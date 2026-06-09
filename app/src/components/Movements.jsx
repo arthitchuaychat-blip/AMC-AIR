@@ -350,7 +350,10 @@ export default function Movements({ role, prefill, onPrefillConsumed }) {
         {printData && (
           <div className="slip">
             <div className="slip-head">
-              <div className="slip-brand">AMC Stock</div>
+              <div className="slip-brand">
+                <img src="/logo.png" alt="" className="slip-logo" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                AMC Stock
+              </div>
               <div className="slip-title">ใบ{printData.typeTh}</div>
             </div>
             <div className="slip-meta">

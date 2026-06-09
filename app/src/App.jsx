@@ -1,7 +1,7 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
 import { getProfile, signOut } from "./lib/api";
-import { UIcon } from "./icons";
+import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
 import Catalog from "./components/Catalog";
 import Movements from "./components/Movements";
@@ -19,8 +19,8 @@ const NAV = {
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
 const NAV_BY_ROLE = {
-  admin: ["movements", "po", "jobs", "catalog", "dashboard", "settings"],
-  exec: ["dashboard", "po", "jobs", "catalog"],
+  admin: ["dashboard", "catalog", "movements", "jobs", "po", "settings"],
+  exec: ["dashboard", "catalog", "jobs", "po"],
   tech: ["movements"],
 };
 
@@ -81,12 +81,13 @@ export default function App() {
       {/* mobile top bar */}
       <div className="topbar">
         <button className="topbar-burger" onClick={() => setMenuOpen(true)} aria-label="เมนู"><UIcon name="menu" size={22} /></button>
+        <Logo size={30} radius={8} />
         <div className="brand-name" style={{ fontSize: 17 }}>AMC <span>Stock</span></div>
       </div>
       {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
       <aside className={"sidebar" + (menuOpen ? " open" : "")}>
         <div className="brand">
-          <div className="brand-mark"><UIcon name="box" size={22} color="#fff" strokeWidth={2} /></div>
+          <Logo size={40} radius={11} />
           <div className="brand-text">
             <div className="brand-name">AMC <span>Stock</span></div>
             <div className="brand-sub">Stock & Materials</div>

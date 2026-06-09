@@ -63,6 +63,18 @@ export function UIcon({ name, size = 20, color = "currentColor", strokeWidth = 1
   );
 }
 
+// App logo: uses /logo.png if present, else falls back to the gradient box mark
+export function Logo({ size = 40, radius = 11 }) {
+  const [ok, setOk] = React.useState(true);
+  if (ok) return <img src="/logo.png" alt="AMC AIR" width={size} height={size}
+    style={{ borderRadius: radius, objectFit: "contain", display: "block", flex: "none" }} onError={() => setOk(false)} />;
+  return (
+    <span className="brand-mark" style={{ width: size, height: size }}>
+      <UIcon name="box" size={size * 0.55} color="#fff" strokeWidth={2} />
+    </span>
+  );
+}
+
 export function MaterialThumb({ mat, size = 48, radius = 12 }) {
   const c = mat.color || "#64748b";
   return (

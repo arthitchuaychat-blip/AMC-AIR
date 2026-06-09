@@ -638,3 +638,7 @@ select.inp{cursor:pointer}
 .po-view-q{color:var(--ink-3);text-align:right}
 .po-view-v{font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
 @media(max-width:560px){.po-edit-in{width:78px}.po-edit-val{display:none}}
+
+/* logo on print slip */
+.slip-brand{display:flex;align-items:center;gap:10px}
+.slip-logo{width:42px;height:42px;object-fit:contain}

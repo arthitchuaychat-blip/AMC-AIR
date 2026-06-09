@@ -1,6 +1,6 @@
 import React from "react";
 import { signIn } from "../lib/api";
-import { UIcon } from "../icons";
+import { UIcon, Logo } from "../icons";
 
 export default function Login() {
   const [email, setEmail] = React.useState("");
@@ -21,7 +21,7 @@ export default function Login() {
     <div className="login-stage">
       <form className="login-card card" onSubmit={submit}>
         <div className="brand" style={{ justifyContent: "center", marginBottom: 6 }}>
-          <div className="brand-mark"><UIcon name="box" size={22} color="#fff" strokeWidth={2} /></div>
+          <Logo size={44} radius={12} />
           <div className="brand-name">AMC <span>Stock</span></div>
         </div>
         <p className="page-sub" style={{ textAlign: "center", marginBottom: 18 }}>เข้าสู่ระบบเพื่อใช้งาน</p>
