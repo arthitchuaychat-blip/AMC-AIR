@@ -21,7 +21,7 @@ create table if not exists materials (
   code        text primary key,
   name_th     text not null,
   name_en     text,
-  category    text references categories(id),
+  category    text references categories(id) on update cascade,
   unit        text,
   cost        numeric not null default 0,
   min_stock   numeric not null default 0,

@@ -56,6 +56,13 @@ export async function deleteCategory(id) {
   const { error } = await supabase.from("categories").delete().eq("id", id);
   if (error) throw error;
 }
+// edit an existing category, including its code/id (cascades to materials via FK ON UPDATE CASCADE)
+export async function updateCategory(oldId, c) {
+  const { error } = await supabase.from("categories")
+    .update({ id: c.id.trim(), name_th: c.name_th.trim(), name_en: c.name_en?.trim() || null })
+    .eq("id", oldId);
+  if (error) throw error;
+}
 
 // auto color palette so teams get distinct chart colors without storing one
 const TEAM_PALETTE = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#0891b2", "#db2777", "#ca8a04", "#0d9488"];

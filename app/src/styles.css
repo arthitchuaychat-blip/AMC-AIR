@@ -505,3 +505,7 @@ select.inp{cursor:pointer}
 .cat-lrow-col b{display:block;font-size:13.5px;color:var(--ink);font-weight:700;margin-top:2px}
 .cat-lrow .cat-card-actions{margin:0;padding:0;border:none;flex:none}
 @media(max-width:820px){.cat-lrow-col.hide-sm{display:none}}
+
+/* category row: editable code */
+.set-cat-dot{width:12px;height:12px;border-radius:99px;flex:none}
+.set-id-inp{flex:none !important;width:92px;font-family:var(--mono);font-size:12px !important}

@@ -1,5 +1,5 @@
 import React from "react";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory } from "../lib/api";
 import { UIcon } from "../icons";
 
 const ROLES = [{ v: "tech", l: "ช่าง" }, { v: "admin", l: "ธุรการ" }, { v: "exec", l: "ผู้บริหาร" }];
@@ -59,13 +59,18 @@ function UserRow({ p, teams, onChanged, flash }) {
 }
 
 function CategoryRow({ c, onChanged, flash }) {
+  const [id, setId] = React.useState(c.id);
   const [nameTh, setNameTh] = React.useState(c.name_th);
   const [nameEn, setNameEn] = React.useState(c.name_en || "");
   const [busy, setBusy] = React.useState(false);
   async function save() {
+    if (!id.trim()) return flash("รหัสหมวดห้ามว่าง", true);
     setBusy(true);
-    try { await saveCategory({ id: c.id, name_th: nameTh, name_en: nameEn }); flash(`บันทึกหมวด ${c.id} แล้ว`); onChanged(); }
-    catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
+    try {
+      await updateCategory(c.id, { id, name_th: nameTh, name_en: nameEn });
+      flash(id.trim() !== c.id ? `เปลี่ยนรหัส ${c.id} → ${id.trim()} แล้ว` : `บันทึกหมวด ${id.trim()} แล้ว`);
+      onChanged();
+    } catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
     setBusy(false);
   }
   async function del() {
@@ -74,8 +79,9 @@ function CategoryRow({ c, onChanged, flash }) {
     catch (e) { flash("ลบไม่ได้ — มีวัสดุใช้หมวดนี้อยู่", true); }
   }
   return (
-    <div className="set-row set-row-team">
-      <span className="code-chip" style={{ background: c.color, color: "#fff", borderColor: c.color }}>{c.id}</span>
+    <div className="set-row set-row-cat">
+      <span className="set-cat-dot" style={{ background: c.color }} />
+      <input className="inp set-id-inp" value={id} onChange={(e) => setId(e.target.value)} placeholder="รหัส" />
       <input className="inp" value={nameTh} onChange={(e) => setNameTh(e.target.value)} placeholder="ชื่อหมวด (ไทย)" />
       <input className="inp" value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="English" />
       <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
