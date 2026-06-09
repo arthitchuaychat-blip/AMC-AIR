@@ -1,0 +1,5 @@
+TxnId,Date,Type,JobNo,Team,MaterialCode,Qty,UnitCost,Value,Reason,PhotoURL,RecordedBy
+TX-0001,2026-06-09,withdraw,JB-260609-01,ARM,COPP3,30,95.33,2859.9,,,demo@example.com
+TX-0002,2026-06-09,return,JB-260609-01,ARM,COPP3,8,95.33,762.64,,,demo@example.com
+TX-0003,2026-06-09,purchase,PO-260609-01,,R32,6,3500,21000,,,demo@example.com
+TX-0004,2026-06-09,damage,JB-260609-01,ARM,INS12,3,28,84,ชำรุด,,demo@example.com

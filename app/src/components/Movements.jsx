@@ -1,0 +1,188 @@
+import React from "react";
+import { listMaterials, listTeams, recordTransaction, listRecentTransactions } from "../lib/api";
+import { fmtBaht, fmtNum } from "../lib/format";
+import { MaterialThumb, UIcon } from "../icons";
+
+const TYPES = [
+  { id: "withdraw", th: "เบิกออก", en: "Withdraw", icon: "withdraw", color: "#2563eb", dir: -1 },
+  { id: "return",   th: "รับคืน",  en: "Return",   icon: "ret",      color: "#16a34a", dir: +1 },
+  { id: "purchase", th: "ซื้อเข้า", en: "Purchase", icon: "purchase", color: "#7c3aed", dir: +1 },
+  { id: "damage",   th: "ตัดเสีย", en: "Write-off", icon: "damage",   color: "#dc2626", dir: -1 },
+];
+const TYPE_BY = Object.fromEntries(TYPES.map((t) => [t.id, t]));
+const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
+
+export default function Movements() {
+  const [mats, setMats] = React.useState([]);
+  const [teams, setTeams] = React.useState([]);
+  const [recent, setRecent] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [toast, setToast] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+
+  const [type, setType] = React.useState("withdraw");
+  const [matCode, setMatCode] = React.useState("");
+  const [team, setTeam] = React.useState("");
+  const [jobNo, setJobNo] = React.useState("");
+  const [qty, setQty] = React.useState(1);
+  const [reason, setReason] = React.useState(REASONS[0]);
+
+  const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
+  const sel = matMap[matCode];
+  const T = TYPE_BY[type];
+
+  async function load() {
+    setLoading(true);
+    const [m, tm, r] = await Promise.all([listMaterials(), listTeams(), listRecentTransactions(40)]);
+    setMats(m); setTeams(tm); setRecent(r);
+    if (!matCode && m.length) setMatCode(m[0].code);
+    if (!team && tm.length) setTeam(tm[0].id);
+    setLoading(false);
+  }
+  React.useEffect(() => { load(); }, []);
+
+  function flash(msg, color) { setToast({ msg, color }); setTimeout(() => setToast(null), 2600); }
+
+  const valid = sel && qty > 0 && (type === "purchase" || team);
+  const after = sel ? sel.stock + T.dir * Number(qty) : 0;
+
+  async function submit() {
+    if (!valid || busy) return;
+    setBusy(true);
+    try {
+      await recordTransaction({
+        type, material_code: matCode, qty: Number(qty),
+        unit_cost: sel.cost, team, job_no: jobNo, reason,
+      });
+      flash(`${T.th} ${sel.th} ${qty} ${sel.unit} สำเร็จ`, T.color);
+      setQty(1); setJobNo("");
+      await load();
+    } catch (e) {
+      flash("บันทึกไม่สำเร็จ: " + (e.message || e), "#dc2626");
+      setBusy(false);
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="adm">
+      <div className="adm-head">
+        <div>
+          <h1 className="page-title">บันทึกธุรกรรม <span className="page-title-en">Stock Movements</span></h1>
+          <p className="page-sub">เบิก · คืน · ซื้อเข้า · ตัดของเสีย — บันทึกแล้วสต๊อกอัปเดตทันที</p>
+        </div>
+      </div>
+
+      <div className="damage-layout">
+        {/* FORM */}
+        <div className="card">
+          <div className="seg" style={{ marginBottom: 18, display: "flex" }}>
+            {TYPES.map((t) => (
+              <button key={t.id} className={"seg-btn" + (type === t.id ? " on" : "")}
+                onClick={() => setType(t.id)}
+                style={type === t.id ? { background: t.color, boxShadow: "none" } : {}}>
+                {t.th}
+              </button>
+            ))}
+          </div>
+
+          <label className="fld"><span>วัสดุ · Material</span>
+            <select className="inp" value={matCode} onChange={(e) => setMatCode(e.target.value)}>
+              {mats.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
+            </select>
+          </label>
+
+          {type !== "purchase" && (
+            <label className="fld"><span>ทีม · Team</span>
+              <div className="team-pick-row">
+                {teams.map((t) => (
+                  <button key={t.id} className={"team-pick" + (team === t.id ? " on" : "")}
+                    onClick={() => setTeam(t.id)}
+                    style={team === t.id ? { background: t.color, borderColor: t.color, color: "#fff" } : {}}>
+                    <span style={{ width: 8, height: 8, borderRadius: 9, background: team === t.id ? "#fff" : t.color }} />
+                    {t.name.replace("Team ", "")}
+                  </button>
+                ))}
+              </div>
+            </label>
+          )}
+
+          <div className="fld-row">
+            <label className="fld"><span>{type === "purchase" ? "เลขใบสั่งซื้อ (PO)" : "เลขที่งาน · Job No."}</span>
+              <input className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)}
+                placeholder={type === "purchase" ? "เช่น PO-260610-01" : "เช่น JB-260610-03"} />
+            </label>
+            <label className="fld"><span>จำนวน{sel ? ` (${sel.unit})` : ""}</span>
+              <input className="inp" type="number" min="1" value={qty}
+                onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} />
+            </label>
+          </div>
+
+          {type === "damage" && (
+            <label className="fld"><span>สาเหตุ · Reason</span>
+              <div className="reason-row">
+                {REASONS.map((r) => (
+                  <button key={r} className={"reason-chip" + (reason === r ? " on" : "")} onClick={() => setReason(r)}>{r}</button>
+                ))}
+              </div>
+            </label>
+          )}
+
+          {sel && (
+            <div className="damage-cost" style={{ background: `color-mix(in srgb, ${T.color} 7%, white)` }}>
+              <span>มูลค่า {fmtBaht(sel.cost * qty)} · คงเหลือ {sel.stock} → <b style={{ color: T.color }}>{after} {sel.unit}</b></span>
+              <b style={{ color: T.color }}>{T.dir > 0 ? "+" : "−"}{qty}</b>
+            </div>
+          )}
+
+          <button className="btn-primary big" disabled={!valid || busy} onClick={submit}
+            style={valid ? { background: T.color, boxShadow: "none" } : {}}>
+            <UIcon name={T.icon} size={17} color="#fff" /> {busy ? "กำลังบันทึก…" : `ยืนยัน${T.th}`}
+          </button>
+          {after < 0 && <p className="page-sub" style={{ color: "var(--down)", marginTop: 8 }}>⚠️ จำนวนเกินคงเหลือ — คงเหลือจะติดลบ</p>}
+        </div>
+
+        {/* RECENT */}
+        <div className="card">
+          <div className="sec-head"><div className="sec-title">รายการล่าสุด <span className="sec-sub">{recent.length} รายการ</span></div></div>
+          {loading && <div className="empty sm">กำลังโหลด…</div>}
+          {!loading && recent.length === 0 && <div className="empty sm">ยังไม่มีธุรกรรม</div>}
+          <div className="ledger">
+            {recent.map((r) => {
+              const m = matMap[r.material_code];
+              const mv = TYPE_BY[r.type];
+              return (
+                <div className="ledger-row" key={r.id}>
+                  <span className="ledger-badge" style={{ background: `color-mix(in srgb, ${mv.color} 13%, white)`, color: mv.color }}>
+                    <UIcon name={mv.icon} size={14} strokeWidth={2} color={mv.color} />
+                  </span>
+                  <div className="ledger-info">
+                    <div className="ledger-type" style={{ color: mv.color }}>{mv.th} · {m ? m.th : r.material_code}</div>
+                    <div className="ledger-meta">
+                      {r.team ? <>{r.team}<span className="dot">·</span></> : null}
+                      {r.job_no ? <><span className="tx-job">{r.job_no}</span><span className="dot">·</span></> : null}
+                      {r.reason ? <><span className="reason-tag sm">{r.reason}</span><span className="dot">·</span></> : null}
+                      {r.txn_date}
+                    </div>
+                  </div>
+                  <div className="ledger-amt">
+                    <div className="ledger-qty" style={{ color: mv.color }}>{mv.dir > 0 ? "+" : "−"}{fmtNum(r.qty)} {m?.unit || ""}</div>
+                    <div className="ledger-date">{fmtBaht(r.value)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
+          background: toast.color, color: "#fff", fontSize: 13.5, fontWeight: 600,
+          padding: "12px 22px", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 200,
+        }}>{toast.msg}</div>
+      )}
+    </div>
+  );
+}

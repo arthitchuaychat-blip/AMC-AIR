@@ -1,0 +1,25 @@
+Code,NameTH,NameEN,Category,Unit,Cost,MinStock,Stock,PhotoURL,Active
+COPP2,"ท่อทองแดงแบบม้วน 1/4"" (6.35mm)","Copper Coil 1/4""",pipe,เมตร,62,120,86,,TRUE
+COPP3,"ท่อทองแดงแบบม้วน 3/8"" (9.52mm)","Copper Coil 3/8""",pipe,เมตร,95.33,100,142,,TRUE
+COPP4,"ท่อทองแดงแบบม้วน 1/2"" (12.7mm)","Copper Coil 1/2""",pipe,เมตร,126,80,41,,TRUE
+COPM4,"ท่อทองแดง Type M 1/2""","Copper Pipe M 1/2""",pipe,เมตร,86.33,60,70,,TRUE
+COPM6,"ท่อทองแดง Type M 3/4""","Copper Pipe M 3/4""",pipe,เมตร,164.5,40,18,,TRUE
+COP14,"ข้อต่อตรงทองแดง 1/4""","Straight Coupling 1/4""",fit,ชิ้น,10,80,210,,TRUE
+COP12,"ข้อต่อตรงทองแดง 1/2""","Straight Coupling 1/2""",fit,ชิ้น,12,60,54,,TRUE
+C4514,"ข้องอ 45° 1/4""","Elbow 45° 1/4""",fit,ชิ้น,18,60,96,,TRUE
+C9014,"ข้องอ 90° 1/4""","Elbow 90° 1/4""",fit,ชิ้น,15,60,33,,TRUE
+C9012,"ข้องอ 90° 1/2""","Elbow 90° 1/2""",fit,ชิ้น,17,50,61,,TRUE
+R32,"น้ำยาแอร์ R32 (10kg)","Refrigerant R32",ref,ถัง,3500,5,3,,TRUE
+R410,"น้ำยาแอร์ R410A (11.3kg)","Refrigerant R410A",ref,ถัง,4200,4,6,,TRUE
+INS14,"ฉนวนยาง 1/4""","Rubber Insulation 1/4""",ins,เมตร,22,150,88,,TRUE
+INS12,"ฉนวนยาง 1/2""","Rubber Insulation 1/2""",ins,เมตร,28,120,165,,TRUE
+THW25,"สายไฟ THW 2.5","Wire THW 2.5",wire,เมตร,18,250,130,,TRUE
+THW40,"สายไฟ THW 4.0","Wire THW 4.0",wire,เมตร,28,200,240,,TRUE
+VCT3,"สายไฟ VCT 3×2.5","Cable VCT 3×2.5",wire,เมตร,45,120,58,,TRUE
+BRK20,"เบรกเกอร์ 20A","Breaker 20A",elec,ตัว,185,12,9,,TRUE
+CAP35,"คาปาซิเตอร์ 35µF","Capacitor 35µF",elec,ตัว,120,15,22,,TRUE
+BKT,"แท่นรองแอร์","AC Bracket",elec,ชุด,250,20,14,,TRUE
+TAPE,"เทปพันท่อ PVC","PVC Tape",ins,ม้วน,15,60,47,,TRUE
+DRAIN,"ท่อน้ำทิ้ง PVC","Drain Pipe PVC",pipe,เมตร,12,120,95,,TRUE
+GAS,"แก๊สเชื่อม","Brazing Gas",elec,กระป๋อง,320,8,5,,TRUE
+SILVER,"ลวดเชื่อมเงิน 5%","Silver Brazing Rod",elec,เส้น,95,30,41,,TRUE

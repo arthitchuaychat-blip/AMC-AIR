@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(curl -sS -L -w \"\\\\nHTTP_STATUS:%{http_code}\\\\n\" \"https://api.anthropic.com/v1/design/h/PMpJkG6meJNqp62VE2Fpxg?open_file=%E0%B8%A7%E0%B8%B1%E0%B8%AA%E0%B8%94%E0%B8%B8OS.html\")",
+      "Bash(curl -sS -w \"\\\\n[%{http_code}]\\\\n\" \"https://api.anthropic.com/v1/design/h/PMpJkG6meJNqp62VE2Fpxg\")",
+      "Bash(curl -sS -w \"\\\\n[%{http_code}]\\\\n\" \"https://api.anthropic.com/v1/design/h/PMpJkG6meJNqp62VE2Fpxg/readme\")",
+      "Bash(curl -sS -w \"\\\\n[%{http_code}]\\\\n\" \"https://api.anthropic.com/v1/design/h/PMpJkG6meJNqp62VE2Fpxg/files\")",
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__get_page_text",
+      "mcp__Claude_in_Chrome__computer",
+      "Bash(curl -sS -w \"\\\\n[HTTP %{http_code}]\\\\n\" \"https://api.anthropic.com/v1/design/h/PMpJkG6meJNqp62VE2Fpxg?open_file=%E0%B8%A7%E0%B8%B1%E0%B8%AA%E0%B8%94%E0%B8%B8OS.html\")",
+      "Bash(curl -sS -w \"\\\\n[HTTP %{http_code}]\\\\n\" \"https://api.anthropic.com/v1/design/h/diU5XuqB9YHJ2cCYUXlKVw?open_file=%E0%B8%A7%E0%B8%B1%E0%B8%AA%E0%B8%94%E0%B8%B8OS.html\")",
+      "Read(//c/Users/User/**)",
+      "Bash(curl -sS \"https://api.anthropic.com/v1/design/h/diU5XuqB9YHJ2cCYUXlKVw?open_file=%E0%B8%A7%E0%B8%B1%E0%B8%AA%E0%B8%94%E0%B8%B8OS.html\" -o /tmp/design_dl.bin)",
+      "Read(//tmp/**)",
+      "Bash(xxd /tmp/design_dl.bin)",
+      "Bash(cp design_dl.bin design.gz)",
+      "Bash(gunzip -f design.gz)",
+      "Bash(tar tf *)",
+      "Bash(rm -rf design_extract)",
+      "Bash(mkdir design_extract)",
+      "Bash(tar xf *)",
+      "Bash(rm -rf _design)",
+      "Bash(mkdir _design)",
+      "Read(//c/c/Users/User/OneDrive/Desktop/Inventory Management/**)",
+      "PowerShell($n = \\(Get-Command node -ErrorAction SilentlyContinue\\); if \\($n\\) { \"node: \" + \\(& node -v\\) } else { \"node: NOT FOUND\" }; $np = \\(Get-Command npm -ErrorAction SilentlyContinue\\); if \\($np\\) { \"npm: \" + \\(& npm -v\\) } else { \"npm: NOT FOUND\" })",
+      "mcp__Claude_Preview__preview_start",
+      "PowerShell(& \"C:\\\\Users\\\\User\\\\OneDrive\\\\Desktop\\\\Inventory Management\\\\_design\\\\serve.ps1\")",
+      "Bash(rm -f \"_design/writer.ps1\")",
+      "Bash(rm -rf \"_design/build\")",
+      "PowerShell($machine = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\); $user = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); $env:Path = \"$machine;$user\"; $n = Get-Command node -ErrorAction SilentlyContinue; if \\($n\\) { \"node: \" + \\(& node -v\\) + \"  @ \" + $n.Source; \"npm: \" + \\(& npm -v\\) } else { \"still not on PATH. Checking common locations:\"; foreach\\($p in @\\(\"C:\\\\Program Files\\\\nodejs\\\\node.exe\",\"C:\\\\Program Files \\(x86\\)\\\\nodejs\\\\node.exe\",\"$env:LOCALAPPDATA\\\\Programs\\\\nodejs\\\\node.exe\"\\)\\){ if\\(Test-Path $p\\){ \"FOUND: $p -> \" + \\(& $p -v\\) } else { \"missing: $p\" } } })",
+      "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); Set-Location \"C:\\\\Users\\\\User\\\\OneDrive\\\\Desktop\\\\Inventory Management\\\\app\"; & npm install --no-fund --no-audit 2>&1 | Select-Object -Last 15)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -s http://localhost:5173/src/main.jsx)",
+      "Bash(curl -s \"http://localhost:5173/src/lib/supabase.js\")",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" \"http://localhost:5173/src/components/Movements.jsx\")"
+    ]
+  }
+}
