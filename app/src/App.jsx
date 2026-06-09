@@ -7,16 +7,18 @@ import Catalog from "./components/Catalog";
 import Movements from "./components/Movements";
 import Dashboard from "./components/Dashboard";
 import Settings from "./components/Settings";
+import Jobs from "./components/Jobs";
 
 const NAV = {
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
   movements: { th: "บันทึกธุรกรรม", en: "Movements", icon: "withdraw" },
+  jobs: { th: "งาน", en: "Jobs & Cost", icon: "clipboard" },
   catalog: { th: "คลังวัสดุ", en: "Catalog", icon: "catalog" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
 const NAV_BY_ROLE = {
-  admin: ["movements", "catalog", "dashboard", "settings"],
-  exec: ["dashboard", "catalog"],
+  admin: ["movements", "jobs", "catalog", "dashboard", "settings"],
+  exec: ["dashboard", "jobs", "catalog"],
   tech: ["movements"],
 };
 
@@ -112,6 +114,7 @@ export default function App() {
       <main className="main">
         {view === "dashboard" && <Dashboard onNavigate={setView} />}
         {view === "movements" && <Movements role={role} />}
+        {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}
         {view === "settings" && <Settings />}
       </main>

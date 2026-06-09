@@ -556,3 +556,27 @@ select.inp{cursor:pointer}
 .sub-toggle button.on{background:color-mix(in srgb,var(--down) 10%,white);border-color:color-mix(in srgb,var(--down) 35%,var(--line));color:var(--down)}
 .job-line{display:flex;align-items:center;gap:10px}
 .job-qty{flex:none !important;width:84px;text-align:center}
+
+/* ---------- jobs / job costing ---------- */
+.job-cards{display:flex;flex-direction:column;gap:12px}
+.job-card{padding:0;overflow:hidden}
+.job-card.closed{opacity:.82}
+.job-card-head{display:flex;align-items:center;gap:16px;padding:16px 18px;cursor:pointer}
+.job-card-head:hover{background:var(--surface-2)}
+.job-card-id{display:flex;align-items:center;gap:9px;flex:none}
+.job-no{font-family:var(--mono);font-size:14px;font-weight:700}
+.job-badge{font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px}
+.job-badge.open{background:color-mix(in srgb,var(--primary) 12%,white);color:var(--primary)}
+.job-badge.closed{background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line)}
+.job-card-meta{flex:1;font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.job-card-cost{text-align:right;flex:none}
+.job-card-cost span{display:block;font-size:10px;color:var(--ink-3)}
+.job-card-cost b{font-size:18px;font-weight:700;letter-spacing:-.3px}
+.job-lines{padding:0 18px 16px;border-top:1px solid var(--line-2)}
+.job-lrow{display:grid;grid-template-columns:1.6fr 60px 60px 60px 90px 90px;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
+.job-lrow.job-lrow-h{font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.3px;padding-top:12px}
+.job-lrow .c{text-align:center}.job-lrow .r{text-align:right;font-weight:700}
+.job-lname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.job-actions{display:flex;align-items:center;gap:12px;margin-top:14px}
+.job-closed-note{font-size:12px;color:var(--ink-3)}
+@media(max-width:760px){.job-lrow{grid-template-columns:1.4fr 46px 46px 60px 70px}.job-lrow span:nth-child(4){display:none}}

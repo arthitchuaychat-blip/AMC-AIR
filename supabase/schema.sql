@@ -59,13 +59,27 @@ create table if not exists transactions (
 create index if not exists idx_txn_material on transactions(material_code);
 create index if not exists idx_txn_date on transactions(txn_date);
 
+-- ---------- งาน (Job costing) ----------
+create table if not exists jobs (
+  job_no     text primary key,
+  team       text,
+  status     text not null default 'open' check (status in ('open','closed')),
+  used_value numeric,
+  closed_at  timestamptz,
+  closed_by  uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
 -- ---------- VIEW: ยอดคงเหลือปัจจุบัน (คำนวณจากธุรกรรม) ----------
+-- หมายเหตุ: "ตัดเสียในงาน" (มี job_no) ไม่หักสต๊อกคลัง เพราะของออกจากคลังตั้งแต่ตอนเบิกแล้ว
+-- มีเฉพาะ "ตัดเสียในคลัง" (job_no ว่าง) ที่หักสต๊อก
 create or replace view material_stock as
 select
   m.*,
   m.init_stock
     + coalesce(sum(case when t.type in ('purchase','return') then t.qty else 0 end), 0)
-    - coalesce(sum(case when t.type in ('withdraw','damage')  then t.qty else 0 end), 0) as current_stock
+    - coalesce(sum(case when t.type = 'withdraw' then t.qty else 0 end), 0)
+    - coalesce(sum(case when t.type = 'damage' and t.job_no is null then t.qty else 0 end), 0) as current_stock
 from materials m
 left join transactions t on t.material_code = m.code
 group by m.code;
@@ -170,6 +184,12 @@ create policy txn_insert on transactions for insert to authenticated
   with check (my_role() = 'admin' or (my_role() = 'tech' and team = my_team()));
 create policy txn_admin_edit on transactions for update to authenticated
   using (my_role() = 'admin');
+
+-- งาน: อ่านได้ทุกคนที่ล็อกอิน · ปิด/เปิดงาน เฉพาะธุรการ
+alter table jobs enable row level security;
+create policy jobs_read on jobs for select to authenticated using (true);
+create policy jobs_write on jobs for all to authenticated
+  using (my_role() = 'admin') with check (my_role() = 'admin');
 
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles

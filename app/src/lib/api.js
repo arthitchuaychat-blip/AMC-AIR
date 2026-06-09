@@ -143,19 +143,18 @@ export async function recordTransactions(rows) {
   if (error) throw error;
 }
 
-// open jobs = withdrawals with outstanding qty (withdrawn − returned − damaged > 0)
-// returns [{ job_no, team, date, lines:[{code, withdrawn, returned, damaged, outstanding, unitCost}] }]
-export async function listOpenJobs() {
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .not("job_no", "is", null)
-    .in("type", ["withdraw", "return", "damage"])
-    .order("id", { ascending: true })
-    .limit(5000);
-  if (error) throw error;
+// aggregate all job_no'd movements + the jobs (status) table
+async function _jobAggregate() {
+  const [txnRes, jobRes] = await Promise.all([
+    supabase.from("transactions").select("*").not("job_no", "is", null)
+      .in("type", ["withdraw", "return", "damage"]).order("id", { ascending: true }).limit(5000),
+    supabase.from("jobs").select("*"),
+  ]);
+  if (txnRes.error) throw txnRes.error;
+  if (jobRes.error) throw jobRes.error;
+  const closed = {}; (jobRes.data || []).forEach((j) => { closed[j.job_no] = j; });
   const jobs = {};
-  for (const r of data || []) {
+  for (const r of txnRes.data || []) {
     const j = jobs[r.job_no] || (jobs[r.job_no] = { job_no: r.job_no, team: r.team, date: r.txn_date, mats: {} });
     if (r.type === "withdraw" && r.team) j.team = r.team;
     if (r.txn_date > j.date) j.date = r.txn_date;
@@ -165,13 +164,46 @@ export async function listOpenJobs() {
     else if (r.type === "return") m.returned += q;
     else if (r.type === "damage") m.damaged += q;
   }
-  return Object.values(jobs)
-    .map((j) => ({
-      job_no: j.job_no, team: j.team, date: j.date,
-      lines: Object.values(j.mats).map((m) => ({ ...m, outstanding: m.withdrawn - m.returned - m.damaged })).filter((m) => m.outstanding > 0),
-    }))
-    .filter((j) => j.lines.length > 0)
+  return { jobs, closed };
+}
+
+// open jobs for return/damage entry: outstanding>0 AND not closed
+export async function listOpenJobs() {
+  const { jobs, closed } = await _jobAggregate();
+  return Object.values(jobs).map((j) => ({
+    job_no: j.job_no, team: j.team, date: j.date,
+    lines: Object.values(j.mats).map((m) => ({ ...m, outstanding: m.withdrawn - m.returned - m.damaged })).filter((m) => m.outstanding > 0),
+  })).filter((j) => j.lines.length > 0 && closed[j.job_no]?.status !== "closed")
     .sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+// all jobs (open + closed) with cost = used (withdrawn − returned) × unit cost
+export async function listAllJobs() {
+  const { jobs, closed } = await _jobAggregate();
+  return Object.values(jobs).map((j) => {
+    const lines = Object.values(j.mats).map((m) => ({ ...m, used: m.withdrawn - m.returned, outstanding: m.withdrawn - m.returned - m.damaged }));
+    const liveUsed = lines.reduce((a, l) => a + l.used * l.unitCost, 0);
+    const rec = closed[j.job_no];
+    const status = rec?.status === "closed" ? "closed" : "open";
+    return {
+      job_no: j.job_no, team: j.team, date: j.date, status, lines,
+      usedValue: status === "closed" && rec?.used_value != null ? Number(rec.used_value) : liveUsed,
+      closed_at: rec?.closed_at || null,
+    };
+  }).sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+export async function closeJob(job_no, team, usedValue) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from("jobs").upsert(
+    { job_no, team, status: "closed", used_value: usedValue, closed_at: new Date().toISOString(), closed_by: user?.id || null },
+    { onConflict: "job_no" }
+  );
+  if (error) throw error;
+}
+export async function reopenJob(job_no) {
+  const { error } = await supabase.from("jobs").upsert({ job_no, status: "open", closed_at: null }, { onConflict: "job_no" });
+  if (error) throw error;
 }
 
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
