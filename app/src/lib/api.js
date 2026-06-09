@@ -125,6 +125,30 @@ export async function recordTransaction(t) {
   if (error) throw error;
 }
 
+// bulk insert many lines (same job) at once
+export async function recordTransactions(rows) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const payload = rows.map((t) => ({
+    txn_date: t.txn_date || new Date().toISOString().slice(0, 10),
+    type: t.type,
+    job_no: t.job_no?.trim() || null,
+    team: t.type === "purchase" ? null : (t.team || null),
+    material_code: t.material_code,
+    qty: Number(t.qty),
+    unit_cost: Number(t.unit_cost) || 0,
+    reason: t.type === "damage" ? (t.reason || null) : null,
+    recorded_by: user?.id || null,
+  }));
+  const { error } = await supabase.from("transactions").insert(payload);
+  if (error) throw error;
+}
+
+// cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
+export async function deleteTransaction(id) {
+  const { error } = await supabase.from("transactions").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function listRecentTransactions(limit = 60) {
   const { data, error } = await supabase
     .from("transactions")

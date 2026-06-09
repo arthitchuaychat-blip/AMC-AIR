@@ -111,7 +111,7 @@ export default function App() {
 
       <main className="main">
         {view === "dashboard" && <Dashboard onNavigate={setView} />}
-        {view === "movements" && <Movements />}
+        {view === "movements" && <Movements role={role} />}
         {view === "catalog" && <Catalog role={role} />}
         {view === "settings" && <Settings />}
       </main>
