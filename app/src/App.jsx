@@ -44,6 +44,7 @@ export default function App() {
   const [session, setSession] = React.useState(null);
   const [profile, setProfile] = React.useState(null);
   const [view, setView] = React.useState(null);
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
@@ -69,9 +70,17 @@ export default function App() {
 
   const role = profile?.role || "tech";
 
+  function go(id) { setView(id); setMenuOpen(false); }
+
   return (
     <div className="app">
-      <aside className="sidebar">
+      {/* mobile top bar */}
+      <div className="topbar">
+        <button className="topbar-burger" onClick={() => setMenuOpen(true)} aria-label="เมนู"><UIcon name="menu" size={22} /></button>
+        <div className="brand-name" style={{ fontSize: 17 }}>วัสดุ<span>OS</span></div>
+      </div>
+      {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
+      <aside className={"sidebar" + (menuOpen ? " open" : "")}>
         <div className="brand">
           <div className="brand-mark"><UIcon name="box" size={22} color="#fff" strokeWidth={2} /></div>
           <div className="brand-text">
@@ -85,7 +94,7 @@ export default function App() {
           {(NAV_BY_ROLE[role] || ["movements"]).map((id) => {
             const n = NAV[id];
             return (
-              <button key={id} className={"nav-item" + (view === id ? " on" : "")} onClick={() => setView(id)}>
+              <button key={id} className={"nav-item" + (view === id ? " on" : "")} onClick={() => go(id)}>
                 <UIcon name={n.icon} size={18} strokeWidth={1.9} />
                 <span className="nav-th">{n.th}</span>
                 <span className="nav-en">{n.en}</span>
