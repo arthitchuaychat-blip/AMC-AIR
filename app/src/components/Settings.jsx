@@ -1,5 +1,5 @@
 import React from "react";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory } from "../lib/api";
 import { UIcon } from "../icons";
 
 const ROLES = [{ v: "tech", l: "ช่าง" }, { v: "admin", l: "ธุรการ" }, { v: "exec", l: "ผู้บริหาร" }];
@@ -58,9 +58,36 @@ function UserRow({ p, teams, onChanged, flash }) {
   );
 }
 
+function CategoryRow({ c, onChanged, flash }) {
+  const [nameTh, setNameTh] = React.useState(c.name_th);
+  const [nameEn, setNameEn] = React.useState(c.name_en || "");
+  const [busy, setBusy] = React.useState(false);
+  async function save() {
+    setBusy(true);
+    try { await saveCategory({ id: c.id, name_th: nameTh, name_en: nameEn }); flash(`บันทึกหมวด ${c.id} แล้ว`); onChanged(); }
+    catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  async function del() {
+    if (!confirm(`ลบหมวด ${c.id}? (ถ้ามีวัสดุใช้หมวดนี้อยู่จะลบไม่ได้)`)) return;
+    try { await deleteCategory(c.id); flash(`ลบหมวด ${c.id} แล้ว`); onChanged(); }
+    catch (e) { flash("ลบไม่ได้ — มีวัสดุใช้หมวดนี้อยู่", true); }
+  }
+  return (
+    <div className="set-row set-row-team">
+      <span className="code-chip" style={{ background: c.color, color: "#fff", borderColor: c.color }}>{c.id}</span>
+      <input className="inp" value={nameTh} onChange={(e) => setNameTh(e.target.value)} placeholder="ชื่อหมวด (ไทย)" />
+      <input className="inp" value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="English" />
+      <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
+      <button className="btn-ghost sm danger" onClick={del}><UIcon name="trash" size={14} /></button>
+    </div>
+  );
+}
+
 export default function Settings() {
   const [teams, setTeams] = React.useState([]);
   const [profiles, setProfiles] = React.useState([]);
+  const [cats, setCats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
 
@@ -68,14 +95,17 @@ export default function Settings() {
   const [nt, setNt] = React.useState({ id: "", name: "", lead: "" });
   // add-user form
   const [nu, setNu] = React.useState({ email: "", password: "", name: "", role: "tech", team: "" });
+  // add-category form
+  const [nc, setNc] = React.useState({ id: "", name_th: "", name_en: "" });
   const [addingT, setAddingT] = React.useState(false);
   const [addingU, setAddingU] = React.useState(false);
+  const [addingC, setAddingC] = React.useState(false);
 
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 3000); }
 
   async function load() {
     setLoading(true);
-    try { const [t, p] = await Promise.all([listTeams(), listProfiles()]); setTeams(t); setProfiles(p); }
+    try { const [t, p, c] = await Promise.all([listTeams(), listProfiles(), listCategories()]); setTeams(t); setProfiles(p); setCats(c); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -101,6 +131,14 @@ export default function Settings() {
     setAddingU(false);
   }
 
+  async function addCat() {
+    if (!nc.id.trim() || !nc.name_th.trim()) return flash("ใส่รหัสและชื่อหมวด", true);
+    setAddingC(true);
+    try { await saveCategory(nc); setNc({ id: "", name_th: "", name_en: "" }); flash(`เพิ่มหมวด ${nc.id} แล้ว`); load(); }
+    catch (e) { flash("เพิ่มหมวดไม่สำเร็จ: " + (e.message || e), true); }
+    setAddingC(false);
+  }
+
   return (
     <div className="adm">
       <div className="adm-head">
@@ -113,6 +151,7 @@ export default function Settings() {
       {loading && <div className="empty">กำลังโหลด…</div>}
 
       {!loading && (
+        <>
         <div className="damage-layout">
           {/* TEAMS */}
           <div className="card">
@@ -149,6 +188,21 @@ export default function Settings() {
             </div>
           </div>
         </div>
+
+        {/* CATEGORIES */}
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="sec-head"><div><div className="sec-title">หมวดวัสดุ</div><div className="sec-sub">{cats.length} หมวด</div></div></div>
+          <div className="set-add">
+            <input className="inp" value={nc.id} onChange={(e) => setNc({ ...nc, id: e.target.value })} placeholder="รหัส (เช่น tool)" />
+            <input className="inp" value={nc.name_th} onChange={(e) => setNc({ ...nc, name_th: e.target.value })} placeholder="ชื่อหมวด (ไทย)" />
+            <input className="inp" value={nc.name_en} onChange={(e) => setNc({ ...nc, name_en: e.target.value })} placeholder="English (ไม่บังคับ)" />
+            <button className="btn-primary" disabled={addingC} onClick={addCat}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มหมวด</button>
+          </div>
+          <div className="set-list">
+            {cats.map((c) => <CategoryRow key={c.id} c={c} onChanged={load} flash={flash} />)}
+          </div>
+        </div>
+        </>
       )}
 
       {toast && (

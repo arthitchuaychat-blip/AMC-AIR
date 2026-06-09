@@ -39,10 +39,22 @@ export async function signOut() {
   return supabase.auth.signOut();
 }
 
+const CAT_PALETTE = ["#2563eb", "#7c3aed", "#0891b2", "#d97706", "#ea580c", "#16a34a", "#db2777", "#0d9488", "#ca8a04", "#4f46e5"];
 export async function listCategories() {
-  const { data, error } = await supabase.from("categories").select("*");
+  const { data, error } = await supabase.from("categories").select("*").order("id");
   if (error) throw error;
-  return data || [];
+  return (data || []).map((c, i) => ({ ...c, color: c.color || CAT_PALETTE[i % CAT_PALETTE.length] }));
+}
+export async function saveCategory(c) {
+  const { error } = await supabase.from("categories").upsert(
+    { id: c.id.trim(), name_th: c.name_th.trim(), name_en: c.name_en?.trim() || null },
+    { onConflict: "id" }
+  );
+  if (error) throw error;
+}
+export async function deleteCategory(id) {
+  const { error } = await supabase.from("categories").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // auto color palette so teams get distinct chart colors without storing one
@@ -121,6 +133,18 @@ export async function listTransactionsSince(startDate) {
   let q = supabase.from("transactions").select("*").limit(10000);
   if (startDate) q = q.gte("txn_date", startDate);
   const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+// all movements for one material (for the detail drawer)
+export async function listMaterialMovements(code) {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("material_code", code)
+    .order("id", { ascending: false })
+    .limit(300);
   if (error) throw error;
   return data || [];
 }
