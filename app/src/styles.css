@@ -618,3 +618,8 @@ select.inp{cursor:pointer}
   .sidebar.open{transform:translateX(0)}
   .main{padding:18px 15px}
 }
+
+/* dashboard inventory card clickable */
+.clickable-card{cursor:pointer;transition:.16s}
+.clickable-card:hover{border-color:color-mix(in srgb,var(--primary) 40%,var(--line));box-shadow:0 6px 22px rgba(16,24,40,.09);transform:translateY(-2px)}
+.clickable-card:hover .cat-card-move{color:var(--primary)}

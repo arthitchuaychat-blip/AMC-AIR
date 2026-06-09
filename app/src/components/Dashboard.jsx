@@ -2,6 +2,7 @@ import React from "react";
 import { listMaterials, listTeams, listTransactionsSince } from "../lib/api";
 import { fmtBaht, fmtNum, fmtCompact } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
+import DashDrawer from "./DashDrawer";
 
 const PERIODS = [
   { id: "day", label: "วันนี้" },
@@ -19,9 +20,11 @@ function periodStart(p) {
   return null;
 }
 
-function StatCard({ icon, color, label, value, sub, accent }) {
+function StatCard({ icon, color, label, value, sub, accent, onClick }) {
   return (
-    <div className="stat-card">
+    <div className={"stat-card" + (onClick ? " clickable" : "")} onClick={onClick}
+      role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && onClick() : undefined}>
       <div className="stat-top">
         <span className="stat-ico" style={{ background: `color-mix(in srgb, ${color} 13%, white)`, color }}>
           <UIcon name={icon} size={18} strokeWidth={1.9} />
@@ -30,12 +33,14 @@ function StatCard({ icon, color, label, value, sub, accent }) {
       <div className="stat-val" style={accent ? { color: accent } : {}}>{value}</div>
       <div className="stat-label">{label}</div>
       {sub && <div className="stat-sub">{sub}</div>}
+      {onClick && <div className="stat-more">ดูรายละเอียด <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>}
     </div>
   );
 }
 
 export default function Dashboard({ onNavigate }) {
   const [period, setPeriod] = React.useState("month");
+  const [detail, setDetail] = React.useState(null);
   const [mats, setMats] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [txns, setTxns] = React.useState([]);
@@ -106,21 +111,22 @@ export default function Dashboard({ onNavigate }) {
         <>
           <div className="kpi-grid">
             <StatCard icon="withdraw" color="#2563eb" label={"ยอดเบิก · " + periodLabel}
-              value={fmtBaht(agg.byType.withdraw.value)} sub={fmtNum(agg.byType.withdraw.count) + " รายการ · " + fmtNum(agg.byType.withdraw.qty) + " หน่วย"} />
+              value={fmtBaht(agg.byType.withdraw.value)} sub={fmtNum(agg.byType.withdraw.count) + " รายการ · " + fmtNum(agg.byType.withdraw.qty) + " หน่วย"} onClick={() => setDetail("withdraw")} />
             <StatCard icon="box" color="#0d9488" label="วัสดุที่ใช้จริง (เบิก − คืน)"
-              value={fmtBaht(used)} sub={"คืนแล้ว " + fmtBaht(agg.byType.return.value)} accent="#0d9488" />
+              value={fmtBaht(used)} sub={"คืนแล้ว " + fmtBaht(agg.byType.return.value)} accent="#0d9488" onClick={() => setDetail("used")} />
             <StatCard icon="purchase" color="#7c3aed" label={"ยอดซื้อ · " + periodLabel}
-              value={fmtBaht(agg.byType.purchase.value)} sub={fmtNum(agg.byType.purchase.count) + " รายการ"} />
+              value={fmtBaht(agg.byType.purchase.value)} sub={fmtNum(agg.byType.purchase.count) + " รายการ"} onClick={() => setDetail("purchase")} />
             <StatCard icon="damage" color="#dc2626" label={"วัสดุเสียหาย · " + periodLabel}
-              value={fmtBaht(agg.byType.damage.value)} sub={fmtNum(agg.byType.damage.qty) + " หน่วยถูกตัดทิ้ง"} accent="#dc2626" />
+              value={fmtBaht(agg.byType.damage.value)} sub={fmtNum(agg.byType.damage.qty) + " หน่วยถูกตัดทิ้ง"} accent="#dc2626" onClick={() => setDetail("damage")} />
           </div>
 
           <div className="dash-grid">
             {/* inventory on hand */}
-            <div className="card">
+            <div className="card clickable-card" onClick={() => setDetail("inventory")}>
               <div className="sec-head"><div><div className="sec-title">มูลค่าวัสดุคงเหลือ</div><div className="sec-sub">Inventory on hand · ณ ปัจจุบัน</div></div></div>
               <div className="inv-headline">{fmtBaht(invValue)}</div>
               <div className="inv-sub">{fmtNum(invUnits)} หน่วย · {mats.length} ชนิด · <span className="inv-low-tag">{low.length} ต่ำกว่าขั้นต่ำ</span></div>
+              <div className="cat-card-move" style={{ marginTop: 14 }}>ดูรายการคงเหลือ <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>
             </div>
 
             {/* withdraw by team */}
@@ -203,6 +209,8 @@ export default function Dashboard({ onNavigate }) {
           </div>
         </>
       )}
+
+      {detail && <DashDrawer kind={detail} periodLabel={periodLabel} txns={txns} teams={teams} mats={mats} onClose={() => setDetail(null)} />}
     </div>
   );
 }
