@@ -143,6 +143,37 @@ export async function recordTransactions(rows) {
   if (error) throw error;
 }
 
+// open jobs = withdrawals with outstanding qty (withdrawn − returned − damaged > 0)
+// returns [{ job_no, team, date, lines:[{code, withdrawn, returned, damaged, outstanding, unitCost}] }]
+export async function listOpenJobs() {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .not("job_no", "is", null)
+    .in("type", ["withdraw", "return", "damage"])
+    .order("id", { ascending: true })
+    .limit(5000);
+  if (error) throw error;
+  const jobs = {};
+  for (const r of data || []) {
+    const j = jobs[r.job_no] || (jobs[r.job_no] = { job_no: r.job_no, team: r.team, date: r.txn_date, mats: {} });
+    if (r.type === "withdraw" && r.team) j.team = r.team;
+    if (r.txn_date > j.date) j.date = r.txn_date;
+    const m = j.mats[r.material_code] || (j.mats[r.material_code] = { code: r.material_code, withdrawn: 0, returned: 0, damaged: 0, unitCost: 0 });
+    const q = Number(r.qty) || 0;
+    if (r.type === "withdraw") { m.withdrawn += q; if (!m.unitCost) m.unitCost = Number(r.unit_cost) || 0; }
+    else if (r.type === "return") m.returned += q;
+    else if (r.type === "damage") m.damaged += q;
+  }
+  return Object.values(jobs)
+    .map((j) => ({
+      job_no: j.job_no, team: j.team, date: j.date,
+      lines: Object.values(j.mats).map((m) => ({ ...m, outstanding: m.withdrawn - m.returned - m.damaged })).filter((m) => m.outstanding > 0),
+    }))
+    .filter((j) => j.lines.length > 0)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
 export async function deleteTransaction(id) {
   const { error } = await supabase.from("transactions").delete().eq("id", id);

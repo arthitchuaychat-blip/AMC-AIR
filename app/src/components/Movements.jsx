@@ -1,5 +1,5 @@
 import React from "react";
-import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction } from "../lib/api";
+import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 
@@ -17,33 +17,41 @@ export default function Movements({ role }) {
   const [mats, setMats] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [recent, setRecent] = React.useState([]);
+  const [jobs, setJobs] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
+  const [printData, setPrintData] = React.useState(null);
 
   const [type, setType] = React.useState("withdraw");
   const [team, setTeam] = React.useState("");
   const [jobNo, setJobNo] = React.useState("");
   const [reason, setReason] = React.useState(REASONS[0]);
-  const [lines, setLines] = React.useState([]);            // [{code, qty}]
+  const [damageMode, setDamageMode] = React.useState("job"); // job | central
+
+  // cart flow (withdraw / purchase / central-damage)
+  const [lines, setLines] = React.useState([]);
   const [pickCode, setPickCode] = React.useState("");
   const [pickQty, setPickQty] = React.useState(1);
-  const [printData, setPrintData] = React.useState(null);
+
+  // job flow (return / damage-from-job)
+  const [selJob, setSelJob] = React.useState("");
+  const [qtyByCode, setQtyByCode] = React.useState({});
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
   const T = TYPE_BY[type];
+  // which UI flow is active
+  const flow = type === "return" ? "job" : type === "damage" ? (damageMode === "job" ? "job" : "cart") : "cart";
 
   async function load() {
     setLoading(true);
-    const [m, tm, r] = await Promise.all([listMaterials(), listTeams(), listRecentTransactions(60)]);
-    setMats(m); setTeams(tm); setRecent(r);
+    const [m, tm, r, j] = await Promise.all([listMaterials(), listTeams(), listRecentTransactions(60), listOpenJobs()]);
+    setMats(m); setTeams(tm); setRecent(r); setJobs(j);
     if (!pickCode && m.length) setPickCode(m[0].code);
     if (!team && tm.length) setTeam(tm[0].id);
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-
-  // fire the browser print dialog once the slip is in the DOM
   React.useEffect(() => {
     if (!printData) return;
     const t = setTimeout(() => { window.print(); setPrintData(null); }, 80);
@@ -51,12 +59,11 @@ export default function Movements({ role }) {
   }, [printData]);
 
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
+  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); }
 
+  // ----- cart helpers -----
   const linesView = lines.map((l) => { const m = matMap[l.code]; return { ...l, m, value: (m?.cost || 0) * l.qty }; });
-  const totalValue = linesView.reduce((a, x) => a + x.value, 0);
-  const totalQty = lines.reduce((a, l) => a + l.qty, 0);
-  const valid = lines.length > 0 && (type === "purchase" || team);
-
+  const cartTotal = linesView.reduce((a, x) => a + x.value, 0);
   function addLine() {
     if (!pickCode || pickQty < 1) return;
     setLines((ls) => {
@@ -67,16 +74,39 @@ export default function Movements({ role }) {
     setPickQty(1);
   }
   const removeLine = (code) => setLines((ls) => ls.filter((l) => l.code !== code));
+  const cartValid = lines.length > 0 && (type === "purchase" || type === "damage" || team);
 
-  async function submit() {
-    if (!valid || busy) return;
+  async function submitCart() {
+    if (!cartValid || busy) return;
     setBusy(true);
     try {
       await recordTransactions(lines.map((l) => ({
-        type, job_no: jobNo, team, material_code: l.code, qty: l.qty, unit_cost: matMap[l.code].cost, reason,
+        type, job_no: jobNo, team: type === "damage" ? null : team,
+        material_code: l.code, qty: l.qty, unit_cost: matMap[l.code].cost, reason,
       })));
       flash(`${T.th} ${lines.length} รายการ สำเร็จ`);
       setLines([]); setJobNo("");
+      await load();
+    } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+
+  // ----- job helpers -----
+  const job = jobs.find((j) => j.job_no === selJob);
+  const jobValid = job && job.lines.some((l) => Number(qtyByCode[l.code] || 0) > 0);
+  async function submitJob() {
+    if (!jobValid || busy) return;
+    const rows = job.lines
+      .map((l) => ({ code: l.code, qty: Number(qtyByCode[l.code] || 0), unitCost: l.unitCost, outstanding: l.outstanding }))
+      .filter((l) => l.qty > 0);
+    for (const r of rows) if (r.qty > r.outstanding) { flash("จำนวนเกินยอดคงค้าง", true); return; }
+    setBusy(true);
+    try {
+      await recordTransactions(rows.map((r) => ({
+        type, job_no: job.job_no, team: job.team, material_code: r.code, qty: r.qty, unit_cost: r.unitCost, reason,
+      })));
+      flash(`${T.th} งาน ${job.job_no} สำเร็จ`);
+      setSelJob(""); setQtyByCode({});
       await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
@@ -87,12 +117,10 @@ export default function Movements({ role }) {
     try { await deleteTransaction(r.id); flash("ยกเลิกรายการแล้ว"); await load(); }
     catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
   }
-
   function printSlip(row) {
     const group = row.job_no ? recent.filter((x) => x.job_no === row.job_no && x.type === row.type) : [row];
     setPrintData({
-      typeTh: TYPE_BY[row.type].th,
-      job_no: row.job_no, team: row.team, date: row.txn_date,
+      typeTh: TYPE_BY[row.type].th, job_no: row.job_no, team: row.team, date: row.txn_date,
       lines: group.map((g) => { const m = matMap[g.material_code]; return { th: m?.th || g.material_code, code: g.material_code, qty: g.qty, unit: m?.unit || "", value: Number(g.value || 0), reason: g.reason }; }),
       total: group.reduce((a, g) => a + Number(g.value || 0), 0),
     });
@@ -103,7 +131,7 @@ export default function Movements({ role }) {
       <div className="adm-head">
         <div>
           <h1 className="page-title">บันทึกธุรกรรม <span className="page-title-en">Stock Movements</span></h1>
-          <p className="page-sub">เบิก · คืน · ซื้อเข้า · ตัดของเสีย — ใบเดียวเพิ่มได้หลายรายการ</p>
+          <p className="page-sub">รับคืน/ตัดเสีย อ้างอิงงานที่เบิก → ต้นทุนงานแม่นยำ</p>
         </div>
       </div>
 
@@ -112,71 +140,133 @@ export default function Movements({ role }) {
         <div className="card">
           <div className="seg" style={{ marginBottom: 16, display: "flex" }}>
             {TYPES.map((t) => (
-              <button key={t.id} className={"seg-btn" + (type === t.id ? " on" : "")} onClick={() => setType(t.id)}
+              <button key={t.id} className={"seg-btn" + (type === t.id ? " on" : "")} onClick={() => changeType(t.id)}
                 style={type === t.id ? { background: t.color, boxShadow: "none" } : {}}>{t.th}</button>
             ))}
           </div>
 
-          {type !== "purchase" && (
-            <label className="fld"><span>ทีม · Team</span>
-              <div className="team-pick-row">
-                {teams.map((t) => (
-                  <button key={t.id} className={"team-pick" + (team === t.id ? " on" : "")} onClick={() => setTeam(t.id)}
-                    style={team === t.id ? { background: t.color, borderColor: t.color, color: "#fff" } : {}}>
-                    <span style={{ width: 8, height: 8, borderRadius: 9, background: team === t.id ? "#fff" : t.color }} />
-                    {t.name.replace("Team ", "")}
-                  </button>
-                ))}
-              </div>
-            </label>
+          {/* damage sub-mode */}
+          {type === "damage" && (
+            <div className="sub-toggle">
+              <button className={damageMode === "job" ? "on" : ""} onClick={() => setDamageMode("job")}>เสียจากงานที่เบิก</button>
+              <button className={damageMode === "central" ? "on" : ""} onClick={() => setDamageMode("central")}>เสียในคลัง (ส่วนกลาง)</button>
+            </div>
           )}
 
-          <div className="fld-row">
-            <label className="fld"><span>{type === "purchase" ? "เลขใบสั่งซื้อ (PO)" : "เลขที่งาน · Job No."}</span>
-              <input className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)}
-                placeholder={type === "purchase" ? "เช่น PO-260610-01" : "เช่น JB-260610-03"} />
-            </label>
-            {type === "damage" && (
-              <label className="fld"><span>สาเหตุ · Reason</span>
-                <select className="inp" value={reason} onChange={(e) => setReason(e.target.value)}>
-                  {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          {/* ============ JOB FLOW (return / damage-from-job) ============ */}
+          {flow === "job" && (
+            <>
+              <label className="fld"><span>เลือกงานที่เบิกค้าง · Open job</span>
+                <select className="inp" value={selJob} onChange={(e) => { setSelJob(e.target.value); setQtyByCode({}); }}>
+                  <option value="">— เลือกงาน —</option>
+                  {jobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.team || "-"} · ค้าง {j.lines.length} รายการ</option>)}
                 </select>
               </label>
-            )}
-          </div>
+              {jobs.length === 0 && <div className="empty sm">ไม่มีงานที่เบิกค้างอยู่</div>}
 
-          {/* line adder */}
-          <div className="fld"><span>เพิ่มรายการวัสดุ</span>
-            <div className="line-add">
-              <select className="inp" value={pickCode} onChange={(e) => setPickCode(e.target.value)}>
-                {mats.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
-              </select>
-              <input className="inp line-qty" type="number" min="1" value={pickQty}
-                onChange={(e) => setPickQty(Math.max(1, Number(e.target.value) || 1))} />
-              <button className="btn-ghost sm" onClick={addLine}><UIcon name="plus" size={14} /> เพิ่ม</button>
-            </div>
-          </div>
+              {type === "damage" && job && (
+                <label className="fld"><span>สาเหตุ · Reason</span>
+                  <select className="inp" value={reason} onChange={(e) => setReason(e.target.value)}>
+                    {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </label>
+              )}
 
-          {/* lines list */}
-          {linesView.length > 0 && (
-            <div className="line-list">
-              {linesView.map((l) => (
-                <div className="line-row" key={l.code}>
-                  <MaterialThumb mat={l.m} size={32} radius={8} />
-                  <div className="line-info"><div className="line-name">{l.m?.th}</div><div className="line-sub">{l.qty} {l.m?.unit} · {fmtBaht(l.value)}</div></div>
-                  <span className="line-dir" style={{ color: T.color }}>{T.dir > 0 ? "+" : "−"}{l.qty}</span>
-                  <button className="line-x" onClick={() => removeLine(l.code)}><UIcon name="x" size={14} /></button>
+              {job && (
+                <div className="line-list">
+                  {job.lines.map((l) => {
+                    const m = matMap[l.code];
+                    return (
+                      <div className="job-line" key={l.code}>
+                        <MaterialThumb mat={m || { color: "#888" }} size={32} radius={8} />
+                        <div className="line-info">
+                          <div className="line-name">{m?.th || l.code}</div>
+                          <div className="line-sub">เบิก {fmtNum(l.withdrawn)} · คงค้าง <b>{fmtNum(l.outstanding)}</b> {m?.unit}</div>
+                        </div>
+                        <input className="inp job-qty" type="number" min="0" max={l.outstanding}
+                          value={qtyByCode[l.code] || ""} placeholder="0"
+                          onChange={(e) => {
+                            const v = Math.max(0, Math.min(l.outstanding, Number(e.target.value) || 0));
+                            setQtyByCode((s) => ({ ...s, [l.code]: v }));
+                          }} />
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-              <div className="line-total"><span>รวม {lines.length} รายการ · {fmtNum(totalQty)} หน่วย</span><b>{fmtBaht(totalValue)}</b></div>
-            </div>
+              )}
+
+              <button className="btn-primary big" disabled={!jobValid || busy} onClick={submitJob}
+                style={jobValid ? { background: T.color, boxShadow: "none" } : {}}>
+                <UIcon name={T.icon} size={17} color="#fff" /> {busy ? "กำลังบันทึก…" : `ยืนยัน${T.th}`}
+              </button>
+            </>
           )}
 
-          <button className="btn-primary big" disabled={!valid || busy} onClick={submit}
-            style={valid ? { background: T.color, boxShadow: "none" } : {}}>
-            <UIcon name={T.icon} size={17} color="#fff" /> {busy ? "กำลังบันทึก…" : `ยืนยัน${T.th} ${lines.length || ""} รายการ`}
-          </button>
-          {lines.length === 0 && <p className="page-sub" style={{ marginTop: 8 }}>เพิ่มวัสดุอย่างน้อย 1 รายการก่อนยืนยัน</p>}
+          {/* ============ CART FLOW (withdraw / purchase / central-damage) ============ */}
+          {flow === "cart" && (
+            <>
+              {type !== "purchase" && type !== "damage" && (
+                <label className="fld"><span>ทีม · Team</span>
+                  <div className="team-pick-row">
+                    {teams.map((t) => (
+                      <button key={t.id} className={"team-pick" + (team === t.id ? " on" : "")} onClick={() => setTeam(t.id)}
+                        style={team === t.id ? { background: t.color, borderColor: t.color, color: "#fff" } : {}}>
+                        <span style={{ width: 8, height: 8, borderRadius: 9, background: team === t.id ? "#fff" : t.color }} />
+                        {t.name.replace("Team ", "")}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+              )}
+
+              <div className="fld-row">
+                {type !== "damage" && (
+                  <label className="fld"><span>{type === "purchase" ? "เลขใบสั่งซื้อ (PO)" : "เลขที่งาน · Job No."}</span>
+                    <input className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)}
+                      placeholder={type === "purchase" ? "เช่น PO-260610-01" : "เช่น JB-260610-03"} />
+                  </label>
+                )}
+                {type === "damage" && (
+                  <label className="fld"><span>สาเหตุ · Reason</span>
+                    <select className="inp" value={reason} onChange={(e) => setReason(e.target.value)}>
+                      {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </label>
+                )}
+              </div>
+
+              <div className="fld"><span>เพิ่มรายการวัสดุ</span>
+                <div className="line-add">
+                  <select className="inp" value={pickCode} onChange={(e) => setPickCode(e.target.value)}>
+                    {mats.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
+                  </select>
+                  <input className="inp line-qty" type="number" min="1" value={pickQty}
+                    onChange={(e) => setPickQty(Math.max(1, Number(e.target.value) || 1))} />
+                  <button className="btn-ghost sm" onClick={addLine}><UIcon name="plus" size={14} /> เพิ่ม</button>
+                </div>
+              </div>
+
+              {linesView.length > 0 && (
+                <div className="line-list">
+                  {linesView.map((l) => (
+                    <div className="line-row" key={l.code}>
+                      <MaterialThumb mat={l.m} size={32} radius={8} />
+                      <div className="line-info"><div className="line-name">{l.m?.th}</div><div className="line-sub">{l.qty} {l.m?.unit} · {fmtBaht(l.value)}</div></div>
+                      <span className="line-dir" style={{ color: T.color }}>{T.dir > 0 ? "+" : "−"}{l.qty}</span>
+                      <button className="line-x" onClick={() => removeLine(l.code)}><UIcon name="x" size={14} /></button>
+                    </div>
+                  ))}
+                  <div className="line-total"><span>รวม {lines.length} รายการ</span><b>{fmtBaht(cartTotal)}</b></div>
+                </div>
+              )}
+
+              <button className="btn-primary big" disabled={!cartValid || busy} onClick={submitCart}
+                style={cartValid ? { background: T.color, boxShadow: "none" } : {}}>
+                <UIcon name={T.icon} size={17} color="#fff" /> {busy ? "กำลังบันทึก…" : `ยืนยัน${T.th} ${lines.length || ""} รายการ`}
+              </button>
+              {lines.length === 0 && <p className="page-sub" style={{ marginTop: 8 }}>เพิ่มวัสดุอย่างน้อย 1 รายการก่อนยืนยัน</p>}
+            </>
+          )}
         </div>
 
         {/* RECENT */}
