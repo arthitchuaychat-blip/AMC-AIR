@@ -350,7 +350,7 @@ export default function Movements({ role, prefill, onPrefillConsumed }) {
         {printData && (
           <div className="slip">
             <div className="slip-head">
-              <div className="slip-brand">วัสดุOS</div>
+              <div className="slip-brand">AMC Stock</div>
               <div className="slip-title">ใบ{printData.typeTh}</div>
             </div>
             <div className="slip-meta">
