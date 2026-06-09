@@ -1,5 +1,5 @@
 import React from "react";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials } from "../lib/api";
 import { UIcon } from "../icons";
 
 const ROLES = [{ v: "tech", l: "ช่าง" }, { v: "admin", l: "ธุรการ" }, { v: "exec", l: "ผู้บริหาร" }];
@@ -86,6 +86,32 @@ function CategoryRow({ c, onChanged, flash }) {
       <input className="inp" value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="English" />
       <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
       <button className="btn-ghost sm danger" onClick={del}><UIcon name="trash" size={14} /></button>
+    </div>
+  );
+}
+
+function DangerAction({ label, desc, phrase, onRun, flash }) {
+  const [armed, setArmed] = React.useState(false);
+  const [val, setVal] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  async function run() {
+    setBusy(true);
+    try { await onRun(); flash(`${label} สำเร็จ`); setArmed(false); setVal(""); }
+    catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="danger-row">
+      <div className="danger-info"><div className="danger-label">{label}</div><div className="danger-desc">{desc}</div></div>
+      {!armed ? (
+        <button className="btn-danger-sm" onClick={() => setArmed(true)}>{label}</button>
+      ) : (
+        <div className="danger-confirm">
+          <input className="inp" placeholder={`พิมพ์ "${phrase}" เพื่อยืนยัน`} value={val} onChange={(e) => setVal(e.target.value)} autoFocus />
+          <button className="btn-ghost sm" onClick={() => { setArmed(false); setVal(""); }}>ยกเลิก</button>
+          <button className="btn-danger-sm" disabled={val.trim() !== phrase || busy} onClick={run}>{busy ? "กำลังลบ…" : "ยืนยันลบ"}</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -207,6 +233,19 @@ export default function Settings() {
           <div className="set-list">
             {cats.map((c) => <CategoryRow key={c.id} c={c} onChanged={load} flash={flash} />)}
           </div>
+        </div>
+
+        {/* DANGER ZONE */}
+        <div className="card danger-card" style={{ marginTop: 16 }}>
+          <div className="sec-head"><div><div className="sec-title" style={{ color: "var(--down)" }}>เขตอันตราย · เตรียมเริ่มใช้จริง</div><div className="sec-sub">ลบข้อมูลทดลองก่อนใช้จริง · ทำแล้วย้อนไม่ได้ · ต้องพิมพ์ยืนยัน</div></div></div>
+          <DangerAction flash={flash}
+            label="ล้างประวัติธุรกรรม + งาน" phrase="ล้างประวัติ"
+            desc="ลบเบิก/คืน/ซื้อ/ตัดเสีย และงานทั้งหมด · คงเหลือกลับเป็นค่าตั้งต้น · เก็บรายการวัสดุไว้"
+            onRun={clearAllTransactions} />
+          <DangerAction flash={flash}
+            label="ลบรายการวัสดุทั้งหมด" phrase="ลบวัสดุ"
+            desc="ลบวัสดุทุกรายการ + ประวัติธุรกรรม + งาน (เริ่มต้นใหม่หมด แล้วค่อยนำเข้าวัสดุจริง)"
+            onRun={deleteAllMaterials} />
         </div>
         </>
       )}

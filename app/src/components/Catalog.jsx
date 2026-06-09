@@ -4,6 +4,7 @@ import { fmtBaht2, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import MaterialModal from "./MaterialModal";
 import MaterialDrawer from "./MaterialDrawer";
+import BulkImportModal from "./BulkImportModal";
 
 export default function Catalog({ role }) {
   const canEdit = role === "admin";
@@ -16,6 +17,7 @@ export default function Catalog({ role }) {
   const [editing, setEditing] = React.useState(undefined); // undefined=closed, null=add, obj=edit
   const [openMat, setOpenMat] = React.useState(null);       // material detail drawer
   const [viewMode, setViewMode] = React.useState("grid");
+  const [importing, setImporting] = React.useState(false);
 
   async function load() {
     setLoading(true); setErr(null);
@@ -64,6 +66,11 @@ export default function Catalog({ role }) {
             <button className={"seg-btn" + (viewMode === "grid" ? " on" : "")} onClick={() => setViewMode("grid")} title="กริด"><UIcon name="dashboard" size={16} /></button>
             <button className={"seg-btn" + (viewMode === "list" ? " on" : "")} onClick={() => setViewMode("list")} title="ตาราง"><UIcon name="catalog" size={16} /></button>
           </div>
+          {canEdit && (
+            <button className="btn-ghost" onClick={() => setImporting(true)}>
+              <UIcon name="box" size={15} /> นำเข้าหลายรายการ
+            </button>
+          )}
           {canEdit && (
             <button className="btn-primary" onClick={() => setEditing(null)}>
               <UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มวัสดุ
@@ -138,6 +145,13 @@ export default function Catalog({ role }) {
         </div>
       )}
 
+      {importing && (
+        <BulkImportModal
+          categories={cats}
+          onClose={() => setImporting(false)}
+          onDone={(n) => { setImporting(false); alert(`นำเข้า ${n} รายการสำเร็จ`); load(); }}
+        />
+      )}
       {openMat && <MaterialDrawer mat={openMat} onClose={() => setOpenMat(null)} />}
       {editing !== undefined && (
         <MaterialModal

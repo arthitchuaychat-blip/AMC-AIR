@@ -110,6 +110,27 @@ export async function deactivateMaterial(code) {
   if (error) throw error;
 }
 
+// bulk import (upsert by code) — admin only via RLS
+export async function bulkUpsertMaterials(rows) {
+  const { error } = await supabase.from("materials").upsert(rows, { onConflict: "code" });
+  if (error) throw error;
+}
+
+// DANGER: clear all transactions + jobs (resets stock to init). admin only.
+export async function clearAllTransactions() {
+  const e1 = (await supabase.from("transactions").delete().gte("id", 0)).error;
+  if (e1) throw e1;
+  const e2 = (await supabase.from("jobs").delete().neq("job_no", "")).error;
+  if (e2) throw e2;
+}
+
+// DANGER: delete every material (also clears transactions/jobs first due to FK). admin only.
+export async function deleteAllMaterials() {
+  await clearAllTransactions();
+  const { error } = await supabase.from("materials").delete().neq("code", "");
+  if (error) throw error;
+}
+
 // ---------- PHASE 2: movements ----------
 // record one transaction (withdraw | return | purchase | damage)
 // stock updates automatically because material_stock view derives from transactions

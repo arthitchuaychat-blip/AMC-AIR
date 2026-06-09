@@ -588,3 +588,20 @@ select.inp{cursor:pointer}
 .inp-unit .unit-pre,.inp-unit .unit-suf{font-size:11.5px;color:var(--ink-3);font-weight:600;flex:none;white-space:nowrap}
 .line-add .line-price{flex:none;width:120px}
 .line-add .line-qty{flex:none;width:108px}
+
+/* bulk import */
+.bulk-ta{width:100%;font-family:var(--mono);font-size:12px;line-height:1.6;resize:vertical;min-height:150px;padding:12px 13px}
+.bulk-preview{margin-top:10px;font-size:13px;font-weight:600;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 13px}
+
+/* danger zone */
+.danger-card{border-color:color-mix(in srgb,var(--down) 30%,var(--line))}
+.danger-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line-2);flex-wrap:wrap}
+.danger-row:last-child{border-bottom:none}
+.danger-info{flex:1;min-width:200px}
+.danger-label{font-size:13.5px;font-weight:700}
+.danger-desc{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.btn-danger-sm{background:var(--down);color:#fff;font-size:12.5px;font-weight:700;padding:9px 15px;border-radius:9px;flex:none;transition:.13s}
+.btn-danger-sm:hover:not(:disabled){filter:brightness(1.06)}
+.btn-danger-sm:disabled{opacity:.4;cursor:default}
+.danger-confirm{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.danger-confirm .inp{width:240px;padding:8px 11px;font-size:13px}
