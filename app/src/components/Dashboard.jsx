@@ -38,7 +38,7 @@ function StatCard({ icon, color, label, value, sub, accent, onClick }) {
   );
 }
 
-export default function Dashboard({ onNavigate }) {
+export default function Dashboard({ onReorder }) {
   const [period, setPeriod] = React.useState("month");
   const [detail, setDetail] = React.useState(null);
   const [mats, setMats] = React.useState([]);
@@ -199,9 +199,9 @@ export default function Dashboard({ onNavigate }) {
                 {low.length > 5 && <div className="lowstock-more">+ อีก {low.length - 5} รายการ</div>}
               </div>
               {low.length > 0 && (
-                <button className="lowstock-cta" onClick={() => onNavigate && onNavigate("movements")}>
+                <button className="lowstock-cta" onClick={() => onReorder && onReorder(low.map((m) => ({ code: m.code, qty: m.need })))}>
                   <UIcon name="purchase" size={17} color="#fff" />
-                  ไปบันทึกสั่งซื้อ · {low.length} รายการ · {fmtBaht(reorderTotal)}
+                  สร้างใบสั่งซื้อ · {low.length} รายการ · {fmtBaht(reorderTotal)}
                   <UIcon name="chevR" size={16} color="#fff" strokeWidth={2.4} />
                 </button>
               )}

@@ -70,6 +70,24 @@ create table if not exists jobs (
   created_at timestamptz not null default now()
 );
 
+-- ---------- ใบสั่งซื้อ (Purchase Orders) ----------
+create table if not exists purchase_orders (
+  po_no       text primary key,
+  supplier    text,
+  status      text not null default 'open' check (status in ('open','received','cancelled')),
+  note        text,
+  created_at  timestamptz not null default now(),
+  received_at timestamptz,
+  created_by  uuid references auth.users(id)
+);
+create table if not exists po_items (
+  id            bigint generated always as identity primary key,
+  po_no         text not null references purchase_orders(po_no) on delete cascade,
+  material_code text not null references materials(code),
+  qty           numeric not null check (qty > 0),
+  price         numeric not null default 0
+);
+
 -- ---------- VIEW: ยอดคงเหลือปัจจุบัน (คำนวณจากธุรกรรม) ----------
 -- หมายเหตุ: "ตัดเสียในงาน" (มี job_no) ไม่หักสต๊อกคลัง เพราะของออกจากคลังตั้งแต่ตอนเบิกแล้ว
 -- มีเฉพาะ "ตัดเสียในคลัง" (job_no ว่าง) ที่หักสต๊อก
@@ -189,6 +207,16 @@ create policy txn_admin_edit on transactions for update to authenticated
 alter table jobs enable row level security;
 create policy jobs_read on jobs for select to authenticated using (true);
 create policy jobs_write on jobs for all to authenticated
+  using (my_role() = 'admin') with check (my_role() = 'admin');
+
+-- ใบสั่งซื้อ: อ่านได้ทุกคนที่ล็อกอิน · สร้าง/แก้/ลบ เฉพาะธุรการ
+alter table purchase_orders enable row level security;
+alter table po_items enable row level security;
+create policy po_read on purchase_orders for select to authenticated using (true);
+create policy po_write on purchase_orders for all to authenticated
+  using (my_role() = 'admin') with check (my_role() = 'admin');
+create policy poi_read on po_items for select to authenticated using (true);
+create policy poi_write on po_items for all to authenticated
   using (my_role() = 'admin') with check (my_role() = 'admin');
 
 -- ============================================================

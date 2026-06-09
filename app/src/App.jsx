@@ -8,17 +8,19 @@ import Movements from "./components/Movements";
 import Dashboard from "./components/Dashboard";
 import Settings from "./components/Settings";
 import Jobs from "./components/Jobs";
+import PurchaseOrders from "./components/PurchaseOrders";
 
 const NAV = {
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
   movements: { th: "บันทึกธุรกรรม", en: "Movements", icon: "withdraw" },
+  po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   jobs: { th: "งาน", en: "Jobs & Cost", icon: "clipboard" },
   catalog: { th: "คลังวัสดุ", en: "Catalog", icon: "catalog" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
 const NAV_BY_ROLE = {
-  admin: ["movements", "jobs", "catalog", "dashboard", "settings"],
-  exec: ["dashboard", "jobs", "catalog"],
+  admin: ["movements", "po", "jobs", "catalog", "dashboard", "settings"],
+  exec: ["dashboard", "po", "jobs", "catalog"],
   tech: ["movements"],
 };
 
@@ -45,6 +47,8 @@ export default function App() {
   const [profile, setProfile] = React.useState(null);
   const [view, setView] = React.useState(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [purchasePrefill, setPurchasePrefill] = React.useState(null);
+  const [poPrefill, setPoPrefill] = React.useState(null);
 
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
@@ -121,8 +125,10 @@ export default function App() {
       </aside>
 
       <main className="main">
-        {view === "dashboard" && <Dashboard onNavigate={setView} />}
-        {view === "movements" && <Movements role={role} />}
+        {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }} />}
+        {view === "movements" && <Movements role={role} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} />}
+        {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
+          onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}
         {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}
         {view === "settings" && <Settings />}

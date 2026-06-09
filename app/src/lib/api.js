@@ -233,6 +233,47 @@ export async function reopenJob(job_no) {
   if (error) throw error;
 }
 
+// ---------- PURCHASE ORDERS ----------
+export async function listPurchaseOrders() {
+  const [poRes, itemRes] = await Promise.all([
+    supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }),
+    supabase.from("po_items").select("*"),
+  ]);
+  if (poRes.error) throw poRes.error;
+  if (itemRes.error) throw itemRes.error;
+  const byPo = {};
+  (itemRes.data || []).forEach((it) => { (byPo[it.po_no] = byPo[it.po_no] || []).push(it); });
+  return (poRes.data || []).map((po) => {
+    const items = (byPo[po.po_no] || []).map((it) => ({ material_code: it.material_code, qty: Number(it.qty), price: Number(it.price) }));
+    return { ...po, items, total: items.reduce((a, it) => a + it.qty * it.price, 0) };
+  });
+}
+
+export async function savePurchaseOrder(po, items) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const e1 = (await supabase.from("purchase_orders").upsert(
+    { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, status: po.status || "open", created_by: user?.id || null },
+    { onConflict: "po_no" }
+  )).error;
+  if (e1) throw e1;
+  const e2 = (await supabase.from("po_items").delete().eq("po_no", po.po_no)).error;
+  if (e2) throw e2;
+  if (items.length) {
+    const e3 = (await supabase.from("po_items").insert(items.map((it) => ({ po_no: po.po_no, material_code: it.code, qty: Number(it.qty), price: Number(it.price) || 0 })))).error;
+    if (e3) throw e3;
+  }
+}
+
+export async function deletePurchaseOrder(po_no) {
+  const { error } = await supabase.from("purchase_orders").delete().eq("po_no", po_no);
+  if (error) throw error;
+}
+
+export async function markPoReceived(po_no) {
+  const { error } = await supabase.from("purchase_orders").update({ status: "received", received_at: new Date().toISOString() }).eq("po_no", po_no);
+  if (error) throw error;
+}
+
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
 export async function deleteTransaction(id) {
   const { error } = await supabase.from("transactions").delete().eq("id", id);

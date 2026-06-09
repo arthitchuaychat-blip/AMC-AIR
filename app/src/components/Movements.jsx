@@ -1,5 +1,5 @@
 import React from "react";
-import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost } from "../lib/api";
+import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 
@@ -12,7 +12,7 @@ const TYPES = [
 const TYPE_BY = Object.fromEntries(TYPES.map((t) => [t.id, t]));
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
 
-export default function Movements({ role }) {
+export default function Movements({ role, prefill, onPrefillConsumed }) {
   const isAdmin = role === "admin";
   const [mats, setMats] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
@@ -34,6 +34,7 @@ export default function Movements({ role }) {
   const [pickCode, setPickCode] = React.useState("");
   const [pickQty, setPickQty] = React.useState(1);
   const [pickPrice, setPickPrice] = React.useState("");
+  const [receivePo, setReceivePo] = React.useState(null);
 
   // job flow (return / damage-from-job)
   const [selJob, setSelJob] = React.useState("");
@@ -54,6 +55,15 @@ export default function Movements({ role }) {
   }
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { const m = matMap[pickCode]; if (m) setPickPrice(String(m.cost)); }, [pickCode, mats]);
+  // prefill the purchase cart when receiving a PO ({ poNo, items:[{code,qty,price}] })
+  React.useEffect(() => {
+    if (!prefill || !prefill.items?.length || !mats.length) return;
+    setType("purchase");
+    setJobNo(prefill.poNo || "");
+    setReceivePo(prefill.poNo || null);
+    setLines(prefill.items.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: p.price ?? matMap[p.code]?.cost ?? 0 })));
+    onPrefillConsumed && onPrefillConsumed();
+  }, [prefill, mats]);
   React.useEffect(() => {
     if (!printData) return;
     const t = setTimeout(() => { window.print(); setPrintData(null); }, 80);
@@ -61,7 +71,7 @@ export default function Movements({ role }) {
   }, [printData]);
 
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
-  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); }
+  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); }
 
   // ----- cart helpers -----
   const linesView = lines.map((l) => {
@@ -100,8 +110,9 @@ export default function Movements({ role }) {
           const denom = onQty + pq;
           if (denom > 0) await updateMaterialCost(l.code, Math.round(((onVal + pq * pp) / denom) * 100) / 100);
         }
+        if (receivePo) { await markPoReceived(receivePo); setReceivePo(null); }
       }
-      flash(`${T.th} ${lines.length} รายการ สำเร็จ`);
+      flash(`${T.th} ${lines.length} รายการ สำเร็จ${receivePo ? " · ปิดใบสั่งซื้อแล้ว" : ""}`);
       setLines([]); setJobNo("");
       await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
