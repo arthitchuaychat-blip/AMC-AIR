@@ -258,11 +258,16 @@ export default function Movements({ role }) {
                     {mats.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
                   </select>
                   {type === "purchase" && (
-                    <input className="inp line-qty" type="number" min="0" step="0.01" value={pickPrice}
-                      onChange={(e) => setPickPrice(e.target.value)} title="ราคา/หน่วยที่ซื้อ" placeholder="ราคา/หน่วย" />
+                    <div className="inp inp-unit line-price" title="ราคา/หน่วยที่ซื้อ">
+                      <span className="unit-pre">฿</span>
+                      <input type="number" min="0" step="0.01" value={pickPrice} onChange={(e) => setPickPrice(e.target.value)} />
+                      <span className="unit-suf">/{matMap[pickCode]?.unit || "หน่วย"}</span>
+                    </div>
                   )}
-                  <input className="inp line-qty" type="number" min="1" value={pickQty}
-                    onChange={(e) => setPickQty(Math.max(1, Number(e.target.value) || 1))} title="จำนวน" />
+                  <div className="inp inp-unit line-qty" title="จำนวน">
+                    <input type="number" min="1" value={pickQty} onChange={(e) => setPickQty(Math.max(1, Number(e.target.value) || 1))} />
+                    <span className="unit-suf">{matMap[pickCode]?.unit || "หน่วย"}</span>
+                  </div>
                   <button className="btn-ghost sm" onClick={addLine}><UIcon name="plus" size={14} /> เพิ่ม</button>
                 </div>
                 {type === "purchase" && <p className="page-sub" style={{ marginTop: 6 }}>ใส่ราคาที่ซื้อจริงครั้งนี้ · ระบบจะคำนวณต้นทุนเฉลี่ยใหม่ให้อัตโนมัติ</p>}
