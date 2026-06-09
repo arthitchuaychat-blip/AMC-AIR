@@ -98,6 +98,12 @@ export async function saveMaterial(row, isNew) {
   if (error) throw error;
 }
 
+// update a material's (weighted-average) unit cost — used by purchase moving average
+export async function updateMaterialCost(code, cost) {
+  const { error } = await supabase.from("materials").update({ cost }).eq("code", code);
+  if (error) throw error;
+}
+
 // soft-delete (keep history intact)
 export async function deactivateMaterial(code) {
   const { error } = await supabase.from("materials").update({ active: false }).eq("code", code);

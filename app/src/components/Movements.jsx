@@ -1,5 +1,5 @@
 import React from "react";
-import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs } from "../lib/api";
+import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 
@@ -33,6 +33,7 @@ export default function Movements({ role }) {
   const [lines, setLines] = React.useState([]);
   const [pickCode, setPickCode] = React.useState("");
   const [pickQty, setPickQty] = React.useState(1);
+  const [pickPrice, setPickPrice] = React.useState("");
 
   // job flow (return / damage-from-job)
   const [selJob, setSelJob] = React.useState("");
@@ -52,6 +53,7 @@ export default function Movements({ role }) {
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  React.useEffect(() => { const m = matMap[pickCode]; if (m) setPickPrice(String(m.cost)); }, [pickCode, mats]);
   React.useEffect(() => {
     if (!printData) return;
     const t = setTimeout(() => { window.print(); setPrintData(null); }, 80);
@@ -62,14 +64,19 @@ export default function Movements({ role }) {
   function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); }
 
   // ----- cart helpers -----
-  const linesView = lines.map((l) => { const m = matMap[l.code]; return { ...l, m, value: (m?.cost || 0) * l.qty }; });
+  const linesView = lines.map((l) => {
+    const m = matMap[l.code];
+    const unit = type === "purchase" ? (l.price ?? m?.cost ?? 0) : (m?.cost || 0);
+    return { ...l, m, unit, value: unit * l.qty };
+  });
   const cartTotal = linesView.reduce((a, x) => a + x.value, 0);
   function addLine() {
     if (!pickCode || pickQty < 1) return;
+    const price = type === "purchase" ? (Number(pickPrice) || 0) : undefined;
     setLines((ls) => {
       const i = ls.findIndex((l) => l.code === pickCode);
-      if (i >= 0) { const c = [...ls]; c[i] = { ...c[i], qty: c[i].qty + Number(pickQty) }; return c; }
-      return [...ls, { code: pickCode, qty: Number(pickQty) }];
+      if (i >= 0) { const c = [...ls]; c[i] = { ...c[i], qty: c[i].qty + Number(pickQty), price }; return c; }
+      return [...ls, { code: pickCode, qty: Number(pickQty), price }];
     });
     setPickQty(1);
   }
@@ -82,8 +89,18 @@ export default function Movements({ role }) {
     try {
       await recordTransactions(lines.map((l) => ({
         type, job_no: jobNo, team: type === "damage" ? null : team,
-        material_code: l.code, qty: l.qty, unit_cost: matMap[l.code].cost, reason,
+        material_code: l.code, qty: l.qty,
+        unit_cost: type === "purchase" ? (Number(l.price) || 0) : matMap[l.code].cost, reason,
       })));
+      // weighted moving average: recompute each purchased material's unit cost
+      if (type === "purchase") {
+        for (const l of lines) {
+          const m = matMap[l.code]; if (!m) continue;
+          const onQty = m.stock, onVal = m.stock * m.cost, pq = l.qty, pp = Number(l.price) || 0;
+          const denom = onQty + pq;
+          if (denom > 0) await updateMaterialCost(l.code, Math.round(((onVal + pq * pp) / denom) * 100) / 100);
+        }
+      }
       flash(`${T.th} ${lines.length} รายการ สำเร็จ`);
       setLines([]); setJobNo("");
       await load();
@@ -240,10 +257,15 @@ export default function Movements({ role }) {
                   <select className="inp" value={pickCode} onChange={(e) => setPickCode(e.target.value)}>
                     {mats.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
                   </select>
+                  {type === "purchase" && (
+                    <input className="inp line-qty" type="number" min="0" step="0.01" value={pickPrice}
+                      onChange={(e) => setPickPrice(e.target.value)} title="ราคา/หน่วยที่ซื้อ" placeholder="ราคา/หน่วย" />
+                  )}
                   <input className="inp line-qty" type="number" min="1" value={pickQty}
-                    onChange={(e) => setPickQty(Math.max(1, Number(e.target.value) || 1))} />
+                    onChange={(e) => setPickQty(Math.max(1, Number(e.target.value) || 1))} title="จำนวน" />
                   <button className="btn-ghost sm" onClick={addLine}><UIcon name="plus" size={14} /> เพิ่ม</button>
                 </div>
+                {type === "purchase" && <p className="page-sub" style={{ marginTop: 6 }}>ใส่ราคาที่ซื้อจริงครั้งนี้ · ระบบจะคำนวณต้นทุนเฉลี่ยใหม่ให้อัตโนมัติ</p>}
               </div>
 
               {linesView.length > 0 && (
@@ -251,7 +273,7 @@ export default function Movements({ role }) {
                   {linesView.map((l) => (
                     <div className="line-row" key={l.code}>
                       <MaterialThumb mat={l.m} size={32} radius={8} />
-                      <div className="line-info"><div className="line-name">{l.m?.th}</div><div className="line-sub">{l.qty} {l.m?.unit} · {fmtBaht(l.value)}</div></div>
+                      <div className="line-info"><div className="line-name">{l.m?.th}</div><div className="line-sub">{l.qty} {l.m?.unit}{type === "purchase" ? ` × ${fmtBaht(l.unit)}` : ""} · {fmtBaht(l.value)}</div></div>
                       <span className="line-dir" style={{ color: T.color }}>{T.dir > 0 ? "+" : "−"}{l.qty}</span>
                       <button className="line-x" onClick={() => removeLine(l.code)}><UIcon name="x" size={14} /></button>
                     </div>
