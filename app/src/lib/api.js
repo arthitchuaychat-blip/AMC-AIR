@@ -1,4 +1,8 @@
+import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+
+const _url = import.meta.env.VITE_SUPABASE_URL;
+const _anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // default icon per category (materials table doesn't store an icon)
 const CAT_ICON = { pipe: "pipe", fit: "elbow", ref: "tank", ins: "foam", wire: "wire", elec: "breaker" };
@@ -119,4 +123,44 @@ export async function listTransactionsSince(startDate) {
   const { data, error } = await q;
   if (error) throw error;
   return data || [];
+}
+
+// ---------- ADMIN: manage teams (admin only — RLS) ----------
+export async function saveTeam(t) {
+  const { error } = await supabase.from("teams").upsert(
+    { id: t.id.trim().toUpperCase(), name: t.name.trim(), lead: t.lead?.trim() || null },
+    { onConflict: "id" }
+  );
+  if (error) throw error;
+}
+export async function deleteTeam(id) {
+  const { error } = await supabase.from("teams").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------- ADMIN: manage users / profiles ----------
+export async function listProfiles() {
+  const { data, error } = await supabase.from("profiles").select("*").order("email");
+  if (error) throw error;
+  return data || [];
+}
+export async function updateProfile(id, fields) {
+  const payload = { role: fields.role, name: fields.name || null, team: fields.role === "tech" ? (fields.team || null) : null };
+  const { error } = await supabase.from("profiles").update(payload).eq("id", id);
+  if (error) throw error;
+}
+// create a brand-new login account + set its profile (admin only).
+// Uses a throwaway client so the admin's own session is untouched.
+export async function createUser({ email, password, name, role, team }) {
+  const tmp = createClient(_url, _anon, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await tmp.auth.signUp({ email: email.trim(), password });
+  if (error) throw error;
+  const uid = data.user?.id;
+  if (!uid) throw new Error("สร้างบัญชีไม่สำเร็จ (อาจต้องปิด Confirm email ใน Supabase)");
+  const { error: e2 } = await supabase.from("profiles").upsert(
+    { id: uid, email: email.trim(), name: name?.trim() || email.trim(), role: role || "tech", team: role === "tech" ? (team || null) : null },
+    { onConflict: "id" }
+  );
+  if (e2) throw e2;
+  return data.user;
 }
