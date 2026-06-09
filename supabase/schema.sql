@@ -14,9 +14,7 @@ create table if not exists categories (
 create table if not exists teams (
   id     text primary key,
   name   text not null,
-  lead   text,
-  van    text,
-  color  text
+  lead   text
 );
 
 create table if not exists materials (
@@ -85,11 +83,11 @@ insert into categories (id, name_th, name_en, color) values
 on conflict (id) do nothing;
 
 -- ---------- SEED: ทีมช่าง ----------
-insert into teams (id, name, lead, van, color) values
- ('ARM','Team ARM','อาร์ม','1กข-1881','#2563eb'),
- ('KENG','Team KENG','เก่ง','2คฆ-2042','#f97316'),
- ('BOM','Team BOM','บอม','3งจ-3370','#16a34a'),
- ('PAT','Team PAT','แพท','4ฉช-4519','#9333ea')
+insert into teams (id, name, lead) values
+ ('ARM','Team ARM','อาร์ม'),
+ ('KENG','Team KENG','เก่ง'),
+ ('BOM','Team BOM','บอม'),
+ ('PAT','Team PAT','แพท')
 on conflict (id) do nothing;
 
 -- ---------- SEED: วัสดุ 24 รายการ ----------

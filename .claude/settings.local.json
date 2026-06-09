@@ -36,7 +36,8 @@
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5173/)",
       "Bash(curl -s http://localhost:5173/src/main.jsx)",
       "Bash(curl -s \"http://localhost:5173/src/lib/supabase.js\")",
-      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" \"http://localhost:5173/src/components/Movements.jsx\")"
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" \"http://localhost:5173/src/components/Movements.jsx\")",
+      "Bash(curl -s -o /tmp/idx.html -w 'HTTP %{http_code}\\\\n' https://amc-air.vercel.app/)"
     ]
   }
 }

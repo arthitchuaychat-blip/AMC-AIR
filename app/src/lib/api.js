@@ -41,10 +41,12 @@ export async function listCategories() {
   return data || [];
 }
 
+// auto color palette so teams get distinct chart colors without storing one
+const TEAM_PALETTE = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#0891b2", "#db2777", "#ca8a04", "#0d9488"];
 export async function listTeams() {
   const { data, error } = await supabase.from("teams").select("*").order("id");
   if (error) throw error;
-  return data || [];
+  return (data || []).map((t, i) => ({ ...t, color: t.color || TEAM_PALETTE[i % TEAM_PALETTE.length] }));
 }
 
 export async function listMaterials() {
