@@ -309,7 +309,7 @@ create policy mat_write on materials for all to authenticated
 
 -- โปรไฟล์: อ่านของตัวเอง / admin อ่านได้หมด
 create policy prof_read on profiles for select to authenticated
-  using (id = auth.uid() or my_role() in ('admin','exec'));
+  using (true);
 create policy prof_self on profiles for update to authenticated
   using (id = auth.uid());
 

@@ -3,6 +3,7 @@ import { listMaterials, listTeams, listTransactionsSince } from "../lib/api";
 import { fmtBaht, fmtNum, fmtCompact } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import DashDrawer from "./DashDrawer";
+import SalesReport from "./SalesReport";
 
 const PERIODS = [
   { id: "day", label: "วันนี้" },
@@ -103,6 +104,10 @@ export default function Dashboard({ onReorder }) {
           ))}
         </div>
       </div>
+
+      <SalesReport />
+
+      <div className="sec-head" style={{ margin: "22px 0 10px" }}><div><div className="sec-title">คลังวัสดุ & การเบิกใช้</div><div className="sec-sub">Inventory & usage · {periodLabel}</div></div></div>
 
       {err && <div className="empty" style={{ color: "var(--down)" }}>โหลดไม่สำเร็จ: {err}</div>}
       {loading && <div className="empty">กำลังโหลด…</div>}
