@@ -2,8 +2,8 @@ import React from "react";
 import { bulkUpsertMaterials } from "../lib/api";
 import { UIcon } from "../icons";
 
-// columns (in order): code, name_th, name_en, category, unit, cost, min_stock, init_stock
-const TEMPLATE = "รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ\nCOPP8,ท่อทองแดง 1\",Copper Pipe 1\",pipe,เมตร,180,40,0";
+// columns (in order): code, name_th, name_en, category, unit, cost, min_stock, init_stock, sale_price, description
+const TEMPLATE = "รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด\nCOPP8,ท่อทองแดง 1\",Copper Pipe 1\",pipe,เมตร,180,40,0,260,ท่อทองแดงเกรด A หนา 0.7mm";
 
 export default function BulkImportModal({ categories, onDone, onClose }) {
   const [text, setText] = React.useState("");
@@ -39,13 +39,15 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
       const cells = line.split(delim).map((c) => c.trim().replace(/^"|"$/g, ""));
       const c0 = (cells[0] || "").toLowerCase();
       if (i === 0 && (c0 === "code" || c0 === "รหัส")) return; // header
-      const [code, name_th, name_en, cat, unit, cost, min_stock, init_stock] = cells;
+      const [code, name_th, name_en, cat, unit, cost, min_stock, init_stock, sale_price] = cells;
+      const description = cells.slice(9).join(delim); // rejoin remainder so commas in description survive
       if (!code || !name_th) { errors.push({ line: i + 1, reason: "ต้องมีรหัสและชื่อไทย" }); return; }
       const category = cat ? (catMap[cat.toLowerCase()] || catMap[cat.trim()] || null) : null;
       rows.push({
         code: code, name_th, name_en: name_en || name_th,
         category, unit: unit || "ชิ้น",
         cost: Number(cost) || 0, min_stock: Number(min_stock) || 0, init_stock: Number(init_stock) || 0,
+        sale_price: Number(sale_price) || 0, description: description?.trim() || null,
       });
     });
     setParsed({ rows, errors });
@@ -69,7 +71,7 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
         <div className="modal-body">
           <p className="page-sub" style={{ marginBottom: 8 }}>
             วางข้อมูลจาก Excel/Google Sheets (คัดลอกทั้งหลายแถวมาวางได้เลย) หรืออัปโหลดไฟล์ <b>.csv</b><br />
-            ลำดับคอลัมน์: <b>รหัส · ชื่อไทย · ชื่ออังกฤษ · หมวด · หน่วย · ต้นทุน · ขั้นต่ำ · คงเหลือ</b> (มี/ไม่มีหัวตารางก็ได้)
+            ลำดับคอลัมน์: <b>รหัส · ชื่อไทย · ชื่ออังกฤษ · หมวด · หน่วย · ต้นทุน · ขั้นต่ำ · คงเหลือ · ราคาขาย · รายละเอียด</b> (มี/ไม่มีหัวตารางก็ได้)
           </p>
           <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
             <label className="btn-ghost sm" style={{ cursor: "pointer" }}>

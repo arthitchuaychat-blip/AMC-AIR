@@ -62,10 +62,11 @@ export default function MaterialDrawer({ mat, onClose }) {
             </div>
             <div className="mat-onhand-side">
               <div><span>มูลค่าคงเหลือ</span><b>{fmtBaht(mat.stock * mat.cost)}</b></div>
-              <div><span>ขั้นต่ำ</span><b>{mat.minStock} {mat.unit}</b></div>
               <div><span>ต้นทุน/หน่วย</span><b>{fmtBaht2(mat.cost)}</b></div>
+              <div><span>ราคาขาย/หน่วย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(mat.salePrice || 0)}</b></div>
             </div>
           </div>
+          {mat.description && <div className="mat-desc">{mat.description}</div>}
         </div>
 
         <div className="drawer-body">

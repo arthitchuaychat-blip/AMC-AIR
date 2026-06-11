@@ -110,10 +110,11 @@ export default function Catalog({ role }) {
                 </div>
                 <div className="cat-card-name">{m.th}</div>
                 <div className="cat-card-en">{m.en}</div>
+                {m.description && <div className="cat-card-desc">{m.description}</div>}
                 <div className="cat-card-stats">
                   <div><span>คงเหลือ</span><b style={low ? { color: "#dc2626" } : {}}>{m.stock} {m.unit}</b></div>
-                  <div><span>ขั้นต่ำ</span><b>{m.minStock}</b></div>
                   <div><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b></div>
+                  <div><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b></div>
                 </div>
                 <div className="cat-card-move">ดูการเคลื่อนไหว <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>
                 <EditDel m={m} />
@@ -136,8 +137,8 @@ export default function Catalog({ role }) {
                   <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.catName} · {m.en}</div>
                 </div>
                 <div className="cat-lrow-col hide-sm"><span>คงเหลือ</span><b style={low ? { color: "#dc2626" } : {}}>{m.stock} {m.unit}</b></div>
-                <div className="cat-lrow-col hide-sm"><span>ขั้นต่ำ</span><b>{m.minStock}</b></div>
-                <div className="cat-lrow-col"><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b></div>
+                <div className="cat-lrow-col hide-sm"><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b></div>
+                <div className="cat-lrow-col"><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b></div>
                 <EditDel m={m} />
               </div>
             );

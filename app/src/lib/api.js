@@ -20,6 +20,8 @@ function enrich(m, catMap) {
     color: c.color || "#64748b",
     icon: CAT_ICON[m.category] || "couple",
     cost: Number(m.cost),
+    salePrice: Number(m.sale_price) || 0,
+    description: m.description || "",
     minStock: Number(m.min_stock),
     stock: Number(m.current_stock ?? m.init_stock ?? 0),
   };
@@ -91,6 +93,8 @@ export async function saveMaterial(row, isNew) {
     category: row.category,
     unit: row.unit,
     cost: Number(row.cost) || 0,
+    sale_price: Number(row.sale_price) || 0,
+    description: row.description?.trim() || null,
     min_stock: Number(row.min_stock) || 0,
   };
   if (isNew) payload.init_stock = Number(row.init_stock) || 0;

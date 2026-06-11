@@ -24,6 +24,8 @@ create table if not exists materials (
   category    text references categories(id) on update cascade,
   unit        text,
   cost        numeric not null default 0,
+  sale_price  numeric not null default 0,
+  description text,
   min_stock   numeric not null default 0,
   init_stock  numeric not null default 0,   -- ยอดคงเหลือ ณ วันเริ่มใช้ระบบ
   photo_url   text,

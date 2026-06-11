@@ -12,6 +12,8 @@ export default function MaterialModal({ initial, categories, onSaved, onClose, o
     category: initial?.category || initial?.cat || categories[0]?.id || "pipe",
     unit: initial?.unit || "เมตร",
     cost: initial?.cost ?? "",
+    sale_price: initial?.salePrice ?? initial?.sale_price ?? "",
+    description: initial?.description ?? "",
     min_stock: initial?.minStock ?? initial?.min_stock ?? "",
     init_stock: initial?.stock ?? initial?.init_stock ?? "",
   }));
@@ -57,6 +59,9 @@ export default function MaterialModal({ initial, categories, onSaved, onClose, o
           <label className="fld"><span>ชื่อวัสดุ (English)</span>
             <input className="inp" value={f.name_en} onChange={set("name_en")} placeholder="Copper Coil 1&quot;" />
           </label>
+          <label className="fld"><span>รายละเอียดสินค้า</span>
+            <textarea className="inp" value={f.description} onChange={set("description")} placeholder="คำอธิบาย / สเปก / หมายเหตุ (ไม่บังคับ)" rows={2} style={{ resize: "vertical" }} />
+          </label>
           <div className="fld-row3">
             <label className="fld"><span>หน่วย</span>
               <select className="inp" value={f.unit} onChange={set("unit")}>
@@ -66,10 +71,13 @@ export default function MaterialModal({ initial, categories, onSaved, onClose, o
             <label className="fld"><span>ต้นทุน/หน่วย *</span>
               <input className="inp" type="number" value={f.cost} onChange={set("cost")} placeholder="0.00" />
             </label>
-            <label className="fld"><span>ขั้นต่ำ</span>
-              <input className="inp" type="number" value={f.min_stock} onChange={set("min_stock")} placeholder="0" />
+            <label className="fld"><span>ราคาขาย/หน่วย</span>
+              <input className="inp" type="number" value={f.sale_price} onChange={set("sale_price")} placeholder="0.00" />
             </label>
           </div>
+          <label className="fld"><span>จำนวนขั้นต่ำ</span>
+            <input className="inp" type="number" value={f.min_stock} onChange={set("min_stock")} placeholder="0" />
+          </label>
           {isNew && (
             <label className="fld"><span>จำนวนคงเหลือเริ่มต้น</span>
               <input className="inp" type="number" value={f.init_stock} onChange={set("init_stock")} placeholder="0" />
