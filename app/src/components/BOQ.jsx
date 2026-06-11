@@ -1,5 +1,5 @@
 import React from "react";
-import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterials, getCompany } from "../lib/api";
+import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterials, getCompanies } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -47,12 +47,12 @@ export default function BOQ({ role }) {
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null); // {boq_no, customer_id, site_id, title, note, items{}}
   const [search, setSearch] = React.useState("");
-  const [company, setCompany] = React.useState({});
+  const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [printB, setPrintB] = React.useState(null);
 
   async function load() {
     setLoading(true);
-    try { const [b, c, m, co] = await Promise.all([listBoqs(), listCustomers(), listMaterials(), getCompany()]); setList(b); setCusts(c); setMats(m); setCompany(co || {}); }
+    try { const [b, c, m, co] = await Promise.all([listBoqs(), listCustomers(), listMaterials(), getCompanies()]); setList(b); setCusts(c); setMats(m); setCompanies(co || { vat: {}, novat: {} }); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -167,7 +167,7 @@ export default function BOQ({ role }) {
         </>);
       })()}
 
-      {printB && (
+      {printB && (() => { const _c = custs.find((x) => String(x.id) === String(printB.customer_id)); const company = _c?.vat === false ? companies.novat : companies.vat; return (
         <DocSlip company={company} titleTh="ใบประมาณการ (BOQ)" titleEn="BILL OF QUANTITIES" docNo={printB.boq_no}
           metaRows={[{ label: "ชื่องาน", value: printB.title }]}
           customer={{ name: printB.customerName, code: printB.customerCode, taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone }}
@@ -201,7 +201,7 @@ export default function BOQ({ role }) {
             <div className="doc-grand"><span>ต้นทุนรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div>
           </div>
         </DocSlip>
-      )}
+      ); })()}
       {toast && <Toast t={toast} />}
     </div>
   );

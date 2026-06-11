@@ -1,26 +1,26 @@
 import React from "react";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompany, saveCompany } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany } from "../lib/api";
 import { UIcon } from "../icons";
 
-// company profile used on the header of printed documents (quotation / BOQ)
-function CompanyCard({ flash }) {
+// company letterhead used on printed documents — two variants: VAT (kind="vat") / non-VAT (kind="novat")
+function CompanyCard({ kind, title, sub, flash }) {
   const [c, setC] = React.useState({});
   const [busy, setBusy] = React.useState(false);
   const [warn, setWarn] = React.useState(null);
   React.useEffect(() => {
-    getCompany().then((d) => setC(d || {}))
-      .catch((e) => setWarn("ยังโหลดข้อมูลบริษัทไม่ได้ — อาจยังไม่ได้รัน migration 014 (" + (e.message || e) + ")"));
+    getCompanies().then((d) => setC((kind === "novat" ? d.novat : d.vat) || {}))
+      .catch((e) => setWarn("ยังโหลดข้อมูลบริษัทไม่ได้ — อาจยังไม่ได้รัน migration 015 (" + (e.message || e) + ")"));
   }, []);
   const set = (k, v) => setC((s) => ({ ...s, [k]: v }));
   async function save() {
     setBusy(true);
-    try { await saveCompany(c); setWarn(null); flash("บันทึกข้อมูลบริษัทแล้ว ✓"); }
-    catch (e) { flash("บันทึกไม่สำเร็จ — รัน SQL 014_documents.sql ก่อน (" + (e.message || e) + ")", true); }
+    try { await saveCompany(c, kind); setWarn(null); flash(`บันทึกหัวกระดาษ (${title}) แล้ว ✓`); }
+    catch (e) { flash("บันทึกไม่สำเร็จ — รัน SQL 015_two_letterheads.sql ก่อน (" + (e.message || e) + ")", true); }
     setBusy(false);
   }
   return (
     <div className="card">
-      <div className="sec-head"><div><div className="sec-title">ข้อมูลบริษัท</div><div className="sec-sub">ใช้เป็นหัวเอกสาร ใบเสนอราคา / BOQ</div></div></div>
+      <div className="sec-head"><div><div className="sec-title">{title}</div><div className="sec-sub">{sub}</div></div></div>
       {warn && <div className="login-err" style={{ marginBottom: 10 }}>{warn}</div>}
       <div className="fld-row">
         <label className="fld"><span>ชื่อบริษัท</span><input className="inp" value={c.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="เช่น บริษัท เอเอ็มซี แอร์ จำกัด" /></label>
@@ -245,7 +245,10 @@ export default function Settings() {
 
       {!loading && (
         <>
-        <div style={{ marginBottom: 16 }}><CompanyCard flash={flash} /></div>
+        <div className="damage-layout" style={{ marginBottom: 16 }}>
+          <CompanyCard kind="vat" title="หัวกระดาษ — แบบมี VAT" sub="ใช้กับใบที่คิด VAT · บัญชีธนาคารชุด VAT" flash={flash} />
+          <CompanyCard kind="novat" title="หัวกระดาษ — แบบไม่มี VAT" sub="ใช้กับใบที่ไม่คิด VAT · บัญชีธนาคารชุดไม่มี VAT" flash={flash} />
+        </div>
         <div className="damage-layout">
           {/* TEAMS */}
           <div className="card">

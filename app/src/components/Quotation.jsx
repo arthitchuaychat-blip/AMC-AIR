@@ -1,5 +1,5 @@
 import React from "react";
-import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs, getCompany } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs, getCompanies } from "../lib/api";
 import DocSlip from "./DocSlip";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -25,13 +25,13 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
   const [printQ, setPrintQ] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
   const [search, setSearch] = React.useState("");
-  const [company, setCompany] = React.useState({});
+  const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
   async function load() {
     setLoading(true);
-    try { const [q, c, m, b, co] = await Promise.all([listQuotations(), listCustomers(), listMaterials(), listBoqs(), getCompany()]); setList(q); setCusts(c); setMats(m); setBoqs(b); setCompany(co || {}); }
+    try { const [q, c, m, b, co] = await Promise.all([listQuotations(), listCustomers(), listMaterials(), listBoqs(), getCompanies()]); setList(q); setCusts(c); setMats(m); setBoqs(b); setCompanies(co || { vat: {}, novat: {} }); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -266,12 +266,12 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
         </>);
       })()}
 
-      {/* print: full quotation document */}
-      {printQ && (
-        <DocSlip company={company} titleTh="ใบเสนอราคา" titleEn="QUOTATION" docNo={printQ.quote_no}
+      {/* print: full quotation document — letterhead chosen by VAT status */}
+      {printQ && (() => { const co = printQ.vat ? companies.vat : companies.novat; return (
+        <DocSlip company={co} titleTh="ใบเสนอราคา" titleEn="QUOTATION" docNo={printQ.quote_no}
           metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }]}
           customer={{ name: printQ.customerName, code: printQ.customerCode, taxId: printQ.customerTaxId, address: printQ.siteAddress || printQ.customerAddr, contactName: printQ.contactName, contactPhone: printQ.contactPhone }}
-          terms={printQ.note || company.default_terms} bank={company.bank_info}
+          terms={printQ.note || co.default_terms} bank={co.bank_info}
           signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}>
           <table className="doc-table">
             <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>
@@ -288,7 +288,7 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
             {printQ.wht ? <div className="doc-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(printQ.netPay)}</b></div> : null}
           </div>
         </DocSlip>
-      )}
+      ); })()}
       {toast && <Toast t={toast} />}
     </div>
   );

@@ -85,16 +85,16 @@ create table if not exists job_orders (
   created_by    uuid references auth.users(id)
 );
 
--- ---------- ข้อมูลบริษัท (หัวเอกสาร · แถวเดียว id=1) ----------
+-- ---------- ข้อมูลบริษัท (หัวเอกสาร 2 ชุด · id=1 มี VAT, id=2 ไม่มี VAT) ----------
 create table if not exists company_profile (
-  id            int primary key default 1,
+  id            int primary key,
   name          text, branch text, address text, tax_id text,
   phone         text, email text, website text,
   bank_info     text, default_terms text, logo_url text,
   updated_at    timestamptz default now(),
-  constraint company_singleton check (id = 1)
+  constraint company_id_check check (id in (1, 2))
 );
-insert into company_profile (id) values (1) on conflict (id) do nothing;
+insert into company_profile (id) values (1), (2) on conflict (id) do nothing;
 
 -- ---------- ความเคลื่อนไหวของใบงาน (timeline: เปลี่ยนสถานะ + แนบรูป/คอมเมนต์ไม่จำกัด) ----------
 create table if not exists job_logs (

@@ -395,15 +395,18 @@ export async function listBoqs() {
   });
 }
 
-// ---------- COMPANY PROFILE (ข้อมูลบริษัทสำหรับหัวเอกสาร) ----------
-export async function getCompany() {
-  const { data, error } = await supabase.from("company_profile").select("*").eq("id", 1).maybeSingle();
+// ---------- COMPANY PROFILE (หัวเอกสาร 2 ชุด: id=1 มี VAT · id=2 ไม่มี VAT) ----------
+export async function getCompanies() {
+  const { data, error } = await supabase.from("company_profile").select("*").in("id", [1, 2]);
   if (error) throw error;
-  return data || {};
+  const m = {}; (data || []).forEach((r) => { m[r.id === 2 ? "novat" : "vat"] = r; });
+  return { vat: m.vat || {}, novat: m.novat || {} };
 }
-export async function saveCompany(c) {
+// kind: "vat" (id=1) | "novat" (id=2)
+export async function saveCompany(c, kind) {
+  const id = kind === "novat" ? 2 : 1;
   const { error } = await supabase.from("company_profile").upsert({
-    id: 1, name: c.name?.trim() || null, branch: c.branch?.trim() || null, address: c.address?.trim() || null,
+    id, name: c.name?.trim() || null, branch: c.branch?.trim() || null, address: c.address?.trim() || null,
     tax_id: c.tax_id?.trim() || null, phone: c.phone?.trim() || null, email: c.email?.trim() || null,
     website: c.website?.trim() || null, bank_info: c.bank_info?.trim() || null, default_terms: c.default_terms?.trim() || null,
   }, { onConflict: "id" });
