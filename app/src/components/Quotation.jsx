@@ -12,7 +12,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role }) {
+export default function Quotation({ role, onCreateJob }) {
   const canEdit = role === "admin" || role === "sales";
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -204,6 +204,7 @@ export default function Quotation({ role }) {
                 <button className="btn-ghost sm" onClick={() => setPrintQ(q)}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 <button className="btn-ghost sm" onClick={() => copyQ(q)}><UIcon name="clipboard" size={14} /> คัดลอก</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEdit && q.status === "approved" && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>
             </div>

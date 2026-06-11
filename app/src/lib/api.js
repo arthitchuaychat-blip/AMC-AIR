@@ -454,6 +454,48 @@ export async function deleteQuotation(quote_no) {
   if (error) throw error;
 }
 
+// ---------- JOB ORDERS (ใบงาน) ----------
+export async function listJobOrders() {
+  const [j, cu, tm] = await Promise.all([
+    supabase.from("job_orders").select("*").order("created_at", { ascending: false }),
+    supabase.from("customers").select("id,name"),
+    supabase.from("teams").select("id,name"),
+  ]);
+  if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error;
+  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
+  return (j.data || []).map((jo) => ({ ...jo, customerName: cn[jo.customer_id] || null, teamName: tn[jo.assigned_team] || jo.assigned_team }));
+}
+
+// job orders assigned to a team (technician view)
+export async function listTeamJobOrders(team) {
+  const { data, error } = await supabase.from("job_orders").select("*").eq("assigned_team", team).order("scheduled_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function saveJobOrder(jo) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from("job_orders").upsert({
+    job_no: jo.job_no, quote_no: jo.quote_no || null, customer_id: jo.customer_id || null, site_id: jo.site_id || null,
+    title: jo.title?.trim() || null, contact_name: jo.contact_name?.trim() || null, contact_phone: jo.contact_phone?.trim() || null,
+    address: jo.address?.trim() || null, map_url: jo.map_url?.trim() || null, details: jo.details?.trim() || null,
+    assigned_team: jo.assigned_team || null, scheduled_at: jo.scheduled_at || null,
+    status: jo.status || "pending", created_by: user?.id || null,
+  }, { onConflict: "job_no" });
+  if (error) throw error;
+}
+
+export async function updateJobStatus(job_no, status) {
+  const { error } = await supabase.from("job_orders").update({ status }).eq("job_no", job_no);
+  if (error) throw error;
+}
+
+export async function deleteJobOrder(job_no) {
+  const { error } = await supabase.from("job_orders").delete().eq("job_no", job_no);
+  if (error) throw error;
+}
+
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
 export async function deleteTransaction(id) {
   const { error } = await supabase.from("transactions").delete().eq("id", id);

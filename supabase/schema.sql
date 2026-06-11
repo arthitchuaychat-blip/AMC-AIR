@@ -65,6 +65,22 @@ create table if not exists transactions (
 create index if not exists idx_txn_material on transactions(material_code);
 create index if not exists idx_txn_date on transactions(txn_date);
 
+-- ---------- ใบงาน (Job Orders) ----------
+create table if not exists job_orders (
+  job_no        text primary key,
+  quote_no      text references quotations(quote_no) on delete set null,
+  customer_id   bigint references customers(id) on delete set null,
+  site_id       bigint references customer_sites(id) on delete set null,
+  title         text,
+  contact_name  text, contact_phone text,
+  address       text, map_url text, details text,
+  assigned_team text references teams(id),
+  scheduled_at  timestamptz,
+  status        text not null default 'pending' check (status in ('pending','scheduled','in_progress','done','cancelled')),
+  created_at    timestamptz not null default now(),
+  created_by    uuid references auth.users(id)
+);
+
 -- ---------- งาน (Job costing) ----------
 create table if not exists jobs (
   job_no     text primary key,
@@ -337,6 +353,12 @@ create policy qt_read on quotations for select to authenticated using (true);
 create policy qt_write on quotations for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
 create policy qti_read on quotation_items for select to authenticated using (true);
 create policy qti_write on quotation_items for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+
+-- ใบงาน: อ่านได้ทุกคน · สร้าง/แก้/ลบ ธุรการ+ฝ่ายขาย · ช่างอัปเดตสถานะงานของทีมตัวเองได้
+alter table job_orders enable row level security;
+create policy jo_read on job_orders for select to authenticated using (true);
+create policy jo_write on job_orders for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+create policy jo_tech_update on job_orders for update to authenticated using (my_role() = 'tech' and assigned_team = my_team()) with check (my_role() = 'tech' and assigned_team = my_team());
 
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles
