@@ -1,13 +1,31 @@
 import React from "react";
-import { bulkUpsertMaterials } from "../lib/api";
+import { bulkUpsertMaterials, saveBrand, saveBtu } from "../lib/api";
 import { UIcon } from "../icons";
 
-// columns (in order): code, name_th, name_en, category, unit, cost, min_stock, init_stock, sale_price, description
-const TEMPLATE = "รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด\nCOPP8,ท่อทองแดง 1\",Copper Pipe 1\",pipe,เมตร,180,40,0,260,ท่อทองแดงเกรด A หนา 0.7mm";
+// New unified format (12 cols):
+// ชนิด · รหัส · ชื่อไทย · ชื่ออังกฤษ · หมวด/ยี่ห้อ · BTU · หน่วย · ต้นทุน · ขั้นต่ำ · คงเหลือ · ราคาขาย · รายละเอียด
+//   ชนิด = แอร์/วัสดุ/บริการ (ac/material/service)
+//   คอลัมน์ "หมวด/ยี่ห้อ" = หมวด(วัสดุ) หรือ ยี่ห้อ(แอร์) · BTU ใช้เฉพาะแอร์
+const HEADER = "ชนิด,รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด/ยี่ห้อ,BTU,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด";
+const SAMPLE_ROWS = [
+  "แอร์,DKN12,แอร์ Daikin 12000 BTU,Daikin 12000,Daikin,12000,เครื่อง,11000,2,0,15900,อินเวอร์เตอร์ เบอร์ 5",
+  "วัสดุ,COPP6,ท่อทองแดง 6 หุน,Copper Pipe,pipe,,เมตร,180,40,0,260,เกรด A",
+  "บริการ,SVCINST,ค่าติดตั้งแอร์,Install,,,งาน,0,0,0,1500,ติดตั้งมาตรฐานต่อชุด",
+];
+const TEMPLATE = [HEADER, ...SAMPLE_ROWS].join("\n");
+
+const KIND_MAP = {
+  "แอร์": "ac", "เครื่องปรับอากาศ": "ac", "ac": "ac",
+  "วัสดุ": "material", "วัสดุสิ้นเปลือง": "material", "material": "material", "mat": "material",
+  "บริการ": "service", "service": "service", "svc": "service",
+};
+const KIND_TH = { ac: "แอร์", material: "วัสดุ", service: "บริการ" };
+const detectKind = (cell) => KIND_MAP[(cell || "").trim().toLowerCase()] || null;
+const defUnit = (kind) => (kind === "ac" ? "เครื่อง" : kind === "service" ? "งาน" : "ชิ้น");
 
 export default function BulkImportModal({ categories, onDone, onClose }) {
   const [text, setText] = React.useState("");
-  const [parsed, setParsed] = React.useState(null); // {rows, errors}
+  const [parsed, setParsed] = React.useState(null); // {rows, errors, counts}
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState(null);
 
@@ -23,6 +41,7 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
     categories.forEach((c) => { m[c.id.toLowerCase()] = c.id; m[(c.name_th || "").trim()] = c.id; });
     return m;
   }, [categories]);
+  const resolveCat = (v) => v ? (catMap[v.toLowerCase()] || catMap[v.trim()] || null) : null;
 
   function onFile(e) {
     const f = e.target.files?.[0]; if (!f) return;
@@ -31,60 +50,106 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
     r.readAsText(f, "utf-8");
   }
 
+  function downloadTemplate() {
+    const blob = new Blob(["﻿" + TEMPLATE], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "amc-import-template.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function parse() {
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     const rows = [], errors = [];
+    const counts = { ac: 0, material: 0, service: 0 };
     lines.forEach((line, i) => {
       const delim = line.includes("\t") ? "\t" : ",";
       const cells = line.split(delim).map((c) => c.trim().replace(/^"|"$/g, ""));
       const c0 = (cells[0] || "").toLowerCase();
-      if (i === 0 && (c0 === "code" || c0 === "รหัส")) return; // header
-      const [code, name_th, name_en, cat, unit, cost, min_stock, init_stock, sale_price] = cells;
-      const description = cells.slice(9).join(delim); // rejoin remainder so commas in description survive
+      if (i === 0 && (c0 === "ชนิด" || c0 === "kind" || c0 === "รหัส" || c0 === "code")) return; // header
+
+      const kindFromCol = detectKind(cells[0]);
+      let kind, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price, description;
+      if (kindFromCol) {
+        // new format: kind in column 1
+        kind = kindFromCol;
+        [, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price] = cells;
+        description = cells.slice(11).join(delim);
+      } else {
+        // backward-compatible: old material-only format (no kind column)
+        kind = "material";
+        [code, name_th, name_en, catBrand, unit, cost, min_stock, init_stock, sale_price] = cells;
+        btu = null;
+        description = cells.slice(9).join(delim);
+      }
+
       if (!code || !name_th) { errors.push({ line: i + 1, reason: "ต้องมีรหัสและชื่อไทย" }); return; }
-      const category = cat ? (catMap[cat.toLowerCase()] || catMap[cat.trim()] || null) : null;
+      const isService = kind === "service";
       rows.push({
-        code: code, name_th, name_en: name_en || name_th,
-        category, unit: unit || "ชิ้น",
-        cost: Number(cost) || 0, min_stock: Number(min_stock) || 0, init_stock: Number(init_stock) || 0,
-        sale_price: Number(sale_price) || 0, description: description?.trim() || null,
+        code, name_th, name_en: name_en || name_th, kind,
+        category: kind === "material" ? resolveCat(catBrand) : null,
+        brand: kind === "ac" ? (catBrand?.trim() || null) : null,
+        btu: kind === "ac" && btu ? Number(btu) : null,
+        tracked: isService ? false : true,
+        unit: unit || defUnit(kind),
+        cost: Number(cost) || 0,
+        sale_price: Number(sale_price) || 0,
+        min_stock: isService ? 0 : (Number(min_stock) || 0),
+        init_stock: isService ? 0 : (Number(init_stock) || 0),
+        description: description?.trim() || null,
       });
+      counts[kind] = (counts[kind] || 0) + 1;
     });
-    setParsed({ rows, errors });
+    setParsed({ rows, errors, counts });
     setMsg(null);
   }
 
   async function doImport() {
     if (!parsed?.rows.length || busy) return;
     setBusy(true);
-    try { await bulkUpsertMaterials(parsed.rows); onDone(parsed.rows.length); }
-    catch (e) { setMsg("นำเข้าไม่สำเร็จ: " + (e.message || e)); setBusy(false); }
+    try {
+      await bulkUpsertMaterials(parsed.rows);
+      // register any new brands / BTUs from imported AC rows (so they show in filters)
+      const brands = [...new Set(parsed.rows.filter((r) => r.kind === "ac" && r.brand).map((r) => r.brand))];
+      const btus = [...new Set(parsed.rows.filter((r) => r.kind === "ac" && r.btu).map((r) => r.btu))];
+      for (const b of brands) { try { await saveBrand(b); } catch { /* ignore dup */ } }
+      for (const b of btus) { try { await saveBtu(b); } catch { /* ignore dup */ } }
+      onDone(parsed.rows.length);
+    } catch (e) { setMsg("นำเข้าไม่สำเร็จ: " + (e.message || e)); setBusy(false); }
   }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 640 }}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 680 }}>
         <div className="modal-head">
-          <div className="modal-title">นำเข้าวัสดุหลายรายการ <span>Bulk import</span></div>
+          <div className="modal-title">นำเข้าหลายรายการ <span>แอร์ · วัสดุ · บริการ</span></div>
           <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
         </div>
         <div className="modal-body">
           <p className="page-sub" style={{ marginBottom: 8 }}>
-            วางข้อมูลจาก Excel/Google Sheets (คัดลอกทั้งหลายแถวมาวางได้เลย) หรืออัปโหลดไฟล์ <b>.csv</b><br />
-            ลำดับคอลัมน์: <b>รหัส · ชื่อไทย · ชื่ออังกฤษ · หมวด · หน่วย · ต้นทุน · ขั้นต่ำ · คงเหลือ · ราคาขาย · รายละเอียด</b> (มี/ไม่มีหัวตารางก็ได้)
+            วางข้อมูลจาก Excel/Google Sheets (หลายแถวพร้อมกัน) หรืออัปโหลดไฟล์ <b>.csv</b> — ใส่ <b>แอร์ · วัสดุ · บริการ</b> รวมกันได้<br />
+            ลำดับคอลัมน์: <b>ชนิด · รหัส · ชื่อไทย · ชื่ออังกฤษ · หมวด/ยี่ห้อ · BTU · หน่วย · ต้นทุน · ขั้นต่ำ · คงเหลือ · ราคาขาย · รายละเอียด</b>
           </p>
+          <ul className="bulk-help">
+            <li><b>ชนิด</b> = แอร์ / วัสดุ / บริการ</li>
+            <li><b>หมวด/ยี่ห้อ</b> = ใส่ "หมวด" ถ้าเป็นวัสดุ · ใส่ "ยี่ห้อ" ถ้าเป็นแอร์ · บริการเว้นว่าง</li>
+            <li><b>BTU</b> = เฉพาะแอร์ · <b>บริการ</b> ไม่ต้องใส่สต๊อก (ขั้นต่ำ/คงเหลือเว้นว่างได้)</li>
+          </ul>
           <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+            <button className="btn-ghost sm" onClick={downloadTemplate}><UIcon name="withdraw" size={14} /> ดาวน์โหลดฟอร์ม CSV</button>
             <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
               <UIcon name="box" size={14} /> เลือกไฟล์ CSV
               <input type="file" accept=".csv,text/csv,text/plain" onChange={onFile} style={{ display: "none" }} />
             </label>
-            <button className="btn-ghost sm" onClick={() => setText(TEMPLATE)}>ใส่ตัวอย่างรูปแบบ</button>
+            <button className="btn-ghost sm" onClick={() => { setText(TEMPLATE); setParsed(null); }}>ใส่ตัวอย่างรูปแบบ</button>
           </div>
           <textarea className="inp bulk-ta" value={text} onChange={(e) => { setText(e.target.value); setParsed(null); }}
-            placeholder={"COPP8,ท่อทองแดง 1\",Copper Pipe 1\",pipe,เมตร,180,40,0\nR32X,น้ำยาแอร์ R32,Refrigerant,ref,ถัง,3600,5,0"} rows={9} />
+            placeholder={SAMPLE_ROWS.join("\n")} rows={9} />
           {parsed && (
             <div className="bulk-preview">
               ✅ พร้อมนำเข้า <b>{parsed.rows.length}</b> รายการ
+              {(parsed.counts.ac > 0 || parsed.counts.material > 0 || parsed.counts.service > 0) &&
+                <span style={{ color: "var(--ink-3)" }}> · แอร์ {parsed.counts.ac} · วัสดุ {parsed.counts.material} · บริการ {parsed.counts.service}</span>}
               {parsed.errors.length > 0 && <span style={{ color: "var(--down)" }}> · ข้าม {parsed.errors.length} แถว (รหัส/ชื่อไม่ครบ)</span>}
             </div>
           )}
