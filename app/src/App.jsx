@@ -121,7 +121,6 @@ export default function App() {
               </button>
             );
           })}
-          <div className="nav-note">เฟส 2: เบิก·คืน·ซื้อ·ตัดเสีย (สต๊อกขยับจริง)<br />เฟสถัดไป: แดชบอร์ด + ขึ้น Vercel</div>
         </nav>
 
         <div className="side-foot">
