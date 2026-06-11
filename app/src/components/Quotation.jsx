@@ -12,7 +12,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, onCreateJob }) {
+export default function Quotation({ role, focus, onFocusConsumed, onCreateJob }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -35,6 +35,8 @@ export default function Quotation({ role, onCreateJob }) {
   }
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { if (!printQ) return; const t = setTimeout(() => { window.print(); setPrintQ(null); }, 80); return () => clearTimeout(t); }, [printQ]);
+  // open focused on a specific quote (from the dashboard report link)
+  React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, note: "", items: [] }); }

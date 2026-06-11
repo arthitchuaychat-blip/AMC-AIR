@@ -68,6 +68,8 @@ export default function App() {
   const [poPrefill, setPoPrefill] = React.useState(null);
   const [joPrefill, setJoPrefill] = React.useState(null);
   const [withdrawCtx, setWithdrawCtx] = React.useState(null);
+  const [quoteFocus, setQuoteFocus] = React.useState(null);
+  const [jobFocus, setJobFocus] = React.useState(null);
 
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
@@ -144,12 +146,13 @@ export default function App() {
       </aside>
 
       <main className="main">
-        {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }} />}
+        {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
         {view === "customers" && <Customers role={role} />}
         {view === "boq" && <BOQ role={role} />}
-        {view === "quote" && <Quotation role={role} onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }} />}
+        {view === "quote" && <Quotation role={role} focus={quoteFocus} onFocusConsumed={() => setQuoteFocus(null)} onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }} />}
         {view === "profit" && <Profit />}
-        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} />}
+        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} />}
         {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}

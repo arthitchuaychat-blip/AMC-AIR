@@ -39,7 +39,7 @@ function StatCard({ icon, color, label, value, sub, accent, onClick }) {
   );
 }
 
-export default function Dashboard({ onReorder }) {
+export default function Dashboard({ onReorder, onOpenQuote, onOpenJob }) {
   const [period, setPeriod] = React.useState("month");
   const [detail, setDetail] = React.useState(null);
   const [mats, setMats] = React.useState([]);
@@ -105,7 +105,7 @@ export default function Dashboard({ onReorder }) {
         </div>
       </div>
 
-      <SalesReport />
+      <SalesReport onOpenQuote={onOpenQuote} onOpenJob={onOpenJob} />
 
       <div className="sec-head" style={{ margin: "22px 0 10px" }}><div><div className="sec-title">คลังวัสดุ & การเบิกใช้</div><div className="sec-sub">Inventory & usage · {periodLabel}</div></div></div>
 

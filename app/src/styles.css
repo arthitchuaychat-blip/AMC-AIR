@@ -738,6 +738,17 @@ select.inp{cursor:pointer}
 .sales-report{margin-bottom:6px}
 .sr-tables{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:860px){.sr-tables{grid-template-columns:1fr}}
+.pf-row.pf-click{cursor:pointer;transition:background .14s}
+.pf-row.pf-click:hover{background:var(--surface-2)}
+.modal-x{border:none;background:transparent;cursor:pointer;color:var(--ink-3);padding:4px;border-radius:8px;display:flex}
+.modal-x:hover{background:var(--surface-2);color:var(--ink)}
+.sr-detail{width:760px}
+.sr-detail-body{overflow-y:auto;padding:4px 0 8px}
+.sr-detail-body .pf-row{grid-template-columns:1.5fr .85fr .85fr .85fr 1.7fr}
+.sr-links-head{text-align:right}
+.sr-links{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.sr-nojob{font-size:11px;color:var(--ink-3);align-self:center}
+@media(max-width:640px){.sr-detail-body .pf-row{grid-template-columns:1.3fr 1fr 1.4fr}.sr-detail-body .pf-row span:nth-child(3),.sr-detail-body .pf-row span:nth-child(4){display:none}}
 /* job timeline */
 .tl{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
 .tl-title{font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:10px}
