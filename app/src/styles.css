@@ -706,3 +706,17 @@ select.inp{cursor:pointer}
 .pf-row .r{text-align:right;font-variant-numeric:tabular-nums}
 .pf-cust{font-size:11px;color:var(--ink-3)}
 @media(max-width:640px){.pf-row{grid-template-columns:1.4fr 1fr 1fr 60px}.pf-row span:nth-child(3){display:none}}
+
+/* ---------- technician: my jobs ---------- */
+.myjob{padding:16px}
+.myjob.closed{opacity:.7}
+.myjob-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
+.myjob-no{font-family:var(--mono);font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:8px}
+.myjob-title{font-size:16px;font-weight:700;margin-top:3px}
+.myjob-when{text-align:right;font-size:11.5px;color:var(--ink-3);flex:none}
+.myjob-when b{font-size:15px;color:var(--ink)}
+.myjob-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);padding:5px 0}
+.myjob-call{margin-left:auto;font-weight:700;color:var(--primary)}
+.myjob-details{white-space:pre-line;font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin:8px 0;line-height:1.6}
+.myjob-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.myjob-actions .btn-primary,.myjob-actions .btn-ghost{flex:1;min-width:140px}

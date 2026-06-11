@@ -14,8 +14,10 @@ import BOQ from "./components/BOQ";
 import Quotation from "./components/Quotation";
 import Profit from "./components/Profit";
 import JobOrders from "./components/JobOrders";
+import MyJobs from "./components/MyJobs";
 
 const NAV = {
+  myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
   catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
@@ -32,7 +34,7 @@ const NAV_BY_ROLE = {
   admin: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders", "movements", "jobs", "po", "settings"],
   sales: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders"],
   exec: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders", "jobs", "po"],
-  tech: ["movements"],
+  tech: ["myjobs", "movements"],
 };
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", sales: "ฝ่ายขาย", tech: "ช่าง" };
@@ -61,6 +63,7 @@ export default function App() {
   const [purchasePrefill, setPurchasePrefill] = React.useState(null);
   const [poPrefill, setPoPrefill] = React.useState(null);
   const [joPrefill, setJoPrefill] = React.useState(null);
+  const [withdrawCtx, setWithdrawCtx] = React.useState(null);
 
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
@@ -144,7 +147,8 @@ export default function App() {
         {view === "quote" && <Quotation role={role} onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }} />}
         {view === "profit" && <Profit />}
         {view === "joborders" && <JobOrders role={role} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} />}
-        {view === "movements" && <Movements role={role} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} />}
+        {view === "myjobs" && <MyJobs team={profile?.team} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: profile?.team }); go("movements"); }} />}
+        {view === "movements" && <Movements role={role} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}
         {view === "jobs" && <Jobs role={role} />}

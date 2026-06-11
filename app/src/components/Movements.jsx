@@ -12,7 +12,7 @@ const TYPES = [
 const TYPE_BY = Object.fromEntries(TYPES.map((t) => [t.id, t]));
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
 
-export default function Movements({ role, prefill, onPrefillConsumed }) {
+export default function Movements({ role, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
   const isAdmin = role === "admin";
   const [mats, setMats] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
@@ -56,6 +56,14 @@ export default function Movements({ role, prefill, onPrefillConsumed }) {
   }
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { const m = matMap[pickCode]; if (m) setPickPrice(String(m.cost)); }, [pickCode, mats]);
+  // technician "withdraw for this job" → preset type=withdraw, team, job no
+  React.useEffect(() => {
+    if (!withdrawCtx) return;
+    setType("withdraw");
+    if (withdrawCtx.team) setTeam(withdrawCtx.team);
+    if (withdrawCtx.jobNo) setJobNo(withdrawCtx.jobNo);
+    onWithdrawCtxConsumed && onWithdrawCtxConsumed();
+  }, [withdrawCtx]);
   // prefill the purchase cart when receiving a PO ({ poNo, items:[{code,qty,price}] })
   React.useEffect(() => {
     if (!prefill || !prefill.items?.length || !mats.length) return;
