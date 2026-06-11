@@ -8,6 +8,7 @@ const STATUS = {
 };
 const STATUS_OPTS = [["pending", "รอจ่ายงาน"], ["scheduled", "นัดแล้ว"], ["in_progress", "กำลังทำ"], ["done", "เสร็จ"], ["cancelled", "ยกเลิก"]];
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
+const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
 export default function JobOrders({ role, prefill, onPrefillConsumed }) {
   const canEdit = role === "admin" || role === "sales";
@@ -41,7 +42,7 @@ export default function JobOrders({ role, prefill, onPrefillConsumed }) {
     setEd({
       job_no: genNo(), quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "",
       title: q.title || "", contact_name: contact?.name || "", contact_phone: contact?.phone || "",
-      address: site?.address || cust?.address || "", map_url: site?.map_url || "", details,
+      address: site?.address || cust?.address || "", map_url: site?.map_url || mapLink(site?.address || cust?.address), details,
       assigned_team: "", date: "", time: "", status: "pending",
     });
     onPrefillConsumed && onPrefillConsumed();
@@ -59,18 +60,24 @@ export default function JobOrders({ role, prefill, onPrefillConsumed }) {
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   function onCustomer(id) {
     const c = custs.find((x) => String(x.id) === String(id));
-    setEd((e) => ({ ...e, customer_id: id, site_id: "", contact_name: c?.contacts?.[0]?.name || "", contact_phone: c?.contacts?.[0]?.phone || "", address: c?.address || "", map_url: "" }));
+    setEd((e) => ({ ...e, customer_id: id, site_id: "", contact_name: c?.contacts?.[0]?.name || "", contact_phone: c?.contacts?.[0]?.phone || "", address: c?.address || "", map_url: mapLink(c?.address) }));
   }
   function onSite(id) {
     const s = cust?.sites?.find((x) => String(x.id) === String(id));
-    setEd((e) => ({ ...e, site_id: id, address: s?.address || e.address, map_url: s?.map_url || e.map_url }));
+    const addr = s?.address || cust?.address || "";
+    setEd((e) => ({ ...e, site_id: id, address: addr || e.address, map_url: s?.map_url || mapLink(addr) || e.map_url }));
   }
 
   async function save() {
     if (!ed.title?.trim() && !ed.customer_id) return flash("ใส่ลูกค้าหรือชื่องาน", true);
     const scheduled_at = ed.date ? `${ed.date}T${ed.time || "08:00"}:00` : null;
     const status = ed.status === "pending" && ed.assigned_team && ed.date ? "scheduled" : ed.status;
-    try { await saveJobOrder({ ...ed, scheduled_at, status }); flash("บันทึกใบงานแล้ว"); setEd(null); await load(); }
+    try {
+      await saveJobOrder({ ...ed, scheduled_at, status });
+      const tn = teams.find((t) => t.id === ed.assigned_team)?.name;
+      flash(ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว");
+      setEd(null); await load();
+    }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(jo) { if (!confirm(`ลบใบงาน ${jo.job_no}?`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }

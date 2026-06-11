@@ -462,23 +462,41 @@ export async function setQuotationStatus(quote_no, status) {
 }
 
 // ---------- JOB ORDERS (ใบงาน) ----------
-export async function listJobOrders() {
-  const [j, cu, tm] = await Promise.all([
-    supabase.from("job_orders").select("*").order("created_at", { ascending: false }),
-    supabase.from("customers").select("id,name"),
-    supabase.from("teams").select("id,name"),
-  ]);
-  if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error;
-  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
-  const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
-  return (j.data || []).map((jo) => ({ ...jo, customerName: cn[jo.customer_id] || null, teamName: tn[jo.assigned_team] || jo.assigned_team }));
+const _gmap = (a) => (a && a.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(a.trim()) : null;
+// resolve address/map LIVE from the linked customer site (so editing the customer flows to job orders)
+function _resolveJo(jo, custName, custAddr, siteMap, teamName) {
+  const s = jo.site_id ? siteMap[jo.site_id] : null;
+  const address = (s && s.address) || jo.address || (custAddr && custAddr[jo.customer_id]) || null;
+  const map_url = (s && s.map_url) || jo.map_url || _gmap(address);
+  return { ...jo, address, map_url, customerName: custName ? (custName[jo.customer_id] || null) : null, teamName: teamName ? (teamName[jo.assigned_team] || jo.assigned_team) : jo.assigned_team };
 }
 
-// job orders assigned to a team (technician view)
+export async function listJobOrders() {
+  const [j, cu, tm, si] = await Promise.all([
+    supabase.from("job_orders").select("*").order("created_at", { ascending: false }),
+    supabase.from("customers").select("id,name,address"),
+    supabase.from("teams").select("id,name"),
+    supabase.from("customer_sites").select("id,address,map_url"),
+  ]);
+  if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error;
+  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
+  const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
+  const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
+  return (j.data || []).map((jo) => _resolveJo(jo, cn, ca, sm, tn));
+}
+
+// job orders assigned to a team (technician view) — address/map resolved live
 export async function listTeamJobOrders(team) {
-  const { data, error } = await supabase.from("job_orders").select("*").eq("assigned_team", team).order("scheduled_at", { ascending: true });
-  if (error) throw error;
-  return data || [];
+  const [j, si, cu] = await Promise.all([
+    supabase.from("job_orders").select("*").eq("assigned_team", team).order("scheduled_at", { ascending: true }),
+    supabase.from("customer_sites").select("id,address,map_url"),
+    supabase.from("customers").select("id,address"),
+  ]);
+  if (j.error) throw j.error; if (si.error) throw si.error; if (cu.error) throw cu.error;
+  const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
+  const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
+  return (j.data || []).map((jo) => _resolveJo(jo, null, ca, sm, null));
 }
 
 export async function saveJobOrder(jo) {
