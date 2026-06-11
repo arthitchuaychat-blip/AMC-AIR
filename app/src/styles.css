@@ -720,3 +720,16 @@ select.inp{cursor:pointer}
 .myjob-details{white-space:pre-line;font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin:8px 0;line-height:1.6}
 .myjob-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 .myjob-actions .btn-primary,.myjob-actions .btn-ghost{flex:1;min-width:140px}
+.myjob-cust{font-size:13.5px;font-weight:700;color:var(--primary);margin-top:4px}
+.myjob-hint{font-size:11.5px;color:var(--ink-3);margin-top:7px;text-align:center}
+/* completion evidence */
+.myjob-ev{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:9px}
+.myjob-ev-title{font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.myjob-photos{display:flex;flex-wrap:wrap;gap:8px}
+.myjob-photo{position:relative;width:74px;height:74px;border-radius:11px;overflow:hidden;border:1px solid var(--line)}
+.myjob-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.myjob-photo-x{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.myjob-addphoto{width:74px;height:74px;border-radius:11px;border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:var(--ink-3);cursor:pointer;background:var(--surface-2)}
+.myjob-addphoto:hover{border-color:var(--primary);color:var(--primary)}
+.myjob-ev textarea.inp{resize:vertical}
+.myjob-ev .btn-primary.sm{align-self:flex-start;padding:8px 16px;font-size:12.5px}

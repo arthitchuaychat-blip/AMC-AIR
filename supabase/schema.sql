@@ -77,6 +77,8 @@ create table if not exists job_orders (
   assigned_team text references teams(id),
   scheduled_at  timestamptz,
   status        text not null default 'pending' check (status in ('pending','scheduled','in_progress','done','cancelled')),
+  completion_note text,
+  photos        text[] default '{}',
   created_at    timestamptz not null default now(),
   created_by    uuid references auth.users(id)
 );

@@ -491,12 +491,19 @@ export async function listTeamJobOrders(team) {
   const [j, si, cu] = await Promise.all([
     supabase.from("job_orders").select("*").eq("assigned_team", team).order("scheduled_at", { ascending: true }),
     supabase.from("customer_sites").select("id,address,map_url"),
-    supabase.from("customers").select("id,address"),
+    supabase.from("customers").select("id,name,address"),
   ]);
   if (j.error) throw j.error; if (si.error) throw si.error; if (cu.error) throw cu.error;
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
+  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
-  return (j.data || []).map((jo) => _resolveJo(jo, null, ca, sm, null));
+  return (j.data || []).map((jo) => _resolveJo(jo, cn, ca, sm, null));
+}
+
+// technician: save completion evidence (photos + comment)
+export async function saveJobEvidence(job_no, photos, note) {
+  const { error } = await supabase.from("job_orders").update({ photos, completion_note: note?.trim() || null }).eq("job_no", job_no);
+  if (error) throw error;
 }
 
 export async function saveJobOrder(jo) {
