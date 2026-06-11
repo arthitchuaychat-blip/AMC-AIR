@@ -97,7 +97,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             <div className="line-add">
               <select className="inp" value={pick.code} onChange={(e) => setPick({ ...pick, code: e.target.value, price: String(matMap[e.target.value]?.cost ?? "") })}>
                 <option value="">— เลือกวัสดุ —</option>
-                {mats.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th}</option>)}
+                {mats.filter((m) => m.tracked).map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th}</option>)}
               </select>
               <div className="inp inp-unit line-price"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={pick.price} onChange={(e) => setPick({ ...pick, price: e.target.value })} /></div>
               <div className="inp inp-unit line-qty"><input type="number" min="1" value={pick.qty} onChange={(e) => setPick({ ...pick, qty: Math.max(1, Number(e.target.value) || 1) })} /><span className="unit-suf">{matMap[pick.code]?.unit || "หน่วย"}</span></div>

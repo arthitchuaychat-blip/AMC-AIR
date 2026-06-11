@@ -49,7 +49,8 @@ export default function Movements({ role, prefill, onPrefillConsumed }) {
     setLoading(true);
     const [m, tm, r, j] = await Promise.all([listMaterials(), listTeams(), listRecentTransactions(60), listOpenJobs()]);
     setMats(m); setTeams(tm); setRecent(r); setJobs(j);
-    if (!pickCode && m.length) setPickCode(m[0].code);
+    const firstTracked = m.find((x) => x.tracked);
+    if (!pickCode && firstTracked) setPickCode(firstTracked.code);
     if (!team && tm.length) setTeam(tm[0].id);
     setLoading(false);
   }
@@ -266,7 +267,7 @@ export default function Movements({ role, prefill, onPrefillConsumed }) {
               <div className="fld"><span>เพิ่มรายการวัสดุ</span>
                 <div className="line-add">
                   <select className="inp" value={pickCode} onChange={(e) => setPickCode(e.target.value)}>
-                    {mats.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
+                    {mats.filter((m) => m.tracked).map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
                   </select>
                   {type === "purchase" && (
                     <div className="inp inp-unit line-price" title="ราคา/หน่วยที่ซื้อ">

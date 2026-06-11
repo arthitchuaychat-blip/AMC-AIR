@@ -1,5 +1,5 @@
 import React from "react";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu } from "../lib/api";
 import { UIcon } from "../icons";
 
 const ROLES = [{ v: "tech", l: "ช่าง" }, { v: "sales", l: "ฝ่ายขาย" }, { v: "admin", l: "ธุรการ" }, { v: "exec", l: "ผู้บริหาร" }];
@@ -120,6 +120,10 @@ export default function Settings() {
   const [teams, setTeams] = React.useState([]);
   const [profiles, setProfiles] = React.useState([]);
   const [cats, setCats] = React.useState([]);
+  const [brands, setBrands] = React.useState([]);
+  const [btus, setBtus] = React.useState([]);
+  const [nBrand, setNBrand] = React.useState("");
+  const [nBtu, setNBtu] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
 
@@ -137,7 +141,7 @@ export default function Settings() {
 
   async function load() {
     setLoading(true);
-    try { const [t, p, c] = await Promise.all([listTeams(), listProfiles(), listCategories()]); setTeams(t); setProfiles(p); setCats(c); }
+    try { const [t, p, c, b, bt] = await Promise.all([listTeams(), listProfiles(), listCategories(), listBrands(), listBtus()]); setTeams(t); setProfiles(p); setCats(c); setBrands(b); setBtus(bt); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -162,6 +166,19 @@ export default function Settings() {
     } catch (e) { flash("เพิ่มผู้ใช้ไม่สำเร็จ: " + (e.message || e), true); }
     setAddingU(false);
   }
+
+  async function addBrand() {
+    if (!nBrand.trim()) return;
+    try { await saveBrand(nBrand); setNBrand(""); flash(`เพิ่มยี่ห้อ ${nBrand} แล้ว`); load(); }
+    catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
+  }
+  async function delBrand(b) { try { await deleteBrand(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
+  async function addBtu() {
+    if (!nBtu || Number(nBtu) <= 0) return;
+    try { await saveBtu(nBtu); setNBtu(""); flash(`เพิ่ม ${nBtu} BTU แล้ว`); load(); }
+    catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
+  }
+  async function delBtu(b) { try { await deleteBtu(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
 
   async function addCat() {
     if (!nc.id.trim() || !nc.name_th.trim()) return flash("ใส่รหัสและชื่อหมวด", true);
@@ -232,6 +249,27 @@ export default function Settings() {
           </div>
           <div className="set-list">
             {cats.map((c) => <CategoryRow key={c.id} c={c} onChanged={load} flash={flash} />)}
+          </div>
+        </div>
+
+        {/* AC BRANDS + BTU */}
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="sec-head"><div><div className="sec-title">ทะเบียนแอร์ · ยี่ห้อ & ขนาด BTU</div><div className="sec-sub">ใช้เลือก/กรองในคลังสินค้า</div></div></div>
+          <div className="damage-layout">
+            <div>
+              <div className="set-add">
+                <input className="inp" value={nBrand} onChange={(e) => setNBrand(e.target.value)} placeholder="ยี่ห้อ เช่น DAIKIN" onKeyDown={(e) => e.key === "Enter" && addBrand()} />
+                <button className="btn-primary" onClick={addBrand}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มยี่ห้อ</button>
+              </div>
+              <div className="chip-wrap">{brands.map((b) => <span className="reg-chip" key={b}>{b}<button onClick={() => delBrand(b)}><UIcon name="x" size={12} /></button></span>)}</div>
+            </div>
+            <div>
+              <div className="set-add">
+                <input className="inp" type="number" value={nBtu} onChange={(e) => setNBtu(e.target.value)} placeholder="BTU เช่น 12000" onKeyDown={(e) => e.key === "Enter" && addBtu()} />
+                <button className="btn-primary" onClick={addBtu}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม BTU</button>
+              </div>
+              <div className="chip-wrap">{btus.map((b) => <span className="reg-chip" key={b}>{Number(b).toLocaleString()}<button onClick={() => delBtu(b)}><UIcon name="x" size={12} /></button></span>)}</div>
+            </div>
           </div>
         </div>
 

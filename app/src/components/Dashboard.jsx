@@ -85,7 +85,7 @@ export default function Dashboard({ onReorder }) {
   // ---- inventory on hand (point in time) ----
   const invValue = mats.reduce((a, m) => a + m.stock * m.cost, 0);
   const invUnits = mats.reduce((a, m) => a + m.stock, 0);
-  const low = mats.filter((m) => m.stock < m.minStock)
+  const low = mats.filter((m) => m.tracked && m.stock < m.minStock)
     .map((m) => ({ ...m, need: m.minStock - m.stock, orderValue: (m.minStock - m.stock) * m.cost }))
     .sort((a, b) => a.stock / a.minStock - b.stock / b.minStock);
   const reorderTotal = low.reduce((a, m) => a + m.orderValue, 0);

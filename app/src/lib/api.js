@@ -23,6 +23,10 @@ function enrich(m, catMap) {
     salePrice: Number(m.sale_price) || 0,
     description: m.description || "",
     photoUrl: m.photo_url || null,
+    kind: m.kind || "material",
+    brand: m.brand || null,
+    btu: m.btu || null,
+    tracked: m.tracked !== false,
     minStock: Number(m.min_stock),
     stock: Number(m.current_stock ?? m.init_stock ?? 0),
   };
@@ -75,6 +79,34 @@ export async function listTeams() {
   return (data || []).map((t, i) => ({ ...t, color: t.color || TEAM_PALETTE[i % TEAM_PALETTE.length] }));
 }
 
+// ---------- AC brands + BTU lists (managed, for filtering) ----------
+export async function listBrands() {
+  const { data, error } = await supabase.from("brands").select("*").order("name");
+  if (error) throw error;
+  return (data || []).map((b) => b.name);
+}
+export async function saveBrand(name) {
+  const { error } = await supabase.from("brands").upsert({ name: name.trim() }, { onConflict: "name" });
+  if (error) throw error;
+}
+export async function deleteBrand(name) {
+  const { error } = await supabase.from("brands").delete().eq("name", name);
+  if (error) throw error;
+}
+export async function listBtus() {
+  const { data, error } = await supabase.from("btus").select("*").order("btu");
+  if (error) throw error;
+  return (data || []).map((b) => Number(b.btu));
+}
+export async function saveBtu(btu) {
+  const { error } = await supabase.from("btus").upsert({ btu: Number(btu) }, { onConflict: "btu" });
+  if (error) throw error;
+}
+export async function deleteBtu(btu) {
+  const { error } = await supabase.from("btus").delete().eq("btu", Number(btu));
+  if (error) throw error;
+}
+
 export async function listMaterials() {
   const [cats, mats] = await Promise.all([
     listCategories(),
@@ -87,11 +119,16 @@ export async function listMaterials() {
 
 // add or update a material (admin only — enforced by RLS)
 export async function saveMaterial(row, isNew) {
+  const kind = row.kind || "material";
   const payload = {
     code: row.code,
     name_th: row.name_th,
     name_en: row.name_en || row.name_th,
-    category: row.category,
+    kind,
+    category: kind === "material" ? (row.category || null) : null,
+    brand: kind === "ac" ? (row.brand || null) : null,
+    btu: kind === "ac" && row.btu ? Number(row.btu) : null,
+    tracked: kind === "service" ? false : (row.tracked !== false),
     unit: row.unit,
     cost: Number(row.cost) || 0,
     sale_price: Number(row.sale_price) || 0,

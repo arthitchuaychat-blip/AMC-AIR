@@ -21,6 +21,10 @@ create table if not exists materials (
   code        text primary key,
   name_th     text not null,
   name_en     text,
+  kind        text not null default 'material' check (kind in ('ac','service','material')),
+  brand       text,
+  btu         integer,
+  tracked     boolean not null default true,
   category    text references categories(id) on update cascade,
   unit        text,
   cost        numeric not null default 0,
@@ -71,6 +75,10 @@ create table if not exists jobs (
   closed_by  uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
+
+-- ---------- ทะเบียนยี่ห้อ + ขนาด BTU (สำหรับสินค้าแอร์) ----------
+create table if not exists brands (name text primary key);
+create table if not exists btus (btu integer primary key);
 
 -- ---------- CRM: ลูกค้า ----------
 create table if not exists customers (
@@ -254,6 +262,14 @@ create policy cc_read on customer_contacts for select to authenticated using (tr
 create policy cc_write on customer_contacts for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
 create policy cs_read on customer_sites for select to authenticated using (true);
 create policy cs_write on customer_sites for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+
+-- ทะเบียนยี่ห้อ/BTU: อ่านได้ทุกคน · แก้ไขเฉพาะธุรการ+ฝ่ายขาย
+alter table brands enable row level security;
+alter table btus enable row level security;
+create policy brands_read on brands for select to authenticated using (true);
+create policy brands_write on brands for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+create policy btus_read on btus for select to authenticated using (true);
+create policy btus_write on btus for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
 
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles
