@@ -77,6 +77,12 @@ export function Logo({ size = 40, radius = 11 }) {
 
 export function MaterialThumb({ mat, size = 48, radius = 12 }) {
   const c = mat.color || "#64748b";
+  const photo = mat.photoUrl || mat.photo_url;
+  if (photo) {
+    return <img src={photo} alt="" width={size} height={size}
+      style={{ borderRadius: radius, objectFit: "cover", flex: "none", border: "1px solid var(--line)", background: "#fff" }}
+      onError={(e) => { e.currentTarget.replaceWith(Object.assign(document.createElement("span"), { className: "thumb-broken" })); }} />;
+  }
   return (
     <div style={{
       width: size, height: size, borderRadius: radius,

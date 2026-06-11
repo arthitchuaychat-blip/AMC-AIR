@@ -22,6 +22,7 @@ function enrich(m, catMap) {
     cost: Number(m.cost),
     salePrice: Number(m.sale_price) || 0,
     description: m.description || "",
+    photoUrl: m.photo_url || null,
     minStock: Number(m.min_stock),
     stock: Number(m.current_stock ?? m.init_stock ?? 0),
   };
@@ -95,6 +96,7 @@ export async function saveMaterial(row, isNew) {
     cost: Number(row.cost) || 0,
     sale_price: Number(row.sale_price) || 0,
     description: row.description?.trim() || null,
+    photo_url: row.photo_url || null,
     min_stock: Number(row.min_stock) || 0,
   };
   if (isNew) payload.init_stock = Number(row.init_stock) || 0;
@@ -106,6 +108,15 @@ export async function saveMaterial(row, isNew) {
 export async function updateMaterialCost(code, cost) {
   const { error } = await supabase.from("materials").update({ cost }).eq("code", code);
   if (error) throw error;
+}
+
+// upload a product photo to Supabase Storage (bucket "photos") -> returns public URL
+export async function uploadMaterialPhoto(file, code) {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `materials/${(code || "m").replace(/[^A-Za-z0-9_-]/g, "")}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
 
 // soft-delete (keep history intact)

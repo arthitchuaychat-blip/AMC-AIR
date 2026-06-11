@@ -1,6 +1,7 @@
 import React from "react";
 import { UIcon } from "../icons";
 import { UNITS } from "../lib/format";
+import { uploadMaterialPhoto } from "../lib/api";
 
 // Add OR edit a material. `initial` null => add mode.
 export default function MaterialModal({ initial, categories, onSaved, onClose, onSave }) {
@@ -14,10 +15,19 @@ export default function MaterialModal({ initial, categories, onSaved, onClose, o
     cost: initial?.cost ?? "",
     sale_price: initial?.salePrice ?? initial?.sale_price ?? "",
     description: initial?.description ?? "",
+    photo_url: initial?.photoUrl ?? initial?.photo_url ?? "",
     min_stock: initial?.minStock ?? initial?.min_stock ?? "",
     init_stock: initial?.stock ?? initial?.init_stock ?? "",
   }));
   const [busy, setBusy] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+  async function onPhoto(e) {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploading(true); setErr(null);
+    try { const url = await uploadMaterialPhoto(file, f.code); setF((s) => ({ ...s, photo_url: url })); }
+    catch (ex) { setErr("อัปโหลดรูปไม่สำเร็จ: " + (ex.message || ex)); }
+    setUploading(false);
+  }
   const [err, setErr] = React.useState(null);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const valid = f.code && f.name_th && f.cost !== "";
@@ -61,6 +71,20 @@ export default function MaterialModal({ initial, categories, onSaved, onClose, o
           </label>
           <label className="fld"><span>รายละเอียดสินค้า</span>
             <textarea className="inp" value={f.description} onChange={set("description")} placeholder="คำอธิบาย / สเปก / หมายเหตุ (ไม่บังคับ)" rows={2} style={{ resize: "vertical" }} />
+          </label>
+          <label className="fld"><span>รูปสินค้า</span>
+            <div className="photo-field">
+              {f.photo_url
+                ? <img src={f.photo_url} className="photo-thumb" alt="" />
+                : <div className="photo-thumb empty"><UIcon name="camera" size={22} color="var(--ink-3)" /></div>}
+              <div className="photo-actions">
+                <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
+                  <UIcon name="camera" size={14} /> {uploading ? "กำลังอัปโหลด…" : (f.photo_url ? "เปลี่ยนรูป" : "อัปโหลดรูป")}
+                  <input type="file" accept="image/*" onChange={onPhoto} style={{ display: "none" }} disabled={uploading} />
+                </label>
+                {f.photo_url && <button className="btn-ghost sm danger" onClick={() => setF((s) => ({ ...s, photo_url: "" }))}>ลบรูป</button>}
+              </div>
+            </div>
           </label>
           <div className="fld-row3">
             <label className="fld"><span>หน่วย</span>
