@@ -18,6 +18,8 @@ export default function JobOrders({ role, prefill, onPrefillConsumed }) {
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
+  const [statusF, setStatusF] = React.useState("all");
+  const [q, setQ] = React.useState("");
 
   async function load() {
     setLoading(true);
@@ -140,12 +142,31 @@ export default function JobOrders({ role, prefill, onPrefillConsumed }) {
     <div className="adm">
       <div className="adm-head">
         <div><h1 className="page-title">ใบงาน <span className="page-title-en">Job Orders</span></h1><p className="page-sub">{list.length} ใบ · มอบหมาย & จัดคิวงานช่าง</p></div>
-        {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบงาน</button>}
+        <div className="cat-head-actions">
+          <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
+            <input placeholder="ค้นหาเลขงาน / ลูกค้า / ทีม" value={q} onChange={(e) => setQ(e.target.value)} />
+            {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
+          </div>
+          {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบงาน</button>}
+        </div>
       </div>
+
+      <div className="cat-filter">
+        {[["all", "ทั้งหมด"], ...STATUS_OPTS].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
+      </div>
+
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && list.length === 0 && <div className="empty">ยังไม่มีใบงาน</div>}
-      <div className="job-cards">
-        {list.map((jo) => {
+      {(() => {
+        const ql = q.trim().toLowerCase();
+        const fl = list.filter((jo) => (statusF === "all" || jo.status === statusF)
+          && (!ql || jo.job_no.toLowerCase().includes(ql) || (jo.customerName || "").toLowerCase().includes(ql) || (jo.teamName || "").toLowerCase().includes(ql) || (jo.title || "").toLowerCase().includes(ql)));
+        return (<>
+          {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบงาน" : "ไม่พบใบงานที่ตรงเงื่อนไข"}</div>}
+          <div className="job-cards">
+            {fl.map((jo) => {
           const st = STATUS[jo.status] || STATUS.pending;
           const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
           return (
@@ -164,7 +185,9 @@ export default function JobOrders({ role, prefill, onPrefillConsumed }) {
             </div>
           );
         })}
-      </div>
+          </div>
+        </>);
+      })()}
       {toast && <Toast t={toast} />}
     </div>
   );
