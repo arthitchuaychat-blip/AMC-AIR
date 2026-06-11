@@ -61,8 +61,10 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
         </div>
         <div className="modal-body">
           {/* kind */}
-          <div className="sub-toggle" style={{ marginBottom: 14 }}>
-            {KINDS.map((k) => <button key={k.v} className={f.kind === k.v ? "on" : ""} onClick={() => setKind(k.v)} disabled={!isNew && f.kind !== k.v}>{k.l}</button>)}
+          <div className="fld" style={{ marginBottom: 6 }}><span>ชนิดรายการ</span>
+            <div className="sub-toggle">
+              {KINDS.map((k) => <button key={k.v} className={f.kind === k.v ? "on" : ""} onClick={() => setKind(k.v)}>{k.l}</button>)}
+            </div>
           </div>
 
           <div className="fld-row">
