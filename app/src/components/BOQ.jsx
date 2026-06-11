@@ -2,6 +2,7 @@ import React from "react";
 import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterials } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { UIcon } from "../icons";
+import ItemPicker from "./ItemPicker";
 
 const SECTIONS = [
   { id: "ac", label: "เครื่องปรับอากาศ", kinds: ["ac"] },
@@ -13,24 +14,13 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const blankItems = () => ({ ac: [], free: [], charged: [], service: [] });
 
 function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
-  const [code, setCode] = React.useState("");
   const pool = mats.filter((m) => sec.kinds.includes(m.kind));
   const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0);
-  function add() {
-    const m = mats.find((x) => x.code === code); if (!m) return;
-    onAdd({ code: m.code, name: m.th, unit: m.unit, qty: 1, unit_cost: m.cost });
-    setCode("");
-  }
   return (
     <div className="boq-sec">
       <div className="boq-sec-head"><span>{sec.label}</span><b>{fmtBaht(subtotal)}</b></div>
-      <div className="line-add">
-        <select className="inp" value={code} onChange={(e) => setCode(e.target.value)}>
-          <option value="">— เลือกรายการ —</option>
-          {pool.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th}{m.brand ? ` (${m.brand})` : ""}</option>)}
-        </select>
-        <button className="btn-ghost sm" onClick={add} disabled={!code}><UIcon name="plus" size={14} /> เพิ่ม</button>
-      </div>
+      <ItemPicker items={pool} placeholder={`ค้นหา${sec.label}…`}
+        onPick={(m) => onAdd({ code: m.code, name: m.th, unit: m.unit, qty: 1, unit_cost: m.cost })} />
       {items.map((it, i) => (
         <div className="boq-line" key={i}>
           <div className="line-info"><div className="line-name">{it.name || it.code}</div><div className="line-sub">{it.code}</div></div>

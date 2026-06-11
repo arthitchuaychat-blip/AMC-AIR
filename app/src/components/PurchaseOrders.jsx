@@ -2,6 +2,7 @@ import React from "react";
 import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterials } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
+import ItemPicker from "./ItemPicker";
 
 const STATUS = { open: { th: "รอรับของ", cls: "open" }, received: { th: "รับแล้ว", cls: "closed" }, cancelled: { th: "ยกเลิก", cls: "closed" } };
 
@@ -94,15 +95,13 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           <label className="fld"><span>หมายเหตุ</span><input className="inp" value={editing.note} onChange={(e) => setEditing({ ...editing, note: e.target.value })} placeholder="(ไม่บังคับ)" /></label>
 
           <div className="fld"><span>เพิ่มรายการวัสดุ</span>
-            <div className="line-add">
-              <select className="inp" value={pick.code} onChange={(e) => setPick({ ...pick, code: e.target.value, price: String(matMap[e.target.value]?.cost ?? "") })}>
-                <option value="">— เลือกวัสดุ —</option>
-                {mats.filter((m) => m.tracked).map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th}</option>)}
-              </select>
-              <div className="inp inp-unit line-price"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={pick.price} onChange={(e) => setPick({ ...pick, price: e.target.value })} /></div>
-              <div className="inp inp-unit line-qty"><input type="number" min="1" value={pick.qty} onChange={(e) => setPick({ ...pick, qty: Math.max(1, Number(e.target.value) || 1) })} /><span className="unit-suf">{matMap[pick.code]?.unit || "หน่วย"}</span></div>
-              <button className="btn-ghost sm" onClick={addItem}><UIcon name="plus" size={14} /> เพิ่ม</button>
-            </div>
+            <ItemPicker items={mats.filter((m) => m.tracked)} placeholder="ค้นหาวัสดุ หรือกดลูกศรเพื่อเลือก…"
+              onPick={(m) => setEditing((e) => {
+                const i = e.items.findIndex((x) => x.code === m.code);
+                if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + 1 }; return { ...e, items }; }
+                return { ...e, items: [...e.items, { code: m.code, qty: 1, price: m.cost }] };
+              })} />
+            <p className="page-sub" style={{ marginTop: 6 }}>เลือกแล้วปรับจำนวน/ราคาได้ในรายการด้านล่าง</p>
           </div>
 
           {editing.items.length > 0 && (
