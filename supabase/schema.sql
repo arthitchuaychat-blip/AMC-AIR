@@ -103,6 +103,27 @@ create table if not exists customer_sites (
   site_name text, address text, map_url text
 );
 
+-- ---------- BOQ (ใบประมาณการต้นทุน) ----------
+create table if not exists boqs (
+  boq_no      text primary key,
+  customer_id bigint references customers(id) on delete set null,
+  site_id     bigint references customer_sites(id) on delete set null,
+  title       text,
+  note        text,
+  status      text not null default 'open',
+  created_at  timestamptz not null default now(),
+  created_by  uuid references auth.users(id)
+);
+create table if not exists boq_items (
+  id        bigint generated always as identity primary key,
+  boq_no    text not null references boqs(boq_no) on delete cascade,
+  section   text not null check (section in ('ac','free','charged','service')),
+  item_code text references materials(code),
+  name      text, unit text,
+  qty       numeric not null default 0,
+  unit_cost numeric not null default 0
+);
+
 -- ---------- ใบสั่งซื้อ (Purchase Orders) ----------
 create table if not exists purchase_orders (
   po_no       text primary key,
@@ -270,6 +291,14 @@ create policy brands_read on brands for select to authenticated using (true);
 create policy brands_write on brands for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
 create policy btus_read on btus for select to authenticated using (true);
 create policy btus_write on btus for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+
+-- BOQ: อ่านได้ทุกคน · แก้ไขเฉพาะธุรการ+ฝ่ายขาย
+alter table boqs enable row level security;
+alter table boq_items enable row level security;
+create policy boq_read on boqs for select to authenticated using (true);
+create policy boq_write on boqs for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+create policy boqi_read on boq_items for select to authenticated using (true);
+create policy boqi_write on boq_items for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
 
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles

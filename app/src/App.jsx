@@ -10,20 +10,22 @@ import Settings from "./components/Settings";
 import Jobs from "./components/Jobs";
 import PurchaseOrders from "./components/PurchaseOrders";
 import Customers from "./components/Customers";
+import BOQ from "./components/BOQ";
 
 const NAV = {
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
-  catalog: { th: "คลังวัสดุ", en: "Catalog", icon: "catalog" },
+  catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
+  boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
   movements: { th: "บันทึกธุรกรรม", en: "Movements", icon: "withdraw" },
-  jobs: { th: "งาน", en: "Jobs & Cost", icon: "clipboard" },
+  jobs: { th: "งาน", en: "Jobs & Cost", icon: "box" },
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
 const NAV_BY_ROLE = {
-  admin: ["dashboard", "customers", "catalog", "movements", "jobs", "po", "settings"],
-  sales: ["dashboard", "customers", "catalog"],
-  exec: ["dashboard", "customers", "catalog", "jobs", "po"],
+  admin: ["dashboard", "customers", "catalog", "boq", "movements", "jobs", "po", "settings"],
+  sales: ["dashboard", "customers", "catalog", "boq"],
+  exec: ["dashboard", "customers", "catalog", "boq", "jobs", "po"],
   tech: ["movements"],
 };
 
@@ -131,6 +133,7 @@ export default function App() {
       <main className="main">
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }} />}
         {view === "customers" && <Customers role={role} />}
+        {view === "boq" && <BOQ role={role} />}
         {view === "movements" && <Movements role={role} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}

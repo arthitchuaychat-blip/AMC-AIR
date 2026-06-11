@@ -367,6 +367,45 @@ export async function deleteCustomer(id) {
   if (error) throw error;
 }
 
+// ---------- BOQ (ใบประมาณการต้นทุน) ----------
+export async function listBoqs() {
+  const [b, it, cu] = await Promise.all([
+    supabase.from("boqs").select("*").order("created_at", { ascending: false }),
+    supabase.from("boq_items").select("*"),
+    supabase.from("customers").select("id,name"),
+  ]);
+  if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error;
+  const byBoq = {}; (it.data || []).forEach((x) => { (byBoq[x.boq_no] = byBoq[x.boq_no] || []).push(x); });
+  const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  return (b.data || []).map((bo) => {
+    const items = byBoq[bo.boq_no] || [];
+    return { ...bo, customerName: custName[bo.customer_id] || null, items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
+  });
+}
+
+export async function saveBoq(boq, items) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const e1 = (await supabase.from("boqs").upsert({
+    boq_no: boq.boq_no, customer_id: boq.customer_id || null, site_id: boq.site_id || null,
+    title: boq.title?.trim() || null, note: boq.note?.trim() || null, status: boq.status || "open", created_by: user?.id || null,
+  }, { onConflict: "boq_no" })).error;
+  if (e1) throw e1;
+  const e2 = (await supabase.from("boq_items").delete().eq("boq_no", boq.boq_no)).error;
+  if (e2) throw e2;
+  if (items.length) {
+    const e3 = (await supabase.from("boq_items").insert(items.map((x) => ({
+      boq_no: boq.boq_no, section: x.section, item_code: x.code || null, name: x.name || null,
+      unit: x.unit || null, qty: Number(x.qty) || 0, unit_cost: Number(x.unit_cost) || 0,
+    })))).error;
+    if (e3) throw e3;
+  }
+}
+
+export async function deleteBoq(boq_no) {
+  const { error } = await supabase.from("boqs").delete().eq("boq_no", boq_no);
+  if (error) throw error;
+}
+
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
 export async function deleteTransaction(id) {
   const { error } = await supabase.from("transactions").delete().eq("id", id);

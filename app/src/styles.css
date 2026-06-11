@@ -669,3 +669,13 @@ select.inp{cursor:pointer}
 .reg-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:12.5px;font-weight:600}
 .reg-chip button{width:18px;height:18px;border-radius:99px;display:flex;align-items:center;justify-content:center;color:var(--ink-3);background:var(--surface-2)}
 .reg-chip button:hover{color:var(--down);background:color-mix(in srgb,var(--down) 12%,white)}
+
+/* ---------- BOQ ---------- */
+.boq-sec{margin:14px 0;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:13px}
+.boq-sec-head{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;font-weight:700;margin-bottom:10px}
+.boq-sec-head b{color:var(--ink)}
+.boq-line{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line-2)}
+.boq-line .line-info{flex:1;min-width:0}
+.boq-in{flex:none;width:96px;padding:0 9px}
+.boq-amt{flex:none;width:84px;text-align:right;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+@media(max-width:560px){.boq-in{width:74px}.boq-amt{display:none}}
