@@ -512,9 +512,20 @@ export async function listTeamJobOrders(team) {
   return (j.data || []).map((jo) => _resolveJo(jo, cn, ca, sm, null));
 }
 
-// technician: save completion evidence (photos + comment)
-export async function saveJobEvidence(job_no, photos, note) {
-  const { error } = await supabase.from("job_orders").update({ photos, completion_note: note?.trim() || null }).eq("job_no", job_no);
+// ---------- job timeline (append-only log of status changes + photo/comment updates) ----------
+export async function listJobLogs(job_no) {
+  const { data, error } = await supabase.from("job_logs").select("*").eq("job_no", job_no).order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+// add one timeline entry (a comment + any photos). Unlimited entries per job.
+export async function addJobLog(job_no, { note, photos, author }) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from("job_logs").insert({
+    job_no, type: "update", note: note?.trim() || null, photos: photos || [],
+    author: author || null, created_by: user?.id || null,
+  });
   if (error) throw error;
 }
 
@@ -530,9 +541,12 @@ export async function saveJobOrder(jo) {
   if (error) throw error;
 }
 
-export async function updateJobStatus(job_no, status) {
+export async function updateJobStatus(job_no, status, author) {
   const { error } = await supabase.from("job_orders").update({ status }).eq("job_no", job_no);
   if (error) throw error;
+  // record the status change on the timeline (best-effort — don't fail the status update if logging fails)
+  const { data: { user } } = await supabase.auth.getUser();
+  await supabase.from("job_logs").insert({ job_no, type: "status", status, author: author || null, created_by: user?.id || null });
 }
 
 export async function deleteJobOrder(job_no) {

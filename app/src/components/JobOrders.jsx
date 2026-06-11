@@ -1,6 +1,7 @@
 import React from "react";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations } from "../lib/api";
 import { UIcon } from "../icons";
+import JobTimeline from "./JobTimeline";
 
 const STATUS = {
   pending: { th: "รอจ่ายงาน", cls: "open" }, scheduled: { th: "นัดแล้ว", cls: "open" },
@@ -10,8 +11,9 @@ const STATUS_OPTS = [["pending", "รอจ่ายงาน"], ["scheduled", "
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
-export default function JobOrders({ role, prefill, onPrefillConsumed }) {
+export default function JobOrders({ role, me, prefill, onPrefillConsumed }) {
   const canEdit = role === "admin" || role === "sales";
+  const [openTl, setOpenTl] = React.useState(null);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
@@ -188,12 +190,14 @@ export default function JobOrders({ role, prefill, onPrefillConsumed }) {
                 {(jo.contact_name || jo.contact_phone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{jo.contact_name || "ผู้ติดต่อ"}{jo.contact_phone && <a href={`tel:${jo.contact_phone}`} className="jo-tel">📞 {jo.contact_phone}</a>}</div>}
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
-              {canEdit && (
-                <div className="job-lines"><div className="job-actions">
-                  <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>
-                  <button className="btn-ghost sm danger" onClick={() => del(jo)}><UIcon name="trash" size={14} /> ลบ</button>
-                </div></div>
-              )}
+              <div className="job-lines"><div className="job-actions">
+                <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>
+                  <UIcon name="clipboard" size={14} /> {openTl === jo.job_no ? "ซ่อนความเคลื่อนไหว" : "ความเคลื่อนไหว"}
+                </button>
+                {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEdit && <button className="btn-ghost sm danger" onClick={() => del(jo)}><UIcon name="trash" size={14} /> ลบ</button>}
+              </div></div>
+              {openTl === jo.job_no && <JobTimeline jobNo={jo.job_no} canPost={canEdit} author={me} flash={flash} />}
             </div>
           );
         })}

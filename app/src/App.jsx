@@ -146,8 +146,8 @@ export default function App() {
         {view === "boq" && <BOQ role={role} />}
         {view === "quote" && <Quotation role={role} onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }} />}
         {view === "profit" && <Profit />}
-        {view === "joborders" && <JobOrders role={role} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} />}
-        {view === "myjobs" && <MyJobs team={profile?.team} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: profile?.team }); go("movements"); }} />}
+        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} />}
+        {view === "myjobs" && <MyJobs team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: profile?.team }); go("movements"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}

@@ -83,6 +83,20 @@ create table if not exists job_orders (
   created_by    uuid references auth.users(id)
 );
 
+-- ---------- ความเคลื่อนไหวของใบงาน (timeline: เปลี่ยนสถานะ + แนบรูป/คอมเมนต์ไม่จำกัด) ----------
+create table if not exists job_logs (
+  id         bigint generated always as identity primary key,
+  job_no     text not null references job_orders(job_no) on delete cascade,
+  type       text not null default 'update' check (type in ('update','status')),
+  status     text,
+  note       text,
+  photos     text[] default '{}',
+  author     text,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id)
+);
+create index if not exists idx_job_logs_job on job_logs(job_no, created_at);
+
 -- ---------- งาน (Job costing) ----------
 create table if not exists jobs (
   job_no     text primary key,
@@ -361,6 +375,15 @@ alter table job_orders enable row level security;
 create policy jo_read on job_orders for select to authenticated using (true);
 create policy jo_write on job_orders for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
 create policy jo_tech_update on job_orders for update to authenticated using (my_role() = 'tech' and assigned_team = my_team()) with check (my_role() = 'tech' and assigned_team = my_team());
+
+alter table job_logs enable row level security;
+-- ทุกบทบาทที่ล็อกอินดูความเคลื่อนไหวได้ (ธุรการ/เซล/ผู้บริหาร/ช่าง)
+create policy jl_read on job_logs for select to authenticated using (true);
+-- โพสต์ได้: ธุรการ/เซล หรือ ช่างที่เป็นเจ้าของทีมในใบงานนั้น
+create policy jl_insert on job_logs for insert to authenticated with check (
+  my_role() in ('admin','sales')
+  or (my_role() = 'tech' and exists (select 1 from job_orders j where j.job_no = job_logs.job_no and j.assigned_team = my_team()))
+);
 
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles
