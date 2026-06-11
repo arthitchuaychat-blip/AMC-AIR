@@ -1,6 +1,44 @@
 import React from "react";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompany, saveCompany } from "../lib/api";
 import { UIcon } from "../icons";
+
+// company profile used on the header of printed documents (quotation / BOQ)
+function CompanyCard({ flash }) {
+  const [c, setC] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => { getCompany().then((d) => setC(d || {})).catch((e) => flash("โหลดข้อมูลบริษัทไม่สำเร็จ: " + (e.message || e), true)); }, []);
+  const set = (k, v) => setC((s) => ({ ...s, [k]: v }));
+  async function save() {
+    setBusy(true);
+    try { await saveCompany(c); flash("บันทึกข้อมูลบริษัทแล้ว ✓"); }
+    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  if (!c) return null;
+  return (
+    <div className="card">
+      <div className="sec-head"><div><div className="sec-title">ข้อมูลบริษัท</div><div className="sec-sub">ใช้เป็นหัวเอกสาร ใบเสนอราคา / BOQ</div></div></div>
+      <div className="fld-row">
+        <label className="fld"><span>ชื่อบริษัท</span><input className="inp" value={c.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="เช่น บริษัท เอเอ็มซี แอร์ จำกัด" /></label>
+        <label className="fld"><span>สาขา</span><input className="inp" value={c.branch || ""} onChange={(e) => set("branch", e.target.value)} placeholder="สำนักงานใหญ่" /></label>
+      </div>
+      <label className="fld"><span>ที่อยู่</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={c.address || ""} onChange={(e) => set("address", e.target.value)} placeholder="123/43 ... กรุงเทพฯ 10700" /></label>
+      <div className="fld-row">
+        <label className="fld"><span>เลขประจำตัวผู้เสียภาษี</span><input className="inp" value={c.tax_id || ""} onChange={(e) => set("tax_id", e.target.value)} placeholder="0135565015501" /></label>
+        <label className="fld"><span>โทรศัพท์</span><input className="inp" value={c.phone || ""} onChange={(e) => set("phone", e.target.value)} placeholder="099-262-9090, 066-067-7955" /></label>
+      </div>
+      <div className="fld-row">
+        <label className="fld"><span>อีเมล</span><input className="inp" value={c.email || ""} onChange={(e) => set("email", e.target.value)} placeholder="sales@amc-air.com" /></label>
+        <label className="fld"><span>เว็บไซต์</span><input className="inp" value={c.website || ""} onChange={(e) => set("website", e.target.value)} placeholder="www.amc-air.com" /></label>
+      </div>
+      <label className="fld"><span>บัญชีธนาคาร (สำหรับชำระเงิน)</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={c.bank_info || ""} onChange={(e) => set("bank_info", e.target.value)} placeholder={"ธ.กสิกรไทย 130-3-86355-5\nธ.ไทยพาณิชย์ 046-0-70228-9"} /></label>
+      <label className="fld"><span>เงื่อนไขมาตรฐาน (ขึ้นท้ายเอกสารเมื่อไม่ได้กรอกหมายเหตุ)</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={c.default_terms || ""} onChange={(e) => set("default_terms", e.target.value)} placeholder={"ยืนราคา 30 วัน · เครดิต 60 วัน · มัดจำ 50%"} /></label>
+      <div style={{ marginTop: 6 }}>
+        <button className="btn-primary" disabled={busy} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {busy ? "กำลังบันทึก…" : "บันทึกข้อมูลบริษัท"}</button>
+      </div>
+    </div>
+  );
+}
 
 const ROLES = [{ v: "tech", l: "ช่าง" }, { v: "lead_tech", l: "หัวหน้าช่าง" }, { v: "sales", l: "ฝ่ายขาย" }, { v: "stock", l: "ธุรการวัสดุ" }, { v: "admin", l: "ฝ่ายธุรการ" }, { v: "finance", l: "บัญชี/การเงิน" }, { v: "exec", l: "ผู้บริหาร" }];
 const roleLabel = (v) => (ROLES.find((r) => r.v === v) || {}).l || v;
@@ -203,6 +241,7 @@ export default function Settings() {
 
       {!loading && (
         <>
+        <div style={{ marginBottom: 16 }}><CompanyCard flash={flash} /></div>
         <div className="damage-layout">
           {/* TEAMS */}
           <div className="card">

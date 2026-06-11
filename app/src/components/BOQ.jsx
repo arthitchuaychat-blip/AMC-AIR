@@ -1,8 +1,11 @@
 import React from "react";
-import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterials } from "../lib/api";
+import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterials, getCompany } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
+import DocSlip from "./DocSlip";
+
+const SECTION_LABEL = { ac: "เครื่องปรับอากาศ", free: "วัสดุแถม (ไม่คิดเงิน)", charged: "วัสดุคิดเงิน", service: "ค่าบริการ" };
 
 const SECTIONS = [
   { id: "ac", label: "เครื่องปรับอากาศ", kinds: ["ac"] },
@@ -44,14 +47,17 @@ export default function BOQ({ role }) {
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null); // {boq_no, customer_id, site_id, title, note, items{}}
   const [search, setSearch] = React.useState("");
+  const [company, setCompany] = React.useState({});
+  const [printB, setPrintB] = React.useState(null);
 
   async function load() {
     setLoading(true);
-    try { const [b, c, m] = await Promise.all([listBoqs(), listCustomers(), listMaterials()]); setList(b); setCusts(c); setMats(m); }
+    try { const [b, c, m, co] = await Promise.all([listBoqs(), listCustomers(), listMaterials(), getCompany()]); setList(b); setCusts(c); setMats(m); setCompany(co || {}); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  React.useEffect(() => { if (!printB) return; const t = setTimeout(() => { window.print(); setPrintB(null); }, 80); return () => clearTimeout(t); }, [printB]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
@@ -150,17 +156,52 @@ export default function BOQ({ role }) {
               <div className="job-card-meta">{bo.customerName || "ไม่ระบุลูกค้า"}{bo.contactPhone ? ` · ${bo.contactPhone}` : ""}{bo.title ? ` · ${bo.title}` : ""} · {bo.items.length} รายการ</div>
               <div className="job-card-cost"><span>ต้นทุนรวม</span><b>{fmtBaht(bo.total)}</b></div>
             </div>
-            {canEdit && (
-              <div className="job-lines"><div className="job-actions">
-                <button className="btn-ghost sm" onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>
-                <button className="btn-ghost sm danger" onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>
-              </div></div>
-            )}
+            <div className="job-lines"><div className="job-actions">
+              <button className="btn-ghost sm" onClick={() => setPrintB(bo)}><UIcon name="catalog" size={14} /> พิมพ์</button>
+              {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+              {canEdit && <button className="btn-ghost sm danger" onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
+            </div></div>
           </div>
         ))}
       </div>
         </>);
       })()}
+
+      {printB && (
+        <DocSlip company={company} titleTh="ใบประมาณการ (BOQ)" titleEn="BILL OF QUANTITIES" docNo={printB.boq_no}
+          metaRows={[{ label: "ชื่องาน", value: printB.title }]}
+          customer={{ name: printB.customerName, code: printB.customerCode, taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone }}
+          terms={printB.note} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]}>
+          {(() => {
+            const order = ["ac", "free", "charged", "service"];
+            const bySec = {}; printB.items.forEach((x) => { (bySec[x.section] = bySec[x.section] || []).push(x); });
+            let n = 0;
+            return (
+              <table className="doc-table">
+                <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>
+                <tbody>
+                  {order.filter((sec) => bySec[sec]?.length).map((sec) => {
+                    const rows = bySec[sec];
+                    const sub = rows.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0);
+                    return (
+                      <React.Fragment key={sec}>
+                        <tr className="doc-sec"><td colSpan="6">{SECTION_LABEL[sec] || sec}</td></tr>
+                        {rows.map((x) => { n++; return (
+                          <tr key={x.item_code + n}><td>{n}</td><td>{x.item_code || "-"}</td><td>{x.name}</td><td className="r">{fmtNum(x.qty)} {x.unit || ""}</td><td className="r">{fmtBaht(x.unit_cost)}</td><td className="r">{sec === "free" ? "แถม" : fmtBaht(x.qty * x.unit_cost)}</td></tr>
+                        ); })}
+                        <tr className="doc-sec-sum"><td colSpan="5" className="r">รวม{SECTION_LABEL[sec] || sec}</td><td className="r">{sec === "free" ? "—" : fmtBaht(sub)}</td></tr>
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            );
+          })()}
+          <div className="doc-totals">
+            <div className="doc-grand"><span>ต้นทุนรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div>
+          </div>
+        </DocSlip>
+      )}
       {toast && <Toast t={toast} />}
     </div>
   );

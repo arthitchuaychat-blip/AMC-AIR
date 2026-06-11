@@ -369,21 +369,45 @@ export async function deleteCustomer(id) {
 
 // ---------- BOQ (ใบประมาณการต้นทุน) ----------
 export async function listBoqs() {
-  const [b, it, cu, ct] = await Promise.all([
+  const [b, it, cu, si, ct] = await Promise.all([
     supabase.from("boqs").select("*").order("created_at", { ascending: false }),
     supabase.from("boq_items").select("*"),
-    supabase.from("customers").select("id,name"),
+    supabase.from("customers").select("id,name,address,tax_id"),
+    supabase.from("customer_sites").select("id,site_name,address"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
   ]);
-  if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (ct.error) throw ct.error;
+  if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error;
   const byBoq = {}; (it.data || []).forEach((x) => { (byBoq[x.boq_no] = byBoq[x.boq_no] || []).push(x); });
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
+  const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   return (b.data || []).map((bo) => {
     const items = byBoq[bo.boq_no] || [];
     const ct0 = cc[bo.customer_id];
-    return { ...bo, customerName: custName[bo.customer_id] || null, contactName: ct0?.name || null, contactPhone: ct0?.phone || null, items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
+    const s = bo.site_id ? sm[bo.site_id] : null;
+    return { ...bo, customerName: custName[bo.customer_id] || null, customerCode: bo.customer_id || null,
+      customerAddr: custAddr[bo.customer_id] || null, customerTaxId: custTax[bo.customer_id] || null,
+      siteName: s?.site_name || null, siteAddress: s?.address || null,
+      contactName: ct0?.name || null, contactPhone: ct0?.phone || null,
+      items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
   });
+}
+
+// ---------- COMPANY PROFILE (ข้อมูลบริษัทสำหรับหัวเอกสาร) ----------
+export async function getCompany() {
+  const { data, error } = await supabase.from("company_profile").select("*").eq("id", 1).maybeSingle();
+  if (error) throw error;
+  return data || {};
+}
+export async function saveCompany(c) {
+  const { error } = await supabase.from("company_profile").upsert({
+    id: 1, name: c.name?.trim() || null, branch: c.branch?.trim() || null, address: c.address?.trim() || null,
+    tax_id: c.tax_id?.trim() || null, phone: c.phone?.trim() || null, email: c.email?.trim() || null,
+    website: c.website?.trim() || null, bank_info: c.bank_info?.trim() || null, default_terms: c.default_terms?.trim() || null,
+  }, { onConflict: "id" });
+  if (error) throw error;
 }
 
 export async function saveBoq(boq, items) {
@@ -414,14 +438,15 @@ export async function listQuotations() {
   const [q, it, cu, si, ct] = await Promise.all([
     supabase.from("quotations").select("*").order("created_at", { ascending: false }),
     supabase.from("quotation_items").select("*"),
-    supabase.from("customers").select("id,name,address"),
-    supabase.from("customer_sites").select("id,address,map_url"),
+    supabase.from("customers").select("id,name,address,tax_id"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
   ]);
   if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error;
   const byQ = {}; (it.data || []).forEach((x) => { (byQ[x.quote_no] = byQ[x.quote_no] || []).push(x); });
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
+  const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
   return (q.data || []).map((qo) => {
@@ -430,14 +455,17 @@ export async function listQuotations() {
     const discount = qo.discount_type === "percent" ? subtotal * Number(qo.discount_value || 0) / 100 : Number(qo.discount_value || 0);
     const afterDisc = subtotal - discount;
     const vatAmt = qo.vat ? afterDisc * 0.07 : 0;
+    const grand = afterDisc + vatAmt;
+    const whtAmt = qo.wht ? afterDisc * (Number(qo.wht_rate) || 3) / 100 : 0; // หัก ณ ที่จ่าย คิดจากฐานก่อน VAT
     const s = qo.site_id ? sm[qo.site_id] : null;
     const siteAddress = (s && s.address) || null;
     const address = siteAddress || custAddr[qo.customer_id] || null;
     const map_url = (s && s.map_url) || _gmap(address);
     const ct0 = firstContact[qo.customer_id];
     return { ...qo, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
+      customerTaxId: custTax[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
       siteAddress, address, map_url, contactName: ct0?.name || null, contactPhone: ct0?.phone || null,
-      items, subtotal, discount, afterDisc, vatAmt, grand: afterDisc + vatAmt };
+      items, subtotal, discount, afterDisc, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
   });
 }
 
@@ -448,7 +476,7 @@ export async function saveQuotation(q, items) {
     title: q.title?.trim() || null, status: q.status || "draft",
     issue_date: q.issue_date || null, valid_until: q.valid_until || null,
     discount_type: q.discount_type || "amount", discount_value: Number(q.discount_value) || 0,
-    vat: !!q.vat, note: q.note?.trim() || null,
+    vat: !!q.vat, wht: !!q.wht, wht_rate: Number(q.wht_rate) || 3, note: q.note?.trim() || null,
     approved_at: q.status === "approved" ? (q.approved_at || new Date().toISOString()) : null,
     created_by: user?.id || null,
   }, { onConflict: "quote_no" })).error;

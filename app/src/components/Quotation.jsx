@@ -1,5 +1,6 @@
 import React from "react";
-import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs, getCompany } from "../lib/api";
+import DocSlip from "./DocSlip";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -24,12 +25,13 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
   const [printQ, setPrintQ] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
   const [search, setSearch] = React.useState("");
+  const [company, setCompany] = React.useState({});
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
   async function load() {
     setLoading(true);
-    try { const [q, c, m, b] = await Promise.all([listQuotations(), listCustomers(), listMaterials(), listBoqs()]); setList(q); setCusts(c); setMats(m); setBoqs(b); }
+    try { const [q, c, m, b, co] = await Promise.all([listQuotations(), listCustomers(), listMaterials(), listBoqs(), getCompany()]); setList(q); setCusts(c); setMats(m); setBoqs(b); setCompany(co || {}); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -39,9 +41,9 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
-  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, note: "", items: [] }); }
+  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, note: "", items: [] }); }
   function startEdit(q) {
-    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, note: q.note || "", approved_at: q.approved_at,
+    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", approved_at: q.approved_at,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind })) });
   }
 
@@ -74,6 +76,8 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
   const afterDisc = subtotal - discount;
   const vatAmt = ed && ed.vat ? afterDisc * 0.07 : 0;
   const grand = afterDisc + vatAmt;
+  const whtAmt = ed && ed.wht ? afterDisc * (Number(ed.wht_rate) || 3) / 100 : 0;
+  const netPay = grand - whtAmt;
 
   async function save() {
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
@@ -166,12 +170,25 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
               <button type="button" className={"vat-toggle" + (ed.vat ? " on" : "")} onClick={() => setQ("vat", !ed.vat)}>{ed.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</button>
             </label>
           </div>
+          <div className="fld-row">
+            <label className="fld"><span>หัก ณ ที่จ่าย</span>
+              <div className="line-add">
+                <button type="button" className={"vat-toggle" + (ed.wht ? " on" : "")} style={{ flex: 1 }} onClick={() => setQ("wht", !ed.wht)}>{ed.wht ? "หัก ณ ที่จ่าย" : "ไม่หัก ณ ที่จ่าย"}</button>
+                <div className="inp inp-unit" style={{ width: 110, flex: "none", opacity: ed.wht ? 1 : .5 }}>
+                  <input type="number" min="0" step="0.1" value={ed.wht_rate} disabled={!ed.wht} onChange={(e) => setQ("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
+                </div>
+              </div>
+            </label>
+            <div className="fld" />
+          </div>
 
           <div className="qt-totals">
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(subtotal)}</b></div>
             {discount > 0 && <div><span>ส่วนลด</span><b style={{ color: "var(--down)" }}>− {fmtBaht(discount)}</b></div>}
             {ed.vat && <div><span>VAT 7%</span><b>{fmtBaht(vatAmt)}</b></div>}
-            <div className="qt-grand"><span>ยอดสุทธิ</span><b>{fmtBaht(grand)}</b></div>
+            <div className="qt-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(grand)}</b></div>
+            {ed.wht && <div><span>หัก ณ ที่จ่าย {Number(ed.wht_rate) || 3}%</span><b style={{ color: "var(--down)" }}>− {fmtBaht(whtAmt)}</b></div>}
+            {ed.wht && <div className="qt-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(netPay)}</b></div>}
           </div>
 
           <div className="fld-row">
@@ -249,32 +266,29 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
         </>);
       })()}
 
-      {/* print */}
-      <div className="print-area">
-        {printQ && (
-          <div className="slip">
-            <div className="slip-head"><div className="slip-brand"><img src="/logo.png" alt="" className="slip-logo" onError={(e) => { e.currentTarget.style.display = "none"; }} />AMC Stock</div><div className="slip-title">ใบเสนอราคา</div></div>
-            <div className="slip-meta">
-              <div>เลขที่: <b>{printQ.quote_no}</b></div><div>วันที่: <b>{printQ.issue_date || "-"}</b></div>
-              <div>ลูกค้า: <b>{printQ.customerName || "-"}</b></div><div>ยืนราคาถึง: <b>{printQ.valid_until || "-"}</b></div>
-              {printQ.customerAddr && <div className="slip-meta-wide">ที่อยู่ลูกค้า: <b>{printQ.customerAddr}</b></div>}
-              {(printQ.contactName || printQ.contactPhone) && <div className="slip-meta-wide">ผู้ติดต่อ: <b>{printQ.contactName || "-"}</b>{printQ.contactPhone ? ` · ${printQ.contactPhone}` : ""}</div>}
-              {printQ.siteAddress && <div className="slip-meta-wide">สถานที่ติดตั้ง/หน้างาน: <b>{printQ.siteAddress}</b></div>}
-            </div>
-            <table className="slip-table">
-              <thead><tr><th>#</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">ราคา/หน่วย</th><th className="r">รวม</th></tr></thead>
-              <tbody>{printQ.items.map((it, i) => <tr key={i}><td>{i + 1}</td><td>{it.name}</td><td className="r">{it.qty} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(it.qty * it.unit_price)}</td></tr>)}</tbody>
-              <tfoot>
-                <tr><td colSpan="4" className="r">รวมเป็นเงิน</td><td className="r">{fmtBaht(printQ.subtotal)}</td></tr>
-                {printQ.discount > 0 && <tr><td colSpan="4" className="r">ส่วนลด</td><td className="r">− {fmtBaht(printQ.discount)}</td></tr>}
-                {printQ.vat ? <tr><td colSpan="4" className="r">VAT 7%</td><td className="r">{fmtBaht(printQ.vatAmt)}</td></tr> : null}
-                <tr><td colSpan="4" className="r"><b>ยอดสุทธิ</b></td><td className="r"><b>{fmtBaht(printQ.grand)}</b></td></tr>
-              </tfoot>
-            </table>
-            <div className="slip-sign"><div>ผู้เสนอราคา ......................</div><div>ผู้อนุมัติ (ลูกค้า) ......................</div></div>
+      {/* print: full quotation document */}
+      {printQ && (
+        <DocSlip company={company} titleTh="ใบเสนอราคา" titleEn="QUOTATION" docNo={printQ.quote_no}
+          metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }]}
+          customer={{ name: printQ.customerName, code: printQ.customerCode, taxId: printQ.customerTaxId, address: printQ.siteAddress || printQ.customerAddr, contactName: printQ.contactName, contactPhone: printQ.contactPhone }}
+          terms={printQ.note || company.default_terms} bank={company.bank_info}
+          signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}>
+          <table className="doc-table">
+            <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>
+            <tbody>{printQ.items.map((it, i) => (
+              <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}</td><td className="r">{it.qty} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(it.qty * it.unit_price)}</td></tr>
+            ))}</tbody>
+          </table>
+          <div className="doc-totals">
+            <div><span>รวมเป็นเงิน</span><b>{fmtBaht(printQ.subtotal)}</b></div>
+            {printQ.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(printQ.discount)}</b></div>}
+            {printQ.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printQ.vatAmt)}</b></div> : null}
+            <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(printQ.grand)}</b></div>
+            {printQ.wht ? <div><span>หัก ณ ที่จ่าย {Number(printQ.wht_rate) || 3}%</span><b>− {fmtBaht(printQ.whtAmt)}</b></div> : null}
+            {printQ.wht ? <div className="doc-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(printQ.netPay)}</b></div> : null}
           </div>
-        )}
-      </div>
+        </DocSlip>
+      )}
       {toast && <Toast t={toast} />}
     </div>
   );

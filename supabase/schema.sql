@@ -85,6 +85,17 @@ create table if not exists job_orders (
   created_by    uuid references auth.users(id)
 );
 
+-- ---------- ข้อมูลบริษัท (หัวเอกสาร · แถวเดียว id=1) ----------
+create table if not exists company_profile (
+  id            int primary key default 1,
+  name          text, branch text, address text, tax_id text,
+  phone         text, email text, website text,
+  bank_info     text, default_terms text, logo_url text,
+  updated_at    timestamptz default now(),
+  constraint company_singleton check (id = 1)
+);
+insert into company_profile (id) values (1) on conflict (id) do nothing;
+
 -- ---------- ความเคลื่อนไหวของใบงาน (timeline: เปลี่ยนสถานะ + แนบรูป/คอมเมนต์ไม่จำกัด) ----------
 create table if not exists job_logs (
   id         bigint generated always as identity primary key,
@@ -171,6 +182,8 @@ create table if not exists quotations (
   discount_type  text not null default 'amount' check (discount_type in ('amount','percent')),
   discount_value numeric not null default 0,
   vat            boolean not null default true,
+  wht            boolean not null default false,
+  wht_rate       numeric not null default 3,
   note           text,
   approved_at    timestamptz,
   created_at     timestamptz not null default now(),
@@ -396,6 +409,12 @@ create policy jl_insert on job_logs for insert to authenticated with check (
   my_role() in ('admin','sales','exec','finance','lead_tech')
   or (my_role() = 'tech' and exists (select 1 from job_orders j where j.job_no = job_logs.job_no and j.assigned_team = my_team()))
 );
+
+-- ข้อมูลบริษัท: อ่านได้ทุกคน · แก้ไขธุรการ/ผู้บริหาร/บัญชี
+alter table company_profile enable row level security;
+create policy company_read on company_profile for select to authenticated using (true);
+create policy company_write on company_profile for all to authenticated
+  using (my_role() in ('admin','exec','finance')) with check (my_role() in ('admin','exec','finance'));
 
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles
