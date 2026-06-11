@@ -406,6 +406,54 @@ export async function deleteBoq(boq_no) {
   if (error) throw error;
 }
 
+// ---------- QUOTATIONS (ใบเสนอราคา) ----------
+export async function listQuotations() {
+  const [q, it, cu] = await Promise.all([
+    supabase.from("quotations").select("*").order("created_at", { ascending: false }),
+    supabase.from("quotation_items").select("*"),
+    supabase.from("customers").select("id,name"),
+  ]);
+  if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error;
+  const byQ = {}; (it.data || []).forEach((x) => { (byQ[x.quote_no] = byQ[x.quote_no] || []).push(x); });
+  const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  return (q.data || []).map((qo) => {
+    const items = byQ[qo.quote_no] || [];
+    const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0);
+    const discount = qo.discount_type === "percent" ? subtotal * Number(qo.discount_value || 0) / 100 : Number(qo.discount_value || 0);
+    const afterDisc = subtotal - discount;
+    const vatAmt = qo.vat ? afterDisc * 0.07 : 0;
+    return { ...qo, customerName: custName[qo.customer_id] || null, items, subtotal, discount, afterDisc, vatAmt, grand: afterDisc + vatAmt };
+  });
+}
+
+export async function saveQuotation(q, items) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const e1 = (await supabase.from("quotations").upsert({
+    quote_no: q.quote_no, customer_id: q.customer_id || null, site_id: q.site_id || null, boq_no: q.boq_no || null,
+    title: q.title?.trim() || null, status: q.status || "draft",
+    issue_date: q.issue_date || null, valid_until: q.valid_until || null,
+    discount_type: q.discount_type || "amount", discount_value: Number(q.discount_value) || 0,
+    vat: !!q.vat, note: q.note?.trim() || null,
+    approved_at: q.status === "approved" ? (q.approved_at || new Date().toISOString()) : null,
+    created_by: user?.id || null,
+  }, { onConflict: "quote_no" })).error;
+  if (e1) throw e1;
+  const e2 = (await supabase.from("quotation_items").delete().eq("quote_no", q.quote_no)).error;
+  if (e2) throw e2;
+  if (items.length) {
+    const e3 = (await supabase.from("quotation_items").insert(items.map((x) => ({
+      quote_no: q.quote_no, item_code: x.code || null, name: x.name || null, kind: x.kind || null,
+      unit: x.unit || null, qty: Number(x.qty) || 0, unit_price: Number(x.unit_price) || 0,
+    })))).error;
+    if (e3) throw e3;
+  }
+}
+
+export async function deleteQuotation(quote_no) {
+  const { error } = await supabase.from("quotations").delete().eq("quote_no", quote_no);
+  if (error) throw error;
+}
+
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
 export async function deleteTransaction(id) {
   const { error } = await supabase.from("transactions").delete().eq("id", id);

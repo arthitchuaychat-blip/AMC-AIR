@@ -124,6 +124,33 @@ create table if not exists boq_items (
   unit_cost numeric not null default 0
 );
 
+-- ---------- ใบเสนอราคา (Quotations) ----------
+create table if not exists quotations (
+  quote_no       text primary key,
+  customer_id    bigint references customers(id) on delete set null,
+  site_id        bigint references customer_sites(id) on delete set null,
+  boq_no         text references boqs(boq_no) on delete set null,
+  title          text,
+  status         text not null default 'draft' check (status in ('draft','sent','approved','rejected','expired')),
+  issue_date     date,
+  valid_until    date,
+  discount_type  text not null default 'amount' check (discount_type in ('amount','percent')),
+  discount_value numeric not null default 0,
+  vat            boolean not null default true,
+  note           text,
+  approved_at    timestamptz,
+  created_at     timestamptz not null default now(),
+  created_by     uuid references auth.users(id)
+);
+create table if not exists quotation_items (
+  id         bigint generated always as identity primary key,
+  quote_no   text not null references quotations(quote_no) on delete cascade,
+  item_code  text references materials(code),
+  name       text, kind text, unit text,
+  qty        numeric not null default 0,
+  unit_price numeric not null default 0
+);
+
 -- ---------- ใบสั่งซื้อ (Purchase Orders) ----------
 create table if not exists purchase_orders (
   po_no       text primary key,
@@ -302,6 +329,14 @@ create policy boq_read on boqs for select to authenticated using (true);
 create policy boq_write on boqs for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
 create policy boqi_read on boq_items for select to authenticated using (true);
 create policy boqi_write on boq_items for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+
+-- ใบเสนอราคา: อ่านได้ทุกคน · แก้ไขเฉพาะธุรการ+ฝ่ายขาย
+alter table quotations enable row level security;
+alter table quotation_items enable row level security;
+create policy qt_read on quotations for select to authenticated using (true);
+create policy qt_write on quotations for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+create policy qti_read on quotation_items for select to authenticated using (true);
+create policy qti_write on quotation_items for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
 
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles

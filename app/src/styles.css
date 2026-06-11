@@ -693,3 +693,9 @@ select.inp{cursor:pointer}
 .ipick-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ipick-code{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:none}
 .ipick-empty{padding:14px;text-align:center;color:var(--ink-3);font-size:12.5px}
+
+/* quotation totals box */
+.qt-totals{background:var(--surface-2);border:1px solid var(--line);border-radius:13px;padding:12px 16px;margin:10px 0}
+.qt-totals>div{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink-2);padding:3px 0}
+.qt-totals .qt-grand{border-top:2px solid var(--line);margin-top:6px;padding-top:10px;font-size:15px;font-weight:600;color:var(--ink)}
+.qt-totals .qt-grand b{font-size:20px;color:var(--primary)}
