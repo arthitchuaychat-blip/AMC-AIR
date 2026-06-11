@@ -145,7 +145,10 @@ create table if not exists po_items (
 -- ---------- VIEW: ยอดคงเหลือปัจจุบัน (คำนวณจากธุรกรรม) ----------
 -- หมายเหตุ: "ตัดเสียในงาน" (มี job_no) ไม่หักสต๊อกคลัง เพราะของออกจากคลังตั้งแต่ตอนเบิกแล้ว
 -- มีเฉพาะ "ตัดเสียในคลัง" (job_no ว่าง) ที่หักสต๊อก
-create or replace view material_stock as
+-- ⚠️ view ใช้ select m.* — ถ้าเพิ่มคอลัมน์ใหม่ใน materials ภายหลัง ต้อง DROP+CREATE view นี้ใหม่
+--    (create or replace อาจไม่อัปเดตคอลัมน์ใหม่ที่แทรกกลางลำดับ) ไม่งั้นแอปจะไม่เห็นคอลัมน์ใหม่
+drop view if exists material_stock cascade;
+create view material_stock as
 select
   m.*,
   m.init_stock
