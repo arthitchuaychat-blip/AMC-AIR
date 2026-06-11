@@ -182,7 +182,7 @@ export default function JobOrders({ role, me, prefill, onPrefillConsumed }) {
         <div><h1 className="page-title">ใบงาน <span className="page-title-en">Job Orders</span></h1><p className="page-sub">{list.length} ใบ · มอบหมาย & จัดคิวงานช่าง</p></div>
         <div className="cat-head-actions">
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
-            <input placeholder="ค้นหาเลขงาน / ลูกค้า / ทีม" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input placeholder="ค้นหาเลขงาน / ลูกค้า / เบอร์โทร / ทีมช่าง" value={q} onChange={(e) => setQ(e.target.value)} />
             {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
           </div>
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบงาน</button>}
@@ -200,7 +200,7 @@ export default function JobOrders({ role, me, prefill, onPrefillConsumed }) {
       {(() => {
         const ql = q.trim().toLowerCase();
         const fl = list.filter((jo) => (statusF === "all" || jo.status === statusF)
-          && (!ql || jo.job_no.toLowerCase().includes(ql) || (jo.customerName || "").toLowerCase().includes(ql) || (jo.teamName || "").toLowerCase().includes(ql) || (jo.title || "").toLowerCase().includes(ql)));
+          && (!ql || jo.job_no.toLowerCase().includes(ql) || (jo.customerName || "").toLowerCase().includes(ql) || (jo.teamName || "").toLowerCase().includes(ql) || (jo.title || "").toLowerCase().includes(ql) || (jo.contact_phone || "").toLowerCase().includes(ql)));
         return (<>
           {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบงาน" : "ไม่พบใบงานที่ตรงเงื่อนไข"}</div>}
           <div className="job-cards">

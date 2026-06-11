@@ -369,17 +369,20 @@ export async function deleteCustomer(id) {
 
 // ---------- BOQ (ใบประมาณการต้นทุน) ----------
 export async function listBoqs() {
-  const [b, it, cu] = await Promise.all([
+  const [b, it, cu, ct] = await Promise.all([
     supabase.from("boqs").select("*").order("created_at", { ascending: false }),
     supabase.from("boq_items").select("*"),
     supabase.from("customers").select("id,name"),
+    supabase.from("customer_contacts").select("customer_id,name,phone"),
   ]);
-  if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error;
+  if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (ct.error) throw ct.error;
   const byBoq = {}; (it.data || []).forEach((x) => { (byBoq[x.boq_no] = byBoq[x.boq_no] || []).push(x); });
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const cc = _firstContacts(ct.data);
   return (b.data || []).map((bo) => {
     const items = byBoq[bo.boq_no] || [];
-    return { ...bo, customerName: custName[bo.customer_id] || null, items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
+    const ct0 = cc[bo.customer_id];
+    return { ...bo, customerName: custName[bo.customer_id] || null, contactName: ct0?.name || null, contactPhone: ct0?.phone || null, items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
   });
 }
 

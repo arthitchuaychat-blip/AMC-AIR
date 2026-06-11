@@ -43,6 +43,7 @@ export default function BOQ({ role }) {
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null); // {boq_no, customer_id, site_id, title, note, items{}}
+  const [search, setSearch] = React.useState("");
 
   async function load() {
     setLoading(true);
@@ -127,16 +128,26 @@ export default function BOQ({ role }) {
     <div className="adm">
       <div className="adm-head">
         <div><h1 className="page-title">BOQ <span className="page-title-en">Bill of Quantities</span></h1><p className="page-sub">{list.length} ใบ · ประมาณการต้นทุนงาน</p></div>
-        {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้าง BOQ</button>}
+        <div className="cat-head-actions">
+          <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
+            <input placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร" value={search} onChange={(e) => setSearch(e.target.value)} />
+            {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
+          </div>
+          {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้าง BOQ</button>}
+        </div>
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && list.length === 0 && <div className="empty">ยังไม่มี BOQ</div>}
+      {(() => {
+        const ql = search.trim().toLowerCase();
+        const fl = list.filter((bo) => !ql || bo.boq_no.toLowerCase().includes(ql) || (bo.customerName || "").toLowerCase().includes(ql) || (bo.contactName || "").toLowerCase().includes(ql) || (bo.contactPhone || "").toLowerCase().includes(ql) || (bo.title || "").toLowerCase().includes(ql));
+        return (<>
+      {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">
-        {list.map((bo) => (
+        {fl.map((bo) => (
           <div className="card job-card" key={bo.boq_no}>
             <div className="job-card-head" style={{ cursor: "default" }}>
               <div className="job-card-id"><span className="job-no">{bo.boq_no}</span></div>
-              <div className="job-card-meta">{bo.customerName || "ไม่ระบุลูกค้า"}{bo.title ? ` · ${bo.title}` : ""} · {bo.items.length} รายการ</div>
+              <div className="job-card-meta">{bo.customerName || "ไม่ระบุลูกค้า"}{bo.contactPhone ? ` · ${bo.contactPhone}` : ""}{bo.title ? ` · ${bo.title}` : ""} · {bo.items.length} รายการ</div>
               <div className="job-card-cost"><span>ต้นทุนรวม</span><b>{fmtBaht(bo.total)}</b></div>
             </div>
             {canEdit && (
@@ -148,6 +159,8 @@ export default function BOQ({ role }) {
           </div>
         ))}
       </div>
+        </>);
+      })()}
       {toast && <Toast t={toast} />}
     </div>
   );

@@ -22,6 +22,8 @@ export default function Quotation({ role, onCreateJob }) {
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
   const [printQ, setPrintQ] = React.useState(null);
+  const [statusF, setStatusF] = React.useState("all");
+  const [search, setSearch] = React.useState("");
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
@@ -192,12 +194,31 @@ export default function Quotation({ role, onCreateJob }) {
     <div className="adm">
       <div className="adm-head">
         <div><h1 className="page-title">ใบเสนอราคา <span className="page-title-en">Quotations</span></h1><p className="page-sub">{list.length} ใบ</p></div>
-        {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบเสนอราคา</button>}
+        <div className="cat-head-actions">
+          <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
+            <input placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร" value={search} onChange={(e) => setSearch(e.target.value)} />
+            {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
+          </div>
+          {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบเสนอราคา</button>}
+        </div>
       </div>
+
+      <div className="cat-filter">
+        {[["all", "ทั้งหมด"], ...STATUS_OPTS].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
+      </div>
+
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && list.length === 0 && <div className="empty">ยังไม่มีใบเสนอราคา</div>}
+      {(() => {
+        const ql = search.trim().toLowerCase();
+        const fl = list.filter((q) => (statusF === "all" || q.status === statusF)
+          && (!ql || q.quote_no.toLowerCase().includes(ql) || (q.customerName || "").toLowerCase().includes(ql) || (q.contactName || "").toLowerCase().includes(ql) || (q.contactPhone || "").toLowerCase().includes(ql) || (q.title || "").toLowerCase().includes(ql)));
+        return (<>
+      {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสนอราคา" : "ไม่พบใบเสนอราคาที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">
-        {list.map((q) => {
+        {fl.map((q) => {
           const st = STATUS[q.status] || STATUS.draft;
           return (
             <div className={"card job-card" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
@@ -223,6 +244,8 @@ export default function Quotation({ role, onCreateJob }) {
           );
         })}
       </div>
+        </>);
+      })()}
 
       {/* print */}
       <div className="print-area">
