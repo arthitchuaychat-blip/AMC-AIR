@@ -408,21 +408,33 @@ export async function deleteBoq(boq_no) {
 
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
 export async function listQuotations() {
-  const [q, it, cu] = await Promise.all([
+  const [q, it, cu, si, ct] = await Promise.all([
     supabase.from("quotations").select("*").order("created_at", { ascending: false }),
     supabase.from("quotation_items").select("*"),
-    supabase.from("customers").select("id,name"),
+    supabase.from("customers").select("id,name,address"),
+    supabase.from("customer_sites").select("id,address,map_url"),
+    supabase.from("customer_contacts").select("customer_id,name,phone"),
   ]);
-  if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error;
+  if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error;
   const byQ = {}; (it.data || []).forEach((x) => { (byQ[x.quote_no] = byQ[x.quote_no] || []).push(x); });
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
+  const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
+  const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
   return (q.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
     const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0);
     const discount = qo.discount_type === "percent" ? subtotal * Number(qo.discount_value || 0) / 100 : Number(qo.discount_value || 0);
     const afterDisc = subtotal - discount;
     const vatAmt = qo.vat ? afterDisc * 0.07 : 0;
-    return { ...qo, customerName: custName[qo.customer_id] || null, items, subtotal, discount, afterDisc, vatAmt, grand: afterDisc + vatAmt };
+    const s = qo.site_id ? sm[qo.site_id] : null;
+    const siteAddress = (s && s.address) || null;
+    const address = siteAddress || custAddr[qo.customer_id] || null;
+    const map_url = (s && s.map_url) || _gmap(address);
+    const ct0 = firstContact[qo.customer_id];
+    return { ...qo, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
+      siteAddress, address, map_url, contactName: ct0?.name || null, contactPhone: ct0?.phone || null,
+      items, subtotal, discount, afterDisc, vatAmt, grand: afterDisc + vatAmt };
   });
 }
 
@@ -468,7 +480,7 @@ function _resolveJo(jo, custName, custAddr, siteMap, teamName) {
   const s = jo.site_id ? siteMap[jo.site_id] : null;
   const address = (s && s.address) || jo.address || (custAddr && custAddr[jo.customer_id]) || null;
   const map_url = (s && s.map_url) || jo.map_url || _gmap(address);
-  return { ...jo, address, map_url, customerName: custName ? (custName[jo.customer_id] || null) : null, teamName: teamName ? (teamName[jo.assigned_team] || jo.assigned_team) : jo.assigned_team };
+  return { ...jo, address, map_url, customerAddr: custAddr ? (custAddr[jo.customer_id] || null) : null, customerName: custName ? (custName[jo.customer_id] || null) : null, teamName: teamName ? (teamName[jo.assigned_team] || jo.assigned_team) : jo.assigned_team };
 }
 
 export async function listJobOrders() {

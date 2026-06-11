@@ -201,8 +201,13 @@ export default function Quotation({ role, onCreateJob }) {
             <div className={"card job-card" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
               <div className="job-card-head" style={{ cursor: "default" }}>
                 <div className="job-card-id"><span className="job-no">{q.quote_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
-                <div className="job-card-meta">{q.customerName || "ไม่ระบุลูกค้า"}{q.title ? ` · ${q.title}` : ""} · {q.items.length} รายการ{q.boq_no ? ` · อ้าง ${q.boq_no}` : ""}</div>
+                <div className="job-card-meta">{q.title || "ใบเสนอราคา"} · {q.items.length} รายการ{q.boq_no ? ` · อ้าง ${q.boq_no}` : ""}</div>
                 <div className="job-card-cost"><span>ยอดสุทธิ</span><b>{fmtBaht(q.grand)}</b></div>
+              </div>
+              <div className="jo-info">
+                <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{q.customerName || "ไม่ระบุลูกค้า"}</b>{q.customerAddr ? <span className="jo-dim"> · {q.customerAddr}</span> : null}</div>
+                {(q.contactName || q.contactPhone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{q.contactName || "ผู้ติดต่อ"}{q.contactPhone && <a href={`tel:${q.contactPhone}`} className="jo-tel">📞 {q.contactPhone}</a>}</div>}
+                {q.siteAddress && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{q.siteAddress}</span>{q.map_url && <a href={q.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
               <div className="job-lines"><div className="job-actions">
                 <button className="btn-ghost sm" onClick={() => setPrintQ(q)}><UIcon name="catalog" size={14} /> พิมพ์</button>
@@ -225,6 +230,9 @@ export default function Quotation({ role, onCreateJob }) {
             <div className="slip-meta">
               <div>เลขที่: <b>{printQ.quote_no}</b></div><div>วันที่: <b>{printQ.issue_date || "-"}</b></div>
               <div>ลูกค้า: <b>{printQ.customerName || "-"}</b></div><div>ยืนราคาถึง: <b>{printQ.valid_until || "-"}</b></div>
+              {printQ.customerAddr && <div className="slip-meta-wide">ที่อยู่ลูกค้า: <b>{printQ.customerAddr}</b></div>}
+              {(printQ.contactName || printQ.contactPhone) && <div className="slip-meta-wide">ผู้ติดต่อ: <b>{printQ.contactName || "-"}</b>{printQ.contactPhone ? ` · ${printQ.contactPhone}` : ""}</div>}
+              {printQ.siteAddress && <div className="slip-meta-wide">สถานที่ติดตั้ง/หน้างาน: <b>{printQ.siteAddress}</b></div>}
             </div>
             <table className="slip-table">
               <thead><tr><th>#</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">ราคา/หน่วย</th><th className="r">รวม</th></tr></thead>

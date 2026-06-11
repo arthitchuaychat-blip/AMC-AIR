@@ -101,7 +101,8 @@ export default function MyJobs({ team, onWithdraw }) {
               <div className="myjob-head">
                 <div>
                   <div className="myjob-no">{jo.job_no} <span className={"job-badge " + st.cls}>{st.th}</span></div>
-                  {jo.customerName && <div className="myjob-cust">{jo.customerName}</div>}
+                  {jo.customerName && <div className="myjob-cust">🏢 {jo.customerName}</div>}
+                  {jo.customerAddr && jo.customerAddr !== jo.address && <div className="myjob-custaddr">{jo.customerAddr}</div>}
                   <div className="myjob-title">{jo.title || "งานติดตั้ง/บริการ"}</div>
                 </div>
                 {dt && <div className="myjob-when">{dt.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}<br /><b>{dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</b></div>}

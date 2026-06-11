@@ -721,6 +721,15 @@ select.inp{cursor:pointer}
 .myjob-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 .myjob-actions .btn-primary,.myjob-actions .btn-ghost{flex:1;min-width:140px}
 .myjob-cust{font-size:13.5px;font-weight:700;color:var(--primary);margin-top:4px}
+.myjob-custaddr{font-size:12px;color:var(--ink-3);margin-top:2px;line-height:1.4}
+/* job order / quotation customer-site info block */
+.jo-info{display:flex;flex-direction:column;gap:5px;padding:11px 13px;margin:4px 0 2px;background:var(--surface-2);border:1px solid var(--line);border-radius:11px}
+.jo-info-row{display:flex;align-items:center;gap:8px;font-size:12.8px;color:var(--ink-2);line-height:1.45}
+.jo-info-row .jo-ic{flex:none}
+.jo-info-row b{color:var(--ink)}
+.jo-dim{color:var(--ink-3)}
+.jo-tel{margin-left:auto;font-weight:700;color:var(--primary);white-space:nowrap}
+.slip-meta-wide{grid-column:1/-1}
 .myjob-hint{font-size:11.5px;color:var(--ink-3);margin-top:7px;text-align:center}
 /* completion evidence */
 .myjob-ev{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:9px}
