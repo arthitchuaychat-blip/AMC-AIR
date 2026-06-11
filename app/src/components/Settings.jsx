@@ -4,20 +4,24 @@ import { UIcon } from "../icons";
 
 // company profile used on the header of printed documents (quotation / BOQ)
 function CompanyCard({ flash }) {
-  const [c, setC] = React.useState(null);
+  const [c, setC] = React.useState({});
   const [busy, setBusy] = React.useState(false);
-  React.useEffect(() => { getCompany().then((d) => setC(d || {})).catch((e) => flash("โหลดข้อมูลบริษัทไม่สำเร็จ: " + (e.message || e), true)); }, []);
+  const [warn, setWarn] = React.useState(null);
+  React.useEffect(() => {
+    getCompany().then((d) => setC(d || {}))
+      .catch((e) => setWarn("ยังโหลดข้อมูลบริษัทไม่ได้ — อาจยังไม่ได้รัน migration 014 (" + (e.message || e) + ")"));
+  }, []);
   const set = (k, v) => setC((s) => ({ ...s, [k]: v }));
   async function save() {
     setBusy(true);
-    try { await saveCompany(c); flash("บันทึกข้อมูลบริษัทแล้ว ✓"); }
-    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    try { await saveCompany(c); setWarn(null); flash("บันทึกข้อมูลบริษัทแล้ว ✓"); }
+    catch (e) { flash("บันทึกไม่สำเร็จ — รัน SQL 014_documents.sql ก่อน (" + (e.message || e) + ")", true); }
     setBusy(false);
   }
-  if (!c) return null;
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">ข้อมูลบริษัท</div><div className="sec-sub">ใช้เป็นหัวเอกสาร ใบเสนอราคา / BOQ</div></div></div>
+      {warn && <div className="login-err" style={{ marginBottom: 10 }}>{warn}</div>}
       <div className="fld-row">
         <label className="fld"><span>ชื่อบริษัท</span><input className="inp" value={c.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="เช่น บริษัท เอเอ็มซี แอร์ จำกัด" /></label>
         <label className="fld"><span>สาขา</span><input className="inp" value={c.branch || ""} onChange={(e) => set("branch", e.target.value)} placeholder="สำนักงานใหญ่" /></label>
