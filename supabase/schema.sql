@@ -42,7 +42,7 @@ create table if not exists profiles (
   id     uuid primary key references auth.users(id) on delete cascade,
   email  text,
   name   text,
-  role   text not null default 'tech' check (role in ('exec','admin','sales','tech')),
+  role   text not null default 'tech' check (role in ('exec','admin','finance','sales','stock','lead_tech','tech')),
   team   text references teams(id)
 );
 
@@ -305,7 +305,7 @@ create policy mat_read  on materials  for select to authenticated using (true);
 
 -- แก้ไขวัสดุ: เฉพาะธุรการ (admin)
 create policy mat_write on materials for all to authenticated
-  using (my_role() in ('admin','exec')) with check (my_role() in ('admin','exec'));
+  using (my_role() in ('admin','exec','finance','stock')) with check (my_role() in ('admin','exec','finance','stock'));
 
 -- โปรไฟล์: อ่านได้ทุกคน · แก้ของตัวเอง · ผู้บริหาร/ธุรการจัดการผู้ใช้ได้ทั้งหมด
 create policy prof_read on profiles for select to authenticated
@@ -313,81 +313,87 @@ create policy prof_read on profiles for select to authenticated
 create policy prof_self on profiles for update to authenticated
   using (id = auth.uid());
 create policy prof_mgr_update on profiles for update to authenticated
-  using (my_role() in ('admin','exec')) with check (my_role() in ('admin','exec'));
+  using (my_role() in ('admin','exec','finance')) with check (my_role() in ('admin','exec','finance'));
 create policy prof_mgr_insert on profiles for insert to authenticated
-  with check (my_role() in ('admin','exec') or id = auth.uid());
+  with check (my_role() in ('admin','exec','finance') or id = auth.uid());
 
 -- ธุรกรรม: ช่างเห็น/บันทึกเฉพาะทีมตัวเอง · admin/exec เห็นหมด+บันทึกได้ทุกทีม
 create policy txn_read on transactions for select to authenticated
-  using (my_role() in ('admin','exec') or team = my_team());
+  using (my_role() in ('admin','exec','finance','stock','lead_tech') or team = my_team());
 create policy txn_insert on transactions for insert to authenticated
-  with check (my_role() in ('admin','exec') or (my_role() = 'tech' and team = my_team() and type in ('withdraw','return')));
+  with check (
+    my_role() in ('admin','exec','finance','stock')
+    or (my_role() = 'tech' and team = my_team() and type in ('withdraw','return'))
+    or (my_role() = 'lead_tech' and type in ('withdraw','return'))
+  );
 create policy txn_admin_edit on transactions for update to authenticated
-  using (my_role() in ('admin','exec'));
+  using (my_role() in ('admin','exec','finance','stock'));
 
 -- งาน: อ่านได้ทุกคนที่ล็อกอิน · ปิด/เปิดงาน เฉพาะธุรการ/ผู้บริหาร
 alter table jobs enable row level security;
 create policy jobs_read on jobs for select to authenticated using (true);
 create policy jobs_write on jobs for all to authenticated
-  using (my_role() in ('admin','exec')) with check (my_role() in ('admin','exec'));
+  using (my_role() in ('admin','exec','finance','stock')) with check (my_role() in ('admin','exec','finance','stock'));
 
 -- ใบสั่งซื้อ: อ่านได้ทุกคนที่ล็อกอิน · สร้าง/แก้/ลบ เฉพาะธุรการ/ผู้บริหาร
 alter table purchase_orders enable row level security;
 alter table po_items enable row level security;
 create policy po_read on purchase_orders for select to authenticated using (true);
 create policy po_write on purchase_orders for all to authenticated
-  using (my_role() in ('admin','exec')) with check (my_role() in ('admin','exec'));
+  using (my_role() in ('admin','exec','finance','stock')) with check (my_role() in ('admin','exec','finance','stock'));
 create policy poi_read on po_items for select to authenticated using (true);
 create policy poi_write on po_items for all to authenticated
-  using (my_role() in ('admin','exec')) with check (my_role() in ('admin','exec'));
+  using (my_role() in ('admin','exec','finance','stock')) with check (my_role() in ('admin','exec','finance','stock'));
 
 -- ลูกค้า: อ่านได้ทุกคนที่ล็อกอิน · เพิ่ม/แก้/ลบ ธุรการ + ฝ่ายขาย + ผู้บริหาร
 alter table customers enable row level security;
 alter table customer_contacts enable row level security;
 alter table customer_sites enable row level security;
 create policy cust_read on customers for select to authenticated using (true);
-create policy cust_write on customers for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy cust_write on customers for all to authenticated using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 create policy cc_read on customer_contacts for select to authenticated using (true);
-create policy cc_write on customer_contacts for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy cc_write on customer_contacts for all to authenticated using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 create policy cs_read on customer_sites for select to authenticated using (true);
-create policy cs_write on customer_sites for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy cs_write on customer_sites for all to authenticated using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 
 -- ทะเบียนยี่ห้อ/BTU: อ่านได้ทุกคน · แก้ไขธุรการ+ฝ่ายขาย+ผู้บริหาร
 alter table brands enable row level security;
 alter table btus enable row level security;
 create policy brands_read on brands for select to authenticated using (true);
-create policy brands_write on brands for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy brands_write on brands for all to authenticated using (my_role() in ('admin','sales','exec','finance','stock')) with check (my_role() in ('admin','sales','exec','finance','stock'));
 create policy btus_read on btus for select to authenticated using (true);
-create policy btus_write on btus for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy btus_write on btus for all to authenticated using (my_role() in ('admin','sales','exec','finance','stock')) with check (my_role() in ('admin','sales','exec','finance','stock'));
 
 -- BOQ: อ่านได้ทุกคน · แก้ไขธุรการ+ฝ่ายขาย+ผู้บริหาร
 alter table boqs enable row level security;
 alter table boq_items enable row level security;
 create policy boq_read on boqs for select to authenticated using (true);
-create policy boq_write on boqs for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy boq_write on boqs for all to authenticated using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 create policy boqi_read on boq_items for select to authenticated using (true);
-create policy boqi_write on boq_items for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy boqi_write on boq_items for all to authenticated using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 
 -- ใบเสนอราคา: อ่านได้ทุกคน · แก้ไขธุรการ+ฝ่ายขาย+ผู้บริหาร
 alter table quotations enable row level security;
 alter table quotation_items enable row level security;
 create policy qt_read on quotations for select to authenticated using (true);
-create policy qt_write on quotations for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy qt_write on quotations for all to authenticated using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 create policy qti_read on quotation_items for select to authenticated using (true);
-create policy qti_write on quotation_items for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy qti_write on quotation_items for all to authenticated using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 
 -- ใบงาน: อ่านได้ทุกคน · สร้าง/แก้/ลบ ธุรการ+ฝ่ายขาย+ผู้บริหาร · ช่างอัปเดตสถานะงานของทีมตัวเองได้
 alter table job_orders enable row level security;
 create policy jo_read on job_orders for select to authenticated using (true);
-create policy jo_write on job_orders for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+create policy jo_write on job_orders for all to authenticated using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 create policy jo_tech_update on job_orders for update to authenticated using (my_role() = 'tech' and assigned_team = my_team()) with check (my_role() = 'tech' and assigned_team = my_team());
+-- หัวหน้าช่าง: อัปเดตสถานะงานได้ทุกทีม
+create policy jo_lead_update on job_orders for update to authenticated using (my_role() = 'lead_tech') with check (my_role() = 'lead_tech');
 
 alter table job_logs enable row level security;
--- ทุกบทบาทที่ล็อกอินดูความเคลื่อนไหวได้ (ธุรการ/เซล/ผู้บริหาร/ช่าง)
+-- ทุกบทบาทที่ล็อกอินดูความเคลื่อนไหวได้
 create policy jl_read on job_logs for select to authenticated using (true);
--- โพสต์ได้: ธุรการ/เซล/ผู้บริหาร หรือ ช่างที่เป็นเจ้าของทีมในใบงานนั้น
+-- โพสต์ได้: ธุรการ/เซล/ผู้บริหาร/บัญชี/หัวหน้าช่าง หรือ ช่างที่เป็นเจ้าของทีมในใบงานนั้น
 create policy jl_insert on job_logs for insert to authenticated with check (
-  my_role() in ('admin','sales','exec')
+  my_role() in ('admin','sales','exec','finance','lead_tech')
   or (my_role() = 'tech' and exists (select 1 from job_orders j where j.job_no = job_logs.job_no and j.assigned_team = my_team()))
 );
 

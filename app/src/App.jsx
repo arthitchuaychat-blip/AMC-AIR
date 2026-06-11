@@ -30,14 +30,18 @@ const NAV = {
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
+const FULL_NAV = ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders", "movements", "jobs", "po", "settings"];
 const NAV_BY_ROLE = {
-  admin: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders", "movements", "jobs", "po", "settings"],
+  admin: FULL_NAV,
+  exec: FULL_NAV,
+  finance: FULL_NAV,
   sales: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders"],
-  exec: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders", "movements", "jobs", "po", "settings"],
+  stock: ["catalog", "movements", "po", "jobs"],
+  lead_tech: ["myjobs", "joborders", "movements", "jobs", "catalog"],
   tech: ["myjobs", "movements"],
 };
 
-const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", sales: "ฝ่ายขาย", tech: "ช่าง" };
+const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 
 function SetupNotice() {
   return (
@@ -146,7 +150,7 @@ export default function App() {
         {view === "quote" && <Quotation role={role} onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }} />}
         {view === "profit" && <Profit />}
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} />}
-        {view === "myjobs" && <MyJobs team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: profile?.team }); go("movements"); }} />}
+        {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}

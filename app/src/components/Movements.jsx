@@ -13,10 +13,11 @@ const TYPE_BY = Object.fromEntries(TYPES.map((t) => [t.id, t]));
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
 
 export default function Movements({ role, myTeam, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
-  const isAdmin = role === "admin" || role === "exec";
+  const isAdmin = ["admin", "exec", "finance", "stock"].includes(role);
   const isTech = role === "tech";
-  // technicians may only เบิกออก (withdraw) / รับคืน (return) — no ซื้อ/ตัดเสีย
-  const allowedTypes = isTech ? TYPES.filter((t) => t.id === "withdraw" || t.id === "return") : TYPES;
+  const isLead = role === "lead_tech"; // หัวหน้าช่าง: เบิก/คืนได้ทุกทีม (แต่ไม่ซื้อ/ตัดเสีย)
+  // ช่าง + หัวหน้าช่าง ทำได้เฉพาะ เบิกออก/รับคืน — no ซื้อ/ตัดเสีย
+  const allowedTypes = (isTech || isLead) ? TYPES.filter((t) => t.id === "withdraw" || t.id === "return") : TYPES;
   const [mats, setMats] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [recent, setRecent] = React.useState([]);

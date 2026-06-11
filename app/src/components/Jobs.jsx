@@ -6,7 +6,7 @@ import { UIcon } from "../icons";
 const FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open", label: "เปิดอยู่" }, { id: "closed", label: "ปิดแล้ว" }];
 
 export default function Jobs({ role }) {
-  const isAdmin = role === "admin" || role === "exec";
+  const isAdmin = ["admin", "exec", "finance", "stock"].includes(role);
   const [jobs, setJobs] = React.useState([]);
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);

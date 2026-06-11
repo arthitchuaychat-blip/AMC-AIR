@@ -5,7 +5,7 @@ import { UIcon } from "../icons";
 const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", vat: true, address: "", note: "" });
 
 export default function Customers({ role }) {
-  const canEdit = role === "admin" || role === "sales" || role === "exec";
+  const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [q, setQ] = React.useState("");

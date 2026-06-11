@@ -1,5 +1,5 @@
 import React from "react";
-import { listTeamJobOrders, updateJobStatus } from "../lib/api";
+import { listTeamJobOrders, listJobOrders, updateJobStatus } from "../lib/api";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 
@@ -8,19 +8,20 @@ const STATUS = {
   in_progress: { th: "กำลังทำ", cls: "open" }, done: { th: "เสร็จแล้ว", cls: "closed" }, cancelled: { th: "ยกเลิก", cls: "closed" },
 };
 
-export default function MyJobs({ team, me, onWithdraw }) {
+export default function MyJobs({ role, team, me, onWithdraw }) {
+  const allTeams = role === "lead_tech"; // หัวหน้าช่างเห็นงานทุกทีม
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
   const [tab, setTab] = React.useState("todo"); // todo | doing | done
 
   async function load() {
-    if (!team) { setLoading(false); return; }
+    if (!allTeams && !team) { setLoading(false); return; }
     setLoading(true);
-    try { setList(await listTeamJobOrders(team)); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
+    try { setList(allTeams ? await listJobOrders() : await listTeamJobOrders(team)); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
-  React.useEffect(() => { load(); }, [team]);
+  React.useEffect(() => { load(); }, [team, allTeams]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); }
 
   async function setStatus(jo, status) {
@@ -35,7 +36,7 @@ export default function MyJobs({ team, me, onWithdraw }) {
   const finished = list.filter((j) => j.status === "done" || j.status === "cancelled");
   const shown = tab === "todo" ? todo : tab === "doing" ? doing : finished;
 
-  if (!team) {
+  if (!allTeams && !team) {
     return <div className="adm"><div className="adm-head"><div><h1 className="page-title">งานของฉัน</h1></div></div>
       <div className="empty">บัญชีนี้ยังไม่ได้สังกัดทีมช่าง — ติดต่อฝ่ายธุรการให้กำหนดทีมให้ครับ</div></div>;
   }
@@ -43,7 +44,7 @@ export default function MyJobs({ team, me, onWithdraw }) {
   return (
     <div className="adm">
       <div className="adm-head">
-        <div><h1 className="page-title">งานของฉัน <span className="page-title-en">My Jobs · {team}</span></h1>
+        <div><h1 className="page-title">{allTeams ? "งานทุกทีม" : "งานของฉัน"} <span className="page-title-en">{allTeams ? "All Jobs · หัวหน้าช่าง" : `My Jobs · ${team}`}</span></h1>
           <p className="page-sub">{todo.length} ต้องทำ · {doing.length} กำลังทำ</p></div>
         <div className="seg">
           <button className={"seg-btn" + (tab === "todo" ? " on" : "")} onClick={() => setTab("todo")}>ต้องทำ ({todo.length})</button>
@@ -63,7 +64,7 @@ export default function MyJobs({ team, me, onWithdraw }) {
             <div className={"card myjob" + (jo.status === "done" ? " closed" : "")} key={jo.job_no}>
               <div className="myjob-head">
                 <div>
-                  <div className="myjob-no">{jo.job_no} <span className={"job-badge " + st.cls}>{st.th}</span></div>
+                  <div className="myjob-no">{jo.job_no} <span className={"job-badge " + st.cls}>{st.th}</span>{allTeams && jo.teamName ? <span className="myjob-team">ทีม {jo.teamName}</span> : null}</div>
                   {jo.customerName && <div className="myjob-cust">🏢 {jo.customerName}</div>}
                   {jo.customerAddr && jo.customerAddr !== jo.address && <div className="myjob-custaddr">{jo.customerAddr}</div>}
                   <div className="myjob-title">{jo.title || "งานติดตั้ง/บริการ"}</div>
