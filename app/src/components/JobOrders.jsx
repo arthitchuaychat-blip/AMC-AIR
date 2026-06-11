@@ -56,7 +56,7 @@ export default function JobOrders({ role, me, prefill, onPrefillConsumed }) {
   function startEdit(jo) {
     const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
     const p = (n) => String(n).padStart(2, "0");
-    setEd({ ...jo, customer_id: jo.customer_id || "", site_id: jo.site_id || "", assigned_team: jo.assigned_team || "",
+    setEd({ ...jo, _edit: true, customer_id: jo.customer_id || "", site_id: jo.site_id || "", assigned_team: jo.assigned_team || "",
       date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
       sales_note: jo.sales_note || "", sales_photos: jo.sales_photos || [] });
@@ -83,6 +83,7 @@ export default function JobOrders({ role, me, prefill, onPrefillConsumed }) {
 
   async function save() {
     if (!ed.title?.trim() && !ed.customer_id) return flash("ใส่ลูกค้าหรือชื่องาน", true);
+    if (ed._edit && !window.confirm(`ยืนยันบันทึกการแก้ไขใบงาน ${ed.job_no} ?`)) return;
     // build from local date+time so the saved instant matches what the user picked (store as proper ISO/UTC)
     const scheduled_at = ed.date ? new Date(`${ed.date}T${ed.time || "08:00"}:00`).toISOString() : null;
     const status = ed.status === "pending" && ed.assigned_team && ed.date ? "scheduled" : ed.status;

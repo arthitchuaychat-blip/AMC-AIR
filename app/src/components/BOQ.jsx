@@ -58,7 +58,7 @@ export default function BOQ({ role }) {
   function startEdit(bo) {
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost) }); });
-    setEd({ boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", items });
+    setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", items });
   }
 
   const cust = custs.find((c) => String(c.id) === String(ed?.customer_id));
@@ -71,6 +71,7 @@ export default function BOQ({ role }) {
   async function save() {
     const flat = Object.entries(ed.items).flatMap(([sec, arr]) => arr.filter((x) => x.qty > 0).map((x) => ({ ...x, section: sec })));
     if (!flat.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
+    if (ed._edit && !window.confirm(`ยืนยันบันทึกการแก้ไข BOQ ${ed.boq_no} ?`)) return;
     try { await saveBoq(ed, flat); flash("บันทึก BOQ แล้ว"); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }

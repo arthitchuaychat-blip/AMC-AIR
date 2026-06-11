@@ -40,7 +40,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   }, [prefill, mats]);
 
   function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", items: [] }); }
-  function startEdit(po) { setEditing({ po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: i.price })) }); }
+  function startEdit(po) { setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: i.price })) }); }
 
   function addItem() {
     if (!pick.code || pick.qty < 1) return;
@@ -62,6 +62,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   async function save() {
     if (!editing.po_no.trim()) return flash("ใส่เลขใบสั่งซื้อ", true);
     if (!editing.items.length) return flash("เพิ่มวัสดุอย่างน้อย 1 รายการ", true);
+    if (editing._edit && !window.confirm(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
     try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, status: "open" }, editing.items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }

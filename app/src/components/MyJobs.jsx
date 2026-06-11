@@ -24,6 +24,8 @@ export default function MyJobs({ team, me, onWithdraw }) {
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); }
 
   async function setStatus(jo, status) {
+    const label = STATUS[status]?.th || status;
+    if (!window.confirm(`ยืนยันเปลี่ยนสถานะงาน ${jo.job_no} เป็น "${label}" ?`)) return;
     try { await updateJobStatus(jo.job_no, status, me); flash("อัปเดตสถานะแล้ว"); await load(); }
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
   }

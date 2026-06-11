@@ -10,6 +10,7 @@ function TeamRow({ team, onChanged, flash }) {
   const [lead, setLead] = React.useState(team.lead || "");
   const [busy, setBusy] = React.useState(false);
   async function save() {
+    if (!window.confirm(`ยืนยันบันทึกการแก้ไขทีม ${team.id} ?`)) return;
     setBusy(true);
     try { await saveTeam({ id: team.id, name, lead }); flash(`บันทึกทีม ${team.id} แล้ว`); onChanged(); }
     catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
@@ -65,6 +66,7 @@ function CategoryRow({ c, onChanged, flash }) {
   const [busy, setBusy] = React.useState(false);
   async function save() {
     if (!id.trim()) return flash("รหัสหมวดห้ามว่าง", true);
+    if (!window.confirm(`ยืนยันบันทึกการแก้ไขหมวด ${c.id} ?`)) return;
     setBusy(true);
     try {
       await updateCategory(c.id, { id, name_th: nameTh, name_en: nameEn });
@@ -172,13 +174,13 @@ export default function Settings() {
     try { await saveBrand(nBrand); setNBrand(""); flash(`เพิ่มยี่ห้อ ${nBrand} แล้ว`); load(); }
     catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
   }
-  async function delBrand(b) { try { await deleteBrand(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
+  async function delBrand(b) { if (!window.confirm(`ลบยี่ห้อ "${b}" ?`)) return; try { await deleteBrand(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
   async function addBtu() {
     if (!nBtu || Number(nBtu) <= 0) return;
     try { await saveBtu(nBtu); setNBtu(""); flash(`เพิ่ม ${nBtu} BTU แล้ว`); load(); }
     catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
   }
-  async function delBtu(b) { try { await deleteBtu(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
+  async function delBtu(b) { if (!window.confirm(`ลบขนาด ${Number(b).toLocaleString()} BTU ?`)) return; try { await deleteBtu(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
 
   async function addCat() {
     if (!nc.id.trim() || !nc.name_th.trim()) return flash("ใส่รหัสและชื่อหมวด", true);

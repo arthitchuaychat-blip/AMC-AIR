@@ -37,7 +37,7 @@ export default function Quotation({ role, onCreateJob }) {
 
   function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, note: "", items: [] }); }
   function startEdit(q) {
-    setEd({ quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, note: q.note || "", approved_at: q.approved_at,
+    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, note: q.note || "", approved_at: q.approved_at,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind })) });
   }
 
@@ -73,11 +73,13 @@ export default function Quotation({ role, onCreateJob }) {
 
   async function save() {
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
+    if (ed._edit && !window.confirm(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
     try { await saveQuotation(ed, ed.items); flash("บันทึกใบเสนอราคาแล้ว"); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(q) { if (!confirm(`ลบ ${q.quote_no}?`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
   async function approve(q) {
+    if (!window.confirm(`ยืนยันอนุมัติใบเสนอราคา ${q.quote_no} ?`)) return;
     try { await setQuotationStatus(q.quote_no, "approved"); flash(`อนุมัติ ${q.quote_no} แล้ว ✓`); await load(); }
     catch (e) { flash("อนุมัติไม่สำเร็จ: " + (e.message || e), true); }
   }

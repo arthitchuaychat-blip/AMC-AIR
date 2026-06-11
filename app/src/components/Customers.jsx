@@ -39,6 +39,7 @@ export default function Customers({ role }) {
 
   async function save() {
     if (!editing.cust.name.trim()) return flash("ใส่ชื่อลูกค้า", true);
+    if (editing.cust.id && !window.confirm(`ยืนยันบันทึกการแก้ไขลูกค้า "${editing.cust.name}" ?`)) return;
     try { await saveCustomer(editing.cust, editing.contacts, editing.sites); flash("บันทึกลูกค้าแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
