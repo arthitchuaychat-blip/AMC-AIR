@@ -56,7 +56,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{isNew ? "เพิ่มรายการใหม่" : "แก้ไขรายการ"} <span>{isNew ? "Add item" : "Edit item"}</span></div>
+          <div className="modal-title">{isNew ? "เพิ่ม" : "แก้ไข"}{(KINDS.find((k) => k.v === f.kind) || {}).l} <span>{f.kind}</span></div>
           <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
         </div>
         <div className="modal-body">
