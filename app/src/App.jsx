@@ -148,7 +148,7 @@ export default function App() {
         {view === "profit" && <Profit />}
         {view === "joborders" && <JobOrders role={role} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} />}
         {view === "myjobs" && <MyJobs team={profile?.team} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: profile?.team }); go("movements"); }} />}
-        {view === "movements" && <Movements role={role} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
+        {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}
         {view === "jobs" && <Jobs role={role} />}

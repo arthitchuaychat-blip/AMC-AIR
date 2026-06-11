@@ -12,8 +12,11 @@ const TYPES = [
 const TYPE_BY = Object.fromEntries(TYPES.map((t) => [t.id, t]));
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
 
-export default function Movements({ role, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
+export default function Movements({ role, myTeam, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
   const isAdmin = role === "admin";
+  const isTech = role === "tech";
+  // technicians may only เบิกออก (withdraw) / รับคืน (return) — no ซื้อ/ตัดเสีย
+  const allowedTypes = isTech ? TYPES.filter((t) => t.id === "withdraw" || t.id === "return") : TYPES;
   const [mats, setMats] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [recent, setRecent] = React.useState([]);
@@ -51,10 +54,12 @@ export default function Movements({ role, prefill, onPrefillConsumed, withdrawCt
     setMats(m); setTeams(tm); setRecent(r); setJobs(j);
     const firstTracked = m.find((x) => x.tracked);
     if (!pickCode && firstTracked) setPickCode(firstTracked.code);
-    if (!team && tm.length) setTeam(tm[0].id);
+    if (!team && tm.length) setTeam(isTech && myTeam ? myTeam : tm[0].id);
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  // technicians are locked to their own team
+  React.useEffect(() => { if (isTech && myTeam) setTeam(myTeam); }, [isTech, myTeam]);
   React.useEffect(() => { const m = matMap[pickCode]; if (m) setPickPrice(String(m.cost)); }, [pickCode, mats]);
   // technician "withdraw for this job" → preset type=withdraw, team, job no
   React.useEffect(() => {
@@ -176,7 +181,7 @@ export default function Movements({ role, prefill, onPrefillConsumed, withdrawCt
         {/* FORM */}
         <div className="card">
           <div className="seg" style={{ marginBottom: 16, display: "flex" }}>
-            {TYPES.map((t) => (
+            {allowedTypes.map((t) => (
               <button key={t.id} className={"seg-btn" + (type === t.id ? " on" : "")} onClick={() => changeType(t.id)}
                 style={type === t.id ? { background: t.color, boxShadow: "none" } : {}}>{t.th}</button>
             ))}
@@ -196,10 +201,10 @@ export default function Movements({ role, prefill, onPrefillConsumed, withdrawCt
               <label className="fld"><span>เลือกงานที่เบิกค้าง · Open job</span>
                 <select className="inp" value={selJob} onChange={(e) => { setSelJob(e.target.value); setQtyByCode({}); }}>
                   <option value="">— เลือกงาน —</option>
-                  {jobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.team || "-"} · ค้าง {j.lines.length} รายการ</option>)}
+                  {jobs.filter((j) => !isTech || j.team === myTeam).map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.team || "-"} · ค้าง {j.lines.length} รายการ</option>)}
                 </select>
               </label>
-              {jobs.length === 0 && <div className="empty sm">ไม่มีงานที่เบิกค้างอยู่</div>}
+              {jobs.filter((j) => !isTech || j.team === myTeam).length === 0 && <div className="empty sm">ไม่มีงานที่เบิกค้างอยู่</div>}
 
               {type === "damage" && job && (
                 <label className="fld"><span>สาเหตุ · Reason</span>
@@ -245,9 +250,9 @@ export default function Movements({ role, prefill, onPrefillConsumed, withdrawCt
               {type !== "purchase" && type !== "damage" && (
                 <label className="fld"><span>ทีม · Team</span>
                   <div className="team-pick-row">
-                    {teams.map((t) => (
-                      <button key={t.id} className={"team-pick" + (team === t.id ? " on" : "")} onClick={() => setTeam(t.id)}
-                        style={team === t.id ? { background: t.color, borderColor: t.color, color: "#fff" } : {}}>
+                    {(isTech ? teams.filter((t) => t.id === myTeam) : teams).map((t) => (
+                      <button key={t.id} className={"team-pick" + (team === t.id ? " on" : "")} onClick={() => !isTech && setTeam(t.id)}
+                        style={team === t.id ? { background: t.color, borderColor: t.color, color: "#fff", cursor: isTech ? "default" : "pointer" } : {}}>
                         <span style={{ width: 8, height: 8, borderRadius: 9, background: team === t.id ? "#fff" : t.color }} />
                         {t.name.replace("Team ", "")}
                       </button>

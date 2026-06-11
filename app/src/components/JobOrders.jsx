@@ -70,7 +70,8 @@ export default function JobOrders({ role, prefill, onPrefillConsumed }) {
 
   async function save() {
     if (!ed.title?.trim() && !ed.customer_id) return flash("ใส่ลูกค้าหรือชื่องาน", true);
-    const scheduled_at = ed.date ? `${ed.date}T${ed.time || "08:00"}:00` : null;
+    // build from local date+time so the saved instant matches what the user picked (store as proper ISO/UTC)
+    const scheduled_at = ed.date ? new Date(`${ed.date}T${ed.time || "08:00"}:00`).toISOString() : null;
     const status = ed.status === "pending" && ed.assigned_team && ed.date ? "scheduled" : ed.status;
     try {
       await saveJobOrder({ ...ed, scheduled_at, status });

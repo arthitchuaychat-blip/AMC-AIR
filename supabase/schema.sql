@@ -301,7 +301,7 @@ create policy prof_self on profiles for update to authenticated
 create policy txn_read on transactions for select to authenticated
   using (my_role() in ('admin','exec') or team = my_team());
 create policy txn_insert on transactions for insert to authenticated
-  with check (my_role() = 'admin' or (my_role() = 'tech' and team = my_team()));
+  with check (my_role() = 'admin' or (my_role() = 'tech' and team = my_team() and type in ('withdraw','return')));
 create policy txn_admin_edit on transactions for update to authenticated
   using (my_role() = 'admin');
 
