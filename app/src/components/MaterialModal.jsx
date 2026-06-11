@@ -48,7 +48,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
   async function submit() {
     if (!valid || busy) return;
     setBusy(true); setErr(null);
-    try { await onSave(f, isNew); onSaved(); }
+    try { await onSave(f, isNew); onSaved(f.kind); }
     catch (e) { setErr(e.message || String(e)); setBusy(false); }
   }
 

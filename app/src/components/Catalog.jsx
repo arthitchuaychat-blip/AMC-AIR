@@ -176,7 +176,9 @@ export default function Catalog({ role }) {
       {editing !== undefined && (
         <MaterialModal initial={editing} categories={cats} brands={brands} btus={btus}
           defaultKind={kind === "all" ? "material" : kind}
-          onSave={saveMaterial} onSaved={() => { setEditing(undefined); load(); }} onClose={() => setEditing(undefined)} />
+          onSave={saveMaterial}
+          onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setBtu("all"); } load(); }}
+          onClose={() => setEditing(undefined)} />
       )}
     </div>
   );
