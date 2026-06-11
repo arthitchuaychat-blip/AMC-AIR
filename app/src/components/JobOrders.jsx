@@ -1,5 +1,5 @@
 import React from "react";
-import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto } from "../lib/api";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 
@@ -14,6 +14,7 @@ const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/s
 export default function JobOrders({ role, me, prefill, onPrefillConsumed }) {
   const canEdit = role === "admin" || role === "sales";
   const [openTl, setOpenTl] = React.useState(null);
+  const [upBrief, setUpBrief] = React.useState(false);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
@@ -45,19 +46,29 @@ export default function JobOrders({ role, me, prefill, onPrefillConsumed }) {
       job_no: genNo(), quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "",
       title: q.title || "", contact_name: contact?.name || "", contact_phone: contact?.phone || "",
       address: site?.address || cust?.address || "", map_url: site?.map_url || mapLink(site?.address || cust?.address), details,
+      sales_note: "", sales_photos: [],
       assigned_team: "", date: "", time: "", status: "pending",
     });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, custs]);
 
-  function startNew() { setEd({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", assigned_team: "", date: "", time: "", status: "pending" }); }
+  function startNew() { setEd({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", date: "", time: "", status: "pending" }); }
   function startEdit(jo) {
     const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
     const p = (n) => String(n).padStart(2, "0");
     setEd({ ...jo, customer_id: jo.customer_id || "", site_id: jo.site_id || "", assigned_team: jo.assigned_team || "",
       date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "",
-      contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "" });
+      contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
+      sales_note: jo.sales_note || "", sales_photos: jo.sales_photos || [] });
   }
+  async function onBriefFiles(e) {
+    const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
+    setUpBrief(true);
+    try { const urls = []; for (const f of files) urls.push(await uploadMaterialPhoto(f, ed.job_no)); setEd((s) => ({ ...s, sales_photos: [...(s.sales_photos || []), ...urls] })); }
+    catch (ex) { flash("อัปโหลดรูปไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUpBrief(false);
+  }
+  const removeBriefPhoto = (i) => setEd((s) => ({ ...s, sales_photos: (s.sales_photos || []).filter((_, j) => j !== i) }));
   const cust = custs.find((c) => String(c.id) === String(ed?.customer_id));
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   function onCustomer(id) {
@@ -116,6 +127,22 @@ export default function JobOrders({ role, me, prefill, onPrefillConsumed }) {
           <label className="fld"><span>ที่อยู่หน้างาน</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={ed.address} onChange={(e) => setF("address", e.target.value)} /></label>
           <label className="fld"><span>ลิงก์แผนที่ (Google Maps)</span><input className="inp" value={ed.map_url} onChange={(e) => setF("map_url", e.target.value)} placeholder="วางลิงก์แผนที่" /></label>
           <label className="fld"><span>รายละเอียดงาน / รายการที่ต้องทำ</span><textarea className="inp" rows={4} style={{ resize: "vertical" }} value={ed.details} onChange={(e) => setF("details", e.target.value)} /></label>
+
+          <label className="fld"><span>โน้ตถึงทีมช่าง (ฝ่ายขาย → ช่าง)</span>
+            <textarea className="inp" rows={2} style={{ resize: "vertical" }} value={ed.sales_note} onChange={(e) => setF("sales_note", e.target.value)} placeholder="ข้อความ/ข้อควรระวังถึงช่าง เช่น ลูกค้าสะดวกช่วงบ่าย, จอดรถหลังตึก, ระวังพื้นไม้" /></label>
+          <div className="fld"><span>รูปหน้างานเบื้องต้น (ให้ช่างดูก่อนเข้างาน)</span>
+            <div className="myjob-photos">
+              {(ed.sales_photos || []).map((u, i) => (
+                <div className="myjob-photo" key={i}>
+                  <a href={u} target="_blank" rel="noreferrer"><img src={u} alt="" /></a>
+                  <button type="button" className="myjob-photo-x" onClick={() => removeBriefPhoto(i)} aria-label="ลบรูป">×</button>
+                </div>
+              ))}
+              <label className="myjob-addphoto">{upBrief ? "…" : "＋ รูป"}
+                <input type="file" accept="image/*" multiple onChange={onBriefFiles} hidden />
+              </label>
+            </div>
+          </div>
 
           <div className="fld-row">
             <label className="fld"><span>มอบหมายทีมช่าง</span>

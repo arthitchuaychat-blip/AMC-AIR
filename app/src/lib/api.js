@@ -476,40 +476,52 @@ export async function setQuotationStatus(quote_no, status) {
 // ---------- JOB ORDERS (ใบงาน) ----------
 const _gmap = (a) => (a && a.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(a.trim()) : null;
 // resolve address/map LIVE from the linked customer site (so editing the customer flows to job orders)
-function _resolveJo(jo, custName, custAddr, siteMap, teamName) {
+function _resolveJo(jo, custName, custAddr, siteMap, teamName, custContact) {
   const s = jo.site_id ? siteMap[jo.site_id] : null;
   const address = (s && s.address) || jo.address || (custAddr && custAddr[jo.customer_id]) || null;
   const map_url = (s && s.map_url) || jo.map_url || _gmap(address);
-  return { ...jo, address, map_url, customerAddr: custAddr ? (custAddr[jo.customer_id] || null) : null, customerName: custName ? (custName[jo.customer_id] || null) : null, teamName: teamName ? (teamName[jo.assigned_team] || jo.assigned_team) : jo.assigned_team };
+  const cc = custContact ? custContact[jo.customer_id] : null;
+  return { ...jo, address, map_url,
+    contact_name: jo.contact_name || (cc && cc.name) || null,
+    contact_phone: jo.contact_phone || (cc && cc.phone) || null,
+    customerAddr: custAddr ? (custAddr[jo.customer_id] || null) : null,
+    customerName: custName ? (custName[jo.customer_id] || null) : null,
+    teamName: teamName ? (teamName[jo.assigned_team] || jo.assigned_team) : jo.assigned_team };
 }
+// first contact per customer (live fallback for the snapshot contact on the job order)
+function _firstContacts(rows) { const m = {}; (rows || []).forEach((c) => { if (!m[c.customer_id]) m[c.customer_id] = c; }); return m; }
 
 export async function listJobOrders() {
-  const [j, cu, tm, si] = await Promise.all([
+  const [j, cu, tm, si, ct] = await Promise.all([
     supabase.from("job_orders").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address"),
     supabase.from("teams").select("id,name"),
     supabase.from("customer_sites").select("id,address,map_url"),
+    supabase.from("customer_contacts").select("customer_id,name,phone"),
   ]);
-  if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error;
+  if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error; if (ct.error) throw ct.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
-  return (j.data || []).map((jo) => _resolveJo(jo, cn, ca, sm, tn));
+  const cc = _firstContacts(ct.data);
+  return (j.data || []).map((jo) => _resolveJo(jo, cn, ca, sm, tn, cc));
 }
 
-// job orders assigned to a team (technician view) — address/map resolved live
+// job orders assigned to a team (technician view) — address/map/contact resolved live
 export async function listTeamJobOrders(team) {
-  const [j, si, cu] = await Promise.all([
+  const [j, si, cu, ct] = await Promise.all([
     supabase.from("job_orders").select("*").eq("assigned_team", team).order("scheduled_at", { ascending: true }),
     supabase.from("customer_sites").select("id,address,map_url"),
     supabase.from("customers").select("id,name,address"),
+    supabase.from("customer_contacts").select("customer_id,name,phone"),
   ]);
-  if (j.error) throw j.error; if (si.error) throw si.error; if (cu.error) throw cu.error;
+  if (j.error) throw j.error; if (si.error) throw si.error; if (cu.error) throw cu.error; if (ct.error) throw ct.error;
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
-  return (j.data || []).map((jo) => _resolveJo(jo, cn, ca, sm, null));
+  const cc = _firstContacts(ct.data);
+  return (j.data || []).map((jo) => _resolveJo(jo, cn, ca, sm, null, cc));
 }
 
 // ---------- job timeline (append-only log of status changes + photo/comment updates) ----------
@@ -535,6 +547,7 @@ export async function saveJobOrder(jo) {
     job_no: jo.job_no, quote_no: jo.quote_no || null, customer_id: jo.customer_id || null, site_id: jo.site_id || null,
     title: jo.title?.trim() || null, contact_name: jo.contact_name?.trim() || null, contact_phone: jo.contact_phone?.trim() || null,
     address: jo.address?.trim() || null, map_url: jo.map_url?.trim() || null, details: jo.details?.trim() || null,
+    sales_note: jo.sales_note?.trim() || null, sales_photos: jo.sales_photos || [],
     assigned_team: jo.assigned_team || null, scheduled_at: jo.scheduled_at || null,
     status: jo.status || "pending", created_by: user?.id || null,
   }, { onConflict: "job_no" });

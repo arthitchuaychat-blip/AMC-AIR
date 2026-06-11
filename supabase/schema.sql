@@ -74,6 +74,8 @@ create table if not exists job_orders (
   title         text,
   contact_name  text, contact_phone text,
   address       text, map_url text, details text,
+  sales_note    text,
+  sales_photos  text[] default '{}',
   assigned_team text references teams(id),
   scheduled_at  timestamptz,
   status        text not null default 'pending' check (status in ('pending','scheduled','in_progress','done','cancelled')),

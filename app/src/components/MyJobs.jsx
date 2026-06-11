@@ -76,6 +76,16 @@ export default function MyJobs({ team, me, onWithdraw }) {
                 {jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm">แผนที่</a>}</div>}
               {jo.details && <div className="myjob-details">{jo.details}</div>}
 
+              {(jo.sales_note || (jo.sales_photos && jo.sales_photos.length > 0)) && (
+                <div className="myjob-brief">
+                  <div className="myjob-brief-title">📋 บรีฟจากฝ่ายขาย</div>
+                  {jo.sales_note && <div className="myjob-brief-note">{jo.sales_note}</div>}
+                  {jo.sales_photos && jo.sales_photos.length > 0 && (
+                    <div className="tl-photos">{jo.sales_photos.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer"><img src={u} alt="" /></a>)}</div>
+                  )}
+                </div>
+              )}
+
               <div className="myjob-actions">
                 {(jo.status === "pending" || jo.status === "scheduled") && <button className="btn-primary" onClick={() => setStatus(jo, "in_progress")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> รับงาน / เริ่มทำ</button>}
                 {jo.status === "in_progress" && <button className="btn-primary ok" onClick={() => setStatus(jo, "done")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> ปิดงาน (เสร็จ)</button>}
