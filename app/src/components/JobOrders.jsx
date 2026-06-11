@@ -12,7 +12,7 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
 export default function JobOrders({ role, me, prefill, onPrefillConsumed }) {
-  const canEdit = role === "admin" || role === "sales";
+  const canEdit = role === "admin" || role === "sales" || role === "exec";
   const [openTl, setOpenTl] = React.useState(null);
   const [upBrief, setUpBrief] = React.useState(false);
   const [list, setList] = React.useState([]);

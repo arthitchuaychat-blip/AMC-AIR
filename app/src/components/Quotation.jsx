@@ -13,7 +13,7 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Quotation({ role, onCreateJob }) {
-  const canEdit = role === "admin" || role === "sales";
+  const canEdit = role === "admin" || role === "sales" || role === "exec";
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);

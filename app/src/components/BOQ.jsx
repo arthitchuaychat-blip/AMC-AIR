@@ -36,7 +36,7 @@ function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
 }
 
 export default function BOQ({ role }) {
-  const canEdit = role === "admin" || role === "sales";
+  const canEdit = role === "admin" || role === "sales" || role === "exec";
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);

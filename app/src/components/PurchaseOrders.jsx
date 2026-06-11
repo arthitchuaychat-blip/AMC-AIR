@@ -12,7 +12,7 @@ function genPoNo() {
 }
 
 export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onReceive }) {
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" || role === "exec";
   const [pos, setPos] = React.useState([]);
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);

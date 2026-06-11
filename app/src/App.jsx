@@ -33,7 +33,7 @@ const NAV = {
 const NAV_BY_ROLE = {
   admin: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders", "movements", "jobs", "po", "settings"],
   sales: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders"],
-  exec: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders", "jobs", "po"],
+  exec: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders", "movements", "jobs", "po", "settings"],
   tech: ["myjobs", "movements"],
 };
 

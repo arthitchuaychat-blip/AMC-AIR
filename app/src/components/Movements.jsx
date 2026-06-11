@@ -13,7 +13,7 @@ const TYPE_BY = Object.fromEntries(TYPES.map((t) => [t.id, t]));
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
 
 export default function Movements({ role, myTeam, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" || role === "exec";
   const isTech = role === "tech";
   // technicians may only เบิกออก (withdraw) / รับคืน (return) — no ซื้อ/ตัดเสีย
   const allowedTypes = isTech ? TYPES.filter((t) => t.id === "withdraw" || t.id === "return") : TYPES;

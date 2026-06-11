@@ -10,7 +10,7 @@ const KINDS = [{ v: "all", l: "ทั้งหมด" }, { v: "ac", l: "เค�
 const KIND_LABEL = { ac: "แอร์", service: "บริการ", material: "วัสดุ" };
 
 export default function Catalog({ role }) {
-  const canEdit = role === "admin";
+  const canEdit = role === "admin" || role === "exec";
   const [mats, setMats] = React.useState([]);
   const [cats, setCats] = React.useState([]);
   const [brands, setBrands] = React.useState([]);
