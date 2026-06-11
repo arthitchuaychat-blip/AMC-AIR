@@ -124,9 +124,12 @@ export async function clearAllTransactions() {
   if (e2) throw e2;
 }
 
-// DANGER: delete every material (also clears transactions/jobs first due to FK). admin only.
+// DANGER: delete every material. Clears everything that references materials first
+// (transactions, jobs, and purchase orders → po_items via cascade). admin only.
 export async function deleteAllMaterials() {
   await clearAllTransactions();
+  const ep = (await supabase.from("purchase_orders").delete().neq("po_no", "")).error;
+  if (ep) throw ep;
   const { error } = await supabase.from("materials").delete().neq("code", "");
   if (error) throw error;
 }
