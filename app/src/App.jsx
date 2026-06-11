@@ -12,6 +12,7 @@ import PurchaseOrders from "./components/PurchaseOrders";
 import Customers from "./components/Customers";
 import BOQ from "./components/BOQ";
 import Quotation from "./components/Quotation";
+import Profit from "./components/Profit";
 
 const NAV = {
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
@@ -19,15 +20,16 @@ const NAV = {
   catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
   boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
   quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
+  profit: { th: "กำไร", en: "Profit", icon: "trend" },
   movements: { th: "บันทึกธุรกรรม", en: "Movements", icon: "withdraw" },
   jobs: { th: "งาน", en: "Jobs & Cost", icon: "box" },
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
 const NAV_BY_ROLE = {
-  admin: ["dashboard", "customers", "catalog", "boq", "quote", "movements", "jobs", "po", "settings"],
-  sales: ["dashboard", "customers", "catalog", "boq", "quote"],
-  exec: ["dashboard", "customers", "catalog", "boq", "quote", "jobs", "po"],
+  admin: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "movements", "jobs", "po", "settings"],
+  sales: ["dashboard", "customers", "catalog", "boq", "quote", "profit"],
+  exec: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "jobs", "po"],
   tech: ["movements"],
 };
 
@@ -137,6 +139,7 @@ export default function App() {
         {view === "customers" && <Customers role={role} />}
         {view === "boq" && <BOQ role={role} />}
         {view === "quote" && <Quotation role={role} />}
+        {view === "profit" && <Profit />}
         {view === "movements" && <Movements role={role} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}
