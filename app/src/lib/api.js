@@ -454,6 +454,13 @@ export async function deleteQuotation(quote_no) {
   if (error) throw error;
 }
 
+export async function setQuotationStatus(quote_no, status) {
+  const patch = { status };
+  if (status === "approved") patch.approved_at = new Date().toISOString();
+  const { error } = await supabase.from("quotations").update(patch).eq("quote_no", quote_no);
+  if (error) throw error;
+}
+
 // ---------- JOB ORDERS (ใบงาน) ----------
 export async function listJobOrders() {
   const [j, cu, tm] = await Promise.all([

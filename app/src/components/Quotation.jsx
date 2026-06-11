@@ -1,5 +1,5 @@
 import React from "react";
-import { listQuotations, saveQuotation, deleteQuotation, listCustomers, listMaterials, listBoqs } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -77,6 +77,10 @@ export default function Quotation({ role, onCreateJob }) {
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(q) { if (!confirm(`ลบ ${q.quote_no}?`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function approve(q) {
+    try { await setQuotationStatus(q.quote_no, "approved"); flash(`อนุมัติ ${q.quote_no} แล้ว ✓`); await load(); }
+    catch (e) { flash("อนุมัติไม่สำเร็จ: " + (e.message || e), true); }
+  }
   function copyQ(q) {
     const text = `ใบเสนอราคา ${q.quote_no}\nลูกค้า: ${q.customerName || "-"}\n`
       + q.items.map((it, i) => `${i + 1}. ${it.name} — ${it.qty} ${it.unit || ""} × ${fmtBaht(it.unit_price)} = ${fmtBaht(it.qty * it.unit_price)}`).join("\n")
@@ -204,6 +208,7 @@ export default function Quotation({ role, onCreateJob }) {
                 <button className="btn-ghost sm" onClick={() => setPrintQ(q)}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 <button className="btn-ghost sm" onClick={() => copyQ(q)}><UIcon name="clipboard" size={14} /> คัดลอก</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {canEdit && q.status === "approved" && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>
