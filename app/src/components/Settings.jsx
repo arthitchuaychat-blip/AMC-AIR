@@ -2,7 +2,7 @@ import React from "react";
 import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials } from "../lib/api";
 import { UIcon } from "../icons";
 
-const ROLES = [{ v: "tech", l: "ช่าง" }, { v: "admin", l: "ธุรการ" }, { v: "exec", l: "ผู้บริหาร" }];
+const ROLES = [{ v: "tech", l: "ช่าง" }, { v: "sales", l: "ฝ่ายขาย" }, { v: "admin", l: "ธุรการ" }, { v: "exec", l: "ผู้บริหาร" }];
 const roleLabel = (v) => (ROLES.find((r) => r.v === v) || {}).l || v;
 
 function TeamRow({ team, onChanged, flash }) {

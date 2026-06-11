@@ -9,22 +9,25 @@ import Dashboard from "./components/Dashboard";
 import Settings from "./components/Settings";
 import Jobs from "./components/Jobs";
 import PurchaseOrders from "./components/PurchaseOrders";
+import Customers from "./components/Customers";
 
 const NAV = {
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
-  movements: { th: "บันทึกธุรกรรม", en: "Movements", icon: "withdraw" },
-  po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
-  jobs: { th: "งาน", en: "Jobs & Cost", icon: "clipboard" },
+  customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
   catalog: { th: "คลังวัสดุ", en: "Catalog", icon: "catalog" },
+  movements: { th: "บันทึกธุรกรรม", en: "Movements", icon: "withdraw" },
+  jobs: { th: "งาน", en: "Jobs & Cost", icon: "clipboard" },
+  po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
 const NAV_BY_ROLE = {
-  admin: ["dashboard", "catalog", "movements", "jobs", "po", "settings"],
-  exec: ["dashboard", "catalog", "jobs", "po"],
+  admin: ["dashboard", "customers", "catalog", "movements", "jobs", "po", "settings"],
+  sales: ["dashboard", "customers", "catalog"],
+  exec: ["dashboard", "customers", "catalog", "jobs", "po"],
   tech: ["movements"],
 };
 
-const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", tech: "ช่าง" };
+const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", sales: "ฝ่ายขาย", tech: "ช่าง" };
 
 function SetupNotice() {
   return (
@@ -127,6 +130,7 @@ export default function App() {
 
       <main className="main">
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }} />}
+        {view === "customers" && <Customers role={role} />}
         {view === "movements" && <Movements role={role} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}

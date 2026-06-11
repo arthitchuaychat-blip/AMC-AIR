@@ -38,7 +38,7 @@ create table if not exists profiles (
   id     uuid primary key references auth.users(id) on delete cascade,
   email  text,
   name   text,
-  role   text not null default 'tech' check (role in ('exec','admin','tech')),
+  role   text not null default 'tech' check (role in ('exec','admin','sales','tech')),
   team   text references teams(id)
 );
 
@@ -70,6 +70,29 @@ create table if not exists jobs (
   closed_at  timestamptz,
   closed_by  uuid references auth.users(id),
   created_at timestamptz not null default now()
+);
+
+-- ---------- CRM: ลูกค้า ----------
+create table if not exists customers (
+  id         bigint generated always as identity primary key,
+  type       text not null default 'company' check (type in ('company','person')),
+  name       text not null,
+  address    text,
+  tax_id     text,
+  vat        boolean not null default true,
+  note       text,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id)
+);
+create table if not exists customer_contacts (
+  id          bigint generated always as identity primary key,
+  customer_id bigint not null references customers(id) on delete cascade,
+  name text, phone text, role text
+);
+create table if not exists customer_sites (
+  id          bigint generated always as identity primary key,
+  customer_id bigint not null references customers(id) on delete cascade,
+  site_name text, address text, map_url text
 );
 
 -- ---------- ใบสั่งซื้อ (Purchase Orders) ----------
@@ -220,6 +243,17 @@ create policy po_write on purchase_orders for all to authenticated
 create policy poi_read on po_items for select to authenticated using (true);
 create policy poi_write on po_items for all to authenticated
   using (my_role() = 'admin') with check (my_role() = 'admin');
+
+-- ลูกค้า: อ่านได้ทุกคนที่ล็อกอิน · เพิ่ม/แก้/ลบ เฉพาะธุรการ + ฝ่ายขาย
+alter table customers enable row level security;
+alter table customer_contacts enable row level security;
+alter table customer_sites enable row level security;
+create policy cust_read on customers for select to authenticated using (true);
+create policy cust_write on customers for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+create policy cc_read on customer_contacts for select to authenticated using (true);
+create policy cc_write on customer_contacts for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
+create policy cs_read on customer_sites for select to authenticated using (true);
+create policy cs_write on customer_sites for all to authenticated using (my_role() in ('admin','sales')) with check (my_role() in ('admin','sales'));
 
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles

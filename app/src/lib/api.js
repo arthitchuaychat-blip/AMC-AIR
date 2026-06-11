@@ -292,6 +292,44 @@ export async function markPoReceived(po_no) {
   if (error) throw error;
 }
 
+// ---------- CRM: customers (+ contacts + sites) ----------
+export async function listCustomers() {
+  const [c, cc, cs] = await Promise.all([
+    supabase.from("customers").select("*").order("created_at", { ascending: false }),
+    supabase.from("customer_contacts").select("*"),
+    supabase.from("customer_sites").select("*"),
+  ]);
+  if (c.error) throw c.error; if (cc.error) throw cc.error; if (cs.error) throw cs.error;
+  const byC = {}, byS = {};
+  (cc.data || []).forEach((x) => { (byC[x.customer_id] = byC[x.customer_id] || []).push(x); });
+  (cs.data || []).forEach((x) => { (byS[x.customer_id] = byS[x.customer_id] || []).push(x); });
+  return (c.data || []).map((cu) => ({ ...cu, contacts: byC[cu.id] || [], sites: byS[cu.id] || [] }));
+}
+
+export async function saveCustomer(cust, contacts, sites) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null };
+  let id = cust.id;
+  if (id) {
+    const e = (await supabase.from("customers").update(fields).eq("id", id)).error; if (e) throw e;
+  } else {
+    const r = await supabase.from("customers").insert({ ...fields, created_by: user?.id || null }).select("id").single();
+    if (r.error) throw r.error; id = r.data.id;
+  }
+  await supabase.from("customer_contacts").delete().eq("customer_id", id);
+  const cRows = contacts.filter((x) => (x.name || x.phone)).map((x) => ({ customer_id: id, name: x.name?.trim() || null, phone: x.phone?.trim() || null, role: x.role?.trim() || null }));
+  if (cRows.length) { const e = (await supabase.from("customer_contacts").insert(cRows)).error; if (e) throw e; }
+  await supabase.from("customer_sites").delete().eq("customer_id", id);
+  const sRows = sites.filter((x) => (x.site_name || x.address)).map((x) => ({ customer_id: id, site_name: x.site_name?.trim() || null, address: x.address?.trim() || null, map_url: x.map_url?.trim() || null }));
+  if (sRows.length) { const e = (await supabase.from("customer_sites").insert(sRows)).error; if (e) throw e; }
+  return id;
+}
+
+export async function deleteCustomer(id) {
+  const { error } = await supabase.from("customers").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
 export async function deleteTransaction(id) {
   const { error } = await supabase.from("transactions").delete().eq("id", id);

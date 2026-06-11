@@ -47,6 +47,7 @@ const UI_PATHS = {
   chevR: "M9 6l6 6-6 6",
   chevD: "M6 9l6 6 6-6",
   menu: "M4 6h16M4 12h16M4 18h16",
+  building: "M3 21h18M6 21V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v16M14 21V9h3a1 1 0 0 1 1 1v11M9 8h2M9 12h2M9 16h2",
   clipboard: "M9 4h6a1 1 0 0 1 1 1v1h2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h2V5a1 1 0 0 1 1-1Zm0 2v1h6V6",
   x: "M6 6l12 12M18 6 6 18",
   box: "M12 3 3 7.5V16.5L12 21l9-4.5v-9L12 3Zm0 0v18M3 7.5 12 12l9-4.5",
