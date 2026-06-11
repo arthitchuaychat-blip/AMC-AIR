@@ -26,6 +26,8 @@ export default function Catalog({ role }) {
   const [openMat, setOpenMat] = React.useState(null);
   const [viewMode, setViewMode] = React.useState("grid");
   const [importing, setImporting] = React.useState(false);
+  const [toast, setToast] = React.useState(null);
+  const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 3200); };
 
   async function load() {
     setLoading(true); setErr(null);
@@ -172,12 +174,15 @@ export default function Catalog({ role }) {
         <BulkImportModal categories={cats} onClose={() => setImporting(false)}
           onDone={(n) => { setImporting(false); alert(`นำเข้า ${n} รายการสำเร็จ`); load(); }} />
       )}
+      {toast && (
+        <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", background: "#16a34a", color: "#fff", fontSize: 13.5, fontWeight: 600, padding: "12px 22px", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 300, maxWidth: "90%", textAlign: "center" }}>{toast}</div>
+      )}
       {openMat && <MaterialDrawer mat={openMat} onClose={() => setOpenMat(null)} />}
       {editing !== undefined && (
         <MaterialModal initial={editing} categories={cats} brands={brands} btus={btus}
           defaultKind={kind === "all" ? "material" : kind}
           onSave={saveMaterial}
-          onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setBtu("all"); } load(); }}
+          onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setBtu("all"); flash(`บันทึกสำเร็จ ✓ — อยู่ในแท็บ "${KINDS.find((k) => k.v === savedKind)?.l || savedKind}"`); } load(); }}
           onClose={() => setEditing(undefined)} />
       )}
     </div>
