@@ -376,20 +376,22 @@ export async function bulkImportCustomers(rows) {
 
 // ---------- BOQ (ใบประมาณการต้นทุน) ----------
 export async function listBoqs() {
-  const [b, it, cu, si, ct] = await Promise.all([
+  const [b, it, cu, si, ct, qt] = await Promise.all([
     supabase.from("boqs").select("*").order("created_at", { ascending: false }),
     supabase.from("boq_items").select("*"),
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
+    supabase.from("quotations").select("quote_no,boq_no"),
   ]);
-  if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error;
+  if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const byBoq = {}; (it.data || []).forEach((x) => { (byBoq[x.boq_no] = byBoq[x.boq_no] || []).push(x); });
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
+  const quoteByBoq = {}; (qt.data || []).forEach((q) => { if (q.boq_no && !quoteByBoq[q.boq_no]) quoteByBoq[q.boq_no] = q.quote_no; });
   return (b.data || []).map((bo) => {
     const items = byBoq[bo.boq_no] || [];
     const ct0 = cc[bo.customer_id];
@@ -398,6 +400,7 @@ export async function listBoqs() {
       customerAddr: custAddr[bo.customer_id] || null, customerTaxId: custTax[bo.customer_id] || null,
       siteName: s?.site_name || null, siteAddress: s?.address || null,
       contactName: ct0?.name || null, contactPhone: ct0?.phone || null,
+      quoteNo: quoteByBoq[bo.boq_no] || null, hasQuote: !!quoteByBoq[bo.boq_no],
       items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
   });
 }
@@ -445,13 +448,14 @@ export async function deleteBoq(boq_no) {
 
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
 export async function listQuotations() {
-  const [q, it, cu, si, ct, jo] = await Promise.all([
+  const [q, it, cu, si, ct, jo, inv] = await Promise.all([
     supabase.from("quotations").select("*").order("created_at", { ascending: false }),
     supabase.from("quotation_items").select("*"),
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("job_orders").select("job_no,quote_no"),
+    supabase.from("invoices").select("quote_no,total,status"),
   ]);
   if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
   const byQ = {}; (it.data || []).forEach((x) => { (byQ[x.quote_no] = byQ[x.quote_no] || []).push(x); });
@@ -461,6 +465,7 @@ export async function listQuotations() {
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j.job_no; });
+  const billedByQ = {}; (inv.data || []).forEach((x) => { if (x.status !== "cancelled") billedByQ[x.quote_no] = (billedByQ[x.quote_no] || 0) + Number(x.total || 0); });
   return (q.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
     const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0);
@@ -478,6 +483,7 @@ export async function listQuotations() {
       customerTaxId: custTax[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
       siteAddress, address, map_url, contactName: ct0?.name || null, contactPhone: ct0?.phone || null,
       jobNo: jobByQuote[qo.quote_no] || null, hasJob: !!jobByQuote[qo.quote_no],
+      hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,
       items, subtotal, discount, afterDisc, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
   });
 }

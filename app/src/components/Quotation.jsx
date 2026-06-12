@@ -267,7 +267,9 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 <button className="btn-ghost sm" onClick={() => copyQ(q)}><UIcon name="clipboard" size={14} /> คัดลอก</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
-                {canEdit && q.status === "approved" && onCreateInvoice && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>}
+                {q.status === "approved" && onCreateInvoice && (q.hasInvoice
+                  ? <span className="job-badge b-green" title="วางบิลงวดถัดไปได้ที่เมนูใบแจ้งหนี้">✓ ออกใบแจ้งหนี้แล้ว · วางบิล {Math.round(q.billedPct)}%</span>
+                  : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>))}
                 {q.status === "approved" && q.hasJob && <span className="job-badge b-green" title={`ใบงาน ${q.jobNo}`}>✓ สร้างใบงานแล้ว · {q.jobNo}</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}

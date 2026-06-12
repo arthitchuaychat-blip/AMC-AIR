@@ -167,6 +167,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
               </div>
               {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
               <div className="job-lines"><div className="job-actions">
+                {x.hasReceipt && <span className="job-badge b-green">✓ ออกใบเสร็จแล้ว</span>}
                 {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="clipboard" size={14} color="#fff" /> ออกใบเสร็จ</button>}
                 {canEdit && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
                 <button className="btn-ghost sm" onClick={() => setPrintI(x)}><UIcon name="catalog" size={14} /> พิมพ์</button>
