@@ -1,5 +1,5 @@
 import React from "react";
-import { listReceipts, listInvoices, saveReceipt, deleteReceipt, setReceiptStatus, getCompanies } from "../lib/api";
+import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, getCompanies } from "../lib/api";
 import { fmtBaht2, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
@@ -14,6 +14,7 @@ export default function Receipts({ role }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
+  const [quotes, setQuotes] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
@@ -23,7 +24,7 @@ export default function Receipts({ role }) {
 
   async function load() {
     setLoading(true);
-    try { const [rc, iv, co] = await Promise.all([listReceipts(), listInvoices(), getCompanies()]); setList(rc); setInvoices(iv); setCompanies(co || { vat: {}, novat: {} }); }
+    try { const [rc, iv, q, co] = await Promise.all([listReceipts(), listInvoices(), listQuotations(), getCompanies()]); setList(rc); setInvoices(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -33,6 +34,7 @@ export default function Receipts({ role }) {
 
   const openInvoices = invoices.filter((x) => x.status === "unpaid" && !x.hasReceipt);
   const invByNo = React.useMemo(() => Object.fromEntries(invoices.map((x) => [x.invoice_no, x])), [invoices]);
+  const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
   function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", note: "" }); }
   async function markPaid(x) { try { await setReceiptStatus(x.receipt_no, "paid", x.invoice_no); flash("รับเงินแล้ว ✓"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
@@ -150,6 +152,7 @@ export default function Receipts({ role }) {
         const co = isVat ? companies.vat : companies.novat;
         const baseTitle = isVat ? "ใบเสร็จรับเงิน/ใบกำกับภาษี" : "ใบเสร็จรับเงิน";
         const paid = printR.status === "paid";
+        const q = quoteByNo[printR.quote_no];
         return (
         <DocSlip company={co} titleTh={baseTitle} titleEn={isVat ? "RECEIPT / TAX INVOICE" : "RECEIPT"} docNo={printR.receipt_no}
           metaRows={[{ label: "วันที่", value: printR.issue_date }, { label: "อ้างอิงใบแจ้งหนี้", value: printR.invoice_no }, { label: "อ้างอิงใบเสนอ", value: printR.quote_no }, { label: "อ้างอิง BOQ", value: printR.boq_no }, { label: "อ้างอิงใบงาน", value: printR.job_no }]}
@@ -157,13 +160,18 @@ export default function Receipts({ role }) {
           terms={printR.note} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}
           paymentInfo={paid ? `ได้รับชำระเงินแล้ว · วันที่ ${printR.issue_date || "-"} · โดย ${printR.payment_method || "-"} · จำนวน ${fmtBaht(printR.net)}` : null}>
           <table className="doc-table">
-            <thead><tr><th>#</th><th>รายการ</th><th className="r">จำนวนเงิน</th></tr></thead>
-            <tbody><tr><td>1</td><td>รับชำระตามใบแจ้งหนี้ {printR.invoice_no}{printR.quote_no ? ` (ใบเสนอ ${printR.quote_no})` : ""}</td><td className="r">{fmtBaht(printR.base)}</td></tr></tbody>
+            <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>
+            <tbody>{(q?.items || []).map((it, i) => (
+              <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(Number(it.qty) * Number(it.unit_price))}</td></tr>
+            ))}</tbody>
           </table>
           <div className="doc-totals">
-            <div><span>มูลค่า</span><b>{fmtBaht(printR.base)}</b></div>
-            {printR.vat_amt > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printR.vat_amt)}</b></div>}
-            <div className="doc-grand"><span>รวมเป็นเงิน</span><b>{fmtBaht(printR.total)}</b></div>
+            <div><span>รวมเป็นเงิน</span><b>{fmtBaht(q?.subtotal || 0)}</b></div>
+            {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(q.discount)}</b></div>}
+            {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(q.vatAmt)}</b></div> : null}
+            <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtBaht(q?.grand || 0)}</b></div>
+            <div style={{ marginTop: 4 }}><span>รับชำระตามใบแจ้งหนี้ {printR.invoice_no}{inv ? ` · งวดที่ ${inv.installment} (${Math.round(inv.pct)}%)` : ""}</span><b /></div>
+            <div className="doc-grand"><span>รวมเป็นเงินงวดนี้</span><b>{fmtBaht(printR.total)}</b></div>
             {printR.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย</span><b>− {fmtBaht(printR.wht_amt)}</b></div>}
             <div className="doc-grand"><span>รับเงินสุทธิ</span><b>{fmtBaht(printR.net)}</b></div>
           </div>

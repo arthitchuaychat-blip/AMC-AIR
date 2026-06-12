@@ -172,15 +172,20 @@ export default function Invoices({ role }) {
           customer={{ name: printI.customerName, code: custCode(printI.customerCode), taxId: printI.customerTaxId, address: printI.siteAddress || printI.customerAddr, contactName: printI.contactName, contactPhone: printI.contactPhone }}
           terms={printI.note || co.default_terms} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}>
           <table className="doc-table">
-            <thead><tr><th>#</th><th>รายการ</th><th className="r">จำนวนเงิน</th></tr></thead>
-            <tbody><tr><td>1</td><td>ตามใบเสนอราคา {printI.quote_no} — งวดที่ {printI.installment} ({Math.round(printI.pct)}%)</td><td className="r">{fmtBaht(printI.base)}</td></tr></tbody>
+            <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>
+            <tbody>{(q?.items || []).map((it, i) => (
+              <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(Number(it.qty) * Number(it.unit_price))}</td></tr>
+            ))}</tbody>
           </table>
           <div className="doc-totals">
-            <div><span>มูลค่า</span><b>{fmtBaht(printI.base)}</b></div>
-            {printI.vat_amt > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printI.vat_amt)}</b></div>}
+            <div><span>รวมเป็นเงิน</span><b>{fmtBaht(q?.subtotal || 0)}</b></div>
+            {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(q.discount)}</b></div>}
+            {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(q.vatAmt)}</b></div> : null}
+            <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtBaht(q?.grand || 0)}</b></div>
+            <div style={{ marginTop: 4 }}><span>งวดที่ {printI.installment} ({Math.round(printI.pct)}%)</span><b /></div>
             <div className="doc-grand"><span>ยอดชำระงวดนี้</span><b>{fmtBaht(printI.total)}</b></div>
             {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
-            {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิ</span><b>{fmtBaht(printI.total - printI.wht_amt)}</b></div>}
+            {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtBaht(printI.total - printI.wht_amt)}</b></div>}
           </div>
         </DocSlip>
       ); })()}
