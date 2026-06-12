@@ -149,11 +149,13 @@ export default function Receipts({ role }) {
         const isVat = inv ? (inv.vat_amt > 0) : (printR.vat_amt > 0);
         const co = isVat ? companies.vat : companies.novat;
         const baseTitle = isVat ? "ใบเสร็จรับเงิน/ใบกำกับภาษี" : "ใบเสร็จรับเงิน";
+        const paid = printR.status === "paid";
         return (
-        <DocSlip company={co} titleTh={printR.status === "pending" ? `${baseTitle} (รอชำระเงิน)` : baseTitle} titleEn={isVat ? "RECEIPT / TAX INVOICE" : "RECEIPT"} docNo={printR.receipt_no}
-          metaRows={[{ label: "วันที่", value: printR.issue_date }, { label: "สถานะ", value: (RSTATUS[printR.status] || RSTATUS.paid).th }, { label: "วิธีชำระ", value: printR.payment_method }, { label: "อ้างอิงใบแจ้งหนี้", value: printR.invoice_no }, { label: "อ้างอิงใบเสนอ", value: printR.quote_no }, { label: "อ้างอิง BOQ", value: printR.boq_no }, { label: "อ้างอิงใบงาน", value: printR.job_no }]}
+        <DocSlip company={co} titleTh={baseTitle} titleEn={isVat ? "RECEIPT / TAX INVOICE" : "RECEIPT"} docNo={printR.receipt_no}
+          metaRows={[{ label: "วันที่", value: printR.issue_date }, { label: "อ้างอิงใบแจ้งหนี้", value: printR.invoice_no }, { label: "อ้างอิงใบเสนอ", value: printR.quote_no }, { label: "อ้างอิง BOQ", value: printR.boq_no }, { label: "อ้างอิงใบงาน", value: printR.job_no }]}
           customer={{ name: printR.customerName, code: custCode(printR.customerCode), taxId: printR.customerTaxId, address: printR.siteAddress || printR.customerAddr, contactName: printR.contactName, contactPhone: printR.contactPhone }}
-          terms={printR.note} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}>
+          terms={printR.note} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}
+          paymentInfo={paid ? `ได้รับชำระเงินแล้ว · วันที่ ${printR.issue_date || "-"} · โดย ${printR.payment_method || "-"} · จำนวน ${fmtBaht(printR.net)}` : null}>
           <table className="doc-table">
             <thead><tr><th>#</th><th>รายการ</th><th className="r">จำนวนเงิน</th></tr></thead>
             <tbody><tr><td>1</td><td>รับชำระตามใบแจ้งหนี้ {printR.invoice_no}{printR.quote_no ? ` (ใบเสนอ ${printR.quote_no})` : ""}</td><td className="r">{fmtBaht(printR.base)}</td></tr></tbody>
