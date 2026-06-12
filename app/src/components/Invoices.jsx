@@ -80,10 +80,8 @@ export default function Invoices({ role }) {
             <label className="fld"><span>อ้างอิงใบเสนอราคา (อนุมัติแล้ว)</span>
               <select className="inp" value={ed.quote_no} onChange={(e) => setF("quote_no", e.target.value)}>
                 <option value="">— เลือกใบเสนอราคา —</option>
-                {/* keep the currently-selected quote even if now fully billed, plus all billable ones */}
-                {(ed.quote_no && !billableQuotes.some((q) => q.quote_no === ed.quote_no) && quoteByNo[ed.quote_no]
-                  ? [quoteByNo[ed.quote_no], ...billableQuotes] : billableQuotes
-                ).map((q) => <option key={q.quote_no} value={q.quote_no}>{q.quote_no} · {q.customerName || "-"} · เหลือ {fmtBaht(round2((q.grand || 0) - (billed[q.quote_no] || 0)))}</option>)}
+                {/* only quotes that still have a balance — fully-billed (100%) ones are hidden */}
+                {billableQuotes.map((q) => <option key={q.quote_no} value={q.quote_no}>{q.quote_no} · {q.customerName || "-"} · เหลือ {fmtBaht(round2((q.grand || 0) - (billed[q.quote_no] || 0)))}</option>)}
               </select>
             </label>
           </div>
