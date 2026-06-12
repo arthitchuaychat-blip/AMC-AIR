@@ -2,6 +2,7 @@ import React from "react";
 import { listCustomers, saveCustomer, deleteCustomer } from "../lib/api";
 import { UIcon } from "../icons";
 import { custCode } from "../lib/format";
+import CustomerImportModal from "./CustomerImportModal";
 
 const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", vat: true, address: "", note: "" });
 
@@ -13,6 +14,7 @@ export default function Customers({ role }) {
   const [toast, setToast] = React.useState(null);
   const [editing, setEditing] = React.useState(null); // {cust, contacts[], sites[]}
   const [viewing, setViewing] = React.useState(null); // customer being viewed (detail)
+  const [importing, setImporting] = React.useState(false);
 
   async function load() {
     setLoading(true);
@@ -125,9 +127,13 @@ export default function Customers({ role }) {
             <input placeholder="ค้นหาชื่อ / เลขภาษี / เบอร์" value={q} onChange={(e) => setQ(e.target.value)} />
             {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
           </div>
+          {canEdit && <button className="btn-ghost" onClick={() => setImporting(true)}><UIcon name="box" size={15} /> นำเข้าหลายราย</button>}
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มลูกค้า</button>}
         </div>
       </div>
+
+      {importing && <CustomerImportModal onClose={() => setImporting(false)}
+        onDone={(n) => { setImporting(false); flash(`นำเข้าลูกค้า ${n} ราย สำเร็จ`); load(); }} />}
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{q ? `ไม่พบลูกค้า “${q}”` : "ยังไม่มีลูกค้า"}</div>}

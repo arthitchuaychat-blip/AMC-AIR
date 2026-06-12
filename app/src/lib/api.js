@@ -367,6 +367,13 @@ export async function deleteCustomer(id) {
   if (error) throw error;
 }
 
+// bulk import customers (each row = {cust, contacts[], sites[]}). Inserts new records.
+export async function bulkImportCustomers(rows) {
+  let n = 0;
+  for (const r of rows) { await saveCustomer(r.cust, r.contacts || [], r.sites || []); n++; }
+  return n;
+}
+
 // ---------- BOQ (ใบประมาณการต้นทุน) ----------
 export async function listBoqs() {
   const [b, it, cu, si, ct] = await Promise.all([
