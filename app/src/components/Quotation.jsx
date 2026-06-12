@@ -256,7 +256,8 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
                 <button className="btn-ghost sm" onClick={() => copyQ(q)}><UIcon name="clipboard" size={14} /> คัดลอก</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
-                {canEdit && q.status === "approved" && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
+                {q.status === "approved" && q.hasJob && <span className="job-badge closed" title={`ใบงาน ${q.jobNo}`}>✓ สร้างใบงานแล้ว · {q.jobNo}</span>}
+                {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>
             </div>
@@ -269,7 +270,7 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
       {/* print: full quotation document — letterhead chosen by VAT status */}
       {printQ && (() => { const co = printQ.vat ? companies.vat : companies.novat; return (
         <DocSlip company={co} titleTh="ใบเสนอราคา" titleEn="QUOTATION" docNo={printQ.quote_no}
-          metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }]}
+          metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }, { label: "อ้างอิง BOQ", value: printQ.boq_no }]}
           customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, address: printQ.siteAddress || printQ.customerAddr, contactName: printQ.contactName, contactPhone: printQ.contactPhone }}
           terms={printQ.note || co.default_terms} bank={co.bank_info}
           signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}>

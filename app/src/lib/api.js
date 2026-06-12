@@ -445,20 +445,22 @@ export async function deleteBoq(boq_no) {
 
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
 export async function listQuotations() {
-  const [q, it, cu, si, ct] = await Promise.all([
+  const [q, it, cu, si, ct, jo] = await Promise.all([
     supabase.from("quotations").select("*").order("created_at", { ascending: false }),
     supabase.from("quotation_items").select("*"),
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
+    supabase.from("job_orders").select("job_no,quote_no"),
   ]);
-  if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error;
+  if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
   const byQ = {}; (it.data || []).forEach((x) => { (byQ[x.quote_no] = byQ[x.quote_no] || []).push(x); });
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
+  const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j.job_no; });
   return (q.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
     const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0);
@@ -475,6 +477,7 @@ export async function listQuotations() {
     return { ...qo, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
       customerTaxId: custTax[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
       siteAddress, address, map_url, contactName: ct0?.name || null, contactPhone: ct0?.phone || null,
+      jobNo: jobByQuote[qo.quote_no] || null, hasJob: !!jobByQuote[qo.quote_no],
       items, subtotal, discount, afterDisc, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
   });
 }
@@ -533,20 +536,22 @@ function _resolveJo(jo, custName, custAddr, siteMap, teamName, custContact) {
 function _firstContacts(rows) { const m = {}; (rows || []).forEach((c) => { if (!m[c.customer_id]) m[c.customer_id] = c; }); return m; }
 
 export async function listJobOrders() {
-  const [j, cu, tm, si, ct] = await Promise.all([
+  const [j, cu, tm, si, ct, qt] = await Promise.all([
     supabase.from("job_orders").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address"),
     supabase.from("teams").select("id,name"),
     supabase.from("customer_sites").select("id,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
+    supabase.from("quotations").select("quote_no,boq_no"),
   ]);
-  if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error; if (ct.error) throw ct.error;
+  if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
-  return (j.data || []).map((jo) => _resolveJo(jo, cn, ca, sm, tn, cc));
+  const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
+  return (j.data || []).map((jo) => ({ ..._resolveJo(jo, cn, ca, sm, tn, cc), boq_no: jo.quote_no ? (boqByQuote[jo.quote_no] || null) : null }));
 }
 
 // job orders assigned to a team (technician view) — address/map/contact resolved live

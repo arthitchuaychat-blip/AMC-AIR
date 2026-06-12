@@ -219,6 +219,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{jo.customerName || "ไม่ระบุลูกค้า"}</b>{jo.customerAddr ? <span className="jo-dim"> · {jo.customerAddr}</span> : null}</div>
                 {(jo.contact_name || jo.contact_phone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{jo.contact_name || "ผู้ติดต่อ"}{jo.contact_phone && <a href={`tel:${jo.contact_phone}`} className="jo-tel">📞 {jo.contact_phone}</a>}</div>}
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
+                {(jo.quote_no || jo.boq_no) && <div className="jo-info-row"><span className="jo-ic">🧾</span><span className="jo-dim">อ้างอิง: {jo.quote_no ? `ใบเสนอ ${jo.quote_no}` : ""}{jo.quote_no && jo.boq_no ? " · " : ""}{jo.boq_no ? `BOQ ${jo.boq_no}` : ""}</span></div>}
               </div>
               <div className="job-lines"><div className="job-actions">
                 <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>
