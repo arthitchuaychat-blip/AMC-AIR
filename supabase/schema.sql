@@ -196,7 +196,7 @@ create table if not exists boq_items (
   id        bigint generated always as identity primary key,
   boq_no    text not null references boqs(boq_no) on delete cascade,
   section   text not null check (section in ('ac','free','charged','service')),
-  item_code text references materials(code),
+  item_code text references materials(code) on delete set null,
   name      text, unit text,
   qty       numeric not null default 0,
   unit_cost numeric not null default 0
@@ -225,7 +225,7 @@ create table if not exists quotations (
 create table if not exists quotation_items (
   id         bigint generated always as identity primary key,
   quote_no   text not null references quotations(quote_no) on delete cascade,
-  item_code  text references materials(code),
+  item_code  text references materials(code) on delete set null,
   name       text, kind text, unit text,
   qty        numeric not null default 0,
   unit_price numeric not null default 0
