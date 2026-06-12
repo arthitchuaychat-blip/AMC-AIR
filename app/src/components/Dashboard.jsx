@@ -4,6 +4,7 @@ import { fmtBaht, fmtNum, fmtCompact } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import DashDrawer from "./DashDrawer";
 import SalesReport from "./SalesReport";
+import BillingSummary from "./BillingSummary";
 
 const PERIODS = [
   { id: "day", label: "วันนี้" },
@@ -39,7 +40,7 @@ function StatCard({ icon, color, label, value, sub, accent, onClick }) {
   );
 }
 
-export default function Dashboard({ onReorder, onOpenQuote, onOpenJob }) {
+export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
   const [period, setPeriod] = React.useState("month");
   const [detail, setDetail] = React.useState(null);
   const [mats, setMats] = React.useState([]);
@@ -106,6 +107,8 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob }) {
       </div>
 
       <SalesReport onOpenQuote={onOpenQuote} onOpenJob={onOpenJob} />
+
+      <BillingSummary onGo={onGo} />
 
       <div className="sec-head" style={{ margin: "22px 0 10px" }}><div><div className="sec-title">คลังวัสดุ & การเบิกใช้</div><div className="sec-sub">Inventory & usage · {periodLabel}</div></div></div>
 
