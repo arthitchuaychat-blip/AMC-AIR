@@ -517,6 +517,101 @@ export async function setQuotationStatus(quote_no, status) {
   if (error) throw error;
 }
 
+// ---------- INVOICES (ใบแจ้งหนี้ · แบ่งงวดได้) ----------
+export async function listInvoices() {
+  const [iv, cu, si, ct, qt, rc] = await Promise.all([
+    supabase.from("invoices").select("*").order("created_at", { ascending: false }),
+    supabase.from("customers").select("id,name,address,tax_id"),
+    supabase.from("customer_sites").select("id,site_name,address"),
+    supabase.from("customer_contacts").select("customer_id,name,phone"),
+    supabase.from("quotations").select("quote_no,boq_no"),
+    supabase.from("receipts").select("invoice_no"),
+  ]);
+  if (iv.error) throw iv.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
+  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
+  const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
+  const cc = _firstContacts(ct.data);
+  const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
+  const receiptedInv = new Set((rc.data || []).map((r) => r.invoice_no));
+  return (iv.data || []).map((x) => {
+    const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
+    return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
+      customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
+      customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
+      contactName: ct0?.name || null, contactPhone: ct0?.phone || null, hasReceipt: receiptedInv.has(x.invoice_no) };
+  });
+}
+// billed total (non-cancelled) per quote_no — used to compute remaining
+export function billedByQuote(invoices) {
+  const m = {};
+  (invoices || []).forEach((x) => { if (x.status !== "cancelled") m[x.quote_no] = (m[x.quote_no] || 0) + Number(x.total || 0); });
+  return m;
+}
+export async function saveInvoice(inv) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from("invoices").upsert({
+    invoice_no: inv.invoice_no, quote_no: inv.quote_no || null, boq_no: inv.boq_no || null,
+    customer_id: inv.customer_id || null, site_id: inv.site_id || null,
+    issue_date: inv.issue_date || null, due_date: inv.due_date || null,
+    installment: Number(inv.installment) || 1, pct: Number(inv.pct) || 0,
+    base: Number(inv.base) || 0, vat_amt: Number(inv.vat_amt) || 0, total: Number(inv.total) || 0, wht_amt: Number(inv.wht_amt) || 0,
+    note: inv.note?.trim() || null, status: inv.status || "unpaid", created_by: user?.id || null,
+  }, { onConflict: "invoice_no" });
+  if (error) throw error;
+}
+export async function setInvoiceStatus(invoice_no, status) {
+  const { error } = await supabase.from("invoices").update({ status }).eq("invoice_no", invoice_no);
+  if (error) throw error;
+}
+export async function deleteInvoice(invoice_no) {
+  const { error } = await supabase.from("invoices").delete().eq("invoice_no", invoice_no);
+  if (error) throw error;
+}
+
+// ---------- RECEIPTS (ใบเสร็จรับเงิน) ----------
+export async function listReceipts() {
+  const [rc, cu, si, ct, jo] = await Promise.all([
+    supabase.from("receipts").select("*").order("created_at", { ascending: false }),
+    supabase.from("customers").select("id,name,address,tax_id"),
+    supabase.from("customer_sites").select("id,site_name,address"),
+    supabase.from("customer_contacts").select("customer_id,name,phone"),
+    supabase.from("job_orders").select("job_no,quote_no"),
+  ]);
+  if (rc.error) throw rc.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
+  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
+  const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
+  const cc = _firstContacts(ct.data);
+  const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j.job_no; });
+  return (rc.data || []).map((x) => {
+    const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
+    return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,
+      customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
+      customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
+      contactName: ct0?.name || null, contactPhone: ct0?.phone || null };
+  });
+}
+// create a receipt from an invoice and mark the invoice paid
+export async function saveReceipt(r) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from("receipts").upsert({
+    receipt_no: r.receipt_no, invoice_no: r.invoice_no || null, quote_no: r.quote_no || null, boq_no: r.boq_no || null, job_no: r.job_no || null,
+    customer_id: r.customer_id || null, site_id: r.site_id || null, issue_date: r.issue_date || null, payment_method: r.payment_method || null,
+    base: Number(r.base) || 0, vat_amt: Number(r.vat_amt) || 0, total: Number(r.total) || 0, wht_amt: Number(r.wht_amt) || 0, net: Number(r.net) || 0,
+    note: r.note?.trim() || null, created_by: user?.id || null,
+  }, { onConflict: "receipt_no" });
+  if (error) throw error;
+  if (r.invoice_no) await supabase.from("invoices").update({ status: "paid" }).eq("invoice_no", r.invoice_no);
+}
+export async function deleteReceipt(receipt_no, invoice_no) {
+  const { error } = await supabase.from("receipts").delete().eq("receipt_no", receipt_no);
+  if (error) throw error;
+  if (invoice_no) await supabase.from("invoices").update({ status: "unpaid" }).eq("invoice_no", invoice_no);
+}
+
 // ---------- JOB ORDERS (ใบงาน) ----------
 const _gmap = (a) => (a && a.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(a.trim()) : null;
 // resolve address/map LIVE from the linked customer site (so editing the customer flows to job orders)

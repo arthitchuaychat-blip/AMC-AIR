@@ -15,6 +15,8 @@ import Quotation from "./components/Quotation";
 import Profit from "./components/Profit";
 import JobOrders from "./components/JobOrders";
 import MyJobs from "./components/MyJobs";
+import Invoices from "./components/Invoices";
+import Receipts from "./components/Receipts";
 
 const NAV = {
   myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
@@ -23,6 +25,8 @@ const NAV = {
   catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
   boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
   quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
+  invoice: { th: "ใบแจ้งหนี้", en: "Invoices", icon: "clipboard" },
+  receipt: { th: "ใบเสร็จ", en: "Receipts", icon: "clipboard" },
   profit: { th: "กำไร", en: "Profit", icon: "trend" },
   joborders: { th: "ใบงาน", en: "Job Orders", icon: "clipboard" },
   movements: { th: "บันทึกธุรกรรม", en: "Movements", icon: "withdraw" },
@@ -30,12 +34,12 @@ const NAV = {
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
-const FULL_NAV = ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders", "movements", "jobs", "po", "settings"];
+const FULL_NAV = ["dashboard", "customers", "catalog", "boq", "quote", "invoice", "receipt", "profit", "joborders", "movements", "jobs", "po", "settings"];
 const NAV_BY_ROLE = {
   admin: FULL_NAV,
   exec: FULL_NAV,
   finance: FULL_NAV,
-  sales: ["dashboard", "customers", "catalog", "boq", "quote", "profit", "joborders"],
+  sales: ["dashboard", "customers", "catalog", "boq", "quote", "invoice", "receipt", "profit", "joborders"],
   stock: ["catalog", "movements", "po", "jobs"],
   lead_tech: ["myjobs", "joborders", "movements", "jobs", "catalog"],
   tech: ["myjobs", "movements"],
@@ -151,6 +155,8 @@ export default function App() {
         {view === "customers" && <Customers role={role} />}
         {view === "boq" && <BOQ role={role} />}
         {view === "quote" && <Quotation role={role} focus={quoteFocus} onFocusConsumed={() => setQuoteFocus(null)} onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }} />}
+        {view === "invoice" && <Invoices role={role} />}
+        {view === "receipt" && <Receipts role={role} />}
         {view === "profit" && <Profit />}
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} />}
         {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} />}

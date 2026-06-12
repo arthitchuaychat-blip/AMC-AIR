@@ -96,6 +96,35 @@ create table if not exists company_profile (
 );
 insert into company_profile (id) values (1), (2) on conflict (id) do nothing;
 
+-- ---------- ใบแจ้งหนี้ (แบ่งงวด) + ใบเสร็จรับเงิน ----------
+create table if not exists invoices (
+  invoice_no   text primary key,
+  quote_no     text references quotations(quote_no) on delete set null,
+  boq_no       text,
+  customer_id  bigint references customers(id) on delete set null,
+  site_id      bigint references customer_sites(id) on delete set null,
+  issue_date   date, due_date date, installment int, pct numeric,
+  base numeric, vat_amt numeric, total numeric, wht_amt numeric,
+  note text,
+  status       text not null default 'unpaid' check (status in ('unpaid','paid','cancelled')),
+  created_at   timestamptz not null default now(),
+  created_by   uuid references auth.users(id)
+);
+create table if not exists receipts (
+  receipt_no   text primary key,
+  invoice_no   text references invoices(invoice_no) on delete set null,
+  quote_no     text references quotations(quote_no) on delete set null,
+  boq_no       text,
+  job_no       text references job_orders(job_no) on delete set null,
+  customer_id  bigint references customers(id) on delete set null,
+  site_id      bigint references customer_sites(id) on delete set null,
+  issue_date   date, payment_method text,
+  base numeric, vat_amt numeric, total numeric, wht_amt numeric, net numeric,
+  note text,
+  created_at   timestamptz not null default now(),
+  created_by   uuid references auth.users(id)
+);
+
 -- ---------- ความเคลื่อนไหวของใบงาน (timeline: เปลี่ยนสถานะ + แนบรูป/คอมเมนต์ไม่จำกัด) ----------
 create table if not exists job_logs (
   id         bigint generated always as identity primary key,
@@ -415,6 +444,16 @@ alter table company_profile enable row level security;
 create policy company_read on company_profile for select to authenticated using (true);
 create policy company_write on company_profile for all to authenticated
   using (my_role() in ('admin','exec','finance')) with check (my_role() in ('admin','exec','finance'));
+
+-- ใบแจ้งหนี้ / ใบเสร็จ: อ่านได้ทุกคน · แก้ไขธุรการ/เซล/ผู้บริหาร/บัญชี
+alter table invoices enable row level security;
+alter table receipts enable row level security;
+create policy inv_read on invoices for select to authenticated using (true);
+create policy inv_write on invoices for all to authenticated
+  using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
+create policy rc_read on receipts for select to authenticated using (true);
+create policy rc_write on receipts for all to authenticated
+  using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles
