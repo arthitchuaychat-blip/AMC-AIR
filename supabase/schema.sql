@@ -120,6 +120,7 @@ create table if not exists receipts (
   site_id      bigint references customer_sites(id) on delete set null,
   issue_date   date, payment_method text,
   base numeric, vat_amt numeric, total numeric, wht_amt numeric, net numeric,
+  wht boolean not null default false, wht_rate numeric not null default 3,
   status       text not null default 'paid' check (status in ('pending','paid')),
   note text,
   created_at   timestamptz not null default now(),

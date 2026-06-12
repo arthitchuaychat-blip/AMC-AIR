@@ -602,6 +602,7 @@ export async function saveReceipt(r) {
     receipt_no: r.receipt_no, invoice_no: r.invoice_no || null, quote_no: r.quote_no || null, boq_no: r.boq_no || null, job_no: r.job_no || null,
     customer_id: r.customer_id || null, site_id: r.site_id || null, issue_date: r.issue_date || null, payment_method: r.payment_method || null,
     base: Number(r.base) || 0, vat_amt: Number(r.vat_amt) || 0, total: Number(r.total) || 0, wht_amt: Number(r.wht_amt) || 0, net: Number(r.net) || 0,
+    wht: !!r.wht, wht_rate: Number(r.wht_rate) || 3,
     status, note: r.note?.trim() || null, created_by: user?.id || null,
   }, { onConflict: "receipt_no" });
   if (error) throw error;

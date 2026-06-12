@@ -1,6 +1,6 @@
 import React from "react";
 import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, getCompanies } from "../lib/api";
-import { fmtBaht2, custCode } from "../lib/format";
+import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 
@@ -36,18 +36,20 @@ export default function Receipts({ role }) {
   const invByNo = React.useMemo(() => Object.fromEntries(invoices.map((x) => [x.invoice_no, x])), [invoices]);
   const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
-  function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", note: "" }); }
+  function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", wht: false, wht_rate: 3, note: "" }); }
   async function markPaid(x) { try { await setReceiptStatus(x.receipt_no, "paid", x.invoice_no); flash("รับเงินแล้ว ✓"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   const selInv = ed?.invoice_no ? invByNo[ed.invoice_no] : null;
-  const net = selInv ? (Number(selInv.total) || 0) - (Number(selInv.wht_amt) || 0) : 0;
+  const whtRate = Number(ed?.wht_rate) || 3;
+  const whtAmt = (selInv && ed?.wht) ? round2((Number(selInv.base) || 0) * whtRate / 100) : 0; // หัก ณ ที่จ่าย คิดจากฐานก่อน VAT
+  const net = selInv ? round2((Number(selInv.total) || 0) - whtAmt) : 0;
 
   async function save() {
     if (!selInv) return flash("เลือกใบแจ้งหนี้ก่อน", true);
     const r = {
       receipt_no: ed.receipt_no, invoice_no: selInv.invoice_no, quote_no: selInv.quote_no || null, boq_no: selInv.boq_no || null, job_no: null,
       customer_id: selInv.customer_id || null, site_id: selInv.site_id || null, issue_date: ed.issue_date || null, payment_method: ed.payment_method || null,
-      base: selInv.base, vat_amt: selInv.vat_amt, total: selInv.total, wht_amt: selInv.wht_amt, net, status: ed.status || "paid",
+      base: selInv.base, vat_amt: selInv.vat_amt, total: selInv.total, wht_amt: whtAmt, net, wht: !!ed.wht, wht_rate: whtRate, status: ed.status || "paid",
       note: ed.note,
     };
     try { await saveReceipt(r); flash(r.status === "paid" ? `ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว` : `ออกใบเสร็จ (รอชำระเงิน) แล้ว`); setEd(null); await load(); }
@@ -65,7 +67,7 @@ export default function Receipts({ role }) {
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบเสร็จ</span><input className="inp" value={ed.receipt_no} onChange={(e) => setF("receipt_no", e.target.value)} /></label>
             <label className="fld"><span>อ้างอิงใบแจ้งหนี้ (ค้างชำระ)</span>
-              <select className="inp" value={ed.invoice_no} onChange={(e) => setF("invoice_no", e.target.value)}>
+              <select className="inp" value={ed.invoice_no} onChange={(e) => { const iv = invByNo[e.target.value]; setEd((s) => ({ ...s, invoice_no: e.target.value, wht: iv ? iv.vat_amt > 0 : false })); }}>
                 <option value="">— เลือกใบแจ้งหนี้ —</option>
                 {openInvoices.map((x) => <option key={x.invoice_no} value={x.invoice_no}>{x.invoice_no} · งวด {x.installment} · {x.customerName || "-"} ({fmtBaht(x.total)})</option>)}
               </select>
@@ -77,7 +79,7 @@ export default function Receipts({ role }) {
               <div><span>ลูกค้า</span><b>{selInv.customerName || "-"} · {custCode(selInv.customer_id)}</b></div>
               <div><span>อ้างอิง</span><b>{selInv.quote_no || "-"}{selInv.boq_no ? ` · BOQ ${selInv.boq_no}` : ""}</b></div>
               <div><span>ยอดงวด (รวม VAT)</span><b>{fmtBaht(selInv.total)}</b></div>
-              {selInv.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย</span><b style={{ color: "var(--down)" }}>− {fmtBaht(selInv.wht_amt)}</b></div>}
+              {whtAmt > 0 && <div><span>หัก ณ ที่จ่าย {whtRate}%</span><b style={{ color: "var(--down)" }}>− {fmtBaht(whtAmt)}</b></div>}
               <div className="inv-remain"><span>ยอดรับสุทธิ</span><b>{fmtBaht(net)}</b></div>
             </div>
           )}
@@ -95,7 +97,14 @@ export default function Receipts({ role }) {
                 <option value="pending">รอชำระเงิน (ออกใบเสร็จก่อน)</option>
               </select>
             </label>
-            <div className="fld" />
+            <label className="fld"><span>หัก ณ ที่จ่าย (คิดจากฐานก่อน VAT)</span>
+              <div className="line-add">
+                <button type="button" className={"vat-toggle" + (ed.wht ? " on" : "")} style={{ flex: 1 }} onClick={() => setF("wht", !ed.wht)}>{ed.wht ? "หัก ณ ที่จ่าย" : "ไม่หัก ณ ที่จ่าย"}</button>
+                <div className="inp inp-unit" style={{ width: 100, flex: "none", opacity: ed.wht ? 1 : .5 }}>
+                  <input type="number" min="0" step="0.1" value={ed.wht_rate} disabled={!ed.wht} onChange={(e) => setF("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
+                </div>
+              </div>
+            </label>
           </div>
           <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note} onChange={(e) => setF("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
 
@@ -172,7 +181,7 @@ export default function Receipts({ role }) {
             <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtBaht(q?.grand || 0)}</b></div>
             <div style={{ marginTop: 4 }}><span>รับชำระตามใบแจ้งหนี้ {printR.invoice_no}{inv ? ` · งวดที่ ${inv.installment} (${Math.round(inv.pct)}%)` : ""}</span><b /></div>
             <div className="doc-grand"><span>รวมเป็นเงินงวดนี้</span><b>{fmtBaht(printR.total)}</b></div>
-            {printR.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย</span><b>− {fmtBaht(printR.wht_amt)}</b></div>}
+            {printR.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(printR.wht_rate) || 3}%</span><b>− {fmtBaht(printR.wht_amt)}</b></div>}
             <div className="doc-grand"><span>รับเงินสุทธิ</span><b>{fmtBaht(printR.net)}</b></div>
           </div>
         </DocSlip>
