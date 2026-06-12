@@ -1,6 +1,7 @@
 import React from "react";
 import { listCustomers, saveCustomer, deleteCustomer } from "../lib/api";
 import { UIcon } from "../icons";
+import { custCode } from "../lib/format";
 
 const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", vat: true, address: "", note: "" });
 
@@ -62,7 +63,10 @@ export default function Customers({ role }) {
             <button className={e.cust.type === "company" ? "on" : ""} onClick={() => setCust("type", "company")}>นิติบุคคล</button>
             <button className={e.cust.type === "person" ? "on" : ""} onClick={() => setCust("type", "person")}>บุคคลธรรมดา</button>
           </div>
-          <label className="fld"><span>ชื่อลูกค้า *</span><input className="inp" value={e.cust.name} onChange={(ev) => setCust("name", ev.target.value)} placeholder={e.cust.type === "company" ? "เช่น บริษัท ... จำกัด" : "ชื่อ-นามสกุล"} /></label>
+          <div className="fld-row">
+            <label className="fld"><span>ชื่อลูกค้า *</span><input className="inp" value={e.cust.name} onChange={(ev) => setCust("name", ev.target.value)} placeholder={e.cust.type === "company" ? "เช่น บริษัท ... จำกัด" : "ชื่อ-นามสกุล"} /></label>
+            <label className="fld"><span>รหัสลูกค้า (อัตโนมัติ)</span><input className="inp" value={e.cust.id ? custCode(e.cust.id) : "สร้างอัตโนมัติเมื่อบันทึก"} disabled style={{ maxWidth: 220 }} /></label>
+          </div>
           <div className="fld-row">
             <label className="fld"><span>เลขผู้เสียภาษี</span><input className="inp" value={e.cust.tax_id} onChange={(ev) => setCust("tax_id", ev.target.value)} placeholder="13 หลัก" /></label>
             <label className="fld"><span>ภาษีมูลค่าเพิ่ม</span>
@@ -134,7 +138,7 @@ export default function Customers({ role }) {
             role="button" tabIndex={0} onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && setViewing(c)}>
             <div className="cat-card-top">
               <div><div className="cat-card-name">{c.name}</div>
-                <div className="cat-card-en">{c.type === "company" ? "นิติบุคคล" : "บุคคลธรรมดา"}{c.tax_id ? ` · ${c.tax_id}` : ""}</div></div>
+                <div className="cat-card-en"><b className="cust-code">{custCode(c.id)}</b> · {c.type === "company" ? "นิติบุคคล" : "บุคคลธรรมดา"}{c.tax_id ? ` · ${c.tax_id}` : ""}</div></div>
               <span className={"job-badge " + (c.vat ? "open" : "closed")}>{c.vat ? "VAT" : "ไม่ VAT"}</span>
             </div>
             {c.address && <div className="cat-card-desc">{c.address}</div>}
@@ -151,11 +155,12 @@ export default function Customers({ role }) {
         <div className="modal-overlay" onClick={() => setViewing(null)}>
           <div className="modal" onClick={(ev) => ev.stopPropagation()} style={{ width: 560 }}>
             <div className="modal-head">
-              <div className="modal-title">{viewing.name} <span>{viewing.vat ? "VAT" : "ไม่ VAT"}</span></div>
+              <div className="modal-title">{viewing.name} <span>{custCode(viewing.id)} · {viewing.vat ? "VAT" : "ไม่ VAT"}</span></div>
               <button className="drawer-close" onClick={() => setViewing(null)}><UIcon name="x" size={20} /></button>
             </div>
             <div className="modal-body">
               <div className="cd-grid">
+                <div className="cd-k">รหัสลูกค้า</div><div className="cd-v">{custCode(viewing.id)}</div>
                 <div className="cd-k">ประเภท</div><div className="cd-v">{viewing.type === "company" ? "นิติบุคคล" : "บุคคลธรรมดา"}</div>
                 <div className="cd-k">เลขผู้เสียภาษี</div><div className="cd-v">{viewing.tax_id || "—"}</div>
                 <div className="cd-k">ภาษี</div><div className="cd-v">{viewing.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</div>

@@ -1,6 +1,6 @@
 import React from "react";
 import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterials, getCompanies } from "../lib/api";
-import { fmtBaht, fmtNum } from "../lib/format";
+import { fmtBaht, fmtNum, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 import DocSlip from "./DocSlip";
@@ -170,7 +170,7 @@ export default function BOQ({ role }) {
       {printB && (() => { const _c = custs.find((x) => String(x.id) === String(printB.customer_id)); const company = _c?.vat === false ? companies.novat : companies.vat; return (
         <DocSlip company={company} titleTh="ใบประมาณการ (BOQ)" titleEn="BILL OF QUANTITIES" docNo={printB.boq_no}
           metaRows={[{ label: "ชื่องาน", value: printB.title }]}
-          customer={{ name: printB.customerName, code: printB.customerCode, taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone }}
+          customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone }}
           terms={printB.note} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]}>
           {(() => {
             const order = ["ac", "free", "charged", "service"];

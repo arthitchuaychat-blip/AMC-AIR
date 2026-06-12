@@ -1,7 +1,7 @@
 import React from "react";
 import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs, getCompanies } from "../lib/api";
 import DocSlip from "./DocSlip";
-import { fmtBaht } from "../lib/format";
+import { fmtBaht, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 
@@ -270,7 +270,7 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
       {printQ && (() => { const co = printQ.vat ? companies.vat : companies.novat; return (
         <DocSlip company={co} titleTh="ใบเสนอราคา" titleEn="QUOTATION" docNo={printQ.quote_no}
           metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }]}
-          customer={{ name: printQ.customerName, code: printQ.customerCode, taxId: printQ.customerTaxId, address: printQ.siteAddress || printQ.customerAddr, contactName: printQ.contactName, contactPhone: printQ.contactPhone }}
+          customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, address: printQ.siteAddress || printQ.customerAddr, contactName: printQ.contactName, contactPhone: printQ.contactPhone }}
           terms={printQ.note || co.default_terms} bank={co.bank_info}
           signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}>
           <table className="doc-table">

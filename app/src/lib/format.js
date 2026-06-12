@@ -11,3 +11,6 @@ export const fmtCompact = (n) => {
 };
 
 export const UNITS = ["เมตร", "ชิ้น", "ตัว", "ชุด", "ถัง", "ม้วน", "เส้น", "กระป๋อง"];
+
+// auto customer code derived from the DB id (sequential, unique, no extra column)
+export const custCode = (id) => (id ? "C" + String(id).padStart(5, "0") : "");

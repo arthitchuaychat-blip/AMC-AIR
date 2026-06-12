@@ -33,7 +33,7 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
         <div className="doc-cust">
           <div className="doc-cust-l">ลูกค้า</div>
           <div className="doc-cust-r">
-            <div className="doc-cust-name">{customer.name || "-"}{customer.code ? `  (รหัส ${String(customer.code).padStart(5, "0")})` : ""}</div>
+            <div className="doc-cust-name">{customer.name || "-"}{customer.code ? `  (รหัส ${customer.code})` : ""}</div>
             {customer.address && <div className="doc-cust-line">{customer.address}</div>}
             <div className="doc-cust-line">
               {customer.taxId ? <>เลขประจำตัวผู้เสียภาษี {customer.taxId}</> : null}
