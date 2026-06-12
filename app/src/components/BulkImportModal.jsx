@@ -1,5 +1,5 @@
 import React from "react";
-import { bulkUpsertMaterials, saveBrand, saveBtu } from "../lib/api";
+import { bulkUpsertMaterials, saveBrand, saveBtu, saveCategory } from "../lib/api";
 import { UIcon } from "../icons";
 
 // New unified format (12 cols):
@@ -88,6 +88,7 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
       rows.push({
         code, name_th, name_en: name_en || name_th, kind,
         category: kind === "material" ? resolveCat(catBrand) : null,
+        _catRaw: kind === "material" ? (catBrand?.trim() || "") : "",
         brand: kind === "ac" ? (catBrand?.trim() || null) : null,
         btu: kind === "ac" && btu ? Number(btu) : null,
         tracked: isService ? false : true,
@@ -108,7 +109,18 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
     if (!parsed?.rows.length || busy) return;
     setBusy(true);
     try {
-      await bulkUpsertMaterials(parsed.rows);
+      // auto-create categories for material rows whose หมวด text didn't match an existing one
+      const matRows = parsed.rows.filter((r) => r.kind === "material");
+      const need = [...new Set(matRows.filter((r) => !r.category && r._catRaw).map((r) => r._catRaw))];
+      if (need.length) {
+        const usedIds = new Set(categories.map((c) => c.id));
+        const slug = (s) => { let base = s.trim().toLowerCase().replace(/[^a-z0-9ก-๙]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 36) || "cat"; let id = base, n = 2; while (usedIds.has(id)) id = `${base}-${n++}`; usedIds.add(id); return id; };
+        const newMap = {};
+        for (const t of need) { const id = slug(t); try { await saveCategory({ id, name_th: t, name_en: "" }); newMap[t] = id; } catch { /* ignore */ } }
+        matRows.forEach((r) => { if (!r.category && r._catRaw && newMap[r._catRaw]) r.category = newMap[r._catRaw]; });
+      }
+      // upsert materials (strip the helper field)
+      await bulkUpsertMaterials(parsed.rows.map(({ _catRaw, ...r }) => r));
       // register any new brands / BTUs from imported AC rows (so they show in filters)
       const brands = [...new Set(parsed.rows.filter((r) => r.kind === "ac" && r.brand).map((r) => r.brand))];
       const btus = [...new Set(parsed.rows.filter((r) => r.kind === "ac" && r.btu).map((r) => r.btu))];
@@ -132,7 +144,7 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
           </p>
           <ul className="bulk-help">
             <li><b>ชนิด</b> = แอร์ / วัสดุ / บริการ</li>
-            <li><b>หมวด/ยี่ห้อ</b> = ใส่ "หมวด" ถ้าเป็นวัสดุ · ใส่ "ยี่ห้อ" ถ้าเป็นแอร์ · บริการเว้นว่าง</li>
+            <li><b>หมวด/ยี่ห้อ</b> = ใส่ "หมวด" ถ้าเป็นวัสดุ (ถ้ายังไม่มีหมวดนี้ ระบบสร้างให้อัตโนมัติ) · ใส่ "ยี่ห้อ" ถ้าเป็นแอร์ · บริการเว้นว่าง</li>
             <li><b>BTU</b> = เฉพาะแอร์ · <b>บริการ</b> ไม่ต้องใส่สต๊อก (ขั้นต่ำ/คงเหลือเว้นว่างได้)</li>
           </ul>
           <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
