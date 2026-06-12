@@ -34,9 +34,11 @@ export default function Invoices({ role }) {
   const approvedQuotes = quotes.filter((q) => q.status === "approved");
   const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
-  function startNew() {
-    setEd({ invoice_no: genNo(), quote_no: "", issue_date: today(), due_date: "", basis: "percent", basis_value: 100, note: "" });
+  function startNew(quoteNo = "") {
+    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: "", basis: "percent", basis_value: 100, note: "" });
   }
+  // approved quotes that still have a balance to bill (shown in the picker)
+  const billableQuotes = approvedQuotes.filter((q) => round2((q.grand || 0) - (billed[q.quote_no] || 0)) > 0.01);
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   const selQ = ed?.quote_no ? quoteByNo[ed.quote_no] : null;
   const remaining = selQ ? Math.max(0, round2((selQ.grand || 0) - (billed[selQ.quote_no] || 0))) : 0;
@@ -78,7 +80,10 @@ export default function Invoices({ role }) {
             <label className="fld"><span>อ้างอิงใบเสนอราคา (อนุมัติแล้ว)</span>
               <select className="inp" value={ed.quote_no} onChange={(e) => setF("quote_no", e.target.value)}>
                 <option value="">— เลือกใบเสนอราคา —</option>
-                {approvedQuotes.map((q) => <option key={q.quote_no} value={q.quote_no}>{q.quote_no} · {q.customerName || "-"} ({fmtBaht(q.grand)})</option>)}
+                {/* keep the currently-selected quote even if now fully billed, plus all billable ones */}
+                {(ed.quote_no && !billableQuotes.some((q) => q.quote_no === ed.quote_no) && quoteByNo[ed.quote_no]
+                  ? [quoteByNo[ed.quote_no], ...billableQuotes] : billableQuotes
+                ).map((q) => <option key={q.quote_no} value={q.quote_no}>{q.quote_no} · {q.customerName || "-"} · เหลือ {fmtBaht(round2((q.grand || 0) - (billed[q.quote_no] || 0)))}</option>)}
               </select>
             </label>
           </div>
@@ -153,6 +158,7 @@ export default function Invoices({ role }) {
               </div>
               {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
               <div className="job-lines"><div className="job-actions">
+                {canEdit && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-primary sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} color="#fff" strokeWidth={2.4} /> วางบิลงวดถัดไป</button>}
                 <button className="btn-ghost sm" onClick={() => setPrintI(x)}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
