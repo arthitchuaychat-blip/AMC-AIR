@@ -4,6 +4,7 @@ import { fmtBaht, fmtNum, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 import DocSlip from "./DocSlip";
+import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 const SECTION_LABEL = { ac: "เครื่องปรับอากาศ", free: "วัสดุแถม (ไม่คิดเงิน)", charged: "วัสดุคิดเงิน", service: "ค่าบริการ" };
 
@@ -57,7 +58,8 @@ export default function BOQ({ role, onCreateQuote }) {
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-  React.useEffect(() => { if (!printB) return; const t = setTimeout(() => { window.print(); setPrintB(null); }, 80); return () => clearTimeout(t); }, [printB]);
+  const printWin = React.useRef(null);
+  React.useEffect(() => { if (!printB) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintB(null); }, 120); return () => clearTimeout(t); }, [printB]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
@@ -160,7 +162,7 @@ export default function BOQ({ role, onCreateQuote }) {
               {onCreateQuote && (bo.hasQuote
                 ? <span className="job-badge b-green" title={bo.quoteNo}>✓ สร้างใบเสนอราคาแล้ว · {bo.quoteNo}</span>
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}
-              <button className="btn-ghost sm" onClick={() => setPrintB(bo)}><UIcon name="catalog" size={14} /> พิมพ์</button>
+              <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(bo); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
               {canEdit && <button className="btn-ghost sm danger" onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
             </div></div>

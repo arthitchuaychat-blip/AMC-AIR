@@ -4,6 +4,7 @@ import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import LineWhtModal from "./LineWhtModal";
+import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 const fmtBaht = fmtBaht2; // receipts show 2 decimals
 const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
@@ -33,7 +34,8 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed }) {
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-  React.useEffect(() => { if (!printR) return; const t = setTimeout(() => { window.print(); setPrintR(null); }, 80); return () => clearTimeout(t); }, [printR]);
+  const printWin = React.useRef(null);
+  React.useEffect(() => { if (!printR) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintR(null); }, 120); return () => clearTimeout(t); }, [printR]);
   // open the create form prefilled from an invoice (link from the invoice page)
   React.useEffect(() => { if (!fromInvoice || !invoices.length) return; startNew(); onPickInvoice(fromInvoice); onFromInvoiceConsumed && onFromInvoiceConsumed(); }, [fromInvoice, invoices]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
@@ -157,7 +159,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed }) {
             </div>
             <div className="job-lines"><div className="job-actions">
               {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
-              <button className="btn-ghost sm" onClick={() => setPrintR(x)}><UIcon name="catalog" size={14} /> พิมพ์</button>
+              <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintR(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
             </div></div>
           </div>

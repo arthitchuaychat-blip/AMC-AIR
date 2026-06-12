@@ -1,6 +1,7 @@
 import React from "react";
 import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs, getCompanies } from "../lib/api";
 import DocSlip from "./DocSlip";
+import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtBaht, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -36,7 +37,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-  React.useEffect(() => { if (!printQ) return; const t = setTimeout(() => { window.print(); setPrintQ(null); }, 80); return () => clearTimeout(t); }, [printQ]);
+  const printWin = React.useRef(null);
+  React.useEffect(() => { if (!printQ) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintQ(null); }, 120); return () => clearTimeout(t); }, [printQ]);
   // open focused on a specific quote (from the dashboard report link)
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
@@ -257,7 +259,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 {q.siteAddress && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{q.siteAddress}</span>{q.map_url && <a href={q.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
               <div className="job-lines"><div className="job-actions">
-                <button className="btn-ghost sm" onClick={() => setPrintQ(q)}><UIcon name="catalog" size={14} /> พิมพ์</button>
+                <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {q.status === "approved" && onCreateInvoice && (q.hasInvoice

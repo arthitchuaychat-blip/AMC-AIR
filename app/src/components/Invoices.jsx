@@ -4,6 +4,7 @@ import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import LineWhtModal from "./LineWhtModal";
+import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 // snapshot a quote's line items (full amounts) with default หัก ณ ที่จ่าย flag (services only)
 const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
@@ -33,7 +34,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-  React.useEffect(() => { if (!printI) return; const t = setTimeout(() => { window.print(); setPrintI(null); }, 80); return () => clearTimeout(t); }, [printI]);
+  const printWin = React.useRef(null);
+  React.useEffect(() => { if (!printI) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintI(null); }, 120); return () => clearTimeout(t); }, [printI]);
   // open the create form prefilled from a quotation (link from the quotation page)
   React.useEffect(() => { if (!fromQuote || !quotes.length) return; startNew(fromQuote); onFromQuoteConsumed && onFromQuoteConsumed(); }, [fromQuote, quotes]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
@@ -170,7 +172,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 {x.hasReceipt && <span className="job-badge b-green">✓ ออกใบเสร็จแล้ว</span>}
                 {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="clipboard" size={14} color="#fff" /> ออกใบเสร็จ</button>}
                 {canEdit && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
-                <button className="btn-ghost sm" onClick={() => setPrintI(x)}><UIcon name="catalog" size={14} /> พิมพ์</button>
+                <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintI(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
               </div></div>

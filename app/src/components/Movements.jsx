@@ -2,6 +2,7 @@ import React from "react";
 import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
+import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 const TYPES = [
   { id: "withdraw", th: "เบิกออก", icon: "withdraw", color: "#2563eb", dir: -1 },
@@ -79,9 +80,10 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     setLines(prefill.items.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: p.price ?? matMap[p.code]?.cost ?? 0 })));
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
+  const printWin = React.useRef(null);
   React.useEffect(() => {
     if (!printData) return;
-    const t = setTimeout(() => { window.print(); setPrintData(null); }, 80);
+    const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintData(null); }, 120);
     return () => clearTimeout(t);
   }, [printData]);
 
@@ -161,6 +163,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
   }
   function printSlip(row) {
+    printWin.current = openPrintWindow();
     const group = row.job_no ? recent.filter((x) => x.job_no === row.job_no && x.type === row.type) : [row];
     setPrintData({
       typeTh: TYPE_BY[row.type].th, job_no: row.job_no, team: row.team, date: row.txn_date,
