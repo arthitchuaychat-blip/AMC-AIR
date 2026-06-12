@@ -102,12 +102,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     try { await setQuotationStatus(q.quote_no, "approved"); flash(`อนุมัติ ${q.quote_no} แล้ว ✓`); await load(); }
     catch (e) { flash("อนุมัติไม่สำเร็จ: " + (e.message || e), true); }
   }
-  function copyQ(q) {
-    const text = `ใบเสนอราคา ${q.quote_no}\nลูกค้า: ${q.customerName || "-"}\n`
-      + q.items.map((it, i) => `${i + 1}. ${it.name} — ${it.qty} ${it.unit || ""} × ${fmtBaht(it.unit_price)} = ${fmtBaht(it.qty * it.unit_price)}`).join("\n")
-      + `\nรวม ${fmtBaht(q.subtotal)}${q.discount ? ` − ส่วนลด ${fmtBaht(q.discount)}` : ""}${q.vat ? ` + VAT ${fmtBaht(q.vatAmt)}` : ""}\nสุทธิ ${fmtBaht(q.grand)}`;
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => flash("คัดลอกแล้ว")); else window.prompt("คัดลอก:", text);
-  }
 
   // ---------- EDITOR ----------
   if (ed) {
@@ -264,7 +258,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               </div>
               <div className="job-lines"><div className="job-actions">
                 <button className="btn-ghost sm" onClick={() => setPrintQ(q)}><UIcon name="catalog" size={14} /> พิมพ์</button>
-                <button className="btn-ghost sm" onClick={() => copyQ(q)}><UIcon name="clipboard" size={14} /> คัดลอก</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {q.status === "approved" && onCreateInvoice && (q.hasInvoice
