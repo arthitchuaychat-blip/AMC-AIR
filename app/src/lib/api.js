@@ -594,17 +594,24 @@ export async function listReceipts() {
       contactName: ct0?.name || null, contactPhone: ct0?.phone || null };
   });
 }
-// create a receipt from an invoice and mark the invoice paid
+// create a receipt from an invoice. Invoice is marked paid only when the receipt status is 'paid'.
 export async function saveReceipt(r) {
   const { data: { user } } = await supabase.auth.getUser();
+  const status = r.status === "pending" ? "pending" : "paid";
   const { error } = await supabase.from("receipts").upsert({
     receipt_no: r.receipt_no, invoice_no: r.invoice_no || null, quote_no: r.quote_no || null, boq_no: r.boq_no || null, job_no: r.job_no || null,
     customer_id: r.customer_id || null, site_id: r.site_id || null, issue_date: r.issue_date || null, payment_method: r.payment_method || null,
     base: Number(r.base) || 0, vat_amt: Number(r.vat_amt) || 0, total: Number(r.total) || 0, wht_amt: Number(r.wht_amt) || 0, net: Number(r.net) || 0,
-    note: r.note?.trim() || null, created_by: user?.id || null,
+    status, note: r.note?.trim() || null, created_by: user?.id || null,
   }, { onConflict: "receipt_no" });
   if (error) throw error;
-  if (r.invoice_no) await supabase.from("invoices").update({ status: "paid" }).eq("invoice_no", r.invoice_no);
+  if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no);
+}
+// toggle a receipt's paid status (and sync the linked invoice)
+export async function setReceiptStatus(receipt_no, status, invoice_no) {
+  const { error } = await supabase.from("receipts").update({ status }).eq("receipt_no", receipt_no);
+  if (error) throw error;
+  if (invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", invoice_no);
 }
 export async function deleteReceipt(receipt_no, invoice_no) {
   const { error } = await supabase.from("receipts").delete().eq("receipt_no", receipt_no);

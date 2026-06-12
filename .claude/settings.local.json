@@ -46,7 +46,9 @@
       "Bash(python -c \"import fitz; print\\('have pymupdf', fitz.__doc__[:30]\\)\")",
       "Bash(python -c \"import pdfplumber; print\\('have pdfplumber'\\)\")",
       "Bash(python -c \"import pypdf; print\\('have pypdf'\\)\")",
-      "Bash(python -c \"import PIL; print\\('have pillow'\\)\")"
+      "Bash(python -c \"import PIL; print\\('have pillow'\\)\")",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget"
     ]
   }
 }

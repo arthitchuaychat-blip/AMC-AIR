@@ -1,11 +1,12 @@
 import React from "react";
-import { listReceipts, listInvoices, saveReceipt, deleteReceipt, getCompanies } from "../lib/api";
+import { listReceipts, listInvoices, saveReceipt, deleteReceipt, setReceiptStatus, getCompanies } from "../lib/api";
 import { fmtBaht2, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 
 const fmtBaht = fmtBaht2; // receipts show 2 decimals
 const METHODS = ["เงินสด", "โอนเงิน", "เช็ค", "บัตรเครดิต"];
+const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber" }, paid: { th: "ชำระเงินแล้ว", cls: "b-green" } };
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -33,7 +34,8 @@ export default function Receipts({ role }) {
   const openInvoices = invoices.filter((x) => x.status === "unpaid" && !x.hasReceipt);
   const invByNo = React.useMemo(() => Object.fromEntries(invoices.map((x) => [x.invoice_no, x])), [invoices]);
 
-  function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], note: "" }); }
+  function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", note: "" }); }
+  async function markPaid(x) { try { await setReceiptStatus(x.receipt_no, "paid", x.invoice_no); flash("รับเงินแล้ว ✓"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   const selInv = ed?.invoice_no ? invByNo[ed.invoice_no] : null;
   const net = selInv ? (Number(selInv.total) || 0) - (Number(selInv.wht_amt) || 0) : 0;
@@ -43,10 +45,10 @@ export default function Receipts({ role }) {
     const r = {
       receipt_no: ed.receipt_no, invoice_no: selInv.invoice_no, quote_no: selInv.quote_no || null, boq_no: selInv.boq_no || null, job_no: null,
       customer_id: selInv.customer_id || null, site_id: selInv.site_id || null, issue_date: ed.issue_date || null, payment_method: ed.payment_method || null,
-      base: selInv.base, vat_amt: selInv.vat_amt, total: selInv.total, wht_amt: selInv.wht_amt, net,
+      base: selInv.base, vat_amt: selInv.vat_amt, total: selInv.total, wht_amt: selInv.wht_amt, net, status: ed.status || "paid",
       note: ed.note,
     };
-    try { await saveReceipt(r); flash(`ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว`); setEd(null); await load(); }
+    try { await saveReceipt(r); flash(r.status === "paid" ? `ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว` : `ออกใบเสร็จ (รอชำระเงิน) แล้ว`); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(x) { if (!window.confirm(`ลบใบเสร็จ ${x.receipt_no}? (ใบแจ้งหนี้จะกลับเป็นค้างชำระ)`)) return; try { await deleteReceipt(x.receipt_no, x.invoice_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
@@ -79,10 +81,19 @@ export default function Receipts({ role }) {
           )}
 
           <div className="fld-row">
-            <label className="fld"><span>วันที่รับเงิน</span><input className="inp" type="date" value={ed.issue_date} onChange={(e) => setF("issue_date", e.target.value)} /></label>
+            <label className="fld"><span>วันที่</span><input className="inp" type="date" value={ed.issue_date} onChange={(e) => setF("issue_date", e.target.value)} /></label>
             <label className="fld"><span>วิธีชำระ</span>
               <select className="inp" value={ed.payment_method} onChange={(e) => setF("payment_method", e.target.value)}>{METHODS.map((m) => <option key={m} value={m}>{m}</option>)}</select>
             </label>
+          </div>
+          <div className="fld-row">
+            <label className="fld"><span>สถานะการชำระ</span>
+              <select className="inp" value={ed.status} onChange={(e) => setF("status", e.target.value)}>
+                <option value="paid">ชำระเงินแล้ว (ปิดใบแจ้งหนี้)</option>
+                <option value="pending">รอชำระเงิน (ออกใบเสร็จก่อน)</option>
+              </select>
+            </label>
+            <div className="fld" />
           </div>
           <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note} onChange={(e) => setF("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
 
@@ -114,24 +125,28 @@ export default function Receipts({ role }) {
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสร็จ" : "ไม่พบใบเสร็จ"}</div>}
       <div className="job-cards">
-        {shown.map((x) => (
-          <div className="card job-card closed" key={x.receipt_no}>
+        {shown.map((x) => {
+          const st = RSTATUS[x.status] || RSTATUS.paid;
+          return (
+          <div className={"card job-card" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
             <div className="job-card-head" style={{ cursor: "default" }}>
-              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className="job-badge b-green">รับเงินแล้ว</span></div>
+              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
               <div className="job-card-meta">{x.customerName || "-"} · อ้างอิง {x.invoice_no || "-"}{x.quote_no ? ` · ${x.quote_no}` : ""}{x.boq_no ? ` · BOQ ${x.boq_no}` : ""}{x.job_no ? ` · งาน ${x.job_no}` : ""}</div>
               <div className="job-card-cost"><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
             </div>
             <div className="job-lines"><div className="job-actions">
+              {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
               <button className="btn-ghost sm" onClick={() => setPrintR(x)}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
             </div></div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {printR && (() => { const inv = invByNo[printR.invoice_no]; const co = (inv ? (inv.vat_amt > 0) : printR.vat_amt > 0) ? companies.vat : companies.novat; return (
-        <DocSlip company={co} titleTh="ใบเสร็จรับเงิน" titleEn="RECEIPT" docNo={printR.receipt_no}
-          metaRows={[{ label: "วันที่", value: printR.issue_date }, { label: "วิธีชำระ", value: printR.payment_method }, { label: "อ้างอิงใบแจ้งหนี้", value: printR.invoice_no }, { label: "อ้างอิงใบเสนอ", value: printR.quote_no }, { label: "อ้างอิง BOQ", value: printR.boq_no }, { label: "อ้างอิงใบงาน", value: printR.job_no }]}
+        <DocSlip company={co} titleTh={printR.status === "pending" ? "ใบเสร็จรับเงิน (รอชำระเงิน)" : "ใบเสร็จรับเงิน"} titleEn="RECEIPT" docNo={printR.receipt_no}
+          metaRows={[{ label: "วันที่", value: printR.issue_date }, { label: "สถานะ", value: (RSTATUS[printR.status] || RSTATUS.paid).th }, { label: "วิธีชำระ", value: printR.payment_method }, { label: "อ้างอิงใบแจ้งหนี้", value: printR.invoice_no }, { label: "อ้างอิงใบเสนอ", value: printR.quote_no }, { label: "อ้างอิง BOQ", value: printR.boq_no }, { label: "อ้างอิงใบงาน", value: printR.job_no }]}
           customer={{ name: printR.customerName, code: custCode(printR.customerCode), taxId: printR.customerTaxId, address: printR.siteAddress || printR.customerAddr, contactName: printR.contactName, contactPhone: printR.contactPhone }}
           terms={printR.note} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}>
           <table className="doc-table">
