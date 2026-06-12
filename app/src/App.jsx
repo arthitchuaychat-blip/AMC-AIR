@@ -15,6 +15,7 @@ import Quotation from "./components/Quotation";
 import Profit from "./components/Profit";
 import JobOrders from "./components/JobOrders";
 import Schedule from "./components/Schedule";
+import Chat from "./components/Chat";
 import MyJobs from "./components/MyJobs";
 import Invoices from "./components/Invoices";
 import Receipts from "./components/Receipts";
@@ -23,6 +24,7 @@ const NAV = {
   myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
+  chat: { th: "แชต LINE", en: "Chat", icon: "chat" },
   catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
   boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
   quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
@@ -36,12 +38,12 @@ const NAV = {
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
-const FULL_NAV = ["dashboard", "customers", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "profit", "catalog", "movements", "jobs", "po", "settings"];
+const FULL_NAV = ["dashboard", "customers", "chat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "profit", "catalog", "movements", "jobs", "po", "settings"];
 const NAV_BY_ROLE = {
   admin: FULL_NAV,
   exec: FULL_NAV,
   finance: FULL_NAV,
-  sales: ["dashboard", "customers", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "profit", "catalog"],
+  sales: ["dashboard", "customers", "chat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "profit", "catalog"],
   stock: ["catalog", "movements", "jobs", "po"],
   lead_tech: ["myjobs", "joborders", "schedule", "catalog", "movements", "jobs"],
   tech: ["myjobs", "movements"],
@@ -159,6 +161,7 @@ export default function App() {
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
         {view === "customers" && <Customers role={role} />}
+        {view === "chat" && <Chat role={role} />}
         {view === "boq" && <BOQ role={role} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }} />}
         {view === "quote" && <Quotation role={role} focus={quoteFocus} onFocusConsumed={() => setQuoteFocus(null)}
           fromBoq={quoteFromBoq} onFromBoqConsumed={() => setQuoteFromBoq(null)}

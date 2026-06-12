@@ -818,3 +818,45 @@ export async function createUser({ email, password, name, role, team }) {
   if (e2) throw e2;
   return data.user;
 }
+
+// ---------- LINE OA chat ----------
+export async function listLineContacts() {
+  const [c, cu] = await Promise.all([
+    supabase.from("line_contacts").select("*").order("last_message_at", { ascending: false, nullsFirst: false }),
+    supabase.from("customers").select("id,name"),
+  ]);
+  if (c.error) throw c.error;
+  const cn = Object.fromEntries((cu.data || []).map((x) => [x.id, x.name]));
+  return (c.data || []).map((r) => ({ ...r, customerName: r.customer_id ? cn[r.customer_id] : null }));
+}
+
+export async function listLineMessages(uid) {
+  const { data, error } = await supabase.from("line_messages").select("*").eq("line_user_id", uid).order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function linkLineContact(uid, customerId) {
+  const { error } = await supabase.from("line_contacts").update({ customer_id: customerId || null }).eq("line_user_id", uid);
+  if (error) throw error;
+}
+
+export async function markLineRead(uid) {
+  await supabase.from("line_contacts").update({ unread: 0 }).eq("line_user_id", uid);
+}
+
+// send a reply via the serverless function (LINE push). Returns on success, throws with a readable message otherwise.
+export async function sendLineMessage(to, text) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch("/api/line-send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+    body: JSON.stringify({ to, text }),
+  });
+  if (!res.ok) {
+    let msg = "HTTP " + res.status;
+    try { msg = (await res.json()).error || msg; } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
