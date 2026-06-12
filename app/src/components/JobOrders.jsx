@@ -1,6 +1,7 @@
 import React from "react";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto } from "../lib/api";
 import { fmtBaht } from "../lib/format";
+import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 
@@ -12,7 +13,9 @@ const STATUS_OPTS = [["pending", "รอจ่ายงาน"], ["scheduled", "
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
-export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed }) {
+const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", date: "", end_date: "", slot: "morning", time: "", status: "pending" });
+
+export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [openTl, setOpenTl] = React.useState(null);
   const [upBrief, setUpBrief] = React.useState(false);
@@ -46,21 +49,27 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     const contact = cust?.contacts?.[0];
     const details = (q.items || []).map((it, i) => `${i + 1}. ${it.name || it.item_code} × ${it.qty} ${it.unit || ""}`).join("\n");
     setEd({
-      job_no: genNo(), quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "",
+      ...blankEd(), quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "",
       title: q.title || "", contact_name: contact?.name || "", contact_phone: contact?.phone || "",
       address: site?.address || cust?.address || "", map_url: site?.map_url || mapLink(site?.address || cust?.address), details,
-      sales_note: "", sales_photos: [],
-      assigned_team: "", date: "", time: "", status: "pending",
     });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, custs]);
 
-  function startNew() { setEd({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", date: "", time: "", status: "pending" }); }
+  // open a new job editor prefilled from a calendar slot (date/team/slot picked on the Schedule page)
+  React.useEffect(() => {
+    if (!schedule) return;
+    setEd({ ...blankEd(), date: schedule.date || "", end_date: schedule.end_date || "", slot: schedule.slot || "morning", assigned_team: schedule.assigned_team || "" });
+    onScheduleConsumed && onScheduleConsumed();
+  }, [schedule]);
+
+  function startNew() { setEd(blankEd()); }
   function startEdit(jo) {
     const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
     const p = (n) => String(n).padStart(2, "0");
     setEd({ ...jo, _edit: true, customer_id: jo.customer_id || "", site_id: jo.site_id || "", assigned_team: jo.assigned_team || "",
       date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "",
+      end_date: jo.end_date || "", slot: jo.slot || "custom",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
       sales_note: jo.sales_note || "", sales_photos: jo.sales_photos || [] });
   }
@@ -87,12 +96,21 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   async function save() {
     if (!ed.title?.trim() && !ed.customer_id) return flash("ใส่ลูกค้าหรือชื่องาน", true);
     if (ed._edit && !window.confirm(`ยืนยันบันทึกการแก้ไขใบงาน ${ed.job_no} ?`)) return;
-    // build from local date+time so the saved instant matches what the user picked (store as proper ISO/UTC)
-    const scheduled_at = ed.date ? new Date(`${ed.date}T${ed.time || "08:00"}:00`).toISOString() : null;
+    const slot = ed.slot || "custom";
+    // start time comes from the slot (custom uses the picked time); store the instant as ISO/UTC
+    const time = slot === "custom" ? (ed.time || "08:00") : slotStartTime(slot);
+    const scheduled_at = ed.date ? new Date(`${ed.date}T${time}:00`).toISOString() : null;
+    const end_date = (ed.end_date && ed.date && ed.end_date > ed.date) ? ed.end_date : null;
+    const tn = teams.find((t) => t.id === ed.assigned_team)?.name?.replace("Team ", "") || ed.assigned_team;
+    // warn on a double-booking: same team, overlapping day-range + slot
+    if (ed.assigned_team && scheduled_at) {
+      const cand = { job_no: ed.job_no, scheduled_at, end_date, slot };
+      const clash = list.find((j) => j.job_no !== ed.job_no && j.assigned_team === ed.assigned_team && j.status !== "cancelled" && jobsOverlap(cand, j));
+      if (clash && !window.confirm(`⚠️ ทีม ${tn} มีงานซ้อนช่วงเวลานี้แล้ว:\n${clash.job_no}${clash.title ? " · " + clash.title : ""}\n\nต้องการจองซ้อนหรือไม่?`)) return;
+    }
     const status = ed.status === "pending" && ed.assigned_team && ed.date ? "scheduled" : ed.status;
     try {
-      await saveJobOrder({ ...ed, scheduled_at, status });
-      const tn = teams.find((t) => t.id === ed.assigned_team)?.name;
+      await saveJobOrder({ ...ed, scheduled_at, end_date, slot, status });
       flash(ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว");
       setEd(null); await load();
     }
@@ -188,9 +206,22 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             </label>
           </div>
           <div className="fld-row">
-            <label className="fld"><span>วันนัด</span><input className="inp" type="date" value={ed.date} onChange={(e) => setF("date", e.target.value)} /></label>
-            <label className="fld"><span>เวลา</span><input className="inp" type="time" value={ed.time} onChange={(e) => setF("time", e.target.value)} /></label>
+            <label className="fld"><span>วันเริ่มงาน</span><input className="inp" type="date" value={ed.date} onChange={(e) => setF("date", e.target.value)} /></label>
+            <label className="fld"><span>วันสิ้นสุด <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(งานหลายวัน · เว้นว่างได้)</small></span>
+              <input className="inp" type="date" min={ed.date || undefined} value={ed.end_date || ""} onChange={(e) => setF("end_date", e.target.value)} /></label>
           </div>
+          <div className="fld"><span>ช่วงเวลา</span>
+            <div className="slot-pick">
+              {SLOTS.map((s) => (
+                <button key={s.id} type="button" className={"slot-btn" + (ed.slot === s.id ? " on" : "")} onClick={() => setF("slot", s.id)}>
+                  <b>{s.icon} {s.th}</b>{s.time && <small>{s.time}</small>}
+                </button>
+              ))}
+            </div>
+          </div>
+          {ed.slot === "custom" && (
+            <label className="fld" style={{ maxWidth: 220 }}><span>เวลาเริ่ม</span><input className="inp" type="time" value={ed.time} onChange={(e) => setF("time", e.target.value)} /></label>
+          )}
           <label className="fld"><span>สถานะ</span>
             <select className="inp" value={ed.status} onChange={(e) => setF("status", e.target.value)}>{STATUS_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </label>
@@ -236,12 +267,11 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
           <div className="job-cards">
             {fl.map((jo) => {
           const st = STATUS[jo.status] || STATUS.pending;
-          const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
           return (
             <div className={"card job-card" + (jo.status === "done" || jo.status === "cancelled" ? " closed" : "")} key={jo.job_no}>
               <div className="job-card-head" style={{ cursor: "default" }}>
                 <div className="job-card-id"><span className="job-no">{jo.job_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
-                <div className="job-card-meta">{jo.title || "งานติดตั้ง/บริการ"} · ทีม {jo.teamName || "ยังไม่มอบ"}{dt ? ` · ${dt.toLocaleDateString("th-TH")} ${dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}` : ""}</div>
+                <div className="job-card-meta">{jo.title || "งานติดตั้ง/บริการ"} · ทีม {jo.teamName || "ยังไม่มอบ"}{jo.scheduled_at ? ` · 🗓 ${scheduleLabel(jo)}` : ""}</div>
               </div>
               <div className="jo-info">
                 <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{jo.customerName || "ไม่ระบุลูกค้า"}</b>{jo.customerAddr ? <span className="jo-dim"> · {jo.customerAddr}</span> : null}</div>

@@ -52,6 +52,8 @@ const UI_PATHS = {
   x: "M6 6l12 12M18 6 6 18",
   box: "M12 3 3 7.5V16.5L12 21l9-4.5v-9L12 3Zm0 0v18M3 7.5 12 12l9-4.5",
   trend: "M3 17l6-6 4 4 8-8m0 0h-5m5 0v5",
+  calendar: "M4 7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7Zm0 4h16M8 3v4m8-4v4",
+  clock: "M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z",
 };
 
 export function UIcon({ name, size = 20, color = "currentColor", strokeWidth = 1.8, style, fill = "none" }) {

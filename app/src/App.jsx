@@ -14,6 +14,7 @@ import BOQ from "./components/BOQ";
 import Quotation from "./components/Quotation";
 import Profit from "./components/Profit";
 import JobOrders from "./components/JobOrders";
+import Schedule from "./components/Schedule";
 import MyJobs from "./components/MyJobs";
 import Invoices from "./components/Invoices";
 import Receipts from "./components/Receipts";
@@ -29,19 +30,20 @@ const NAV = {
   receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
   profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
   joborders: { th: "ใบงาน", en: "Job Orders", icon: "clipboard" },
+  schedule: { th: "ปฏิทินงาน", en: "Schedule", icon: "calendar" },
   movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "withdraw" },
   jobs: { th: "วัสดุที่ใช้ในงาน", en: "Jobs & Cost", icon: "box" },
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
-const FULL_NAV = ["dashboard", "customers", "boq", "quote", "invoice", "receipt", "joborders", "profit", "catalog", "movements", "jobs", "po", "settings"];
+const FULL_NAV = ["dashboard", "customers", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "profit", "catalog", "movements", "jobs", "po", "settings"];
 const NAV_BY_ROLE = {
   admin: FULL_NAV,
   exec: FULL_NAV,
   finance: FULL_NAV,
-  sales: ["dashboard", "customers", "boq", "quote", "invoice", "receipt", "joborders", "profit", "catalog"],
+  sales: ["dashboard", "customers", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "profit", "catalog"],
   stock: ["catalog", "movements", "jobs", "po"],
-  lead_tech: ["myjobs", "joborders", "catalog", "movements", "jobs"],
+  lead_tech: ["myjobs", "joborders", "schedule", "catalog", "movements", "jobs"],
   tech: ["myjobs", "movements"],
 };
 
@@ -71,6 +73,7 @@ export default function App() {
   const [purchasePrefill, setPurchasePrefill] = React.useState(null);
   const [poPrefill, setPoPrefill] = React.useState(null);
   const [joPrefill, setJoPrefill] = React.useState(null);
+  const [joSchedule, setJoSchedule] = React.useState(null);
   const [withdrawCtx, setWithdrawCtx] = React.useState(null);
   const [quoteFocus, setQuoteFocus] = React.useState(null);
   const [jobFocus, setJobFocus] = React.useState(null);
@@ -165,7 +168,8 @@ export default function App() {
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
         {view === "receipt" && <Receipts role={role} fromInvoice={receiptFromInvoice} onFromInvoiceConsumed={() => setReceiptFromInvoice(null)} />}
         {view === "profit" && <Profit />}
-        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} />}
+        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)} />}
+        {view === "schedule" && <Schedule role={role} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}
         {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}

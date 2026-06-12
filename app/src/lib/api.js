@@ -723,6 +723,7 @@ export async function saveJobOrder(jo) {
     address: jo.address?.trim() || null, map_url: jo.map_url?.trim() || null, details: jo.details?.trim() || null,
     sales_note: jo.sales_note?.trim() || null, sales_photos: jo.sales_photos || [],
     assigned_team: jo.assigned_team || null, scheduled_at: jo.scheduled_at || null,
+    end_date: jo.end_date || null, slot: jo.slot || null,
     status: jo.status || "pending", created_by: user?.id || null,
   }, { onConflict: "job_no" });
   if (error) throw error;

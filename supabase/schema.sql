@@ -78,6 +78,8 @@ create table if not exists job_orders (
   sales_photos  text[] default '{}',
   assigned_team text references teams(id),
   scheduled_at  timestamptz,
+  end_date      date,                       -- วันสิ้นสุด (งานหลายวัน) · ว่าง = งานวันเดียว
+  slot          text check (slot is null or slot in ('morning','afternoon','full','custom')),
   status        text not null default 'pending' check (status in ('pending','scheduled','in_progress','done','cancelled')),
   completion_note text,
   photos        text[] default '{}',

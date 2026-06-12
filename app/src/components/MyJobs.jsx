@@ -1,6 +1,7 @@
 import React from "react";
 import { listTeamJobOrders, listJobOrders, updateJobStatus } from "../lib/api";
 import { UIcon } from "../icons";
+import { slotDef, jobDays, parseYmd, thDayMon } from "../lib/schedule";
 import JobTimeline from "./JobTimeline";
 
 const STATUS = {
@@ -60,6 +61,9 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
         {shown.map((jo) => {
           const st = STATUS[jo.status] || STATUS.pending;
           const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
+          const days = dt ? jobDays(jo) : [];
+          const slot = slotDef(jo.slot);
+          const slotTxt = dt ? ((!jo.slot || jo.slot === "custom") ? dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น." : slot.th) : "";
           return (
             <div className={"card myjob" + (jo.status === "done" ? " closed" : "")} key={jo.job_no}>
               <div className="myjob-head">
@@ -69,7 +73,10 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                   {jo.customerAddr && jo.customerAddr !== jo.address && <div className="myjob-custaddr">{jo.customerAddr}</div>}
                   <div className="myjob-title">{jo.title || "งานติดตั้ง/บริการ"}</div>
                 </div>
-                {dt && <div className="myjob-when">{dt.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}<br /><b>{dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</b></div>}
+                {dt && <div className="myjob-when">
+                  {days.length > 1 ? `${thDayMon(dt)} – ${thDayMon(parseYmd(days[days.length - 1]))}` : dt.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}
+                  <br /><b>{slotTxt}</b>{days.length > 1 && <span className="myjob-when-multi">{days.length} วัน</span>}
+                </div>}
               </div>
 
               {jo.contact_name && <div className="myjob-row"><UIcon name="user" size={15} color="var(--ink-3)" /> {jo.contact_name}
