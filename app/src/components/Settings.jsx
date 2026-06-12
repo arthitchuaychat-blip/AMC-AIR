@@ -286,40 +286,7 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* CATEGORIES */}
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="sec-head"><div><div className="sec-title">หมวดวัสดุ</div><div className="sec-sub">{cats.length} หมวด</div></div></div>
-          <div className="set-add">
-            <input className="inp" value={nc.id} onChange={(e) => setNc({ ...nc, id: e.target.value })} placeholder="รหัส (เช่น tool)" />
-            <input className="inp" value={nc.name_th} onChange={(e) => setNc({ ...nc, name_th: e.target.value })} placeholder="ชื่อหมวด (ไทย)" />
-            <input className="inp" value={nc.name_en} onChange={(e) => setNc({ ...nc, name_en: e.target.value })} placeholder="English (ไม่บังคับ)" />
-            <button className="btn-primary" disabled={addingC} onClick={addCat}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มหมวด</button>
-          </div>
-          <div className="set-list">
-            {cats.map((c) => <CategoryRow key={c.id} c={c} onChanged={load} flash={flash} />)}
-          </div>
-        </div>
-
-        {/* AC BRANDS + BTU */}
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="sec-head"><div><div className="sec-title">ทะเบียนแอร์ · ยี่ห้อ & ขนาด BTU</div><div className="sec-sub">ใช้เลือก/กรองในคลังสินค้า</div></div></div>
-          <div className="damage-layout">
-            <div>
-              <div className="set-add">
-                <input className="inp" value={nBrand} onChange={(e) => setNBrand(e.target.value)} placeholder="ยี่ห้อ เช่น DAIKIN" onKeyDown={(e) => e.key === "Enter" && addBrand()} />
-                <button className="btn-primary" onClick={addBrand}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มยี่ห้อ</button>
-              </div>
-              <div className="chip-wrap">{brands.map((b) => <span className="reg-chip" key={b}>{b}<button onClick={() => delBrand(b)}><UIcon name="x" size={12} /></button></span>)}</div>
-            </div>
-            <div>
-              <div className="set-add">
-                <input className="inp" type="number" value={nBtu} onChange={(e) => setNBtu(e.target.value)} placeholder="BTU เช่น 12000" onKeyDown={(e) => e.key === "Enter" && addBtu()} />
-                <button className="btn-primary" onClick={addBtu}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม BTU</button>
-              </div>
-              <div className="chip-wrap">{btus.map((b) => <span className="reg-chip" key={b}>{Number(b).toLocaleString()}<button onClick={() => delBtu(b)}><UIcon name="x" size={12} /></button></span>)}</div>
-            </div>
-          </div>
-        </div>
+        {/* หมวดวัสดุ · ยี่ห้อแอร์ · BTU — สร้างอัตโนมัติเมื่ออัปโหลดสินค้า (ไม่ต้องจัดการเอง) */}
 
         {/* DANGER ZONE */}
         <div className="card danger-card" style={{ marginTop: 16 }}>
