@@ -26,22 +26,22 @@ const NAV = {
   boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
   quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
   invoice: { th: "ใบแจ้งหนี้", en: "Invoices", icon: "clipboard" },
-  receipt: { th: "ใบเสร็จ", en: "Receipts", icon: "clipboard" },
-  profit: { th: "กำไร", en: "Profit", icon: "trend" },
+  receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
+  profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
   joborders: { th: "ใบงาน", en: "Job Orders", icon: "clipboard" },
-  movements: { th: "บันทึกธุรกรรม", en: "Movements", icon: "withdraw" },
-  jobs: { th: "งาน", en: "Jobs & Cost", icon: "box" },
+  movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "withdraw" },
+  jobs: { th: "วัสดุที่ใช้ในงาน", en: "Jobs & Cost", icon: "box" },
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
-const FULL_NAV = ["dashboard", "customers", "catalog", "boq", "quote", "invoice", "receipt", "profit", "joborders", "movements", "jobs", "po", "settings"];
+const FULL_NAV = ["dashboard", "customers", "boq", "quote", "invoice", "receipt", "joborders", "profit", "catalog", "movements", "jobs", "po", "settings"];
 const NAV_BY_ROLE = {
   admin: FULL_NAV,
   exec: FULL_NAV,
   finance: FULL_NAV,
-  sales: ["dashboard", "customers", "catalog", "boq", "quote", "invoice", "receipt", "profit", "joborders"],
-  stock: ["catalog", "movements", "po", "jobs"],
-  lead_tech: ["myjobs", "joborders", "movements", "jobs", "catalog"],
+  sales: ["dashboard", "customers", "boq", "quote", "invoice", "receipt", "joborders", "profit", "catalog"],
+  stock: ["catalog", "movements", "jobs", "po"],
+  lead_tech: ["myjobs", "joborders", "catalog", "movements", "jobs"],
   tech: ["myjobs", "movements"],
 };
 
