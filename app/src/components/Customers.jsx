@@ -145,7 +145,7 @@ export default function Customers({ role }) {
             <div className="cat-card-top">
               <div><div className="cat-card-name">{c.name}</div>
                 <div className="cat-card-en"><b className="cust-code">{custCode(c.id)}</b> · {c.type === "company" ? "นิติบุคคล" : "บุคคลธรรมดา"}{c.tax_id ? ` · ${c.tax_id}` : ""}</div></div>
-              <span className={"job-badge " + (c.vat ? "open" : "closed")}>{c.vat ? "VAT" : "ไม่ VAT"}</span>
+              <span className={"job-badge " + (c.vat ? "b-blue" : "b-grey")}>{c.vat ? "VAT" : "ไม่ VAT"}</span>
             </div>
             {c.address && <div className="cat-card-desc">{c.address}</div>}
             <div className="crm-meta">

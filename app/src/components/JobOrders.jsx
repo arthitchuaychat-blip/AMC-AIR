@@ -4,8 +4,8 @@ import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 
 const STATUS = {
-  pending: { th: "รอจ่ายงาน", cls: "open" }, scheduled: { th: "นัดแล้ว", cls: "open" },
-  in_progress: { th: "กำลังทำ", cls: "open" }, done: { th: "เสร็จ", cls: "closed" }, cancelled: { th: "ยกเลิก", cls: "closed" },
+  pending: { th: "รอจ่ายงาน", cls: "b-grey" }, scheduled: { th: "นัดแล้ว", cls: "b-blue" },
+  in_progress: { th: "กำลังทำ", cls: "b-amber" }, done: { th: "เสร็จ", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" },
 };
 const STATUS_OPTS = [["pending", "รอจ่ายงาน"], ["scheduled", "นัดแล้ว"], ["in_progress", "กำลังทำ"], ["done", "เสร็จ"], ["cancelled", "ยกเลิก"]];
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }

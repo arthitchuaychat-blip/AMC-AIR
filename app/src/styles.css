@@ -565,9 +565,18 @@ select.inp{cursor:pointer}
 .job-card-head:hover{background:var(--surface-2)}
 .job-card-id{display:flex;align-items:center;gap:9px;flex:none}
 .job-no{font-family:var(--mono);font-size:14px;font-weight:700}
-.job-badge{font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px}
-.job-badge.open{background:color-mix(in srgb,var(--primary) 12%,white);color:var(--primary)}
-.job-badge.closed{background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line)}
+.job-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;padding:5px 13px;border-radius:999px;letter-spacing:.2px;line-height:1.35;white-space:nowrap;color:#fff;box-shadow:0 2px 7px rgba(16,24,40,.16)}
+.job-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.92);flex:none}
+/* semantic status colors */
+.job-badge.b-green{background:linear-gradient(135deg,#16a34a,#12894a)}
+.job-badge.b-amber{background:linear-gradient(135deg,#f59e0b,#ea8a04);color:#3a2500}
+.job-badge.b-amber::before{background:rgba(58,37,0,.55)}
+.job-badge.b-red{background:linear-gradient(135deg,#ef4444,#dc2626)}
+.job-badge.b-blue{background:linear-gradient(135deg,#3b82f6,#2563eb)}
+.job-badge.b-grey{background:linear-gradient(135deg,#94a3b8,#7c899c)}
+/* legacy open/closed kept vibrant for untouched badges */
+.job-badge.open{background:linear-gradient(135deg,#3b82f6,#2563eb)}
+.job-badge.closed{background:linear-gradient(135deg,#16a34a,#12894a)}
 .job-card-meta{flex:1;font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .job-card-cost{text-align:right;flex:none}
 .job-card-cost span{display:block;font-size:10px;color:var(--ink-3)}

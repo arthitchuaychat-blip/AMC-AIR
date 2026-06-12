@@ -6,8 +6,8 @@ import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 
 const STATUS = {
-  draft: { th: "ร่าง", cls: "open" }, sent: { th: "ส่งแล้ว", cls: "open" },
-  approved: { th: "อนุมัติ", cls: "closed" }, rejected: { th: "ปฏิเสธ", cls: "closed" }, expired: { th: "หมดอายุ", cls: "closed" },
+  draft: { th: "ร่าง", cls: "b-grey" }, sent: { th: "ส่งแล้ว", cls: "b-blue" },
+  approved: { th: "อนุมัติ", cls: "b-green" }, rejected: { th: "ปฏิเสธ", cls: "b-red" }, expired: { th: "หมดอายุ", cls: "b-grey" },
 };
 const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"], ["approved", "อนุมัติ"], ["rejected", "ปฏิเสธ"], ["expired", "หมดอายุ"]];
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
@@ -256,7 +256,7 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
                 <button className="btn-ghost sm" onClick={() => copyQ(q)}><UIcon name="clipboard" size={14} /> คัดลอก</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
-                {q.status === "approved" && q.hasJob && <span className="job-badge closed" title={`ใบงาน ${q.jobNo}`}>✓ สร้างใบงานแล้ว · {q.jobNo}</span>}
+                {q.status === "approved" && q.hasJob && <span className="job-badge b-green" title={`ใบงาน ${q.jobNo}`}>✓ สร้างใบงานแล้ว · {q.jobNo}</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>

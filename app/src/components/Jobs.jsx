@@ -71,7 +71,7 @@ export default function Jobs({ role }) {
               <div className="job-card-head" onClick={() => setExpanded((s) => ({ ...s, [j.job_no]: !s[j.job_no] }))}>
                 <div className="job-card-id">
                   <span className="job-no">{j.job_no}</span>
-                  <span className={"job-badge " + (closed ? "closed" : "open")}>{closed ? "ปิดแล้ว" : "เปิดอยู่"}</span>
+                  <span className={"job-badge " + (closed ? "b-green" : "b-amber")}>{closed ? "ปิดแล้ว" : "เปิดอยู่"}</span>
                 </div>
                 <div className="job-card-meta">{j.team || "-"} · {j.date} · {j.lines.length} รายการ</div>
                 <div className="job-card-cost">

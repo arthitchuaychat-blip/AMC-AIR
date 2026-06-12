@@ -4,7 +4,7 @@ import { fmtBaht, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 
-const STATUS = { open: { th: "รอรับของ", cls: "open" }, received: { th: "รับแล้ว", cls: "closed" }, cancelled: { th: "ยกเลิก", cls: "closed" } };
+const STATUS = { open: { th: "รอรับของ", cls: "b-amber" }, received: { th: "รับแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
 
 function genPoNo() {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");

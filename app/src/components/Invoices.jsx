@@ -5,7 +5,7 @@ import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 
 const fmtBaht = fmtBaht2; // invoices show 2 decimals to avoid rounding leftovers
-const STATUS = { unpaid: { th: "ค้างชำระ", cls: "open" }, paid: { th: "ชำระแล้ว", cls: "closed" }, cancelled: { th: "ยกเลิก", cls: "closed" } };
+const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, paid: { th: "ชำระแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `INV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 

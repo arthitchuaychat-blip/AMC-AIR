@@ -4,8 +4,8 @@ import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 
 const STATUS = {
-  pending: { th: "รอเริ่มงาน", cls: "open" }, scheduled: { th: "นัดแล้ว", cls: "open" },
-  in_progress: { th: "กำลังทำ", cls: "open" }, done: { th: "เสร็จแล้ว", cls: "closed" }, cancelled: { th: "ยกเลิก", cls: "closed" },
+  pending: { th: "รอเริ่มงาน", cls: "b-grey" }, scheduled: { th: "นัดแล้ว", cls: "b-blue" },
+  in_progress: { th: "กำลังทำ", cls: "b-amber" }, done: { th: "เสร็จแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" },
 };
 
 export default function MyJobs({ role, team, me, onWithdraw }) {

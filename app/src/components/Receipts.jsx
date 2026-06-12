@@ -117,7 +117,7 @@ export default function Receipts({ role }) {
         {shown.map((x) => (
           <div className="card job-card closed" key={x.receipt_no}>
             <div className="job-card-head" style={{ cursor: "default" }}>
-              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className="job-badge closed">รับเงินแล้ว</span></div>
+              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className="job-badge b-green">รับเงินแล้ว</span></div>
               <div className="job-card-meta">{x.customerName || "-"} · อ้างอิง {x.invoice_no || "-"}{x.quote_no ? ` · ${x.quote_no}` : ""}{x.boq_no ? ` · BOQ ${x.boq_no}` : ""}{x.job_no ? ` · งาน ${x.job_no}` : ""}</div>
               <div className="job-card-cost"><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
             </div>
