@@ -837,6 +837,9 @@ select.inp{cursor:pointer}
 .tc-legend{display:flex;gap:16px;justify-content:center;margin-top:6px;font-size:12px;color:var(--ink-2)}
 .tc-legend span{display:inline-flex;align-items:center;gap:6px}
 .tc-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.tc-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tc-range{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3)}
+.tc-range .inp{padding:6px 9px;width:auto;font-size:12.5px}
 .pf-row.pf-click{cursor:pointer;transition:background .14s}
 .pf-row.pf-click:hover{background:var(--surface-2)}
 .modal-x{border:none;background:transparent;cursor:pointer;color:var(--ink-3);padding:4px;border-radius:8px;display:flex}

@@ -6,11 +6,25 @@ const TH_MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค."
 const pad = (n) => String(n).padStart(2, "0");
 const keyOf = (d, g) => g === "year" ? `${d.getFullYear()}` : g === "month" ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}` : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-function buildBuckets(g) {
-  const now = new Date(); const arr = [];
-  if (g === "day") for (let i = 13; i >= 0; i--) { const d = new Date(now); d.setDate(now.getDate() - i); arr.push({ key: keyOf(d, g), label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` }); }
-  else if (g === "month") for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); arr.push({ key: keyOf(d, g), label: `${TH_MON[d.getMonth()]} ${String(d.getFullYear() + 543).slice(2)}` }); }
-  else for (let i = 4; i >= 0; i--) { const y = now.getFullYear() - i; arr.push({ key: `${y}`, label: `${y + 543}` }); }
+function buildBuckets(g, from, to) {
+  const now = new Date();
+  const end = to ? new Date(to) : now;
+  let start;
+  if (from) start = new Date(from);
+  else if (g === "day") { start = new Date(end); start.setDate(end.getDate() - 13); }
+  else if (g === "month") start = new Date(end.getFullYear(), end.getMonth() - 11, 1);
+  else start = new Date(end.getFullYear() - 4, 0, 1);
+  const arr = [];
+  if (g === "day") {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    for (let i = 0; d <= e && i < 120; i++) { arr.push({ key: keyOf(d, g), label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` }); d.setDate(d.getDate() + 1); }
+  } else if (g === "month") {
+    let d = new Date(start.getFullYear(), start.getMonth(), 1); const e = new Date(end.getFullYear(), end.getMonth(), 1);
+    for (let i = 0; d <= e && i < 48; i++) { arr.push({ key: keyOf(d, g), label: `${TH_MON[d.getMonth()]} ${String(d.getFullYear() + 543).slice(2)}` }); d = new Date(d.getFullYear(), d.getMonth() + 1, 1); }
+  } else {
+    for (let y = start.getFullYear(), i = 0; y <= end.getFullYear() && i < 25; y++, i++) arr.push({ key: `${y}`, label: `${y + 543}` });
+  }
   return arr;
 }
 
@@ -63,6 +77,8 @@ function HBars({ rows, color }) {
 
 export default function TrendCharts() {
   const [g, setG] = React.useState("month");
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
   const [data, setData] = React.useState(null);
   const [err, setErr] = React.useState(null);
 
@@ -81,7 +97,7 @@ export default function TrendCharts() {
     const teamName = Object.fromEntries(data.teams.map((t) => [t.id, t.name]));
     const teamByQuote = {}; data.jos.forEach((j) => { if (j.quote_no && !teamByQuote[j.quote_no]) teamByQuote[j.quote_no] = j.assigned_team; });
     const approved = data.qs.filter((q) => q.status === "approved");
-    const buckets = buildBuckets(g);
+    const buckets = buildBuckets(g, from, to);
     const idx = Object.fromEntries(buckets.map((b, i) => [b.key, i]));
     buckets.forEach((b) => { b.sale = 0; b.cost = 0; b.profit = 0; });
     const bySales = {}, byTeam = {};
@@ -102,18 +118,25 @@ export default function TrendCharts() {
     const salesRows = Object.entries(bySales).map(([name, v]) => ({ name, v })).sort((a, b) => b.v - a.v);
     const teamRows = Object.entries(byTeam).map(([name, v]) => ({ name, v })).sort((a, b) => b.v - a.v);
     return { buckets, tot, salesRows, teamRows };
-  }, [data, g]);
+  }, [data, g, from, to]);
 
   if (err) return <div className="empty" style={{ color: "var(--down)" }}>โหลดกราฟไม่สำเร็จ: {err}</div>;
 
   return (
     <div className="sales-report" style={{ marginTop: 18 }}>
-      <div className="sec-head" style={{ marginBottom: 12 }}>
+      <div className="sec-head" style={{ marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
         <div><div className="sec-title">กราฟเปรียบเทียบ</div><div className="sec-sub">ยอดขาย · ต้นทุน · กำไร · ทีม — เลือกช่วงเวลา</div></div>
-        <div className="seg">
-          <button className={"seg-btn" + (g === "day" ? " on" : "")} onClick={() => setG("day")}>รายวัน</button>
-          <button className={"seg-btn" + (g === "month" ? " on" : "")} onClick={() => setG("month")}>รายเดือน</button>
-          <button className={"seg-btn" + (g === "year" ? " on" : "")} onClick={() => setG("year")}>รายปี</button>
+        <div className="tc-controls">
+          <div className="seg">
+            <button className={"seg-btn" + (g === "day" ? " on" : "")} onClick={() => setG("day")}>รายวัน</button>
+            <button className={"seg-btn" + (g === "month" ? " on" : "")} onClick={() => setG("month")}>รายเดือน</button>
+            <button className={"seg-btn" + (g === "year" ? " on" : "")} onClick={() => setG("year")}>รายปี</button>
+          </div>
+          <div className="tc-range">
+            <span>จาก</span><input className="inp" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <span>ถึง</span><input className="inp" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            {(from || to) && <button className="btn-ghost sm" onClick={() => { setFrom(""); setTo(""); }}>ล้าง</button>}
+          </div>
         </div>
       </div>
 
