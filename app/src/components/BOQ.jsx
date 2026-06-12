@@ -38,7 +38,7 @@ function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
   );
 }
 
-export default function BOQ({ role }) {
+export default function BOQ({ role, onCreateQuote }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -157,6 +157,7 @@ export default function BOQ({ role }) {
               <div className="job-card-cost"><span>ต้นทุนรวม</span><b>{fmtBaht(bo.total)}</b></div>
             </div>
             <div className="job-lines"><div className="job-actions">
+              {canEdit && onCreateQuote && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>}
               <button className="btn-ghost sm" onClick={() => setPrintB(bo)}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
               {canEdit && <button className="btn-ghost sm danger" onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}

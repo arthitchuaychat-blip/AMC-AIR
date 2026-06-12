@@ -13,7 +13,7 @@ const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Receipts({ role }) {
+export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
@@ -34,6 +34,8 @@ export default function Receipts({ role }) {
   }
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { if (!printR) return; const t = setTimeout(() => { window.print(); setPrintR(null); }, 80); return () => clearTimeout(t); }, [printR]);
+  // open the create form prefilled from an invoice (link from the invoice page)
+  React.useEffect(() => { if (!fromInvoice || !invoices.length) return; startNew(); onPickInvoice(fromInvoice); onFromInvoiceConsumed && onFromInvoiceConsumed(); }, [fromInvoice, invoices]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   const openInvoices = invoices.filter((x) => x.status === "unpaid" && !x.hasReceipt);

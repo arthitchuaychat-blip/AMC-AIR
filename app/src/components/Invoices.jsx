@@ -14,7 +14,7 @@ const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, pai
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `INV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Invoices({ role }) {
+export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -34,6 +34,8 @@ export default function Invoices({ role }) {
   }
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { if (!printI) return; const t = setTimeout(() => { window.print(); setPrintI(null); }, 80); return () => clearTimeout(t); }, [printI]);
+  // open the create form prefilled from a quotation (link from the quotation page)
+  React.useEffect(() => { if (!fromQuote || !quotes.length) return; startNew(fromQuote); onFromQuoteConsumed && onFromQuoteConsumed(); }, [fromQuote, quotes]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   const billed = React.useMemo(() => billedByQuote(list), [list]);
@@ -165,7 +167,8 @@ export default function Invoices({ role }) {
               </div>
               {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
               <div className="job-lines"><div className="job-actions">
-                {canEdit && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-primary sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} color="#fff" strokeWidth={2.4} /> วางบิลงวดถัดไป</button>}
+                {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="clipboard" size={14} color="#fff" /> ออกใบเสร็จ</button>}
+                {canEdit && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
                 <button className="btn-ghost sm" onClick={() => setPrintI(x)}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}

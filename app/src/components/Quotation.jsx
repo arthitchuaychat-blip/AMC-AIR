@@ -13,7 +13,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, focus, onFocusConsumed, onCreateJob }) {
+export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -42,6 +42,17 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, note: "", items: [] }); }
+  // create a new quotation prefilled from a BOQ (customer/site + pulled items)
+  function startFromBoq(boqNo) {
+    const b = boqs.find((x) => x.boq_no === boqNo); if (!b) return;
+    const c = custs.find((x) => String(x.id) === String(b.customer_id));
+    const items = b.items.filter((x) => ["ac", "charged", "service"].includes(x.section)).map((x) => {
+      const m = matMap[x.item_code];
+      return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind };
+    });
+    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, note: "", items });
+  }
+  React.useEffect(() => { if (!fromBoq || !boqs.length) return; startFromBoq(fromBoq); onFromBoqConsumed && onFromBoqConsumed(); }, [fromBoq, boqs]);
   function startEdit(q) {
     setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", approved_at: q.approved_at,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind })) });
@@ -256,6 +267,7 @@ export default function Quotation({ role, focus, onFocusConsumed, onCreateJob })
                 <button className="btn-ghost sm" onClick={() => copyQ(q)}><UIcon name="clipboard" size={14} /> คัดลอก</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
+                {canEdit && q.status === "approved" && onCreateInvoice && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>}
                 {q.status === "approved" && q.hasJob && <span className="job-badge b-green" title={`ใบงาน ${q.jobNo}`}>✓ สร้างใบงานแล้ว · {q.jobNo}</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
