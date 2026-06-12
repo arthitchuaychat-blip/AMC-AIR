@@ -110,15 +110,15 @@ export default function App() {
       <div className="topbar">
         <button className="topbar-burger" onClick={() => setMenuOpen(true)} aria-label="เมนู"><UIcon name="menu" size={22} /></button>
         <Logo size={30} radius={8} />
-        <div className="brand-name" style={{ fontSize: 17 }}>AMC <span>Stock</span></div>
+        <div className="brand-name" style={{ fontSize: 17 }}>AMC <span>Management</span></div>
       </div>
       {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
       <aside className={"sidebar" + (menuOpen ? " open" : "")}>
         <div className="brand">
           <Logo size={40} radius={11} />
           <div className="brand-text">
-            <div className="brand-name">AMC <span>Stock</span></div>
-            <div className="brand-sub">Stock & Materials</div>
+            <div className="brand-name">AMC <span>Management</span></div>
+            <div className="brand-sub">Management System</div>
           </div>
         </div>
 

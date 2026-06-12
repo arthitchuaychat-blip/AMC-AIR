@@ -367,7 +367,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
             <div className="slip-head">
               <div className="slip-brand">
                 <img src="/logo.png" alt="" className="slip-logo" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                AMC Stock
+                AMC Management
               </div>
               <div className="slip-title">ใบ{printData.typeTh}</div>
             </div>

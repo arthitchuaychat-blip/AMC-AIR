@@ -22,7 +22,7 @@ export default function Login() {
       <form className="login-card card" onSubmit={submit}>
         <div className="brand" style={{ justifyContent: "center", marginBottom: 6 }}>
           <Logo size={44} radius={12} />
-          <div className="brand-name">AMC <span>Stock</span></div>
+          <div className="brand-name">AMC <span>Management</span></div>
         </div>
         <p className="page-sub" style={{ textAlign: "center", marginBottom: 18 }}>เข้าสู่ระบบเพื่อใช้งาน</p>
         <label className="fld"><span>อีเมล · Email</span>
