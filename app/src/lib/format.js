@@ -14,3 +14,6 @@ export const UNITS = ["เมตร", "ชิ้น", "ตัว", "ชุด", 
 
 // auto customer code derived from the DB id (sequential, unique, no extra column)
 export const custCode = (id) => (id ? "C" + String(id).padStart(6, "0") : "");
+
+// round to 2 decimals (money) — avoids accumulating rounding leftovers
+export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;

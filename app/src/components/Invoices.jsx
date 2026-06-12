@@ -1,11 +1,12 @@
 import React from "react";
 import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, getCompanies, billedByQuote } from "../lib/api";
-import { fmtBaht, custCode } from "../lib/format";
+import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 
+const fmtBaht = fmtBaht2; // invoices show 2 decimals to avoid rounding leftovers
 const STATUS = { unpaid: { th: "ค้างชำระ", cls: "open" }, paid: { th: "ชำระแล้ว", cls: "closed" }, cancelled: { th: "ยกเลิก", cls: "closed" } };
-function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `INV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
+function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `INV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Invoices({ role }) {
@@ -38,25 +39,25 @@ export default function Invoices({ role }) {
   }
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   const selQ = ed?.quote_no ? quoteByNo[ed.quote_no] : null;
-  const remaining = selQ ? Math.max(0, (selQ.grand || 0) - (billed[selQ.quote_no] || 0)) : 0;
+  const remaining = selQ ? Math.max(0, round2((selQ.grand || 0) - (billed[selQ.quote_no] || 0))) : 0;
   const newTotal = (() => {
     if (!selQ) return 0;
     const v = Number(ed.basis_value) || 0;
     const t = ed.basis === "percent" ? (selQ.grand || 0) * v / 100 : v;
-    return Math.min(t, remaining + 0.5);
+    return round2(Math.min(t, remaining));
   })();
 
   async function save() {
     if (!selQ) return flash("เลือกใบเสนอราคาก่อน", true);
-    if (newTotal <= 0) return flash("ยอดงวดต้องมากกว่า 0", true);
-    if (newTotal > remaining + 0.5) return flash("ยอดงวดเกินยอดคงเหลือ", true);
+    if (newTotal <= 0) return flash("ยอดงวดต้องมากกว่า 0 (อาจวางบิลครบ 100% แล้ว)", true);
+    if (newTotal > remaining + 0.01) return flash("ยอดงวดเกินยอดคงเหลือ", true);
     const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;
     const installment = list.filter((x) => x.quote_no === selQ.quote_no && x.status !== "cancelled").length + 1;
     const inv = {
       invoice_no: ed.invoice_no, quote_no: selQ.quote_no, boq_no: selQ.boq_no || null,
       customer_id: selQ.customer_id || null, site_id: selQ.site_id || null,
-      issue_date: ed.issue_date || null, due_date: ed.due_date || null, installment, pct: f * 100,
-      base: (selQ.afterDisc || 0) * f, vat_amt: (selQ.vatAmt || 0) * f, total: newTotal, wht_amt: (selQ.whtAmt || 0) * f,
+      issue_date: ed.issue_date || null, due_date: ed.due_date || null, installment, pct: round2(f * 100),
+      base: round2((selQ.afterDisc || 0) * f), vat_amt: round2((selQ.vatAmt || 0) * f), total: newTotal, wht_amt: round2((selQ.whtAmt || 0) * f),
       note: ed.note, status: "unpaid",
     };
     try { await saveInvoice(inv); flash(`สร้างใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load(); }
@@ -150,7 +151,7 @@ export default function Invoices({ role }) {
                 <div className="job-card-meta">งวดที่ {x.installment} ({Math.round(x.pct)}%) · {x.customerName || "-"} · อ้างอิง {x.quote_no || "-"}{x.boq_no ? ` · BOQ ${x.boq_no}` : ""}</div>
                 <div className="job-card-cost"><span>ยอดงวดนี้</span><b>{fmtBaht(x.total)}</b></div>
               </div>
-              {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.5 ? " · ครบ 100% ✓" : ""}</span></div>}
+              {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
               <div className="job-lines"><div className="job-actions">
                 <button className="btn-ghost sm" onClick={() => setPrintI(x)}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}

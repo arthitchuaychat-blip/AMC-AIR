@@ -1,11 +1,12 @@
 import React from "react";
 import { listReceipts, listInvoices, saveReceipt, deleteReceipt, getCompanies } from "../lib/api";
-import { fmtBaht, custCode } from "../lib/format";
+import { fmtBaht2, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 
+const fmtBaht = fmtBaht2; // receipts show 2 decimals
 const METHODS = ["เงินสด", "โอนเงิน", "เช็ค", "บัตรเครดิต"];
-function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
+function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Receipts({ role }) {
