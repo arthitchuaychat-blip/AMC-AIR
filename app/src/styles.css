@@ -662,6 +662,18 @@ select.inp{cursor:pointer}
 .crm-site{margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--line-2)}
 .crm-site .inp{font-size:13px}
 .crm-meta{font-size:12px;color:var(--ink-2);margin-top:10px;display:flex;flex-direction:column;gap:3px}
+/* customer detail modal */
+.cd-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px;margin-bottom:6px}
+.cd-k{color:var(--ink-3);white-space:nowrap}
+.cd-v{color:var(--ink);font-weight:600}
+.cd-sec{font-size:12px;font-weight:800;color:var(--ink-2);margin:14px 0 7px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.cd-empty{font-size:12.5px;color:var(--ink-3)}
+.cd-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;padding:5px 0}
+.cd-tel{font-weight:700;color:var(--primary);white-space:nowrap}
+.cd-site{padding:7px 0;border-bottom:1px solid var(--line-2)}
+.cd-site:last-child{border-bottom:none}
+.cd-site-top{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;font-weight:600}
+.cd-site-addr{font-size:12.5px;color:var(--ink-2);margin-top:3px;line-height:1.5}
 .vat-toggle{width:100%;padding:10px 13px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:14px;font-weight:600;color:var(--ink-2);transition:.14s;text-align:left}
 .vat-toggle.on{background:color-mix(in srgb,var(--up) 10%,white);border-color:color-mix(in srgb,var(--up) 35%,var(--line));color:var(--up)}
 

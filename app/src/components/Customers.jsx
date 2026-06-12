@@ -11,6 +11,7 @@ export default function Customers({ role }) {
   const [q, setQ] = React.useState("");
   const [toast, setToast] = React.useState(null);
   const [editing, setEditing] = React.useState(null); // {cust, contacts[], sites[]}
+  const [viewing, setViewing] = React.useState(null); // customer being viewed (detail)
 
   async function load() {
     setLoading(true);
@@ -129,7 +130,8 @@ export default function Customers({ role }) {
 
       <div className="cat-grid">
         {shown.map((c) => (
-          <div className="cat-card" key={c.id}>
+          <div className="cat-card clickable-card" key={c.id} onClick={() => setViewing(c)}
+            role="button" tabIndex={0} onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && setViewing(c)}>
             <div className="cat-card-top">
               <div><div className="cat-card-name">{c.name}</div>
                 <div className="cat-card-en">{c.type === "company" ? "นิติบุคคล" : "บุคคลธรรมดา"}{c.tax_id ? ` · ${c.tax_id}` : ""}</div></div>
@@ -140,15 +142,53 @@ export default function Customers({ role }) {
               {c.contacts[0] && <div>📞 {c.contacts[0].name || ""} {c.contacts[0].phone || ""}{c.contacts.length > 1 ? ` +${c.contacts.length - 1}` : ""}</div>}
               {c.sites.length > 0 && <div>📍 {c.sites.length} ไซต์งาน</div>}
             </div>
-            {canEdit && (
-              <div className="cat-card-actions">
-                <button className="btn-ghost sm" onClick={() => startEdit(c)}><UIcon name="edit" size={14} /> แก้ไข</button>
-                <button className="btn-ghost sm danger" onClick={() => del(c)}><UIcon name="trash" size={14} /> ลบ</button>
-              </div>
-            )}
+            <div className="cat-card-move">ดูรายละเอียด <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>
           </div>
         ))}
       </div>
+
+      {viewing && (
+        <div className="modal-overlay" onClick={() => setViewing(null)}>
+          <div className="modal" onClick={(ev) => ev.stopPropagation()} style={{ width: 560 }}>
+            <div className="modal-head">
+              <div className="modal-title">{viewing.name} <span>{viewing.vat ? "VAT" : "ไม่ VAT"}</span></div>
+              <button className="drawer-close" onClick={() => setViewing(null)}><UIcon name="x" size={20} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="cd-grid">
+                <div className="cd-k">ประเภท</div><div className="cd-v">{viewing.type === "company" ? "นิติบุคคล" : "บุคคลธรรมดา"}</div>
+                <div className="cd-k">เลขผู้เสียภาษี</div><div className="cd-v">{viewing.tax_id || "—"}</div>
+                <div className="cd-k">ภาษี</div><div className="cd-v">{viewing.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</div>
+                <div className="cd-k">ที่อยู่หลัก</div><div className="cd-v">{viewing.address || "—"}</div>
+                {viewing.note && <><div className="cd-k">หมายเหตุ</div><div className="cd-v">{viewing.note}</div></>}
+              </div>
+
+              <div className="cd-sec">ผู้ติดต่อ ({viewing.contacts.length})</div>
+              {viewing.contacts.length === 0 && <div className="cd-empty">— ไม่มี —</div>}
+              {viewing.contacts.map((ct, i) => (
+                <div className="cd-row" key={i}>
+                  <span>👤 {ct.name || "ผู้ติดต่อ"}{ct.role ? ` · ${ct.role}` : ""}</span>
+                  {ct.phone && <a href={`tel:${ct.phone}`} className="cd-tel">📞 {ct.phone}</a>}
+                </div>
+              ))}
+
+              <div className="cd-sec">ไซต์งาน ({viewing.sites.length})</div>
+              {viewing.sites.length === 0 && <div className="cd-empty">— ไม่มี —</div>}
+              {viewing.sites.map((s, i) => (
+                <div className="cd-site" key={i}>
+                  <div className="cd-site-top"><span>📍 {s.site_name || "ไซต์งาน"}</span>
+                    {s.map_url && <a href={s.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm">แผนที่</a>}</div>
+                  {s.address && <div className="cd-site-addr">{s.address}</div>}
+                </div>
+              ))}
+            </div>
+            <div className="modal-foot">
+              {canEdit && <button className="btn-ghost danger" onClick={() => { const c = viewing; setViewing(null); del(c); }}><UIcon name="trash" size={15} /> ลบ</button>}
+              {canEdit && <button className="btn-primary" onClick={() => { const c = viewing; setViewing(null); startEdit(c); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
+            </div>
+          </div>
+        </div>
+      )}
       {toast && <Toast t={toast} />}
     </div>
   );
