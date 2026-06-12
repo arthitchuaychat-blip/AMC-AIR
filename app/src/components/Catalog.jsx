@@ -40,6 +40,7 @@ export default function Catalog({ role }) {
   React.useEffect(() => { load(); }, []);
 
   const ql = q.trim().toLowerCase();
+  const KIND_ORDER = { ac: 0, material: 1, service: 2 };
   const list = mats.filter((m) =>
     (kind === "all" || m.kind === kind) &&
     (kind !== "material" || cat === "all" || m.cat === cat) &&
@@ -47,6 +48,10 @@ export default function Catalog({ role }) {
     (kind !== "ac" || btu === "all" || String(m.btu) === String(btu)) &&
     (!ql || (m.th || "").toLowerCase().includes(ql) || (m.en || "").toLowerCase().includes(ql) ||
       (m.code || "").toLowerCase().includes(ql) || (m.catName || "").includes(q.trim()) || (m.brand || "").toLowerCase().includes(ql))
+  ).sort((a, b) =>
+    (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) ||                       // ชนิด: แอร์ → วัสดุ → บริการ
+    (a.brand || a.catName || "").localeCompare(b.brand || b.catName || "", "th") || // ยี่ห้อ (แอร์) / หมวด (วัสดุ)
+    (a.th || "").localeCompare(b.th || "", "th")                                    // แล้วเรียงตามตัวอักษรชื่อไทย
   );
 
   async function remove(m) {
