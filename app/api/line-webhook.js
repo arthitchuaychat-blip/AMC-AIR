@@ -64,6 +64,16 @@ export default async function handler(req) {
         SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
       });
     }
+    if (u.searchParams.get("dbcheck") === "1") {
+      const out = {};
+      for (const t of ["line_contacts", "line_messages"]) {
+        try {
+          const r = await fetch(`${SB()}/rest/v1/${t}?select=*&limit=1`, { headers: sbHeaders() });
+          out[t] = { status: r.status, body: (await r.text()).slice(0, 180) };
+        } catch (e) { out[t] = { error: e?.message || String(e) }; }
+      }
+      return json(out);
+    }
     return new Response("ok");
   }
   const raw = await req.text();
