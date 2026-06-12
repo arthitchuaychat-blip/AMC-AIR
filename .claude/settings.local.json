@@ -48,7 +48,12 @@
       "Bash(python -c \"import pypdf; print\\('have pypdf'\\)\")",
       "Bash(python -c \"import PIL; print\\('have pillow'\\)\")",
       "mcp__visualize__read_me",
-      "mcp__visualize__show_widget"
+      "mcp__visualize__show_widget",
+      "Bash(ls -la public/)",
+      "Bash(grep -i \"icon\\\\|logo\\\\|favicon\" index.html)",
+      "Bash(cp \"LOGO AIR.png\" \"Inventory Management/app/public/logo.png\")",
+      "Bash(rm -f \"Inventory Management/app/public/README-logo.txt\")",
+      "Bash(xxd)"
     ]
   }
 }
