@@ -117,7 +117,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
       `หมุดโลเคชั่น : ${jo.map_url || "-"}`,
       "--",
       "รายการสินค้าและบริการ :",
-      jo.details || "-",
+      (jo.quote_no
+        ? ((jo.confirmItems && jo.confirmItems.length) ? jo.confirmItems.map((it, i) => `${i + 1}. ${it.name} × ${it.qty} ${it.unit || ""}`).join("\n") : "-")
+        : (jo.details || "-")),
       `ยอดชำระเงิน : ${fmtBaht(jo.quoteGrand || 0)}`,
     ];
     const text = lines.join("\n");
