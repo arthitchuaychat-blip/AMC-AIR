@@ -16,6 +16,7 @@ export default function Customers({ role }) {
   const [viewing, setViewing] = React.useState(null); // customer being viewed (detail)
   const [importing, setImporting] = React.useState(false);
   const [viewMode, setViewMode] = React.useState("grid"); // grid | list
+  const [vatF, setVatF] = React.useState("all"); // all | vat | novat
 
   async function load() {
     setLoading(true);
@@ -26,8 +27,9 @@ export default function Customers({ role }) {
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   const ql = q.trim().toLowerCase();
-  const shown = list.filter((c) => !ql || c.name.toLowerCase().includes(ql) || (c.tax_id || "").includes(q.trim())
-    || c.contacts.some((ct) => (ct.phone || "").includes(q.trim())));
+  const shown = list.filter((c) => (vatF === "all" || (vatF === "vat" ? c.vat : !c.vat))
+    && (!ql || c.name.toLowerCase().includes(ql) || (c.tax_id || "").includes(q.trim())
+      || c.contacts.some((ct) => (ct.phone || "").includes(q.trim()))));
 
   function startNew() { setEditing({ cust: blankCust(), contacts: [{ name: "", phone: "", role: "" }], sites: [{ site_name: "", address: "", map_url: "" }] }); }
   function startEdit(c) {
@@ -135,6 +137,13 @@ export default function Customers({ role }) {
           {canEdit && <button className="btn-ghost" onClick={() => setImporting(true)}><UIcon name="box" size={15} /> นำเข้าหลายราย</button>}
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มลูกค้า</button>}
         </div>
+      </div>
+
+      <div className="cat-filter">
+        {[["all", "ทั้งหมด"], ["vat", "VAT"], ["novat", "ไม่ VAT"]].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
+            style={vatF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
       </div>
 
       {importing && <CustomerImportModal onClose={() => setImporting(false)}
