@@ -15,6 +15,7 @@ export default function Customers({ role }) {
   const [editing, setEditing] = React.useState(null); // {cust, contacts[], sites[]}
   const [viewing, setViewing] = React.useState(null); // customer being viewed (detail)
   const [importing, setImporting] = React.useState(false);
+  const [viewMode, setViewMode] = React.useState("grid"); // grid | list
 
   async function load() {
     setLoading(true);
@@ -127,6 +128,10 @@ export default function Customers({ role }) {
             <input placeholder="ค้นหาชื่อ / เลขภาษี / เบอร์" value={q} onChange={(e) => setQ(e.target.value)} />
             {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
           </div>
+          <div className="seg view-seg">
+            <button className={"seg-btn" + (viewMode === "grid" ? " on" : "")} onClick={() => setViewMode("grid")} title="กริด"><UIcon name="dashboard" size={16} /></button>
+            <button className={"seg-btn" + (viewMode === "list" ? " on" : "")} onClick={() => setViewMode("list")} title="แถว"><UIcon name="catalog" size={16} /></button>
+          </div>
           {canEdit && <button className="btn-ghost" onClick={() => setImporting(true)}><UIcon name="box" size={15} /> นำเข้าหลายราย</button>}
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มลูกค้า</button>}
         </div>
@@ -138,6 +143,7 @@ export default function Customers({ role }) {
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{q ? `ไม่พบลูกค้า “${q}”` : "ยังไม่มีลูกค้า"}</div>}
 
+      {viewMode === "grid" && (
       <div className="cat-grid">
         {shown.map((c) => (
           <div className="cat-card clickable-card" key={c.id} onClick={() => setViewing(c)}
@@ -156,6 +162,23 @@ export default function Customers({ role }) {
           </div>
         ))}
       </div>
+      )}
+
+      {viewMode === "list" && (
+      <div className="cat-list">
+        {shown.map((c) => (
+          <div className="cat-lrow" key={c.id} onClick={() => setViewing(c)}>
+            <div className="cat-lrow-main">
+              <div className="cat-lrow-name">{c.name} <span className={"job-badge " + (c.vat ? "b-blue" : "b-grey")}>{c.vat ? "VAT" : "ไม่ VAT"}</span></div>
+              <div className="cat-lrow-sub"><span className="code-chip">{custCode(c.id)}</span> {c.type === "company" ? "นิติบุคคล" : "บุคคลธรรมดา"}{c.tax_id ? ` · ${c.tax_id}` : ""}</div>
+            </div>
+            <div className="cat-lrow-col hide-sm"><span>ผู้ติดต่อ</span><b>{c.contacts[0]?.phone || "—"}</b></div>
+            <div className="cat-lrow-col"><span>ไซต์งาน</span><b>{c.sites.length}</b></div>
+            <UIcon name="chevR" size={16} color="var(--ink-3)" strokeWidth={2} />
+          </div>
+        ))}
+      </div>
+      )}
 
       {viewing && (
         <div className="modal-overlay" onClick={() => setViewing(null)}>
