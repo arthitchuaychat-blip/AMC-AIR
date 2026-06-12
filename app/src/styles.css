@@ -534,10 +534,14 @@ select.inp{cursor:pointer}
 
 /* ---------- print slip ---------- */
 @media screen { .print-area { display:none; } }
+/* margin:0 removes the browser's auto header/footer (date · title · url · page no.);
+   safe margins come from .print-area padding instead */
+@page { margin: 0; }
 @media print {
   body * { visibility:hidden !important; }
   .print-area, .print-area * { visibility:visible !important; }
-  .print-area { position:absolute; left:0; top:0; width:100%; padding:8mm; }
+  .print-area { position:absolute; left:0; top:0; width:100%; padding:13mm 12mm; }
+  .doc-table tr, .doc-totals, .doc-foot, .doc-cust, .doc-head { page-break-inside:avoid; }
 }
 .slip{font-family:var(--appfont);color:#000;max-width:720px;margin:0 auto}
 .slip-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}
