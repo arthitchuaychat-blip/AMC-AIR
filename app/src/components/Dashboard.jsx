@@ -7,21 +7,14 @@ import SalesReport from "./SalesReport";
 import BillingSummary from "./BillingSummary";
 import TrendCharts from "./TrendCharts";
 
-const PERIODS = [
-  { id: "day", label: "วันนี้" },
-  { id: "month", label: "เดือนนี้" },
-  { id: "year", label: "ปีนี้" },
-  { id: "all", label: "ตลอดอายุ" },
+const pad2 = (n) => String(n).padStart(2, "0");
+const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const PRESETS = [
+  { id: "month", label: "เดือนนี้", range: () => { const n = new Date(); return { from: `${n.getFullYear()}-${pad2(n.getMonth() + 1)}-01`, to: "" }; } },
+  { id: "year", label: "ปีนี้", range: () => { const n = new Date(); return { from: `${n.getFullYear()}-01-01`, to: "" }; } },
+  { id: "7d", label: "7 วัน", range: () => { const n = new Date(); const s = new Date(n); s.setDate(n.getDate() - 6); return { from: ymd(s), to: "" }; } },
+  { id: "all", label: "ทั้งหมด", range: () => ({ from: "", to: "" }) },
 ];
-
-function periodStart(p) {
-  const d = new Date();
-  const ymd = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
-  if (p === "day") return ymd(d);
-  if (p === "month") return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-  if (p === "year") return `${d.getFullYear()}-01-01`;
-  return null;
-}
 
 function StatCard({ icon, color, label, value, sub, accent, onClick }) {
   return (
@@ -42,7 +35,9 @@ function StatCard({ icon, color, label, value, sub, accent, onClick }) {
 }
 
 export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
-  const [period, setPeriod] = React.useState("month");
+  const [preset, setPreset] = React.useState("month");
+  const [from, setFrom] = React.useState(PRESETS[0].range().from);
+  const [to, setTo] = React.useState("");
   const [detail, setDetail] = React.useState(null);
   const [mats, setMats] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
@@ -50,25 +45,30 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState(null);
 
+  function applyPreset(p) { const r = PRESETS.find((x) => x.id === p).range(); setPreset(p); setFrom(r.from); setTo(r.to); }
+  const setCustom = (k, v) => { setPreset("custom"); k === "from" ? setFrom(v) : setTo(v); };
+  const rangeLabel = preset !== "custom" ? (PRESETS.find((p) => p.id === preset)?.label || "") : `${from || "เริ่มต้น"} – ${to || "วันนี้"}`;
+
   React.useEffect(() => {
     let alive = true;
     setLoading(true); setErr(null);
-    Promise.all([listMaterials(), listTeams(), listTransactionsSince(periodStart(period))])
+    Promise.all([listMaterials(), listTeams(), listTransactionsSince(from || null)])
       .then(([m, t, x]) => { if (alive) { setMats(m); setTeams(t); setTxns(x); setLoading(false); } })
       .catch((e) => { if (alive) { setErr(e.message || String(e)); setLoading(false); } });
     return () => { alive = false; };
-  }, [period]);
+  }, [from]);
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
-  const periodLabel = PERIODS.find((p) => p.id === period).label;
+  const periodLabel = rangeLabel;
 
-  // ---- aggregate transactions ----
+  // ---- aggregate transactions (filtered to the selected range) ----
   const agg = React.useMemo(() => {
     const z = () => ({ value: 0, qty: 0, count: 0 });
     const byType = { withdraw: z(), return: z(), purchase: z(), damage: z() };
     const teamWithdraw = {};
     const matWithdraw = {};
     for (const r of txns) {
+      if (to && r.txn_date > to) continue;
       const b = byType[r.type]; if (!b) continue;
       b.value += Number(r.value) || 0; b.qty += Number(r.qty) || 0; b.count += 1;
       if (r.type === "withdraw") {
@@ -77,7 +77,9 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
       }
     }
     return { byType, teamWithdraw, matWithdraw };
-  }, [txns]);
+  }, [txns, to]);
+
+  const rangeTxns = React.useMemo(() => txns.filter((r) => !to || r.txn_date <= to), [txns, to]);
 
   const used = agg.byType.withdraw.value - agg.byType.return.value;
   const teamMax = Math.max(1, ...teams.map((t) => agg.teamWithdraw[t.id] || 0));
@@ -98,20 +100,27 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
       <div className="dash-head">
         <div>
           <h1 className="page-title">ภาพรวมผู้บริหาร <span className="page-title-en">Executive Overview</span></h1>
-          <p className="page-sub">ข้อมูลสด · สรุป {periodLabel}</p>
-        </div>
-        <div className="seg">
-          {PERIODS.map((p) => (
-            <button key={p.id} className={"seg-btn" + (period === p.id ? " on" : "")} onClick={() => setPeriod(p.id)}>{p.label}</button>
-          ))}
+          <p className="page-sub">ข้อมูลสด · ทุกรายงานในช่วง {rangeLabel}</p>
         </div>
       </div>
 
-      <SalesReport onOpenQuote={onOpenQuote} onOpenJob={onOpenJob} />
+      <div className="dash-filter">
+        <div className="seg">
+          {PRESETS.map((p) => (
+            <button key={p.id} className={"seg-btn" + (preset === p.id ? " on" : "")} onClick={() => applyPreset(p.id)}>{p.label}</button>
+          ))}
+        </div>
+        <div className="tc-range">
+          <span>จาก</span><input className="inp" type="date" value={from} onChange={(e) => setCustom("from", e.target.value)} />
+          <span>ถึง</span><input className="inp" type="date" value={to} onChange={(e) => setCustom("to", e.target.value)} />
+        </div>
+      </div>
 
-      <BillingSummary onGo={onGo} />
+      <SalesReport onOpenQuote={onOpenQuote} onOpenJob={onOpenJob} from={from} to={to} />
 
-      <TrendCharts />
+      <BillingSummary onGo={onGo} from={from} to={to} />
+
+      <TrendCharts from={from} to={to} />
 
       <div className="sec-head" style={{ margin: "22px 0 10px" }}><div><div className="sec-title">คลังวัสดุ & การเบิกใช้</div><div className="sec-sub">Inventory & usage · {periodLabel}</div></div></div>
 
@@ -221,7 +230,7 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
         </>
       )}
 
-      {detail && <DashDrawer kind={detail} periodLabel={periodLabel} txns={txns} teams={teams} mats={mats} onClose={() => setDetail(null)} />}
+      {detail && <DashDrawer kind={detail} periodLabel={periodLabel} txns={rangeTxns} teams={teams} mats={mats} onClose={() => setDetail(null)} />}
     </div>
   );
 }

@@ -75,10 +75,8 @@ function HBars({ rows, color }) {
   );
 }
 
-export default function TrendCharts() {
+export default function TrendCharts({ from, to }) {
   const [g, setG] = React.useState("month");
-  const [from, setFrom] = React.useState("");
-  const [to, setTo] = React.useState("");
   const [data, setData] = React.useState(null);
   const [err, setErr] = React.useState(null);
 
@@ -125,18 +123,11 @@ export default function TrendCharts() {
   return (
     <div className="sales-report" style={{ marginTop: 18 }}>
       <div className="sec-head" style={{ marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
-        <div><div className="sec-title">กราฟเปรียบเทียบ</div><div className="sec-sub">ยอดขาย · ต้นทุน · กำไร · ทีม — เลือกช่วงเวลา</div></div>
-        <div className="tc-controls">
-          <div className="seg">
-            <button className={"seg-btn" + (g === "day" ? " on" : "")} onClick={() => setG("day")}>รายวัน</button>
-            <button className={"seg-btn" + (g === "month" ? " on" : "")} onClick={() => setG("month")}>รายเดือน</button>
-            <button className={"seg-btn" + (g === "year" ? " on" : "")} onClick={() => setG("year")}>รายปี</button>
-          </div>
-          <div className="tc-range">
-            <span>จาก</span><input className="inp" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            <span>ถึง</span><input className="inp" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            {(from || to) && <button className="btn-ghost sm" onClick={() => { setFrom(""); setTo(""); }}>ล้าง</button>}
-          </div>
+        <div><div className="sec-title">กราฟเปรียบเทียบ</div><div className="sec-sub">ยอดขาย · ต้นทุน · กำไร · ทีม — แบ่งแกนเวลา</div></div>
+        <div className="seg">
+          <button className={"seg-btn" + (g === "day" ? " on" : "")} onClick={() => setG("day")}>รายวัน</button>
+          <button className={"seg-btn" + (g === "month" ? " on" : "")} onClick={() => setG("month")}>รายเดือน</button>
+          <button className={"seg-btn" + (g === "year" ? " on" : "")} onClick={() => setG("year")}>รายปี</button>
         </div>
       </div>
 

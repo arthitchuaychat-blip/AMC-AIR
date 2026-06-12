@@ -1,38 +1,42 @@
 import React from "react";
 import { listBoqs, listQuotations, listInvoices, listReceipts } from "../lib/api";
-import { fmtBaht } from "../lib/format";
+import { fmtBaht, inRange } from "../lib/format";
 import { UIcon } from "../icons";
 
-// Dashboard money summary: BOQ value · quotations · invoiced (AR) · collected, + VAT/non-VAT sales split.
-export default function BillingSummary({ onGo }) {
-  const [d, setD] = React.useState(null);
+// Dashboard money summary (within selected date range): BOQ · quotations · invoiced (AR) · collected + VAT split.
+export default function BillingSummary({ onGo, from, to }) {
+  const [raw, setRaw] = React.useState(null);
   const [err, setErr] = React.useState(null);
 
   React.useEffect(() => {
     let alive = true;
     Promise.all([listBoqs(), listQuotations(), listInvoices(), listReceipts()])
-      .then(([boqs, quotes, invoices, receipts]) => {
-        if (!alive) return;
-        const boqTotal = boqs.reduce((a, b) => a + (Number(b.total) || 0), 0);
-        const quoteTotal = quotes.reduce((a, q) => a + (Number(q.grand) || 0), 0);
-        const liveInv = invoices.filter((i) => i.status !== "cancelled");
-        const invoiceTotal = liveInv.reduce((a, i) => a + (Number(i.total) || 0), 0);
-        const paidRc = receipts.filter((r) => r.status === "paid");
-        const collected = paidRc.reduce((a, r) => a + (Number(r.total) || 0), 0);
-        const approved = quotes.filter((q) => q.status === "approved");
-        const vatA = approved.filter((q) => q.vat), noVatA = approved.filter((q) => !q.vat);
-        setD({
-          boqTotal, boqCount: boqs.length,
-          quoteTotal, quoteCount: quotes.length,
-          invoiceTotal, invoiceCount: liveInv.length, outstanding: invoiceTotal - collected,
-          collected, collectedCount: paidRc.length,
-          vatSales: vatA.reduce((a, q) => a + (Number(q.afterDisc) || 0), 0), vatCount: vatA.length,
-          noVatSales: noVatA.reduce((a, q) => a + (Number(q.afterDisc) || 0), 0), noVatCount: noVatA.length,
-        });
-      })
+      .then(([boqs, quotes, invoices, receipts]) => { if (alive) setRaw({ boqs, quotes, invoices, receipts }); })
       .catch((e) => { if (alive) setErr(e.message || String(e)); });
     return () => { alive = false; };
   }, []);
+
+  const d = React.useMemo(() => {
+    if (!raw) return null;
+    const boqs = raw.boqs.filter((b) => inRange(b.created_at, from, to));
+    const quotes = raw.quotes.filter((q) => inRange(q.issue_date || q.created_at, from, to));
+    const liveInv = raw.invoices.filter((i) => i.status !== "cancelled" && inRange(i.issue_date || i.created_at, from, to));
+    const paidRc = raw.receipts.filter((r) => r.status === "paid" && inRange(r.issue_date || r.created_at, from, to));
+    const boqTotal = boqs.reduce((a, b) => a + (Number(b.total) || 0), 0);
+    const quoteTotal = quotes.reduce((a, q) => a + (Number(q.grand) || 0), 0);
+    const invoiceTotal = liveInv.reduce((a, i) => a + (Number(i.total) || 0), 0);
+    const collected = paidRc.reduce((a, r) => a + (Number(r.total) || 0), 0);
+    const approved = quotes.filter((q) => q.status === "approved");
+    const vatA = approved.filter((q) => q.vat), noVatA = approved.filter((q) => !q.vat);
+    return {
+      boqTotal, boqCount: boqs.length,
+      quoteTotal, quoteCount: quotes.length,
+      invoiceTotal, invoiceCount: liveInv.length, outstanding: invoiceTotal - collected,
+      collected, collectedCount: paidRc.length,
+      vatSales: vatA.reduce((a, q) => a + (Number(q.afterDisc) || 0), 0), vatCount: vatA.length,
+      noVatSales: noVatA.reduce((a, q) => a + (Number(q.afterDisc) || 0), 0), noVatCount: noVatA.length,
+    };
+  }, [raw, from, to]);
 
   if (err) return <div className="empty" style={{ color: "var(--down)" }}>โหลดสรุปยอดไม่สำเร็จ: {err}</div>;
   if (!d) return <div className="empty">กำลังโหลดสรุปยอด…</div>;

@@ -1,59 +1,60 @@
 import React from "react";
 import { listQuotations, listBoqs, listJobOrders, listProfiles, listTeams } from "../lib/api";
-import { fmtBaht } from "../lib/format";
+import { fmtBaht, inRange } from "../lib/format";
 import { UIcon } from "../icons";
 
-// Sales & profit report from APPROVED quotations:
-//  - total approved sales
-//  - per salesperson (who created the quote)
-//  - per technician team (assigned to the job created from that quote)
+// Sales & profit report from APPROVED quotations within the selected date range:
+//  - total approved sales · per salesperson · per technician team
 // Click any KPI / row to drill into the line items, then jump straight to the quotation or job order.
-export default function SalesReport({ onOpenQuote, onOpenJob }) {
-  const [data, setData] = React.useState(null);
+export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
+  const [raw, setRaw] = React.useState(null);
   const [err, setErr] = React.useState(null);
   const [detail, setDetail] = React.useState(null); // { title, quotes:[...] }
 
   React.useEffect(() => {
     let alive = true;
     Promise.all([listQuotations(), listBoqs(), listJobOrders(), listProfiles(), listTeams()])
-      .then(([qs, bs, jos, profs, teams]) => {
-        if (!alive) return;
-        const boqCost = Object.fromEntries(bs.map((b) => [b.boq_no, b.total]));
-        const profName = Object.fromEntries((profs || []).map((p) => [p.id, p.name || p.email]));
-        const teamName = Object.fromEntries(teams.map((t) => [t.id, t.name]));
-        const jobByQuote = {}; jos.forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
-
-        const approved = qs.filter((q) => q.status === "approved");
-        const z = () => ({ sale: 0, cost: 0, hasCost: false, count: 0 });
-        const bySales = {}, byTeam = {};
-        let totalSale = 0, totalCost = 0;
-        const quotes = approved.map((q) => {
-          const sale = q.afterDisc || 0;
-          const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : null;
-          totalSale += sale; if (cost != null) totalCost += cost;
-          const sid = q.created_by || "__unknown__";
-          const job = jobByQuote[q.quote_no];
-          const tid = job?.assigned_team || "__none__";
-          (bySales[sid] = bySales[sid] || z());
-          bySales[sid].sale += sale; bySales[sid].count++;
-          if (cost != null) { bySales[sid].cost += cost; bySales[sid].hasCost = true; }
-          (byTeam[tid] = byTeam[tid] || z());
-          byTeam[tid].sale += sale; byTeam[tid].count++;
-          if (cost != null) { byTeam[tid].cost += cost; byTeam[tid].hasCost = true; }
-          return { quote_no: q.quote_no, customerName: q.customerName, sale, cost, profit: cost == null ? null : sale - cost,
-            salesId: sid, salesName: sid === "__unknown__" ? "ไม่ทราบผู้ทำ" : (profName[sid] || "ไม่ทราบผู้ทำ"),
-            teamId: tid, teamName: tid === "__none__" ? "ยังไม่มอบช่าง" : (teamName[tid] || tid), job_no: job?.job_no || null };
-        });
-        const mk = (entries, label) => Object.entries(entries)
-          .map(([id, v]) => ({ id, name: label(id), ...v, profit: v.hasCost ? v.sale - v.cost : null }))
-          .sort((a, b) => b.sale - a.sale);
-        const salesRows = mk(bySales, (id) => id === "__unknown__" ? "ไม่ทราบผู้ทำ" : (profName[id] || "ไม่ทราบผู้ทำ"));
-        const teamRows = mk(byTeam, (id) => id === "__none__" ? "ยังไม่มอบช่าง" : (teamName[id] || id));
-        setData({ totalSale, totalCost, totalProfit: totalSale - totalCost, count: approved.length, salesRows, teamRows, quotes });
-      })
+      .then(([qs, bs, jos, profs, teams]) => { if (alive) setRaw({ qs, bs, jos, profs, teams }); })
       .catch((e) => { if (alive) setErr(e.message || String(e)); });
     return () => { alive = false; };
   }, []);
+
+  const data = React.useMemo(() => {
+    if (!raw) return null;
+    const { qs, bs, jos, profs, teams } = raw;
+    const boqCost = Object.fromEntries(bs.map((b) => [b.boq_no, b.total]));
+    const profName = Object.fromEntries((profs || []).map((p) => [p.id, p.name || p.email]));
+    const teamName = Object.fromEntries(teams.map((t) => [t.id, t.name]));
+    const jobByQuote = {}; jos.forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
+
+    const approved = qs.filter((q) => q.status === "approved" && inRange(q.approved_at || q.issue_date, from, to));
+    const z = () => ({ sale: 0, cost: 0, hasCost: false, count: 0 });
+    const bySales = {}, byTeam = {};
+    let totalSale = 0, totalCost = 0;
+    const quotes = approved.map((q) => {
+      const sale = q.afterDisc || 0;
+      const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : null;
+      totalSale += sale; if (cost != null) totalCost += cost;
+      const sid = q.created_by || "__unknown__";
+      const job = jobByQuote[q.quote_no];
+      const tid = job?.assigned_team || "__none__";
+      (bySales[sid] = bySales[sid] || z());
+      bySales[sid].sale += sale; bySales[sid].count++;
+      if (cost != null) { bySales[sid].cost += cost; bySales[sid].hasCost = true; }
+      (byTeam[tid] = byTeam[tid] || z());
+      byTeam[tid].sale += sale; byTeam[tid].count++;
+      if (cost != null) { byTeam[tid].cost += cost; byTeam[tid].hasCost = true; }
+      return { quote_no: q.quote_no, customerName: q.customerName, sale, cost, profit: cost == null ? null : sale - cost,
+        salesId: sid, salesName: sid === "__unknown__" ? "ไม่ทราบผู้ทำ" : (profName[sid] || "ไม่ทราบผู้ทำ"),
+        teamId: tid, teamName: tid === "__none__" ? "ยังไม่มอบช่าง" : (teamName[tid] || tid), job_no: job?.job_no || null };
+    });
+    const mk = (entries, label) => Object.entries(entries)
+      .map(([id, v]) => ({ id, name: label(id), ...v, profit: v.hasCost ? v.sale - v.cost : null }))
+      .sort((a, b) => b.sale - a.sale);
+    const salesRows = mk(bySales, (id) => id === "__unknown__" ? "ไม่ทราบผู้ทำ" : (profName[id] || "ไม่ทราบผู้ทำ"));
+    const teamRows = mk(byTeam, (id) => id === "__none__" ? "ยังไม่มอบช่าง" : (teamName[id] || id));
+    return { totalSale, totalCost, totalProfit: totalSale - totalCost, count: approved.length, salesRows, teamRows, quotes };
+  }, [raw, from, to]);
 
   if (err) return <div className="empty" style={{ color: "var(--down)" }}>โหลดรายงานยอดขายไม่สำเร็จ: {err}</div>;
   if (!data) return <div className="empty">กำลังโหลดรายงานยอดขาย…</div>;

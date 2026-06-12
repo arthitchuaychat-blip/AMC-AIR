@@ -17,3 +17,11 @@ export const custCode = (id) => (id ? "C" + String(id).padStart(6, "0") : "");
 
 // round to 2 decimals (money) — avoids accumulating rounding leftovers
 export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+// is a date (YYYY-MM-DD or ISO) within [from, to] (inclusive)? empty from/to = open end
+export const inRange = (dateStr, from, to) => {
+  if (!from && !to) return true;
+  if (!dateStr) return false;
+  const d = String(dateStr).slice(0, 10);
+  return (!from || d >= from) && (!to || d <= to);
+};
