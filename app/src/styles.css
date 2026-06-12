@@ -682,6 +682,17 @@ select.inp{cursor:pointer}
 .inv-progress{padding:0 2px 4px;font-size:11.5px;color:var(--ink-3);display:flex;flex-direction:column;gap:4px}
 .inv-bar{height:7px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
 .inv-bar>div{height:100%;background:var(--primary)}
+/* per-line WHT modal */
+.lw-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:6px}
+.lw-table th{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.3px;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+.lw-table td{padding:8px;border-bottom:1px solid var(--line-2);vertical-align:top}
+.lw-table .r{text-align:right;white-space:nowrap}
+.lw-table .c{text-align:center}
+.lw-table input[type=checkbox]{width:18px;height:18px;cursor:pointer}
+.lw-code{color:var(--ink-3);font-size:11.5px}
+.lw-sub{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.lw-empty{color:var(--ink-3);text-align:center;padding:14px}
+.lw-rate{display:flex;align-items:center;justify-content:flex-end;gap:10px;font-size:13px;color:var(--ink-2);margin-top:8px}
 /* customer detail modal */
 .cd-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px;margin-bottom:6px}
 .cd-k{color:var(--ink-3);white-space:nowrap}

@@ -1,10 +1,13 @@
 import React from "react";
-import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, getCompanies } from "../lib/api";
+import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies } from "../lib/api";
 import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
+import LineWhtModal from "./LineWhtModal";
 
 const fmtBaht = fmtBaht2; // receipts show 2 decimals
+const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
+const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 const METHODS = ["เงินสด", "โอนเงิน", "เช็ค", "บัตรเครดิต"];
 const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber" }, paid: { th: "ชำระเงินแล้ว", cls: "b-green" } };
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
@@ -20,6 +23,7 @@ export default function Receipts({ role }) {
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
   const [printR, setPrintR] = React.useState(null);
+  const [view, setView] = React.useState(null);
   const [search, setSearch] = React.useState("");
 
   async function load() {
@@ -36,12 +40,18 @@ export default function Receipts({ role }) {
   const invByNo = React.useMemo(() => Object.fromEntries(invoices.map((x) => [x.invoice_no, x])), [invoices]);
   const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
-  function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", wht: false, wht_rate: 3, note: "" }); }
+  function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", items: [], wht_rate: 3, note: "" }); }
+  // copy the invoice's line items (with WHT flags) when an invoice is selected
+  function onPickInvoice(invoice_no) {
+    const iv = invByNo[invoice_no];
+    const items = iv?.items?.length ? iv.items.map((x) => ({ ...x })) : snapshotItems(quoteByNo[iv?.quote_no]);
+    setEd((s) => ({ ...s, invoice_no, items, wht_rate: iv?.wht_rate || 3 }));
+  }
   async function markPaid(x) { try { await setReceiptStatus(x.receipt_no, "paid", x.invoice_no); flash("รับเงินแล้ว ✓"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   const selInv = ed?.invoice_no ? invByNo[ed.invoice_no] : null;
   const whtRate = Number(ed?.wht_rate) || 3;
-  const whtAmt = (selInv && ed?.wht) ? round2((Number(selInv.base) || 0) * whtRate / 100) : 0; // หัก ณ ที่จ่าย คิดจากฐานก่อน VAT
+  const whtAmt = selInv ? lineWhtAmt(ed.items, selInv.base, whtRate) : 0; // หัก ณ ที่จ่าย รายบรรทัด
   const net = selInv ? round2((Number(selInv.total) || 0) - whtAmt) : 0;
 
   async function save() {
@@ -49,7 +59,7 @@ export default function Receipts({ role }) {
     const r = {
       receipt_no: ed.receipt_no, invoice_no: selInv.invoice_no, quote_no: selInv.quote_no || null, boq_no: selInv.boq_no || null, job_no: null,
       customer_id: selInv.customer_id || null, site_id: selInv.site_id || null, issue_date: ed.issue_date || null, payment_method: ed.payment_method || null,
-      base: selInv.base, vat_amt: selInv.vat_amt, total: selInv.total, wht_amt: whtAmt, net, wht: !!ed.wht, wht_rate: whtRate, status: ed.status || "paid",
+      base: selInv.base, vat_amt: selInv.vat_amt, total: selInv.total, wht_amt: whtAmt, net, wht: (ed.items || []).some((i) => i.wht), wht_rate: whtRate, items: ed.items || [], status: ed.status || "paid",
       note: ed.note,
     };
     try { await saveReceipt(r); flash(r.status === "paid" ? `ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว` : `ออกใบเสร็จ (รอชำระเงิน) แล้ว`); setEd(null); await load(); }
@@ -67,7 +77,7 @@ export default function Receipts({ role }) {
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบเสร็จ</span><input className="inp" value={ed.receipt_no} onChange={(e) => setF("receipt_no", e.target.value)} /></label>
             <label className="fld"><span>อ้างอิงใบแจ้งหนี้ (ค้างชำระ)</span>
-              <select className="inp" value={ed.invoice_no} onChange={(e) => { const iv = invByNo[e.target.value]; setEd((s) => ({ ...s, invoice_no: e.target.value, wht: iv ? iv.vat_amt > 0 : false })); }}>
+              <select className="inp" value={ed.invoice_no} onChange={(e) => onPickInvoice(e.target.value)}>
                 <option value="">— เลือกใบแจ้งหนี้ —</option>
                 {openInvoices.map((x) => <option key={x.invoice_no} value={x.invoice_no}>{x.invoice_no} · งวด {x.installment} · {x.customerName || "-"} ({fmtBaht(x.total)})</option>)}
               </select>
@@ -97,15 +107,13 @@ export default function Receipts({ role }) {
                 <option value="pending">รอชำระเงิน (ออกใบเสร็จก่อน)</option>
               </select>
             </label>
-            <label className="fld"><span>หัก ณ ที่จ่าย (คิดจากฐานก่อน VAT)</span>
-              <div className="line-add">
-                <button type="button" className={"vat-toggle" + (ed.wht ? " on" : "")} style={{ flex: 1 }} onClick={() => setF("wht", !ed.wht)}>{ed.wht ? "หัก ณ ที่จ่าย" : "ไม่หัก ณ ที่จ่าย"}</button>
-                <div className="inp inp-unit" style={{ width: 100, flex: "none", opacity: ed.wht ? 1 : .5 }}>
-                  <input type="number" min="0" step="0.1" value={ed.wht_rate} disabled={!ed.wht} onChange={(e) => setF("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
-                </div>
+            <label className="fld"><span>อัตราหัก ณ ที่จ่าย</span>
+              <div className="inp inp-unit" style={{ width: 120 }}>
+                <input type="number" min="0" step="0.1" value={ed.wht_rate} onChange={(e) => setF("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
               </div>
             </label>
           </div>
+          {selInv && <p className="page-sub" style={{ margin: "0 0 6px" }}>หัก ณ ที่จ่าย ดึงจากใบแจ้งหนี้ (ค่าบริการ) · ปรับรายบรรทัดได้โดยกดที่ใบเสร็จในรายการหลังออกใบ</p>}
           <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note} onChange={(e) => setF("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
@@ -140,9 +148,9 @@ export default function Receipts({ role }) {
           const st = RSTATUS[x.status] || RSTATUS.paid;
           return (
           <div className={"card job-card" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
-            <div className="job-card-head" style={{ cursor: "default" }}>
+            <div className="job-card-head clickable-card" onClick={() => setView(x)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setView(x)}>
               <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
-              <div className="job-card-meta">{x.customerName || "-"} · อ้างอิง {x.invoice_no || "-"}{x.quote_no ? ` · ${x.quote_no}` : ""}{x.boq_no ? ` · BOQ ${x.boq_no}` : ""}{x.job_no ? ` · งาน ${x.job_no}` : ""}</div>
+              <div className="job-card-meta">{x.customerName || "-"} · อ้างอิง {x.invoice_no || "-"}{x.quote_no ? ` · ${x.quote_no}` : ""}{x.boq_no ? ` · BOQ ${x.boq_no}` : ""}{x.job_no ? ` · งาน ${x.job_no}` : ""} · กดดูรายการ ›</div>
               <div className="job-card-cost"><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
             </div>
             <div className="job-lines"><div className="job-actions">
@@ -186,6 +194,17 @@ export default function Receipts({ role }) {
           </div>
         </DocSlip>
       ); })()}
+
+      {view && (
+        <LineWhtModal
+          title={`ใบเสร็จ ${view.receipt_no}`}
+          subtitle={`${view.customerName || "-"} · อ้างอิง ${view.invoice_no || "-"}`}
+          items={view.items?.length ? view.items : snapshotItems(quoteByNo[view.quote_no])}
+          rate={view.wht_rate || 3} docBase={view.base} docTotal={view.total} canEdit={canEdit}
+          onClose={() => setView(null)}
+          onSave={async ({ items, rate, whtAmt, net }) => { await setReceiptWht(view.receipt_no, items, items.some((i) => i.wht), rate, whtAmt, net); flash("บันทึกหัก ณ ที่จ่ายแล้ว ✓"); setView(null); await load(); }}
+        />
+      )}
       {toast && <Toast t={toast} />}
     </div>
   );

@@ -556,9 +556,15 @@ export async function saveInvoice(inv) {
     customer_id: inv.customer_id || null, site_id: inv.site_id || null,
     issue_date: inv.issue_date || null, due_date: inv.due_date || null,
     installment: Number(inv.installment) || 1, pct: Number(inv.pct) || 0,
-    base: Number(inv.base) || 0, vat_amt: Number(inv.vat_amt) || 0, total: Number(inv.total) || 0, wht_amt: Number(inv.wht_amt) || 0,
+    base: Number(inv.base) || 0, vat_amt: Number(inv.vat_amt) || 0, total: Number(inv.total) || 0,
+    wht_amt: Number(inv.wht_amt) || 0, wht_rate: Number(inv.wht_rate) || 3, items: inv.items || [],
     note: inv.note?.trim() || null, status: inv.status || "unpaid", created_by: user?.id || null,
   }, { onConflict: "invoice_no" });
+  if (error) throw error;
+}
+// update per-line WHT selection (items) + rate + recomputed amount on an invoice
+export async function setInvoiceWht(invoice_no, items, wht_rate, wht_amt) {
+  const { error } = await supabase.from("invoices").update({ items: items || [], wht_rate: Number(wht_rate) || 3, wht_amt: Number(wht_amt) || 0 }).eq("invoice_no", invoice_no);
   if (error) throw error;
 }
 export async function setInvoiceStatus(invoice_no, status) {
@@ -602,11 +608,16 @@ export async function saveReceipt(r) {
     receipt_no: r.receipt_no, invoice_no: r.invoice_no || null, quote_no: r.quote_no || null, boq_no: r.boq_no || null, job_no: r.job_no || null,
     customer_id: r.customer_id || null, site_id: r.site_id || null, issue_date: r.issue_date || null, payment_method: r.payment_method || null,
     base: Number(r.base) || 0, vat_amt: Number(r.vat_amt) || 0, total: Number(r.total) || 0, wht_amt: Number(r.wht_amt) || 0, net: Number(r.net) || 0,
-    wht: !!r.wht, wht_rate: Number(r.wht_rate) || 3,
+    wht: !!r.wht, wht_rate: Number(r.wht_rate) || 3, items: r.items || [],
     status, note: r.note?.trim() || null, created_by: user?.id || null,
   }, { onConflict: "receipt_no" });
   if (error) throw error;
   if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no);
+}
+// update per-line WHT selection + rate + recomputed amounts on a receipt
+export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, net) {
+  const { error } = await supabase.from("receipts").update({ items: items || [], wht: !!wht, wht_rate: Number(wht_rate) || 3, wht_amt: Number(wht_amt) || 0, net: Number(net) || 0 }).eq("receipt_no", receipt_no);
+  if (error) throw error;
 }
 // toggle a receipt's paid status (and sync the linked invoice)
 export async function setReceiptStatus(receipt_no, status, invoice_no) {

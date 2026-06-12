@@ -1,8 +1,13 @@
 import React from "react";
-import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, getCompanies, billedByQuote } from "../lib/api";
+import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote } from "../lib/api";
 import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
+import LineWhtModal from "./LineWhtModal";
+
+// snapshot a quote's line items (full amounts) with default หัก ณ ที่จ่าย flag (services only)
+const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
+const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 
 const fmtBaht = fmtBaht2; // invoices show 2 decimals to avoid rounding leftovers
 const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, paid: { th: "ชำระแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
@@ -18,6 +23,7 @@ export default function Invoices({ role }) {
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
   const [printI, setPrintI] = React.useState(null);
+  const [view, setView] = React.useState(null);
   const [search, setSearch] = React.useState("");
 
   async function load() {
@@ -55,11 +61,14 @@ export default function Invoices({ role }) {
     if (newTotal > remaining + 0.01) return flash("ยอดงวดเกินยอดคงเหลือ", true);
     const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;
     const installment = list.filter((x) => x.quote_no === selQ.quote_no && x.status !== "cancelled").length + 1;
+    const base = round2((selQ.afterDisc || 0) * f);
+    const items = snapshotItems(selQ);
+    const wht_rate = 3;
     const inv = {
       invoice_no: ed.invoice_no, quote_no: selQ.quote_no, boq_no: selQ.boq_no || null,
       customer_id: selQ.customer_id || null, site_id: selQ.site_id || null,
       issue_date: ed.issue_date || null, due_date: ed.due_date || null, installment, pct: round2(f * 100),
-      base: round2((selQ.afterDisc || 0) * f), vat_amt: round2((selQ.vatAmt || 0) * f), total: newTotal, wht_amt: round2((selQ.whtAmt || 0) * f),
+      base, vat_amt: round2((selQ.vatAmt || 0) * f), total: newTotal, wht_rate, items, wht_amt: lineWhtAmt(items, base, wht_rate),
       note: ed.note, status: "unpaid",
     };
     try { await saveInvoice(inv); flash(`สร้างใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load(); }
@@ -149,9 +158,9 @@ export default function Invoices({ role }) {
           const grand = q?.grand || 0; const bl = billed[x.quote_no] || 0;
           return (
             <div className={"card job-card" + (x.status !== "unpaid" ? " closed" : "")} key={x.invoice_no}>
-              <div className="job-card-head" style={{ cursor: "default" }}>
+              <div className="job-card-head clickable-card" onClick={() => setView(x)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setView(x)}>
                 <div className="job-card-id"><span className="job-no">{x.invoice_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
-                <div className="job-card-meta">งวดที่ {x.installment} ({Math.round(x.pct)}%) · {x.customerName || "-"} · อ้างอิง {x.quote_no || "-"}{x.boq_no ? ` · BOQ ${x.boq_no}` : ""}</div>
+                <div className="job-card-meta">งวดที่ {x.installment} ({Math.round(x.pct)}%) · {x.customerName || "-"} · อ้างอิง {x.quote_no || "-"}{x.boq_no ? ` · BOQ ${x.boq_no}` : ""} · กดดูรายการ ›</div>
                 <div className="job-card-cost"><span>ยอดงวดนี้</span><b>{fmtBaht(x.total)}</b></div>
               </div>
               {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
@@ -189,6 +198,17 @@ export default function Invoices({ role }) {
           </div>
         </DocSlip>
       ); })()}
+
+      {view && (
+        <LineWhtModal
+          title={`ใบแจ้งหนี้ ${view.invoice_no}`}
+          subtitle={`งวด ${view.installment} (${Math.round(view.pct)}%) · ${view.customerName || "-"}`}
+          items={view.items?.length ? view.items : snapshotItems(quoteByNo[view.quote_no])}
+          rate={view.wht_rate || 3} docBase={view.base} docTotal={view.total} canEdit={canEdit}
+          onClose={() => setView(null)}
+          onSave={async ({ items, rate, whtAmt }) => { await setInvoiceWht(view.invoice_no, items, rate, whtAmt); flash("บันทึกหัก ณ ที่จ่ายแล้ว ✓"); setView(null); await load(); }}
+        />
+      )}
       {toast && <Toast t={toast} />}
     </div>
   );
