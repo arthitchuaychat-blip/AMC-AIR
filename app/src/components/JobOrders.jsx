@@ -1,5 +1,6 @@
 import React from "react";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto } from "../lib/api";
+import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 
@@ -98,6 +99,31 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(jo) { if (!confirm(`ลบใบงาน ${jo.job_no}?`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+
+  // copy an order-confirmation message to send to the customer (Line OA)
+  function copyConfirm(jo) {
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" }) : "-";
+    const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
+    const lines = [
+      `วันที่สั่งซื้อ : ${fmtDate(jo.created_at)}`,
+      `วันที่นัดหมายบริการ : ${dt ? fmtDate(jo.scheduled_at) : "-"}`,
+      `เวลาให้บริการ : ${dt ? dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น." : "-"}`,
+      `เลขที่ใบเสนอราคา : ${jo.quote_no || "-"}`,
+      "--",
+      `ชื่อลูกค้า : ${jo.customerName || "-"}`,
+      `ชื่อผู้ติดต่อ : ${jo.contact_name || "-"}`,
+      `เบอร์โทรผู้ติดต่อ : ${jo.contact_phone || "-"}`,
+      `ที่อยู่ในการให้บริการ : ${jo.address || "-"}`,
+      `หมุดโลเคชั่น : ${jo.map_url || "-"}`,
+      "--",
+      "รายการสินค้าและบริการ :",
+      jo.details || "-",
+      `ยอดชำระเงิน : ${fmtBaht(jo.quoteGrand || 0)}`,
+    ];
+    const text = lines.join("\n");
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => flash("คัดลอกคอนเฟิมออเดอร์แล้ว ✓")).catch(() => window.prompt("คัดลอกข้อความนี้:", text));
+    else window.prompt("คัดลอกข้อความนี้:", text);
+  }
 
   // ---------- EDITOR ----------
   if (ed) {
@@ -222,6 +248,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 {(jo.quote_no || jo.boq_no) && <div className="jo-info-row"><span className="jo-ic">🧾</span><span className="jo-dim">อ้างอิง: {jo.quote_no ? `ใบเสนอ ${jo.quote_no}` : ""}{jo.quote_no && jo.boq_no ? " · " : ""}{jo.boq_no ? `BOQ ${jo.boq_no}` : ""}</span></div>}
               </div>
               <div className="job-lines"><div className="job-actions">
+                <button className="btn-ghost sm" onClick={() => copyConfirm(jo)}><UIcon name="clipboard" size={14} /> คัดลอกคอนเฟิม</button>
                 <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>
                   <UIcon name="clipboard" size={14} /> {openTl === jo.job_no ? "ซ่อนความเคลื่อนไหว" : "ความเคลื่อนไหว"}
                 </button>
