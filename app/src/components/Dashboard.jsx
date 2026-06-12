@@ -5,6 +5,7 @@ import { MaterialThumb, UIcon } from "../icons";
 import DashDrawer from "./DashDrawer";
 import SalesReport from "./SalesReport";
 import BillingSummary from "./BillingSummary";
+import TrendCharts from "./TrendCharts";
 
 const PERIODS = [
   { id: "day", label: "วันนี้" },
@@ -109,6 +110,8 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
       <SalesReport onOpenQuote={onOpenQuote} onOpenJob={onOpenJob} />
 
       <BillingSummary onGo={onGo} />
+
+      <TrendCharts />
 
       <div className="sec-head" style={{ margin: "22px 0 10px" }}><div><div className="sec-title">คลังวัสดุ & การเบิกใช้</div><div className="sec-sub">Inventory & usage · {periodLabel}</div></div></div>
 

@@ -831,6 +831,12 @@ select.inp{cursor:pointer}
 .sales-report{margin-bottom:6px}
 .sr-tables{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:860px){.sr-tables{grid-template-columns:1fr}}
+/* trend charts */
+.tc-wrap{margin-top:10px}
+.tc-svg{width:100%;height:auto;display:block}
+.tc-legend{display:flex;gap:16px;justify-content:center;margin-top:6px;font-size:12px;color:var(--ink-2)}
+.tc-legend span{display:inline-flex;align-items:center;gap:6px}
+.tc-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
 .pf-row.pf-click{cursor:pointer;transition:background .14s}
 .pf-row.pf-click:hover{background:var(--surface-2)}
 .modal-x{border:none;background:transparent;cursor:pointer;color:var(--ink-3);padding:4px;border-radius:8px;display:flex}
