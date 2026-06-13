@@ -7,6 +7,7 @@ import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtBaht, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
+import ItemBrowser from "./ItemBrowser";
 
 const STATUS = {
   draft: { th: "ร่าง", cls: "b-grey" }, sent: { th: "ส่งแล้ว", cls: "b-blue" },
@@ -114,7 +115,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       <div className="adm">
         <div className="adm-head"><div><h1 className="page-title">ใบเสนอราคา <span className="page-title-en">Quotation</span></h1>
           <p className="page-sub">ดึงจาก BOQ ได้ (ไม่รวมของแถม) · ส่วนลด · VAT · ราคาขาย</p></div></div>
-        <div className="card" style={{ maxWidth: 860 }}>
+        <div className="doc-edit-wrap">
+        <div className="card" style={{ flex: 1, maxWidth: 860 }}>
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบเสนอราคา</span><input className="inp" value={ed.quote_no} onChange={(e) => setQ("quote_no", e.target.value)} /></label>
             <label className="fld"><span>ชื่องาน</span><input className="inp" value={ed.title} onChange={(e) => setQ("title", e.target.value)} placeholder="เช่น ติดตั้งแอร์ออฟฟิศ" /></label>
@@ -230,6 +232,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
             <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึกใบเสนอราคา</button>
           </div>
+        </div>
+        <ItemBrowser mats={mats} onAdd={addLine} />
         </div>
         {toast && <Toast t={toast} />}
       </div>

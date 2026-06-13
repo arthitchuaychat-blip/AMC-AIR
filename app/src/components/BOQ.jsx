@@ -3,6 +3,7 @@ import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterialsLite, getComp
 import { fmtBaht, fmtNum, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
+import ItemBrowser from "./ItemBrowser";
 import DocChips from "./DocChips";
 import GrowArea from "./GrowArea";
 import DocSlip from "./DocSlip";
@@ -83,6 +84,12 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const poolFor = (sec) => poolByKind[sec.kinds[0]] || [];
 
   const addItem = (sec, it) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: [...e.items[sec], it] } }));
+  // add from the right-side browser → route to the section matching the item's kind (material defaults to "คิดเงิน")
+  const browserAdd = (m) => {
+    const sec = m.kind === "ac" ? "ac" : m.kind === "service" ? "service" : "charged";
+    addItem(sec, { code: m.code, name: m.th, unit: m.unit, qty: 1, unit_cost: m.cost, description: m.description || "" });
+    flash(`+ ${m.th}`);
+  };
   const setItem = (sec, i, k, v) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: e.items[sec].map((x, j) => j === i ? { ...x, [k]: v } : x) } }));
   const delItem = (sec, i) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: e.items[sec].filter((_, j) => j !== i) } }));
 
@@ -105,7 +112,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       <div className="adm">
         <div className="adm-head"><div><h1 className="page-title">BOQ <span className="page-title-en">Bill of Quantities (ต้นทุน)</span></h1>
           <p className="page-sub">ประมาณการต้นทุน 4 ส่วน · แก้ไขจำนวน/ต้นทุนได้</p></div></div>
-        <div className="card" style={{ maxWidth: 820 }}>
+        <div className="doc-edit-wrap">
+        <div className="card" style={{ flex: 1, maxWidth: 820 }}>
           <div className="fld-row">
             <label className="fld"><span>เลขที่ BOQ</span><input className="inp" value={ed.boq_no} onChange={(e) => setEd({ ...ed, boq_no: e.target.value })} /></label>
             <label className="fld"><span>ชื่องาน</span><input className="inp" value={ed.title} onChange={(e) => setEd({ ...ed, title: e.target.value })} placeholder="เช่น ติดตั้งแอร์ออฟฟิศ" /></label>
@@ -148,6 +156,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
             <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึก BOQ</button>
           </div>
+        </div>
+        <ItemBrowser mats={mats} onAdd={browserAdd} />
         </div>
         {toast && <Toast t={toast} />}
       </div>
