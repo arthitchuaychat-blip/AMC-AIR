@@ -21,7 +21,7 @@ function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
   const pool = mats.filter((m) => sec.kinds.includes(m.kind));
   const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0);
   return (
-    <div className="boq-sec">
+    <div className={"boq-sec sec-" + sec.id}>
       <div className="boq-sec-head"><span>{sec.label}</span><b>{fmtBaht(subtotal)}</b></div>
       <ItemPicker items={pool} placeholder={`ค้นหา${sec.label}…`}
         onPick={(m) => onAdd({ code: m.code, name: m.th, unit: m.unit, qty: 1, unit_cost: m.cost, description: m.description || "" })} />

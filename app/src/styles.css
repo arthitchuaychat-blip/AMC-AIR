@@ -723,6 +723,17 @@ select.inp{cursor:pointer}
 .boq-sec{margin:14px 0;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:13px}
 .boq-sec-head{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;font-weight:700;margin-bottom:10px}
 .boq-sec-head b{color:var(--ink)}
+/* per-section background tint (BOQ) */
+.boq-sec.sec-ac{background:#eef5ff;border-color:#cfe0f5}
+.boq-sec.sec-free{background:#eefbf3;border-color:#c7ebd3}
+.boq-sec.sec-charged{background:#ecf8fb;border-color:#c5e8ef}
+.boq-sec.sec-service{background:#f6f0ff;border-color:#e0d2f5}
+.boq-sec.sec-ac .boq-sec-head{color:#1f74e0}
+.boq-sec.sec-free .boq-sec-head{color:#16a34a}
+.boq-sec.sec-charged .boq-sec-head{color:#0891b2}
+.boq-sec.sec-service .boq-sec-head{color:#7c3aed}
+/* on a tinted section the line cards read cleaner as solid white */
+.boq-sec .line-item{background:#fff}
 .boq-line{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line-2)}
 .boq-line .line-info{flex:1;min-width:0}
 .boq-in{flex:none;width:96px;padding:0 9px}
