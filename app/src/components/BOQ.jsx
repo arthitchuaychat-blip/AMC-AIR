@@ -4,6 +4,7 @@ import { fmtBaht, fmtNum, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 import DocChips from "./DocChips";
+import GrowArea from "./GrowArea";
 import DocSlip from "./DocSlip";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -35,7 +36,7 @@ function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
             <span className="boq-amt">{fmtBaht(Number(it.qty) * Number(it.unit_cost))}</span>
             <button className="line-x" onClick={() => onDel(i)}><UIcon name="x" size={14} /></button>
           </div>
-          <input className="inp line-desc" placeholder="รายละเอียดสินค้า (แสดงใต้ชื่อในเอกสาร)" value={it.description || ""} onChange={(e) => onSet(i, "description", e.target.value)} />
+          <GrowArea className="inp line-desc" placeholder="รายละเอียดสินค้า (Enter ขึ้นบรรทัดใหม่ได้ · แสดงใต้ชื่อในเอกสาร)" value={it.description || ""} onChange={(e) => onSet(i, "description", e.target.value)} />
         </div>
       ))}
       {items.length === 0 && <div className="empty sm">ยังไม่มีรายการ</div>}

@@ -2,6 +2,7 @@ import React from "react";
 import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs, getCompanies, listDocLinks } from "../lib/api";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
+import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtBaht, custCode } from "../lib/format";
 import { UIcon } from "../icons";
@@ -162,7 +163,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                     <span className="boq-amt">{fmtBaht(it.qty * it.unit_price)}</span>
                     <button className="line-x" onClick={() => delLine(i)}><UIcon name="x" size={14} /></button>
                   </div>
-                  <input className="inp line-desc" placeholder="รายละเอียดสินค้า (แสดงใต้ชื่อในเอกสาร — แก้เฉพาะใบนี้)" value={it.description || ""} onChange={(e) => setLine(i, "description", e.target.value)} />
+                  <GrowArea className="inp line-desc" placeholder="รายละเอียดสินค้า (Enter ขึ้นบรรทัดใหม่ได้ · แสดงใต้ชื่อในเอกสาร — แก้เฉพาะใบนี้)" value={it.description || ""} onChange={(e) => setLine(i, "description", e.target.value)} />
                 </div>
               ))}
             </div>
