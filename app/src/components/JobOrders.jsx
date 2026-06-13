@@ -42,7 +42,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   // open focused on a specific job order (from the dashboard report link)
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setQ(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
 
-  // open editor prefilled from an approved quotation
+  // open editor prefilled from an approved quotation. Use the quote's own resolved
+  // contact/site fields (always present from listQuotations) so it doesn't depend on
+  // the customers list having finished loading.
   React.useEffect(() => {
     if (!prefill) return;
     const q = prefill;
@@ -50,10 +52,13 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     const site = cust?.sites?.find((s) => String(s.id) === String(q.site_id));
     const contact = cust?.contacts?.[0];
     const details = (q.items || []).map((it, i) => `${i + 1}. ${it.name || it.item_code} × ${it.qty} ${it.unit || ""}`).join("\n");
+    const address = q.siteAddress || site?.address || q.customerAddr || cust?.address || "";
     setEd({
       ...blankEd(), quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "",
-      title: q.title || "", contact_name: contact?.name || "", contact_phone: contact?.phone || "",
-      address: site?.address || cust?.address || "", map_url: site?.map_url || mapLink(site?.address || cust?.address), details,
+      title: q.title || "",
+      contact_name: q.contactName || contact?.name || "",
+      contact_phone: q.contactPhone || contact?.phone || "",
+      address, map_url: q.map_url || site?.map_url || mapLink(address), details,
     });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, custs]);
