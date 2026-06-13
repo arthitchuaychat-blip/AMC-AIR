@@ -15,7 +15,7 @@ const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, pai
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `INV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt }) {
+export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenQuote, onOpenBoq }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -172,7 +172,13 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             <div className={"card job-card" + (x.status !== "unpaid" ? " closed" : "")} key={x.invoice_no}>
               <div className="job-card-head clickable-card" onClick={() => setView(x)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setView(x)}>
                 <div className="job-card-id"><span className="job-no">{x.invoice_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
-                <div className="job-card-meta">งวดที่ {x.installment} ({Math.round(x.pct)}%) · {x.customerName || "-"} · อ้างอิง {x.quote_no || "-"}{x.boq_no ? ` · BOQ ${x.boq_no}` : ""} · กดดูรายการ ›</div>
+                <div className="job-card-meta inv-meta">
+                  <span className="inv-period">งวดที่ {x.installment} · {Math.round(x.pct)}%</span>
+                  <span className="inv-cust">{x.customerName || "-"}</span>
+                  {x.quote_no && <button className="ref-link" title="เปิดใบเสนอราคา" onClick={(e) => { e.stopPropagation(); onOpenQuote && onOpenQuote(x.quote_no); }}><UIcon name="clipboard" size={11} /> {x.quote_no}</button>}
+                  {x.boq_no && <button className="ref-link" title="เปิด BOQ" onClick={(e) => { e.stopPropagation(); onOpenBoq && onOpenBoq(x.boq_no); }}>BOQ {x.boq_no}</button>}
+                  <span className="inv-hint">ดูรายการ ›</span>
+                </div>
                 <div className="job-card-cost"><span>ยอดงวดนี้</span><b>{fmtBaht(x.total)}</b></div>
               </div>
               {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}

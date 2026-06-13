@@ -14,7 +14,7 @@ const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed }) {
+export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenQuote, onOpenBoq, onOpenJob }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
@@ -162,7 +162,14 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed }) {
           <div className={"card job-card" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
             <div className="job-card-head clickable-card" onClick={() => setView(x)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setView(x)}>
               <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
-              <div className="job-card-meta">{x.customerName || "-"} · อ้างอิง {x.invoice_no || "-"}{x.quote_no ? ` · ${x.quote_no}` : ""}{x.boq_no ? ` · BOQ ${x.boq_no}` : ""}{x.job_no ? ` · งาน ${x.job_no}` : ""} · กดดูรายการ ›</div>
+              <div className="job-card-meta inv-meta">
+                <span className="inv-cust">{x.customerName || "-"}</span>
+                {x.invoice_no && <span className="ref-flat">{x.invoice_no}</span>}
+                {x.quote_no && <button className="ref-link" title="เปิดใบเสนอราคา" onClick={(e) => { e.stopPropagation(); onOpenQuote && onOpenQuote(x.quote_no); }}><UIcon name="clipboard" size={11} /> {x.quote_no}</button>}
+                {x.boq_no && <button className="ref-link" title="เปิด BOQ" onClick={(e) => { e.stopPropagation(); onOpenBoq && onOpenBoq(x.boq_no); }}>BOQ {x.boq_no}</button>}
+                {x.job_no && <button className="ref-link" title="เปิดใบงาน" onClick={(e) => { e.stopPropagation(); onOpenJob && onOpenJob(x.job_no); }}>งาน {x.job_no}</button>}
+                <span className="inv-hint">ดูรายการ ›</span>
+              </div>
               <div className="job-card-cost"><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
             </div>
             <div className="job-lines"><div className="job-actions">

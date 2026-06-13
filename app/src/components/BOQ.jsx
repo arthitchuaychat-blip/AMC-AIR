@@ -42,7 +42,7 @@ function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
   );
 }
 
-export default function BOQ({ role, onCreateQuote }) {
+export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -61,6 +61,7 @@ export default function BOQ({ role, onCreateQuote }) {
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  React.useEffect(() => { if (focus) { setEd(null); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printB) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintB(null); }, 120); return () => clearTimeout(t); }, [printB]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
