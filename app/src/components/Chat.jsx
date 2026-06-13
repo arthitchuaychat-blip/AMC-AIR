@@ -1,5 +1,6 @@
 import React from "react";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerJobs, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply } from "../lib/api";
+import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel } from "../lib/schedule";
@@ -10,9 +11,8 @@ import CustomerFormModal from "./CustomerFormModal";
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "";
-const JOB_STATUS = { pending: ["รอจ่ายงาน", "b-grey"], scheduled: ["นัดแล้ว", "b-blue"], in_progress: ["กำลังทำ", "b-amber"], done: ["เสร็จ", "b-green"], cancelled: ["ยกเลิก", "b-red"] };
 
-export default function Chat({ role, onOpenJob, onGoCustomers }) {
+export default function Chat({ role, onOpenDoc, onGoCustomers }) {
   const canSend = ["admin", "sales", "exec", "finance"].includes(role);
   const [contacts, setContacts] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -28,8 +28,9 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
   const [newQr, setNewQr] = React.useState("");
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
   const [jobPicker, setJobPicker] = React.useState(null);
-  const [infoJobs, setInfoJobs] = React.useState([]);
-  const [loadingInfoJobs, setLoadingInfoJobs] = React.useState(false);
+  const [infoDocs, setInfoDocs] = React.useState([]);
+  const [loadingInfoDocs, setLoadingInfoDocs] = React.useState(false);
+  const [infoDocF, setInfoDocF] = React.useState("all");
   const [showInfo, setShowInfo] = React.useState(false); // mobile info-panel toggle
   const [custForm, setCustForm] = React.useState(null);  // { initial, link } → opens the customer form modal
   const selRef = React.useRef(null);
@@ -56,12 +57,12 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
     return () => { supabase.removeChannel(ch); };
   }, []);
 
-  // job history for the linked customer (right info panel)
+  // document + job history for the linked customer (right info panel)
   const linkedCustId = (contacts.find((c) => c.line_user_id === sel) || {}).customer_id || null;
   React.useEffect(() => {
-    if (!linkedCustId) { setInfoJobs([]); return; }
-    setLoadingInfoJobs(true);
-    listCustomerJobs(linkedCustId).then(setInfoJobs).catch(() => setInfoJobs([])).finally(() => setLoadingInfoJobs(false));
+    if (!linkedCustId) { setInfoDocs([]); return; }
+    setInfoDocF("all"); setLoadingInfoDocs(true);
+    listCustomerDocs(linkedCustId).then(setInfoDocs).catch(() => setInfoDocs([])).finally(() => setLoadingInfoDocs(false));
   }, [linkedCustId]);
 
   async function openContact(c) {
@@ -86,7 +87,7 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
       if (wasLink && id) await linkLineContact(sel, id);
       setCusts(await listCustomers());
       await loadContacts();
-      if (linkedCustId) listCustomerJobs(linkedCustId).then(setInfoJobs).catch(() => {});
+      if (linkedCustId) listCustomerDocs(linkedCustId).then(setInfoDocs).catch(() => {});
       flash(wasLink ? "เพิ่มลูกค้า + เชื่อมแล้ว ✓" : "บันทึกข้อมูลลูกค้าแล้ว ✓");
     } catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
   }
@@ -222,7 +223,8 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
         {selContact && (() => {
           const cust = custs.find((c) => String(c.id) === String(selContact.customer_id));
           const phone = cust?.contacts?.[0]?.phone;
-          const done = infoJobs.filter((j) => j.status === "done").length;
+          const shownDocs = infoDocs.filter((e) => infoDocF === "all" || e.type === infoDocF);
+          const dcount = (t) => infoDocs.filter((e) => e.type === t).length;
           return (
             <div className={"chat-info" + (showInfo ? " open" : "")}>
               <div className="ci-head"><span>ข้อมูลลูกค้า</span>
@@ -241,19 +243,27 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
                     <button className="btn-ghost sm" onClick={() => onGoCustomers && onGoCustomers(cust.name)}>เปิดหน้าลูกค้า</button>
                     <button className="btn-ghost sm" onClick={() => onLink(null)}>ยกเลิกการเชื่อม</button>
                   </div>}
-                  <div className="ci-sec">ประวัติงาน ({infoJobs.length}{done ? ` · เสร็จ ${done}` : ""})</div>
-                  {loadingInfoJobs && <div className="cd-empty">กำลังโหลด…</div>}
-                  {!loadingInfoJobs && infoJobs.length === 0 && <div className="cd-empty">— ยังไม่เคยมีงาน —</div>}
+                  <div className="ci-sec">ประวัติเอกสาร &amp; งาน ({infoDocs.length})</div>
+                  <div className="cd-docfilter">
+                    {DOC_FILTERS.map(([v, l]) => (
+                      <button key={v} className={"cat-chip" + (infoDocF === v ? " on" : "")} onClick={() => setInfoDocF(v)}
+                        style={infoDocF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}{v !== "all" && dcount(v) ? ` (${dcount(v)})` : ""}</button>
+                    ))}
+                  </div>
+                  {loadingInfoDocs && <div className="cd-empty">กำลังโหลด…</div>}
+                  {!loadingInfoDocs && shownDocs.length === 0 && <div className="cd-empty">— ไม่มีรายการ —</div>}
                   <div className="cd-timeline">
-                    {infoJobs.map((jo) => {
-                      const st = JOB_STATUS[jo.status] || JOB_STATUS.pending;
+                    {shownDocs.map((e) => {
+                      const st = stOf(e);
+                      const dateTxt = e.type === "job" && e.scheduled_at ? scheduleLabel(e)
+                        : (e.date ? new Date(e.date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) : "—");
                       return (
-                        <button className="cd-job" key={jo.job_no} onClick={() => onOpenJob && onOpenJob(jo.job_no)}>
+                        <button className="cd-job" key={e.type + e.no} onClick={() => onOpenDoc && onOpenDoc(e.type, e.no)}>
                           <span className={"cd-job-dot " + st[1]} />
                           <div className="cd-job-body">
-                            <div className="cd-job-top"><b>{jo.title || "งานติดตั้ง/บริการ"}</b><span className={"job-badge " + st[1]}>{st[0]}</span></div>
-                            <div className="cd-job-meta">🗓 {jo.scheduled_at ? scheduleLabel(jo) : "ยังไม่นัด"} · 👷 {jo.teamName || "ยังไม่มอบทีม"}</div>
-                            <div className="cd-job-no">{jo.job_no} · ดูรายละเอียด ›</div>
+                            <div className="cd-job-top"><b><span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span>{e.title || ""}</b><span className={"job-badge " + st[1]}>{st[0]}</span></div>
+                            <div className="cd-job-meta">🗓 {dateTxt}{e.teamName ? ` · 👷 ${e.teamName}` : ""}{e.amount != null ? ` · ${fmtBaht(e.amount)}` : ""}</div>
+                            <div className="cd-job-no">{e.no} · ดูรายละเอียด ›</div>
                           </div>
                         </button>
                       );
