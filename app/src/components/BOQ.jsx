@@ -85,8 +85,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
 
   const addItem = (sec, it) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: [...e.items[sec], it] } }));
   // add from the right-side browser → route to the section matching the item's kind (material defaults to "คิดเงิน")
-  const browserAdd = (m) => {
-    const sec = m.kind === "ac" ? "ac" : m.kind === "service" ? "service" : "charged";
+  const browserAdd = (m, target) => {
+    const sec = m.kind === "ac" ? "ac" : m.kind === "service" ? "service" : (target || "charged");
     addItem(sec, { code: m.code, name: m.th, unit: m.unit, qty: 1, unit_cost: m.cost, description: m.description || "" });
     flash(`+ ${m.th}`);
   };
@@ -157,7 +157,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
             <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึก BOQ</button>
           </div>
         </div>
-        <ItemBrowser mats={mats} onAdd={browserAdd} />
+        <ItemBrowser mats={mats} onAdd={browserAdd} matTargets={[{ id: "charged", label: "คิดเงิน" }, { id: "free", label: "แถม" }]} />
         </div>
         {toast && <Toast t={toast} />}
       </div>

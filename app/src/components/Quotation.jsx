@@ -1,5 +1,5 @@
 import React from "react";
-import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems } from "../lib/api";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
 import GrowArea from "./GrowArea";
@@ -99,7 +99,21 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   async function save() {
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
     if (ed._edit && !window.confirm(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
-    try { await saveQuotation(ed, ed.items); flash("บันทึกใบเสนอราคาแล้ว"); setEd(null); await load(); }
+    try {
+      await saveQuotation(ed, ed.items);
+      // sync new items back into the linked BOQ (add only — never removes BOQ items)
+      let synced = 0;
+      if (ed.boq_no) {
+        const rows = (ed.items || []).map((it) => ({
+          section: it.kind === "ac" ? "ac" : it.kind === "service" ? "service" : "charged",
+          item_code: it.code || null, name: it.name, unit: it.unit, qty: it.qty,
+          unit_cost: matMap[it.code]?.cost ?? 0, description: it.description || "",
+        }));
+        try { synced = await syncBoqItems(ed.boq_no, rows); } catch { /* non-fatal */ }
+      }
+      flash(synced > 0 ? `บันทึกแล้ว · ซิงค์ ${synced} รายการเข้า ${ed.boq_no}` : "บันทึกใบเสนอราคาแล้ว");
+      setEd(null); await load();
+    }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(q) { if (!confirm(`ลบ ${q.quote_no}?`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }

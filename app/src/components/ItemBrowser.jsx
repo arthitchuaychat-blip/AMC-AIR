@@ -6,13 +6,14 @@ import { UIcon } from "../icons";
 // drill down with sub-filters, click an item to add it to the document.
 const TABS = [{ v: "ac", l: "แอร์" }, { v: "material", l: "วัสดุ" }, { v: "service", l: "บริการ" }];
 
-export default function ItemBrowser({ mats, onAdd }) {
+export default function ItemBrowser({ mats, onAdd, matTargets }) {
   const [kind, setKind] = React.useState("ac");
   const [q, setQ] = React.useState("");
   const [brand, setBrand] = React.useState("all");
   const [acType, setAcType] = React.useState("all");
   const [btu, setBtu] = React.useState("all");
   const [cat, setCat] = React.useState("all");
+  const [matTarget, setMatTarget] = React.useState(matTargets?.[0]?.id);
 
   const brands = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "ac" && m.brand).map((m) => m.brand))].sort((a, b) => a.localeCompare(b)), [mats]);
   const acTypes = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "ac" && m.ac_type).map((m) => m.ac_type))].sort((a, b) => a.localeCompare(b, "th")), [mats]);
@@ -50,11 +51,16 @@ export default function ItemBrowser({ mats, onAdd }) {
           <select className="inp" value={cat} onChange={(e) => setCat(e.target.value)}><option value="all">ทุกหมวด</option>{cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select>
         </div>
       )}
+      {kind === "material" && matTargets && (
+        <div className="ib-target"><span>เพิ่มเข้า:</span>
+          {matTargets.map((t) => <button key={t.id} className={"ib-target-btn" + (matTarget === t.id ? " on" : "")} onClick={() => setMatTarget(t.id)}>{t.label}</button>)}
+        </div>
+      )}
       <div className="ib-count">{list.length} รายการ</div>
       <div className="ib-list">
         {shown.length === 0 && <div className="ib-empty">ไม่พบรายการ</div>}
         {shown.map((m) => (
-          <button key={m.code} className="ib-item" onClick={() => onAdd(m)} title="เพิ่มเข้าเอกสาร">
+          <button key={m.code} className="ib-item" onClick={() => onAdd(m, m.kind === "material" ? matTarget : undefined)} title="เพิ่มเข้าเอกสาร">
             <div className="ib-item-main">
               <div className="ib-item-name">{m.th}</div>
               <div className="ib-item-sub">{m.code}{m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? fmtNum(m.btu) + " BTU" : null].filter(Boolean).map((x) => " · " + x).join("") : (m.catName ? " · " + m.catName : "")}</div>

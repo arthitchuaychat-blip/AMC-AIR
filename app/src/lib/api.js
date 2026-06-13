@@ -468,6 +468,22 @@ export async function saveBoq(boq, items) {
   }
 }
 
+// add items from a quotation into its linked BOQ (only ones not already there) — keeps the BOQ in sync as the quote grows
+export async function syncBoqItems(boq_no, items) {
+  if (!boq_no || !items?.length) return 0;
+  const { data: existing, error: e0 } = await supabase.from("boq_items").select("item_code,name").eq("boq_no", boq_no);
+  if (e0) throw e0;
+  const keys = new Set((existing || []).map((r) => r.item_code || r.name));
+  const rows = items.filter((it) => !keys.has(it.item_code || it.name));
+  if (!rows.length) return 0;
+  const { error } = await supabase.from("boq_items").insert(rows.map((it) => ({
+    boq_no, section: it.section, item_code: it.item_code || null, name: it.name || null,
+    description: it.description?.trim() || null, unit: it.unit || null, qty: Number(it.qty) || 0, unit_cost: Number(it.unit_cost) || 0,
+  })));
+  if (error) throw error;
+  return rows.length;
+}
+
 export async function deleteBoq(boq_no) {
   const { error } = await supabase.from("boqs").delete().eq("boq_no", boq_no);
   if (error) throw error;
