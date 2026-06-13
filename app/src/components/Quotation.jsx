@@ -1,6 +1,7 @@
 import React from "react";
-import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs, getCompanies } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs, getCompanies, listDocLinks } from "../lib/api";
 import DocSlip from "./DocSlip";
+import DocChips from "./DocChips";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtBaht, custCode } from "../lib/format";
 import { UIcon } from "../icons";
@@ -14,7 +15,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob }) {
+export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -27,12 +28,13 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const [statusF, setStatusF] = React.useState("all");
   const [search, setSearch] = React.useState("");
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
+  const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
   async function load() {
     setLoading(true);
-    try { const [q, c, m, b, co] = await Promise.all([listQuotations(), listCustomers(), listMaterials(), listBoqs(), getCompanies()]); setList(q); setCusts(c); setMats(m); setBoqs(b); setCompanies(co || { vat: {}, novat: {} }); }
+    try { const [q, c, m, b, co, dl] = await Promise.all([listQuotations(), listCustomers(), listMaterials(), listBoqs(), getCompanies(), listDocLinks()]); setList(q); setCusts(c); setMats(m); setBoqs(b); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -256,7 +258,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 <div className="job-card-meta inv-meta">
                   <span className="inv-cust">{q.title || "ใบเสนอราคา"}</span>
                   <span className="inv-hint">{q.items.length} รายการ</span>
-                  {q.boq_no && <button className="ref-link" title="เปิด BOQ" onClick={() => onOpenBoq && onOpenBoq(q.boq_no)}>BOQ {q.boq_no}</button>}
                 </div>
                 <div className="job-card-cost"><span>ยอดสุทธิ</span><b>{fmtBaht(q.grand)}</b></div>
               </div>
@@ -265,6 +266,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 {(q.contactName || q.contactPhone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{q.contactName || "ผู้ติดต่อ"}{q.contactPhone && <a href={`tel:${q.contactPhone}`} className="jo-tel">📞 {q.contactPhone}</a>}</div>}
                 {q.siteAddress && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{q.siteAddress}</span>{q.map_url && <a href={q.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
+              {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "quote", no: q.quote_no }} onOpen={onOpenDoc} />; })()}
               <div className="job-lines"><div className="job-actions">
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
@@ -272,7 +274,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 {q.status === "approved" && onCreateInvoice && (q.hasInvoice
                   ? <span className="job-badge b-green" title="วางบิลงวดถัดไปได้ที่เมนูใบแจ้งหนี้">✓ ออกใบแจ้งหนี้แล้ว · วางบิล {Math.round(q.billedPct)}%</span>
                   : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>))}
-                {q.status === "approved" && q.hasJob && <button className="job-badge b-green badge-link" title="เปิดใบงาน" onClick={() => onOpenJob && onOpenJob(q.jobNo)}>✓ ใบงาน · {q.jobNo} ›</button>}
+                {q.status === "approved" && q.hasJob && <span className="job-badge b-green">✓ สร้างใบงานแล้ว</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>

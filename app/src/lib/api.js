@@ -906,3 +906,27 @@ export async function deleteQuickReply(id) {
   const { error } = await supabase.from("quick_replies").delete().eq("id", id);
   if (error) throw error;
 }
+
+// ---------- cross-document links (full chain both directions) ----------
+// chain is keyed by quote_no: BOQ → quote → invoices/job-orders → receipts
+export async function listDocLinks() {
+  const [q, inv, rc, jo] = await Promise.all([
+    supabase.from("quotations").select("quote_no,boq_no"),
+    supabase.from("invoices").select("invoice_no,quote_no").neq("status", "cancelled"),
+    supabase.from("receipts").select("receipt_no,invoice_no,quote_no,job_no,boq_no"),
+    supabase.from("job_orders").select("job_no,quote_no"),
+  ]);
+  const byQuote = {};
+  const ensure = (qn) => (byQuote[qn] = byQuote[qn] || { boqNo: null, jobNos: [], invoiceNos: [], receiptNos: [] });
+  (q.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).boqNo = x.boq_no || null; });
+  (jo.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).jobNos.push(x.job_no); });
+  (inv.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).invoiceNos.push(x.invoice_no); });
+  (rc.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).receiptNos.push(x.receipt_no); });
+  // reverse lookups → quote_no (so any doc can find its chain)
+  const boqToQuote = {}, jobToQuote = {}, invToQuote = {}, rcToQuote = {};
+  (q.data || []).forEach((x) => { if (x.boq_no) boqToQuote[x.boq_no] = x.quote_no; });
+  (jo.data || []).forEach((x) => { if (x.quote_no) jobToQuote[x.job_no] = x.quote_no; });
+  (inv.data || []).forEach((x) => { if (x.quote_no) invToQuote[x.invoice_no] = x.quote_no; });
+  (rc.data || []).forEach((x) => { if (x.quote_no) rcToQuote[x.receipt_no] = x.quote_no; });
+  return { byQuote, boqToQuote, jobToQuote, invToQuote, rcToQuote };
+}

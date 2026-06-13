@@ -1,8 +1,9 @@
 import React from "react";
-import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote } from "../lib/api";
+import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks } from "../lib/api";
 import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
+import DocChips from "./DocChips";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -15,7 +16,7 @@ const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, pai
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `INV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenQuote, onOpenBoq }) {
+export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenDoc, focus, onFocusConsumed }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -27,14 +28,16 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [view, setView] = React.useState(null);
   const [search, setSearch] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
+  const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
     setLoading(true);
-    try { const [iv, q, co] = await Promise.all([listInvoices(), listQuotations(), getCompanies()]); setList(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); }
+    try { const [iv, q, co, dl] = await Promise.all([listInvoices(), listQuotations(), getCompanies(), listDocLinks()]); setList(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  React.useEffect(() => { if (focus) { setEd(null); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printI) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintI(null); }, 120); return () => clearTimeout(t); }, [printI]);
   // open the create form prefilled from a quotation (link from the quotation page)
@@ -175,13 +178,12 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 <div className="job-card-meta inv-meta">
                   <span className="inv-period">งวดที่ {x.installment} · {Math.round(x.pct)}%</span>
                   <span className="inv-cust">{x.customerName || "-"}</span>
-                  {x.quote_no && <button className="ref-link" title="เปิดใบเสนอราคา" onClick={(e) => { e.stopPropagation(); onOpenQuote && onOpenQuote(x.quote_no); }}><UIcon name="clipboard" size={11} /> {x.quote_no}</button>}
-                  {x.boq_no && <button className="ref-link" title="เปิด BOQ" onClick={(e) => { e.stopPropagation(); onOpenBoq && onOpenBoq(x.boq_no); }}>BOQ {x.boq_no}</button>}
                   <span className="inv-hint">ดูรายการ ›</span>
                 </div>
                 <div className="job-card-cost"><span>ยอดงวดนี้</span><b>{fmtBaht(x.total)}</b></div>
               </div>
               {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
+              {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "invoice", no: x.invoice_no }} onOpen={onOpenDoc} />; })()}
               <div className="job-lines"><div className="job-actions">
                 {x.hasReceipt && <span className="job-badge b-green">✓ ออกใบเสร็จแล้ว</span>}
                 {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="clipboard" size={14} color="#fff" /> ออกใบเสร็จ</button>}

@@ -1,9 +1,10 @@
 import React from "react";
-import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel } from "../lib/schedule";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
+import DocChips from "./DocChips";
 
 const STATUS = {
   pending: { th: "รอจ่ายงาน", cls: "b-grey" }, scheduled: { th: "นัดแล้ว", cls: "b-blue" },
@@ -15,7 +16,7 @@ const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/s
 
 const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", date: "", end_date: "", slot: "morning", time: "", status: "pending" });
 
-export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, onOpenQuote, onOpenBoq }) {
+export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, onOpenQuote, onOpenBoq, onOpenDoc }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [openTl, setOpenTl] = React.useState(null);
   const [upBrief, setUpBrief] = React.useState(false);
@@ -28,10 +29,11 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   const [ed, setEd] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
   const [q, setQ] = React.useState("");
+  const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
     setLoading(true);
-    try { const [j, c, t, q] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations()]); setList(j); setCusts(c); setTeams(t); setQuotes(q); }
+    try { const [j, c, t, q, dl] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks()]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -257,10 +259,8 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{jo.customerName || "ไม่ระบุลูกค้า"}</b>{jo.customerAddr ? <span className="jo-dim"> · {jo.customerAddr}</span> : null}</div>
                 {(jo.contact_name || jo.contact_phone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{jo.contact_name || "ผู้ติดต่อ"}{jo.contact_phone && <a href={`tel:${jo.contact_phone}`} className="jo-tel">📞 {jo.contact_phone}</a>}</div>}
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
-                {(jo.quote_no || jo.boq_no) && <div className="jo-info-row"><span className="jo-ic">🧾</span><span className="jo-dim">อ้างอิง:</span>
-                  {jo.quote_no && <button className="ref-link" title="เปิดใบเสนอราคา" onClick={() => onOpenQuote && onOpenQuote(jo.quote_no)}><UIcon name="clipboard" size={11} /> {jo.quote_no}</button>}
-                  {jo.boq_no && <button className="ref-link" title="เปิด BOQ" onClick={() => onOpenBoq && onOpenBoq(jo.boq_no)}>BOQ {jo.boq_no}</button>}</div>}
               </div>
+              {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "job", no: jo.job_no }} onOpen={onOpenDoc} />; })()}
               <div className="job-lines"><div className="job-actions">
                 <button className="btn-ghost sm" onClick={() => copyConfirm(jo)}><UIcon name="clipboard" size={14} /> คัดลอกคอนเฟิม</button>
                 <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>

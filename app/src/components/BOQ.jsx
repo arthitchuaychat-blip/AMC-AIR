@@ -1,8 +1,9 @@
 import React from "react";
-import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterials, getCompanies } from "../lib/api";
+import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterials, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht, fmtNum, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
+import DocChips from "./DocChips";
 import DocSlip from "./DocSlip";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -42,7 +43,7 @@ function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
   );
 }
 
-export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote }) {
+export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -53,10 +54,11 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const [search, setSearch] = React.useState("");
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [printB, setPrintB] = React.useState(null);
+  const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
     setLoading(true);
-    try { const [b, c, m, co] = await Promise.all([listBoqs(), listCustomers(), listMaterials(), getCompanies()]); setList(b); setCusts(c); setMats(m); setCompanies(co || { vat: {}, novat: {} }); }
+    try { const [b, c, m, co, dl] = await Promise.all([listBoqs(), listCustomers(), listMaterials(), getCompanies(), listDocLinks()]); setList(b); setCusts(c); setMats(m); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -167,9 +169,10 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
               </div>
               <div className="job-card-cost"><span>ต้นทุนรวม</span><b>{fmtBaht(bo.total)}</b></div>
             </div>
+            {(() => { const ch = docLinks.byQuote[bo.quoteNo] || {}; return <DocChips quoteNo={bo.quoteNo} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "boq", no: bo.boq_no }} onOpen={onOpenDoc} />; })()}
             <div className="job-lines"><div className="job-actions">
               {onCreateQuote && (bo.hasQuote
-                ? <button className="job-badge b-green badge-link" title="เปิดใบเสนอราคา" onClick={() => onOpenQuote && onOpenQuote(bo.quoteNo)}>✓ ใบเสนอราคา · {bo.quoteNo} ›</button>
+                ? <span className="job-badge b-green">✓ ออกใบเสนอราคาแล้ว</span>
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(bo); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
