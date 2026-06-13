@@ -1,5 +1,5 @@
 import React from "react";
-import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterials, getCompanies, listDocLinks } from "../lib/api";
+import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterialsLite, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht, fmtNum, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -58,7 +58,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
 
   async function load() {
     setLoading(true);
-    try { const [b, c, m, co, dl] = await Promise.all([listBoqs(), listCustomers(), listMaterials(), getCompanies(), listDocLinks()]); setList(b); setCusts(c); setMats(m); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
+    try { const [b, c, m, co, dl] = await Promise.all([listBoqs(), listCustomers(), listMaterialsLite(), getCompanies(), listDocLinks()]); setList(b); setCusts(c); setMats(m); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }

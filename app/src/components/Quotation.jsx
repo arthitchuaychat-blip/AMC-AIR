@@ -1,5 +1,5 @@
 import React from "react";
-import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterials, listBoqs, getCompanies, listDocLinks } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks } from "../lib/api";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
 import GrowArea from "./GrowArea";
@@ -35,7 +35,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
   async function load() {
     setLoading(true);
-    try { const [q, c, m, b, co, dl] = await Promise.all([listQuotations(), listCustomers(), listMaterials(), listBoqs(), getCompanies(), listDocLinks()]); setList(q); setCusts(c); setMats(m); setBoqs(b); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
+    try { const [q, c, m, b, co, dl] = await Promise.all([listQuotations(), listCustomers(), listMaterialsLite(), listBoqs(), getCompanies(), listDocLinks()]); setList(q); setCusts(c); setMats(m); setBoqs(b); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }

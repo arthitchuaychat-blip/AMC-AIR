@@ -123,6 +123,24 @@ export async function listMaterials() {
   return all.map((m) => enrich(m, catMap)).sort((a, b) => a.code.localeCompare(b.code));
 }
 
+// lightweight catalog for document item-pickers (BOQ/quotation): reads `materials` directly,
+// skipping the material_stock view's transaction join/aggregation → much faster with a large catalog.
+export async function listMaterialsLite() {
+  const cats = await listCategories();
+  const catMap = Object.fromEntries(cats.map((c) => [c.id, c]));
+  const PAGE = 1000;
+  const all = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase.from("materials")
+      .select("code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description")
+      .eq("active", true).range(from, from + PAGE - 1);
+    if (error) throw error;
+    all.push(...(data || []));
+    if (!data || data.length < PAGE) break;
+  }
+  return all.map((m) => enrich(m, catMap)).sort((a, b) => a.code.localeCompare(b.code));
+}
+
 // add or update a material (admin only — enforced by RLS)
 export async function saveMaterial(row, isNew) {
   const kind = row.kind || "material";
