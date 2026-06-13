@@ -23,6 +23,25 @@ const KIND_TH = { ac: "แอร์", material: "วัสดุ", service: "บ
 const detectKind = (cell) => KIND_MAP[(cell || "").trim().toLowerCase()] || null;
 const defUnit = (kind) => (kind === "ac" ? "เครื่อง" : kind === "service" ? "งาน" : "ชิ้น");
 
+// split one row into cells. Tab-delimited (pasted from Sheets) → simple split.
+// Comma (CSV) → quote-aware parser so names with commas like "9,000-36,000 BTU" stay intact.
+function splitCells(line) {
+  if (line.includes("\t")) return line.split("\t").map((c) => c.trim().replace(/^"|"$/g, ""));
+  const out = [];
+  let cur = "", inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ",") { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map((c) => c.trim());
+}
+
 export default function BulkImportModal({ categories, onDone, onClose }) {
   const [text, setText] = React.useState("");
   const [parsed, setParsed] = React.useState(null); // {rows, errors, counts}
@@ -63,8 +82,7 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
     const rows = [], errors = [];
     const counts = { ac: 0, material: 0, service: 0 };
     lines.forEach((line, i) => {
-      const delim = line.includes("\t") ? "\t" : ",";
-      const cells = line.split(delim).map((c) => c.trim().replace(/^"|"$/g, ""));
+      const cells = splitCells(line);
       const c0 = (cells[0] || "").toLowerCase();
       if (i === 0 && (c0 === "ชนิด" || c0 === "kind" || c0 === "รหัส" || c0 === "code")) return; // header
 
@@ -74,13 +92,13 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
         // new format: kind in column 1
         kind = kindFromCol;
         [, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price] = cells;
-        description = cells.slice(11).join(delim);
+        description = cells.slice(11).join(",");
       } else {
         // backward-compatible: old material-only format (no kind column)
         kind = "material";
         [code, name_th, name_en, catBrand, unit, cost, min_stock, init_stock, sale_price] = cells;
         btu = null;
-        description = cells.slice(9).join(delim);
+        description = cells.slice(9).join(",");
       }
 
       if (!code || !name_th) { errors.push({ line: i + 1, reason: "ต้องมีรหัสและชื่อไทย" }); return; }
