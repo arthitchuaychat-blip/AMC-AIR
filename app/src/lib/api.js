@@ -109,13 +109,18 @@ export async function deleteBtu(btu) {
 }
 
 export async function listMaterials() {
-  const [cats, mats] = await Promise.all([
-    listCategories(),
-    supabase.from("material_stock").select("*").eq("active", true),
-  ]);
-  if (mats.error) throw mats.error;
+  const cats = await listCategories();
   const catMap = Object.fromEntries(cats.map((c) => [c.id, c]));
-  return (mats.data || []).map((m) => enrich(m, catMap)).sort((a, b) => a.code.localeCompare(b.code));
+  // Supabase returns at most 1000 rows per request — page through until a short page so all items load
+  const PAGE = 1000;
+  const all = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase.from("material_stock").select("*").eq("active", true).range(from, from + PAGE - 1);
+    if (error) throw error;
+    all.push(...(data || []));
+    if (!data || data.length < PAGE) break;
+  }
+  return all.map((m) => enrich(m, catMap)).sort((a, b) => a.code.localeCompare(b.code));
 }
 
 // add or update a material (admin only — enforced by RLS)
