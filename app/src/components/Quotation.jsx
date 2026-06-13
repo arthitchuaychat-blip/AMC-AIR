@@ -132,6 +132,21 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               </select>
             </label>
           </div>
+
+          {cust && (() => {
+            const site = cust.sites?.find((s) => String(s.id) === String(ed.site_id));
+            const c0 = cust.contacts?.[0];
+            const addr = site?.address || cust.address;
+            const map = site?.map_url || (addr ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr) : "");
+            return (
+              <div className="cust-info-box">
+                <div className="cust-info-row">🏢 <b>{cust.name}</b>{cust.tax_id ? <span className="ci-dim"> · เลขภาษี {cust.tax_id}</span> : null}</div>
+                {c0 && (c0.name || c0.phone) && <div className="cust-info-row">👤 {c0.name || "ผู้ติดต่อ"}{c0.role ? ` · ${c0.role}` : ""}{c0.phone && <a className="ci-tel" href={`tel:${c0.phone}`}>📞 {c0.phone}</a>}</div>}
+                {addr && <div className="cust-info-row">📍 <span className="ci-addr">{addr}</span>{map && <a className="ci-map" href={map} target="_blank" rel="noreferrer">แผนที่</a>}</div>}
+              </div>
+            );
+          })()}
+
           <div className="fld-row">
             <label className="fld"><span>วันที่</span><input className="inp" type="date" value={ed.issue_date} onChange={(e) => setQ("issue_date", e.target.value)} /></label>
             <label className="fld"><span>ยืนราคาถึง</span><input className="inp" type="date" value={ed.valid_until} onChange={(e) => setQ("valid_until", e.target.value)} /></label>
@@ -290,7 +305,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       {printQ && (() => { const co = printQ.vat ? companies.vat : companies.novat; return (
         <DocSlip company={co} titleTh="ใบเสนอราคา" titleEn="QUOTATION" docNo={printQ.quote_no}
           metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }, { label: "อ้างอิง BOQ", value: printQ.boq_no }]}
-          customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, address: printQ.siteAddress || printQ.customerAddr, contactName: printQ.contactName, contactPhone: printQ.contactPhone }}
+          customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, address: printQ.siteAddress || printQ.customerAddr, contactName: printQ.contactName, contactPhone: printQ.contactPhone, mapUrl: printQ.map_url }}
           terms={printQ.note || co.default_terms} bank={co.bank_info}
           signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}>
           <table className="doc-table">

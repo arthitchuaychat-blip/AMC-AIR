@@ -387,7 +387,7 @@ export async function listBoqs() {
     supabase.from("boqs").select("*").order("created_at", { ascending: false }),
     supabase.from("boq_items").select("*"),
     supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no"),
   ]);
@@ -406,6 +406,7 @@ export async function listBoqs() {
     return { ...bo, customerName: custName[bo.customer_id] || null, customerCode: bo.customer_id || null,
       customerAddr: custAddr[bo.customer_id] || null, customerTaxId: custTax[bo.customer_id] || null,
       siteName: s?.site_name || null, siteAddress: s?.address || null,
+      mapUrl: (s && s.map_url) || _gmap(s?.address || custAddr[bo.customer_id]),
       contactName: ct0?.name || null, contactPhone: ct0?.phone || null,
       quoteNo: quoteByBoq[bo.boq_no] || null, hasQuote: !!quoteByBoq[bo.boq_no],
       items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
@@ -537,7 +538,7 @@ export async function listInvoices() {
   const [iv, cu, si, ct, qt, rc] = await Promise.all([
     supabase.from("invoices").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no"),
     supabase.from("receipts").select("invoice_no"),
@@ -555,6 +556,7 @@ export async function listInvoices() {
     return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
+      mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
       contactName: ct0?.name || null, contactPhone: ct0?.phone || null, hasReceipt: receiptedInv.has(x.invoice_no) };
   });
 }
@@ -596,7 +598,7 @@ export async function listReceipts() {
   const [rc, cu, si, ct, jo] = await Promise.all([
     supabase.from("receipts").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("job_orders").select("job_no,quote_no"),
   ]);
@@ -612,6 +614,7 @@ export async function listReceipts() {
     return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
+      mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
       contactName: ct0?.name || null, contactPhone: ct0?.phone || null };
   });
 }

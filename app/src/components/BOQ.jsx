@@ -122,6 +122,20 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
             </label>
           </div>
 
+          {cust && (() => {
+            const site = cust.sites?.find((s) => String(s.id) === String(ed.site_id));
+            const c0 = cust.contacts?.[0];
+            const addr = site?.address || cust.address;
+            const map = site?.map_url || (addr ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr) : "");
+            return (
+              <div className="cust-info-box">
+                <div className="cust-info-row">🏢 <b>{cust.name}</b>{cust.tax_id ? <span className="ci-dim"> · เลขภาษี {cust.tax_id}</span> : null}</div>
+                {c0 && (c0.name || c0.phone) && <div className="cust-info-row">👤 {c0.name || "ผู้ติดต่อ"}{c0.role ? ` · ${c0.role}` : ""}{c0.phone && <a className="ci-tel" href={`tel:${c0.phone}`}>📞 {c0.phone}</a>}</div>}
+                {addr && <div className="cust-info-row">📍 <span className="ci-addr">{addr}</span>{map && <a className="ci-map" href={map} target="_blank" rel="noreferrer">แผนที่</a>}</div>}
+              </div>
+            );
+          })()}
+
           {SECTIONS.map((sec) => (
             <SectionBlock key={sec.id} sec={sec} items={ed.items[sec.id]} mats={mats}
               onAdd={(it) => addItem(sec.id, it)} onSet={(i, k, v) => setItem(sec.id, i, k, v)} onDel={(i) => delItem(sec.id, i)} />
@@ -188,7 +202,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       {printB && (() => { const _c = custs.find((x) => String(x.id) === String(printB.customer_id)); const company = _c?.vat === false ? companies.novat : companies.vat; return (
         <DocSlip company={company} titleTh="ใบประมาณการ (BOQ)" titleEn="BILL OF QUANTITIES" docNo={printB.boq_no}
           metaRows={[{ label: "ชื่องาน", value: printB.title }]}
-          customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone }}
+          customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone, mapUrl: printB.mapUrl }}
           terms={printB.note} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]}>
           {(() => {
             const order = ["ac", "free", "charged", "service"];
