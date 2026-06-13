@@ -845,13 +845,13 @@ export async function markLineRead(uid) {
   await supabase.from("line_contacts").update({ unread: 0 }).eq("line_user_id", uid);
 }
 
-// send a reply via the serverless function (LINE push). Returns on success, throws with a readable message otherwise.
-export async function sendLineMessage(to, text) {
+// send a reply via the serverless function (LINE push). payload = { text } or { imageUrl }.
+async function callLineSend(to, payload) {
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch("/api/line-send", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
-    body: JSON.stringify({ to, text }),
+    body: JSON.stringify({ to, ...payload }),
   });
   if (!res.ok) {
     let msg = "HTTP " + res.status;
@@ -859,4 +859,30 @@ export async function sendLineMessage(to, text) {
     throw new Error(msg);
   }
   return res.json();
+}
+export const sendLineMessage = (to, text) => callLineSend(to, { text });
+export const sendLineImage = (to, imageUrl) => callLineSend(to, { imageUrl });
+
+// upload an image to send through the chat → public URL (used by LINE image messages)
+export async function uploadChatImage(file) {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `chat/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
+
+// ---------- saved quick replies (canned messages) ----------
+export async function listQuickReplies() {
+  const { data, error } = await supabase.from("quick_replies").select("*").order("sort").order("id");
+  if (error) throw error;
+  return data || [];
+}
+export async function addQuickReply(text) {
+  const { error } = await supabase.from("quick_replies").insert({ text: text.trim() });
+  if (error) throw error;
+}
+export async function deleteQuickReply(id) {
+  const { error } = await supabase.from("quick_replies").delete().eq("id", id);
+  if (error) throw error;
 }

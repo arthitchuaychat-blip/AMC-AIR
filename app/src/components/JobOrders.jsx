@@ -1,7 +1,7 @@
 import React from "react";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto } from "../lib/api";
-import { fmtBaht } from "../lib/format";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel } from "../lib/schedule";
+import { buildOrderConfirm } from "../lib/confirmText";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 
@@ -120,27 +120,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
 
   // copy an order-confirmation message to send to the customer (Line OA)
   function copyConfirm(jo) {
-    const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" }) : "-";
-    const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
-    const lines = [
-      `วันที่สั่งซื้อ : ${fmtDate(jo.created_at)}`,
-      `วันที่นัดหมายบริการ : ${dt ? fmtDate(jo.scheduled_at) : "-"}`,
-      `เวลาให้บริการ : ${dt ? dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น." : "-"}`,
-      `เลขที่ใบเสนอราคา : ${jo.quote_no || "-"}`,
-      "--",
-      `ชื่อลูกค้า : ${jo.customerName || "-"}`,
-      `ชื่อผู้ติดต่อ : ${jo.contact_name || "-"}`,
-      `เบอร์โทรผู้ติดต่อ : ${jo.contact_phone || "-"}`,
-      `ที่อยู่ในการให้บริการ : ${jo.address || "-"}`,
-      `หมุดโลเคชั่น : ${jo.map_url || "-"}`,
-      "--",
-      "รายการสินค้าและบริการ :",
-      (jo.quote_no
-        ? ((jo.confirmItems && jo.confirmItems.length) ? jo.confirmItems.map((it, i) => `${i + 1}. ${it.name} × ${it.qty} ${it.unit || ""}`).join("\n") : "-")
-        : (jo.details || "-")),
-      `ยอดชำระเงิน : ${fmtBaht(jo.quoteGrand || 0)}`,
-    ];
-    const text = lines.join("\n");
+    const text = buildOrderConfirm(jo);
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => flash("คัดลอกคอนเฟิมออเดอร์แล้ว ✓")).catch(() => window.prompt("คัดลอกข้อความนี้:", text));
     else window.prompt("คัดลอกข้อความนี้:", text);
   }

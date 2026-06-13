@@ -1,6 +1,9 @@
 import React from "react";
-import { listLineContacts, listLineMessages, sendLineMessage, linkLineContact, markLineRead, listCustomers } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply } from "../lib/api";
 import { supabase } from "../lib/supabase";
+import { buildOrderConfirm } from "../lib/confirmText";
+import { scheduleLabel } from "../lib/schedule";
+import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
@@ -18,13 +21,19 @@ export default function Chat({ role }) {
   const [sending, setSending] = React.useState(false);
   const [showThread, setShowThread] = React.useState(false); // mobile pane toggle
   const [toast, setToast] = React.useState(null);
+  const [quickReplies, setQuickReplies] = React.useState([]);
+  const [qrManage, setQrManage] = React.useState(false);
+  const [newQr, setNewQr] = React.useState("");
+  const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
+  const [jobPicker, setJobPicker] = React.useState(null);
   const selRef = React.useRef(null);
   const endRef = React.useRef(null);
 
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
   async function loadContacts() { try { setContacts(await listLineContacts()); } catch (e) { flash("โหลดแชตไม่สำเร็จ: " + (e.message || e), true); } }
 
-  React.useEffect(() => { loadContacts(); listCustomers().then(setCusts).catch(() => {}); }, []);
+  async function loadQr() { try { setQuickReplies(await listQuickReplies()); } catch { /* ignore */ } }
+  React.useEffect(() => { loadContacts(); loadQr(); listCustomers().then(setCusts).catch(() => {}); }, []);
   React.useEffect(() => { selRef.current = sel; }, [sel]);
   React.useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -58,6 +67,31 @@ export default function Chat({ role }) {
     try { await linkLineContact(sel, cid); await loadContacts(); flash(cid ? "เชื่อมลูกค้าแล้ว ✓" : "ยกเลิกการเชื่อมแล้ว"); }
     catch (e) { flash("เชื่อมไม่สำเร็จ: " + (e.message || e), true); }
   }
+
+  // send an image: upload to storage → push the public URL to LINE
+  async function onImage(e) {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel || sending) return;
+    setSending(true);
+    try { const url = await uploadChatImage(f); await sendLineImage(sel, url); }
+    catch (ex) { flash("ส่งรูปไม่สำเร็จ: " + (ex.message || ex), true); }
+    setSending(false);
+  }
+
+  // order-confirmation: pick one of the linked customer's job orders → fill the box for review
+  async function openConfirm() {
+    try {
+      let js = jobs;
+      if (!js) { js = await listJobOrders(); setJobs(js); }
+      const mine = js.filter((j) => String(j.customer_id) === String(selContact.customer_id));
+      if (!mine.length) return flash("ลูกค้านี้ยังไม่มีใบงาน", true);
+      setJobPicker(mine);
+    } catch (e) { flash("โหลดใบงานไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  function pickJob(jo) { setText(buildOrderConfirm(jo)); setJobPicker(null); flash("ใส่ข้อความคอนเฟิมแล้ว — ตรวจทานแล้วกดส่ง"); }
+
+  const insertQr = (t) => setText((cur) => cur ? cur + (cur.endsWith("\n") ? "" : "\n") + t : t);
+  async function addQr() { const t = newQr.trim(); if (!t) return; try { await addQuickReply(t); setNewQr(""); await loadQr(); } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e.message || e), true); } }
+  async function delQr(id) { if (!window.confirm("ลบข้อความนี้?")) return; try { await deleteQuickReply(id); await loadQr(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
   const selContact = contacts.find((c) => c.line_user_id === sel);
   const ql = q.trim().toLowerCase();
@@ -130,17 +164,69 @@ export default function Chat({ role }) {
               </div>
 
               {canSend ? (
-                <div className="chat-compose">
-                  <textarea className="inp" rows={1} value={text} placeholder="พิมพ์ข้อความ…"
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
-                  <button className="btn-primary" disabled={sending || !text.trim()} onClick={send}>{sending ? "…" : "ส่ง"}</button>
+                <div className="chat-composer">
+                  <div className="chat-tools">
+                    {selContact.customer_id && <button className="chat-tool primary" onClick={openConfirm} disabled={sending}>🧾 ส่งคอนเฟิม</button>}
+                    <label className={"chat-tool" + (sending ? " disabled" : "")}>📷 รูป
+                      <input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
+                    </label>
+                    {quickReplies.map((qr) => (
+                      <button key={qr.id} className="chat-qr" title={qr.text} onClick={() => insertQr(qr.text)}>
+                        {qr.text.length > 22 ? qr.text.slice(0, 22) + "…" : qr.text}
+                      </button>
+                    ))}
+                    <button className="chat-tool ghost" onClick={() => setQrManage(true)}>✏️ จัดการคำตอบ</button>
+                  </div>
+                  <div className="chat-compose">
+                    <textarea className="inp" rows={1} value={text} placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ…"}
+                      onChange={(e) => setText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
+                    <button className="btn-primary" disabled={sending || !text.trim()} onClick={send}>{sending ? "…" : "ส่ง"}</button>
+                  </div>
                 </div>
               ) : <div className="chat-readonly">ดูได้อย่างเดียว — เฉพาะฝ่ายออฟฟิศตอบกลับได้</div>}
             </>
           )}
         </div>
       </div>
+      {jobPicker && (
+        <div className="modal-overlay" onClick={() => setJobPicker(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
+            <div className="modal-head"><div className="modal-title">เลือกใบงานเพื่อส่งคอนเฟิม</div>
+              <button className="drawer-close" onClick={() => setJobPicker(null)}><UIcon name="x" size={20} /></button></div>
+            <div className="modal-body">
+              <p className="page-sub" style={{ marginBottom: 10 }}>เลือกใบงานของลูกค้ารายนี้ — ระบบจะใส่ข้อความคอนเฟิมในกล่องพิมพ์ ให้ตรวจทานก่อนกดส่ง</p>
+              {jobPicker.map((jo) => (
+                <button key={jo.job_no} className="confirm-job" onClick={() => pickJob(jo)}>
+                  <div><b>{jo.job_no}</b> · {jo.title || "งานติดตั้ง/บริการ"}</div>
+                  <small>🗓 {jo.scheduled_at ? scheduleLabel(jo) : "ยังไม่นัด"} · 💰 {fmtBaht(jo.quoteGrand || 0)}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {qrManage && (
+        <div className="modal-overlay" onClick={() => setQrManage(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
+            <div className="modal-head"><div className="modal-title">ข้อความตอบกลับสำเร็จรูป</div>
+              <button className="drawer-close" onClick={() => setQrManage(false)}><UIcon name="x" size={20} /></button></div>
+            <div className="modal-body">
+              <div className="qr-add">
+                <textarea className="inp" rows={2} value={newQr} onChange={(e) => setNewQr(e.target.value)} placeholder="พิมพ์ข้อความที่ใช้บ่อย…" />
+                <button className="btn-primary" disabled={!newQr.trim()} onClick={addQr}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม</button>
+              </div>
+              <div className="qr-list">
+                {quickReplies.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ยังไม่มีข้อความบันทึกไว้</div>}
+                {quickReplies.map((qr) => (
+                  <div className="qr-item" key={qr.id}><span>{qr.text}</span>
+                    <button className="qr-del" onClick={() => delQr(qr.id)}><UIcon name="trash" size={15} /></button></div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {toast && <div className={"chat-toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );

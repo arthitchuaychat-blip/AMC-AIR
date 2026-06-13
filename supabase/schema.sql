@@ -500,6 +500,19 @@ create policy lm_read on line_messages for select to authenticated
 alter publication supabase_realtime add table line_messages;
 alter publication supabase_realtime add table line_contacts;
 
+-- ---------- ข้อความตอบกลับสำเร็จรูป (quick replies) ----------
+create table if not exists quick_replies (
+  id         bigint generated always as identity primary key,
+  text       text not null,
+  sort       int not null default 0,
+  created_at timestamptz not null default now()
+);
+alter table quick_replies enable row level security;
+create policy qr_read on quick_replies for select to authenticated
+  using (my_role() in ('admin','sales','exec','finance','lead_tech'));
+create policy qr_write on quick_replies for all to authenticated
+  using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
+
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles
 -- เช่น: update profiles set role='admin' where email='admin@yourco.com';
