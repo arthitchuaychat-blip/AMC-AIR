@@ -1,27 +1,12 @@
-import { toPng } from "html-to-image";
+import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { uploadDocFile, sendLineImage, sendLineMessage } from "./api";
 
-// Capture the rendered document (DocSlip) into a PNG laid out on an A4 page.
-// The live .print-area is display:none on screen (so capturing it directly comes out blank), so we
-// CLONE the .doc into a fresh, visible-but-offscreen A4 wrapper — the clone gets real layout + styles.
-async function capture() {
-  const src = document.querySelector(".print-area .doc") || document.querySelector(".print-area");
-  if (!src) throw new Error("ไม่พบเอกสาร (ยังไม่ได้เรนเดอร์)");
-  const wrap = document.createElement("div");
-  wrap.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;min-height:1123px;padding:48px 40px;box-sizing:border-box;background:#fff;z-index:-1";
-  const clone = src.cloneNode(true);
-  clone.style.maxWidth = "none"; clone.style.margin = "0"; clone.style.width = "100%";
-  wrap.appendChild(clone);
-  document.body.appendChild(wrap);
-  try {
-    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch { /* ignore */ } }
-    // wait for images (logo) inside the clone to load
-    await Promise.all([...wrap.querySelectorAll("img")].map((im) => im.complete ? null : new Promise((r) => { im.onload = im.onerror = r; })));
-    const dataUrl = await toPng(wrap, { pixelRatio: 2, backgroundColor: "#ffffff" });
-    const img = new Image(); img.src = dataUrl; await img.decode().catch(() => {});
-    return { dataUrl, width: img.naturalWidth || 794, height: img.naturalHeight || 1123 };
-  } finally { document.body.removeChild(wrap); }
+// Capture a DOM node (an A4-sized DocSlip wrapper) to a PNG via html2canvas.
+async function captureNode(node) {
+  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch { /* ignore */ } }
+  const canvas = await html2canvas(node, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: node.scrollWidth, windowHeight: node.scrollHeight });
+  return { dataUrl: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height };
 }
 
 function dataUrlToBlob(dataUrl) {
@@ -32,25 +17,21 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([arr], { type: "image/png" });
 }
 
+// tile a tall image across A4 pages
 function toPdfBlob({ dataUrl, width, height }) {
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
   const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-  const imgH = (height / width) * pw;             // image height when scaled to full A4 width
+  const imgH = (height / width) * pw;
   let heightLeft = imgH, position = 0;
   pdf.addImage(dataUrl, "PNG", 0, position, pw, imgH);
   heightLeft -= ph;
-  while (heightLeft > 0.5) {                       // tile a tall doc across multiple A4 pages
-    position -= ph;
-    pdf.addPage();
-    pdf.addImage(dataUrl, "PNG", 0, position, pw, imgH);
-    heightLeft -= ph;
-  }
+  while (heightLeft > 0.5) { position -= ph; pdf.addPage(); pdf.addImage(dataUrl, "PNG", 0, position, pw, imgH); heightLeft -= ph; }
   return pdf.output("blob");
 }
 
-// mode: "image" → LINE image message · "pdf" → upload PDF + send a link message
-export async function sendDocToLine(lineUserId, mode, label) {
-  const cap = await capture();
+// capture `node`, then send to the customer on LINE — mode: "image" | "pdf"
+export async function sendDocFromNode(node, lineUserId, mode, label) {
+  const cap = await captureNode(node);
   if (mode === "image") {
     const url = await uploadDocFile(dataUrlToBlob(cap.dataUrl), "png", "image/png");
     await sendLineImage(lineUserId, url);

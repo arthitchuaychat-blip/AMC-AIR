@@ -6,8 +6,6 @@ import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
-import { sendDocToLine } from "../lib/sendDoc";
-import { lineContactByCustomer } from "../lib/api";
 
 // snapshot a quote's line items (full amounts) with default หัก ณ ที่จ่าย flag (services only)
 const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
@@ -18,7 +16,7 @@ const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, pai
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `INV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenDoc, focus, onFocusConsumed, sendIntent, onSendIntentDone }) {
+export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenDoc, focus, onFocusConsumed }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -41,30 +39,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { if (focus) { setEd(null); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
-  const capturing = React.useRef(false);
-  const [sendBusy, setSendBusy] = React.useState(false);
-  React.useEffect(() => { if (!printI || capturing.current) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintI(null); }, 120); return () => clearTimeout(t); }, [printI]);
-
-  async function sendToLine(x, mode) {
-    if (sendBusy) return;
-    const contact = await lineContactByCustomer(x.customerCode);
-    if (!contact?.line_user_id) return flash("ลูกค้านี้ยังไม่ได้เชื่อม LINE — ไปเชื่อมในเมนูแชตก่อน", true);
-    setSendBusy(true); flash("กำลังเตรียมเอกสาร…");
-    capturing.current = true; setPrintI(x);
-    await new Promise((r) => setTimeout(r, 400));
-    try {
-      await sendDocToLine(contact.line_user_id, mode, `ใบแจ้งหนี้ ${x.invoice_no}`);
-      flash(mode === "image" ? "ส่งรูปเอกสารให้ลูกค้าทาง LINE แล้ว ✓" : "ส่งลิงก์ PDF ให้ลูกค้าทาง LINE แล้ว ✓");
-    } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
-    setPrintI(null); capturing.current = false; setSendBusy(false);
-  }
-  React.useEffect(() => {
-    if (!sendIntent || sendIntent.type !== "invoice" || sendBusy) return;
-    const x = list.find((r) => r.invoice_no === sendIntent.no);
-    if (!x) return;
-    const mode = sendIntent.mode; onSendIntentDone && onSendIntentDone();
-    sendToLine(x, mode);
-  }, [sendIntent, list]);
+  React.useEffect(() => { if (!printI) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintI(null); }, 120); return () => clearTimeout(t); }, [printI]);
   // open the create form prefilled from a quotation (link from the quotation page)
   React.useEffect(() => { if (!fromQuote || !quotes.length) return; startNew(fromQuote); onFromQuoteConsumed && onFromQuoteConsumed(); }, [fromQuote, quotes]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }

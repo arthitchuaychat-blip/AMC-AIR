@@ -1,6 +1,5 @@
 import React from "react";
-import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks, lineContactByCustomer } from "../lib/api";
-import { sendDocToLine } from "../lib/sendDoc";
+import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
@@ -16,7 +15,7 @@ const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenDoc, focus, onFocusConsumed, sendIntent, onSendIntentDone }) {
+export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenDoc, focus, onFocusConsumed }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
@@ -40,30 +39,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { if (focus) { setEd(null); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
-  const capturing = React.useRef(false);
-  const [sendBusy, setSendBusy] = React.useState(false);
-  React.useEffect(() => { if (!printR || capturing.current) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintR(null); }, 120); return () => clearTimeout(t); }, [printR]);
-
-  async function sendToLine(x, mode) {
-    if (sendBusy) return;
-    const contact = await lineContactByCustomer(x.customerCode);
-    if (!contact?.line_user_id) return flash("ลูกค้านี้ยังไม่ได้เชื่อม LINE — ไปเชื่อมในเมนูแชตก่อน", true);
-    setSendBusy(true); flash("กำลังเตรียมเอกสาร…");
-    capturing.current = true; setPrintR(x);
-    await new Promise((r) => setTimeout(r, 400));
-    try {
-      await sendDocToLine(contact.line_user_id, mode, `ใบเสร็จ ${x.receipt_no}`);
-      flash(mode === "image" ? "ส่งรูปเอกสารให้ลูกค้าทาง LINE แล้ว ✓" : "ส่งลิงก์ PDF ให้ลูกค้าทาง LINE แล้ว ✓");
-    } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
-    setPrintR(null); capturing.current = false; setSendBusy(false);
-  }
-  React.useEffect(() => {
-    if (!sendIntent || sendIntent.type !== "receipt" || sendBusy) return;
-    const x = list.find((r) => r.receipt_no === sendIntent.no);
-    if (!x) return;
-    const mode = sendIntent.mode; onSendIntentDone && onSendIntentDone();
-    sendToLine(x, mode);
-  }, [sendIntent, list]);
+  React.useEffect(() => { if (!printR) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintR(null); }, 120); return () => clearTimeout(t); }, [printR]);
   // open the create form prefilled from an invoice (link from the invoice page)
   React.useEffect(() => { if (!fromInvoice || !invoices.length) return; startNew(); onPickInvoice(fromInvoice); onFromInvoiceConsumed && onFromInvoiceConsumed(); }, [fromInvoice, invoices]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }

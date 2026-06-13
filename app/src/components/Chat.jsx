@@ -7,12 +7,14 @@ import { scheduleLabel } from "../lib/schedule";
 import { fmtBaht, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
+import DocCapture from "./DocCapture";
+import { sendDocFromNode } from "../lib/sendDoc";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "";
 
-export default function Chat({ role, onOpenDoc, onGoCustomers, onSendDoc }) {
+export default function Chat({ role, onOpenDoc, onGoCustomers }) {
   const canSend = ["admin", "sales", "exec", "finance"].includes(role);
   const [contacts, setContacts] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -29,6 +31,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onSendDoc }) {
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
   const [jobPicker, setJobPicker] = React.useState(null);
   const [sendDocOpen, setSendDocOpen] = React.useState(false);
+  const [capJob, setCapJob] = React.useState(null); // { type, no, mode, to, label } → render off-screen + capture + send
   const [infoDocs, setInfoDocs] = React.useState([]);
   const [loadingInfoDocs, setLoadingInfoDocs] = React.useState(false);
   const [infoDocF, setInfoDocF] = React.useState("all");
@@ -348,8 +351,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onSendDoc }) {
                         <div><span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span><b>{e.no}</b></div>
                         <small>{e.title || ""} · <span className={"job-badge " + st[1]}>{st[0]}</span></small>
                       </div>
-                      <button className="btn-ghost sm" onClick={() => { setSendDocOpen(false); onSendDoc && onSendDoc(e.type, e.no, "image"); }}><UIcon name="camera" size={13} /> รูป</button>
-                      <button className="btn-ghost sm" onClick={() => { setSendDocOpen(false); onSendDoc && onSendDoc(e.type, e.no, "pdf"); }}><UIcon name="clipboard" size={13} /> PDF</button>
+                      <button className="btn-ghost sm" disabled={!!capJob} onClick={() => { setSendDocOpen(false); setCapJob({ type: e.type, no: e.no, mode: "image", to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}` }); flash("กำลังเตรียมเอกสาร…"); }}><UIcon name="camera" size={13} /> รูป</button>
+                      <button className="btn-ghost sm" disabled={!!capJob} onClick={() => { setSendDocOpen(false); setCapJob({ type: e.type, no: e.no, mode: "pdf", to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}` }); flash("กำลังเตรียมเอกสาร…"); }}><UIcon name="clipboard" size={13} /> PDF</button>
                     </div>
                   );
                 })}
@@ -359,6 +362,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onSendDoc }) {
         );
       })()}
       {custForm && <CustomerFormModal initial={custForm.initial} onClose={() => setCustForm(null)} onSaved={onCustSaved} />}
+      {capJob && <DocCapture type={capJob.type} no={capJob.no}
+        onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
+        onReady={async (node) => {
+          try { await sendDocFromNode(node, capJob.to, capJob.mode, capJob.label); flash(capJob.mode === "image" ? "ส่งรูปเอกสารให้ลูกค้าแล้ว ✓" : "ส่งลิงก์ PDF ให้ลูกค้าแล้ว ✓"); }
+          catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+          setCapJob(null);
+        }} />}
       {toast && <div className={"chat-toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );

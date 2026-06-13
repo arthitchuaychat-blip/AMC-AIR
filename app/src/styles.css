@@ -1188,3 +1188,7 @@ select.inp{cursor:pointer}
 .senddoc-info{flex:1;min-width:0}
 .senddoc-info b{font-size:13px;color:var(--ink)}
 .senddoc-info small{font-size:11.5px;color:var(--ink-3);display:block;margin-top:2px}
+
+/* off-screen A4 wrapper used to capture a document to image/PDF for sending on LINE */
+.doc-capture-wrap{position:fixed;left:-10000px;top:0;width:794px;min-height:1123px;padding:48px 40px;box-sizing:border-box;background:#fff;z-index:-1}
+.doc-capture-wrap .print-area{display:block !important;position:static !important;width:auto !important;padding:0 !important}

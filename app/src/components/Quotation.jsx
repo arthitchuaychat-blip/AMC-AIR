@@ -1,10 +1,9 @@
 import React from "react";
-import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems, lineContactByCustomer } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems } from "../lib/api";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
 import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
-import { sendDocToLine } from "../lib/sendDoc";
 import { fmtBaht, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -18,7 +17,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc, sendIntent, onSendIntentDone }) {
+export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -43,32 +42,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   }
   React.useEffect(() => { load(); }, []);
   const printWin = React.useRef(null);
-  const capturing = React.useRef(false); // when true, printQ is rendered for image/PDF capture (don't auto-print)
-  const [sendBusy, setSendBusy] = React.useState(false);
-  React.useEffect(() => { if (!printQ || capturing.current) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintQ(null); }, 120); return () => clearTimeout(t); }, [printQ]);
-
-  // send the document to the linked customer on LINE — mode: "image" | "pdf"
-  async function sendToLine(q, mode) {
-    if (sendBusy) return;
-    const contact = await lineContactByCustomer(q.customerCode);
-    if (!contact?.line_user_id) return flash("ลูกค้านี้ยังไม่ได้เชื่อม LINE — ไปเชื่อมในเมนูแชตก่อน", true);
-    setSendBusy(true); flash("กำลังเตรียมเอกสาร…");
-    capturing.current = true; setPrintQ(q);
-    await new Promise((r) => setTimeout(r, 400)); // let DocSlip render + fonts settle
-    try {
-      await sendDocToLine(contact.line_user_id, mode, `ใบเสนอราคา ${q.quote_no}`);
-      flash(mode === "image" ? "ส่งรูปเอกสารให้ลูกค้าทาง LINE แล้ว ✓" : "ส่งลิงก์ PDF ให้ลูกค้าทาง LINE แล้ว ✓");
-    } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
-    setPrintQ(null); capturing.current = false; setSendBusy(false);
-  }
-  // auto-send when arriving with a send intent from the chat page
-  React.useEffect(() => {
-    if (!sendIntent || sendIntent.type !== "quote" || sendBusy) return;
-    const q = list.find((x) => x.quote_no === sendIntent.no);
-    if (!q) return;
-    const mode = sendIntent.mode; onSendIntentDone && onSendIntentDone();
-    sendToLine(q, mode);
-  }, [sendIntent, list]);
+  React.useEffect(() => { if (!printQ) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintQ(null); }, 120); return () => clearTimeout(t); }, [printQ]);
   // open focused on a specific quote (from the dashboard report link)
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
