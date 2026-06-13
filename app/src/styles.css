@@ -1039,3 +1039,16 @@ select.inp{cursor:pointer}
 .qr-item span{flex:1;font-size:13px;color:var(--ink);white-space:pre-wrap;word-break:break-word}
 .qr-del{flex:none;border:none;background:none;color:var(--down);cursor:pointer;padding:3px;border-radius:6px}
 .qr-del:hover{background:#fde8e8}
+
+/* customer detail — job history timeline */
+.cd-timeline{display:flex;flex-direction:column;position:relative;margin-top:4px}
+.cd-job{position:relative;display:flex;gap:11px;width:100%;text-align:left;font-family:inherit;background:none;border:none;cursor:pointer;padding:4px 4px 12px 4px}
+.cd-job:not(:last-child)::before{content:"";position:absolute;left:9px;top:18px;bottom:0;width:2px;background:var(--line)}
+.cd-job-dot{flex:none;width:14px;height:14px;border-radius:50%;margin-top:3px;background:#94a3b8;border:3px solid var(--surface);box-shadow:0 0 0 2px var(--line);z-index:1}
+.cd-job-dot.b-green{background:#16a34a}.cd-job-dot.b-blue{background:#1f74e0}.cd-job-dot.b-amber{background:#d97706}.cd-job-dot.b-red{background:#dc2626}.cd-job-dot.b-grey{background:#94a3b8}
+.cd-job-body{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:9px 12px}
+.cd-job:hover .cd-job-body{border-color:var(--primary);background:#fff}
+.cd-job-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cd-job-top b{font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd-job-meta{font-size:12px;color:var(--ink-2);margin-top:3px}
+.cd-job-no{font-size:11px;color:var(--primary);font-weight:600;margin-top:3px}

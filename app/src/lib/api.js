@@ -682,6 +682,17 @@ export async function listJobOrders() {
   return (j.data || []).map((jo) => ({ ..._resolveJo(jo, cn, ca, sm, tn, cc), boq_no: jo.quote_no ? (boqByQuote[jo.quote_no] || null) : null, quoteGrand: jo.quote_no ? (grandByQuote[jo.quote_no] || 0) : 0, confirmItems: jo.quote_no ? (confirmByQuote[jo.quote_no] || []) : null }));
 }
 
+// job-order history for one customer (newest first) — for the customer detail timeline
+export async function listCustomerJobs(customerId) {
+  const [j, tm] = await Promise.all([
+    supabase.from("job_orders").select("job_no,title,details,scheduled_at,end_date,slot,status,assigned_team,created_at").eq("customer_id", customerId).order("scheduled_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }),
+    supabase.from("teams").select("id,name"),
+  ]);
+  if (j.error) throw j.error;
+  const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
+  return (j.data || []).map((r) => ({ ...r, teamName: r.assigned_team ? (tn[r.assigned_team] || r.assigned_team) : null }));
+}
+
 // job orders assigned to a team (technician view) — address/map/contact resolved live
 export async function listTeamJobOrders(team) {
   const [j, si, cu, ct] = await Promise.all([

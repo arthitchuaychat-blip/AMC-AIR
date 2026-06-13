@@ -1,12 +1,14 @@
 import React from "react";
-import { listCustomers, saveCustomer, deleteCustomer } from "../lib/api";
+import { listCustomers, saveCustomer, deleteCustomer, listCustomerJobs } from "../lib/api";
 import { UIcon } from "../icons";
 import { custCode } from "../lib/format";
+import { scheduleLabel } from "../lib/schedule";
 import CustomerImportModal from "./CustomerImportModal";
 
 const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", vat: true, address: "", note: "" });
+const JOB_STATUS = { pending: ["รอจ่ายงาน", "b-grey"], scheduled: ["นัดแล้ว", "b-blue"], in_progress: ["กำลังทำ", "b-amber"], done: ["เสร็จ", "b-green"], cancelled: ["ยกเลิก", "b-red"] };
 
-export default function Customers({ role }) {
+export default function Customers({ role, onOpenJob }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -14,6 +16,8 @@ export default function Customers({ role }) {
   const [toast, setToast] = React.useState(null);
   const [editing, setEditing] = React.useState(null); // {cust, contacts[], sites[]}
   const [viewing, setViewing] = React.useState(null); // customer being viewed (detail)
+  const [viewJobs, setViewJobs] = React.useState([]);
+  const [loadingJobs, setLoadingJobs] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
   const [viewMode, setViewMode] = React.useState("grid"); // grid | list
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
@@ -24,6 +28,12 @@ export default function Customers({ role }) {
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  // load this customer's job history whenever the detail modal opens
+  React.useEffect(() => {
+    if (!viewing) { setViewJobs([]); return; }
+    setLoadingJobs(true);
+    listCustomerJobs(viewing.id).then(setViewJobs).catch(() => setViewJobs([])).finally(() => setLoadingJobs(false));
+  }, [viewing]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   const ql = q.trim().toLowerCase();
@@ -224,6 +234,25 @@ export default function Customers({ role }) {
                   {s.address && <div className="cd-site-addr">{s.address}</div>}
                 </div>
               ))}
+
+              <div className="cd-sec">ประวัติงาน ({viewJobs.length} รายการ{viewJobs.filter((j) => j.status === "done").length ? ` · เสร็จ ${viewJobs.filter((j) => j.status === "done").length}` : ""})</div>
+              {loadingJobs && <div className="cd-empty">กำลังโหลด…</div>}
+              {!loadingJobs && viewJobs.length === 0 && <div className="cd-empty">— ยังไม่เคยมีงาน —</div>}
+              <div className="cd-timeline">
+                {viewJobs.map((jo) => {
+                  const st = JOB_STATUS[jo.status] || JOB_STATUS.pending;
+                  return (
+                    <button className="cd-job" key={jo.job_no} onClick={() => { const n = jo.job_no; setViewing(null); onOpenJob && onOpenJob(n); }}>
+                      <span className={"cd-job-dot " + st[1]} />
+                      <div className="cd-job-body">
+                        <div className="cd-job-top"><b>{jo.title || "งานติดตั้ง/บริการ"}</b><span className={"job-badge " + st[1]}>{st[0]}</span></div>
+                        <div className="cd-job-meta">🗓 {jo.scheduled_at ? scheduleLabel(jo) : "ยังไม่นัด"} · 👷 {jo.teamName || "ยังไม่มอบทีม"}</div>
+                        <div className="cd-job-no">{jo.job_no} · ดูรายละเอียด ›</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="modal-foot">
               {canEdit && <button className="btn-ghost danger" onClick={() => { const c = viewing; setViewing(null); del(c); }}><UIcon name="trash" size={15} /> ลบ</button>}
