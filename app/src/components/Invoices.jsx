@@ -26,6 +26,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [printI, setPrintI] = React.useState(null);
   const [view, setView] = React.useState(null);
   const [search, setSearch] = React.useState("");
+  const [statusF, setStatusF] = React.useState("all");
 
   async function load() {
     setLoading(true);
@@ -140,7 +141,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   // ---------- LIST ----------
   const ql = search.trim().toLowerCase();
-  const shown = list.filter((x) => !ql || x.invoice_no.toLowerCase().includes(ql) || (x.customerName || "").toLowerCase().includes(ql) || (x.quote_no || "").toLowerCase().includes(ql) || (x.contactPhone || "").includes(search.trim()));
+  const shown = list.filter((x) => (statusF === "all" || x.status === statusF)
+    && (!ql || x.invoice_no.toLowerCase().includes(ql) || (x.customerName || "").toLowerCase().includes(ql) || (x.quote_no || "").toLowerCase().includes(ql) || (x.contactPhone || "").includes(search.trim())));
   return (
     <div className="adm">
       <div className="adm-head">
@@ -152,6 +154,12 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           </div>
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบแจ้งหนี้</button>}
         </div>
+      </div>
+      <div className="cat-filter">
+        {[["all", "ทั้งหมด"], ["unpaid", "ค้างชำระ"], ["paid", "ชำระแล้ว"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบแจ้งหนี้" : "ไม่พบใบแจ้งหนี้"}</div>}

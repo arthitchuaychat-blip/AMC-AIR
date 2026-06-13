@@ -26,6 +26,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed }) {
   const [printR, setPrintR] = React.useState(null);
   const [view, setView] = React.useState(null);
   const [search, setSearch] = React.useState("");
+  const [statusF, setStatusF] = React.useState("all");
 
   async function load() {
     setLoading(true);
@@ -132,7 +133,8 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed }) {
 
   // ---------- LIST ----------
   const ql = search.trim().toLowerCase();
-  const shown = list.filter((x) => !ql || x.receipt_no.toLowerCase().includes(ql) || (x.customerName || "").toLowerCase().includes(ql) || (x.quote_no || "").toLowerCase().includes(ql) || (x.job_no || "").toLowerCase().includes(ql));
+  const shown = list.filter((x) => (statusF === "all" || x.status === statusF)
+    && (!ql || x.receipt_no.toLowerCase().includes(ql) || (x.customerName || "").toLowerCase().includes(ql) || (x.quote_no || "").toLowerCase().includes(ql) || (x.job_no || "").toLowerCase().includes(ql)));
   return (
     <div className="adm">
       <div className="adm-head">
@@ -144,6 +146,12 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed }) {
           </div>
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> ออกใบเสร็จ</button>}
         </div>
+      </div>
+      <div className="cat-filter">
+        {[["all", "ทั้งหมด"], ["pending", "รอชำระเงิน"], ["paid", "ชำระเงินแล้ว"]].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสร็จ" : "ไม่พบใบเสร็จ"}</div>}
