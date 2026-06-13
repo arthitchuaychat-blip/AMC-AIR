@@ -6,7 +6,7 @@ import { uploadMaterialPhoto } from "../lib/api";
 const KINDS = [{ v: "material", l: "วัสดุ" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }];
 
 // Add OR edit a catalog item (material / ac / service). `initial` null => add mode.
-export default function MaterialModal({ initial, categories, brands = [], btus = [], defaultKind = "material", onSaved, onClose, onSave }) {
+export default function MaterialModal({ initial, categories, brands = [], btus = [], acTypes = [], defaultKind = "material", onSaved, onClose, onSave }) {
   const isNew = !initial;
   const [f, setF] = React.useState(() => ({
     code: initial?.code || "",
@@ -16,6 +16,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     category: initial?.category || initial?.cat || categories[0]?.id || "pipe",
     brand: initial?.brand || "",
     btu: initial?.btu || "",
+    ac_type: initial?.ac_type || "",
     tracked: initial ? (initial.tracked !== false) : (defaultKind !== "service"),
     unit: initial?.unit || "เมตร",
     cost: initial?.cost ?? "",
@@ -95,10 +96,16 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
           </label>
 
           {isAc && (
-            <label className="fld"><span>ขนาด BTU</span>
-              <input className="inp" type="number" list="btu-list" value={f.btu} onChange={set("btu")} placeholder="เช่น 12000" />
-              <datalist id="btu-list">{btus.map((b) => <option key={b} value={b} />)}</datalist>
-            </label>
+            <div className="fld-row">
+              <label className="fld"><span>ขนาด BTU</span>
+                <input className="inp" type="number" list="btu-list" value={f.btu} onChange={set("btu")} placeholder="เช่น 12000" />
+                <datalist id="btu-list">{btus.map((b) => <option key={b} value={b} />)}</datalist>
+              </label>
+              <label className="fld"><span>ประเภทแอร์ · Type</span>
+                <input className="inp" list="actype-list" value={f.ac_type} onChange={set("ac_type")} placeholder="เช่น Wall Type" />
+                <datalist id="actype-list">{acTypes.map((t) => <option key={t} value={t} />)}</datalist>
+              </label>
+            </div>
           )}
 
           <label className="fld"><span>รายละเอียด</span>

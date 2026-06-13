@@ -21,6 +21,7 @@ export default function Catalog({ role }) {
   const [cat, setCat] = React.useState("all");
   const [brand, setBrand] = React.useState("all");
   const [btu, setBtu] = React.useState("all");
+  const [acType, setAcType] = React.useState("all");
   const [q, setQ] = React.useState("");
   const [editing, setEditing] = React.useState(undefined);
   const [openMat, setOpenMat] = React.useState(null);
@@ -41,11 +42,14 @@ export default function Catalog({ role }) {
 
   const ql = q.trim().toLowerCase();
   const KIND_ORDER = { ac: 0, material: 1, service: 2 };
+  // distinct AC sub-category values (derived from the catalog) for the filter dropdown
+  const acTypes = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "ac" && m.ac_type).map((m) => m.ac_type))].sort((a, b) => a.localeCompare(b, "th")), [mats]);
   const list = mats.filter((m) =>
     (kind === "all" || m.kind === kind) &&
     (kind !== "material" || cat === "all" || m.cat === cat) &&
     (kind !== "ac" || brand === "all" || m.brand === brand) &&
     (kind !== "ac" || btu === "all" || String(m.btu) === String(btu)) &&
+    (kind !== "ac" || acType === "all" || m.ac_type === acType) &&
     (!ql || (m.th || "").toLowerCase().includes(ql) || (m.en || "").toLowerCase().includes(ql) ||
       (m.code || "").toLowerCase().includes(ql) || (m.catName || "").includes(q.trim()) || (m.brand || "").toLowerCase().includes(ql))
   ).sort((a, b) =>
@@ -92,7 +96,7 @@ export default function Catalog({ role }) {
       {/* type tabs */}
       <div className="cat-filter">
         {KINDS.map((k) => (
-          <button key={k.v} className={"cat-chip" + (kind === k.v ? " on" : "")} onClick={() => { setKind(k.v); setCat("all"); setBrand("all"); setBtu("all"); }}
+          <button key={k.v} className={"cat-chip" + (kind === k.v ? " on" : "")} onClick={() => { setKind(k.v); setCat("all"); setBrand("all"); setBtu("all"); setAcType("all"); }}
             style={kind === k.v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{k.l}</button>
         ))}
       </div>
@@ -114,6 +118,9 @@ export default function Catalog({ role }) {
           </select>
           <select className="inp" style={{ width: "auto" }} value={btu} onChange={(e) => setBtu(e.target.value)}>
             <option value="all">ทุกขนาด BTU</option>{btus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
+          </select>
+          <select className="inp" style={{ width: "auto" }} value={acType} onChange={(e) => setAcType(e.target.value)}>
+            <option value="all">ทุกประเภทแอร์</option>{acTypes.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
       )}
@@ -137,7 +144,7 @@ export default function Catalog({ role }) {
                   </div>
                 </div>
                 <div className="cat-card-name">{m.th}</div>
-                <div className="cat-card-en">{m.kind === "ac" ? [m.brand, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") || m.en : m.en}</div>
+                <div className="cat-card-en">{m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") || m.en : m.en}</div>
                 {m.description && <div className="cat-card-desc">{m.description}</div>}
                 <div className="cat-card-stats">
                   {m.tracked
@@ -163,7 +170,7 @@ export default function Catalog({ role }) {
                 <MaterialThumb mat={m} size={40} radius={11} />
                 <div className="cat-lrow-main">
                   <div className="cat-lrow-name">{m.th} {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>} {low && <span className="badge-warn sm">ต่ำ</span>}</div>
-                  <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
+                  <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
                 </div>
                 <div className="cat-lrow-col hide-sm"><span>คงเหลือ</span><b style={low ? { color: "#dc2626" } : {}}>{m.tracked ? `${m.stock} ${m.unit}` : "—"}</b></div>
                 <div className="cat-lrow-col hide-sm"><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b></div>
@@ -184,10 +191,10 @@ export default function Catalog({ role }) {
       )}
       {openMat && <MaterialDrawer mat={openMat} onClose={() => setOpenMat(null)} />}
       {editing !== undefined && (
-        <MaterialModal initial={editing} categories={cats} brands={brands} btus={btus}
+        <MaterialModal initial={editing} categories={cats} brands={brands} btus={btus} acTypes={acTypes}
           defaultKind={kind === "all" ? "material" : kind}
           onSave={saveMaterial}
-          onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setBtu("all"); flash(`บันทึกสำเร็จ ✓ — อยู่ในแท็บ "${KINDS.find((k) => k.v === savedKind)?.l || savedKind}"`); } load(); }}
+          onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setBtu("all"); setAcType("all"); flash(`บันทึกสำเร็จ ✓ — อยู่ในแท็บ "${KINDS.find((k) => k.v === savedKind)?.l || savedKind}"`); } load(); }}
           onClose={() => setEditing(undefined)} />
       )}
     </div>

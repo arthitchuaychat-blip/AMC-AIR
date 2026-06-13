@@ -6,11 +6,11 @@ import { UIcon } from "../icons";
 // ชนิด · รหัส · ชื่อไทย · ชื่ออังกฤษ · หมวด/ยี่ห้อ · BTU · หน่วย · ต้นทุน · ขั้นต่ำ · คงเหลือ · ราคาขาย · รายละเอียด
 //   ชนิด = แอร์/วัสดุ/บริการ (ac/material/service)
 //   คอลัมน์ "หมวด/ยี่ห้อ" = หมวด(วัสดุ) หรือ ยี่ห้อ(แอร์) · BTU ใช้เฉพาะแอร์
-const HEADER = "ชนิด,รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด/ยี่ห้อ,BTU,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด";
+const HEADER = "ชนิด,รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด/ยี่ห้อ,BTU,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด,ประเภทแอร์";
 const SAMPLE_ROWS = [
-  "แอร์,DKN12,แอร์ Daikin 12000 BTU,Daikin 12000,Daikin,12000,เครื่อง,11000,2,0,15900,อินเวอร์เตอร์ เบอร์ 5",
-  "วัสดุ,COPP6,ท่อทองแดง 6 หุน,Copper Pipe,pipe,,เมตร,180,40,0,260,เกรด A",
-  "บริการ,SVCINST,ค่าติดตั้งแอร์,Install,,,งาน,0,0,0,1500,ติดตั้งมาตรฐานต่อชุด",
+  "แอร์,DKN12,แอร์ Daikin 12000 BTU,Daikin 12000,Daikin,12000,เครื่อง,11000,2,0,15900,อินเวอร์เตอร์ เบอร์ 5,Wall Type",
+  "วัสดุ,COPP6,ท่อทองแดง 6 หุน,Copper Pipe,pipe,,เมตร,180,40,0,260,เกรด A,",
+  "บริการ,SVCINST,ค่าติดตั้งแอร์,Install,,,งาน,0,0,0,1500,ติดตั้งมาตรฐานต่อชุด,",
 ];
 const TEMPLATE = [HEADER, ...SAMPLE_ROWS].join("\n");
 
@@ -87,18 +87,16 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
       if (i === 0 && (c0 === "ชนิด" || c0 === "kind" || c0 === "รหัส" || c0 === "code")) return; // header
 
       const kindFromCol = detectKind(cells[0]);
-      let kind, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price, description;
+      let kind, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price, description, ac_type;
       if (kindFromCol) {
-        // new format: kind in column 1
+        // new format: kind in column 1 · ...,ราคาขาย(10),รายละเอียด(11),ประเภทแอร์(12)
         kind = kindFromCol;
-        [, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price] = cells;
-        description = cells.slice(11).join(",");
+        [, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price, description, ac_type] = cells;
       } else {
         // backward-compatible: old material-only format (no kind column)
         kind = "material";
-        [code, name_th, name_en, catBrand, unit, cost, min_stock, init_stock, sale_price] = cells;
+        [code, name_th, name_en, catBrand, unit, cost, min_stock, init_stock, sale_price, description] = cells;
         btu = null;
-        description = cells.slice(9).join(",");
       }
 
       if (!code || !name_th) { errors.push({ line: i + 1, reason: "ต้องมีรหัสและชื่อไทย" }); return; }
@@ -109,6 +107,7 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
         _catRaw: kind === "material" ? (catBrand?.trim() || "") : "",
         brand: kind === "ac" ? (catBrand?.trim() || null) : null,
         btu: kind === "ac" && btu ? Number(btu) : null,
+        ac_type: kind === "ac" ? (ac_type?.trim() || null) : null,
         tracked: isService ? false : true,
         unit: unit || defUnit(kind),
         cost: Number(cost) || 0,
@@ -158,12 +157,13 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
         <div className="modal-body">
           <p className="page-sub" style={{ marginBottom: 8 }}>
             วางข้อมูลจาก Excel/Google Sheets (หลายแถวพร้อมกัน) หรืออัปโหลดไฟล์ <b>.csv</b> — ใส่ <b>แอร์ · วัสดุ · บริการ</b> รวมกันได้<br />
-            ลำดับคอลัมน์: <b>ชนิด · รหัส · ชื่อไทย · ชื่ออังกฤษ · หมวด/ยี่ห้อ · BTU · หน่วย · ต้นทุน · ขั้นต่ำ · คงเหลือ · ราคาขาย · รายละเอียด</b>
+            ลำดับคอลัมน์: <b>ชนิด · รหัส · ชื่อไทย · ชื่ออังกฤษ · หมวด/ยี่ห้อ · BTU · หน่วย · ต้นทุน · ขั้นต่ำ · คงเหลือ · ราคาขาย · รายละเอียด · ประเภทแอร์</b>
           </p>
           <ul className="bulk-help">
             <li><b>ชนิด</b> = แอร์ / วัสดุ / บริการ</li>
             <li><b>หมวด/ยี่ห้อ</b> = ใส่ "หมวด" ถ้าเป็นวัสดุ (ถ้ายังไม่มีหมวดนี้ ระบบสร้างให้อัตโนมัติ) · ใส่ "ยี่ห้อ" ถ้าเป็นแอร์ · บริการเว้นว่าง</li>
-            <li><b>BTU</b> = เฉพาะแอร์ · <b>บริการ</b> ไม่ต้องใส่สต๊อก (ขั้นต่ำ/คงเหลือเว้นว่างได้)</li>
+            <li><b>BTU · ประเภทแอร์</b> = เฉพาะแอร์ (ประเภทแอร์ เช่น Wall Type / Cassette Type — กรองได้ในคลัง) · วัสดุ/บริการ เว้นว่าง</li>
+            <li><b>บริการ</b> ไม่ต้องใส่สต๊อก (ขั้นต่ำ/คงเหลือเว้นว่างได้) · ชื่อที่มีจุลภาคให้ครอบด้วย "..." หรือก๊อปจาก Google Sheets มาวางตรงๆ</li>
           </ul>
           <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
             <button className="btn-ghost sm" onClick={downloadTemplate}><UIcon name="withdraw" size={14} /> ดาวน์โหลดฟอร์ม CSV</button>

@@ -24,6 +24,8 @@ create table if not exists materials (
   kind        text not null default 'material' check (kind in ('ac','service','material')),
   brand       text,
   btu         integer,
+  ac_type     text,                       -- ประเภทแอร์ (Wall/Cassette/Ceiling/Duct/Floor) — เฉพาะสินค้าแอร์
+
   tracked     boolean not null default true,
   category    text references categories(id) on update cascade,
   unit        text,
