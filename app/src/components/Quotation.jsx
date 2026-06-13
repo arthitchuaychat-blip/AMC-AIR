@@ -18,7 +18,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc }) {
+export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc, sendIntent, onSendIntentDone }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -61,6 +61,14 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setPrintQ(null); capturing.current = false; setSendBusy(false);
   }
+  // auto-send when arriving with a send intent from the chat page
+  React.useEffect(() => {
+    if (!sendIntent || sendIntent.type !== "quote" || sendBusy) return;
+    const q = list.find((x) => x.quote_no === sendIntent.no);
+    if (!q) return;
+    const mode = sendIntent.mode; onSendIntentDone && onSendIntentDone();
+    sendToLine(q, mode);
+  }, [sendIntent, list]);
   // open focused on a specific quote (from the dashboard report link)
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
@@ -328,8 +336,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "quote", no: q.quote_no }} onOpen={onOpenDoc} />; })()}
               <div className="job-lines"><div className="job-actions">
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-                {canEdit && <button className="btn-ghost sm" disabled={sendBusy} onClick={() => sendToLine(q, "image")}><UIcon name="chat" size={14} /> รูป→LINE</button>}
-                {canEdit && <button className="btn-ghost sm" disabled={sendBusy} onClick={() => sendToLine(q, "pdf")}><UIcon name="chat" size={14} /> PDF→LINE</button>}
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {q.status === "approved" && onCreateInvoice && (q.hasInvoice

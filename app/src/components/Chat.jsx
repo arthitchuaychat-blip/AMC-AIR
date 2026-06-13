@@ -12,7 +12,7 @@ const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "";
 
-export default function Chat({ role, onOpenDoc, onGoCustomers }) {
+export default function Chat({ role, onOpenDoc, onGoCustomers, onSendDoc }) {
   const canSend = ["admin", "sales", "exec", "finance"].includes(role);
   const [contacts, setContacts] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -28,6 +28,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
   const [newQr, setNewQr] = React.useState("");
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
   const [jobPicker, setJobPicker] = React.useState(null);
+  const [sendDocOpen, setSendDocOpen] = React.useState(false);
   const [infoDocs, setInfoDocs] = React.useState([]);
   const [loadingInfoDocs, setLoadingInfoDocs] = React.useState(false);
   const [infoDocF, setInfoDocF] = React.useState("all");
@@ -197,6 +198,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
                 <div className="chat-composer">
                   <div className="chat-tools">
                     {selContact.customer_id && <button className="chat-tool primary" onClick={openConfirm} disabled={sending}>🧾 ส่งคอนเฟิม</button>}
+                    {selContact.customer_id && <button className="chat-tool primary" onClick={() => setSendDocOpen(true)}>📄 ส่งเอกสาร</button>}
                     <label className={"chat-tool" + (sending ? " disabled" : "")}>📷 รูป
                       <input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
                     </label>
@@ -328,6 +330,34 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
           </div>
         </div>
       )}
+      {sendDocOpen && (() => {
+        const docs = infoDocs.filter((e) => ["quote", "invoice", "receipt"].includes(e.type));
+        return (
+          <div className="modal-overlay" onClick={() => setSendDocOpen(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
+              <div className="modal-head"><div className="modal-title">ส่งเอกสารให้ลูกค้าทาง LINE</div>
+                <button className="drawer-close" onClick={() => setSendDocOpen(false)}><UIcon name="x" size={20} /></button></div>
+              <div className="modal-body">
+                <p className="page-sub" style={{ marginBottom: 10 }}>เลือกเอกสารแล้วเลือกส่งเป็น “รูป” (เห็นในแชต) หรือ “PDF” (ลิงก์เปิด/เซฟไฟล์)</p>
+                {docs.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ลูกค้านี้ยังไม่มีเอกสาร</div>}
+                {docs.map((e) => {
+                  const st = stOf(e);
+                  return (
+                    <div className="senddoc-row" key={e.type + e.no}>
+                      <div className="senddoc-info">
+                        <div><span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span><b>{e.no}</b></div>
+                        <small>{e.title || ""} · <span className={"job-badge " + st[1]}>{st[0]}</span></small>
+                      </div>
+                      <button className="btn-ghost sm" onClick={() => { setSendDocOpen(false); onSendDoc && onSendDoc(e.type, e.no, "image"); }}><UIcon name="camera" size={13} /> รูป</button>
+                      <button className="btn-ghost sm" onClick={() => { setSendDocOpen(false); onSendDoc && onSendDoc(e.type, e.no, "pdf"); }}><UIcon name="clipboard" size={13} /> PDF</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {custForm && <CustomerFormModal initial={custForm.initial} onClose={() => setCustForm(null)} onSaved={onCustSaved} />}
       {toast && <div className={"chat-toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>

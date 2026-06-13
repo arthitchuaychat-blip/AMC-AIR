@@ -18,7 +18,7 @@ const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, pai
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `INV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenDoc, focus, onFocusConsumed }) {
+export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenDoc, focus, onFocusConsumed, sendIntent, onSendIntentDone }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -58,6 +58,13 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setPrintI(null); capturing.current = false; setSendBusy(false);
   }
+  React.useEffect(() => {
+    if (!sendIntent || sendIntent.type !== "invoice" || sendBusy) return;
+    const x = list.find((r) => r.invoice_no === sendIntent.no);
+    if (!x) return;
+    const mode = sendIntent.mode; onSendIntentDone && onSendIntentDone();
+    sendToLine(x, mode);
+  }, [sendIntent, list]);
   // open the create form prefilled from a quotation (link from the quotation page)
   React.useEffect(() => { if (!fromQuote || !quotes.length) return; startNew(fromQuote); onFromQuoteConsumed && onFromQuoteConsumed(); }, [fromQuote, quotes]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
@@ -207,8 +214,6 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="clipboard" size={14} color="#fff" /> ออกใบเสร็จ</button>}
                 {canEdit && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintI(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-                <button className="btn-ghost sm" disabled={sendBusy} onClick={() => sendToLine(x, "image")}><UIcon name="chat" size={14} /> รูป→LINE</button>
-                <button className="btn-ghost sm" disabled={sendBusy} onClick={() => sendToLine(x, "pdf")}><UIcon name="chat" size={14} /> PDF→LINE</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
               </div></div>

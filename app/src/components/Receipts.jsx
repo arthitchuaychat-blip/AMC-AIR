@@ -16,7 +16,7 @@ const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenDoc, focus, onFocusConsumed }) {
+export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenDoc, focus, onFocusConsumed, sendIntent, onSendIntentDone }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
@@ -57,6 +57,13 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
     } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setPrintR(null); capturing.current = false; setSendBusy(false);
   }
+  React.useEffect(() => {
+    if (!sendIntent || sendIntent.type !== "receipt" || sendBusy) return;
+    const x = list.find((r) => r.receipt_no === sendIntent.no);
+    if (!x) return;
+    const mode = sendIntent.mode; onSendIntentDone && onSendIntentDone();
+    sendToLine(x, mode);
+  }, [sendIntent, list]);
   // open the create form prefilled from an invoice (link from the invoice page)
   React.useEffect(() => { if (!fromInvoice || !invoices.length) return; startNew(); onPickInvoice(fromInvoice); onFromInvoiceConsumed && onFromInvoiceConsumed(); }, [fromInvoice, invoices]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
@@ -192,8 +199,6 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
             <div className="job-lines"><div className="job-actions">
               {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintR(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-              <button className="btn-ghost sm" disabled={sendBusy} onClick={() => sendToLine(x, "image")}><UIcon name="chat" size={14} /> รูป→LINE</button>
-              <button className="btn-ghost sm" disabled={sendBusy} onClick={() => sendToLine(x, "pdf")}><UIcon name="chat" size={14} /> PDF→LINE</button>
               {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
             </div></div>
           </div>
