@@ -159,7 +159,12 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           <div className="card job-card" key={bo.boq_no}>
             <div className="job-card-head" style={{ cursor: "default" }}>
               <div className="job-card-id"><span className="job-no">{bo.boq_no}</span></div>
-              <div className="job-card-meta">{bo.customerName || "ไม่ระบุลูกค้า"}{bo.contactPhone ? ` · ${bo.contactPhone}` : ""}{bo.title ? ` · ${bo.title}` : ""} · {bo.items.length} รายการ</div>
+              <div className="job-card-meta inv-meta">
+                <span className="inv-cust">🏢 {bo.customerName || "ไม่ระบุลูกค้า"}</span>
+                {bo.contactPhone && <a className="ref-link" href={`tel:${bo.contactPhone}`}>📞 {bo.contactPhone}</a>}
+                {bo.title && <span>{bo.title}</span>}
+                <span className="inv-hint">{bo.items.length} รายการ</span>
+              </div>
               <div className="job-card-cost"><span>ต้นทุนรวม</span><b>{fmtBaht(bo.total)}</b></div>
             </div>
             <div className="job-lines"><div className="job-actions">
