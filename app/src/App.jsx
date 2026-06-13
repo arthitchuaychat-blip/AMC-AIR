@@ -172,7 +172,7 @@ export default function App() {
       <main className="main">
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
-        {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
+        {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
         {view === "chat" && <Chat role={role} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGoCustomers={(name) => { setCustFocus(name); go("customers"); }} />}
         {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenDoc={openDoc} />}

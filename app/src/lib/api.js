@@ -744,6 +744,25 @@ export async function listCustomerJobs(customerId) {
   return (j.data || []).map((r) => ({ ...r, teamName: r.assigned_team ? (tn[r.assigned_team] || r.assigned_team) : null }));
 }
 
+// all documents + jobs for one customer (newest first) — for the customer detail history with type filter
+export async function listCustomerDocs(customerId) {
+  const [q, iv, rc, jo, tm] = await Promise.all([
+    supabase.from("quotations").select("quote_no,title,status,issue_date,created_at").eq("customer_id", customerId),
+    supabase.from("invoices").select("invoice_no,status,issue_date,total,installment,pct,created_at").eq("customer_id", customerId),
+    supabase.from("receipts").select("receipt_no,status,issue_date,net,created_at").eq("customer_id", customerId),
+    supabase.from("job_orders").select("job_no,title,scheduled_at,end_date,slot,status,assigned_team,created_at").eq("customer_id", customerId),
+    supabase.from("teams").select("id,name"),
+  ]);
+  const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
+  const entries = [
+    ...(q.data || []).map((x) => ({ type: "quote", no: x.quote_no, title: x.title, status: x.status, date: x.issue_date || x.created_at })),
+    ...(iv.data || []).map((x) => ({ type: "invoice", no: x.invoice_no, title: `งวด ${x.installment} (${Math.round(x.pct)}%)`, status: x.status, amount: x.total, date: x.issue_date || x.created_at })),
+    ...(rc.data || []).map((x) => ({ type: "receipt", no: x.receipt_no, status: x.status, amount: x.net, date: x.issue_date || x.created_at })),
+    ...(jo.data || []).map((x) => ({ type: "job", no: x.job_no, title: x.title, status: x.status, date: x.scheduled_at || x.created_at, teamName: x.assigned_team ? (tn[x.assigned_team] || x.assigned_team) : null, scheduled_at: x.scheduled_at, end_date: x.end_date, slot: x.slot })),
+  ];
+  return entries.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
 // job orders assigned to a team (technician view) — address/map/contact resolved live
 export async function listTeamJobOrders(team) {
   const [j, si, cu, ct] = await Promise.all([
