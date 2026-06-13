@@ -1,10 +1,11 @@
 import React from "react";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerJobs, saveCustomer, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerJobs, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel } from "../lib/schedule";
 import { fmtBaht, custCode } from "../lib/format";
 import { UIcon } from "../icons";
+import CustomerFormModal from "./CustomerFormModal";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
@@ -30,7 +31,7 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
   const [infoJobs, setInfoJobs] = React.useState([]);
   const [loadingInfoJobs, setLoadingInfoJobs] = React.useState(false);
   const [showInfo, setShowInfo] = React.useState(false); // mobile info-panel toggle
-  const [creatingCust, setCreatingCust] = React.useState(false);
+  const [custForm, setCustForm] = React.useState(null);  // { initial, link } → opens the customer form modal
   const selRef = React.useRef(null);
   const endRef = React.useRef(null);
 
@@ -69,21 +70,25 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
     catch (e) { flash("โหลดข้อความไม่สำเร็จ", true); }
   }
 
-  // create a brand-new customer from this LINE contact and link it
-  async function addNewCustomer() {
+  // open the full customer form (in a popup) to add a new customer from this LINE contact, then auto-link
+  function addNewCustomer() {
     const c = contacts.find((x) => x.line_user_id === sel); if (!c) return;
-    const name = window.prompt("ชื่อลูกค้าใหม่ (แก้ไขได้):", c.display_name || "");
-    if (name === null) return;
-    if (!name.trim()) return flash("ใส่ชื่อลูกค้า", true);
-    setCreatingCust(true);
+    setCustForm({ initial: { type: "person", name: c.display_name || "", vat: false, note: "ลูกค้าจาก LINE OA", contacts: [{ name: c.display_name || "", phone: "", role: "" }], sites: [] }, link: true });
+  }
+  // open the full customer form to edit the already-linked customer
+  function editCustomer(cust) { setCustForm({ initial: cust, link: false }); }
+
+  // after the form saves: link (if new), then refresh customers + contacts + job history
+  async function onCustSaved(id) {
+    const wasLink = custForm?.link;
+    setCustForm(null);
     try {
-      const id = await saveCustomer({ type: "person", name, vat: false, address: "", tax_id: "", note: "ลูกค้าจาก LINE OA" }, [], []);
-      await linkLineContact(sel, id);
+      if (wasLink && id) await linkLineContact(sel, id);
       setCusts(await listCustomers());
       await loadContacts();
-      flash("เพิ่มลูกค้าใหม่ + เชื่อมแล้ว ✓");
-    } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e.message || e), true); }
-    setCreatingCust(false);
+      if (linkedCustId) listCustomerJobs(linkedCustId).then(setInfoJobs).catch(() => {});
+      flash(wasLink ? "เพิ่มลูกค้า + เชื่อมแล้ว ✓" : "บันทึกข้อมูลลูกค้าแล้ว ✓");
+    } catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
   }
 
   async function send() {
@@ -232,6 +237,7 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
                   {cust.tax_id && <div className="ci-row">🧾 <span>{cust.tax_id}</span></div>}
                   {cust.sites?.length > 0 && <div className="ci-row">🏠 <span>{cust.sites.length} ไซต์งาน</span></div>}
                   {canSend && <div className="ci-actions">
+                    <button className="btn-primary sm" onClick={() => editCustomer(cust)}><UIcon name="edit" size={13} color="#fff" /> แก้ไขข้อมูล</button>
                     <button className="btn-ghost sm" onClick={() => onGoCustomers && onGoCustomers(cust.name)}>เปิดหน้าลูกค้า</button>
                     <button className="btn-ghost sm" onClick={() => onLink(null)}>ยกเลิกการเชื่อม</button>
                   </div>}
@@ -263,8 +269,8 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
                           {custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </label>
-                      <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} disabled={creatingCust} onClick={addNewCustomer}>
-                        <UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> {creatingCust ? "กำลังเพิ่ม…" : "เพิ่มลูกค้าใหม่จาก LINE นี้"}
+                      <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={addNewCustomer}>
+                        <UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มลูกค้าใหม่จาก LINE นี้
                       </button>
                     </>}
                   </div>
@@ -312,6 +318,7 @@ export default function Chat({ role, onOpenJob, onGoCustomers }) {
           </div>
         </div>
       )}
+      {custForm && <CustomerFormModal initial={custForm.initial} onClose={() => setCustForm(null)} onSaved={onCustSaved} />}
       {toast && <div className={"chat-toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );
