@@ -26,7 +26,7 @@ function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
       <ItemPicker items={pool} placeholder={`ค้นหา${sec.label}…`}
         onPick={(m) => onAdd({ code: m.code, name: m.th, unit: m.unit, qty: 1, unit_cost: m.cost, description: m.description || "" })} />
       {items.map((it, i) => (
-        <div className="line-item" key={i}>
+        <div className={"line-item li-" + sec.id} key={i}>
           <div className="boq-line">
             <div className="line-info"><div className="line-name">{it.name || it.code}</div><div className="line-sub">{it.code}</div></div>
             <div className="inp inp-unit boq-in"><input type="number" min="1" value={it.qty} onChange={(e) => onSet(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><span className="unit-suf">{it.unit}</span></div>

@@ -152,7 +152,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           {ed.items.length > 0 && (
             <div className="line-list">
               {ed.items.map((it, i) => (
-                <div className="line-item" key={i}>
+                <div className={"line-item li-" + (it.kind || "material")} key={i}>
                   <div className="boq-line">
                     <div className="line-info"><div className="line-name">{it.name}</div><div className="line-sub">{it.code || "-"}</div></div>
                     <div className="inp inp-unit boq-in"><input type="number" min="0" value={it.qty} onChange={(e) => setLine(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><span className="unit-suf">{it.unit}</span></div>
