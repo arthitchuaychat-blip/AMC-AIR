@@ -42,7 +42,7 @@ function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
   );
 }
 
-export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed }) {
+export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -164,7 +164,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed }) {
             </div>
             <div className="job-lines"><div className="job-actions">
               {onCreateQuote && (bo.hasQuote
-                ? <span className="job-badge b-green" title={bo.quoteNo}>✓ สร้างใบเสนอราคาแล้ว · {bo.quoteNo}</span>
+                ? <button className="job-badge b-green badge-link" title="เปิดใบเสนอราคา" onClick={() => onOpenQuote && onOpenQuote(bo.quoteNo)}>✓ ใบเสนอราคา · {bo.quoteNo} ›</button>
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(bo); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}

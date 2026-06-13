@@ -164,18 +164,21 @@ export default function App() {
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
         {view === "chat" && <Chat role={role} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGoCustomers={(name) => { setCustFocus(name); go("customers"); }} />}
-        {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }} />}
+        {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} />}
         {view === "quote" && <Quotation role={role} focus={quoteFocus} onFocusConsumed={() => setQuoteFocus(null)}
           fromBoq={quoteFromBoq} onFromBoqConsumed={() => setQuoteFromBoq(null)}
           onCreateInvoice={(quoteNo) => { setInvoiceFromQuote(quoteNo); go("invoice"); }}
-          onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }} />}
+          onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }}
+          onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
         {view === "invoice" && <Invoices role={role} fromQuote={invoiceFromQuote} onFromQuoteConsumed={() => setInvoiceFromQuote(null)}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} />}
         {view === "receipt" && <Receipts role={role} fromInvoice={receiptFromInvoice} onFromInvoiceConsumed={() => setReceiptFromInvoice(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
         {view === "profit" && <Profit />}
-        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)} />}
+        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} />}
         {view === "schedule" && <Schedule role={role} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}
         {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}

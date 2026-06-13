@@ -1111,3 +1111,6 @@ select.inp{cursor:pointer}
 .ref-link:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
 .ref-flat{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);border-radius:7px;padding:2px 9px;font-size:11.5px;font-weight:600}
 .inv-hint{font-size:11px;color:var(--ink-3)}
+
+.badge-link{border:none;cursor:pointer;font-family:inherit}
+.badge-link:hover{filter:brightness(.94);text-decoration:underline}

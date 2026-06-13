@@ -14,7 +14,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob }) {
+export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -253,7 +253,11 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             <div className={"card job-card" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
               <div className="job-card-head" style={{ cursor: "default" }}>
                 <div className="job-card-id"><span className="job-no">{q.quote_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
-                <div className="job-card-meta">{q.title || "ใบเสนอราคา"} · {q.items.length} รายการ{q.boq_no ? ` · อ้าง ${q.boq_no}` : ""}</div>
+                <div className="job-card-meta inv-meta">
+                  <span className="inv-cust">{q.title || "ใบเสนอราคา"}</span>
+                  <span className="inv-hint">{q.items.length} รายการ</span>
+                  {q.boq_no && <button className="ref-link" title="เปิด BOQ" onClick={() => onOpenBoq && onOpenBoq(q.boq_no)}>BOQ {q.boq_no}</button>}
+                </div>
                 <div className="job-card-cost"><span>ยอดสุทธิ</span><b>{fmtBaht(q.grand)}</b></div>
               </div>
               <div className="jo-info">
@@ -268,7 +272,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 {q.status === "approved" && onCreateInvoice && (q.hasInvoice
                   ? <span className="job-badge b-green" title="วางบิลงวดถัดไปได้ที่เมนูใบแจ้งหนี้">✓ ออกใบแจ้งหนี้แล้ว · วางบิล {Math.round(q.billedPct)}%</span>
                   : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>))}
-                {q.status === "approved" && q.hasJob && <span className="job-badge b-green" title={`ใบงาน ${q.jobNo}`}>✓ สร้างใบงานแล้ว · {q.jobNo}</span>}
+                {q.status === "approved" && q.hasJob && <button className="job-badge b-green badge-link" title="เปิดใบงาน" onClick={() => onOpenJob && onOpenJob(q.jobNo)}>✓ ใบงาน · {q.jobNo} ›</button>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>
