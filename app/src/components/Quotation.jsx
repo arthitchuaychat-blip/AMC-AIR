@@ -80,12 +80,14 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
   function pullFromBoq() {
     const b = boqs.find((x) => x.boq_no === ed.boq_no); if (!b) return flash("เลือก BOQ ก่อน", true);
+    const existing = new Set((ed.items || []).map((it) => it.code || it.name));
     const pulled = b.items.filter((x) => ["ac", "charged", "service"].includes(x.section)).map((x) => {
       const m = matMap[x.item_code];
       return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
-    });
-    setEd((e) => ({ ...e, items: pulled }));
-    flash(`ดึง ${pulled.length} รายการจาก ${b.boq_no} (ไม่รวมของแถม)`);
+    }).filter((it) => !existing.has(it.code || it.name)); // add only items not already in the quote (keeps your edited prices)
+    if (!pulled.length) return flash("ไม่มีรายการใหม่จาก BOQ (มีครบแล้ว)");
+    setEd((e) => ({ ...e, items: [...(e.items || []), ...pulled] }));
+    flash(`เพิ่ม ${pulled.length} รายการใหม่จาก ${b.boq_no} — ตรวจราคาขายแล้วบันทึก`);
   }
 
   // totals
@@ -170,7 +172,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           </div>
 
           {/* pull from BOQ */}
-          <div className="fld"><span>ดึงรายการจาก BOQ (ไม่บังคับ)</span>
+          <div className="fld"><span>ดึงรายการจาก BOQ (เพิ่มเฉพาะรายการใหม่ · ไม่ทับของเดิม)</span>
             <div className="line-add">
               <select className="inp" value={ed.boq_no} onChange={(e) => setQ("boq_no", e.target.value)}>
                 <option value="">— ไม่อ้าง BOQ —</option>{custBoqs.map((b) => <option key={b.boq_no} value={b.boq_no}>{b.boq_no}{b.title ? ` · ${b.title}` : ""}</option>)}
