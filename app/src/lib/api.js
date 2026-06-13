@@ -403,7 +403,7 @@ export async function bulkImportCustomers(rows) {
 export async function listBoqs() {
   const [b, it, cu, si, ct, qt] = await Promise.all([
     supabase.from("boqs").select("*").order("created_at", { ascending: false }),
-    supabase.from("boq_items").select("*"),
+    supabase.from("boq_items").select("*").order("id"),
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
@@ -493,7 +493,7 @@ export async function deleteBoq(boq_no) {
 export async function listQuotations() {
   const [q, it, cu, si, ct, jo, inv] = await Promise.all([
     supabase.from("quotations").select("*").order("created_at", { ascending: false }),
-    supabase.from("quotation_items").select("*"),
+    supabase.from("quotation_items").select("*").order("id"),
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
