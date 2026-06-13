@@ -2,7 +2,7 @@ import React from "react";
 
 // Full A4 print document shared by Quotation & BOQ:
 // company letterhead → doc meta → customer block → {children: table+totals} → terms/bank → signatures.
-export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, terms, bank, paymentInfo, signLabels = [], children }) {
+export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, projectTitle, terms, bank, paymentInfo, signLabels = [], children }) {
   const co = company || {};
   return (
     <div className="print-area">
@@ -42,6 +42,8 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
             {customer.mapUrl && <div className="doc-cust-line">📍 หมุดแผนที่: <a href={customer.mapUrl} target="_blank" rel="noreferrer">เปิดแผนที่ (Google Maps)</a></div>}
           </div>
         </div>
+
+        {projectTitle && <div className="doc-project"><span>ชื่องาน</span> {projectTitle}</div>}
 
         {children}
 

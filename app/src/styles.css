@@ -1133,3 +1133,8 @@ select.inp{cursor:pointer}
 .cust-info-row .ci-addr{flex:1;min-width:0;color:var(--ink-2)}
 .cust-info-row .ci-tel{color:var(--primary);font-weight:700}
 .cust-info-row .ci-map{font-size:11.5px;font-weight:700;color:var(--primary);border:1px solid #cfe0f5;background:#e9f3fd;border-radius:7px;padding:1px 9px}
+
+/* project/job title banner on printed documents */
+.doc-project{margin:10px 0 4px;font-size:13.5px;color:var(--ink);font-weight:700}
+.doc-project span{display:inline-block;background:#eef3fb;color:var(--primary);border:1px solid #d4e3f7;border-radius:6px;padding:1px 9px;font-size:11.5px;margin-right:8px}
+@media print{.doc-project span{background:#eef3fb !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}

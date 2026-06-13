@@ -558,7 +558,7 @@ export async function listInvoices() {
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("quotations").select("quote_no,boq_no"),
+    supabase.from("quotations").select("quote_no,boq_no,title"),
     supabase.from("receipts").select("invoice_no"),
   ]);
   if (iv.error) throw iv.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
@@ -568,10 +568,12 @@ export async function listInvoices() {
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
+  const titleByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.title]));
   const receiptedInv = new Set((rc.data || []).map((r) => r.invoice_no));
   return (iv.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
+      title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
@@ -613,14 +615,16 @@ export async function deleteInvoice(invoice_no) {
 
 // ---------- RECEIPTS (ใบเสร็จรับเงิน) ----------
 export async function listReceipts() {
-  const [rc, cu, si, ct, jo] = await Promise.all([
+  const [rc, cu, si, ct, jo, qt] = await Promise.all([
     supabase.from("receipts").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("job_orders").select("job_no,quote_no"),
+    supabase.from("quotations").select("quote_no,title"),
   ]);
-  if (rc.error) throw rc.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
+  if (rc.error) throw rc.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error; if (qt.error) throw qt.error;
+  const titleByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.title]));
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
@@ -630,6 +634,7 @@ export async function listReceipts() {
   return (rc.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,
+      title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
