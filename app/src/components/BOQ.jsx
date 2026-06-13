@@ -19,8 +19,7 @@ const SECTIONS = [
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BOQ-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const blankItems = () => ({ ac: [], free: [], charged: [], service: [] });
 
-function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
-  const pool = mats.filter((m) => sec.kinds.includes(m.kind));
+function SectionBlock({ sec, items, pool, onAdd, onSet, onDel }) {
   const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0);
   return (
     <div className={"boq-sec sec-" + sec.id}>
@@ -79,6 +78,9 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
 
   const cust = custs.find((c) => String(c.id) === String(ed?.customer_id));
   const total = ed ? Object.values(ed.items).flat().reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) : 0;
+  // pre-compute each section's item pool once (not on every keystroke) — much faster with a large catalog
+  const poolByKind = React.useMemo(() => ({ ac: mats.filter((m) => m.kind === "ac"), material: mats.filter((m) => m.kind === "material"), service: mats.filter((m) => m.kind === "service") }), [mats]);
+  const poolFor = (sec) => poolByKind[sec.kinds[0]] || [];
 
   const addItem = (sec, it) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: [...e.items[sec], it] } }));
   const setItem = (sec, i, k, v) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: e.items[sec].map((x, j) => j === i ? { ...x, [k]: v } : x) } }));
@@ -137,7 +139,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           })()}
 
           {SECTIONS.map((sec) => (
-            <SectionBlock key={sec.id} sec={sec} items={ed.items[sec.id]} mats={mats}
+            <SectionBlock key={sec.id} sec={sec} items={ed.items[sec.id]} pool={poolFor(sec)}
               onAdd={(it) => addItem(sec.id, it)} onSet={(i, k, v) => setItem(sec.id, i, k, v)} onDel={(i) => delItem(sec.id, i)} />
           ))}
 

@@ -14,11 +14,13 @@ export default function ItemPicker({ items, onPick, placeholder = "พิมพ�
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const ql = q.trim().toLowerCase();
-  const list = (ql
-    ? items.filter((m) => (m.th || "").toLowerCase().includes(ql) || (m.code || "").toLowerCase().includes(ql)
-      || (m.en || "").toLowerCase().includes(ql) || (m.brand || "").toLowerCase().includes(ql))
-    : items).slice(0, 200);
+  // multi-term search (every word must match) across name/code/brand/type/BTU — render at most 60 for speed
+  const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matched = terms.length
+    ? items.filter((m) => { const h = `${m.th || ""} ${m.en || ""} ${m.code || ""} ${m.brand || ""} ${m.ac_type || ""} ${m.btu || ""}`.toLowerCase(); return terms.every((t) => h.includes(t)); })
+    : items;
+  const list = matched.slice(0, 60);
+  const more = matched.length - list.length;
 
   return (
     <div className="ipick" ref={ref}>
@@ -35,10 +37,11 @@ export default function ItemPicker({ items, onPick, placeholder = "พิมพ�
           {list.length === 0 && <div className="ipick-empty">ไม่พบรายการ</div>}
           {list.map((m) => (
             <button type="button" className="ipick-opt" key={m.code} onClick={() => { onPick(m); setQ(""); setOpen(false); }}>
-              <span className="ipick-name">{m.th}{m.brand ? ` · ${m.brand}` : ""}{m.btu ? ` · ${Number(m.btu).toLocaleString()} BTU` : ""}</span>
+              <span className="ipick-name">{m.th}{m.brand ? ` · ${m.brand}` : ""}{m.ac_type ? ` · ${m.ac_type}` : ""}{m.btu ? ` · ${Number(m.btu).toLocaleString()} BTU` : ""}</span>
               <span className="ipick-code">{m.code}</span>
             </button>
           ))}
+          {more > 0 && <div className="ipick-empty">…อีก {more} รายการ — พิมพ์เพื่อค้นให้แคบลง</div>}
         </div>
       )}
     </div>
