@@ -76,6 +76,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   });
   const setLine = (i, k, v) => setEd((e) => ({ ...e, items: e.items.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
   const delLine = (i) => setEd((e) => ({ ...e, items: e.items.filter((_, j) => j !== i) }));
+  const moveLine = (i, dir) => setEd((e) => { const a = [...e.items]; const j = i + dir; if (j < 0 || j >= a.length) return e; [a[i], a[j]] = [a[j], a[i]]; return { ...e, items: a }; });
 
   function pullFromBoq() {
     const b = boqs.find((x) => x.boq_no === ed.boq_no); if (!b) return flash("เลือก BOQ ก่อน", true);
@@ -192,6 +193,10 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                     <div className="inp inp-unit boq-in"><input type="number" min="0" value={it.qty} onChange={(e) => setLine(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><span className="unit-suf">{it.unit}</span></div>
                     <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.unit_price} onChange={(e) => setLine(i, "unit_price", Number(e.target.value) || 0)} /></div>
                     <span className="boq-amt">{fmtBaht(it.qty * it.unit_price)}</span>
+                    <div className="line-move">
+                      <button className="line-mv" disabled={i === 0} onClick={() => moveLine(i, -1)} title="เลื่อนขึ้น"><UIcon name="chevD" size={13} style={{ transform: "rotate(180deg)" }} /></button>
+                      <button className="line-mv" disabled={i === ed.items.length - 1} onClick={() => moveLine(i, 1)} title="เลื่อนลง"><UIcon name="chevD" size={13} /></button>
+                    </div>
                     <button className="line-x" onClick={() => delLine(i)}><UIcon name="x" size={14} /></button>
                   </div>
                   <GrowArea className="inp line-desc" placeholder="รายละเอียดสินค้า (Enter ขึ้นบรรทัดใหม่ได้ · แสดงใต้ชื่อในเอกสาร — แก้เฉพาะใบนี้)" value={it.description || ""} onChange={(e) => setLine(i, "description", e.target.value)} />

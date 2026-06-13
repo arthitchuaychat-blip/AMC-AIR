@@ -20,7 +20,7 @@ const SECTIONS = [
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BOQ-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const blankItems = () => ({ ac: [], free: [], charged: [], service: [] });
 
-function SectionBlock({ sec, items, pool, onAdd, onSet, onDel }) {
+function SectionBlock({ sec, items, pool, onAdd, onSet, onDel, onMove }) {
   const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0);
   return (
     <div className={"boq-sec sec-" + sec.id}>
@@ -34,6 +34,10 @@ function SectionBlock({ sec, items, pool, onAdd, onSet, onDel }) {
             <div className="inp inp-unit boq-in"><input type="number" min="1" value={it.qty} onChange={(e) => onSet(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><span className="unit-suf">{it.unit}</span></div>
             <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.unit_cost} onChange={(e) => onSet(i, "unit_cost", Number(e.target.value) || 0)} /></div>
             <span className="boq-amt">{fmtBaht(Number(it.qty) * Number(it.unit_cost))}</span>
+            <div className="line-move">
+              <button className="line-mv" disabled={i === 0} onClick={() => onMove(i, -1)} title="เลื่อนขึ้น"><UIcon name="chevD" size={13} style={{ transform: "rotate(180deg)" }} /></button>
+              <button className="line-mv" disabled={i === items.length - 1} onClick={() => onMove(i, 1)} title="เลื่อนลง"><UIcon name="chevD" size={13} /></button>
+            </div>
             <button className="line-x" onClick={() => onDel(i)}><UIcon name="x" size={14} /></button>
           </div>
           <GrowArea className="inp line-desc" placeholder="รายละเอียดสินค้า (Enter ขึ้นบรรทัดใหม่ได้ · แสดงใต้ชื่อในเอกสาร)" value={it.description || ""} onChange={(e) => onSet(i, "description", e.target.value)} />
@@ -84,6 +88,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const poolFor = (sec) => poolByKind[sec.kinds[0]] || [];
 
   const addItem = (sec, it) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: [...e.items[sec], it] } }));
+  const moveItem = (sec, i, dir) => setEd((e) => { const a = [...e.items[sec]]; const j = i + dir; if (j < 0 || j >= a.length) return e; [a[i], a[j]] = [a[j], a[i]]; return { ...e, items: { ...e.items, [sec]: a } }; });
   // add from the right-side browser → route to the section matching the item's kind (material defaults to "คิดเงิน")
   const browserAdd = (m, target) => {
     const sec = m.kind === "ac" ? "ac" : m.kind === "service" ? "service" : (target || "charged");
@@ -148,7 +153,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
 
           {SECTIONS.map((sec) => (
             <SectionBlock key={sec.id} sec={sec} items={ed.items[sec.id]} pool={poolFor(sec)}
-              onAdd={(it) => addItem(sec.id, it)} onSet={(i, k, v) => setItem(sec.id, i, k, v)} onDel={(i) => delItem(sec.id, i)} />
+              onAdd={(it) => addItem(sec.id, it)} onSet={(i, k, v) => setItem(sec.id, i, k, v)} onDel={(i) => delItem(sec.id, i)} onMove={(i, dir) => moveItem(sec.id, i, dir)} />
           ))}
 
           <div className="line-total" style={{ fontSize: 15 }}><span>ต้นทุนรวมทั้งสิ้น</span><b style={{ fontSize: 20 }}>{fmtBaht(total)}</b></div>

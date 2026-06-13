@@ -1170,3 +1170,11 @@ select.inp{cursor:pointer}
 .ib-target{display:flex;align-items:center;gap:6px;padding:9px 11px 0;font-size:11.5px;color:var(--ink-3);font-weight:700}
 .ib-target-btn{font-family:inherit;font-size:11.5px;font-weight:700;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);border-radius:7px;padding:3px 11px;cursor:pointer}
 .ib-target-btn.on{background:#0891b2;color:#fff;border-color:#0891b2}
+
+/* reorder (move up/down) controls on document line items */
+.line-move{display:flex;flex-direction:column;flex:none;gap:1px}
+.line-mv{border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);width:22px;height:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.line-mv:first-child{border-radius:6px 6px 0 0}
+.line-mv:last-child{border-radius:0 0 6px 6px;border-top:none}
+.line-mv:hover:not(:disabled){background:var(--primary);color:#fff;border-color:var(--primary)}
+.line-mv:disabled{opacity:.35;cursor:default}
