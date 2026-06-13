@@ -64,6 +64,28 @@ export default function Catalog({ role }) {
     catch (e) { alert("ลบไม่สำเร็จ: " + (e.message || e)); }
   }
 
+  // export the whole catalog as a CSV in the same column order as the import form (edit → re-upload to update)
+  function exportCsv() {
+    const KIND_TH = { ac: "แอร์", material: "วัสดุ", service: "บริการ" };
+    const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const header = "ชนิด,รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด/ยี่ห้อ,BTU,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด,ประเภทแอร์";
+    const rows = mats.map((m) => [
+      KIND_TH[m.kind] || "วัสดุ", m.code, m.th, m.en,
+      m.kind === "ac" ? (m.brand || "") : (m.kind === "material" ? (m.catName || "") : ""),
+      m.kind === "ac" ? (m.btu || "") : "",
+      m.unit || "", m.cost ?? "", m.minStock ?? "",
+      m.tracked ? (m.stock ?? "") : "", m.salePrice ?? "",
+      m.description || "", m.kind === "ac" ? (m.ac_type || "") : "",
+    ].map(esc).join(","));
+    const csv = "﻿" + [header, ...rows].join("\r\n"); // BOM so Excel reads Thai correctly
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    a.download = `amc-catalog-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    flash(`ดาวน์โหลด ${mats.length} รายการแล้ว ✓`);
+  }
+
   const EditDel = ({ m }) => canEdit && (
     <div className="cat-card-actions" onClick={(e) => e.stopPropagation()}>
       <button className="btn-ghost sm" onClick={() => setEditing(m)}><UIcon name="edit" size={14} /> แก้ไข</button>
@@ -88,6 +110,7 @@ export default function Catalog({ role }) {
             <button className={"seg-btn" + (viewMode === "grid" ? " on" : "")} onClick={() => setViewMode("grid")} title="กริด"><UIcon name="dashboard" size={16} /></button>
             <button className={"seg-btn" + (viewMode === "list" ? " on" : "")} onClick={() => setViewMode("list")} title="ตาราง"><UIcon name="catalog" size={16} /></button>
           </div>
+          {canEdit && <button className="btn-ghost" onClick={exportCsv} disabled={!mats.length}><UIcon name="withdraw" size={15} /> ดาวน์โหลดรายการ</button>}
           {canEdit && <button className="btn-ghost" onClick={() => setImporting(true)}><UIcon name="box" size={15} /> นำเข้าหลายรายการ</button>}
           {canEdit && <button className="btn-primary" onClick={() => setEditing(null)}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มรายการ</button>}
         </div>
@@ -171,6 +194,7 @@ export default function Catalog({ role }) {
                 <div className="cat-lrow-main">
                   <div className="cat-lrow-name">{m.th} {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>} {low && <span className="badge-warn sm">ต่ำ</span>}</div>
                   <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
+                  {m.description && <div className="cat-lrow-desc">{m.description}</div>}
                 </div>
                 <div className="cat-lrow-col hide-sm"><span>คงเหลือ</span><b style={low ? { color: "#dc2626" } : {}}>{m.tracked ? `${m.stock} ${m.unit}` : "—"}</b></div>
                 <div className="cat-lrow-col hide-sm"><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b></div>

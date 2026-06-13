@@ -1077,3 +1077,5 @@ select.inp{cursor:pointer}
   .ci-close{display:block}
   .chat-info-toggle{display:flex}
 }
+
+.cat-lrow-desc{font-size:11.5px;color:var(--ink-3);margin-top:3px;line-height:1.4;max-width:640px}
