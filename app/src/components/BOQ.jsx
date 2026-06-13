@@ -24,14 +24,17 @@ function SectionBlock({ sec, items, mats, onAdd, onSet, onDel }) {
     <div className="boq-sec">
       <div className="boq-sec-head"><span>{sec.label}</span><b>{fmtBaht(subtotal)}</b></div>
       <ItemPicker items={pool} placeholder={`ค้นหา${sec.label}…`}
-        onPick={(m) => onAdd({ code: m.code, name: m.th, unit: m.unit, qty: 1, unit_cost: m.cost })} />
+        onPick={(m) => onAdd({ code: m.code, name: m.th, unit: m.unit, qty: 1, unit_cost: m.cost, description: m.description || "" })} />
       {items.map((it, i) => (
-        <div className="boq-line" key={i}>
-          <div className="line-info"><div className="line-name">{it.name || it.code}</div><div className="line-sub">{it.code}</div></div>
-          <div className="inp inp-unit boq-in"><input type="number" min="1" value={it.qty} onChange={(e) => onSet(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><span className="unit-suf">{it.unit}</span></div>
-          <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.unit_cost} onChange={(e) => onSet(i, "unit_cost", Number(e.target.value) || 0)} /></div>
-          <span className="boq-amt">{fmtBaht(Number(it.qty) * Number(it.unit_cost))}</span>
-          <button className="line-x" onClick={() => onDel(i)}><UIcon name="x" size={14} /></button>
+        <div className="line-item" key={i}>
+          <div className="boq-line">
+            <div className="line-info"><div className="line-name">{it.name || it.code}</div><div className="line-sub">{it.code}</div></div>
+            <div className="inp inp-unit boq-in"><input type="number" min="1" value={it.qty} onChange={(e) => onSet(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><span className="unit-suf">{it.unit}</span></div>
+            <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.unit_cost} onChange={(e) => onSet(i, "unit_cost", Number(e.target.value) || 0)} /></div>
+            <span className="boq-amt">{fmtBaht(Number(it.qty) * Number(it.unit_cost))}</span>
+            <button className="line-x" onClick={() => onDel(i)}><UIcon name="x" size={14} /></button>
+          </div>
+          <input className="inp line-desc" placeholder="รายละเอียดสินค้า (แสดงใต้ชื่อในเอกสาร)" value={it.description || ""} onChange={(e) => onSet(i, "description", e.target.value)} />
         </div>
       ))}
       {items.length === 0 && <div className="empty sm">ยังไม่มีรายการ</div>}
@@ -66,7 +69,7 @@ export default function BOQ({ role, onCreateQuote }) {
   function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", note: "", items: blankItems() }); }
   function startEdit(bo) {
     const items = blankItems();
-    bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost) }); });
+    bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
     setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", items });
   }
 
@@ -192,7 +195,7 @@ export default function BOQ({ role, onCreateQuote }) {
                       <React.Fragment key={sec}>
                         <tr className="doc-sec"><td colSpan="6">{SECTION_LABEL[sec] || sec}</td></tr>
                         {rows.map((x) => { n++; return (
-                          <tr key={x.item_code + n}><td>{n}</td><td>{x.item_code || "-"}</td><td>{x.name}</td><td className="r">{fmtNum(x.qty)} {x.unit || ""}</td><td className="r">{fmtBaht(x.unit_cost)}</td><td className="r">{sec === "free" ? "แถม" : fmtBaht(x.qty * x.unit_cost)}</td></tr>
+                          <tr key={x.item_code + n}><td>{n}</td><td>{x.item_code || "-"}</td><td>{x.name}{x.description ? <div className="doc-item-desc">{x.description}</div> : null}</td><td className="r">{fmtNum(x.qty)} {x.unit || ""}</td><td className="r">{fmtBaht(x.unit_cost)}</td><td className="r">{sec === "free" ? "แถม" : fmtBaht(x.qty * x.unit_cost)}</td></tr>
                         ); })}
                         <tr className="doc-sec-sum"><td colSpan="5" className="r">รวม{SECTION_LABEL[sec] || sec}</td><td className="r">{sec === "free" ? "—" : fmtBaht(sub)}</td></tr>
                       </React.Fragment>

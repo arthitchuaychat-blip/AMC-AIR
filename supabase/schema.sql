@@ -202,6 +202,7 @@ create table if not exists boq_items (
   section   text not null check (section in ('ac','free','charged','service')),
   item_code text references materials(code) on delete set null,
   name      text, unit text,
+  description text,
   qty       numeric not null default 0,
   unit_cost numeric not null default 0
 );
@@ -231,6 +232,7 @@ create table if not exists quotation_items (
   quote_no   text not null references quotations(quote_no) on delete cascade,
   item_code  text references materials(code) on delete set null,
   name       text, kind text, unit text,
+  description text,
   qty        numeric not null default 0,
   unit_price numeric not null default 0
 );

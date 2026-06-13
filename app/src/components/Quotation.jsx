@@ -50,14 +50,14 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     const c = custs.find((x) => String(x.id) === String(b.customer_id));
     const items = b.items.filter((x) => ["ac", "charged", "service"].includes(x.section)).map((x) => {
       const m = matMap[x.item_code];
-      return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind };
+      return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
     });
     setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, note: "", items });
   }
   React.useEffect(() => { if (!fromBoq || !boqs.length) return; startFromBoq(fromBoq); onFromBoqConsumed && onFromBoqConsumed(); }, [fromBoq, boqs]);
   function startEdit(q) {
     setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", approved_at: q.approved_at,
-      items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind })) });
+      items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind, description: x.description || "" })) });
   }
 
   const cust = custs.find((c) => String(c.id) === String(ed?.customer_id));
@@ -68,7 +68,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const addLine = (m) => setEd((e) => {
     const i = e.items.findIndex((x) => x.code === m.code);
     if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + 1 }; return { ...e, items }; }
-    return { ...e, items: [...e.items, { code: m.code, name: m.th, unit: m.unit, qty: 1, unit_price: m.salePrice || 0, kind: m.kind }] };
+    return { ...e, items: [...e.items, { code: m.code, name: m.th, unit: m.unit, qty: 1, unit_price: m.salePrice || 0, kind: m.kind, description: m.description || "" }] };
   });
   const setLine = (i, k, v) => setEd((e) => ({ ...e, items: e.items.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
   const delLine = (i) => setEd((e) => ({ ...e, items: e.items.filter((_, j) => j !== i) }));
@@ -77,7 +77,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     const b = boqs.find((x) => x.boq_no === ed.boq_no); if (!b) return flash("เลือก BOQ ก่อน", true);
     const pulled = b.items.filter((x) => ["ac", "charged", "service"].includes(x.section)).map((x) => {
       const m = matMap[x.item_code];
-      return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind };
+      return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
     });
     setEd((e) => ({ ...e, items: pulled }));
     flash(`ดึง ${pulled.length} รายการจาก ${b.boq_no} (ไม่รวมของแถม)`);
@@ -152,12 +152,15 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           {ed.items.length > 0 && (
             <div className="line-list">
               {ed.items.map((it, i) => (
-                <div className="boq-line" key={i}>
-                  <div className="line-info"><div className="line-name">{it.name}</div><div className="line-sub">{it.code || "-"}</div></div>
-                  <div className="inp inp-unit boq-in"><input type="number" min="0" value={it.qty} onChange={(e) => setLine(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><span className="unit-suf">{it.unit}</span></div>
-                  <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.unit_price} onChange={(e) => setLine(i, "unit_price", Number(e.target.value) || 0)} /></div>
-                  <span className="boq-amt">{fmtBaht(it.qty * it.unit_price)}</span>
-                  <button className="line-x" onClick={() => delLine(i)}><UIcon name="x" size={14} /></button>
+                <div className="line-item" key={i}>
+                  <div className="boq-line">
+                    <div className="line-info"><div className="line-name">{it.name}</div><div className="line-sub">{it.code || "-"}</div></div>
+                    <div className="inp inp-unit boq-in"><input type="number" min="0" value={it.qty} onChange={(e) => setLine(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><span className="unit-suf">{it.unit}</span></div>
+                    <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.unit_price} onChange={(e) => setLine(i, "unit_price", Number(e.target.value) || 0)} /></div>
+                    <span className="boq-amt">{fmtBaht(it.qty * it.unit_price)}</span>
+                    <button className="line-x" onClick={() => delLine(i)}><UIcon name="x" size={14} /></button>
+                  </div>
+                  <input className="inp line-desc" placeholder="รายละเอียดสินค้า (แสดงใต้ชื่อในเอกสาร — แก้เฉพาะใบนี้)" value={it.description || ""} onChange={(e) => setLine(i, "description", e.target.value)} />
                 </div>
               ))}
             </div>
@@ -286,7 +289,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           <table className="doc-table">
             <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>
             <tbody>{printQ.items.map((it, i) => (
-              <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}</td><td className="r">{it.qty} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(it.qty * it.unit_price)}</td></tr>
+              <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{it.qty} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(it.qty * it.unit_price)}</td></tr>
             ))}</tbody>
           </table>
           <div className="doc-totals">

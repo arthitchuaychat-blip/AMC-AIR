@@ -7,7 +7,7 @@ import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 // snapshot a quote's line items (full amounts) with default หัก ณ ที่จ่าย flag (services only)
-const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
+const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
 const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 
 const fmtBaht = fmtBaht2; // invoices show 2 decimals to avoid rounding leftovers
@@ -189,7 +189,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           <table className="doc-table">
             <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>
             <tbody>{(q?.items || []).map((it, i) => (
-              <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(Number(it.qty) * Number(it.unit_price))}</td></tr>
+              <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(Number(it.qty) * Number(it.unit_price))}</td></tr>
             ))}</tbody>
           </table>
           <div className="doc-totals">

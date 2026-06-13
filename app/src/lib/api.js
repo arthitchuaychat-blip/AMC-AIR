@@ -442,6 +442,7 @@ export async function saveBoq(boq, items) {
   if (items.length) {
     const e3 = (await supabase.from("boq_items").insert(items.map((x) => ({
       boq_no: boq.boq_no, section: x.section, item_code: x.code || null, name: x.name || null,
+      description: x.description?.trim() || null,
       unit: x.unit || null, qty: Number(x.qty) || 0, unit_cost: Number(x.unit_cost) || 0,
     })))).error;
     if (e3) throw e3;
@@ -512,6 +513,7 @@ export async function saveQuotation(q, items) {
   if (items.length) {
     const e3 = (await supabase.from("quotation_items").insert(items.map((x) => ({
       quote_no: q.quote_no, item_code: x.code || null, name: x.name || null, kind: x.kind || null,
+      description: x.description?.trim() || null,
       unit: x.unit || null, qty: Number(x.qty) || 0, unit_price: Number(x.unit_price) || 0,
     })))).error;
     if (e3) throw e3;
