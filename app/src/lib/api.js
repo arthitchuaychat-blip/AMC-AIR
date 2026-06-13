@@ -953,6 +953,21 @@ export async function uploadChatImage(file) {
   return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
 
+// upload a generated document file (image/pdf) → public URL (for sending docs to customers on LINE)
+export async function uploadDocFile(blob, ext, contentType) {
+  const path = `docs/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, blob, { upsert: true, contentType: contentType || "application/octet-stream" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
+
+// the LINE contact linked to a customer (so documents can be sent to them) — null if not linked
+export async function lineContactByCustomer(customerId) {
+  if (!customerId) return null;
+  const { data } = await supabase.from("line_contacts").select("line_user_id,display_name").eq("customer_id", customerId).limit(1).maybeSingle();
+  return data || null;
+}
+
 // ---------- saved quick replies (canned messages) ----------
 export async function listQuickReplies() {
   const { data, error } = await supabase.from("quick_replies").select("*").order("sort").order("id");

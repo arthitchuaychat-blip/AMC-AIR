@@ -6,6 +6,8 @@ import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
+import { sendDocToLine } from "../lib/sendDoc";
+import { lineContactByCustomer } from "../lib/api";
 
 // snapshot a quote's line items (full amounts) with default หัก ณ ที่จ่าย flag (services only)
 const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
@@ -39,7 +41,23 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { if (focus) { setEd(null); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
-  React.useEffect(() => { if (!printI) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintI(null); }, 120); return () => clearTimeout(t); }, [printI]);
+  const capturing = React.useRef(false);
+  const [sendBusy, setSendBusy] = React.useState(false);
+  React.useEffect(() => { if (!printI || capturing.current) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintI(null); }, 120); return () => clearTimeout(t); }, [printI]);
+
+  async function sendToLine(x, mode) {
+    if (sendBusy) return;
+    const contact = await lineContactByCustomer(x.customerCode);
+    if (!contact?.line_user_id) return flash("ลูกค้านี้ยังไม่ได้เชื่อม LINE — ไปเชื่อมในเมนูแชตก่อน", true);
+    setSendBusy(true); flash("กำลังเตรียมเอกสาร…");
+    capturing.current = true; setPrintI(x);
+    await new Promise((r) => setTimeout(r, 400));
+    try {
+      await sendDocToLine(contact.line_user_id, mode, `ใบแจ้งหนี้ ${x.invoice_no}`);
+      flash(mode === "image" ? "ส่งรูปเอกสารให้ลูกค้าทาง LINE แล้ว ✓" : "ส่งลิงก์ PDF ให้ลูกค้าทาง LINE แล้ว ✓");
+    } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    setPrintI(null); capturing.current = false; setSendBusy(false);
+  }
   // open the create form prefilled from a quotation (link from the quotation page)
   React.useEffect(() => { if (!fromQuote || !quotes.length) return; startNew(fromQuote); onFromQuoteConsumed && onFromQuoteConsumed(); }, [fromQuote, quotes]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
@@ -189,6 +207,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="clipboard" size={14} color="#fff" /> ออกใบเสร็จ</button>}
                 {canEdit && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintI(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
+                <button className="btn-ghost sm" disabled={sendBusy} onClick={() => sendToLine(x, "image")}><UIcon name="chat" size={14} /> รูป→LINE</button>
+                <button className="btn-ghost sm" disabled={sendBusy} onClick={() => sendToLine(x, "pdf")}><UIcon name="chat" size={14} /> PDF→LINE</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
               </div></div>
