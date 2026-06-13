@@ -42,6 +42,12 @@ function splitCells(line) {
   return out.map((c) => c.trim());
 }
 
+// tolerant number parse: strips thousands-separator commas + stray text
+//   "22,900" → 22900 · "24,274" → 24274 · "1,450 บาท" → 1450
+const num = (v) => { const n = parseFloat(String(v ?? "").replace(/,/g, "").replace(/[^\d.\-]/g, "")); return Number.isFinite(n) ? n : 0; };
+// BTU: keep digits only → "18000 BTU" → 18000 · "12,000" → 12000 · "" → null
+const numBtu = (v) => { const d = String(v ?? "").replace(/[^\d]/g, ""); return d ? Number(d) : null; };
+
 export default function BulkImportModal({ categories, onDone, onClose }) {
   const [text, setText] = React.useState("");
   const [parsed, setParsed] = React.useState(null); // {rows, errors, counts}
@@ -106,14 +112,14 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
         category: kind === "material" ? resolveCat(catBrand) : null,
         _catRaw: kind === "material" ? (catBrand?.trim() || "") : "",
         brand: kind === "ac" ? (catBrand?.trim() || null) : null,
-        btu: kind === "ac" && btu ? Number(btu) : null,
+        btu: kind === "ac" ? numBtu(btu) : null,
         ac_type: kind === "ac" ? (ac_type?.trim() || null) : null,
         tracked: isService ? false : true,
         unit: unit || defUnit(kind),
-        cost: Number(cost) || 0,
-        sale_price: Number(sale_price) || 0,
-        min_stock: isService ? 0 : (Number(min_stock) || 0),
-        init_stock: isService ? 0 : (Number(init_stock) || 0),
+        cost: num(cost),
+        sale_price: num(sale_price),
+        min_stock: isService ? 0 : num(min_stock),
+        init_stock: isService ? 0 : num(init_stock),
         description: description?.trim() || null,
       });
       counts[kind] = (counts[kind] || 0) + 1;
