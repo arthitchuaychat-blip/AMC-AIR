@@ -2,20 +2,26 @@ import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { uploadDocFile, sendLineImage, sendLineMessage } from "./api";
 
-// Capture the currently-rendered .print-area (DocSlip) into a PNG laid out on an A4 page.
-// .print-area is display:none on screen → render it visible off-screen, sized to A4 (794×1123px @96dpi,
-// min-height so short docs still fill a full A4 page), with page margins, then capture.
+// Capture the rendered document (DocSlip) into a PNG laid out on an A4 page.
+// The live .print-area is display:none on screen (so capturing it directly comes out blank), so we
+// CLONE the .doc into a fresh, visible-but-offscreen A4 wrapper — the clone gets real layout + styles.
 async function capture() {
-  const area = document.querySelector(".print-area");
-  if (!area) throw new Error("ไม่พบเอกสาร (ยังไม่ได้เรนเดอร์)");
-  const prev = area.getAttribute("style") || "";
-  area.setAttribute("style", "display:block;position:fixed;left:-10000px;top:0;width:794px;min-height:1123px;padding:48px 40px;box-sizing:border-box;background:#fff;z-index:-1");
+  const src = document.querySelector(".print-area .doc") || document.querySelector(".print-area");
+  if (!src) throw new Error("ไม่พบเอกสาร (ยังไม่ได้เรนเดอร์)");
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;min-height:1123px;padding:48px 40px;box-sizing:border-box;background:#fff;z-index:-1";
+  const clone = src.cloneNode(true);
+  clone.style.maxWidth = "none"; clone.style.margin = "0"; clone.style.width = "100%";
+  wrap.appendChild(clone);
+  document.body.appendChild(wrap);
   try {
     if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch { /* ignore */ } }
-    const dataUrl = await toPng(area, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true });
+    // wait for images (logo) inside the clone to load
+    await Promise.all([...wrap.querySelectorAll("img")].map((im) => im.complete ? null : new Promise((r) => { im.onload = im.onerror = r; })));
+    const dataUrl = await toPng(wrap, { pixelRatio: 2, backgroundColor: "#ffffff" });
     const img = new Image(); img.src = dataUrl; await img.decode().catch(() => {});
     return { dataUrl, width: img.naturalWidth || 794, height: img.naturalHeight || 1123 };
-  } finally { area.setAttribute("style", prev); }
+  } finally { document.body.removeChild(wrap); }
 }
 
 function dataUrlToBlob(dataUrl) {
