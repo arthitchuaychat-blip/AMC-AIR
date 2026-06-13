@@ -1,16 +1,17 @@
 import React from "react";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerJobs, saveCustomer, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel } from "../lib/schedule";
-import { fmtBaht } from "../lib/format";
+import { fmtBaht, custCode } from "../lib/format";
 import { UIcon } from "../icons";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "";
+const JOB_STATUS = { pending: ["รอจ่ายงาน", "b-grey"], scheduled: ["นัดแล้ว", "b-blue"], in_progress: ["กำลังทำ", "b-amber"], done: ["เสร็จ", "b-green"], cancelled: ["ยกเลิก", "b-red"] };
 
-export default function Chat({ role }) {
+export default function Chat({ role, onOpenJob, onGoCustomers }) {
   const canSend = ["admin", "sales", "exec", "finance"].includes(role);
   const [contacts, setContacts] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -26,6 +27,10 @@ export default function Chat({ role }) {
   const [newQr, setNewQr] = React.useState("");
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
   const [jobPicker, setJobPicker] = React.useState(null);
+  const [infoJobs, setInfoJobs] = React.useState([]);
+  const [loadingInfoJobs, setLoadingInfoJobs] = React.useState(false);
+  const [showInfo, setShowInfo] = React.useState(false); // mobile info-panel toggle
+  const [creatingCust, setCreatingCust] = React.useState(false);
   const selRef = React.useRef(null);
   const endRef = React.useRef(null);
 
@@ -50,10 +55,35 @@ export default function Chat({ role }) {
     return () => { supabase.removeChannel(ch); };
   }, []);
 
+  // job history for the linked customer (right info panel)
+  const linkedCustId = (contacts.find((c) => c.line_user_id === sel) || {}).customer_id || null;
+  React.useEffect(() => {
+    if (!linkedCustId) { setInfoJobs([]); return; }
+    setLoadingInfoJobs(true);
+    listCustomerJobs(linkedCustId).then(setInfoJobs).catch(() => setInfoJobs([])).finally(() => setLoadingInfoJobs(false));
+  }, [linkedCustId]);
+
   async function openContact(c) {
-    setSel(c.line_user_id); setShowThread(true);
+    setSel(c.line_user_id); setShowThread(true); setShowInfo(false);
     try { setMsgs(await listLineMessages(c.line_user_id)); if (c.unread) { markLineRead(c.line_user_id); loadContacts(); } }
     catch (e) { flash("โหลดข้อความไม่สำเร็จ", true); }
+  }
+
+  // create a brand-new customer from this LINE contact and link it
+  async function addNewCustomer() {
+    const c = contacts.find((x) => x.line_user_id === sel); if (!c) return;
+    const name = window.prompt("ชื่อลูกค้าใหม่ (แก้ไขได้):", c.display_name || "");
+    if (name === null) return;
+    if (!name.trim()) return flash("ใส่ชื่อลูกค้า", true);
+    setCreatingCust(true);
+    try {
+      const id = await saveCustomer({ type: "person", name, vat: false, address: "", tax_id: "", note: "ลูกค้าจาก LINE OA" }, [], []);
+      await linkLineContact(sel, id);
+      setCusts(await listCustomers());
+      await loadContacts();
+      flash("เพิ่มลูกค้าใหม่ + เชื่อมแล้ว ✓");
+    } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e.message || e), true); }
+    setCreatingCust(false);
   }
 
   async function send() {
@@ -104,7 +134,7 @@ export default function Chat({ role }) {
           <p className="page-sub">{contacts.length} ผู้ติดต่อ · คุยกับลูกค้า · เชื่อมกับ CRM</p></div>
       </div>
 
-      <div className={"chat-wrap" + (showThread ? " show-thread" : "")}>
+      <div className={"chat-wrap" + (showThread ? " show-thread" : "") + (showInfo ? " show-info" : "")}>
         {/* conversation list */}
         <div className="chat-list">
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
@@ -135,15 +165,9 @@ export default function Chat({ role }) {
                 <div className="chat-av sm">{selContact.picture_url ? <img src={selContact.picture_url} alt="" /> : initial(selContact.display_name)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="chat-thread-name">{selContact.display_name || "LINE User"}</div>
-                  <div className="chat-thread-sub">
-                    {canSend ? (
-                      <select className="chat-linksel" value={selContact.customer_id || ""} onChange={(e) => onLink(e.target.value || null)}>
-                        <option value="">— ยังไม่เชื่อมลูกค้า —</option>
-                        {custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    ) : (selContact.customerName ? `🔗 ${selContact.customerName}` : "ยังไม่เชื่อมลูกค้า")}
-                  </div>
+                  <div className="chat-thread-sub">{selContact.customerName ? `🔗 ${selContact.customerName}` : "ยังไม่เชื่อมลูกค้า"}</div>
                 </div>
+                <button className="chat-info-toggle" onClick={() => setShowInfo((s) => !s)} title="ข้อมูลลูกค้า"><UIcon name="building" size={18} /></button>
               </div>
 
               <div className="chat-msgs">
@@ -188,6 +212,67 @@ export default function Chat({ role }) {
             </>
           )}
         </div>
+
+        {/* right info panel: customer details + job history (from the customer card) */}
+        {selContact && (() => {
+          const cust = custs.find((c) => String(c.id) === String(selContact.customer_id));
+          const phone = cust?.contacts?.[0]?.phone;
+          const done = infoJobs.filter((j) => j.status === "done").length;
+          return (
+            <div className={"chat-info" + (showInfo ? " open" : "")}>
+              <div className="ci-head"><span>ข้อมูลลูกค้า</span>
+                <button className="ci-close" onClick={() => setShowInfo(false)}><UIcon name="x" size={16} /></button></div>
+              <div className="ci-body">
+                {cust ? (<>
+                  <div className="ci-cust-name">{cust.name}</div>
+                  <div className="ci-cust-sub"><b className="cust-code">{custCode(cust.id)}</b>
+                    <span className={"job-badge " + (cust.vat ? "b-blue" : "b-grey")}>{cust.vat ? "VAT" : "ไม่ VAT"}</span></div>
+                  {phone && <div className="ci-row">📞 <a href={`tel:${phone}`}>{phone}</a></div>}
+                  {cust.address && <div className="ci-row">📍 <span>{cust.address}</span></div>}
+                  {cust.tax_id && <div className="ci-row">🧾 <span>{cust.tax_id}</span></div>}
+                  {cust.sites?.length > 0 && <div className="ci-row">🏠 <span>{cust.sites.length} ไซต์งาน</span></div>}
+                  {canSend && <div className="ci-actions">
+                    <button className="btn-ghost sm" onClick={() => onGoCustomers && onGoCustomers(cust.name)}>เปิดหน้าลูกค้า</button>
+                    <button className="btn-ghost sm" onClick={() => onLink(null)}>ยกเลิกการเชื่อม</button>
+                  </div>}
+                  <div className="ci-sec">ประวัติงาน ({infoJobs.length}{done ? ` · เสร็จ ${done}` : ""})</div>
+                  {loadingInfoJobs && <div className="cd-empty">กำลังโหลด…</div>}
+                  {!loadingInfoJobs && infoJobs.length === 0 && <div className="cd-empty">— ยังไม่เคยมีงาน —</div>}
+                  <div className="cd-timeline">
+                    {infoJobs.map((jo) => {
+                      const st = JOB_STATUS[jo.status] || JOB_STATUS.pending;
+                      return (
+                        <button className="cd-job" key={jo.job_no} onClick={() => onOpenJob && onOpenJob(jo.job_no)}>
+                          <span className={"cd-job-dot " + st[1]} />
+                          <div className="cd-job-body">
+                            <div className="cd-job-top"><b>{jo.title || "งานติดตั้ง/บริการ"}</b><span className={"job-badge " + st[1]}>{st[0]}</span></div>
+                            <div className="cd-job-meta">🗓 {jo.scheduled_at ? scheduleLabel(jo) : "ยังไม่นัด"} · 👷 {jo.teamName || "ยังไม่มอบทีม"}</div>
+                            <div className="cd-job-no">{jo.job_no} · ดูรายละเอียด ›</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>) : (
+                  <div className="ci-unlinked">
+                    <div className="ci-unlinked-msg">แชตนี้ยังไม่ได้เชื่อมกับลูกค้า</div>
+                    {canSend && <>
+                      <label className="ci-field"><span>เชื่อมกับลูกค้าที่มีอยู่</span>
+                        <select className="inp" value="" onChange={(e) => e.target.value && onLink(e.target.value)}>
+                          <option value="">— เลือกลูกค้า —</option>
+                          {custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </label>
+                      <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} disabled={creatingCust} onClick={addNewCustomer}>
+                        <UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> {creatingCust ? "กำลังเพิ่ม…" : "เพิ่มลูกค้าใหม่จาก LINE นี้"}
+                      </button>
+                    </>}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
       {jobPicker && (
         <div className="modal-overlay" onClick={() => setJobPicker(null)}>

@@ -8,7 +8,7 @@ import CustomerImportModal from "./CustomerImportModal";
 const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", vat: true, address: "", note: "" });
 const JOB_STATUS = { pending: ["รอจ่ายงาน", "b-grey"], scheduled: ["นัดแล้ว", "b-blue"], in_progress: ["กำลังทำ", "b-amber"], done: ["เสร็จ", "b-green"], cancelled: ["ยกเลิก", "b-red"] };
 
-export default function Customers({ role, onOpenJob }) {
+export default function Customers({ role, onOpenJob, focus, onFocusConsumed }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -28,6 +28,8 @@ export default function Customers({ role, onOpenJob }) {
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  // prefill search when opened from another page (e.g. "เปิดหน้าลูกค้า" in chat)
+  React.useEffect(() => { if (focus) { setQ(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   // load this customer's job history whenever the detail modal opens
   React.useEffect(() => {
     if (!viewing) { setViewJobs([]); return; }

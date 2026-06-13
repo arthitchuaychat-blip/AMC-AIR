@@ -79,6 +79,7 @@ export default function App() {
   const [withdrawCtx, setWithdrawCtx] = React.useState(null);
   const [quoteFocus, setQuoteFocus] = React.useState(null);
   const [jobFocus, setJobFocus] = React.useState(null);
+  const [custFocus, setCustFocus] = React.useState(null);
   const [quoteFromBoq, setQuoteFromBoq] = React.useState(null);
   const [invoiceFromQuote, setInvoiceFromQuote] = React.useState(null);
   const [receiptFromInvoice, setReceiptFromInvoice] = React.useState(null);
@@ -160,8 +161,8 @@ export default function App() {
       <main className="main">
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
-        {view === "customers" && <Customers role={role} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
-        {view === "chat" && <Chat role={role} />}
+        {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
+        {view === "chat" && <Chat role={role} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGoCustomers={(name) => { setCustFocus(name); go("customers"); }} />}
         {view === "boq" && <BOQ role={role} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }} />}
         {view === "quote" && <Quotation role={role} focus={quoteFocus} onFocusConsumed={() => setQuoteFocus(null)}
           fromBoq={quoteFromBoq} onFromBoqConsumed={() => setQuoteFromBoq(null)}
