@@ -56,28 +56,27 @@ export default function Catalog({ role }) {
   const btuOpts = React.useMemo(() => [...new Set(acMats.map((m) => m.btu).filter(Boolean).map(Number))].sort((a, b) => a - b), [acMats]);
   // One shared collator (th) — far faster than calling String.localeCompare per comparison.
   const collator = React.useMemo(() => new Intl.Collator("th"), []);
-  // Defer the search term so typing stays smooth while the big list re-filters in the background.
-  const dq = React.useDeferredValue(q);
   // Memoized so it only recomputes when a filter actually changes — not on every unrelated render
-  // (modal open, toast, hover). This + the render cap is what stops the page from feeling "frozen".
+  // (modal open, toast, hover). Uses `q` directly (NOT useDeferredValue) so a filter/search change
+  // updates the list immediately — deferring it made the list look "stuck" until another action.
   const list = React.useMemo(() => mats.filter((m) =>
     (kind === "all" || m.kind === kind) &&
     (kind !== "material" || cat === "all" || m.cat === cat) &&
     (kind !== "ac" || brand === "all" || eqi(m.brand, brand)) &&
     (kind !== "ac" || btu === "all" || String(m.btu) === String(btu)) &&
     (kind !== "ac" || acType === "all" || eqi(m.ac_type, acType)) &&
-    matchText(dq, m.th, m.en, m.code, m.catName, m.brand, m.ac_type)
+    matchText(q, m.th, m.en, m.code, m.catName, m.brand, m.ac_type)
   ).sort((a, b) =>
     (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) ||                       // ชนิด: แอร์ → วัสดุ → บริการ
     collator.compare(a.brand || a.catName || "", b.brand || b.catName || "") ||   // ยี่ห้อ (แอร์) / หมวด (วัสดุ)
     collator.compare(a.th || "", b.th || "")                                       // แล้วเรียงตามตัวอักษรชื่อไทย
-  ), [mats, kind, cat, brand, btu, acType, dq, collator]);
+  ), [mats, kind, cat, brand, btu, acType, q, collator]);
   // Render in chunks — drawing the whole catalog at once is what made the page lag. Filtering/sort
   // still run over the FULL catalog (search never misses anything); we just paint `limit` cards and
   // grow on demand. Reset back to one page whenever the filter/search changes.
   const PAGE = 120;
   const [limit, setLimit] = React.useState(PAGE);
-  React.useEffect(() => { setLimit(PAGE); }, [kind, cat, brand, btu, acType, dq, viewMode]);
+  React.useEffect(() => { setLimit(PAGE); }, [kind, cat, brand, btu, acType, q]);
   const capped = React.useMemo(() => list.slice(0, limit), [list, limit]);
 
   async function remove(m) {
