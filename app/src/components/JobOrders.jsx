@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef } from "../lib/schedule";
@@ -115,7 +116,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
 
   async function save() {
     if (!ed.title?.trim() && !ed.customer_id) return flash("ใส่ลูกค้าหรือชื่องาน", true);
-    if (ed._edit && !window.confirm(`ยืนยันบันทึกการแก้ไขใบงาน ${ed.job_no} ?`)) return;
+    if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบงาน ${ed.job_no} ?`)) return;
     const slot = ed.slot || "custom";
     // start time comes from the slot (custom uses the picked time); store the instant as ISO/UTC
     const time = slot === "custom" ? (ed.time || "08:00") : slotStartTime(slot);
@@ -126,7 +127,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     if (ed.assigned_team && scheduled_at) {
       const cand = { job_no: ed.job_no, scheduled_at, end_date, slot };
       const clash = list.find((j) => j.job_no !== ed.job_no && j.assigned_team === ed.assigned_team && j.status !== "cancelled" && jobsOverlap(cand, j));
-      if (clash && !window.confirm(`⚠️ ทีม ${tn} มีงานซ้อนช่วงเวลานี้แล้ว:\n${clash.job_no}${clash.title ? " · " + clash.title : ""}\n\nต้องการจองซ้อนหรือไม่?`)) return;
+      if (clash && !await confirmDialog(`⚠️ ทีม ${tn} มีงานซ้อนช่วงเวลานี้แล้ว:\n${clash.job_no}${clash.title ? " · " + clash.title : ""}\n\nต้องการจองซ้อนหรือไม่?`)) return;
     }
     const status = ed.status === "pending" && ed.assigned_team && ed.date ? "scheduled" : ed.status;
     try {
@@ -136,7 +137,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(jo) { if (!confirm(`ลบใบงาน ${jo.job_no}?`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(jo) { if (!await confirmDialog(`ลบใบงาน ${jo.job_no}?`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
   // copy an order-confirmation message to send to the customer (Line OA)
   function copyConfirm(jo) {

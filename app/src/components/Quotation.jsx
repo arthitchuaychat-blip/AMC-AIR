@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems } from "../lib/api";
 import DocSlip from "./DocSlip";
@@ -107,7 +108,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
   async function save() {
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
-    if (ed._edit && !window.confirm(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
+    if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
     try {
       await saveQuotation(ed, ed.items);
       // sync new items back into the linked BOQ (add only — never removes BOQ items)
@@ -125,9 +126,9 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(q) { const lk = lockMsg(q); if (lk) return alert(lk); if (!confirm(`ลบ ${q.quote_no}?`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(q) { const lk = lockMsg(q); if (lk) return alert(lk); if (!await confirmDialog(`ลบ ${q.quote_no}?`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
   async function approve(q) {
-    if (!window.confirm(`ยืนยันอนุมัติใบเสนอราคา ${q.quote_no} ?`)) return;
+    if (!await confirmDialog(`ยืนยันอนุมัติใบเสนอราคา ${q.quote_no} ?`)) return;
     try { await setQuotationStatus(q.quote_no, "approved"); flash(`อนุมัติ ${q.quote_no} แล้ว ✓`); await load(); }
     catch (e) { flash("อนุมัติไม่สำเร็จ: " + (e.message || e), true); }
   }

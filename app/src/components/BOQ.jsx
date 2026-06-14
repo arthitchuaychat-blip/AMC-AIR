@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterialsLite, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht, fmtNum, custCode } from "../lib/format";
@@ -108,13 +109,13 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   async function save() {
     const flat = Object.entries(ed.items).flatMap(([sec, arr]) => arr.filter((x) => x.qty > 0).map((x) => ({ ...x, section: sec })));
     if (!flat.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
-    if (ed._edit && !window.confirm(`ยืนยันบันทึกการแก้ไข BOQ ${ed.boq_no} ?`)) return;
+    if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไข BOQ ${ed.boq_no} ?`)) return;
     try { await saveBoq(ed, flat); flash("บันทึก BOQ แล้ว"); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(bo) {
     const lk = lockMsg(bo); if (lk) return alert(lk);
-    if (!confirm(`ลบ ${bo.boq_no}?`)) return;
+    if (!await confirmDialog(`ลบ ${bo.boq_no}?`)) return;
     try { await deleteBoq(bo.boq_no); flash("ลบแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }

@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import { listAllJobs, listMaterials, closeJob, reopenJob } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { UIcon } from "../icons";
@@ -29,12 +30,12 @@ export default function Jobs({ role }) {
   const openCount = jobs.filter((j) => j.status === "open").length;
 
   async function close(j) {
-    if (!confirm(`ปิดงาน ${j.job_no}?\nต้นทุนงาน = ${fmtBaht(j.usedValue)} (ล็อกแล้วรับคืน/ตัดเสียเพิ่มไม่ได้)`)) return;
+    if (!await confirmDialog(`ปิดงาน ${j.job_no}?\nต้นทุนงาน = ${fmtBaht(j.usedValue)} (ล็อกแล้วรับคืน/ตัดเสียเพิ่มไม่ได้)`)) return;
     try { await closeJob(j.job_no, j.team, j.usedValue); flash(`ปิดงาน ${j.job_no} แล้ว`); await load(); }
     catch (e) { flash("ปิดงานไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function reopen(j) {
-    if (!confirm(`เปิดงาน ${j.job_no} ใหม่?`)) return;
+    if (!await confirmDialog(`เปิดงาน ${j.job_no} ใหม่?`)) return;
     try { await reopenJob(j.job_no); flash(`เปิดงาน ${j.job_no} ใหม่แล้ว`); await load(); }
     catch (e) { flash("เปิดงานไม่สำเร็จ: " + (e.message || e), true); }
   }

@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listCustomers, saveCustomer, deleteCustomer, listCustomerDocs } from "../lib/api";
 import { UIcon } from "../icons";
@@ -63,12 +64,12 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
 
   async function save() {
     if (!editing.cust.name.trim()) return flash("ใส่ชื่อลูกค้า", true);
-    if (editing.cust.id && !window.confirm(`ยืนยันบันทึกการแก้ไขลูกค้า "${editing.cust.name}" ?`)) return;
+    if (editing.cust.id && !await confirmDialog(`ยืนยันบันทึกการแก้ไขลูกค้า "${editing.cust.name}" ?`)) return;
     try { await saveCustomer(editing.cust, editing.contacts, editing.sites); flash("บันทึกลูกค้าแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(c) {
-    if (!confirm(`ลบลูกค้า "${c.name}"? (ลบใบเสนอราคา/งานที่อ้างถึงไม่ได้ถ้ามี)`)) return;
+    if (!await confirmDialog(`ลบลูกค้า "${c.name}"? (ลบใบเสนอราคา/งานที่อ้างถึงไม่ได้ถ้ามี)`)) return;
     try { await deleteCustomer(c.id); flash("ลบลูกค้าแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ — อาจมีใบเสนอราคา/งานผูกอยู่", true); }
   }

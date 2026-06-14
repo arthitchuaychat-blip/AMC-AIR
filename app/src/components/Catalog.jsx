@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listMaterials, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus } from "../lib/api";
 import { fmtBaht2, fmtNum } from "../lib/format";
@@ -60,7 +61,7 @@ export default function Catalog({ role }) {
   );
 
   async function remove(m) {
-    if (!confirm(`ลบ "${m.th}" ออกจากคลัง? (ประวัติยังเก็บไว้)`)) return;
+    if (!await confirmDialog(`ลบ "${m.th}" ออกจากคลัง? (ประวัติยังเก็บไว้)`)) return;
     try { await deactivateMaterial(m.code); load(); }
     catch (e) { alert("ลบไม่สำเร็จ: " + (e.message || e)); }
   }

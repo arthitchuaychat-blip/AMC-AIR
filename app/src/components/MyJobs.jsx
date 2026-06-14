@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import { listTeamJobOrders, listJobOrders, updateJobStatus } from "../lib/api";
 import { UIcon } from "../icons";
 import { slotDef, jobDays, parseYmd, thDayMon } from "../lib/schedule";
@@ -27,7 +28,7 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
 
   async function setStatus(jo, status) {
     const label = STATUS[status]?.th || status;
-    if (!window.confirm(`ยืนยันเปลี่ยนสถานะงาน ${jo.job_no} เป็น "${label}" ?`)) return;
+    if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะงาน ${jo.job_no} เป็น "${label}" ?`)) return;
     try { await updateJobStatus(jo.job_no, status, me); flash("อัปเดตสถานะแล้ว"); await load(); }
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
   }

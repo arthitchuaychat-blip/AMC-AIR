@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterials } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
@@ -62,12 +63,12 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   async function save() {
     if (!editing.po_no.trim()) return flash("ใส่เลขใบสั่งซื้อ", true);
     if (!editing.items.length) return flash("เพิ่มวัสดุอย่างน้อย 1 รายการ", true);
-    if (editing._edit && !window.confirm(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
+    if (editing._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
     try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, status: "open" }, editing.items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(po) {
-    if (!confirm(`ลบใบสั่งซื้อ ${po.po_no}?`)) return;
+    if (!await confirmDialog(`ลบใบสั่งซื้อ ${po.po_no}?`)) return;
     try { await deletePurchaseOrder(po.po_no); flash("ลบใบสั่งซื้อแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }

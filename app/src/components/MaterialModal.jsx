@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { UIcon } from "../icons";
 import { UNITS } from "../lib/format";
@@ -49,7 +50,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
   }, []);
   async function submit() {
     if (!valid || busy) return;
-    if (!isNew && !window.confirm(`ยืนยันบันทึกการแก้ไข "${f.th || f.code}" ?`)) return;
+    if (!isNew && !await confirmDialog(`ยืนยันบันทึกการแก้ไข "${f.th || f.code}" ?`)) return;
     setBusy(true); setErr(null);
     try { await onSave(f, isNew); onSaved(f.kind); }
     catch (e) { setErr(e.message || String(e)); setBusy(false); }

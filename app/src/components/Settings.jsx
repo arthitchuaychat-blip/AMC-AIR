@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany } from "../lib/api";
 import { UIcon } from "../icons";
@@ -53,14 +54,14 @@ function TeamRow({ team, onChanged, flash }) {
   const [lead, setLead] = React.useState(team.lead || "");
   const [busy, setBusy] = React.useState(false);
   async function save() {
-    if (!window.confirm(`ยืนยันบันทึกการแก้ไขทีม ${team.id} ?`)) return;
+    if (!await confirmDialog(`ยืนยันบันทึกการแก้ไขทีม ${team.id} ?`)) return;
     setBusy(true);
     try { await saveTeam({ id: team.id, name, lead }); flash(`บันทึกทีม ${team.id} แล้ว`); onChanged(); }
     catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
     setBusy(false);
   }
   async function del() {
-    if (!confirm(`ลบทีม ${team.id}? (ถ้ามีธุรกรรม/ช่างผูกอยู่จะลบไม่ได้)`)) return;
+    if (!await confirmDialog(`ลบทีม ${team.id}? (ถ้ามีธุรกรรม/ช่างผูกอยู่จะลบไม่ได้)`)) return;
     try { await deleteTeam(team.id); flash(`ลบทีม ${team.id} แล้ว`); onChanged(); }
     catch (e) { flash("ลบไม่ได้ — มีข้อมูลผูกอยู่", true); }
   }
@@ -109,7 +110,7 @@ function CategoryRow({ c, onChanged, flash }) {
   const [busy, setBusy] = React.useState(false);
   async function save() {
     if (!id.trim()) return flash("รหัสหมวดห้ามว่าง", true);
-    if (!window.confirm(`ยืนยันบันทึกการแก้ไขหมวด ${c.id} ?`)) return;
+    if (!await confirmDialog(`ยืนยันบันทึกการแก้ไขหมวด ${c.id} ?`)) return;
     setBusy(true);
     try {
       await updateCategory(c.id, { id, name_th: nameTh, name_en: nameEn });
@@ -119,7 +120,7 @@ function CategoryRow({ c, onChanged, flash }) {
     setBusy(false);
   }
   async function del() {
-    if (!confirm(`ลบหมวด ${c.id}? (ถ้ามีวัสดุใช้หมวดนี้อยู่จะลบไม่ได้)`)) return;
+    if (!await confirmDialog(`ลบหมวด ${c.id}? (ถ้ามีวัสดุใช้หมวดนี้อยู่จะลบไม่ได้)`)) return;
     try { await deleteCategory(c.id); flash(`ลบหมวด ${c.id} แล้ว`); onChanged(); }
     catch (e) { flash("ลบไม่ได้ — มีวัสดุใช้หมวดนี้อยู่", true); }
   }
@@ -217,13 +218,13 @@ export default function Settings() {
     try { await saveBrand(nBrand); setNBrand(""); flash(`เพิ่มยี่ห้อ ${nBrand} แล้ว`); load(); }
     catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
   }
-  async function delBrand(b) { if (!window.confirm(`ลบยี่ห้อ "${b}" ?`)) return; try { await deleteBrand(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
+  async function delBrand(b) { if (!await confirmDialog(`ลบยี่ห้อ "${b}" ?`)) return; try { await deleteBrand(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
   async function addBtu() {
     if (!nBtu || Number(nBtu) <= 0) return;
     try { await saveBtu(nBtu); setNBtu(""); flash(`เพิ่ม ${nBtu} BTU แล้ว`); load(); }
     catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
   }
-  async function delBtu(b) { if (!window.confirm(`ลบขนาด ${Number(b).toLocaleString()} BTU ?`)) return; try { await deleteBtu(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
+  async function delBtu(b) { if (!await confirmDialog(`ลบขนาด ${Number(b).toLocaleString()} BTU ?`)) return; try { await deleteBtu(b); load(); } catch (e) { flash("ลบไม่ได้: " + (e.message || e), true); } }
 
   async function addCat() {
     if (!nc.id.trim() || !nc.name_th.trim()) return flash("ใส่รหัสและชื่อหมวด", true);

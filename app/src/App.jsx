@@ -3,6 +3,7 @@ import { supabase, hasConfig } from "./lib/supabase";
 import { getProfile, signOut } from "./lib/api";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
+import { ConfirmHost } from "./components/ConfirmDialog";
 import Catalog from "./components/Catalog";
 import Movements from "./components/Movements";
 import Dashboard from "./components/Dashboard";
@@ -204,6 +205,7 @@ export default function App() {
         {view === "catalog" && <Catalog role={role} />}
         {view === "settings" && <Settings />}
       </main>
+      <ConfirmHost />
     </div>
   );
 }

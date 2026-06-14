@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
@@ -159,7 +160,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   }
 
   async function cancel(r) {
-    if (!confirm(`ยกเลิกรายการนี้? (${TYPE_BY[r.type].th} ${matMap[r.material_code]?.th || r.material_code} ${r.qty}) — สต๊อกจะคืนค่าให้`)) return;
+    if (!await confirmDialog(`ยกเลิกรายการนี้? (${TYPE_BY[r.type].th} ${matMap[r.material_code]?.th || r.material_code} ${r.qty}) — สต๊อกจะคืนค่าให้`)) return;
     try { await deleteTransaction(r.id); flash("ยกเลิกรายการแล้ว"); await load(); }
     catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
   }

@@ -1,4 +1,5 @@
 import React from "react";
+import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht2, custCode, round2 } from "../lib/format";
@@ -74,7 +75,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
     try { await saveReceipt(r); flash(r.status === "paid" ? `ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว` : `ออกใบเสร็จ (รอชำระเงิน) แล้ว`); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(x) { if (!window.confirm(`ลบใบเสร็จ ${x.receipt_no}? (ใบแจ้งหนี้จะกลับเป็นค้างชำระ)`)) return; try { await deleteReceipt(x.receipt_no, x.invoice_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(x) { if (!await confirmDialog(`ลบใบเสร็จ ${x.receipt_no}? (ใบแจ้งหนี้จะกลับเป็นค้างชำระ)`)) return; try { await deleteReceipt(x.receipt_no, x.invoice_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
   // ---------- EDITOR ----------
   if (ed) {
