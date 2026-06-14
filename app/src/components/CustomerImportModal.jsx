@@ -53,11 +53,12 @@ export default function CustomerImportModal({ onDone, onClose }) {
       if (i === 0 && (c0 === "ชนิด" || c0 === "kind" || c0 === "ชื่อลูกค้า" || c0 === "name")) return; // header
       const [type, name, tax_id, vat, address, cname, cphone, crole, saddr, note, mapUrl] = cells;
       if (!name) { errors.push({ line: i + 1 }); return; }
+      const ctype = custType(type);
       rows.push({
-        cust: { type: custType(type), name, tax_id: tax_id || "", vat: isVat(vat), address: address || "", note: note || "" },
+        cust: { type: ctype, name, tax_id: tax_id || "", vat: isVat(vat), address: address || "", note: note || "" },
         contacts: (cname || cphone) ? [{ name: cname || "", phone: cphone || "", role: crole || "" }] : [],
-        // map pin lands on a site; if no separate site address, reuse the customer address so the pin still has a label
-        sites: (saddr || mapUrl) ? [{ site_name: "", address: saddr || address || "", map_url: mapUrl || "" }] : [],
+        // map pin lands on a site; default site name by type (สำนักงาน/บ้าน); reuse customer address if no separate site address
+        sites: (saddr || mapUrl) ? [{ site_name: ctype === "company" ? "สำนักงาน" : "บ้าน", address: saddr || address || "", map_url: mapUrl || "" }] : [],
       });
     });
     setParsed({ rows, errors }); setMsg(null);
