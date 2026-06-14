@@ -5,6 +5,7 @@ import { MaterialThumb, UIcon } from "../icons";
 import DashDrawer from "./DashDrawer";
 import SalesReport from "./SalesReport";
 import BillingSummary from "./BillingSummary";
+import CrmJobsSummary from "./CrmJobsSummary";
 import TrendCharts from "./TrendCharts";
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -119,6 +120,8 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
       <SalesReport onOpenQuote={onOpenQuote} onOpenJob={onOpenJob} from={from} to={to} />
 
       <BillingSummary onGo={onGo} from={from} to={to} />
+
+      <CrmJobsSummary onGo={onGo} />
 
       <TrendCharts from={from} to={to} />
 
