@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus } from "../lib/api";
+import { listMaterials, listMaterialsLite, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus } from "../lib/api";
 import { fmtBaht2, fmtNum, eqi, matchText, norm } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import MaterialModal from "./MaterialModal";
@@ -35,10 +35,14 @@ export default function Catalog({ role }) {
   async function load() {
     setLoading(true); setErr(null);
     try {
-      const [m, c, b, bt] = await Promise.all([listMaterials(), listCategories(), listBrands(), listBtus()]);
-      setMats(m); setCats(c); setBrands(b); setBtus(bt);
-    } catch (e) { setErr(e.message || String(e)); }
-    setLoading(false);
+      // Fast first paint: the "lite" catalog reads the materials table directly (no per-item
+      // stock aggregation over every transaction), so the page is usable almost immediately.
+      const [lite, c, b, bt] = await Promise.all([listMaterialsLite(), listCategories(), listBrands(), listBtus()]);
+      setMats(lite); setCats(c); setBrands(b); setBtus(bt);
+      setLoading(false);
+      // Then upgrade to live stock numbers in the background — the heavy query no longer blocks the UI.
+      listMaterials().then((full) => setMats(full)).catch(() => {});
+    } catch (e) { setErr(e.message || String(e)); setLoading(false); }
   }
   React.useEffect(() => { load(); }, []);
 
@@ -68,10 +72,13 @@ export default function Catalog({ role }) {
     collator.compare(a.brand || a.catName || "", b.brand || b.catName || "") ||   // ยี่ห้อ (แอร์) / หมวด (วัสดุ)
     collator.compare(a.th || "", b.th || "")                                       // แล้วเรียงตามตัวอักษรชื่อไทย
   ), [mats, kind, cat, brand, btu, acType, dq, collator]);
-  // Render at most CAP cards at a time — drawing the whole catalog at once is what made the page lag.
-  // Filtering/sort still run over the FULL catalog, so search never misses anything.
-  const CAP = 150;
-  const capped = React.useMemo(() => list.slice(0, CAP), [list]);
+  // Render in chunks — drawing the whole catalog at once is what made the page lag. Filtering/sort
+  // still run over the FULL catalog (search never misses anything); we just paint `limit` cards and
+  // grow on demand. Reset back to one page whenever the filter/search changes.
+  const PAGE = 120;
+  const [limit, setLimit] = React.useState(PAGE);
+  React.useEffect(() => { setLimit(PAGE); }, [kind, cat, brand, btu, acType, dq, viewMode]);
+  const capped = React.useMemo(() => list.slice(0, limit), [list, limit]);
 
   async function remove(m) {
     if (!await confirmDialog(`ลบ "${m.th}" ออกจากคลัง? (ประวัติยังเก็บไว้)`)) return;
@@ -166,8 +173,8 @@ export default function Catalog({ role }) {
       {loading && <div className="empty">กำลังโหลด…</div>}
       {err && <div className="empty" style={{ color: "var(--down)" }}>โหลดข้อมูลไม่สำเร็จ: {err}</div>}
       {!loading && !err && list.length === 0 && <div className="empty">ไม่พบรายการ{q && ` “${q}”`}</div>}
-      {!loading && !err && list.length > CAP && (
-        <div className="page-sub" style={{ margin: "2px 2px 12px" }}>แสดง {CAP} จาก {fmtNum(list.length)} รายการ · พิมพ์ค้นหาหรือเลือกตัวกรองเพื่อให้แคบลง</div>
+      {!loading && !err && list.length > limit && (
+        <div className="page-sub" style={{ margin: "2px 2px 12px" }}>แสดง {fmtNum(capped.length)} จาก {fmtNum(list.length)} รายการ · พิมพ์ค้นหาหรือเลือกตัวกรองเพื่อให้แคบลง</div>
       )}
 
       {viewMode === "grid" && (
@@ -221,6 +228,14 @@ export default function Catalog({ role }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!loading && !err && list.length > limit && (
+        <div style={{ display: "flex", justifyContent: "center", margin: "16px 0 4px" }}>
+          <button className="btn-ghost" onClick={() => setLimit((n) => n + PAGE)}>
+            แสดงเพิ่ม · เหลืออีก {fmtNum(list.length - limit)} รายการ
+          </button>
         </div>
       )}
 
