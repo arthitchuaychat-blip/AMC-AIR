@@ -1123,9 +1123,26 @@ export async function listQuickReplies() {
   if (error) throw error;
   return data || [];
 }
-export async function addQuickReply(text) {
-  const { error } = await supabase.from("quick_replies").insert({ text: text.trim() });
+export async function addQuickReply(text, title) {
+  // put new replies at the end (largest sort + 1)
+  const { data } = await supabase.from("quick_replies").select("sort").order("sort", { ascending: false }).limit(1);
+  const nextSort = ((data && data[0] && data[0].sort) || 0) + 1;
+  const { error } = await supabase.from("quick_replies").insert({ text: text.trim(), title: (title || "").trim() || null, sort: nextSort });
   if (error) throw error;
+}
+export async function updateQuickReply(id, fields) {
+  const patch = {};
+  if (fields.text != null) patch.text = String(fields.text).trim();
+  if (fields.title !== undefined) patch.title = (fields.title || "").trim() || null;
+  const { error } = await supabase.from("quick_replies").update(patch).eq("id", id);
+  if (error) throw error;
+}
+// persist a new order: write sort = position for each id (list is small)
+export async function saveQuickReplyOrder(ids) {
+  for (let i = 0; i < ids.length; i++) {
+    const { error } = await supabase.from("quick_replies").update({ sort: i + 1 }).eq("id", ids[i]);
+    if (error) throw error;
+  }
 }
 export async function deleteQuickReply(id) {
   const { error } = await supabase.from("quick_replies").delete().eq("id", id);

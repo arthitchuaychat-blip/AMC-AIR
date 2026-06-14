@@ -536,6 +536,7 @@ alter publication supabase_realtime add table line_contacts;
 -- ---------- ข้อความตอบกลับสำเร็จรูป (quick replies) ----------
 create table if not exists quick_replies (
   id         bigint generated always as identity primary key,
+  title      text,
   text       text not null,
   sort       int not null default 0,
   created_at timestamptz not null default now()

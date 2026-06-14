@@ -1129,14 +1129,25 @@ select.inp{cursor:pointer}
 .confirm-job b{color:var(--primary)}
 .confirm-job small{color:var(--ink-3);font-size:11.5px}
 /* quick-reply manager */
-.qr-add{display:flex;gap:8px;align-items:flex-end;margin-bottom:14px}
+.qr-add{display:flex;flex-direction:column;gap:8px;align-items:stretch;margin-bottom:14px}
 .qr-add textarea{flex:1;resize:vertical}
-.qr-add .btn-primary{white-space:nowrap}
+.qr-add .btn-primary{white-space:nowrap;align-self:flex-end}
 .qr-list{display:flex;flex-direction:column;gap:7px}
-.qr-item{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;background:var(--surface-2)}
-.qr-item span{flex:1;font-size:13px;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+.qr-item{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;background:var(--surface-2)}
+.qr-item.editing{display:block}
+.qr-reorder{flex:none;display:flex;flex-direction:column;gap:2px}
+.qr-move{border:1px solid var(--line);background:#fff;color:var(--ink-2);cursor:pointer;border-radius:5px;width:22px;height:18px;line-height:1;font-size:10px;padding:0}
+.qr-move:hover:not(:disabled){background:var(--surface-2);color:var(--ink)}
+.qr-move:disabled{opacity:.35;cursor:default}
+.qr-body{flex:1;min-width:0}
+.qr-title{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:2px}
+.qr-text{font-size:12.5px;color:var(--ink-2);white-space:pre-wrap;word-break:break-word}
+.qr-edit-fields{display:flex;flex-direction:column;gap:7px}
+.qr-edit-acts{display:flex;gap:8px;justify-content:flex-end}
 .qr-del{flex:none;border:none;background:none;color:var(--down);cursor:pointer;padding:3px;border-radius:6px}
+.qr-del[title="แก้ไข"]{color:var(--ink-3)}
 .qr-del:hover{background:#fde8e8}
+.qr-del[title="แก้ไข"]:hover{background:var(--surface-2);color:var(--primary)}
 
 /* customer detail — job history timeline */
 .cd-timeline{display:flex;flex-direction:column;position:relative;margin-top:4px}

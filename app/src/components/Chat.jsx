@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
@@ -59,6 +59,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [quickReplies, setQuickReplies] = React.useState([]);
   const [qrManage, setQrManage] = React.useState(false);
   const [newQr, setNewQr] = React.useState("");
+  const [newQrTitle, setNewQrTitle] = React.useState("");
+  const [qrEdit, setQrEdit] = React.useState(null); // { id, title, text } while editing one reply
+  const [qrSearch, setQrSearch] = React.useState("");
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
   const [jobPicker, setJobPicker] = React.useState(null);
   const [sendMenuFor, setSendMenuFor] = React.useState(null); // doc entry whose "ส่งเป็น รูป/PDF" popup is open
@@ -175,7 +178,16 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   function pickJob(jo) { setText(buildOrderConfirm(jo)); setJobPicker(null); flash("ใส่ข้อความคอนเฟิมแล้ว — ตรวจทานแล้วกดส่ง"); }
 
   const insertQr = (t) => setText((cur) => cur ? cur + (cur.endsWith("\n") ? "" : "\n") + t : t);
-  async function addQr() { const t = newQr.trim(); if (!t) return; try { await addQuickReply(t); setNewQr(""); await loadQr(); } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e.message || e), true); } }
+  async function addQr() { const t = newQr.trim(); if (!t) return; try { await addQuickReply(t, newQrTitle); setNewQr(""); setNewQrTitle(""); await loadQr(); } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e.message || e), true); } }
+  async function saveQrEdit() { if (!qrEdit || !qrEdit.text.trim()) return; try { await updateQuickReply(qrEdit.id, { title: qrEdit.title, text: qrEdit.text }); setQrEdit(null); await loadQr(); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); } }
+  async function moveQr(id, dir) {
+    const ids = quickReplies.map((q) => q.id);
+    const i = ids.indexOf(id), j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    setQuickReplies(ids.map((x) => quickReplies.find((q) => q.id === x))); // optimistic reorder
+    try { await saveQuickReplyOrder(ids); } catch (e) { flash("จัดลำดับไม่สำเร็จ: " + (e.message || e), true); await loadQr(); }
+  }
   async function delQr(id) { if (!await confirmDialog("ลบข้อความนี้?")) return; try { await deleteQuickReply(id); await loadQr(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
   const selContact = contacts.find((c) => c.line_user_id === sel);
@@ -288,11 +300,14 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <label className={"chat-tool" + (sending ? " disabled" : "")}>📷 รูป
                       <input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
                     </label>
-                    {quickReplies.map((qr) => (
-                      <button key={qr.id} className="chat-qr" title={qr.text} onClick={() => insertQr(qr.text)}>
-                        {qr.text.length > 22 ? qr.text.slice(0, 22) + "…" : qr.text}
-                      </button>
-                    ))}
+                    {quickReplies.map((qr) => {
+                      const label = qr.title || qr.text;
+                      return (
+                        <button key={qr.id} className="chat-qr" title={qr.text} onClick={() => insertQr(qr.text)}>
+                          {label.length > 22 ? label.slice(0, 22) + "…" : label}
+                        </button>
+                      );
+                    })}
                     <button className="chat-tool ghost" onClick={() => setQrManage(true)}>✏️ จัดการคำตอบ</button>
                   </div>
                   <div className="chat-compose">
@@ -420,15 +435,44 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <button className="drawer-close" onClick={() => setQrManage(false)}><UIcon name="x" size={20} /></button></div>
             <div className="modal-body">
               <div className="qr-add">
+                <input className="inp" value={newQrTitle} onChange={(e) => setNewQrTitle(e.target.value)} placeholder="ชื่อหัวข้อ (ไว้ค้นหา/แสดงบนปุ่ม) เช่น โอนเงิน กสิกร" />
                 <textarea className="inp" rows={2} value={newQr} onChange={(e) => setNewQr(e.target.value)} placeholder="พิมพ์ข้อความที่ใช้บ่อย…" />
                 <button className="btn-primary" disabled={!newQr.trim()} onClick={addQr}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม</button>
               </div>
+              {quickReplies.length > 5 && (
+                <input className="inp" style={{ marginBottom: 10 }} value={qrSearch} onChange={(e) => setQrSearch(e.target.value)} placeholder="🔍 ค้นหาหัวข้อ / ข้อความ…" />
+              )}
               <div className="qr-list">
                 {quickReplies.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ยังไม่มีข้อความบันทึกไว้</div>}
-                {quickReplies.map((qr) => (
-                  <div className="qr-item" key={qr.id}><span>{qr.text}</span>
-                    <button className="qr-del" onClick={() => delQr(qr.id)}><UIcon name="trash" size={15} /></button></div>
-                ))}
+                {quickReplies.map((qr, i) => {
+                  if (qrSearch.trim() && !matchText(qrSearch, qr.title, qr.text)) return null;
+                  if (qrEdit && qrEdit.id === qr.id) return (
+                    <div className="qr-item editing" key={qr.id}>
+                      <div className="qr-edit-fields">
+                        <input className="inp" value={qrEdit.title} onChange={(e) => setQrEdit({ ...qrEdit, title: e.target.value })} placeholder="ชื่อหัวข้อ" />
+                        <textarea className="inp" rows={2} value={qrEdit.text} onChange={(e) => setQrEdit({ ...qrEdit, text: e.target.value })} placeholder="ข้อความ" />
+                        <div className="qr-edit-acts">
+                          <button className="btn-ghost sm" onClick={() => setQrEdit(null)}>ยกเลิก</button>
+                          <button className="btn-primary sm" disabled={!qrEdit.text.trim()} onClick={saveQrEdit}>บันทึก</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                  return (
+                    <div className="qr-item" key={qr.id}>
+                      <div className="qr-reorder">
+                        <button className="qr-move" disabled={i === 0 || !!qrSearch.trim()} title="เลื่อนขึ้น" onClick={() => moveQr(qr.id, -1)}>▲</button>
+                        <button className="qr-move" disabled={i === quickReplies.length - 1 || !!qrSearch.trim()} title="เลื่อนลง" onClick={() => moveQr(qr.id, 1)}>▼</button>
+                      </div>
+                      <div className="qr-body">
+                        {qr.title && <div className="qr-title">{qr.title}</div>}
+                        <div className="qr-text">{qr.text}</div>
+                      </div>
+                      <button className="qr-del" title="แก้ไข" onClick={() => setQrEdit({ id: qr.id, title: qr.title || "", text: qr.text })}><UIcon name="edit" size={15} /></button>
+                      <button className="qr-del" title="ลบ" onClick={() => delQr(qr.id)}><UIcon name="trash" size={15} /></button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
