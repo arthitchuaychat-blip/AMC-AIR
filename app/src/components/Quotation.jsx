@@ -254,7 +254,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             <label className="fld"><span>สถานะ</span>
               <Combo className="inp" value={ed.status} onChange={(e) => setQ("status", e.target.value)}>{STATUS_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Combo>
             </label>
-            <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note} onChange={(e) => setQ("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
           </div>
 
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setQ(k, v)} />

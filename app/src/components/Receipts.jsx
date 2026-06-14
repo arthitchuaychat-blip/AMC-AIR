@@ -125,8 +125,6 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
             </label>
           </div>
           {selInv && <p className="page-sub" style={{ margin: "0 0 6px" }}>หัก ณ ที่จ่าย ดึงจากใบแจ้งหนี้ (ค่าบริการ) · ปรับรายบรรทัดได้โดยกดที่ใบเสร็จในรายการหลังออกใบ</p>}
-          <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note} onChange={(e) => setF("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
-
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setF(k, v)} />
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>

@@ -552,14 +552,16 @@ select.inp{cursor:pointer}
 
 /* ---------- print slip ---------- */
 @media screen { .print-area { display:none; } }
-/* margin:0 removes the browser's auto header/footer (date · title · url · page no.);
-   safe margins come from .print-area padding instead */
-@page { margin: 0; }
+/* A4 with safe margins; the margin also hides the browser's auto header/footer band */
+@page { size: A4; margin: 14mm 12mm; }
 @media print {
   body * { visibility:hidden !important; }
   .print-area, .print-area * { visibility:visible !important; }
-  .print-area { position:absolute; left:0; top:0; width:100%; padding:13mm 12mm; }
-  .doc-table tr, .doc-totals, .doc-foot, .doc-cust, .doc-head { page-break-inside:avoid; }
+  .print-area { position:absolute; left:0; top:0; width:100%; padding:0; }
+  /* letterhead (thead) repeats on every page; keep blocks from splitting awkwardly */
+  .doc-sheet thead { display:table-header-group; }
+  .doc-table tr, .doc-totals, .doc-terms-box, .doc-signs, .doc-cust { page-break-inside:avoid; break-inside:avoid; }
+  .doc::before { display:none; } /* the decorative bar would otherwise overlap repeated headers */
 }
 .slip{font-family:var(--appfont);color:#000;max-width:720px;margin:0 auto}
 .slip-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:14px}
@@ -828,6 +830,9 @@ select.inp{cursor:pointer}
 .doc,.doc *{ -webkit-print-color-adjust:exact; print-color-adjust:exact }
 .doc{font-family:var(--appfont);color:#0f1729;max-width:760px;margin:0 auto;font-size:12.5px;position:relative;padding-top:16px}
 .doc::before{content:"";position:absolute;top:0;left:0;right:0;height:8px;border-radius:6px;background:linear-gradient(90deg,#1f74e0,#33a7ef 60%,#5bc8f5)}
+/* sheet table: header in thead repeats on every printed page */
+.doc-sheet{width:100%;border-collapse:collapse}
+.doc-sheet-cell{padding:0;text-align:left;font-weight:400;vertical-align:top}
 .doc-head{display:flex;justify-content:space-between;gap:20px;padding:6px 0 14px;margin-bottom:14px;border-bottom:2px solid #eef0f5}
 .doc-co{display:flex;gap:13px;align-items:flex-start}
 .doc-logo{width:56px;height:56px;object-fit:contain;flex:none;border-radius:11px}

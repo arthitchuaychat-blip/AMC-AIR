@@ -22,9 +22,12 @@ export function writeAndPrint(win, selector = ".print-area") {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 ${styles}
 <style>
-  @page{ margin:0 }
+  @page{ size:A4; margin:14mm 12mm }
   html,body{ margin:0;padding:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact }
-  .print-area{ display:block !important;position:static !important;width:auto !important;padding:12mm 11mm }
+  .print-area{ display:block !important;position:static !important;width:auto !important;padding:0 }
+  .doc-sheet thead{ display:table-header-group }
+  .doc::before{ display:none }
+  .doc-table tr,.doc-totals,.doc-terms-box,.doc-signs,.doc-cust{ break-inside:avoid;page-break-inside:avoid }
 </style></head><body>${src.outerHTML}</body></html>`;
 
   win.document.open();
