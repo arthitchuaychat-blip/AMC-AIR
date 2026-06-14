@@ -1061,7 +1061,7 @@ export async function markLineRead(uid) {
 }
 // how many chats still have unread (waiting to be answered) — for the sidebar badge
 export async function countUnreadChats() {
-  const { count, error } = await supabase.from("line_contacts").select("id", { count: "exact", head: true }).gt("unread", 0);
+  const { count, error } = await supabase.from("line_contacts").select("line_user_id", { count: "exact", head: true }).gt("unread", 0);
   if (error) throw error;
   return count || 0;
 }
