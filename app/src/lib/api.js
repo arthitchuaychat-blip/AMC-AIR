@@ -24,7 +24,7 @@ function enrich(m, catMap) {
     salePrice: Number(m.sale_price) || 0,
     description: m.description || "",
     photoUrl: m.photo_url || null,
-    kind: m.kind || "material",
+    kind: String(m.kind || "material").trim().toLowerCase(),  // normalize: stray space/case in stored kind broke tab filtering
     brand: m.brand || null,
     btu: m.btu || null,
     ac_type: m.ac_type || null,
