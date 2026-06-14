@@ -31,6 +31,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   const [statusF, setStatusF] = React.useState("all");
   const [typeF, setTypeF] = React.useState("all");
   const [viewing, setViewing] = React.useState(null); // job being viewed (detail modal)
+  const [approveCtx, setApproveCtx] = React.useState(null); // { jo, v } → approval choice popup
   const [q, setQ] = React.useState("");
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
@@ -193,17 +194,14 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     try { const newNo = await createLinkedJob(jo); flash(`สร้างใบงานเชื่อม ${newNo} แล้ว`); await load(); setViewing(null); const fresh = await listJobOrders(); setList(fresh); startEdit(fresh.find((x) => x.job_no === newNo)); }
     catch (e) { flash("สร้างไม่สำเร็จ: " + (e.message || e), true); }
   }
-  // office acts on ONE รอบ (visit) — approve → เสร็จ, or send → รอนัดหมายใหม่; sibling visits untouched
-  async function visitAction(jo, v, status) {
-    const o = status === "done"
-      ? { title: "อนุมัติรอบนี้เป็น 'เสร็จ' ?", confirmText: "อนุมัติ เสร็จ" }
-      : { title: "ส่งรอบนี้ไป 'รอนัดหมายใหม่' ?", confirmText: "ให้นัดหมายใหม่" };
-    if (!await confirmDialog({ ...o, message: `รอบ · ${v.teamName || "ทีม"} · ${scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}`, danger: false })) return;
+  // office sets ONE รอบ (visit) status — siblings untouched; modal/list refresh in place
+  async function doVisitStatus(jo, v, status) {
+    setApproveCtx(null);
     try {
       await updateVisitStatus(v.id, jo.job_no, status, me);
-      flash("อัปเดตรอบงานแล้ว ✓");
+      flash(status === "done" ? "อนุมัติ · ปิดงานรอบนี้แล้ว ✓" : "ส่งรอบนี้ไปนัดหมายเพิ่มแล้ว");
       const fresh = await listJobOrders(); setList(fresh);
-      setViewing(fresh.find((x) => x.job_no === jo.job_no) || null);
+      setViewing((cur) => cur ? (fresh.find((x) => x.job_no === jo.job_no) || null) : cur);
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   // open the editor to set a new appointment; flip รอนัดหมายใหม่ visit(s) back to นัดแล้ว so the new date lands as scheduled.
@@ -387,7 +385,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               )}
               {canEdit && jo.status === "reschedule" && (
                 <div className="job-lines"><div className="job-actions">
-                  <button className="btn-primary sm" onClick={() => startReschedule(jo)}><UIcon name="calendar" size={14} color="#fff" /> ตั้งนัดหมายใหม่</button>
+                  <button className="btn-primary sm" onClick={() => startReschedule(jo)}><UIcon name="calendar" size={14} color="#fff" /> ตั้งวันนัดหมายเพิ่ม</button>
                 </div></div>
               )}
               <div className="job-lines"><div className="job-actions">
@@ -434,13 +432,12 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                       <div className="cd-site-addr">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}</div>
                       {canEdit && v.status === "awaiting_approval" && (
                         <div className="myjob-visit-acts" style={{ marginTop: 7 }}>
-                          <button className="btn-primary sm ok" onClick={() => visitAction(jo, v, "done")}>✓ อนุมัติ เสร็จ</button>
-                          <button className="btn-ghost sm" onClick={() => visitAction(jo, v, "reschedule")}>↻ ให้นัดใหม่</button>
+                          <button className="btn-primary sm ok" onClick={() => setApproveCtx({ jo, v })}>✓ อนุมัติรอบนี้</button>
                         </div>
                       )}
                       {canEdit && v.status === "reschedule" && (
                         <div className="myjob-visit-acts" style={{ marginTop: 7 }}>
-                          <button className="btn-primary sm" onClick={() => { setViewing(null); startReschedule(jo, i); }}>📅 ตั้งนัดใหม่รอบนี้</button>
+                          <button className="btn-primary sm" onClick={() => { setViewing(null); startReschedule(jo, i); }}>📅 ตั้งวันนัดหมายเพิ่ม</button>
                         </div>
                       )}
                     </div>
@@ -462,6 +459,24 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 {canEdit && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const j = jo; setViewing(null); del(j); }}><UIcon name="trash" size={15} /> ลบ</button>}
                 {canEdit && <button className="btn-ghost" onClick={() => addLinked(jo)}><UIcon name="plus" size={15} /> ใบงานเชื่อม</button>}
                 {canEdit && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {approveCtx && (() => {
+        const { jo, v } = approveCtx;
+        return (
+          <div className="confirm-overlay" onMouseDown={() => setApproveCtx(null)}>
+            <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+              <div className="confirm-icon">✅</div>
+              <div className="confirm-title">อนุมัติรอบนี้</div>
+              <div className="confirm-msg">{jo.job_no} · {v.teamName || "ทีม"}<br />🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}<br /><br />งานรอบนี้…?</div>
+              <div className="confirm-acts" style={{ flexDirection: "column" }}>
+                <button className="btn-primary ok" style={{ width: "100%" }} onClick={() => doVisitStatus(jo, v, "done")}>✅ เสร็จสิ้นแล้ว · ปิดงาน</button>
+                <button className="btn-primary" style={{ width: "100%", background: "#ea580c" }} onClick={() => doVisitStatus(jo, v, "reschedule")}>📅 ต้องนัดหมายเพิ่ม</button>
+                <button className="btn-ghost" style={{ width: "100%" }} onClick={() => setApproveCtx(null)}>ยกเลิก</button>
               </div>
             </div>
           </div>

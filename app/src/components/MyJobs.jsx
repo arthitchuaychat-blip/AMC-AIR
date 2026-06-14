@@ -133,13 +133,13 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                           {(v.status === "pending" || v.status === "scheduled") && <button className="btn-primary sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>เริ่มทำรอบนี้</button>}
                           {v.status === "in_progress" && <>
                             <button className="btn-primary sm ok" onClick={() => setVStatus(jo.job_no, v, "awaiting_approval")}>ส่งอนุมัติ ✓</button>
-                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "reschedule")}>ขอเลื่อนนัด</button>
+                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "reschedule")}>ขอนัดหมายเพิ่ม</button>
                           </>}
                           {v.status === "awaiting_approval" && <>
                             <span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span>
                             <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>แก้ไข/ทำต่อ</button>
                           </>}
-                          {v.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศตั้งนัดใหม่</span>}
+                          {v.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศนัดหมายเพิ่ม</span>}
                           {v.status === "done" && <span className="myjob-await">🔒 อนุมัติแล้ว · ปิดงาน</span>}
                         </div>
                       </div>
@@ -152,10 +152,10 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                   {(jo.status === "pending" || jo.status === "scheduled") && <button className="btn-primary" onClick={() => setStatus(jo, "in_progress")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> รับงาน / เริ่มทำ</button>}
                   {jo.status === "in_progress" && <>
                     <button className="btn-primary ok" onClick={() => setStatus(jo, "awaiting_approval")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> ส่งอนุมัติ</button>
-                    <button className="btn-ghost" onClick={() => setStatus(jo, "reschedule")}>ขอเลื่อนนัด</button>
+                    <button className="btn-ghost" onClick={() => setStatus(jo, "reschedule")}>ขอนัดหมายเพิ่ม</button>
                   </>}
                   {jo.status === "awaiting_approval" && <><span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span><button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}>แก้ไข/ทำต่อ</button></>}
-                  {jo.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศตั้งนัดใหม่</span>}
+                  {jo.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศนัดหมายเพิ่ม</span>}
                   {jo.status === "done" && <span className="myjob-await">🔒 อนุมัติแล้ว · ปิดงาน</span>}
                   {jo.status !== "done" && jo.status !== "cancelled" && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
                 </div>

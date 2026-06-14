@@ -5,7 +5,7 @@ import { BUCKETS, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYe
 
 const VIEWS = [["day", "วัน"], ["week", "สัปดาห์"], ["month", "เดือน"]];
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l]) => [v, l]));
-const STATUS_FILTERS = [["all", "ทุกสถานะ"], ["scheduled", "นัดแล้ว"], ["in_progress", "กำลังทำ"], ["awaiting_approval", "รออนุมัติ"], ["reschedule", "รอนัดใหม่"], ["done", "เสร็จ"]];
+const STATUS_FILTERS = [["all", "ทุกสถานะ"], ["scheduled", "นัดแล้ว"], ["in_progress", "กำลังทำ"], ["awaiting_approval", "รออนุมัติ"], ["reschedule", "นัดหมายเพิ่ม"], ["done", "เสร็จ"]];
 const matchStatus = (st, f) => f === "all" || (f === "scheduled" ? (st === "scheduled" || st === "pending") : st === f);
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
