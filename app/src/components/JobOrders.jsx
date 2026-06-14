@@ -14,8 +14,8 @@ const STATUS_OPTS = JOB_STATUSES.map(([v, l]) => [v, l]);
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
-const blankVisit = () => ({ assigned_team: "", date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
-const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], visits: [blankVisit()], status: "pending" });
+const blankVisit = () => ({ date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
+const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
 
 export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
@@ -81,11 +81,11 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   // open a new job editor prefilled from a calendar slot (date/team/slot picked on the Schedule page)
   React.useEffect(() => {
     if (!schedule) return;
-    setEd({ ...blankEd(), visits: [{ ...blankVisit(), date: schedule.date || "", end_date: schedule.end_date || "", slot: schedule.slot || "morning", assigned_team: schedule.assigned_team || "" }] });
+    setEd({ ...blankEd(), assigned_team: schedule.assigned_team || "", visits: [{ ...blankVisit(), date: schedule.date || "", end_date: schedule.end_date || "", slot: schedule.slot || "morning" }] });
     onScheduleConsumed && onScheduleConsumed();
   }, [schedule]);
 
-  // turn a stored job_visit row into the editor's visit shape
+  // turn a stored job_visit row into the editor's visit shape (keep assigned_team so a done รอบ keeps its team)
   function visitFromRow(v) {
     const dt = (v.slot === "custom" && v.scheduled_at) ? new Date(v.scheduled_at) : null;
     const p = (n) => String(n).padStart(2, "0");
@@ -101,6 +101,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
       visits = [{ assigned_team: jo.assigned_team || "", date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", end_date: jo.end_date || "", slot: jo.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: jo.status || "scheduled" }];
     }
     setEd({ ...jo, _edit: true, job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "",
+      assigned_team: jo.assigned_team || jo.visits?.[0]?.assigned_team || "",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
       sales_note: jo.sales_note || "", sales_photos: jo.sales_photos || [], visits, status: jo.status || "pending" });
   }
@@ -130,11 +131,13 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   async function save() {
     if (!ed.title?.trim() && !ed.customer_id) return flash("ใส่ลูกค้าหรือชื่องาน", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบงาน ${ed.job_no} ?`)) return;
-    // build the visit rows (only ones with a date) — each = วัน + รอบเวลา + ทีม
+    // build the visit rows (only ones with a date) — each = วัน + รอบเวลา; ทีมเดียวทั้งใบ
+    // (รอบที่เสร็จแล้วคงทีมเดิมไว้ เผื่อมีการเปลี่ยนทีมของใบภายหลัง)
     const visitRows = (ed.visits || []).filter((v) => v.date).map((v) => {
       const slot = v.slot || "custom";
       const time = slot === "custom" ? (v.time || "08:00") : slotStartTime(slot);
-      return { visit_date: v.date, end_date: (v.end_date && v.end_date > v.date) ? v.end_date : null, slot, scheduled_at: new Date(`${v.date}T${time}:00`).toISOString(), assigned_team: v.assigned_team || null, status: v.status || "scheduled" };
+      const team = v.status === "done" ? (v.assigned_team || ed.assigned_team || null) : (ed.assigned_team || null);
+      return { visit_date: v.date, end_date: (v.end_date && v.end_date > v.date) ? v.end_date : null, slot, scheduled_at: new Date(`${v.date}T${time}:00`).toISOString(), assigned_team: team, status: v.status || "scheduled" };
     });
     // double-booking: each scheduled visit vs every other job's visits (same team, overlapping day+slot)
     for (const vr of visitRows) {
@@ -158,12 +161,12 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     const scheduled_at = primary?.scheduled_at || null;
     const end_date = primary?.end_date || null;
     const slot = primary?.slot || null;
-    const tn = primary ? (teams.find((t) => t.id === primary.assigned_team)?.name?.replace("Team ", "") || primary.assigned_team) : null;
+    const tn = ed.assigned_team ? (teams.find((t) => t.id === ed.assigned_team)?.name?.replace("Team ", "") || ed.assigned_team) : null;
     // overall job status is derived from the visits' own statuses
     const status = deriveJobStatus(visitRows);
     try {
-      await saveJobOrder({ ...ed, assigned_team: primary?.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows });
-      flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (primary?.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
+      await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows });
+      flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
       // offer to notify the customer via LINE (only when linked) — preview + confirm before sending
       let notify = null;
       const tdLabel = jobTypeDef(ed.job_type)[1];
@@ -264,9 +267,16 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             </div>
           </div>
 
-          <div className="fld"><span>รอบเข้างาน <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(เพิ่มได้หลายรอบ · คนละทีม/คนละวัน/หลายทีมก็ได้)</small></span>
+          <div className="fld-row">
+            <label className="fld"><span>ทีมช่าง <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(1 ใบงาน = 1 ทีม · ทีมอื่นใช้ "ใบงานเชื่อม")</small></span>
+              <Combo className="inp" value={ed.assigned_team} disabled={ed.visits.some((v) => v.status === "done")} onChange={(e) => setF("assigned_team", e.target.value)}>
+                <option value="">— เลือกทีมช่าง —</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name.replace("Team ", "")}</option>)}
+              </Combo>
+            </label>
+          </div>
+          <div className="fld"><span>รอบเข้างาน <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(เพิ่มได้หลายรอบ · หลายวัน/หลายช่วงเวลาของทีมนี้)</small></span>
             {ed.visits.map((v, i) => {
-              const col = teams.find((t) => t.id === v.assigned_team)?.color || "#94a3b8";
+              const col = teams.find((t) => t.id === ed.assigned_team)?.color || "#94a3b8";
               const locked = v.status === "done"; // อนุมัติแล้ว = ล๊อก แก้ไม่ได้ กันรีเซ็ต
               return (
                 <div className="crm-site" key={i} style={{ borderLeftColor: col, background: col + "14", opacity: locked ? 0.85 : 1 }}>
@@ -275,14 +285,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                     {ed.visits.length > 1 && !locked && <button className="line-x" onClick={() => delVisit(i)}><UIcon name="x" size={14} /></button>}
                   </div>
                   <div className="crm-row">
-                    <Combo className="inp" value={v.assigned_team} disabled={locked} onChange={(e) => setVisit(i, "assigned_team", e.target.value)}>
-                      <option value="">— เลือกทีมช่าง —</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name.replace("Team ", "")}</option>)}
-                    </Combo>
                     <Combo className="inp" value={v.slot} disabled={locked} onChange={(e) => setVisit(i, "slot", e.target.value)}>
                       {SLOTS.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.th}{s.time ? ` (${s.time})` : ""}</option>)}
                     </Combo>
-                  </div>
-                  <div className="crm-row">
                     <Combo className="inp" value={v.status || "scheduled"} disabled={locked} onChange={(e) => setVisit(i, "status", e.target.value)}>
                       {STATUS_OPTS.map(([sv, sl]) => <option key={sv} value={sv}>สถานะ: {sl}</option>)}
                     </Combo>
