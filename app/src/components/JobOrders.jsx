@@ -17,7 +17,7 @@ const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/s
 
 const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", date: "", end_date: "", slot: "morning", time: "", status: "pending" });
 
-export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, onOpenQuote, onOpenBoq, onOpenDoc }) {
+export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [openTl, setOpenTl] = React.useState(null);
   const [upBrief, setUpBrief] = React.useState(false);
@@ -63,6 +63,17 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, custs]);
+
+  // open a new SURVEY job prefilled with this customer (launched from the chat panel)
+  React.useEffect(() => {
+    if (!surveyFor || !custs.length) return;
+    const c = custs.find((x) => String(x.id) === String(surveyFor));
+    const address = c?.address || "";
+    setEd({ ...blankEd(), customer_id: String(surveyFor), title: "สำรวจหน้างาน",
+      contact_name: c?.contacts?.[0]?.name || "", contact_phone: c?.contacts?.[0]?.phone || "",
+      address, map_url: mapLink(address) });
+    onSurveyConsumed && onSurveyConsumed();
+  }, [surveyFor, custs]);
 
   // open a new job editor prefilled from a calendar slot (date/team/slot picked on the Schedule page)
   React.useEffect(() => {
