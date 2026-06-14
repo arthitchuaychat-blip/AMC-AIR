@@ -51,6 +51,8 @@ const NAV_BY_ROLE = {
 };
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
+// bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
+const BUILD = "2026-06-14·ค้นหา-v2";
 
 function SetupNotice() {
   return (
@@ -169,6 +171,7 @@ export default function App() {
           <button className="logout-btn" onClick={() => signOut()}>
             <UIcon name="logout" size={16} /> ออกจากระบบ
           </button>
+          <div style={{ fontSize: 10.5, color: "var(--ink-3)", textAlign: "center", marginTop: 8, opacity: 0.7 }}>เวอร์ชัน {BUILD}</div>
         </div>
       </aside>
 

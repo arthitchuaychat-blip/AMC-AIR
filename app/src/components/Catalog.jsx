@@ -108,7 +108,7 @@ export default function Catalog({ role }) {
         <div className="cat-head-actions">
           <div className="cat-search">
             <UIcon name="search" size={17} color="var(--ink-3)" />
-            <input placeholder="ค้นหาชื่อ / รหัส / ยี่ห้อ" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input placeholder="ค้นหา ชื่อ / รหัส / ยี่ห้อ / ประเภท" value={q} onChange={(e) => setQ(e.target.value)} />
             {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
           </div>
           <div className="seg view-seg">
