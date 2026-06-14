@@ -10,7 +10,7 @@ const seedCust = (i) => ({ id: i?.id || null, type: i?.type || "person", name: i
 export default function CustomerFormModal({ initial, onClose, onSaved }) {
   const [cust, setCust] = React.useState(() => seedCust(initial));
   const [contacts, setContacts] = React.useState(() => initial?.contacts?.length ? initial.contacts.map((x) => ({ name: x.name || "", phone: x.phone || "", role: x.role || "" })) : [{ name: initial?.name || "", phone: "", role: "" }]);
-  const [sites, setSites] = React.useState(() => initial?.sites?.length ? initial.sites.map((x) => ({ site_name: x.site_name || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", address: "", map_url: "" }]);
+  const [sites, setSites] = React.useState(() => initial?.sites?.length ? initial.sites.map((x) => ({ site_name: x.site_name || "", contact_name: x.contact_name || "", phone: x.phone || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }]);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState(null);
 
@@ -64,7 +64,7 @@ export default function CustomerFormModal({ initial, onClose, onSaved }) {
             <button className="btn-ghost sm" onClick={() => addRow(setContacts, { name: "", phone: "", role: "" })}><UIcon name="plus" size={13} /> เพิ่มผู้ติดต่อ</button>
           </div>
 
-          <div className="fld"><span>ที่อยู่ให้บริการ / ไซต์งาน (เพิ่มได้หลายที่)</span>
+          <div className="fld"><span>ไซต์งาน / สถานที่ให้บริการ (เพิ่มได้หลายที่)</span>
             {sites.map((s, i) => (
               <div className="crm-site" key={i}>
                 <div className="crm-row">
@@ -72,10 +72,14 @@ export default function CustomerFormModal({ initial, onClose, onSaved }) {
                   <input className="inp" value={s.map_url} onChange={(e) => setRow(setSites, i, "map_url", e.target.value)} placeholder="ลิงก์ Google Maps" />
                   <button className="line-x" onClick={() => delRow(setSites, i)}><UIcon name="x" size={14} /></button>
                 </div>
+                <div className="crm-row">
+                  <input className="inp" value={s.contact_name} onChange={(e) => setRow(setSites, i, "contact_name", e.target.value)} placeholder="ชื่อผู้ติดต่อ (ไซต์นี้)" />
+                  <input className="inp" value={s.phone} onChange={(e) => setRow(setSites, i, "phone", e.target.value)} placeholder="เบอร์โทร (ไซต์นี้)" />
+                </div>
                 <input className="inp" value={s.address} onChange={(e) => setRow(setSites, i, "address", e.target.value)} placeholder="ที่อยู่ไซต์งาน" />
               </div>
             ))}
-            <button className="btn-ghost sm" onClick={() => addRow(setSites, { site_name: "", address: "", map_url: "" })}><UIcon name="plus" size={13} /> เพิ่มไซต์งาน</button>
+            <button className="btn-ghost sm" onClick={() => addRow(setSites, { site_name: "", contact_name: "", phone: "", address: "", map_url: "" })}><UIcon name="plus" size={13} /> เพิ่มไซต์งาน</button>
           </div>
           {err && <div className="login-err" style={{ marginTop: 8 }}>{err}</div>}
         </div>

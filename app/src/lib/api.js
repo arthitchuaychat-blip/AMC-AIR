@@ -396,7 +396,7 @@ export async function saveCustomer(cust, contacts, sites) {
   const cRows = contacts.filter((x) => (x.name || x.phone)).map((x) => ({ customer_id: id, name: x.name?.trim() || null, phone: x.phone?.trim() || null, role: x.role?.trim() || null }));
   if (cRows.length) { const e = (await supabase.from("customer_contacts").insert(cRows)).error; if (e) throw e; }
   await supabase.from("customer_sites").delete().eq("customer_id", id);
-  const sRows = sites.filter((x) => (x.site_name || x.address)).map((x) => ({ customer_id: id, site_name: x.site_name?.trim() || null, address: x.address?.trim() || null, map_url: x.map_url?.trim() || null }));
+  const sRows = sites.filter((x) => (x.site_name || x.address || x.contact_name || x.phone || x.map_url)).map((x) => ({ customer_id: id, site_name: x.site_name?.trim() || null, address: x.address?.trim() || null, map_url: x.map_url?.trim() || null, contact_name: x.contact_name?.trim() || null, phone: x.phone?.trim() || null }));
   if (sRows.length) { const e = (await supabase.from("customer_sites").insert(sRows)).error; if (e) throw e; }
   return id;
 }
@@ -428,7 +428,7 @@ export async function listBoqs() {
     supabase.from("boqs").select("*").order("created_at", { ascending: false }),
     supabase.from("boq_items").select("*").order("id"),
     supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no"),
   ]);
@@ -448,7 +448,7 @@ export async function listBoqs() {
       customerAddr: custAddr[bo.customer_id] || null, customerTaxId: custTax[bo.customer_id] || null,
       siteName: s?.site_name || null, siteAddress: s?.address || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || custAddr[bo.customer_id]),
-      contactName: ct0?.name || null, contactPhone: ct0?.phone || null,
+      contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       quoteNo: quoteByBoq[bo.boq_no] || null, hasQuote: !!quoteByBoq[bo.boq_no],
       items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
   });
@@ -522,7 +522,7 @@ export async function listQuotations() {
     supabase.from("quotations").select("*").order("created_at", { ascending: false }),
     supabase.from("quotation_items").select("*").order("id"),
     supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("job_orders").select("job_no,quote_no,scheduled_at"),
     supabase.from("invoices").select("quote_no,total,status"),
@@ -551,7 +551,7 @@ export async function listQuotations() {
     const ct0 = firstContact[qo.customer_id];
     return { ...qo, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
       customerTaxId: custTax[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
-      siteAddress, address, map_url, contactName: ct0?.name || null, contactPhone: ct0?.phone || null,
+      siteAddress, address, map_url, contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       jobNo: jobByQuote[qo.quote_no]?.job_no || null, hasJob: !!jobByQuote[qo.quote_no], jobScheduledAt: jobByQuote[qo.quote_no]?.scheduled_at || null,
       hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,
       items, subtotal, discount, afterDisc, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
@@ -606,7 +606,7 @@ export async function listInvoices() {
   const [iv, cu, si, ct, qt, rc] = await Promise.all([
     supabase.from("invoices").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no,title"),
     supabase.from("receipts").select("invoice_no"),
@@ -627,7 +627,7 @@ export async function listInvoices() {
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
-      contactName: ct0?.name || null, contactPhone: ct0?.phone || null, hasReceipt: receiptedInv.has(x.invoice_no) };
+      contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null, hasReceipt: receiptedInv.has(x.invoice_no) };
   });
 }
 // billed total (non-cancelled) per quote_no — used to compute remaining
@@ -678,7 +678,7 @@ export async function listReceipts() {
   const [rc, cu, si, ct, jo, qt] = await Promise.all([
     supabase.from("receipts").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("job_orders").select("job_no,quote_no"),
     supabase.from("quotations").select("quote_no,title"),
@@ -698,7 +698,7 @@ export async function listReceipts() {
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
-      contactName: ct0?.name || null, contactPhone: ct0?.phone || null };
+      contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null };
   });
 }
 // create a receipt from an invoice. Invoice is marked paid only when the receipt status is 'paid'.
@@ -741,8 +741,8 @@ function _resolveJo(jo, custName, custAddr, siteMap, teamName, custContact) {
   const map_url = (s && s.map_url) || jo.map_url || _gmap(address);
   const cc = custContact ? custContact[jo.customer_id] : null;
   return { ...jo, address, map_url,
-    contact_name: jo.contact_name || (cc && cc.name) || null,
-    contact_phone: jo.contact_phone || (cc && cc.phone) || null,
+    contact_name: jo.contact_name || (s && s.contact_name) || (cc && cc.name) || null,
+    contact_phone: jo.contact_phone || (s && s.phone) || (cc && cc.phone) || null,
     customerAddr: custAddr ? (custAddr[jo.customer_id] || null) : null,
     customerName: custName ? (custName[jo.customer_id] || null) : null,
     teamName: teamName ? (teamName[jo.assigned_team] || jo.assigned_team) : jo.assigned_team };
@@ -755,7 +755,7 @@ export async function listJobOrders() {
     supabase.from("job_orders").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address"),
     supabase.from("teams").select("id,name"),
-    supabase.from("customer_sites").select("id,address,map_url"),
+    supabase.from("customer_sites").select("id,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat"),
     supabase.from("quotation_items").select("quote_no,name,unit,qty,unit_price,kind"),
@@ -812,7 +812,7 @@ export async function listCustomerDocs(customerId) {
 export async function listTeamJobOrders(team) {
   const [j, si, cu, ct] = await Promise.all([
     supabase.from("job_orders").select("*").eq("assigned_team", team).order("scheduled_at", { ascending: true }),
-    supabase.from("customer_sites").select("id,address,map_url"),
+    supabase.from("customer_sites").select("id,address,map_url,contact_name,phone"),
     supabase.from("customers").select("id,name,address"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
   ]);

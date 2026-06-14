@@ -182,7 +182,8 @@ create table if not exists customer_contacts (
 create table if not exists customer_sites (
   id          bigint generated always as identity primary key,
   customer_id bigint not null references customers(id) on delete cascade,
-  site_name text, address text, map_url text
+  site_name text, address text, map_url text,
+  contact_name text, phone text
 );
 
 -- ---------- BOQ (ใบประมาณการต้นทุน) ----------
