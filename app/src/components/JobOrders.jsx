@@ -316,10 +316,18 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
       </div>
 
       <div className="cat-filter">
-        {[["all", "ทั้งหมด"], ...STATUS_OPTS].map(([v, l]) => (
-          <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
-            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
-        ))}
+        <button className={"cat-chip" + (statusF === "all" ? " on" : "")} onClick={() => setStatusF("all")}
+          style={statusF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทั้งหมด ({list.length})</button>
+        {JOB_STATUSES.map(([v, l, , col]) => {
+          const n = list.filter((j) => j.status === v).length;
+          const on = statusF === v;
+          return (
+            <button key={v} className={"cat-chip" + (on ? " on" : "")} onClick={() => setStatusF(v)}
+              style={on ? { background: col, color: "#fff", borderColor: col } : {}}>
+              <span style={{ width: 8, height: 8, borderRadius: 9, background: on ? "#fff" : col, display: "inline-block", marginRight: 5 }} />{l} ({n})
+            </button>
+          );
+        })}
       </div>
       <div className="cat-filter">
         <button className={"cat-chip" + (typeF === "all" ? " on" : "")} onClick={() => setTypeF("all")}

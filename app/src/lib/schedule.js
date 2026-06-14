@@ -25,16 +25,17 @@ export const JOB_TYPES = [
 ];
 export const jobTypeDef = (t) => JOB_TYPES.find((x) => x[0] === t) || JOB_TYPES[1];
 
-// shared job/visit statuses — [value, label, badge-class]
+// shared job/visit statuses — [value, label, badge-class, color]
 export const JOB_STATUSES = [
-  ["pending", "รอจ่ายงาน", "b-grey"],
-  ["scheduled", "นัดแล้ว", "b-blue"],
-  ["in_progress", "กำลังทำงาน", "b-amber"],
-  ["awaiting_approval", "รออนุมัติ", "b-purple"],
-  ["reschedule", "รอนัดหมายใหม่", "b-orange"],
-  ["done", "เสร็จ", "b-green"],
-  ["cancelled", "ยกเลิกแล้ว", "b-red"],
+  ["pending", "รอจ่ายงาน", "b-grey", "#7c899c"],
+  ["scheduled", "นัดแล้ว", "b-blue", "#2563eb"],
+  ["in_progress", "กำลังทำงาน", "b-amber", "#ea8a04"],
+  ["awaiting_approval", "รออนุมัติ", "b-purple", "#7c3aed"],
+  ["reschedule", "รอนัดหมายใหม่", "b-orange", "#ea580c"],
+  ["done", "เสร็จ", "b-green", "#16a34a"],
+  ["cancelled", "ยกเลิกแล้ว", "b-red", "#dc2626"],
 ];
+export const jobStatusColor = (s) => (JOB_STATUSES.find((x) => x[0] === s) || JOB_STATUSES[0])[3];
 export const jobStatusDef = (s) => JOB_STATUSES.find((x) => x[0] === s) || JOB_STATUSES[0];
 export const jobStatusLabel = (s) => jobStatusDef(s)[1];
 
