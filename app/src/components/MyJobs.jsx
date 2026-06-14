@@ -1,8 +1,8 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listJobOrders, updateJobStatus } from "../lib/api";
+import { listJobOrders, updateJobStatus, updateVisitStatus } from "../lib/api";
 import { UIcon } from "../icons";
-import { slotDef, jobDays, parseYmd, thDayMon } from "../lib/schedule";
+import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel } from "../lib/schedule";
 import JobTimeline from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
 
@@ -37,6 +37,12 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
     const label = STATUS[status]?.th || status;
     if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะงาน ${jo.job_no} เป็น "${label}" ?`)) return;
     try { await updateJobStatus(jo.job_no, status, me); flash("อัปเดตสถานะแล้ว"); await load(); }
+    catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function setVStatus(jobNo, v, status) {
+    const label = STATUS[status]?.th || status;
+    if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะรอบนี้เป็น "${label}" ?`)) return;
+    try { await updateVisitStatus(v.id, jobNo, status, me); flash("อัปเดตรอบงานแล้ว"); await load(); }
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
   }
 
@@ -110,12 +116,32 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                 </div>
               )}
 
-              <div className="myjob-actions">
-                {(jo.status === "pending" || jo.status === "scheduled") && <button className="btn-primary" onClick={() => setStatus(jo, "in_progress")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> รับงาน / เริ่มทำ</button>}
-                {jo.status === "in_progress" && <button className="btn-primary ok" onClick={() => setStatus(jo, "done")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> ปิดงาน (เสร็จ)</button>}
-                {jo.status === "done" && <button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}><UIcon name="ret" size={15} /> กลับมาทำต่อ</button>}
-                {jo.status !== "done" && jo.status !== "cancelled" && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
-              </div>
+              {/* per-visit controls: each team marks its own รอบ done */}
+              {myVisits.length > 0 ? (
+                <div className="myjob-visits">
+                  {myVisits.map((v) => {
+                    const vst = STATUS[v.status] || STATUS.scheduled;
+                    return (
+                      <div className="myjob-visit" key={v.id}>
+                        <div className="myjob-visit-info">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}{allTeams && v.teamName ? ` · ทีม ${v.teamName}` : ""} <span className={"job-badge " + vst.cls}>{vst.th}</span></div>
+                        <div className="myjob-visit-acts">
+                          {(v.status === "pending" || v.status === "scheduled") && <button className="btn-primary sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>เริ่มทำรอบนี้</button>}
+                          {v.status === "in_progress" && <button className="btn-primary sm ok" onClick={() => setVStatus(jo.job_no, v, "done")}>ปิดรอบนี้ ✓</button>}
+                          {v.status === "done" && <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>กลับมาทำต่อ</button>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {jo.status !== "done" && jo.status !== "cancelled" && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
+                </div>
+              ) : (
+                <div className="myjob-actions">
+                  {(jo.status === "pending" || jo.status === "scheduled") && <button className="btn-primary" onClick={() => setStatus(jo, "in_progress")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> รับงาน / เริ่มทำ</button>}
+                  {jo.status === "in_progress" && <button className="btn-primary ok" onClick={() => setStatus(jo, "done")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> ปิดงาน (เสร็จ)</button>}
+                  {jo.status === "done" && <button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}><UIcon name="ret" size={15} /> กลับมาทำต่อ</button>}
+                  {jo.status !== "done" && jo.status !== "cancelled" && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
+                </div>
+              )}
               {jo.status === "in_progress" && <div className="myjob-hint">เข้าหน้างานได้หลายครั้ง · เบิกวัสดุเพิ่มได้ไม่จำกัด · แนบรูป/คอมเมนต์ลงไทม์ไลน์ด้านล่าง</div>}
 
               {jo.status !== "cancelled" && <JobTimeline jobNo={jo.job_no} canPost author={me} flash={flash} />}

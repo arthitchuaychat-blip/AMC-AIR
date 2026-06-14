@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { deriveJobStatus } from "./schedule";
 
 const _url = import.meta.env.VITE_SUPABASE_URL;
 const _anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -871,6 +872,18 @@ export async function updateJobStatus(job_no, status, author) {
   // record the status change on the timeline (best-effort — don't fail the status update if logging fails)
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("job_logs").insert({ job_no, type: "status", status, author: author || null, created_by: user?.id || null });
+}
+
+// update one visit's status, then recompute + save the job's overall status from all its visits
+export async function updateVisitStatus(visitId, jobNo, status, author) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const u1 = await supabase.from("job_visits").update({ status }).eq("id", visitId);
+  if (u1.error) throw u1.error;
+  const { data: vs } = await supabase.from("job_visits").select("status").eq("job_no", jobNo);
+  const jobStatus = deriveJobStatus(vs || []);
+  await supabase.from("job_orders").update({ status: jobStatus }).eq("job_no", jobNo);
+  await supabase.from("job_logs").insert({ job_no: jobNo, type: "status", status, author: author || null, created_by: user?.id || null });
+  return jobStatus;
 }
 
 export async function deleteJobOrder(job_no) {

@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage } from "../lib/api";
-import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef } from "../lib/schedule";
+import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus } from "../lib/schedule";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -18,7 +18,7 @@ const STATUS_OPTS = [["pending", "รอจ่ายงาน"], ["scheduled", "
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
-const blankVisit = () => ({ assigned_team: "", date: "", end_date: "", slot: "morning", time: "" });
+const blankVisit = () => ({ assigned_team: "", date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
 const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], visits: [blankVisit()], status: "pending" });
 
 export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc }) {
@@ -91,7 +91,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   function visitFromRow(v) {
     const dt = (v.slot === "custom" && v.scheduled_at) ? new Date(v.scheduled_at) : null;
     const p = (n) => String(n).padStart(2, "0");
-    return { assigned_team: v.assigned_team || "", date: v.visit_date || "", end_date: v.end_date || "", slot: v.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "" };
+    return { assigned_team: v.assigned_team || "", date: v.visit_date || "", end_date: v.end_date || "", slot: v.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: v.status || "scheduled" };
   }
   function startNew() { setEd(blankEd()); }
   function startEdit(jo) {
@@ -100,7 +100,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     if (!visits.length) {
       const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
       const p = (n) => String(n).padStart(2, "0");
-      visits = [{ assigned_team: jo.assigned_team || "", date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", end_date: jo.end_date || "", slot: jo.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "" }];
+      visits = [{ assigned_team: jo.assigned_team || "", date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", end_date: jo.end_date || "", slot: jo.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: jo.status || "scheduled" }];
     }
     setEd({ ...jo, _edit: true, job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
@@ -136,7 +136,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     const visitRows = (ed.visits || []).filter((v) => v.date).map((v) => {
       const slot = v.slot || "custom";
       const time = slot === "custom" ? (v.time || "08:00") : slotStartTime(slot);
-      return { visit_date: v.date, end_date: (v.end_date && v.end_date > v.date) ? v.end_date : null, slot, scheduled_at: new Date(`${v.date}T${time}:00`).toISOString(), assigned_team: v.assigned_team || null };
+      return { visit_date: v.date, end_date: (v.end_date && v.end_date > v.date) ? v.end_date : null, slot, scheduled_at: new Date(`${v.date}T${time}:00`).toISOString(), assigned_team: v.assigned_team || null, status: v.status || "scheduled" };
     });
     // double-booking: each scheduled visit vs every other job's visits (same team, overlapping day+slot)
     for (const vr of visitRows) {
@@ -161,9 +161,10 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     const end_date = primary?.end_date || null;
     const slot = primary?.slot || null;
     const tn = primary ? (teams.find((t) => t.id === primary.assigned_team)?.name?.replace("Team ", "") || primary.assigned_team) : null;
-    const status = ed.status === "pending" && primary?.assigned_team ? "scheduled" : ed.status;
+    // overall job status is derived from the visits' own statuses
+    const status = deriveJobStatus(visitRows);
     try {
-      await saveJobOrder({ ...ed, assigned_team: primary?.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows.map((r) => ({ ...r, status })) });
+      await saveJobOrder({ ...ed, assigned_team: primary?.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows });
       flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (primary?.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
       // offer to notify the customer via LINE (only when linked) — preview + confirm before sending
       let notify = null;
@@ -275,9 +276,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             })}
             <button className="btn-ghost sm" onClick={addVisit}><UIcon name="plus" size={13} /> เพิ่มรอบเข้างาน</button>
           </div>
-          <label className="fld"><span>สถานะงาน (ภาพรวม)</span>
-            <Combo className="inp" value={ed.status} onChange={(e) => setF("status", e.target.value)}>{STATUS_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Combo>
-          </label>
+          <div className="fld"><span>สถานะงาน (ภาพรวม · คำนวณจากรอบ)</span>
+            {(() => { const s = deriveJobStatus((ed.visits || []).filter((v) => v.date)); const d = STATUS[s] || STATUS.pending; return <div><span className={"job-badge " + d.cls}>{d.th}</span></div>; })()}
+          </div>
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>

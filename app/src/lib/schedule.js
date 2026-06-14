@@ -25,6 +25,16 @@ export const JOB_TYPES = [
 ];
 export const jobTypeDef = (t) => JOB_TYPES.find((x) => x[0] === t) || JOB_TYPES[1];
 
+// a job's overall status, derived from its visits (รอบ): done only when every active visit is done
+export function deriveJobStatus(visits) {
+  const active = (visits || []).filter((v) => v.status !== "cancelled");
+  if (!active.length) return (visits && visits.length) ? "cancelled" : "pending";
+  if (active.every((v) => v.status === "done")) return "done";
+  if (active.some((v) => v.status === "in_progress")) return "in_progress";
+  if (active.some((v) => v.status === "scheduled")) return "scheduled";
+  return "pending";
+}
+
 export const slotDef = (id) => SLOTS.find((s) => s.id === id) || null;
 export const slotStartTime = (id, fallback) => slotDef(id)?.start || fallback || "08:00";
 
