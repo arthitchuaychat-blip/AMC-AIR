@@ -1200,3 +1200,15 @@ select.inp{cursor:pointer}
 .cd-send{flex:none;font-family:inherit;font-size:11px;font-weight:800;color:#fff;background:var(--primary);border:none;border-radius:7px;padding:3px 11px;cursor:pointer}
 .cd-send:hover:not(:disabled){filter:brightness(.94)}
 .cd-send:disabled{opacity:.5;cursor:default}
+
+/* chat CRM: stage filter + stage/owner tags + info panel */
+.chat-listfilter{display:flex;gap:6px;padding:8px 10px 0;align-items:center}
+.chat-listfilter .inp{flex:1;min-width:0;font-size:12px;padding:6px 8px}
+.chat-mine{flex:none;font-family:inherit;font-size:11px;font-weight:700;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);border-radius:8px;padding:6px 9px;cursor:pointer;white-space:nowrap}
+.chat-mine.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.chat-convo-tags{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:4px}
+.conv-stage{font-size:9.5px;font-weight:800;color:#fff;border-radius:5px;padding:1px 7px;white-space:nowrap}
+.conv-owner{font-size:10px;font-weight:700;color:var(--ink-3);white-space:nowrap}
+.ci-crm{display:flex;flex-direction:column;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:11px 12px;margin-bottom:14px}
+.ci-crm .ci-field span{font-size:11.5px;font-weight:700;color:var(--ink-2);margin-bottom:4px}
+.ci-crm .inp{font-size:13px;padding:7px 9px}

@@ -474,6 +474,8 @@ create table if not exists line_contacts (
   last_message    text,
   last_message_at timestamptz,
   unread          int not null default 0,
+  stage           text default 'new',                       -- CRM phase: new/talking/interested/followup/won/closed/lost
+  assigned_to     uuid references auth.users(id) on delete set null,  -- staff responsible
   created_at      timestamptz not null default now()
 );
 create table if not exists line_messages (

@@ -1,5 +1,5 @@
 import React from "react";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
@@ -13,6 +13,17 @@ import { sendDocFromNode } from "../lib/sendDoc";
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "";
+// CRM stages (sales phase) for a LINE contact
+const STAGES = [
+  { id: "new", label: "ใหม่", color: "#64748b" },
+  { id: "talking", label: "กำลังคุย", color: "#1f74e0" },
+  { id: "interested", label: "สนใจ/จะซื้อ", color: "#d97706" },
+  { id: "followup", label: "ต้องติดตาม", color: "#7c3aed" },
+  { id: "won", label: "ปิดการขาย", color: "#16a34a" },
+  { id: "closed", label: "จบแล้ว", color: "#0891b2" },
+  { id: "lost", label: "ไม่สนใจ", color: "#dc2626" },
+];
+const stageDef = (id) => STAGES.find((s) => s.id === id) || STAGES[0];
 
 export default function Chat({ role, onOpenDoc, onGoCustomers }) {
   const canSend = ["admin", "sales", "exec", "finance"].includes(role);
@@ -38,6 +49,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
   const [infoDocF, setInfoDocF] = React.useState("all");
   const [showInfo, setShowInfo] = React.useState(false); // mobile info-panel toggle
   const [custForm, setCustForm] = React.useState(null);  // { initial, link } → opens the customer form modal
+  const [staff, setStaff] = React.useState([]);
+  const [myId, setMyId] = React.useState(null);
+  const [stageF, setStageF] = React.useState("all");     // list filter by stage
+  const [mineOnly, setMineOnly] = React.useState(false); // list filter: assigned to me
   const selRef = React.useRef(null);
   const endRef = React.useRef(null);
 
@@ -45,7 +60,15 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
   async function loadContacts() { try { setContacts(await listLineContacts()); } catch (e) { flash("โหลดแชตไม่สำเร็จ: " + (e.message || e), true); } }
 
   async function loadQr() { try { setQuickReplies(await listQuickReplies()); } catch { /* ignore */ } }
-  React.useEffect(() => { loadContacts(); loadQr(); listCustomers().then(setCusts).catch(() => {}); }, []);
+  React.useEffect(() => {
+    loadContacts(); loadQr();
+    listCustomers().then(setCusts).catch(() => {});
+    listStaff().then(setStaff).catch(() => {});
+    getProfile().then((p) => setMyId(p?.id || null)).catch(() => {});
+  }, []);
+  const staffMap = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
+  async function changeStage(s) { try { await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeOwner(uid) { try { await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
   React.useEffect(() => { selRef.current = sel; }, [sel]);
   React.useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -136,7 +159,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
 
   const selContact = contacts.find((c) => c.line_user_id === sel);
   const ql = q.trim().toLowerCase();
-  const shown = contacts.filter((c) => !ql || (c.display_name || "").toLowerCase().includes(ql) || (c.customerName || "").toLowerCase().includes(ql) || (c.last_message || "").toLowerCase().includes(ql));
+  const shown = contacts.filter((c) =>
+    (stageF === "all" || (c.stage || "new") === stageF)
+    && (!mineOnly || c.assigned_to === myId)
+    && (!ql || (c.display_name || "").toLowerCase().includes(ql) || (c.customerName || "").toLowerCase().includes(ql) || (c.last_message || "").toLowerCase().includes(ql)));
 
   return (
     <div className="adm">
@@ -151,19 +177,32 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
+          <div className="chat-listfilter">
+            <select className="inp" value={stageF} onChange={(e) => setStageF(e.target.value)}>
+              <option value="all">ทุกสถานะ</option>{STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+            <button className={"chat-mine" + (mineOnly ? " on" : "")} onClick={() => setMineOnly((v) => !v)} title="เฉพาะที่ฉันรับผิดชอบ">👤 ของฉัน</button>
+          </div>
           <div className="chat-convos">
-            {shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ยังไม่มีผู้ติดต่อ — เมื่อลูกค้าทักเข้า LINE OA จะปรากฏที่นี่</div>}
-            {shown.map((c) => (
+            {shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ไม่พบผู้ติดต่อตามเงื่อนไข</div>}
+            {shown.map((c) => {
+              const sd = stageDef(c.stage);
+              return (
               <button key={c.line_user_id} className={"chat-convo" + (sel === c.line_user_id ? " on" : "")} onClick={() => openContact(c)}>
                 <div className="chat-av">{c.picture_url ? <img src={c.picture_url} alt="" /> : initial(c.display_name)}</div>
                 <div className="chat-convo-body">
                   <div className="chat-convo-top"><b>{c.display_name || "LINE User"}</b><span>{fmtTime(c.last_message_at)}</span></div>
                   <div className="chat-convo-last">{c.last_message || "—"}</div>
-                  {c.customerName && <span className="chat-link-chip">🔗 {c.customerName}</span>}
+                  <div className="chat-convo-tags">
+                    <span className="conv-stage" style={{ background: sd.color }}>{sd.label}</span>
+                    {c.customerName && <span className="chat-link-chip">🔗 {c.customerName}</span>}
+                    {c.assigned_to && staffMap[c.assigned_to] && <span className="conv-owner">👤 {staffMap[c.assigned_to]}</span>}
+                  </div>
                 </div>
                 {c.unread > 0 && <span className="chat-unread">{c.unread}</span>}
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -190,7 +229,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
                       {daySep && <div className="chat-daysep">{fmtDay(m.created_at)}</div>}
                       <div className={"chat-bubble " + (m.direction === "out" ? "out" : "in")}>
                         {m.image_url ? <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a> : <span>{m.text}</span>}
-                        <span className="chat-bubble-time">{fmtTime(m.created_at)}{m.direction === "out" ? " · ส่งจากแอป" : ""}</span>
+                        <span className="chat-bubble-time">{fmtTime(m.created_at)}{m.direction === "out" ? " · " + ((m.sent_by && staffMap[m.sent_by]) || "ส่งจากแอป") : ""}</span>
                       </div>
                     </React.Fragment>
                   );
@@ -235,6 +274,18 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
               <div className="ci-head"><span>ข้อมูลลูกค้า</span>
                 <button className="ci-close" onClick={() => setShowInfo(false)}><UIcon name="x" size={16} /></button></div>
               <div className="ci-body">
+                <div className="ci-crm">
+                  <label className="ci-field"><span>สถานะลูกค้า (เฟส)</span>
+                    {canSend
+                      ? <select className="inp" value={selContact.stage || "new"} onChange={(e) => changeStage(e.target.value)}>{STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                      : <span className="conv-stage" style={{ background: stageDef(selContact.stage).color, alignSelf: "flex-start" }}>{stageDef(selContact.stage).label}</span>}
+                  </label>
+                  <label className="ci-field"><span>ผู้รับผิดชอบ</span>
+                    {canSend
+                      ? <select className="inp" value={selContact.assigned_to || ""} onChange={(e) => changeOwner(e.target.value || null)}><option value="">— ยังไม่มอบหมาย —</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+                      : <span style={{ fontSize: 13 }}>{(selContact.assigned_to && staffMap[selContact.assigned_to]) || "—"}</span>}
+                  </label>
+                </div>
                 {cust ? (<>
                   <div className="ci-cust-name">{cust.name}</div>
                   <div className="ci-cust-sub"><b className="cust-code">{custCode(cust.id)}</b>

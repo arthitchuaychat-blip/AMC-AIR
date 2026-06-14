@@ -926,6 +926,21 @@ export async function linkLineContact(uid, customerId) {
 export async function markLineRead(uid) {
   await supabase.from("line_contacts").update({ unread: 0 }).eq("line_user_id", uid);
 }
+// CRM: set a contact's stage / responsible staff
+export async function setLineStage(uid, stage) {
+  const { error } = await supabase.from("line_contacts").update({ stage }).eq("line_user_id", uid);
+  if (error) throw error;
+}
+export async function setLineOwner(uid, userId) {
+  const { error } = await supabase.from("line_contacts").update({ assigned_to: userId || null }).eq("line_user_id", uid);
+  if (error) throw error;
+}
+// staff list (for owner dropdown + showing who replied)
+export async function listStaff() {
+  const { data, error } = await supabase.from("profiles").select("id,name,email,role").order("name");
+  if (error) throw error;
+  return (data || []).map((p) => ({ ...p, name: p.name || p.email }));
+}
 
 // send a reply via the serverless function (LINE push). payload = { text } or { imageUrl }.
 async function callLineSend(to, payload) {
