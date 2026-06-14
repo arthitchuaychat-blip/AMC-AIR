@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import { listAllJobs, listMaterials, closeJob, reopenJob } from "../lib/api";
-import { fmtBaht, fmtNum } from "../lib/format";
+import { fmtBaht, fmtNum, matchText } from "../lib/format";
 import { UIcon } from "../icons";
 
 const FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open", label: "เปิดอยู่" }, { id: "closed", label: "ปิดแล้ว" }];
@@ -12,6 +12,7 @@ export default function Jobs({ role }) {
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [filter, setFilter] = React.useState("all");
+  const [q, setQ] = React.useState("");
   const [expanded, setExpanded] = React.useState({});
   const [toast, setToast] = React.useState(null);
 
@@ -26,7 +27,8 @@ export default function Jobs({ role }) {
   React.useEffect(() => { load(); }, []);
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
 
-  const list = jobs.filter((j) => filter === "all" || j.status === filter);
+  const list = jobs.filter((j) => (filter === "all" || j.status === filter)
+    && (matchText(q, j.job_no, j.team) || (j.lines || []).some((l) => matchText(q, l.code, matMap[l.code]?.th))));
   const openCount = jobs.filter((j) => j.status === "open").length;
 
   async function close(j) {
@@ -53,11 +55,18 @@ export default function Jobs({ role }) {
         </div>
       </div>
 
-      <div className="cat-filter">
-        {FILTERS.map((f) => (
-          <button key={f.id} className={"cat-chip" + (filter === f.id ? " on" : "")} onClick={() => setFilter(f.id)}
-            style={filter === f.id ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{f.label}</button>
-        ))}
+      <div className="cat-filter" style={{ justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {FILTERS.map((f) => (
+            <button key={f.id} className={"cat-chip" + (filter === f.id ? " on" : "")} onClick={() => setFilter(f.id)}
+              style={filter === f.id ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{f.label}</button>
+          ))}
+        </div>
+        <div className="cat-search">
+          <UIcon name="search" size={17} color="var(--ink-3)" />
+          <input placeholder="ค้นหาเลขงาน / ทีม / วัสดุ" value={q} onChange={(e) => setQ(e.target.value)} />
+          {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
+        </div>
       </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}

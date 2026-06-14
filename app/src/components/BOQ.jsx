@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterialsLite, getCompanies, listDocLinks } from "../lib/api";
-import { fmtBaht, fmtNum, custCode } from "../lib/format";
+import { fmtBaht, fmtNum, custCode, matchText, matchPhone } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
@@ -193,8 +193,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
-        const ql = search.trim().toLowerCase();
-        const fl = list.filter((bo) => !ql || bo.boq_no.toLowerCase().includes(ql) || (bo.customerName || "").toLowerCase().includes(ql) || (bo.contactName || "").toLowerCase().includes(ql) || (bo.contactPhone || "").toLowerCase().includes(ql) || (bo.title || "").toLowerCase().includes(ql));
+        const fl = list.filter((bo) => matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title) || matchPhone(search, bo.contactPhone));
         return (<>
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">

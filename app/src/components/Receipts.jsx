@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks } from "../lib/api";
-import { fmtBaht2, custCode, round2 } from "../lib/format";
+import { fmtBaht2, custCode, round2, matchText } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
@@ -137,9 +137,8 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   }
 
   // ---------- LIST ----------
-  const ql = search.trim().toLowerCase();
   const shown = list.filter((x) => (statusF === "all" || x.status === statusF)
-    && (!ql || x.receipt_no.toLowerCase().includes(ql) || (x.customerName || "").toLowerCase().includes(ql) || (x.quote_no || "").toLowerCase().includes(ql) || (x.job_no || "").toLowerCase().includes(ql)));
+    && matchText(search, x.receipt_no, x.customerName, x.quote_no, x.job_no, x.createdByName));
   return (
     <div className="adm">
       <div className="adm-head">

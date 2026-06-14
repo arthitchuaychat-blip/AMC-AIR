@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks } from "../lib/api";
-import { fmtBaht2, custCode, round2 } from "../lib/format";
+import { fmtBaht2, custCode, round2, matchText, matchPhone } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
@@ -147,9 +147,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   }
 
   // ---------- LIST ----------
-  const ql = search.trim().toLowerCase();
   const shown = list.filter((x) => (statusF === "all" || x.status === statusF)
-    && (!ql || x.invoice_no.toLowerCase().includes(ql) || (x.customerName || "").toLowerCase().includes(ql) || (x.quote_no || "").toLowerCase().includes(ql) || (x.contactPhone || "").includes(search.trim())));
+    && (matchText(search, x.invoice_no, x.customerName, x.quote_no, x.createdByName) || matchPhone(search, x.contactPhone)));
   return (
     <div className="adm">
       <div className="adm-head">

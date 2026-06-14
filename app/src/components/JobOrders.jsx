@@ -7,7 +7,7 @@ import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 import DocChips from "./DocChips";
 import AttachThumb from "./AttachThumb";
-import { ATTACH_ACCEPT } from "../lib/format";
+import { ATTACH_ACCEPT, matchText, matchPhone } from "../lib/format";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
 const STATUS_OPTS = JOB_STATUSES.map(([v, l]) => [v, l]);
@@ -350,10 +350,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
-        const ql = q.trim().toLowerCase();
         const fl = list.filter((jo) => (statusF === "all" || jo.status === statusF)
           && (typeF === "all" || (jo.job_type || "install") === typeF)
-          && (!ql || jo.job_no.toLowerCase().includes(ql) || (jo.customerName || "").toLowerCase().includes(ql) || (jo.teamName || "").toLowerCase().includes(ql) || (jo.title || "").toLowerCase().includes(ql) || (jo.contact_phone || "").toLowerCase().includes(ql)));
+          && (matchText(q, jo.job_no, jo.customerName, jo.teamName, jo.title, jo.quote_no, jo.address) || matchPhone(q, jo.contact_phone)));
         return (<>
           {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบงาน" : "ไม่พบใบงานที่ตรงเงื่อนไข"}</div>}
           <div className="job-cards">

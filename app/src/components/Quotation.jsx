@@ -6,7 +6,7 @@ import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
 import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
-import { fmtBaht, custCode } from "../lib/format";
+import { fmtBaht, custCode, matchText, matchPhone } from "../lib/format";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
@@ -291,9 +291,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
-        const ql = search.trim().toLowerCase();
         const fl = list.filter((q) => (statusF === "all" || q.status === statusF)
-          && (!ql || q.quote_no.toLowerCase().includes(ql) || (q.customerName || "").toLowerCase().includes(ql) || (q.contactName || "").toLowerCase().includes(ql) || (q.contactPhone || "").toLowerCase().includes(ql) || (q.title || "").toLowerCase().includes(ql)));
+          && (matchText(search, q.quote_no, q.customerName, q.contactName, q.title, q.boq_no) || matchPhone(search, q.contactPhone)));
         return (<>
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสนอราคา" : "ไม่พบใบเสนอราคาที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">

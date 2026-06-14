@@ -10,6 +10,27 @@ export const fmtCompact = (n) => {
   return "฿" + Math.round(n);
 };
 
+// ---------- search / filter helpers (used by every list + filter in the app) ----------
+// normalize for tolerant matching: lowercase, NFC, collapse whitespace, trim.
+// makes search/equality robust against case, stray spaces, and import inconsistencies.
+export const norm = (s) => (s == null ? "" : String(s)).toLowerCase().normalize("NFC").replace(/\s+/g, " ").trim();
+// normalized equality — use for filter dropdowns (brand/type/team/…) instead of raw === so
+// dirty data ("Carrier " vs "carrier") still matches the selected value.
+export const eqi = (a, b) => norm(a) === norm(b);
+// does the query appear in ANY of the given fields? empty query => matches everything.
+export const matchText = (query, ...fields) => {
+  const n = norm(query);
+  if (!n) return true;
+  return fields.some((f) => norm(f).includes(n));
+};
+// digits-only compare for phone/tax-id (ignores spaces, dashes, parentheses)
+export const digits = (s) => String(s == null ? "" : s).replace(/\D/g, "");
+export const matchPhone = (query, ...phones) => {
+  const q = digits(query);
+  if (!q) return false;
+  return phones.some((p) => digits(p).includes(q));
+};
+
 export const UNITS = ["เมตร", "ชิ้น", "ตัว", "ชุด", "ถัง", "ม้วน", "เส้น", "กระป๋อง"];
 
 // auto customer code derived from the DB id (sequential, unique, no extra column)

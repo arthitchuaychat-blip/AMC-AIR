@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listMaterials, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus } from "../lib/api";
-import { fmtBaht2, fmtNum } from "../lib/format";
+import { fmtBaht2, fmtNum, eqi, matchText, norm } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import MaterialModal from "./MaterialModal";
 import MaterialDrawer from "./MaterialDrawer";
@@ -42,18 +42,21 @@ export default function Catalog({ role }) {
   }
   React.useEffect(() => { load(); }, []);
 
-  const ql = q.trim().toLowerCase();
   const KIND_ORDER = { ac: 0, material: 1, service: 2 };
-  // distinct AC sub-category values (derived from the catalog) for the filter dropdown
-  const acTypes = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "ac" && m.ac_type).map((m) => m.ac_type))].sort((a, b) => a.localeCompare(b, "th")), [mats]);
+  // Filter options derived FROM the catalog itself (deduped case-insensitively) so every option
+  // matches real data — no missing brands and no case/space duplicate entries splitting the list.
+  const dedupe = (vals) => { const seen = new Map(); vals.forEach((v) => { const k = norm(v); if (k && !seen.has(k)) seen.set(k, v); }); return [...seen.values()]; };
+  const acMats = React.useMemo(() => mats.filter((m) => m.kind === "ac"), [mats]);
+  const brandOpts = React.useMemo(() => dedupe(acMats.map((m) => m.brand)).sort((a, b) => a.localeCompare(b, "th")), [acMats]);
+  const acTypes = React.useMemo(() => dedupe(acMats.map((m) => m.ac_type)).sort((a, b) => a.localeCompare(b, "th")), [acMats]);
+  const btuOpts = React.useMemo(() => [...new Set(acMats.map((m) => m.btu).filter(Boolean).map(Number))].sort((a, b) => a - b), [acMats]);
   const list = mats.filter((m) =>
     (kind === "all" || m.kind === kind) &&
     (kind !== "material" || cat === "all" || m.cat === cat) &&
-    (kind !== "ac" || brand === "all" || m.brand === brand) &&
+    (kind !== "ac" || brand === "all" || eqi(m.brand, brand)) &&
     (kind !== "ac" || btu === "all" || String(m.btu) === String(btu)) &&
-    (kind !== "ac" || acType === "all" || m.ac_type === acType) &&
-    (!ql || (m.th || "").toLowerCase().includes(ql) || (m.en || "").toLowerCase().includes(ql) ||
-      (m.code || "").toLowerCase().includes(ql) || (m.catName || "").includes(q.trim()) || (m.brand || "").toLowerCase().includes(ql))
+    (kind !== "ac" || acType === "all" || eqi(m.ac_type, acType)) &&
+    matchText(q, m.th, m.en, m.code, m.catName, m.brand, m.ac_type)
   ).sort((a, b) =>
     (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) ||                       // ชนิด: แอร์ → วัสดุ → บริการ
     (a.brand || a.catName || "").localeCompare(b.brand || b.catName || "", "th") || // ยี่ห้อ (แอร์) / หมวด (วัสดุ)
@@ -139,10 +142,10 @@ export default function Catalog({ role }) {
       {kind === "ac" && (
         <div className="cat-filter" style={{ gap: 10 }}>
           <Combo className="inp" style={{ width: "auto" }} value={brand} onChange={(e) => setBrand(e.target.value)}>
-            <option value="all">ทุกยี่ห้อ</option>{brands.map((b) => <option key={b} value={b}>{b}</option>)}
+            <option value="all">ทุกยี่ห้อ</option>{brandOpts.map((b) => <option key={b} value={b}>{b}</option>)}
           </Combo>
           <Combo className="inp" style={{ width: "auto" }} value={btu} onChange={(e) => setBtu(e.target.value)}>
-            <option value="all">ทุกขนาด BTU</option>{btus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
+            <option value="all">ทุกขนาด BTU</option>{btuOpts.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
           </Combo>
           <Combo className="inp" style={{ width: "auto" }} value={acType} onChange={(e) => setAcType(e.target.value)}>
             <option value="all">ทุกประเภทแอร์</option>{acTypes.map((t) => <option key={t} value={t}>{t}</option>)}

@@ -3,7 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listCustomers, saveCustomer, deleteCustomer, listCustomerDocs } from "../lib/api";
 import { UIcon } from "../icons";
-import { custCode, fmtBaht } from "../lib/format";
+import { custCode, fmtBaht, matchText, matchPhone } from "../lib/format";
 import { scheduleLabel } from "../lib/schedule";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import CustomerImportModal from "./CustomerImportModal";
@@ -44,10 +44,12 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   }, [viewing]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
-  const ql = q.trim().toLowerCase();
-  const shown = list.filter((c) => (vatF === "all" || (vatF === "vat" ? c.vat : !c.vat))
-    && (!ql || c.name.toLowerCase().includes(ql) || (c.tax_id || "").includes(q.trim())
-      || c.contacts.some((ct) => (ct.phone || "").includes(q.trim()))));
+  const shown = list.filter((c) => {
+    if (!(vatF === "all" || (vatF === "vat" ? c.vat : !c.vat))) return false;
+    const cs = c.contacts || [], si = c.sites || [];
+    return matchText(q, c.name, c.tax_id, c.address, ...cs.map((x) => x.name), ...si.map((s) => s.contact_name), ...si.map((s) => s.address))
+      || matchPhone(q, c.tax_id, ...cs.map((x) => x.phone), ...si.map((s) => s.phone));
+  });
 
   function startNew() { setEditing({ cust: blankCust(), contacts: [{ name: "", phone: "", role: "" }], sites: [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }] }); }
   function startEdit(c) {

@@ -1,11 +1,12 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterials } from "../lib/api";
-import { fmtBaht, fmtNum } from "../lib/format";
+import { fmtBaht, fmtNum, matchText } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 
 const STATUS = { open: { th: "รอรับของ", cls: "b-amber" }, received: { th: "รับแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
+const PO_FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open", label: "รอรับของ" }, { id: "received", label: "รับแล้ว" }, { id: "cancelled", label: "ยกเลิก" }];
 
 function genPoNo() {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
@@ -20,8 +21,12 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const [toast, setToast] = React.useState(null);
   const [editing, setEditing] = React.useState(null); // {po_no, supplier, note, items:[{code,qty,price}]} or null
   const [pick, setPick] = React.useState({ code: "", qty: 1, price: "" });
+  const [q, setQ] = React.useState("");
+  const [statusF, setStatusF] = React.useState("all");
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
+  const shown = pos.filter((po) => (statusF === "all" || po.status === statusF)
+    && (matchText(q, po.po_no, po.supplier, po.note) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
 
   async function load() {
     setLoading(true);
@@ -141,11 +146,26 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
         {isAdmin && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบสั่งซื้อ</button>}
       </div>
 
+      <div className="cat-filter" style={{ justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {PO_FILTERS.map((f) => (
+            <button key={f.id} className={"cat-chip" + (statusF === f.id ? " on" : "")} onClick={() => setStatusF(f.id)}
+              style={statusF === f.id ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{f.label}</button>
+          ))}
+        </div>
+        <div className="cat-search">
+          <UIcon name="search" size={17} color="var(--ink-3)" />
+          <input placeholder="ค้นหาเลข PO / ร้าน / วัสดุ" value={q} onChange={(e) => setQ(e.target.value)} />
+          {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
+        </div>
+      </div>
+
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && pos.length === 0 && <div className="empty">ยังไม่มีใบสั่งซื้อ</div>}
+      {!loading && pos.length > 0 && shown.length === 0 && <div className="empty">ไม่พบใบสั่งซื้อที่ตรงเงื่อนไข</div>}
 
       <div className="job-cards">
-        {pos.map((po) => {
+        {shown.map((po) => {
           const st = STATUS[po.status] || STATUS.open;
           return (
             <div className={"card job-card" + (po.status !== "open" ? " closed" : "")} key={po.po_no}>

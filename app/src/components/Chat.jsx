@@ -6,7 +6,7 @@ import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel } from "../lib/schedule";
-import { fmtBaht, custCode } from "../lib/format";
+import { fmtBaht, custCode, matchText, matchPhone } from "../lib/format";
 import { UIcon } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
@@ -179,11 +179,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function delQr(id) { if (!await confirmDialog("ลบข้อความนี้?")) return; try { await deleteQuickReply(id); await loadQr(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
   const selContact = contacts.find((c) => c.line_user_id === sel);
-  const ql = q.trim().toLowerCase();
   const shown = contacts.filter((c) =>
     (stageF === "all" || (c.stage || "new") === stageF)
     && (!mineOnly || c.assigned_to === myId)
-    && (!ql || (c.display_name || "").toLowerCase().includes(ql) || (c.customerName || "").toLowerCase().includes(ql) || (c.last_message || "").toLowerCase().includes(ql)));
+    && (matchText(q, c.display_name, c.customerName, c.last_message) || matchPhone(q, c.phone)));
 
   return (
     <div className="adm">
