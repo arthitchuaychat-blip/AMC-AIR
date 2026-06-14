@@ -30,6 +30,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   const [ed, setEd] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
   const [typeF, setTypeF] = React.useState("all");
+  const [viewing, setViewing] = React.useState(null); // job being viewed (detail modal)
   const [q, setQ] = React.useState("");
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
@@ -342,7 +343,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
           const st = STATUS[jo.status] || STATUS.pending;
           return (
             <div className={"card job-card" + (jo.status === "done" || jo.status === "cancelled" ? " closed" : "")} key={jo.job_no}>
-              <div className="job-card-head" style={{ cursor: "default" }}>
+              <div className="job-card-head" style={{ cursor: "pointer" }} onClick={() => setViewing(jo)} title="กดดูรายละเอียด">
                 <div className="job-card-id"><span className="job-no">{jo.job_no}</span>
                   {(() => { const td = jobTypeDef(jo.job_type); return <span className="job-type-chip" style={{ background: td[3] }}>{td[2]} {td[1]}</span>; })()}
                   <span className={"job-badge " + st.cls}>{st.th}</span></div>
@@ -379,6 +380,50 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
           </div>
         </>);
       })()}
+
+      {viewing && (() => {
+        const jo = viewing; const st = STATUS[jo.status] || STATUS.pending; const td = jobTypeDef(jo.job_type);
+        const vs = (jo.visits && jo.visits.length) ? jo.visits : [];
+        return (
+          <div className="modal-overlay" onClick={() => setViewing(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 640, maxWidth: "95vw" }}>
+              <div className="modal-head">
+                <div className="modal-title">{jo.job_no} <span>{td[2]} {td[1]} · {st.th}</span></div>
+                <button className="drawer-close" onClick={() => setViewing(null)}><UIcon name="x" size={20} /></button>
+              </div>
+              <div className="modal-body">
+                <div className="cd-grid">
+                  <div className="cd-k">ชื่องาน</div><div className="cd-v">{jo.title || "—"}</div>
+                  <div className="cd-k">ลูกค้า</div><div className="cd-v">{jo.customerName || "—"}</div>
+                  {(jo.contact_name || jo.contact_phone) && <><div className="cd-k">ผู้ติดต่อ</div><div className="cd-v">{jo.contact_name || "—"}{jo.contact_phone ? ` · ${jo.contact_phone}` : ""}</div></>}
+                  {jo.address && <><div className="cd-k">ที่อยู่</div><div className="cd-v">{jo.address}{jo.map_url ? <> · <a href={jo.map_url} target="_blank" rel="noreferrer">แผนที่</a></> : null}</div></>}
+                </div>
+
+                <div className="cd-sec">รอบเข้างาน ({vs.length})</div>
+                {vs.length === 0 && <div className="cd-empty">— ยังไม่มีรอบเข้างาน —</div>}
+                {vs.map((v, i) => {
+                  const vst = STATUS[v.status] || STATUS.scheduled; const col = teams.find((t) => t.id === v.assigned_team)?.color || "#94a3b8";
+                  return (
+                    <div className="cd-site" key={v.id || i} style={{ borderLeft: `3px solid ${col}`, background: col + "18", paddingLeft: 9, borderRadius: 8 }}>
+                      <div className="cd-site-top"><span>📍 รอบ {i + 1} · {v.teamName || "ยังไม่มอบทีม"}</span><span className={"job-badge " + vst.cls}>{vst.th}</span></div>
+                      <div className="cd-site-addr">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}</div>
+                    </div>
+                  );
+                })}
+
+                {jo.details && <><div className="cd-sec">รายละเอียดงาน</div><div className="cd-v" style={{ whiteSpace: "pre-wrap" }}>{jo.details}</div></>}
+                {jo.sales_note && <><div className="cd-sec">บรีฟจากฝ่ายขาย</div><div className="cd-v" style={{ whiteSpace: "pre-wrap" }}>{jo.sales_note}</div></>}
+                {jo.sales_photos?.length > 0 && <div className="tl-photos" style={{ marginTop: 8 }}>{jo.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>}
+              </div>
+              <div className="modal-foot">
+                {canEdit && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const j = jo; setViewing(null); del(j); }}><UIcon name="trash" size={15} /> ลบ</button>}
+                {canEdit && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {toast && <Toast t={toast} />}
     </div>
   );
