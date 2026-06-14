@@ -47,7 +47,7 @@ const NAV_BY_ROLE = {
   sales: ["dashboard", "customers", "chat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "profit", "catalog"],
   stock: ["catalog", "movements", "jobs", "po"],
   lead_tech: ["myjobs", "joborders", "schedule", "catalog", "movements", "jobs"],
-  tech: ["myjobs", "movements"],
+  tech: ["myjobs", "schedule", "movements"],
 };
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
@@ -196,7 +196,7 @@ export default function App() {
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
           surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} />}
-        {view === "schedule" && <Schedule role={role} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}
+        {view === "schedule" && <Schedule role={role} onOpenJob={(jn) => { if ((NAV_BY_ROLE[role] || []).includes("joborders")) { setJobFocus(jn); go("joborders"); } else { go("myjobs"); } }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}
         {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}

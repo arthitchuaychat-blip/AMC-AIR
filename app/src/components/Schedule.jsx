@@ -7,6 +7,8 @@ const STATUS = {
   pending: "รอจ่ายงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", done: "เสร็จ", cancelled: "ยกเลิก",
 };
 const VIEWS = [["day", "วัน"], ["week", "สัปดาห์"], ["month", "เดือน"]];
+const STATUS_FILTERS = [["all", "ทุกสถานะ"], ["scheduled", "นัดแล้ว"], ["in_progress", "กำลังทำ"], ["done", "เสร็จ"]];
+const matchStatus = (st, f) => f === "all" || (f === "scheduled" ? (st === "scheduled" || st === "pending") : st === f);
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 // Monday-based start of the week containing d
@@ -17,6 +19,7 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
   const [view, setView] = React.useState("week");
   const [anchor, setAnchor] = React.useState(today0());
   const [teamF, setTeamF] = React.useState("all");
+  const [statusF, setStatusF] = React.useState("all");
   const [jobs, setJobs] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -43,7 +46,7 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
         : (j.scheduled_at ? [{ id: "legacy", assigned_team: j.assigned_team, scheduled_at: j.scheduled_at, end_date: j.end_date, slot: j.slot, status: j.status }] : []);
       vs.forEach((v) => {
         if (v.status === "cancelled" || !v.scheduled_at) return;
-        out.push({ ...j, _key: j.job_no + "#" + (v.id ?? "x"), assigned_team: v.assigned_team, scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot });
+        out.push({ ...j, _key: j.job_no + "#" + (v.id ?? "x"), assigned_team: v.assigned_team, scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot, status: v.status });
       });
     });
     return out;
@@ -52,10 +55,10 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
   // index visit-entries by day (yyyy-mm-dd), respecting the team filter
   const byDay = React.useMemo(() => {
     const m = {};
-    entries.filter((e) => teamF === "all" || e.assigned_team === teamF)
+    entries.filter((e) => (teamF === "all" || e.assigned_team === teamF) && matchStatus(e.status, statusF))
       .forEach((e) => { jobDays(e).forEach((d) => { (m[d] = m[d] || []).push(e); }); });
     return m;
-  }, [entries, teamF]);
+  }, [entries, teamF, statusF]);
 
   // which buckets each team has occupied on a given day (full blocks both half-day slots)
   function occupancy(dayKey) {
@@ -114,6 +117,12 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
           ))}
         </div>
       </div>
+      <div className="cat-filter sched-teams" style={{ marginTop: -4 }}>
+        {STATUS_FILTERS.map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
+      </div>
 
       {loading ? <div className="empty">กำลังโหลด…</div> : (
         view === "week" ? <WeekView /> : view === "day" ? <DayView /> : <MonthView />
@@ -127,9 +136,9 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
     const full = slotBucket(j) === "full";
     const multi = jobDays(j).length > 1;
     return (
-      <button className={"sched-chip" + (big ? " big" : "") + (full ? " full" : "")} onClick={() => onOpenJob && onOpenJob(j.job_no)}
-        style={{ background: c, borderColor: c }} title={`${j.job_no} · ${scheduleLabel(j)}`}>
-        <span className="sc-team">{jobTypeDef(j.job_type)[2]} {teamName(j.assigned_team)}</span>
+      <button className={"sched-chip" + (big ? " big" : "") + (full ? " full" : "") + (j.status === "done" ? " sc-done" : "")} onClick={() => onOpenJob && onOpenJob(j.job_no)}
+        style={{ background: c, borderColor: c }} title={`${j.job_no} · ${scheduleLabel(j)} · ${STATUS[j.status] || ""}`}>
+        <span className="sc-team">{jobTypeDef(j.job_type)[2]} {teamName(j.assigned_team)}{j.status === "in_progress" ? " ●" : j.status === "done" ? " ✓" : ""}</span>
         <span className="sc-title">{j.title || j.customerName || "งาน"}</span>
         {big && j.customerName && j.title && <span className="sc-sub">{j.customerName}</span>}
         {multi && <span className="sc-badge">หลายวัน</span>}

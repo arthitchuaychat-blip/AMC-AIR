@@ -38,26 +38,6 @@ export default function JobTimeline({ jobNo, canPost, author, flash }) {
   return (
     <div className="tl">
       <div className="tl-title">ความเคลื่อนไหวของงาน · Timeline</div>
-      {logs === null && <div className="tl-empty">กำลังโหลด…</div>}
-      {logs && logs.length === 0 && <div className="tl-empty">ยังไม่มีความเคลื่อนไหว</div>}
-      {logs && logs.length > 0 && (
-        <div className="tl-list">
-          {logs.map((l) => (
-            <div className={"tl-item" + (l.type === "status" ? " status" : "")} key={l.id}>
-              <span className="tl-dot" />
-              <div className="tl-body">
-                <div className="tl-meta">{fmtWhen(l.created_at)}{l.author ? ` · ${l.author}` : ""}</div>
-                {l.type === "status"
-                  ? <div className="tl-status">เปลี่ยนสถานะเป็น <b>{STATUS_TH[l.status] || l.status}</b></div>
-                  : <>
-                      {l.note && <div className="tl-note">{l.note}</div>}
-                      {l.photos?.length > 0 && <div className="tl-photos">{l.photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>}
-                    </>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {canPost && (
         <div className="tl-add">
@@ -74,6 +54,27 @@ export default function JobTimeline({ jobNo, canPost, author, flash }) {
           </div>
           <textarea className="inp" rows={2} placeholder="เพิ่มบันทึก/คอมเมนต์ความคืบหน้า…" value={note} onChange={(e) => setNote(e.target.value)} />
           <button className="btn-primary sm" disabled={busy || uploading || (!note.trim() && photos.length === 0)} onClick={post}>{busy ? "กำลังบันทึก…" : "เพิ่มลงไทม์ไลน์"}</button>
+        </div>
+      )}
+
+      {logs === null && <div className="tl-empty">กำลังโหลด…</div>}
+      {logs && logs.length === 0 && <div className="tl-empty">ยังไม่มีความเคลื่อนไหว</div>}
+      {logs && logs.length > 0 && (
+        <div className="tl-list">
+          {logs.slice().reverse().map((l) => (
+            <div className={"tl-item" + (l.type === "status" ? " status" : "")} key={l.id}>
+              <span className="tl-dot" />
+              <div className="tl-body">
+                <div className="tl-meta">{fmtWhen(l.created_at)}{l.author ? ` · ${l.author}` : ""}</div>
+                {l.type === "status"
+                  ? <div className="tl-status">เปลี่ยนสถานะเป็น <b>{STATUS_TH[l.status] || l.status}</b></div>
+                  : <>
+                      {l.note && <div className="tl-note">{l.note}</div>}
+                      {l.photos?.length > 0 && <div className="tl-photos">{l.photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>}
+                    </>}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

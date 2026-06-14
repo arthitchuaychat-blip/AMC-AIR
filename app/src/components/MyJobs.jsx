@@ -46,10 +46,12 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
   }
 
+  const isProject = (j) => (j.visits?.length || 0) > 1; // เข้างานมากกว่า 1 ครั้ง = งานโปรเจค
   const todo = list.filter((j) => j.status === "pending" || j.status === "scheduled");
-  const doing = list.filter((j) => j.status === "in_progress");
+  const doingGen = list.filter((j) => j.status === "in_progress" && !isProject(j));
+  const doingProj = list.filter((j) => j.status === "in_progress" && isProject(j));
   const finished = list.filter((j) => j.status === "done" || j.status === "cancelled");
-  const shown = tab === "todo" ? todo : tab === "doing" ? doing : finished;
+  const shown = tab === "todo" ? todo : tab === "doing" ? doingGen : tab === "project" ? doingProj : finished;
 
   if (!allTeams && !team) {
     return <div className="adm"><div className="adm-head"><div><h1 className="page-title">งานของฉัน</h1></div></div>
@@ -60,16 +62,17 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
     <div className="adm">
       <div className="adm-head">
         <div><h1 className="page-title">{allTeams ? "งานทุกทีม" : "งานของฉัน"} <span className="page-title-en">{allTeams ? "All Jobs · หัวหน้าช่าง" : `My Jobs · ${team}`}</span></h1>
-          <p className="page-sub">{todo.length} ต้องทำ · {doing.length} กำลังทำ</p></div>
+          <p className="page-sub">{todo.length} ต้องทำ · {doingGen.length + doingProj.length} กำลังทำ</p></div>
         <div className="seg">
           <button className={"seg-btn" + (tab === "todo" ? " on" : "")} onClick={() => setTab("todo")}>ต้องทำ ({todo.length})</button>
-          <button className={"seg-btn" + (tab === "doing" ? " on" : "")} onClick={() => setTab("doing")}>กำลังทำ ({doing.length})</button>
+          <button className={"seg-btn" + (tab === "doing" ? " on" : "")} onClick={() => setTab("doing")}>กำลังทำ · ทั่วไป ({doingGen.length})</button>
+          <button className={"seg-btn" + (tab === "project" ? " on" : "")} onClick={() => setTab("project")}>กำลังทำ · โปรเจค ({doingProj.length})</button>
           <button className={"seg-btn" + (tab === "done" ? " on" : "")} onClick={() => setTab("done")}>เสร็จแล้ว ({finished.length})</button>
         </div>
       </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && shown.length === 0 && <div className="empty">{tab === "done" ? "ยังไม่มีงานที่เสร็จ" : tab === "doing" ? "ยังไม่มีงานที่กำลังทำ" : "ไม่มีงานค้าง 🎉"}</div>}
+      {!loading && shown.length === 0 && <div className="empty">{tab === "done" ? "ยังไม่มีงานที่เสร็จ" : tab === "project" ? "ยังไม่มีงานโปรเจคที่กำลังทำ" : tab === "doing" ? "ยังไม่มีงานทั่วไปที่กำลังทำ" : "ไม่มีงานค้าง 🎉"}</div>}
 
       <div className="job-cards">
         {shown.map((jo) => {
