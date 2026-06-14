@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
@@ -203,18 +204,18 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           {flow === "job" && (
             <>
               <label className="fld"><span>เลือกงานที่เบิกค้าง · Open job</span>
-                <select className="inp" value={selJob} onChange={(e) => { setSelJob(e.target.value); setQtyByCode({}); }}>
+                <Combo className="inp" value={selJob} onChange={(e) => { setSelJob(e.target.value); setQtyByCode({}); }}>
                   <option value="">— เลือกงาน —</option>
                   {jobs.filter((j) => !isTech || j.team === myTeam).map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.team || "-"} · ค้าง {j.lines.length} รายการ</option>)}
-                </select>
+                </Combo>
               </label>
               {jobs.filter((j) => !isTech || j.team === myTeam).length === 0 && <div className="empty sm">ไม่มีงานที่เบิกค้างอยู่</div>}
 
               {type === "damage" && job && (
                 <label className="fld"><span>สาเหตุ · Reason</span>
-                  <select className="inp" value={reason} onChange={(e) => setReason(e.target.value)}>
+                  <Combo className="inp" value={reason} onChange={(e) => setReason(e.target.value)}>
                     {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                  </Combo>
                 </label>
               )}
 
@@ -274,18 +275,18 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                 )}
                 {type === "damage" && (
                   <label className="fld"><span>สาเหตุ · Reason</span>
-                    <select className="inp" value={reason} onChange={(e) => setReason(e.target.value)}>
+                    <Combo className="inp" value={reason} onChange={(e) => setReason(e.target.value)}>
                       {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                    </select>
+                    </Combo>
                   </label>
                 )}
               </div>
 
               <div className="fld"><span>เพิ่มรายการวัสดุ</span>
                 <div className="line-add">
-                  <select className="inp" value={pickCode} onChange={(e) => setPickCode(e.target.value)}>
+                  <Combo className="inp" value={pickCode} onChange={(e) => setPickCode(e.target.value)}>
                     {mats.filter((m) => m.tracked).map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
-                  </select>
+                  </Combo>
                   {type === "purchase" && (
                     <div className="inp inp-unit line-price" title="ราคา/หน่วยที่ซื้อ">
                       <span className="unit-pre">฿</span>

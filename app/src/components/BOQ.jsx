@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterialsLite, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht, fmtNum, custCode } from "../lib/format";
 import { UIcon } from "../icons";
@@ -129,15 +130,15 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           </div>
           <div className="fld-row">
             <label className="fld"><span>ลูกค้า</span>
-              <select className="inp" value={ed.customer_id} onChange={(e) => setEd({ ...ed, customer_id: e.target.value, site_id: "" })}>
+              <Combo className="inp" value={ed.customer_id} onChange={(e) => setEd({ ...ed, customer_id: e.target.value, site_id: "" })}>
                 <option value="">— เลือกลูกค้า —</option>{custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Combo>
             </label>
             <label className="fld"><span>ไซต์งาน</span>
-              <select className="inp" value={ed.site_id} onChange={(e) => setEd({ ...ed, site_id: e.target.value })} disabled={!cust || !cust.sites?.length}>
+              <Combo className="inp" value={ed.site_id} onChange={(e) => setEd({ ...ed, site_id: e.target.value })} disabled={!cust || !cust.sites?.length}>
                 <option value="">{cust?.sites?.length ? "— เลือกไซต์ —" : "(ไม่มีไซต์)"}</option>
                 {cust?.sites?.map((s) => <option key={s.id} value={s.id}>{s.site_name || s.address}</option>)}
-              </select>
+              </Combo>
             </label>
           </div>
 

@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
@@ -85,10 +86,10 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบเสร็จ</span><input className="inp" value={ed.receipt_no} onChange={(e) => setF("receipt_no", e.target.value)} /></label>
             <label className="fld"><span>อ้างอิงใบแจ้งหนี้ (ค้างชำระ)</span>
-              <select className="inp" value={ed.invoice_no} onChange={(e) => onPickInvoice(e.target.value)}>
+              <Combo className="inp" value={ed.invoice_no} onChange={(e) => onPickInvoice(e.target.value)}>
                 <option value="">— เลือกใบแจ้งหนี้ —</option>
                 {openInvoices.map((x) => <option key={x.invoice_no} value={x.invoice_no}>{x.invoice_no} · งวด {x.installment} · {x.customerName || "-"} ({fmtBaht(x.total)})</option>)}
-              </select>
+              </Combo>
             </label>
           </div>
 
@@ -105,15 +106,15 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           <div className="fld-row">
             <label className="fld"><span>วันที่</span><input className="inp" type="date" value={ed.issue_date} onChange={(e) => setF("issue_date", e.target.value)} /></label>
             <label className="fld"><span>วิธีชำระ</span>
-              <select className="inp" value={ed.payment_method} onChange={(e) => setF("payment_method", e.target.value)}>{METHODS.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+              <Combo className="inp" value={ed.payment_method} onChange={(e) => setF("payment_method", e.target.value)}>{METHODS.map((m) => <option key={m} value={m}>{m}</option>)}</Combo>
             </label>
           </div>
           <div className="fld-row">
             <label className="fld"><span>สถานะการชำระ</span>
-              <select className="inp" value={ed.status} onChange={(e) => setF("status", e.target.value)}>
+              <Combo className="inp" value={ed.status} onChange={(e) => setF("status", e.target.value)}>
                 <option value="paid">ชำระเงินแล้ว (ปิดใบแจ้งหนี้)</option>
                 <option value="pending">รอชำระเงิน (ออกใบเสร็จก่อน)</option>
-              </select>
+              </Combo>
             </label>
             <label className="fld"><span>อัตราหัก ณ ที่จ่าย</span>
               <div className="inp inp-unit" style={{ width: 120 }}>

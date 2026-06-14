@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listCustomers, saveCustomer, deleteCustomer, listCustomerDocs } from "../lib/api";
 import { UIcon } from "../icons";
 import { custCode, fmtBaht } from "../lib/format";
@@ -265,13 +266,13 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
                 return (<>
                   <div className="cd-sec">ประวัติเอกสาร &amp; งาน ({bySite.length} รายการ)</div>
                   {viewing.sites.length > 1 && (
-                    <select className="inp" value={siteF} onChange={(ev) => setSiteF(ev.target.value)} style={{ fontSize: 13, marginBottom: 8 }}>
+                    <Combo className="inp" value={siteF} onChange={(ev) => setSiteF(ev.target.value)} style={{ fontSize: 13, marginBottom: 8 }}>
                       <option value="all">📍 ทุกไซต์ ({viewDocs.length})</option>
                       {viewing.sites.map((s, i) => {
                         const cnt = viewDocs.filter((d) => String(d.site_id) === String(s.id)).length;
                         return <option key={s.id} value={String(s.id)}>📍 {s.site_name || `ไซต์ ${i + 1}`} ({cnt})</option>;
                       })}
-                    </select>
+                    </Combo>
                   )}
                   <div className="cd-docfilter">
                     {DOC_FILTERS.map(([v, l]) => (

@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel } from "../lib/schedule";
 import { buildOrderConfirm } from "../lib/confirmText";
@@ -145,15 +146,15 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
           </div>
           <div className="fld-row">
             <label className="fld"><span>ลูกค้า</span>
-              <select className="inp" value={ed.customer_id} onChange={(e) => onCustomer(e.target.value)}>
+              <Combo className="inp" value={ed.customer_id} onChange={(e) => onCustomer(e.target.value)}>
                 <option value="">— เลือกลูกค้า —</option>{custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Combo>
             </label>
             <label className="fld"><span>ไซต์งาน</span>
-              <select className="inp" value={ed.site_id} onChange={(e) => onSite(e.target.value)} disabled={!cust?.sites?.length}>
+              <Combo className="inp" value={ed.site_id} onChange={(e) => onSite(e.target.value)} disabled={!cust?.sites?.length}>
                 <option value="">{cust?.sites?.length ? "— เลือกไซต์ —" : "(ไม่มีไซต์)"}</option>
                 {cust?.sites?.map((s) => <option key={s.id} value={s.id}>{s.site_name || s.address}</option>)}
-              </select>
+              </Combo>
             </label>
           </div>
           <div className="fld-row">
@@ -210,7 +211,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             <label className="fld" style={{ maxWidth: 220 }}><span>เวลาเริ่ม</span><input className="inp" type="time" value={ed.time} onChange={(e) => setF("time", e.target.value)} /></label>
           )}
           <label className="fld"><span>สถานะ</span>
-            <select className="inp" value={ed.status} onChange={(e) => setF("status", e.target.value)}>{STATUS_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+            <Combo className="inp" value={ed.status} onChange={(e) => setF("status", e.target.value)}>{STATUS_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Combo>
           </label>
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>

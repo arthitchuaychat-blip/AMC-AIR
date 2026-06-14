@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -178,9 +179,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
             <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className="chat-listfilter">
-            <select className="inp" value={stageF} onChange={(e) => setStageF(e.target.value)}>
+            <Combo className="inp" value={stageF} onChange={(e) => setStageF(e.target.value)}>
               <option value="all">ทุกสถานะ</option>{STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </select>
+            </Combo>
             <button className={"chat-mine" + (mineOnly ? " on" : "")} onClick={() => setMineOnly((v) => !v)} title="เฉพาะที่ฉันรับผิดชอบ">👤 ของฉัน</button>
           </div>
           <div className="chat-convos">
@@ -277,12 +278,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
                 <div className="ci-crm">
                   <label className="ci-field"><span>สถานะลูกค้า (เฟส)</span>
                     {canSend
-                      ? <select className="inp" value={selContact.stage || "new"} onChange={(e) => changeStage(e.target.value)}>{STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                      ? <Combo className="inp" value={selContact.stage || "new"} onChange={(e) => changeStage(e.target.value)}>{STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</Combo>
                       : <span className="conv-stage" style={{ background: stageDef(selContact.stage).color, alignSelf: "flex-start" }}>{stageDef(selContact.stage).label}</span>}
                   </label>
                   <label className="ci-field"><span>ผู้รับผิดชอบ</span>
                     {canSend
-                      ? <select className="inp" value={selContact.assigned_to || ""} onChange={(e) => changeOwner(e.target.value || null)}><option value="">— ยังไม่มอบหมาย —</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+                      ? <Combo className="inp" value={selContact.assigned_to || ""} onChange={(e) => changeOwner(e.target.value || null)}><option value="">— ยังไม่มอบหมาย —</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Combo>
                       : <span style={{ fontSize: 13 }}>{(selContact.assigned_to && staffMap[selContact.assigned_to]) || "—"}</span>}
                   </label>
                 </div>
@@ -334,10 +335,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
                     <div className="ci-unlinked-msg">แชตนี้ยังไม่ได้เชื่อมกับลูกค้า</div>
                     {canSend && <>
                       <label className="ci-field"><span>เชื่อมกับลูกค้าที่มีอยู่</span>
-                        <select className="inp" value="" onChange={(e) => e.target.value && onLink(e.target.value)}>
+                        <Combo className="inp" value="" onChange={(e) => e.target.value && onLink(e.target.value)}>
                           <option value="">— เลือกลูกค้า —</option>
                           {custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                        </Combo>
                       </label>
                       <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={addNewCustomer}>
                         <UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มลูกค้าใหม่จาก LINE นี้

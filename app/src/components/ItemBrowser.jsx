@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { fmtBaht2, fmtNum } from "../lib/format";
 import { UIcon } from "../icons";
 
@@ -41,14 +42,14 @@ export default function ItemBrowser({ mats, onAdd, matTargets }) {
       </div>
       {kind === "ac" && (
         <div className="ib-filters">
-          <select className="inp" value={brand} onChange={(e) => setBrand(e.target.value)}><option value="all">ทุกยี่ห้อ</option>{brands.map((b) => <option key={b} value={b}>{b}</option>)}</select>
-          <select className="inp" value={acType} onChange={(e) => setAcType(e.target.value)}><option value="all">ทุกประเภท</option>{acTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-          <select className="inp" value={btu} onChange={(e) => setBtu(e.target.value)}><option value="all">ทุก BTU</option>{btus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}</select>
+          <Combo className="inp" value={brand} onChange={(e) => setBrand(e.target.value)}><option value="all">ทุกยี่ห้อ</option>{brands.map((b) => <option key={b} value={b}>{b}</option>)}</Combo>
+          <Combo className="inp" value={acType} onChange={(e) => setAcType(e.target.value)}><option value="all">ทุกประเภท</option>{acTypes.map((t) => <option key={t} value={t}>{t}</option>)}</Combo>
+          <Combo className="inp" value={btu} onChange={(e) => setBtu(e.target.value)}><option value="all">ทุก BTU</option>{btus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}</Combo>
         </div>
       )}
       {kind === "material" && (
         <div className="ib-filters">
-          <select className="inp" value={cat} onChange={(e) => setCat(e.target.value)}><option value="all">ทุกหมวด</option>{cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select>
+          <Combo className="inp" value={cat} onChange={(e) => setCat(e.target.value)}><option value="all">ทุกหมวด</option>{cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</Combo>
         </div>
       )}
       {kind === "material" && matTargets && (

@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listMaterials, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus } from "../lib/api";
 import { fmtBaht2, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
@@ -136,15 +137,15 @@ export default function Catalog({ role }) {
       )}
       {kind === "ac" && (
         <div className="cat-filter" style={{ gap: 10 }}>
-          <select className="inp" style={{ width: "auto" }} value={brand} onChange={(e) => setBrand(e.target.value)}>
+          <Combo className="inp" style={{ width: "auto" }} value={brand} onChange={(e) => setBrand(e.target.value)}>
             <option value="all">ทุกยี่ห้อ</option>{brands.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <select className="inp" style={{ width: "auto" }} value={btu} onChange={(e) => setBtu(e.target.value)}>
+          </Combo>
+          <Combo className="inp" style={{ width: "auto" }} value={btu} onChange={(e) => setBtu(e.target.value)}>
             <option value="all">ทุกขนาด BTU</option>{btus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
-          </select>
-          <select className="inp" style={{ width: "auto" }} value={acType} onChange={(e) => setAcType(e.target.value)}>
+          </Combo>
+          <Combo className="inp" style={{ width: "auto" }} value={acType} onChange={(e) => setAcType(e.target.value)}>
             <option value="all">ทุกประเภทแอร์</option>{acTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          </Combo>
         </div>
       )}
 

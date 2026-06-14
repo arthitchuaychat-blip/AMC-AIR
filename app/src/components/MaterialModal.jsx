@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { UIcon } from "../icons";
 import { UNITS } from "../lib/format";
 import { uploadMaterialPhoto } from "../lib/api";
@@ -75,9 +76,9 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
             </label>
             {isMat && (
               <label className="fld"><span>หมวดย่อย · Category</span>
-                <select className="inp" value={f.category} onChange={set("category")}>
+                <Combo className="inp" value={f.category} onChange={set("category")}>
                   {categories.map((c) => <option key={c.id} value={c.id}>{c.name_th}</option>)}
-                </select>
+                </Combo>
               </label>
             )}
             {isAc && (
@@ -126,9 +127,9 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
 
           <div className="fld-row3">
             <label className="fld"><span>หน่วย</span>
-              <select className="inp" value={f.unit} onChange={set("unit")}>
+              <Combo className="inp" value={f.unit} onChange={set("unit")}>
                 {[...new Set([f.unit, ...UNITS, "เครื่อง", "งาน", "ชุด"])].filter(Boolean).map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
+              </Combo>
             </label>
             <label className="fld"><span>ต้นทุน/หน่วย</span>
               <input className="inp" type="number" value={f.cost} onChange={set("cost")} placeholder="0.00" />

@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems } from "../lib/api";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
@@ -145,15 +146,15 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           </div>
           <div className="fld-row">
             <label className="fld"><span>ลูกค้า</span>
-              <select className="inp" value={ed.customer_id} onChange={(e) => onCustomer(e.target.value)}>
+              <Combo className="inp" value={ed.customer_id} onChange={(e) => onCustomer(e.target.value)}>
                 <option value="">— เลือกลูกค้า —</option>{custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Combo>
             </label>
             <label className="fld"><span>ไซต์งาน</span>
-              <select className="inp" value={ed.site_id} onChange={(e) => setQ("site_id", e.target.value)} disabled={!cust?.sites?.length}>
+              <Combo className="inp" value={ed.site_id} onChange={(e) => setQ("site_id", e.target.value)} disabled={!cust?.sites?.length}>
                 <option value="">{cust?.sites?.length ? "— เลือกไซต์ —" : "(ไม่มีไซต์)"}</option>
                 {cust?.sites?.map((s) => <option key={s.id} value={s.id}>{s.site_name || s.address}</option>)}
-              </select>
+              </Combo>
             </label>
           </div>
 
@@ -179,9 +180,9 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           {/* pull from BOQ */}
           <div className="fld"><span>ดึงรายการจาก BOQ (เพิ่มเฉพาะรายการใหม่ · ไม่ทับของเดิม)</span>
             <div className="line-add">
-              <select className="inp" value={ed.boq_no} onChange={(e) => setQ("boq_no", e.target.value)}>
+              <Combo className="inp" value={ed.boq_no} onChange={(e) => setQ("boq_no", e.target.value)}>
                 <option value="">— ไม่อ้าง BOQ —</option>{custBoqs.map((b) => <option key={b.boq_no} value={b.boq_no}>{b.boq_no}{b.title ? ` · ${b.title}` : ""}</option>)}
-              </select>
+              </Combo>
               <button className="btn-ghost sm" onClick={pullFromBoq} disabled={!ed.boq_no}><UIcon name="box" size={14} /> ดึงรายการ</button>
             </div>
           </div>
@@ -216,9 +217,9 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           <div className="fld-row">
             <label className="fld"><span>ส่วนลด</span>
               <div className="line-add">
-                <select className="inp" style={{ width: 90, flex: "none" }} value={ed.discount_type} onChange={(e) => setQ("discount_type", e.target.value)}>
+                <Combo className="inp" style={{ width: 90, flex: "none" }} value={ed.discount_type} onChange={(e) => setQ("discount_type", e.target.value)}>
                   <option value="amount">บาท</option><option value="percent">%</option>
-                </select>
+                </Combo>
                 <input className="inp" type="number" min="0" value={ed.discount_value} onChange={(e) => setQ("discount_value", Number(e.target.value) || 0)} />
               </div>
             </label>
@@ -249,7 +250,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
           <div className="fld-row">
             <label className="fld"><span>สถานะ</span>
-              <select className="inp" value={ed.status} onChange={(e) => setQ("status", e.target.value)}>{STATUS_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+              <Combo className="inp" value={ed.status} onChange={(e) => setQ("status", e.target.value)}>{STATUS_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Combo>
             </label>
             <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note} onChange={(e) => setQ("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
           </div>

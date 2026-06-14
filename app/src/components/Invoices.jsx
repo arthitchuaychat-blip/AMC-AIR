@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks } from "../lib/api";
 import { fmtBaht2, custCode, round2 } from "../lib/format";
 import { UIcon } from "../icons";
@@ -97,11 +98,11 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบแจ้งหนี้</span><input className="inp" value={ed.invoice_no} onChange={(e) => setF("invoice_no", e.target.value)} /></label>
             <label className="fld"><span>อ้างอิงใบเสนอราคา (อนุมัติแล้ว)</span>
-              <select className="inp" value={ed.quote_no} onChange={(e) => setF("quote_no", e.target.value)}>
+              <Combo className="inp" value={ed.quote_no} onChange={(e) => setF("quote_no", e.target.value)}>
                 <option value="">— เลือกใบเสนอราคา —</option>
                 {/* only quotes that still have a balance — fully-billed (100%) ones are hidden */}
                 {billableQuotes.map((q) => <option key={q.quote_no} value={q.quote_no}>{q.quote_no} · {q.customerName || "-"} · เหลือ {fmtBaht(round2((q.grand || 0) - (billed[q.quote_no] || 0)))}</option>)}
-              </select>
+              </Combo>
             </label>
           </div>
 
@@ -123,9 +124,9 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           <div className="fld-row">
             <label className="fld"><span>วางบิลงวดนี้</span>
               <div className="line-add">
-                <select className="inp" style={{ width: 110, flex: "none" }} value={ed.basis} onChange={(e) => setF("basis", e.target.value)}>
+                <Combo className="inp" style={{ width: 110, flex: "none" }} value={ed.basis} onChange={(e) => setF("basis", e.target.value)}>
                   <option value="percent">เป็น %</option><option value="amount">เป็นบาท</option>
-                </select>
+                </Combo>
                 <input className="inp" type="number" min="0" step="0.01" value={ed.basis_value} onChange={(e) => setF("basis_value", Number(e.target.value) || 0)} />
                 <button className="btn-ghost sm" onClick={() => setF("basis_value", ed.basis === "percent" ? 100 : remaining)} disabled={!selQ}>ยอดคงเหลือ</button>
               </div>

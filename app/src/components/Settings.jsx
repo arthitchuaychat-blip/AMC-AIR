@@ -1,4 +1,5 @@
 import React from "react";
+import Combo from "./Combo";
 import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany } from "../lib/api";
 import { UIcon } from "../icons";
 
@@ -89,13 +90,13 @@ function UserRow({ p, teams, onChanged, flash }) {
     <div className="set-row set-row-user">
       <div className="set-email">{p.email}</div>
       <input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อ" />
-      <select className="inp" value={role} onChange={(e) => setRole(e.target.value)}>
+      <Combo className="inp" value={role} onChange={(e) => setRole(e.target.value)}>
         {ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
-      </select>
-      <select className="inp" value={team} onChange={(e) => setTeam(e.target.value)} disabled={role !== "tech"}>
+      </Combo>
+      <Combo className="inp" value={team} onChange={(e) => setTeam(e.target.value)} disabled={role !== "tech"}>
         <option value="">— ทีม —</option>
         {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-      </select>
+      </Combo>
       <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
     </div>
   );
@@ -271,13 +272,13 @@ export default function Settings() {
               <input className="inp" value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} placeholder="อีเมล" />
               <input className="inp" type="text" value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} placeholder="รหัสผ่าน (≥6)" />
               <input className="inp" value={nu.name} onChange={(e) => setNu({ ...nu, name: e.target.value })} placeholder="ชื่อ" />
-              <select className="inp" value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })}>
+              <Combo className="inp" value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })}>
                 {ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
-              </select>
-              <select className="inp" value={nu.team} onChange={(e) => setNu({ ...nu, team: e.target.value })} disabled={nu.role !== "tech"}>
+              </Combo>
+              <Combo className="inp" value={nu.team} onChange={(e) => setNu({ ...nu, team: e.target.value })} disabled={nu.role !== "tech"}>
                 <option value="">— ทีม —</option>
                 {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              </Combo>
               <button className="btn-primary" disabled={addingU} onClick={addUser}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มผู้ใช้</button>
             </div>
             <div className="set-list">
