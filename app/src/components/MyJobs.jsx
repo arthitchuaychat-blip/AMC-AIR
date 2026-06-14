@@ -162,7 +162,7 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
               )}
               {jo.status === "in_progress" && <div className="myjob-hint">เข้าหน้างานได้หลายครั้ง · เบิกวัสดุเพิ่มได้ไม่จำกัด · แนบรูป/คอมเมนต์ลงไทม์ไลน์ด้านล่าง</div>}
 
-              {jo.status !== "cancelled" && <JobTimeline jobNo={jo.job_no} canPost author={me} flash={flash} />}
+              {jo.status !== "cancelled" && <JobTimeline jobNo={jo.job_no} groupNo={jo.group_no || jo.job_no} linked={!!jo.group_no} canPost author={me} flash={flash} />}
             </div>
           );
         })}

@@ -1,5 +1,5 @@
 import React from "react";
-import { listJobLogs, addJobLog, uploadMaterialPhoto } from "../lib/api";
+import { listJobLogs, listJobLogsByGroup, addJobLog, uploadMaterialPhoto } from "../lib/api";
 import { ATTACH_ACCEPT } from "../lib/format";
 import AttachThumb from "./AttachThumb";
 
@@ -8,15 +8,17 @@ const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-
 
 // Append-only timeline of a job: status changes + photo/comment updates.
 // canPost=true shows the add-entry box (unlimited photos + comment per entry).
-export default function JobTimeline({ jobNo, canPost, author, flash }) {
+export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, flash }) {
   const [logs, setLogs] = React.useState(null);
   const [note, setNote] = React.useState("");
   const [photos, setPhotos] = React.useState([]);
   const [uploading, setUploading] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
 
-  async function load() { try { setLogs(await listJobLogs(jobNo)); } catch (e) { flash && flash("โหลดความเคลื่อนไหวไม่สำเร็จ: " + (e.message || e), true); setLogs([]); } }
-  React.useEffect(() => { load(); }, [jobNo]);
+  // shared board across a linked-job group (resolved server-side so it works even when the list is filtered)
+  const shared = !!linked && !!groupNo;
+  async function load() { try { setLogs(shared ? await listJobLogsByGroup(groupNo) : await listJobLogs(jobNo)); } catch (e) { flash && flash("โหลดความเคลื่อนไหวไม่สำเร็จ: " + (e.message || e), true); setLogs([]); } }
+  React.useEffect(() => { load(); }, [jobNo, groupNo, linked]);
 
   async function onFiles(e) {
     const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
@@ -37,7 +39,7 @@ export default function JobTimeline({ jobNo, canPost, author, flash }) {
 
   return (
     <div className="tl">
-      <div className="tl-title">ความเคลื่อนไหวของงาน · Timeline</div>
+      <div className="tl-title">ความเคลื่อนไหวของงาน · Timeline{shared ? " (รวมใบงานเชื่อม)" : ""}</div>
 
       {canPost && (
         <div className="tl-add">
@@ -65,7 +67,7 @@ export default function JobTimeline({ jobNo, canPost, author, flash }) {
             <div className={"tl-item" + (l.type === "status" ? " status" : "")} key={l.id}>
               <span className="tl-dot" />
               <div className="tl-body">
-                <div className="tl-meta">{fmtWhen(l.created_at)}{l.author ? ` · ${l.author}` : ""}</div>
+                <div className="tl-meta">{fmtWhen(l.created_at)}{l.author ? ` · ${l.author}` : ""}{shared ? <span className="tl-jobtag">{l.job_no}</span> : null}</div>
                 {l.type === "status"
                   ? <div className="tl-status">เปลี่ยนสถานะเป็น <b>{STATUS_TH[l.status] || l.status}</b></div>
                   : <>

@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage, updateVisitStatus } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage, updateVisitStatus, createLinkedJob } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -185,6 +185,14 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(jo) { if (!await confirmDialog(`ลบใบงาน ${jo.job_no}?`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  // linked job orders (A/B/C) sharing a group — for assigning extra teams, with a shared timeline
+  const groupKey = (j) => j.group_no || j.job_no;
+  const siblingsOf = (j) => list.filter((x) => groupKey(x) === groupKey(j)).sort((a, b) => a.job_no.localeCompare(b.job_no));
+  async function addLinked(jo) {
+    if (!await confirmDialog({ title: "สร้างใบงานเชื่อม (มอบทีมเพิ่ม) ?", message: `จาก ${jo.job_no} · คัดลอกลูกค้า/งาน แล้วให้กำหนดทีม+รอบของใบใหม่`, danger: false, confirmText: "สร้างใบเชื่อม" })) return;
+    try { const newNo = await createLinkedJob(jo); flash(`สร้างใบงานเชื่อม ${newNo} แล้ว`); await load(); setViewing(null); const fresh = await listJobOrders(); setList(fresh); startEdit(fresh.find((x) => x.job_no === newNo)); }
+    catch (e) { flash("สร้างไม่สำเร็จ: " + (e.message || e), true); }
+  }
   // office acts on ONE รอบ (visit) — approve → เสร็จ, or send → รอนัดหมายใหม่; sibling visits untouched
   async function visitAction(jo, v, status) {
     const o = status === "done"
@@ -366,6 +374,11 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
               {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "job", no: jo.job_no }} onOpen={onOpenDoc} />; })()}
+              {(() => { const sibs = siblingsOf(jo); return sibs.length > 1 ? (
+                <div className="job-group-chips"><span style={{ fontSize: 12, color: "var(--ink-2)" }}>🔗 ใบงานเชื่อม:</span>
+                  {sibs.map((s) => <button key={s.job_no} className={"job-group-chip" + (s.job_no === jo.job_no ? " cur" : "")} onClick={() => setViewing(s)}>{s.job_no}</button>)}
+                </div>
+              ) : null; })()}
               {canEdit && jo.status === "awaiting_approval" && (
                 <div className="job-lines"><div className="job-actions">
                   <button className="btn-primary sm ok" onClick={() => setViewing(jo)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> ตรวจ & อนุมัติรายรอบ</button>
@@ -380,10 +393,11 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>
                   <UIcon name="clipboard" size={14} /> {openTl === jo.job_no ? "ซ่อนความเคลื่อนไหว" : "ความเคลื่อนไหว"}
                 </button>
+                {canEdit && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && <button className="btn-ghost sm danger" onClick={() => del(jo)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div></div>
-              {openTl === jo.job_no && <JobTimeline jobNo={jo.job_no} canPost={canEdit} author={me} flash={flash} />}
+              {openTl === jo.job_no && <JobTimeline jobNo={jo.job_no} groupNo={groupKey(jo)} linked={!!jo.group_no} canPost={canEdit} author={me} flash={flash} />}
             </div>
           );
         })}
@@ -432,12 +446,20 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                   );
                 })}
 
+                {(() => { const sibs = siblingsOf(jo); return sibs.length > 1 ? (
+                  <><div className="cd-sec">ใบงานเชื่อม ({sibs.length})</div>
+                  <div className="job-group-chips" style={{ paddingTop: 0 }}>
+                    {sibs.map((s) => <button key={s.job_no} className={"job-group-chip" + (s.job_no === jo.job_no ? " cur" : "")} onClick={() => setViewing(s)}>{s.job_no} · {STATUS[s.status]?.th || ""}</button>)}
+                  </div></>
+                ) : null; })()}
+
                 {jo.details && <><div className="cd-sec">รายละเอียดงาน</div><div className="cd-v" style={{ whiteSpace: "pre-wrap" }}>{jo.details}</div></>}
                 {jo.sales_note && <><div className="cd-sec">บรีฟจากฝ่ายขาย</div><div className="cd-v" style={{ whiteSpace: "pre-wrap" }}>{jo.sales_note}</div></>}
                 {jo.sales_photos?.length > 0 && <div className="tl-photos" style={{ marginTop: 8 }}>{jo.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>}
               </div>
               <div className="modal-foot">
                 {canEdit && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const j = jo; setViewing(null); del(j); }}><UIcon name="trash" size={15} /> ลบ</button>}
+                {canEdit && <button className="btn-ghost" onClick={() => addLinked(jo)}><UIcon name="plus" size={15} /> ใบงานเชื่อม</button>}
                 {canEdit && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
               </div>
             </div>

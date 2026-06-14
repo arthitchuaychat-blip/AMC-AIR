@@ -829,9 +829,19 @@ export async function listTeamJobOrders(team) {
 
 // ---------- job timeline (append-only log of status changes + photo/comment updates) ----------
 export async function listJobLogs(job_no) {
-  const { data, error } = await supabase.from("job_logs").select("*").eq("job_no", job_no).order("created_at", { ascending: true });
+  // job_no can be a single value or an array (shared board for linked jobs)
+  let q = supabase.from("job_logs").select("*").order("created_at", { ascending: true });
+  q = Array.isArray(job_no) ? q.in("job_no", job_no) : q.eq("job_no", job_no);
+  const { data, error } = await q;
   if (error) throw error;
   return data || [];
+}
+
+// shared timeline for a linked-job group: all logs across every job in the group
+export async function listJobLogsByGroup(groupNo) {
+  const { data: jobs } = await supabase.from("job_orders").select("job_no").or(`group_no.eq.${groupNo},job_no.eq.${groupNo}`);
+  const nos = (jobs || []).map((j) => j.job_no);
+  return nos.length ? listJobLogs(nos) : [];
 }
 
 // add one timeline entry (a comment + any photos). Unlimited entries per job.
@@ -847,7 +857,7 @@ export async function addJobLog(job_no, { note, photos, author }) {
 export async function saveJobOrder(jo) {
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from("job_orders").upsert({
-    job_no: jo.job_no, quote_no: jo.quote_no || null, customer_id: jo.customer_id || null, site_id: jo.site_id || null,
+    job_no: jo.job_no, group_no: jo.group_no || null, quote_no: jo.quote_no || null, customer_id: jo.customer_id || null, site_id: jo.site_id || null,
     title: jo.title?.trim() || null, job_type: jo.job_type || "install", contact_name: jo.contact_name?.trim() || null, contact_phone: jo.contact_phone?.trim() || null,
     address: jo.address?.trim() || null, map_url: jo.map_url?.trim() || null, details: jo.details?.trim() || null,
     sales_note: jo.sales_note?.trim() || null, sales_photos: jo.sales_photos || [],
@@ -898,6 +908,25 @@ export async function updateVisitStatus(visitId, jobNo, status, author) {
 export async function deleteJobOrder(job_no) {
   const { error } = await supabase.from("job_orders").delete().eq("job_no", job_no);
   if (error) throw error;
+}
+
+// ใบงานเชื่อม: แตกใบใหม่จากใบหนึ่ง (เลขราก + A/B/C) คัดลอกข้อมูลลูกค้า/งาน · ทีม+รอบให้ออฟฟิศกำหนดเอง
+export async function createLinkedJob(base) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const group = base.group_no || base.job_no;
+  if (!base.group_no) await supabase.from("job_orders").update({ group_no: group }).eq("job_no", base.job_no);
+  const { data: sibs } = await supabase.from("job_orders").select("job_no").like("job_no", group + "%");
+  const used = new Set((sibs || []).map((s) => s.job_no).filter((n) => n.startsWith(group) && /^[A-Z]$/.test(n.slice(group.length))).map((n) => n.slice(group.length)));
+  let suffix = "A"; for (let i = 0; i < 26; i++) { const c = String.fromCharCode(65 + i); if (!used.has(c)) { suffix = c; break; } }
+  const newNo = group + suffix;
+  const row = {
+    job_no: newNo, group_no: group, quote_no: base.quote_no || null, customer_id: base.customer_id || null, site_id: base.site_id || null,
+    title: base.title || null, job_type: base.job_type || "install", contact_name: base.contact_name || null, contact_phone: base.contact_phone || null,
+    address: base.address || null, map_url: base.map_url || null, details: base.details || null, sales_note: base.sales_note || null,
+    sales_photos: base.sales_photos || [], status: "pending", created_by: user?.id || null,
+  };
+  const e = (await supabase.from("job_orders").insert(row)).error; if (e) throw e;
+  return newNo;
 }
 
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
