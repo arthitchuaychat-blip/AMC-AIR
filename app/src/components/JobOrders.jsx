@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage, updateVisitStatus, createLinkedJob } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, createLinkedJob } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -167,23 +167,6 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     try {
       await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows });
       flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
-      // offer to notify the customer via LINE (only when linked) — preview + confirm before sending
-      let notify = null;
-      const tdLabel = jobTypeDef(ed.job_type)[1];
-      if (ed.customer_id && status === "done") {
-        notify = { title: "ส่งข้อความขอบคุณลูกค้าทาง LINE?", msg: `🙏 ขอบคุณที่ใช้บริการ AMC AIR ครับ\nงาน${tdLabel} ${ed.job_no} เสร็จเรียบร้อยแล้ว\n\nหากมีปัญหาการใช้งานหรือต้องการบริการเพิ่มเติม แจ้งได้ที่แชตนี้ได้เลยครับ 😊` };
-      } else if (ed.customer_id && scheduled_at) {
-        notify = { title: "แจ้งนัดหมายลูกค้าทาง LINE?", msg: `🔔 แจ้งนัดหมายงาน${tdLabel}\n📅 ${scheduleLabel({ scheduled_at, end_date, slot })}` + (tn ? `\n👷 ทีมช่าง: ${tn}` : "") + (ed.address ? `\n📍 ${ed.address}` : "") + `\n\nทาง AMC AIR จะเข้าให้บริการตามนัด หากต้องการเปลี่ยนแปลงแจ้งได้ที่แชตนี้ครับ 🙏` };
-      }
-      if (notify) {
-        try {
-          const lc = await lineContactByCustomer(ed.customer_id);
-          if (lc?.line_user_id && await confirmDialog({ title: notify.title, message: notify.msg, danger: false, confirmText: "ส่งเลย", cancelText: "ไม่ส่ง" })) {
-            await sendLineMessage(lc.line_user_id, notify.msg);
-            flash("ส่งข้อความให้ลูกค้าทาง LINE แล้ว ✓");
-          }
-        } catch { /* notification is best-effort — never block the save */ }
-      }
       setEd(null); await load();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
