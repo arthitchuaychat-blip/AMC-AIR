@@ -30,8 +30,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
   const [newQr, setNewQr] = React.useState("");
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
   const [jobPicker, setJobPicker] = React.useState(null);
-  const [sendDocOpen, setSendDocOpen] = React.useState(false);
+  const [sendMenuFor, setSendMenuFor] = React.useState(null); // doc entry whose "ส่งเป็น รูป/PDF" popup is open
   const [capJob, setCapJob] = React.useState(null); // { type, no, mode, to, label } → render off-screen + capture + send
+  const startSend = (e, mode) => { setSendMenuFor(null); setCapJob({ type: e.type, no: e.no, mode, to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}` }); flash("กำลังเตรียมเอกสาร…"); };
   const [infoDocs, setInfoDocs] = React.useState([]);
   const [loadingInfoDocs, setLoadingInfoDocs] = React.useState(false);
   const [infoDocF, setInfoDocF] = React.useState("all");
@@ -201,7 +202,6 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
                 <div className="chat-composer">
                   <div className="chat-tools">
                     {selContact.customer_id && <button className="chat-tool primary" onClick={openConfirm} disabled={sending}>🧾 ส่งคอนเฟิม</button>}
-                    {selContact.customer_id && <button className="chat-tool primary" onClick={() => setSendDocOpen(true)}>📄 ส่งเอกสาร</button>}
                     <label className={"chat-tool" + (sending ? " disabled" : "")}>📷 รูป
                       <input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
                     </label>
@@ -262,15 +262,19 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
                       const st = stOf(e);
                       const dateTxt = e.type === "job" && e.scheduled_at ? scheduleLabel(e)
                         : (e.date ? new Date(e.date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) : "—");
+                      const sendable = ["quote", "invoice", "receipt"].includes(e.type);
                       return (
-                        <button className="cd-job" key={e.type + e.no} onClick={() => onOpenDoc && onOpenDoc(e.type, e.no)}>
+                        <div className="cd-job" key={e.type + e.no}>
                           <span className={"cd-job-dot " + st[1]} />
-                          <div className="cd-job-body">
+                          <div className="cd-job-body" role="button" tabIndex={0} onClick={() => onOpenDoc && onOpenDoc(e.type, e.no)}>
                             <div className="cd-job-top"><b><span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span>{e.title || ""}</b><span className={"job-badge " + st[1]}>{st[0]}</span></div>
                             <div className="cd-job-meta">🗓 {dateTxt}{e.teamName ? ` · 👷 ${e.teamName}` : ""}{e.amount != null ? ` · ${fmtBaht(e.amount)}` : ""}</div>
-                            <div className="cd-job-no">{e.no} · ดูรายละเอียด ›</div>
+                            <div className="cd-job-no-row">
+                              <span className="cd-job-no">{e.no} · ดูรายละเอียด ›</span>
+                              {sendable && canSend && <button className="cd-send" disabled={!!capJob} onClick={(ev) => { ev.stopPropagation(); setSendMenuFor(e); }}>📤 ส่ง</button>}
+                            </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -333,34 +337,21 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
           </div>
         </div>
       )}
-      {sendDocOpen && (() => {
-        const docs = infoDocs.filter((e) => ["quote", "invoice", "receipt"].includes(e.type));
-        return (
-          <div className="modal-overlay" onClick={() => setSendDocOpen(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
-              <div className="modal-head"><div className="modal-title">ส่งเอกสารให้ลูกค้าทาง LINE</div>
-                <button className="drawer-close" onClick={() => setSendDocOpen(false)}><UIcon name="x" size={20} /></button></div>
-              <div className="modal-body">
-                <p className="page-sub" style={{ marginBottom: 10 }}>เลือกเอกสารแล้วเลือกส่งเป็น “รูป” (เห็นในแชต) หรือ “PDF” (ลิงก์เปิด/เซฟไฟล์)</p>
-                {docs.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ลูกค้านี้ยังไม่มีเอกสาร</div>}
-                {docs.map((e) => {
-                  const st = stOf(e);
-                  return (
-                    <div className="senddoc-row" key={e.type + e.no}>
-                      <div className="senddoc-info">
-                        <div><span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span><b>{e.no}</b></div>
-                        <small>{e.title || ""} · <span className={"job-badge " + st[1]}>{st[0]}</span></small>
-                      </div>
-                      <button className="btn-ghost sm" disabled={!!capJob} onClick={() => { setSendDocOpen(false); setCapJob({ type: e.type, no: e.no, mode: "image", to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}` }); flash("กำลังเตรียมเอกสาร…"); }}><UIcon name="camera" size={13} /> รูป</button>
-                      <button className="btn-ghost sm" disabled={!!capJob} onClick={() => { setSendDocOpen(false); setCapJob({ type: e.type, no: e.no, mode: "pdf", to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}` }); flash("กำลังเตรียมเอกสาร…"); }}><UIcon name="clipboard" size={13} /> PDF</button>
-                    </div>
-                  );
-                })}
+      {sendMenuFor && (
+        <div className="modal-overlay" onClick={() => setSendMenuFor(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 400 }}>
+            <div className="modal-head"><div className="modal-title">ส่งเอกสารให้ลูกค้า</div>
+              <button className="drawer-close" onClick={() => setSendMenuFor(null)}><UIcon name="x" size={20} /></button></div>
+            <div className="modal-body">
+              <p className="page-sub" style={{ marginBottom: 14 }}><span className={"doc-tag dl-" + sendMenuFor.type}>{TYPE_LABEL[sendMenuFor.type]}</span><b>{sendMenuFor.no}</b>{sendMenuFor.title ? ` · ${sendMenuFor.title}` : ""} — ส่งเป็น?</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => startSend(sendMenuFor, "image")}><UIcon name="camera" size={15} color="#fff" /> รูปภาพ</button>
+                <button className="btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={() => startSend(sendMenuFor, "pdf")}><UIcon name="clipboard" size={15} /> ไฟล์ PDF</button>
               </div>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
       {custForm && <CustomerFormModal initial={custForm.initial} onClose={() => setCustForm(null)} onSaved={onCustSaved} />}
       {capJob && <DocCapture type={capJob.type} no={capJob.no}
         onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
