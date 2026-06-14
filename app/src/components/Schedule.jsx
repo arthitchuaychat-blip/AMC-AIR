@@ -1,7 +1,7 @@
 import React from "react";
 import { listJobOrders, listTeams } from "../lib/api";
 import { UIcon } from "../icons";
-import { BUCKETS, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef, JOB_STATUSES } from "../lib/schedule";
+import { BUCKETS, slotDef, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef, JOB_STATUSES } from "../lib/schedule";
 
 const VIEWS = [["list", "รายการ"], ["day", "วัน"], ["week", "สัปดาห์"], ["month", "เดือน"]];
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l]) => [v, l]));
