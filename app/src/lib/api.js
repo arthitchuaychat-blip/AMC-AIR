@@ -874,6 +874,20 @@ export async function updateJobStatus(job_no, status, author) {
   await supabase.from("job_logs").insert({ job_no, type: "status", status, author: author || null, created_by: user?.id || null });
 }
 
+// office quick action: move every visit of a job whose status is in fromStatuses → toStatus,
+// then recompute the job's overall status. Falls back to the job row if it has no visits.
+export async function setJobVisitsStatus(jobNo, fromStatuses, toStatus, author) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: vs } = await supabase.from("job_visits").select("id,status").eq("job_no", jobNo);
+  const ids = (vs || []).filter((v) => fromStatuses.includes(v.status)).map((v) => v.id);
+  if (ids.length) { const e = (await supabase.from("job_visits").update({ status: toStatus }).in("id", ids)).error; if (e) throw e; }
+  const { data: vs2 } = await supabase.from("job_visits").select("status").eq("job_no", jobNo);
+  const jobStatus = (vs2 && vs2.length) ? deriveJobStatus(vs2) : toStatus; // no visits → just set the job status
+  await supabase.from("job_orders").update({ status: jobStatus }).eq("job_no", jobNo);
+  await supabase.from("job_logs").insert({ job_no: jobNo, type: "status", status: toStatus, author: author || null, created_by: user?.id || null });
+  return jobStatus;
+}
+
 // update one visit's status, then recompute + save the job's overall status from all its visits
 export async function updateVisitStatus(visitId, jobNo, status, author) {
   const { data: { user } } = await supabase.auth.getUser();

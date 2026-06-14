@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage, setJobVisitsStatus, updateJobStatus } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -184,6 +184,22 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(jo) { if (!await confirmDialog(`ลบใบงาน ${jo.job_no}?`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  // office approval flow: from "รออนุมัติ" → เสร็จ / รอนัดหมายใหม่
+  async function approveJob(jo) {
+    if (!await confirmDialog({ title: "อนุมัติงานนี้เป็น 'เสร็จ' ?", message: `${jo.job_no}${jo.title ? " · " + jo.title : ""}`, danger: false, confirmText: "อนุมัติ เสร็จ" })) return;
+    try { if (jo.visits?.length) await setJobVisitsStatus(jo.job_no, ["awaiting_approval", "in_progress"], "done", me); else await updateJobStatus(jo.job_no, "done", me); flash("อนุมัติงานเสร็จแล้ว ✓"); await load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function toReschedule(jo) {
+    if (!await confirmDialog({ title: "ส่งงานนี้ไป 'รอนัดหมายใหม่' ?", message: `${jo.job_no}${jo.title ? " · " + jo.title : ""}`, danger: false, confirmText: "ให้นัดหมายใหม่" })) return;
+    try { if (jo.visits?.length) await setJobVisitsStatus(jo.job_no, ["awaiting_approval", "in_progress"], "reschedule", me); else await updateJobStatus(jo.job_no, "reschedule", me); flash("ส่งไปรอนัดหมายใหม่แล้ว"); await load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // open the editor to set a new appointment; flip รอนัดหมายใหม่ visits back to นัดแล้ว so the new date lands as scheduled
+  function startReschedule(jo) {
+    startEdit(jo);
+    setEd((e) => e ? { ...e, visits: e.visits.map((v) => v.status === "reschedule" ? { ...v, status: "scheduled" } : v) } : e);
+  }
 
   // ---------- EDITOR ----------
   if (ed) {
@@ -338,6 +354,17 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
               {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "job", no: jo.job_no }} onOpen={onOpenDoc} />; })()}
+              {canEdit && jo.status === "awaiting_approval" && (
+                <div className="job-lines"><div className="job-actions">
+                  <button className="btn-primary sm ok" onClick={() => approveJob(jo)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> อนุมัติ · เสร็จ</button>
+                  <button className="btn-ghost sm" onClick={() => toReschedule(jo)}>↻ ให้นัดหมายใหม่</button>
+                </div></div>
+              )}
+              {canEdit && jo.status === "reschedule" && (
+                <div className="job-lines"><div className="job-actions">
+                  <button className="btn-primary sm" onClick={() => startReschedule(jo)}><UIcon name="calendar" size={14} color="#fff" /> ตั้งนัดหมายใหม่</button>
+                </div></div>
+              )}
               <div className="job-lines"><div className="job-actions">
                 <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>
                   <UIcon name="clipboard" size={14} /> {openTl === jo.job_no ? "ซ่อนความเคลื่อนไหว" : "ความเคลื่อนไหว"}
