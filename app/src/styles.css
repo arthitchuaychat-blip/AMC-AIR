@@ -672,8 +672,11 @@ select.inp{cursor:pointer}
 /* ---------- CRM customers ---------- */
 .crm-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
 .crm-row .inp{flex:1;min-width:0;padding:8px 11px;font-size:13px}
-.crm-site{margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--line-2)}
-.crm-site .inp{font-size:13px}
+.crm-site{margin-bottom:10px;padding:10px 11px;border:1px solid var(--line-2);border-left-width:4px;border-radius:10px}
+.crm-site .inp{font-size:13px;background:var(--bg-1)}
+.crm-site .crm-row:last-child{margin-bottom:0}
+.crm-site-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.crm-site-badge{font-size:11px;font-weight:700;color:#fff;padding:2px 10px;border-radius:999px;letter-spacing:.3px}
 .crm-meta{font-size:12px;color:var(--ink-2);margin-top:10px;display:flex;flex-direction:column;gap:3px}
 .cust-code{font-family:var(--mono);color:var(--primary);font-weight:700}
 /* invoices */

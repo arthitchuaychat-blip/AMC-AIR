@@ -6,6 +6,8 @@ import { custCode } from "../lib/format";
 // Full add/edit customer form in a popup. initial = customer obj (with contacts[]/sites[]) for edit, or a seed for new.
 // onSaved(id) fires after a successful save.
 const seedCust = (i) => ({ id: i?.id || null, type: i?.type || "person", name: i?.name || "", tax_id: i?.tax_id || "", vat: !!i?.vat, address: i?.address || "", note: i?.note || "" });
+// สีไล่ต่อไซต์ เพื่อแยกกล่องไซต์ให้เห็นง่าย ไม่ตาลาย
+const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626"];
 
 export default function CustomerFormModal({ initial, onClose, onSaved }) {
   const [cust, setCust] = React.useState(() => seedCust(initial));
@@ -65,20 +67,26 @@ export default function CustomerFormModal({ initial, onClose, onSaved }) {
           </div>
 
           <div className="fld"><span>ไซต์งาน / สถานที่ให้บริการ (เพิ่มได้หลายที่)</span>
-            {sites.map((s, i) => (
-              <div className="crm-site" key={i}>
-                <div className="crm-row">
-                  <input className="inp" value={s.site_name} onChange={(e) => setRow(setSites, i, "site_name", e.target.value)} placeholder="ชื่อไซต์ (เช่น สาขาลาดพร้าว)" />
-                  <input className="inp" value={s.map_url} onChange={(e) => setRow(setSites, i, "map_url", e.target.value)} placeholder="ลิงก์ Google Maps" />
-                  <button className="line-x" onClick={() => delRow(setSites, i)}><UIcon name="x" size={14} /></button>
+            {sites.map((s, i) => {
+              const c = SITE_COLORS[i % SITE_COLORS.length];
+              return (
+                <div className="crm-site" key={i} style={{ borderLeftColor: c, background: c + "0d" }}>
+                  <div className="crm-site-head">
+                    <span className="crm-site-badge" style={{ background: c }}>📍 ไซต์ {i + 1}{s.site_name ? " · " + s.site_name : ""}</span>
+                    <button className="line-x" onClick={() => delRow(setSites, i)}><UIcon name="x" size={14} /></button>
+                  </div>
+                  <div className="crm-row">
+                    <input className="inp" value={s.site_name} onChange={(e) => setRow(setSites, i, "site_name", e.target.value)} placeholder="ชื่อไซต์ (เช่น สาขาลาดพร้าว)" />
+                    <input className="inp" value={s.map_url} onChange={(e) => setRow(setSites, i, "map_url", e.target.value)} placeholder="ลิงก์ Google Maps" />
+                  </div>
+                  <div className="crm-row">
+                    <input className="inp" value={s.contact_name} onChange={(e) => setRow(setSites, i, "contact_name", e.target.value)} placeholder="👤 ชื่อผู้ติดต่อ (ไซต์นี้)" />
+                    <input className="inp" value={s.phone} onChange={(e) => setRow(setSites, i, "phone", e.target.value)} placeholder="📞 เบอร์โทร (ไซต์นี้)" />
+                  </div>
+                  <input className="inp" value={s.address} onChange={(e) => setRow(setSites, i, "address", e.target.value)} placeholder="ที่อยู่ไซต์งาน" />
                 </div>
-                <div className="crm-row">
-                  <input className="inp" value={s.contact_name} onChange={(e) => setRow(setSites, i, "contact_name", e.target.value)} placeholder="ชื่อผู้ติดต่อ (ไซต์นี้)" />
-                  <input className="inp" value={s.phone} onChange={(e) => setRow(setSites, i, "phone", e.target.value)} placeholder="เบอร์โทร (ไซต์นี้)" />
-                </div>
-                <input className="inp" value={s.address} onChange={(e) => setRow(setSites, i, "address", e.target.value)} placeholder="ที่อยู่ไซต์งาน" />
-              </div>
-            ))}
+              );
+            })}
             <button className="btn-ghost sm" onClick={() => addRow(setSites, { site_name: "", contact_name: "", phone: "", address: "", map_url: "" })}><UIcon name="plus" size={13} /> เพิ่มไซต์งาน</button>
           </div>
           {err && <div className="login-err" style={{ marginTop: 8 }}>{err}</div>}
