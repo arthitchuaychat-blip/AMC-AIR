@@ -845,7 +845,7 @@ export async function saveJobOrder(jo) {
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from("job_orders").upsert({
     job_no: jo.job_no, quote_no: jo.quote_no || null, customer_id: jo.customer_id || null, site_id: jo.site_id || null,
-    title: jo.title?.trim() || null, contact_name: jo.contact_name?.trim() || null, contact_phone: jo.contact_phone?.trim() || null,
+    title: jo.title?.trim() || null, job_type: jo.job_type || "install", contact_name: jo.contact_name?.trim() || null, contact_phone: jo.contact_phone?.trim() || null,
     address: jo.address?.trim() || null, map_url: jo.map_url?.trim() || null, details: jo.details?.trim() || null,
     sales_note: jo.sales_note?.trim() || null, sales_photos: jo.sales_photos || [],
     assigned_team: jo.assigned_team || null, scheduled_at: jo.scheduled_at || null,

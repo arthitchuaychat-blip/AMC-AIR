@@ -1039,6 +1039,7 @@ select.inp{cursor:pointer}
 .chat-media-acts a,.chat-media-acts button{color:inherit;opacity:.92;text-decoration:underline;background:none;border:none;padding:0;cursor:pointer;font:inherit}
 .chat-bubble.in .chat-media-acts a,.chat-bubble.in .chat-media-acts button{color:var(--primary)}
 .chat-file{display:inline-block;color:inherit;font-weight:600;text-decoration:none;word-break:break-word}
+.job-type-chip{font-size:11px;font-weight:700;color:#fff;padding:2px 9px;border-radius:999px;white-space:nowrap}
 .chat-compose{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border-top:1px solid var(--line)}
 .chat-compose textarea{flex:1;resize:none;max-height:120px;min-height:40px}
 .chat-compose .btn-primary{padding:0 20px;height:40px}

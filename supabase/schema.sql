@@ -74,6 +74,7 @@ create table if not exists job_orders (
   customer_id   bigint references customers(id) on delete set null,
   site_id       bigint references customer_sites(id) on delete set null,
   title         text,
+  job_type      text not null default 'install',  -- survey/install/repair/maintenance/other
   contact_name  text, contact_phone text,
   address       text, map_url text, details text,
   sales_note    text,

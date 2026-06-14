@@ -1,7 +1,7 @@
 import React from "react";
 import { listJobOrders, listTeams } from "../lib/api";
 import { UIcon } from "../icons";
-import { BUCKETS, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel } from "../lib/schedule";
+import { BUCKETS, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef } from "../lib/schedule";
 
 const STATUS = {
   pending: "รอจ่ายงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", done: "เสร็จ", cancelled: "ยกเลิก",
@@ -112,7 +112,7 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
     return (
       <button className={"sched-chip" + (big ? " big" : "") + (full ? " full" : "")} onClick={() => onOpenJob && onOpenJob(j.job_no)}
         style={{ background: c, borderColor: c }} title={`${j.job_no} · ${scheduleLabel(j)}`}>
-        <span className="sc-team">{teamName(j.assigned_team)}</span>
+        <span className="sc-team">{jobTypeDef(j.job_type)[2]} {teamName(j.assigned_team)}</span>
         <span className="sc-title">{j.title || j.customerName || "งาน"}</span>
         {big && j.customerName && j.title && <span className="sc-sub">{j.customerName}</span>}
         {multi && <span className="sc-badge">หลายวัน</span>}
@@ -213,7 +213,7 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
                     <span key={j.job_no} className="sm-job" style={{ background: teamColor(j.assigned_team) }}
                       title={`${teamName(j.assigned_team)} · ${j.title || j.customerName || "งาน"}`}
                       onClick={(e) => { e.stopPropagation(); onOpenJob && onOpenJob(j.job_no); }}>
-                      {teamName(j.assigned_team)} {j.title || j.customerName || ""}
+                      {jobTypeDef(j.job_type)[2]} {j.title || j.customerName || teamName(j.assigned_team)}
                     </span>
                   ))}
                   {list.length > 3 && <span className="sm-more">+{list.length - 3} เพิ่ม</span>}

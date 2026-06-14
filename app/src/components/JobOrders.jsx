@@ -1,7 +1,7 @@
 import React from "react";
 import Combo from "./Combo";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks } from "../lib/api";
-import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel } from "../lib/schedule";
+import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef } from "../lib/schedule";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -15,7 +15,7 @@ const STATUS_OPTS = [["pending", "รอจ่ายงาน"], ["scheduled", "
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
-const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", date: "", end_date: "", slot: "morning", time: "", status: "pending" });
+const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", date: "", end_date: "", slot: "morning", time: "", status: "pending" });
 
 export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
@@ -29,6 +29,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
+  const [typeF, setTypeF] = React.useState("all");
   const [q, setQ] = React.useState("");
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
@@ -69,7 +70,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     if (!surveyFor || !custs.length) return;
     const c = custs.find((x) => String(x.id) === String(surveyFor));
     const address = c?.address || "";
-    setEd({ ...blankEd(), customer_id: String(surveyFor), title: "สำรวจหน้างาน",
+    setEd({ ...blankEd(), customer_id: String(surveyFor), title: "สำรวจหน้างาน", job_type: "survey",
       contact_name: c?.contacts?.[0]?.name || "", contact_phone: c?.contacts?.[0]?.phone || "",
       address, map_url: mapLink(address) });
     onSurveyConsumed && onSurveyConsumed();
@@ -86,7 +87,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   function startEdit(jo) {
     const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
     const p = (n) => String(n).padStart(2, "0");
-    setEd({ ...jo, _edit: true, customer_id: jo.customer_id || "", site_id: jo.site_id || "", assigned_team: jo.assigned_team || "",
+    setEd({ ...jo, _edit: true, job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "", assigned_team: jo.assigned_team || "",
       date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "",
       end_date: jo.end_date || "", slot: jo.slot || "custom",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
@@ -153,8 +154,13 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
         <div className="card" style={{ maxWidth: 800 }}>
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบงาน</span><input className="inp" value={ed.job_no} onChange={(e) => setF("job_no", e.target.value)} /></label>
-            <label className="fld"><span>ชื่องาน</span><input className="inp" value={ed.title} onChange={(e) => setF("title", e.target.value)} placeholder="เช่น ติดตั้งแอร์ออฟฟิศ" /></label>
+            <label className="fld"><span>ประเภทงาน</span>
+              <Combo className="inp" value={ed.job_type} onChange={(e) => setF("job_type", e.target.value)}>
+                {JOB_TYPES.map(([v, l, ic]) => <option key={v} value={v}>{ic} {l}</option>)}
+              </Combo>
+            </label>
           </div>
+          <label className="fld"><span>ชื่องาน</span><input className="inp" value={ed.title} onChange={(e) => setF("title", e.target.value)} placeholder="เช่น ติดตั้งแอร์ออฟฟิศ" /></label>
           <div className="fld-row">
             <label className="fld"><span>ลูกค้า</span>
               <Combo className="inp" value={ed.customer_id} onChange={(e) => onCustomer(e.target.value)}>
@@ -255,11 +261,20 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
       </div>
+      <div className="cat-filter">
+        <button className={"cat-chip" + (typeF === "all" ? " on" : "")} onClick={() => setTypeF("all")}
+          style={typeF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกประเภท</button>
+        {JOB_TYPES.map(([v, l, ic, col]) => (
+          <button key={v} className={"cat-chip" + (typeF === v ? " on" : "")} onClick={() => setTypeF(v)}
+            style={typeF === v ? { background: col, color: "#fff", borderColor: col } : {}}>{ic} {l}</button>
+        ))}
+      </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
         const ql = q.trim().toLowerCase();
         const fl = list.filter((jo) => (statusF === "all" || jo.status === statusF)
+          && (typeF === "all" || (jo.job_type || "install") === typeF)
           && (!ql || jo.job_no.toLowerCase().includes(ql) || (jo.customerName || "").toLowerCase().includes(ql) || (jo.teamName || "").toLowerCase().includes(ql) || (jo.title || "").toLowerCase().includes(ql) || (jo.contact_phone || "").toLowerCase().includes(ql)));
         return (<>
           {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบงาน" : "ไม่พบใบงานที่ตรงเงื่อนไข"}</div>}
@@ -269,7 +284,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
           return (
             <div className={"card job-card" + (jo.status === "done" || jo.status === "cancelled" ? " closed" : "")} key={jo.job_no}>
               <div className="job-card-head" style={{ cursor: "default" }}>
-                <div className="job-card-id"><span className="job-no">{jo.job_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
+                <div className="job-card-id"><span className="job-no">{jo.job_no}</span>
+                  {(() => { const td = jobTypeDef(jo.job_type); return <span className="job-type-chip" style={{ background: td[3] }}>{td[2]} {td[1]}</span>; })()}
+                  <span className={"job-badge " + st.cls}>{st.th}</span></div>
                 <div className="job-card-meta">{jo.title || "งานติดตั้ง/บริการ"} · ทีม {jo.teamName || "ยังไม่มอบ"}{jo.scheduled_at ? ` · 🗓 ${scheduleLabel(jo)}` : ""}</div>
               </div>
               <div className="jo-info">

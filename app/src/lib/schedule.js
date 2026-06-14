@@ -15,6 +15,16 @@ export const BUCKETS = [
   { id: "afternoon", th: "บ่าย",    time: "14:00–17:00" },
 ];
 
+// job categories — [value, label, icon, color] · shared by the editor, list filter and calendar
+export const JOB_TYPES = [
+  ["survey", "สำรวจหน้างาน", "🔍", "#2563eb"],
+  ["install", "ติดตั้ง", "🔧", "#16a34a"],
+  ["repair", "ซ่อม/แก้ไข", "🛠️", "#d97706"],
+  ["maintenance", "ล้าง/บำรุงรักษา", "🧊", "#0891b2"],
+  ["other", "อื่น ๆ", "📋", "#6b7280"],
+];
+export const jobTypeDef = (t) => JOB_TYPES.find((x) => x[0] === t) || JOB_TYPES[1];
+
 export const slotDef = (id) => SLOTS.find((s) => s.id === id) || null;
 export const slotStartTime = (id, fallback) => slotDef(id)?.start || fallback || "08:00";
 
