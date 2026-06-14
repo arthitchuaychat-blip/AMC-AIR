@@ -303,7 +303,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
               })()}
             </div>
             <div className="modal-foot">
-              {canEdit && <button className="btn-ghost danger" onClick={() => { const c = viewing; setViewing(null); del(c); }}><UIcon name="trash" size={15} /> ลบ</button>}
+              {canEdit && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const c = viewing; setViewing(null); del(c); }}><UIcon name="trash" size={15} /> ลบ</button>}
               {canEdit && <button className="btn-primary" onClick={() => { const c = viewing; setViewing(null); startEdit(c); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
             </div>
           </div>
