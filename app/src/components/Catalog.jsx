@@ -62,6 +62,10 @@ export default function Catalog({ role }) {
     (a.brand || a.catName || "").localeCompare(b.brand || b.catName || "", "th") || // ยี่ห้อ (แอร์) / หมวด (วัสดุ)
     (a.th || "").localeCompare(b.th || "", "th")                                    // แล้วเรียงตามตัวอักษรชื่อไทย
   );
+  // Render at most CAP cards at a time — drawing all 1,000+ items every keystroke makes the
+  // page lag so badly that search feels broken. Filtering still runs over the FULL catalog.
+  const CAP = 300;
+  const capped = list.slice(0, CAP);
 
   async function remove(m) {
     if (!await confirmDialog(`ลบ "${m.th}" ออกจากคลัง? (ประวัติยังเก็บไว้)`)) return;
@@ -156,10 +160,13 @@ export default function Catalog({ role }) {
       {loading && <div className="empty">กำลังโหลด…</div>}
       {err && <div className="empty" style={{ color: "var(--down)" }}>โหลดข้อมูลไม่สำเร็จ: {err}</div>}
       {!loading && !err && list.length === 0 && <div className="empty">ไม่พบรายการ{q && ` “${q}”`}</div>}
+      {!loading && !err && list.length > CAP && (
+        <div className="page-sub" style={{ margin: "2px 2px 12px" }}>แสดง {CAP} จาก {fmtNum(list.length)} รายการ · พิมพ์ค้นหาหรือเลือกตัวกรองเพื่อให้แคบลง</div>
+      )}
 
       {viewMode === "grid" && (
         <div className="cat-grid">
-          {list.map((m) => {
+          {capped.map((m) => {
             const low = m.tracked && m.stock < m.minStock;
             return (
               <div className={"cat-card clickable" + (low ? " low" : "")} key={m.code} onClick={() => setOpenMat(m)}>
@@ -191,7 +198,7 @@ export default function Catalog({ role }) {
 
       {viewMode === "list" && (
         <div className="cat-list">
-          {list.map((m) => {
+          {capped.map((m) => {
             const low = m.tracked && m.stock < m.minStock;
             return (
               <div className={"cat-lrow" + (low ? " low" : "")} key={m.code} onClick={() => setOpenMat(m)}>
