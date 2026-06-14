@@ -967,6 +967,21 @@ export async function listTransactionsSince(startDate) {
   return data || [];
 }
 
+// ต้นทุนวัสดุที่เบิก/คืน รวมต่อใบงาน → { job_no: { withdraw, return } }
+export async function jobMaterialCost() {
+  const rows = await _fetchAll((f, t) =>
+    supabase.from("transactions").select("job_no,type,value", { count: "exact" }).not("job_no", "is", null).range(f, t)
+  );
+  const m = {};
+  rows.forEach((r) => {
+    if (!r.job_no) return;
+    const j = m[r.job_no] || (m[r.job_no] = { withdraw: 0, return: 0 });
+    if (r.type === "withdraw" || r.type === "damage") j.withdraw += Number(r.value) || 0;
+    else if (r.type === "return") j.return += Number(r.value) || 0;
+  });
+  return m;
+}
+
 // all movements for one material (for the detail drawer)
 export async function listMaterialMovements(code) {
   const { data, error } = await supabase
