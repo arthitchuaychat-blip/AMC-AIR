@@ -82,8 +82,10 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     try { await saveInvoice(inv); flash(`สร้างใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(x) { if (!window.confirm(`ลบใบแจ้งหนี้ ${x.invoice_no}?`)) return; try { await deleteInvoice(x.invoice_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
-  async function cancel(x) { if (!window.confirm(`ยกเลิกใบแจ้งหนี้ ${x.invoice_no}? (ยอดจะคืนกลับไปคงเหลือ)`)) return; try { await setInvoiceStatus(x.invoice_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  // chain lock: can't edit/delete/cancel an invoice that already has a receipt downstream
+  const lockMsg = (x) => x.hasReceipt ? "แก้ไข/ลบ/ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว\nต้องลบใบเสร็จก่อน" : null;
+  async function del(x) { const lk = lockMsg(x); if (lk) return alert(lk); if (!window.confirm(`ลบใบแจ้งหนี้ ${x.invoice_no}?`)) return; try { await deleteInvoice(x.invoice_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancel(x) { const lk = lockMsg(x); if (lk) return alert(lk); if (!window.confirm(`ยกเลิกใบแจ้งหนี้ ${x.invoice_no}? (ยอดจะคืนกลับไปคงเหลือ)`)) return; try { await setInvoiceStatus(x.invoice_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
 
   // ---------- EDITOR ----------
   if (ed) {
@@ -189,8 +191,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="clipboard" size={14} color="#fff" /> ออกใบเสร็จ</button>}
                 {canEdit && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintI(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-                {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
-                {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
+                {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" disabled={x.hasReceipt} title={lockMsg(x) || ""} onClick={() => cancel(x)}>ยกเลิก</button>}
+                {canEdit && <button className="btn-ghost sm danger" disabled={x.hasReceipt} title={lockMsg(x) || ""} onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
               </div></div>
             </div>
           );
@@ -227,7 +229,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           title={`ใบแจ้งหนี้ ${view.invoice_no}`}
           subtitle={`งวด ${view.installment} (${Math.round(view.pct)}%) · ${view.customerName || "-"}`}
           items={view.items?.length ? view.items : snapshotItems(quoteByNo[view.quote_no])}
-          rate={view.wht_rate || 3} docBase={view.base} docTotal={view.total} canEdit={canEdit}
+          rate={view.wht_rate || 3} docBase={view.base} docTotal={view.total} canEdit={canEdit && !view.hasReceipt}
           onClose={() => setView(null)}
           onSave={async ({ items, rate, whtAmt }) => { await setInvoiceWht(view.invoice_no, items, rate, whtAmt); flash("บันทึกหัก ณ ที่จ่ายแล้ว ✓"); setView(null); await load(); }}
         />

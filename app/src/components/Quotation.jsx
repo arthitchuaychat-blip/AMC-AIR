@@ -59,7 +59,12 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, note: "", items });
   }
   React.useEffect(() => { if (!fromBoq || !boqs.length) return; startFromBoq(fromBoq); onFromBoqConsumed && onFromBoqConsumed(); }, [fromBoq, boqs]);
+  // chain lock: can't edit/delete a quotation that already has an invoice or job order downstream
+  const lockMsg = (q) => (q.hasInvoice || q.hasJob)
+    ? `แก้ไข/ลบใบเสนอราคานี้ไม่ได้ — มี${[q.hasInvoice && "ใบแจ้งหนี้", q.hasJob && `ใบงาน ${q.jobNo || ""}`].filter(Boolean).join(" และ ")}แล้ว\nต้องลบเอกสารถัดไป (ใบแจ้งหนี้/ใบเสร็จ/ใบงาน) ก่อน`
+    : null;
   function startEdit(q) {
+    const lk = lockMsg(q); if (lk) return alert(lk);
     setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", approved_at: q.approved_at,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind, description: x.description || "" })) });
   }
@@ -119,7 +124,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(q) { if (!confirm(`ลบ ${q.quote_no}?`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(q) { const lk = lockMsg(q); if (lk) return alert(lk); if (!confirm(`ลบ ${q.quote_no}?`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
   async function approve(q) {
     if (!window.confirm(`ยืนยันอนุมัติใบเสนอราคา ${q.quote_no} ?`)) return;
     try { await setQuotationStatus(q.quote_no, "approved"); flash(`อนุมัติ ${q.quote_no} แล้ว ✓`); await load(); }
@@ -310,14 +315,14 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "quote", no: q.quote_no }} onOpen={onOpenDoc} />; })()}
               <div className="job-lines"><div className="job-actions">
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-                {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEdit && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {q.status === "approved" && onCreateInvoice && (q.hasInvoice
                   ? <span className="job-badge b-green" title="วางบิลงวดถัดไปได้ที่เมนูใบแจ้งหนี้">✓ ออกใบแจ้งหนี้แล้ว · วางบิล {Math.round(q.billedPct)}%</span>
                   : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>))}
                 {q.status === "approved" && q.hasJob && <span className="job-badge b-green">✓ สร้างใบงานแล้ว</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
-                {canEdit && <button className="btn-ghost sm danger" onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
+                {canEdit && <button className="btn-ghost sm danger" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>
             </div>
           );

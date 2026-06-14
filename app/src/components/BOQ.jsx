@@ -75,7 +75,10 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
   function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", note: "", items: blankItems() }); }
+  // chain lock: can't edit/delete a BOQ that already has a quotation downstream
+  const lockMsg = (bo) => bo.hasQuote ? `แก้ไข/ลบ BOQ นี้ไม่ได้ — สร้างใบเสนอราคา ${bo.quoteNo || ""} จาก BOQ นี้แล้ว\nต้องลบใบเสนอราคา (และเอกสารถัดไป) ก่อน` : null;
   function startEdit(bo) {
+    const lk = lockMsg(bo); if (lk) return alert(lk);
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
     setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", items });
@@ -106,6 +109,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(bo) {
+    const lk = lockMsg(bo); if (lk) return alert(lk);
     if (!confirm(`ลบ ${bo.boq_no}?`)) return;
     try { await deleteBoq(bo.boq_no); flash("ลบแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
@@ -207,8 +211,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
                 ? <span className="job-badge b-green">✓ ออกใบเสนอราคาแล้ว</span>
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(bo); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-              {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
-              {canEdit && <button className="btn-ghost sm danger" onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
+              {canEdit && <button className="btn-ghost sm" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+              {canEdit && <button className="btn-ghost sm danger" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
             </div></div>
           </div>
         ))}
