@@ -3,7 +3,7 @@ import { listJobOrders, listTeams } from "../lib/api";
 import { UIcon } from "../icons";
 import { BUCKETS, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef, JOB_STATUSES } from "../lib/schedule";
 
-const VIEWS = [["day", "วัน"], ["week", "สัปดาห์"], ["month", "เดือน"]];
+const VIEWS = [["list", "รายการ"], ["day", "วัน"], ["week", "สัปดาห์"], ["month", "เดือน"]];
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l]) => [v, l]));
 const STATUS_FILTERS = [["all", "ทุกสถานะ"], ["scheduled", "นัดแล้ว"], ["in_progress", "กำลังทำ"], ["awaiting_approval", "รออนุมัติ"], ["reschedule", "นัดหมายเพิ่ม"], ["done", "เสร็จ"]];
 const matchStatus = (st, f) => f === "all" || (f === "scheduled" ? (st === "scheduled" || st === "pending") : st === f);
@@ -77,7 +77,7 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
 
   function move(dir) {
     if (view === "day") setAnchor((a) => addDays(a, dir));
-    else if (view === "week") setAnchor((a) => addDays(a, dir * 7));
+    else if (view === "week" || view === "list") setAnchor((a) => addDays(a, dir * 7));
     else setAnchor((a) => { const x = new Date(a); x.setMonth(x.getMonth() + dir); return x; });
   }
   const goNew = (date, slot, team) => { if (canEdit && onNewJob) onNewJob({ date, slot, assigned_team: team || "" }); };
@@ -126,10 +126,46 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
       </div>
 
       {loading ? <div className="empty">กำลังโหลด…</div> : (
-        view === "week" ? <WeekView /> : view === "day" ? <DayView /> : <MonthView />
+        view === "list" ? <AgendaView /> : view === "week" ? <WeekView /> : view === "day" ? <DayView /> : <MonthView />
       )}
     </div>
   );
+
+  // ---------- LIST / AGENDA (Google-calendar style) ----------
+  function AgendaView() {
+    const from = ymd(weekStart(anchor)); // จากต้นสัปดาห์ที่เลือก เป็นต้นไป
+    const days = Object.keys(byDay).filter((d) => d >= from).sort();
+    const todayKey = ymd(today0());
+    if (!days.length) return <div className="empty">ไม่มีงานในช่วงนี้</div>;
+    return (
+      <div className="sched-agenda">
+        {days.map((d) => {
+          const dt = parseYmd(d);
+          const items = byDay[d].slice().sort((a, b) => (a.scheduled_at || "").localeCompare(b.scheduled_at || ""));
+          return (
+            <div className="agenda-day" key={d}>
+              <div className={"agenda-date" + (d === todayKey ? " today" : "")}>
+                <b>{thDow(dt)} {dt.getDate()}</b><span>{thDayMon(dt)}{d === todayKey ? " · วันนี้" : ""}</span>
+              </div>
+              <div className="agenda-items">
+                {items.map((j) => {
+                  const c = teamColor(j.assigned_team); const sd = slotDef(j.slot);
+                  const slotTxt = (!j.slot || j.slot === "custom") ? new Date(j.scheduled_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น." : (sd ? sd.th : "");
+                  return (
+                    <button className={"agenda-row" + (j.status === "done" ? " sc-done" : "")} key={j._key} onClick={() => onOpenJob && onOpenJob(j.job_no)} style={{ borderLeftColor: c }}>
+                      <span className="agenda-slot">{slotTxt}</span>
+                      <span className="agenda-main">{jobTypeDef(j.job_type)[2]} {[j.customerName, j.title].filter(Boolean).join(" · ") || "งาน"}</span>
+                      <span className="agenda-meta"><span style={{ width: 8, height: 8, borderRadius: 9, background: c, display: "inline-block", marginRight: 5 }} />{teamName(j.assigned_team)} · <b style={{ color: c }}>{STATUS[j.status] || ""}</b></span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   // ---------- a single job chip ----------
   function Chip({ j, big }) {
@@ -140,8 +176,7 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
       <button className={"sched-chip" + (big ? " big" : "") + (full ? " full" : "") + (j.status === "done" ? " sc-done" : "")} onClick={() => onOpenJob && onOpenJob(j.job_no)}
         style={{ background: c, borderColor: c }} title={`${j.job_no} · ${scheduleLabel(j)} · ${STATUS[j.status] || ""}`}>
         <span className="sc-team">{jobTypeDef(j.job_type)[2]} {teamName(j.assigned_team)}{j.status === "in_progress" ? " ●" : j.status === "done" ? " ✓" : j.status === "awaiting_approval" ? " ⏳" : j.status === "reschedule" ? " ↻" : ""}</span>
-        <span className="sc-title">{j.title || j.customerName || "งาน"}</span>
-        {big && j.customerName && j.title && <span className="sc-sub">{j.customerName}</span>}
+        <span className="sc-title">{[j.customerName, j.title].filter(Boolean).join(" · ") || "งาน"}</span>
         {multi && <span className="sc-badge">หลายวัน</span>}
       </button>
     );
@@ -240,7 +275,7 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
                     <span key={j._key} className="sm-job" style={{ background: teamColor(j.assigned_team) }}
                       title={`${teamName(j.assigned_team)} · ${j.title || j.customerName || "งาน"}`}
                       onClick={(e) => { e.stopPropagation(); onOpenJob && onOpenJob(j.job_no); }}>
-                      {jobTypeDef(j.job_type)[2]} {j.title || j.customerName || teamName(j.assigned_team)}
+                      {jobTypeDef(j.job_type)[2]} {[j.customerName, j.title].filter(Boolean).join(" · ") || teamName(j.assigned_team)}
                     </span>
                   ))}
                   {list.length > 3 && <span className="sm-more">+{list.length - 3} เพิ่ม</span>}
