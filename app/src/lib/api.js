@@ -485,6 +485,10 @@ export async function syncBoqItems(boq_no, items) {
 }
 
 export async function deleteBoq(boq_no) {
+  // chain safety: block if a quotation was created from this BOQ (checked live, not from the UI flag)
+  const { count, error: ce } = await supabase.from("quotations").select("quote_no", { count: "exact", head: true }).eq("boq_no", boq_no);
+  if (ce) throw ce;
+  if ((count || 0) > 0) throw new Error("ลบ BOQ นี้ไม่ได้ — มีใบเสนอราคาอ้างอิงอยู่ · ต้องลบใบเสนอราคา (และเอกสารถัดไป) ก่อน");
   const { error } = await supabase.from("boqs").delete().eq("boq_no", boq_no);
   if (error) throw error;
 }
@@ -556,6 +560,13 @@ export async function saveQuotation(q, items) {
 }
 
 export async function deleteQuotation(quote_no) {
+  // chain safety: block if an invoice or job order was created from this quotation
+  const [iv, jo] = await Promise.all([
+    supabase.from("invoices").select("invoice_no", { count: "exact", head: true }).eq("quote_no", quote_no),
+    supabase.from("job_orders").select("job_no", { count: "exact", head: true }).eq("quote_no", quote_no),
+  ]);
+  if (iv.error) throw iv.error; if (jo.error) throw jo.error;
+  if ((iv.count || 0) > 0 || (jo.count || 0) > 0) throw new Error("ลบใบเสนอราคานี้ไม่ได้ — มีใบแจ้งหนี้/ใบงานอ้างอิงอยู่ · ต้องลบเอกสารถัดไปก่อน");
   const { error } = await supabase.from("quotations").delete().eq("quote_no", quote_no);
   if (error) throw error;
 }
@@ -621,10 +632,20 @@ export async function setInvoiceWht(invoice_no, items, wht_rate, wht_amt) {
   if (error) throw error;
 }
 export async function setInvoiceStatus(invoice_no, status) {
+  // chain safety: cannot cancel an invoice that already has a receipt
+  if (status === "cancelled") {
+    const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no);
+    if (ce) throw ce;
+    if ((count || 0) > 0) throw new Error("ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว · ต้องลบใบเสร็จก่อน");
+  }
   const { error } = await supabase.from("invoices").update({ status }).eq("invoice_no", invoice_no);
   if (error) throw error;
 }
 export async function deleteInvoice(invoice_no) {
+  // chain safety: block if a receipt was issued from this invoice
+  const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no);
+  if (ce) throw ce;
+  if ((count || 0) > 0) throw new Error("ลบใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว · ต้องลบใบเสร็จก่อน");
   const { error } = await supabase.from("invoices").delete().eq("invoice_no", invoice_no);
   if (error) throw error;
 }
