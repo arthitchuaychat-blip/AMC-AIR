@@ -5,6 +5,7 @@ import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt,
 import { fmtBaht2, custCode, round2, matchText } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
+import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
@@ -50,12 +51,12 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const invByNo = React.useMemo(() => Object.fromEntries(invoices.map((x) => [x.invoice_no, x])), [invoices]);
   const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
-  function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", items: [], wht_rate: 3, note: "" }); }
-  // copy the invoice's line items (with WHT flags) when an invoice is selected
+  function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", items: [], wht_rate: 3, note: "", terms_payment: "", terms_freebies: "", terms_warranty: "" }); }
+  // copy the invoice's line items (with WHT flags) + end-of-document terms when an invoice is selected
   function onPickInvoice(invoice_no) {
     const iv = invByNo[invoice_no];
     const items = iv?.items?.length ? iv.items.map((x) => ({ ...x })) : snapshotItems(quoteByNo[iv?.quote_no]);
-    setEd((s) => ({ ...s, invoice_no, items, wht_rate: iv?.wht_rate || 3 }));
+    setEd((s) => ({ ...s, invoice_no, items, wht_rate: iv?.wht_rate || 3, terms_payment: iv?.terms_payment || "", terms_freebies: iv?.terms_freebies || "", terms_warranty: iv?.terms_warranty || "" }));
   }
   async function markPaid(x) { try { await setReceiptStatus(x.receipt_no, "paid", x.invoice_no); flash("รับเงินแล้ว ✓"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
@@ -70,7 +71,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
       receipt_no: ed.receipt_no, invoice_no: selInv.invoice_no, quote_no: selInv.quote_no || null, boq_no: selInv.boq_no || null, job_no: null,
       customer_id: selInv.customer_id || null, site_id: selInv.site_id || null, issue_date: ed.issue_date || null, payment_method: ed.payment_method || null,
       base: selInv.base, vat_amt: selInv.vat_amt, total: selInv.total, wht_amt: whtAmt, net, wht: (ed.items || []).some((i) => i.wht), wht_rate: whtRate, items: ed.items || [], status: ed.status || "paid",
-      note: ed.note,
+      note: ed.note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty,
     };
     try { await saveReceipt(r); flash(r.status === "paid" ? `ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว` : `ออกใบเสร็จ (รอชำระเงิน) แล้ว`); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
@@ -125,6 +126,8 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           </div>
           {selInv && <p className="page-sub" style={{ margin: "0 0 6px" }}>หัก ณ ที่จ่าย ดึงจากใบแจ้งหนี้ (ค่าบริการ) · ปรับรายบรรทัดได้โดยกดที่ใบเสร็จในรายการหลังออกใบ</p>}
           <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note} onChange={(e) => setF("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
+
+          <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setF(k, v)} />
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
@@ -196,7 +199,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           metaRows={[{ label: "วันที่", value: printR.issue_date }, { label: "อ้างอิงใบแจ้งหนี้", value: printR.invoice_no }, { label: "อ้างอิงใบเสนอ", value: printR.quote_no }, { label: "อ้างอิง BOQ", value: printR.boq_no }, { label: "อ้างอิงใบงาน", value: printR.job_no }]}
           projectTitle={printR.title}
           customer={{ name: printR.customerName, code: custCode(printR.customerCode), taxId: printR.customerTaxId, address: printR.siteAddress || printR.customerAddr, contactName: printR.contactName, contactPhone: printR.contactPhone, mapUrl: printR.mapUrl }}
-          terms={printR.note} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}
+          terms={printR.note} termsPayment={printR.terms_payment} termsFreebies={printR.terms_freebies} termsWarranty={printR.terms_warranty} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}
           paymentInfo={paid ? `ได้รับชำระเงินแล้ว · วันที่ ${printR.issue_date || "-"} · โดย ${printR.payment_method || "-"} · จำนวน ${fmtBaht(printR.net)}` : null}>
           <table className="doc-table">
             <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>

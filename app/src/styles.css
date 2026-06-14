@@ -1150,6 +1150,16 @@ select.inp{cursor:pointer}
 .qr-del[title="แก้ไข"]{color:var(--ink-3)}
 .qr-del:hover{background:#fde8e8}
 .qr-del[title="แก้ไข"]:hover{background:var(--surface-2);color:var(--primary)}
+/* end-of-document terms editor (shared by BOQ/quote/invoice/receipt) */
+.docterms{border:1px solid var(--line);border-radius:12px;padding:13px 14px;background:var(--surface-2);margin-top:8px}
+.docterms-head{font-size:13.5px;font-weight:700;color:var(--ink);margin-bottom:10px}
+.docterms-sec{margin-bottom:12px}
+.docterms-sec:last-child{margin-bottom:0}
+.docterms-sec-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
+.docterms-label{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.docterms-actions{display:flex;align-items:center;gap:6px}
+.docterms-pick{min-width:190px;font-size:12px}
+.docterms-sec textarea{width:100%;resize:vertical}
 
 /* customer detail — job history timeline */
 .cd-timeline{display:flex;flex-direction:column;position:relative;margin-top:4px}

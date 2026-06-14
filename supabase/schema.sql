@@ -130,6 +130,7 @@ create table if not exists invoices (
   base numeric, vat_amt numeric, total numeric, wht_amt numeric, wht_rate numeric not null default 3,
   items jsonb default '[]',
   note text,
+  terms_payment text, terms_freebies text, terms_warranty text,
   status       text not null default 'unpaid' check (status in ('unpaid','paid','cancelled')),
   created_at   timestamptz not null default now(),
   created_by   uuid references auth.users(id)
@@ -148,6 +149,7 @@ create table if not exists receipts (
   items jsonb default '[]',
   status       text not null default 'paid' check (status in ('pending','paid')),
   note text,
+  terms_payment text, terms_freebies text, terms_warranty text,
   created_at   timestamptz not null default now(),
   created_by   uuid references auth.users(id)
 );
@@ -212,6 +214,7 @@ create table if not exists boqs (
   site_id     bigint references customer_sites(id) on delete set null,
   title       text,
   note        text,
+  terms_payment text, terms_freebies text, terms_warranty text,
   status      text not null default 'open',
   created_at  timestamptz not null default now(),
   created_by  uuid references auth.users(id)
@@ -243,6 +246,7 @@ create table if not exists quotations (
   wht            boolean not null default false,
   wht_rate       numeric not null default 3,
   note           text,
+  terms_payment text, terms_freebies text, terms_warranty text,
   approved_at    timestamptz,
   created_at     timestamptz not null default now(),
   created_by     uuid references auth.users(id)
@@ -545,6 +549,20 @@ alter table quick_replies enable row level security;
 create policy qr_read on quick_replies for select to authenticated
   using (my_role() in ('admin','sales','exec','finance','lead_tech'));
 create policy qr_write on quick_replies for all to authenticated
+  using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
+
+-- ---------- คลังแบบมาตรฐานของเงื่อนไขท้ายเอกสาร (doc term presets) ----------
+create table if not exists doc_term_presets (
+  id         bigint generated always as identity primary key,
+  category   text not null check (category in ('payment','freebies','warranty')),
+  title      text not null,
+  body       text not null,
+  sort       int not null default 0,
+  created_at timestamptz not null default now()
+);
+alter table doc_term_presets enable row level security;
+create policy dtp_read  on doc_term_presets for select to authenticated using (true);
+create policy dtp_write on doc_term_presets for all to authenticated
   using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 
 -- ============================================================

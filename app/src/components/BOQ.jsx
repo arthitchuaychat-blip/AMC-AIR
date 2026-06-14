@@ -9,6 +9,7 @@ import ItemBrowser from "./ItemBrowser";
 import DocChips from "./DocChips";
 import GrowArea from "./GrowArea";
 import DocSlip from "./DocSlip";
+import DocTerms from "./DocTerms";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 const SECTION_LABEL = { ac: "เครื่องปรับอากาศ", free: "วัสดุแถม (ไม่คิดเงิน)", charged: "วัสดุคิดเงิน", service: "ค่าบริการ" };
@@ -76,8 +77,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
-  function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", note: "", items: blankItems() }); }
-  function startNewFor(customerId) { setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", note: "", items: blankItems() }); }
+  function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", note: "", terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
+  function startNewFor(customerId) { setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", note: "", terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
   // open a fresh BOQ pre-filled with this customer (e.g. launched from the chat panel)
   React.useEffect(() => { if (newForCustomer) { startNewFor(newForCustomer); onNewConsumed && onNewConsumed(); } }, [newForCustomer]);
   // chain lock: can't edit/delete a BOQ that already has a quotation downstream
@@ -86,7 +87,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     const lk = lockMsg(bo); if (lk) return alert(lk);
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
-    setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", items });
+    setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
   }
 
   const cust = custs.find((c) => String(c.id) === String(ed?.customer_id));
@@ -166,6 +167,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           ))}
 
           <div className="line-total" style={{ fontSize: 15 }}><span>ต้นทุนรวมทั้งสิ้น</span><b style={{ fontSize: 20 }}>{fmtBaht(total)}</b></div>
+          <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setEd((e) => ({ ...e, [k]: v }))} />
           <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
             <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึก BOQ</button>
@@ -230,7 +232,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           metaRows={[{ label: "ชื่องาน", value: printB.title }]}
           projectTitle={printB.title}
           customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone, mapUrl: printB.mapUrl }}
-          terms={printB.note} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]}>
+          terms={printB.note} termsPayment={printB.terms_payment} termsFreebies={printB.terms_freebies} termsWarranty={printB.terms_warranty} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]}>
           {(() => {
             const order = ["ac", "free", "charged", "service"];
             const bySec = {}; printB.items.forEach((x) => { (bySec[x.section] = bySec[x.section] || []).push(x); });

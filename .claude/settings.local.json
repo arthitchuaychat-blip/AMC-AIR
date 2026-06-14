@@ -58,7 +58,10 @@
       "Bash(node gen.cjs)",
       "Bash(awk '{print $5, $9}')",
       "Bash(grep -E \"\\\\.jsx$\")",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\User\\\\OneDrive\\\\Desktop\\\\Inventory Management\" -Recurse -Include \"*.jsx\", \"*.js\", \"*.sql\")",
+      "Bash(Select-Object -First 50)",
+      "Bash(Format-Table FullName)"
     ]
   }
 }

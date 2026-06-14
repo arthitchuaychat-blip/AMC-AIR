@@ -5,6 +5,7 @@ import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceSta
 import { fmtBaht2, custCode, round2, matchText, matchPhone } from "../lib/format";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
+import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
@@ -51,7 +52,14 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
   function startNew(quoteNo = "") {
-    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: "", basis: "percent", basis_value: 100, note: "" });
+    const q = quoteNo ? quoteByNo[quoteNo] : null;
+    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: "", basis: "percent", basis_value: 100, note: "",
+      terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" });
+  }
+  // picking a quote pulls its end-of-document terms forward (still editable below)
+  function pickQuote(qno) {
+    const q = quoteByNo[qno];
+    setEd((e) => ({ ...e, quote_no: qno, terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
   }
   // approved quotes that still have a balance to bill (shown in the picker)
   const billableQuotes = approvedQuotes.filter((q) => round2((q.grand || 0) - (billed[q.quote_no] || 0)) > 0.01);
@@ -79,7 +87,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       customer_id: selQ.customer_id || null, site_id: selQ.site_id || null,
       issue_date: ed.issue_date || null, due_date: ed.due_date || null, installment, pct: round2(f * 100),
       base, vat_amt: round2((selQ.vatAmt || 0) * f), total: newTotal, wht_rate, items, wht_amt: lineWhtAmt(items, base, wht_rate),
-      note: ed.note, status: "unpaid",
+      note: ed.note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty, status: "unpaid",
     };
     try { await saveInvoice(inv); flash(`สร้างใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
@@ -99,7 +107,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบแจ้งหนี้</span><input className="inp" value={ed.invoice_no} onChange={(e) => setF("invoice_no", e.target.value)} /></label>
             <label className="fld"><span>อ้างอิงใบเสนอราคา (อนุมัติแล้ว)</span>
-              <Combo className="inp" value={ed.quote_no} onChange={(e) => setF("quote_no", e.target.value)}>
+              <Combo className="inp" value={ed.quote_no} onChange={(e) => pickQuote(e.target.value)}>
                 <option value="">— เลือกใบเสนอราคา —</option>
                 {/* only quotes that still have a balance — fully-billed (100%) ones are hidden */}
                 {billableQuotes.map((q) => <option key={q.quote_no} value={q.quote_no}>{q.quote_no} · {q.customerName || "-"} · เหลือ {fmtBaht(round2((q.grand || 0) - (billed[q.quote_no] || 0)))}</option>)}
@@ -135,6 +143,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             <div className="fld"><span>ยอดงวดนี้ (รวม VAT)</span><div className="inv-total">{fmtBaht(newTotal)}</div></div>
           </div>
           <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note} onChange={(e) => setF("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
+
+          <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setF(k, v)} />
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
@@ -206,7 +216,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, { label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }]}
           projectTitle={printI.title}
           customer={{ name: printI.customerName, code: custCode(printI.customerCode), taxId: printI.customerTaxId, address: printI.siteAddress || printI.customerAddr, contactName: printI.contactName, contactPhone: printI.contactPhone, mapUrl: printI.mapUrl }}
-          terms={printI.note || co.default_terms} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}>
+          terms={printI.note || co.default_terms} termsPayment={printI.terms_payment} termsFreebies={printI.terms_freebies} termsWarranty={printI.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}>
           <table className="doc-table">
             <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>
             <tbody>{(q?.items || []).map((it, i) => (
