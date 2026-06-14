@@ -165,7 +165,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     // overall job status is derived from the visits' own statuses
     const status = deriveJobStatus(visitRows);
     try {
-      await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows });
+      await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows }, me);
       flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
       setEd(null); await load();
     }

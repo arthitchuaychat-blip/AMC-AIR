@@ -310,7 +310,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 <div className="job-card-cost"><span>ยอดสุทธิ</span><b>{fmtBaht(q.grand)}</b></div>
               </div>
               <div className="jo-info">
-                <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{q.customerName || "ไม่ระบุลูกค้า"}</b>{q.customerAddr ? <span className="jo-dim"> · {q.customerAddr}</span> : null}</div>
+                <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{q.customerName || "ไม่ระบุลูกค้า"}</b>{q.customerAddr ? <span className="jo-dim"> · {q.customerAddr}</span> : null}{q.createdByName ? <span className="jo-dim"> · 👤 สร้างโดย {q.createdByName}</span> : null}</div>
                 {(q.contactName || q.contactPhone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{q.contactName || "ผู้ติดต่อ"}{q.contactPhone && <a href={`tel:${q.contactPhone}`} className="jo-tel">📞 {q.contactPhone}</a>}</div>}
                 {q.siteAddress && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{q.siteAddress}</span>{q.map_url && <a href={q.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>

@@ -169,6 +169,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
               <div className="job-card-meta inv-meta">
                 <span className="inv-cust">{x.customerName || "-"}</span>
+                {x.createdByName && <span className="inv-by">👤 {x.createdByName}</span>}
                 <span className="inv-hint">ดูรายการ ›</span>
               </div>
               <div className="job-card-cost"><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>

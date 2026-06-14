@@ -4,6 +4,8 @@ import { ATTACH_ACCEPT } from "../lib/format";
 import AttachThumb from "./AttachThumb";
 
 const STATUS_TH = { pending: "รอเริ่มงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", awaiting_approval: "รออนุมัติ", reschedule: "นัดหมายเพิ่ม", done: "เสร็จแล้ว", cancelled: "ยกเลิก" };
+// action wording per status — so the timeline says clearly who did what
+const STATUS_ACTION = { pending: "🕒 รอจ่ายงาน", scheduled: "📌 นัดหมายแล้ว", in_progress: "🔧 เริ่ม/กำลังทำงาน", awaiting_approval: "📤 ส่งอนุมัติ", reschedule: "📅 ส่งไปนัดหมายเพิ่ม", done: "✅ อนุมัติงานเสร็จ", cancelled: "❌ ยกเลิกงาน" };
 const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."; };
 
 // Append-only timeline of a job: status changes + photo/comment updates.
@@ -69,7 +71,9 @@ export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, f
               <div className="tl-body">
                 <div className="tl-meta">{fmtWhen(l.created_at)}{l.author ? ` · ${l.author}` : ""}{shared ? <span className="tl-jobtag">{l.job_no}</span> : null}</div>
                 {l.type === "status"
-                  ? <div className="tl-status">เปลี่ยนสถานะเป็น <b>{STATUS_TH[l.status] || l.status}</b></div>
+                  ? <div className="tl-status">{STATUS_ACTION[l.status] || `เปลี่ยนสถานะเป็น ${STATUS_TH[l.status] || l.status}`}</div>
+                  : l.type === "edit"
+                  ? <div className="tl-status">✏️ บันทึก/แก้ไขใบงาน{l.status ? ` · สถานะ: ${STATUS_TH[l.status] || l.status}` : ""}</div>
                   : <>
                       {l.note && <div className="tl-note">{l.note}</div>}
                       {l.photos?.length > 0 && <div className="tl-photos">{l.photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>}

@@ -39,12 +39,12 @@ const NAV = {
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
-const FULL_NAV = ["dashboard", "customers", "chat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "profit", "catalog", "movements", "jobs", "po", "settings"];
+const FULL_NAV = ["dashboard", "customers", "chat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "catalog", "movements", "jobs", "po", "settings"];
 const NAV_BY_ROLE = {
   admin: FULL_NAV,
   exec: FULL_NAV,
   finance: FULL_NAV,
-  sales: ["dashboard", "customers", "chat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "profit", "catalog"],
+  sales: ["dashboard", "customers", "chat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "catalog"],
   stock: ["catalog", "movements", "jobs", "po"],
   lead_tech: ["myjobs", "joborders", "schedule", "catalog", "movements", "jobs"],
   tech: ["myjobs", "schedule", "movements"],

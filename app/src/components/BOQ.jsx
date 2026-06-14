@@ -206,6 +206,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
                 <span className="inv-cust">🏢 {bo.customerName || "ไม่ระบุลูกค้า"}</span>
                 {bo.contactPhone && <a className="ref-link" href={`tel:${bo.contactPhone}`}>📞 {bo.contactPhone}</a>}
                 {bo.title && <span>{bo.title}</span>}
+                {bo.createdByName && <span className="inv-by">👤 {bo.createdByName}</span>}
                 <span className="inv-hint">{bo.items.length} รายการ</span>
               </div>
               <div className="job-card-cost"><span>ต้นทุนรวม</span><b>{fmtBaht(bo.total)}</b></div>

@@ -182,6 +182,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 <div className="job-card-meta inv-meta">
                   <span className="inv-period">งวดที่ {x.installment} · {Math.round(x.pct)}%</span>
                   <span className="inv-cust">{x.customerName || "-"}</span>
+                  {x.createdByName && <span className="inv-by">👤 {x.createdByName}</span>}
                   <span className="inv-hint">ดูรายการ ›</span>
                 </div>
                 <div className="job-card-cost"><span>ยอดงวดนี้</span><b>{fmtBaht(x.total)}</b></div>

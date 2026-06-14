@@ -441,13 +441,14 @@ export async function listBoqs() {
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   const quoteByBoq = {}; (qt.data || []).forEach((q) => { if (q.boq_no && !quoteByBoq[q.boq_no]) quoteByBoq[q.boq_no] = q.quote_no; });
+  const cb = await _creators();
   return (b.data || []).map((bo) => {
     const items = byBoq[bo.boq_no] || [];
     const ct0 = cc[bo.customer_id];
     const s = bo.site_id ? sm[bo.site_id] : null;
     return { ...bo, customerName: custName[bo.customer_id] || null, customerCode: bo.customer_id || null,
       customerAddr: custAddr[bo.customer_id] || null, customerTaxId: custTax[bo.customer_id] || null,
-      siteName: s?.site_name || null, siteAddress: s?.address || null,
+      siteName: s?.site_name || null, siteAddress: s?.address || null, createdByName: cb[bo.created_by] || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || custAddr[bo.customer_id]),
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       quoteNo: quoteByBoq[bo.boq_no] || null, hasQuote: !!quoteByBoq[bo.boq_no],
@@ -537,6 +538,7 @@ export async function listQuotations() {
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
   const billedByQ = {}; (inv.data || []).forEach((x) => { if (x.status !== "cancelled") billedByQ[x.quote_no] = (billedByQ[x.quote_no] || 0) + Number(x.total || 0); });
+  const cb = await _creators();
   return (q.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
     const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0);
@@ -552,7 +554,7 @@ export async function listQuotations() {
     const ct0 = firstContact[qo.customer_id];
     return { ...qo, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
       customerTaxId: custTax[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
-      siteAddress, address, map_url, contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
+      siteAddress, address, map_url, createdByName: cb[qo.created_by] || null, contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       jobNo: jobByQuote[qo.quote_no]?.job_no || null, hasJob: !!jobByQuote[qo.quote_no], jobScheduledAt: jobByQuote[qo.quote_no]?.scheduled_at || null,
       hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,
       items, subtotal, discount, afterDisc, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
@@ -602,6 +604,12 @@ export async function setQuotationStatus(quote_no, status) {
   if (error) throw error;
 }
 
+// id → name map of document creators (for the "ผู้สร้างเอกสาร" audit line)
+async function _creators() {
+  const { data } = await supabase.from("profiles").select("id,name");
+  return Object.fromEntries((data || []).map((p) => [p.id, p.name]));
+}
+
 // ---------- INVOICES (ใบแจ้งหนี้ · แบ่งงวดได้) ----------
 export async function listInvoices() {
   const [iv, cu, si, ct, qt, rc] = await Promise.all([
@@ -621,6 +629,7 @@ export async function listInvoices() {
   const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
   const titleByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.title]));
   const receiptedInv = new Set((rc.data || []).map((r) => r.invoice_no));
+  const cb = await _creators();
   return (iv.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
@@ -628,6 +637,7 @@ export async function listInvoices() {
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
+      createdByName: cb[x.created_by] || null,
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null, hasReceipt: receiptedInv.has(x.invoice_no) };
   });
 }
@@ -692,12 +702,13 @@ export async function listReceipts() {
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j.job_no; });
+  const cb = await _creators();
   return (rc.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,
       title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
-      customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
+      customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null, createdByName: cb[x.created_by] || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null };
   });
@@ -854,7 +865,7 @@ export async function addJobLog(job_no, { note, photos, author }) {
   if (error) throw error;
 }
 
-export async function saveJobOrder(jo) {
+export async function saveJobOrder(jo, author) {
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from("job_orders").upsert({
     job_no: jo.job_no, group_no: jo.group_no || null, quote_no: jo.quote_no || null, customer_id: jo.customer_id || null, site_id: jo.site_id || null,
@@ -874,6 +885,8 @@ export async function saveJobOrder(jo) {
       .map((v) => ({ job_no: jo.job_no, visit_date: v.visit_date, end_date: v.end_date || null, slot: v.slot || null, scheduled_at: v.scheduled_at || null, assigned_team: v.assigned_team || null, status: v.status || "scheduled", note: v.note || null, created_by: user?.id || null }));
     if (rows.length) { const e2 = (await supabase.from("job_visits").insert(rows)).error; if (e2) throw e2; }
   }
+  // audit trail: record who created/edited the job (best-effort)
+  await supabase.from("job_logs").insert({ job_no: jo.job_no, type: "edit", status: jo.status || null, author: author || null, created_by: user?.id || null });
 }
 
 export async function updateJobStatus(job_no, status, author) {

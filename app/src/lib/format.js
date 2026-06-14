@@ -1,7 +1,7 @@
 // Formatting helpers (ported from the prototype)
-export const fmtBaht = (n) => "฿" + Math.round(n || 0).toLocaleString("en-US");
-export const fmtBaht2 = (n) =>
-  "฿" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// money — always 2 decimals
+export const fmtBaht = (n) => "฿" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const fmtBaht2 = fmtBaht;
 export const fmtNum = (n) => Math.round(n || 0).toLocaleString("en-US");
 export const fmtCompact = (n) => {
   n = n || 0;
