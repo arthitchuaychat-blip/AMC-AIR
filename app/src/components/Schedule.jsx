@@ -32,13 +32,30 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
   const teamName = (id) => teams.find((t) => t.id === id)?.name?.replace("Team ", "") || "—";
   const shownTeams = teamF === "all" ? teams : teams.filter((t) => t.id === teamF);
 
-  // index jobs by day (yyyy-mm-dd) → array, respecting the team filter + skipping cancelled
+  // flatten each job into one entry per visit (rอบ): carries the job's display fields
+  // + that visit's schedule/team, so the whole calendar works per-visit
+  const entries = React.useMemo(() => {
+    const out = [];
+    jobs.forEach((j) => {
+      if (j.status === "cancelled") return;
+      const vs = (j.visits && j.visits.length)
+        ? j.visits
+        : (j.scheduled_at ? [{ id: "legacy", assigned_team: j.assigned_team, scheduled_at: j.scheduled_at, end_date: j.end_date, slot: j.slot, status: j.status }] : []);
+      vs.forEach((v) => {
+        if (v.status === "cancelled" || !v.scheduled_at) return;
+        out.push({ ...j, _key: j.job_no + "#" + (v.id ?? "x"), assigned_team: v.assigned_team, scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot });
+      });
+    });
+    return out;
+  }, [jobs]);
+
+  // index visit-entries by day (yyyy-mm-dd), respecting the team filter
   const byDay = React.useMemo(() => {
     const m = {};
-    jobs.filter((j) => j.status !== "cancelled" && (teamF === "all" || j.assigned_team === teamF) && j.scheduled_at)
-      .forEach((j) => { jobDays(j).forEach((d) => { (m[d] = m[d] || []).push(j); }); });
+    entries.filter((e) => teamF === "all" || e.assigned_team === teamF)
+      .forEach((e) => { jobDays(e).forEach((d) => { (m[d] = m[d] || []).push(e); }); });
     return m;
-  }, [jobs, teamF]);
+  }, [entries, teamF]);
 
   // which buckets each team has occupied on a given day (full blocks both half-day slots)
   function occupancy(dayKey) {
@@ -155,7 +172,7 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
                 const here = (byDay[k] || []).filter((j) => slotBucket(j) === b.id);
                 return (
                   <div key={k + b.id} className={"sw-cell" + (k === todayKey ? " today" : "")}>
-                    {here.map((j) => <Chip key={j.job_no} j={j} />)}
+                    {here.map((j) => <Chip key={j._key} j={j} />)}
                     {b.id !== "full" && <FreeChips dayKey={k} bucket={b.id} />}
                   </div>
                 );
@@ -179,7 +196,7 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
               <div className="sds-head"><div className="sec-title">{b.th}</div><div className="sec-sub">{b.time}</div></div>
               <div className="sds-jobs">
                 {here.length === 0 && <div className="sds-empty">— ว่าง —</div>}
-                {here.map((j) => <Chip key={j.job_no} j={j} big />)}
+                {here.map((j) => <Chip key={j._key} j={j} big />)}
               </div>
               {b.id !== "full" && <div className="sds-free"><FreeChips dayKey={k} bucket={b.id} /></div>}
             </div>
@@ -210,7 +227,7 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
                 <div className="sm-date">{d.getDate()}</div>
                 <div className="sm-jobs">
                   {list.slice(0, 3).map((j) => (
-                    <span key={j.job_no} className="sm-job" style={{ background: teamColor(j.assigned_team) }}
+                    <span key={j._key} className="sm-job" style={{ background: teamColor(j.assigned_team) }}
                       title={`${teamName(j.assigned_team)} · ${j.title || j.customerName || "งาน"}`}
                       onClick={(e) => { e.stopPropagation(); onOpenJob && onOpenJob(j.job_no); }}>
                       {jobTypeDef(j.job_type)[2]} {j.title || j.customerName || teamName(j.assigned_team)}

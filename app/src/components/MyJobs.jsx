@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listTeamJobOrders, listJobOrders, updateJobStatus } from "../lib/api";
+import { listJobOrders, updateJobStatus } from "../lib/api";
 import { UIcon } from "../icons";
 import { slotDef, jobDays, parseYmd, thDayMon } from "../lib/schedule";
 import JobTimeline from "./JobTimeline";
@@ -21,7 +21,13 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
   async function load() {
     if (!allTeams && !team) { setLoading(false); return; }
     setLoading(true);
-    try { setList(allTeams ? await listJobOrders() : await listTeamJobOrders(team)); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
+    try {
+      const all = await listJobOrders();
+      // a job is "mine" if my team is on ANY of its visits (fallback: legacy assigned_team)
+      const mine = allTeams ? all : all.filter((j) =>
+        (j.visits && j.visits.length) ? j.visits.some((v) => v.assigned_team === team) : j.assigned_team === team);
+      setList(mine);
+    } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
   React.useEffect(() => { load(); }, [team, allTeams]);
@@ -62,15 +68,21 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
       <div className="job-cards">
         {shown.map((jo) => {
           const st = STATUS[jo.status] || STATUS.pending;
-          const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
-          const days = dt ? jobDays(jo) : [];
-          const slot = slotDef(jo.slot);
-          const slotTxt = dt ? ((!jo.slot || jo.slot === "custom") ? dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น." : slot.th) : "";
+          // show the visit(s) relevant to this team (lead sees all visits)
+          const myVisits = (jo.visits && jo.visits.length)
+            ? (allTeams ? jo.visits : jo.visits.filter((v) => v.assigned_team === team))
+            : [];
+          const sv = myVisits.slice().sort((a, b) => (a.scheduled_at || "").localeCompare(b.scheduled_at || ""))[0] || jo;
+          const dt = sv.scheduled_at ? new Date(sv.scheduled_at) : null;
+          const days = dt ? jobDays({ scheduled_at: sv.scheduled_at, end_date: sv.end_date, slot: sv.slot }) : [];
+          const slot = slotDef(sv.slot);
+          const slotTxt = dt ? ((!sv.slot || sv.slot === "custom") ? dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น." : slot.th) : "";
+          const visitTeam = sv.teamName || jo.teamName;
           return (
             <div className={"card myjob" + (jo.status === "done" ? " closed" : "")} key={jo.job_no}>
               <div className="myjob-head">
                 <div>
-                  <div className="myjob-no">{jo.job_no} <span className={"job-badge " + st.cls}>{st.th}</span>{allTeams && jo.teamName ? <span className="myjob-team">ทีม {jo.teamName}</span> : null}</div>
+                  <div className="myjob-no">{jo.job_no} <span className={"job-badge " + st.cls}>{st.th}</span>{visitTeam ? <span className="myjob-team">ทีม {visitTeam}</span> : null}{myVisits.length > 1 ? <span className="myjob-team">🔁 {myVisits.length} รอบ</span> : null}</div>
                   {jo.customerName && <div className="myjob-cust">🏢 {jo.customerName}</div>}
                   {jo.customerAddr && jo.customerAddr !== jo.address && <div className="myjob-custaddr">{jo.customerAddr}</div>}
                   <div className="myjob-title">{jo.title || "งานติดตั้ง/บริการ"}</div>
