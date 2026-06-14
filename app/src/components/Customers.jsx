@@ -21,6 +21,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   const [viewDocs, setViewDocs] = React.useState([]);
   const [loadingDocs, setLoadingDocs] = React.useState(false);
   const [docF, setDocF] = React.useState("all");
+  const [siteF, setSiteF] = React.useState("all"); // filter doc history by site
   const [importing, setImporting] = React.useState(false);
   const [viewMode, setViewMode] = React.useState("grid"); // grid | list
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
@@ -36,7 +37,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   // load this customer's documents + jobs whenever the detail modal opens
   React.useEffect(() => {
     if (!viewing) { setViewDocs([]); return; }
-    setDocF("all"); setLoadingDocs(true);
+    setDocF("all"); setSiteF("all"); setLoadingDocs(true);
     listCustomerDocs(viewing.id).then(setViewDocs).catch(() => setViewDocs([])).finally(() => setLoadingDocs(false));
   }, [viewing]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
@@ -216,7 +217,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
 
       {viewing && (
         <div className="modal-overlay" onClick={() => setViewing(null)}>
-          <div className="modal" onClick={(ev) => ev.stopPropagation()} style={{ width: 560 }}>
+          <div className="modal" onClick={(ev) => ev.stopPropagation()} style={{ width: 820, maxWidth: "95vw" }}>
             <div className="modal-head">
               <div className="modal-title">{viewing.name} <span>{custCode(viewing.id)} · {viewing.vat ? "VAT" : "ไม่ VAT"}</span></div>
               <button className="drawer-close" onClick={() => setViewing(null)}><UIcon name="x" size={20} /></button>
@@ -258,10 +259,20 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
               })}
 
               {(() => {
-                const shownDocs = viewDocs.filter((e) => docF === "all" || e.type === docF);
-                const count = (t) => viewDocs.filter((e) => e.type === t).length;
+                const bySite = viewDocs.filter((e) => siteF === "all" || String(e.site_id) === siteF);
+                const shownDocs = bySite.filter((e) => docF === "all" || e.type === docF);
+                const count = (t) => bySite.filter((e) => e.type === t).length;
                 return (<>
-                  <div className="cd-sec">ประวัติเอกสาร &amp; งาน ({viewDocs.length} รายการ)</div>
+                  <div className="cd-sec">ประวัติเอกสาร &amp; งาน ({bySite.length} รายการ)</div>
+                  {viewing.sites.length > 1 && (
+                    <select className="inp" value={siteF} onChange={(ev) => setSiteF(ev.target.value)} style={{ fontSize: 13, marginBottom: 8 }}>
+                      <option value="all">📍 ทุกไซต์ ({viewDocs.length})</option>
+                      {viewing.sites.map((s, i) => {
+                        const cnt = viewDocs.filter((d) => String(d.site_id) === String(s.id)).length;
+                        return <option key={s.id} value={String(s.id)}>📍 {s.site_name || `ไซต์ ${i + 1}`} ({cnt})</option>;
+                      })}
+                    </select>
+                  )}
                   <div className="cd-docfilter">
                     {DOC_FILTERS.map(([v, l]) => (
                       <button key={v} className={"cat-chip" + (docF === v ? " on" : "")} onClick={() => setDocF(v)}
