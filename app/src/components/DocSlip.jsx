@@ -34,10 +34,7 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
                   </tbody></table>
                 </div>
               </div>
-            </th></tr>
-          </thead>
-          <tbody>
-            <tr><td className="doc-sheet-cell">
+              {/* customer + project ride along in the thead so they repeat at the top of every page */}
               <div className="doc-cust">
                 <div className="doc-cust-l">ลูกค้า</div>
                 <div className="doc-cust-r">
@@ -49,9 +46,11 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
                   </div>
                 </div>
               </div>
-
               {projectTitle && <div className="doc-project"><span>ชื่องาน</span> {projectTitle}</div>}
-
+            </th></tr>
+          </thead>
+          <tbody>
+            <tr><td className="doc-sheet-cell">
               {children}
 
               <div className="doc-foot">
