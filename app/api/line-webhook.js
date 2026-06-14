@@ -19,31 +19,53 @@ async function tfetch(url, opts = {}, ms = 8000) {
   finally { clearTimeout(t); }
 }
 
-async function lineProfile(uid) {
+async function lineGet(path) {
   try {
-    const r = await tfetch(`https://api.line.me/v2/bot/profile/${uid}`, { headers: { Authorization: `Bearer ${TOKEN()}` } });
+    const r = await tfetch(`https://api.line.me/v2/bot/${path}`, { headers: { Authorization: `Bearer ${TOKEN()}` } });
     return r.ok ? await r.json() : null;
   } catch { return null; }
 }
 
-// create the contact if new; if it already exists but still has the default name, refresh it from the profile
-async function ensureContact(uid) {
-  const r = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(uid)}&select=display_name`, { headers: sbH() });
+// the conversation id for a LINE event source: a group/room is its own chat (not the individual sender),
+// so group/multi-person messages land in ONE thread instead of being scattered per sender.
+const convOf = (src) => (src && (src.groupId || src.roomId || src.userId)) || null;
+
+// resolve a display name (+ picture) for a conversation source.
+// group → group name (1-on-1 profile API doesn't work for group members, which is why groups showed "LINE User")
+async function resolveName(src) {
+  if (src.type === "group") {
+    const s = await lineGet(`group/${src.groupId}/summary`);
+    return { name: s?.groupName ? `👥 ${s.groupName}` : null, pic: s?.pictureUrl || null, fallback: "👥 กลุ่ม LINE" };
+  }
+  if (src.type === "room") {
+    return { name: null, pic: null, fallback: "👥 แชตกลุ่ม" };
+  }
+  const p = src.userId ? await lineGet(`profile/${src.userId}`) : null;
+  return { name: p?.displayName || null, pic: p?.pictureUrl || null, fallback: "LINE User" };
+}
+
+const isPlaceholder = (n) => !n || n === "LINE User" || n === "👥 กลุ่ม LINE" || n === "👥 แชตกลุ่ม";
+
+// create the contact if new; if it already exists but still has a placeholder name, refresh it
+async function ensureContact(convId, src) {
+  const r = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=display_name`, { headers: sbH() });
   const arr = r.ok ? await r.json() : [];
   const exists = Array.isArray(arr) && arr.length;
-  const prof = await lineProfile(uid);
+  if (exists && !isPlaceholder(arr[0].display_name)) return; // already has a real name → no LINE API call needed
+  const { name, pic, fallback } = await resolveName(src);
   if (exists) {
-    if (prof && (!arr[0].display_name || arr[0].display_name === "LINE User")) {
-      await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(uid)}`, {
-        method: "PATCH", headers: sbH(),
-        body: JSON.stringify({ display_name: prof.displayName, picture_url: prof.pictureUrl || null }),
+    if (name) {
+      const patch = { display_name: name };
+      if (pic) patch.picture_url = pic;
+      await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}`, {
+        method: "PATCH", headers: sbH(), body: JSON.stringify(patch),
       });
     }
     return;
   }
   await tfetch(`${SB()}/rest/v1/line_contacts`, {
     method: "POST", headers: { ...sbH(), Prefer: "resolution=ignore-duplicates" },
-    body: JSON.stringify({ line_user_id: uid, display_name: prof?.displayName || "LINE User", picture_url: prof?.pictureUrl || null }),
+    body: JSON.stringify({ line_user_id: convId, display_name: name || fallback, picture_url: pic }),
   });
 }
 
@@ -113,12 +135,13 @@ export default async function handler(req, res) {
   let body; try { body = JSON.parse(raw.toString("utf8")); } catch { return res.status(200).send("ok"); }
   try {
     for (const ev of body.events || []) {
-      const uid = ev.source?.userId;
-      if (!uid) continue;
-      await ensureContact(uid);
+      const src = ev.source || {};
+      const convId = convOf(src);
+      if (!convId) continue;
+      await ensureContact(convId, src);
       if (ev.type === "message") {
         const m = ev.message;
-        const row = { line_user_id: uid, direction: "in", type: m.type, line_message_id: m.id };
+        const row = { line_user_id: convId, direction: "in", type: m.type, line_message_id: m.id };
         if (m.type === "text") row.text = m.text;
         else if (m.type === "image") { row.image_url = await saveImage(m.id); row.text = "[รูปภาพ]"; }
         else if (m.type === "sticker") { row.text = "[สติกเกอร์]"; }
@@ -128,7 +151,7 @@ export default async function handler(req, res) {
         else if (m.type === "location") { const q = (m.latitude != null && m.longitude != null) ? `${m.latitude},${m.longitude}` : encodeURIComponent(m.address || ""); row.file_url = `https://www.google.com/maps/search/?api=1&query=${q}`; row.text = `📍 ${m.title || m.address || "ตำแหน่งที่ตั้ง"}`; }
         else { row.text = `[${m.type}]`; }
         await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
-        await tfetch(`${SB()}/rest/v1/rpc/line_bump_unread`, { method: "POST", headers: sbH(), body: JSON.stringify({ p_uid: uid, p_msg: row.text || "[ข้อความ]" }) });
+        await tfetch(`${SB()}/rest/v1/rpc/line_bump_unread`, { method: "POST", headers: sbH(), body: JSON.stringify({ p_uid: convId, p_msg: row.text || "[ข้อความ]" }) });
       }
     }
   } catch (e) {
