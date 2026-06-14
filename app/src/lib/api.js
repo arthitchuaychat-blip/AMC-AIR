@@ -751,7 +751,7 @@ function _resolveJo(jo, custName, custAddr, siteMap, teamName, custContact) {
 function _firstContacts(rows) { const m = {}; (rows || []).forEach((c) => { if (!m[c.customer_id]) m[c.customer_id] = c; }); return m; }
 
 export async function listJobOrders() {
-  const [j, cu, tm, si, ct, qt, qit] = await Promise.all([
+  const [j, cu, tm, si, ct, qt, qit, jv] = await Promise.all([
     supabase.from("job_orders").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address"),
     supabase.from("teams").select("id,name"),
@@ -759,11 +759,13 @@ export async function listJobOrders() {
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat"),
     supabase.from("quotation_items").select("quote_no,name,unit,qty,unit_price,kind"),
+    supabase.from("job_visits").select("*").order("visit_date", { ascending: true }),
   ]);
   if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error; if (qit.error) throw qit.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
+  const visitsByJob = {}; (jv?.data || []).forEach((v) => { (visitsByJob[v.job_no] = visitsByJob[v.job_no] || []).push({ ...v, teamName: v.assigned_team ? (tn[v.assigned_team] || v.assigned_team) : null }); });
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
@@ -774,7 +776,7 @@ export async function listJobOrders() {
     if (x.kind === "ac" || x.kind === "service") (confirmByQuote[x.quote_no] = confirmByQuote[x.quote_no] || []).push({ name: x.name, qty: Number(x.qty), unit: x.unit });
   });
   const grandByQuote = {}; (qt.data || []).forEach((x) => { const sub = subByQuote[x.quote_no] || 0; const disc = x.discount_type === "percent" ? sub * Number(x.discount_value || 0) / 100 : Number(x.discount_value || 0); const after = sub - disc; grandByQuote[x.quote_no] = after + (x.vat ? after * 0.07 : 0); });
-  return (j.data || []).map((jo) => ({ ..._resolveJo(jo, cn, ca, sm, tn, cc), boq_no: jo.quote_no ? (boqByQuote[jo.quote_no] || null) : null, quoteGrand: jo.quote_no ? (grandByQuote[jo.quote_no] || 0) : 0, confirmItems: jo.quote_no ? (confirmByQuote[jo.quote_no] || []) : null }));
+  return (j.data || []).map((jo) => ({ ..._resolveJo(jo, cn, ca, sm, tn, cc), visits: visitsByJob[jo.job_no] || [], boq_no: jo.quote_no ? (boqByQuote[jo.quote_no] || null) : null, quoteGrand: jo.quote_no ? (grandByQuote[jo.quote_no] || 0) : 0, confirmItems: jo.quote_no ? (confirmByQuote[jo.quote_no] || []) : null }));
 }
 
 // job-order history for one customer (newest first) — for the customer detail timeline
@@ -853,6 +855,14 @@ export async function saveJobOrder(jo) {
     status: jo.status || "pending", created_by: user?.id || null,
   }, { onConflict: "job_no" });
   if (error) throw error;
+  // replace this job's visits (job_visits) when provided
+  if (Array.isArray(jo.visits)) {
+    await supabase.from("job_visits").delete().eq("job_no", jo.job_no);
+    const rows = jo.visits
+      .filter((v) => v.visit_date)
+      .map((v) => ({ job_no: jo.job_no, visit_date: v.visit_date, end_date: v.end_date || null, slot: v.slot || null, scheduled_at: v.scheduled_at || null, assigned_team: v.assigned_team || null, status: v.status || "scheduled", note: v.note || null, created_by: user?.id || null }));
+    if (rows.length) { const e2 = (await supabase.from("job_visits").insert(rows)).error; if (e2) throw e2; }
+  }
 }
 
 export async function updateJobStatus(job_no, status, author) {

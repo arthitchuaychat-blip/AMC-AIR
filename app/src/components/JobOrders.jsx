@@ -18,7 +18,8 @@ const STATUS_OPTS = [["pending", "รอจ่ายงาน"], ["scheduled", "
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
-const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", date: "", end_date: "", slot: "morning", time: "", status: "pending" });
+const blankVisit = () => ({ assigned_team: "", date: "", end_date: "", slot: "morning", time: "" });
+const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], visits: [blankVisit()], status: "pending" });
 
 export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
@@ -82,20 +83,32 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   // open a new job editor prefilled from a calendar slot (date/team/slot picked on the Schedule page)
   React.useEffect(() => {
     if (!schedule) return;
-    setEd({ ...blankEd(), date: schedule.date || "", end_date: schedule.end_date || "", slot: schedule.slot || "morning", assigned_team: schedule.assigned_team || "" });
+    setEd({ ...blankEd(), visits: [{ ...blankVisit(), date: schedule.date || "", end_date: schedule.end_date || "", slot: schedule.slot || "morning", assigned_team: schedule.assigned_team || "" }] });
     onScheduleConsumed && onScheduleConsumed();
   }, [schedule]);
 
+  // turn a stored job_visit row into the editor's visit shape
+  function visitFromRow(v) {
+    const dt = (v.slot === "custom" && v.scheduled_at) ? new Date(v.scheduled_at) : null;
+    const p = (n) => String(n).padStart(2, "0");
+    return { assigned_team: v.assigned_team || "", date: v.visit_date || "", end_date: v.end_date || "", slot: v.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "" };
+  }
   function startNew() { setEd(blankEd()); }
   function startEdit(jo) {
-    const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
-    const p = (n) => String(n).padStart(2, "0");
-    setEd({ ...jo, _edit: true, job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "", assigned_team: jo.assigned_team || "",
-      date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "",
-      end_date: jo.end_date || "", slot: jo.slot || "custom",
+    // prefer the job's visits; fall back to the legacy single schedule for old jobs
+    let visits = (jo.visits || []).map(visitFromRow);
+    if (!visits.length) {
+      const dt = jo.scheduled_at ? new Date(jo.scheduled_at) : null;
+      const p = (n) => String(n).padStart(2, "0");
+      visits = [{ assigned_team: jo.assigned_team || "", date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", end_date: jo.end_date || "", slot: jo.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "" }];
+    }
+    setEd({ ...jo, _edit: true, job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
-      sales_note: jo.sales_note || "", sales_photos: jo.sales_photos || [] });
+      sales_note: jo.sales_note || "", sales_photos: jo.sales_photos || [], visits, status: jo.status || "pending" });
   }
+  const setVisit = (i, k, v) => setEd((e) => ({ ...e, visits: e.visits.map((r, j) => j === i ? { ...r, [k]: v } : r) }));
+  const addVisit = () => setEd((e) => ({ ...e, visits: [...e.visits, blankVisit()] }));
+  const delVisit = (i) => setEd((e) => ({ ...e, visits: e.visits.length > 1 ? e.visits.filter((_, j) => j !== i) : e.visits }));
   async function onBriefFiles(e) {
     const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
     setUpBrief(true);
@@ -119,22 +132,39 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   async function save() {
     if (!ed.title?.trim() && !ed.customer_id) return flash("ใส่ลูกค้าหรือชื่องาน", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบงาน ${ed.job_no} ?`)) return;
-    const slot = ed.slot || "custom";
-    // start time comes from the slot (custom uses the picked time); store the instant as ISO/UTC
-    const time = slot === "custom" ? (ed.time || "08:00") : slotStartTime(slot);
-    const scheduled_at = ed.date ? new Date(`${ed.date}T${time}:00`).toISOString() : null;
-    const end_date = (ed.end_date && ed.date && ed.end_date > ed.date) ? ed.end_date : null;
-    const tn = teams.find((t) => t.id === ed.assigned_team)?.name?.replace("Team ", "") || ed.assigned_team;
-    // warn on a double-booking: same team, overlapping day-range + slot
-    if (ed.assigned_team && scheduled_at) {
-      const cand = { job_no: ed.job_no, scheduled_at, end_date, slot };
-      const clash = list.find((j) => j.job_no !== ed.job_no && j.assigned_team === ed.assigned_team && j.status !== "cancelled" && jobsOverlap(cand, j));
-      if (clash && !await confirmDialog(`⚠️ ทีม ${tn} มีงานซ้อนช่วงเวลานี้แล้ว:\n${clash.job_no}${clash.title ? " · " + clash.title : ""}\n\nต้องการจองซ้อนหรือไม่?`)) return;
+    // build the visit rows (only ones with a date) — each = วัน + รอบเวลา + ทีม
+    const visitRows = (ed.visits || []).filter((v) => v.date).map((v) => {
+      const slot = v.slot || "custom";
+      const time = slot === "custom" ? (v.time || "08:00") : slotStartTime(slot);
+      return { visit_date: v.date, end_date: (v.end_date && v.end_date > v.date) ? v.end_date : null, slot, scheduled_at: new Date(`${v.date}T${time}:00`).toISOString(), assigned_team: v.assigned_team || null };
+    });
+    // double-booking: each scheduled visit vs every other job's visits (same team, overlapping day+slot)
+    for (const vr of visitRows) {
+      if (!vr.assigned_team) continue;
+      const tnm = teams.find((t) => t.id === vr.assigned_team)?.name?.replace("Team ", "") || vr.assigned_team;
+      const cand = { scheduled_at: vr.scheduled_at, end_date: vr.end_date, slot: vr.slot };
+      let clash = null;
+      for (const j of list) {
+        if (j.job_no === ed.job_no) continue;
+        const ovs = (j.visits && j.visits.length) ? j.visits : [{ assigned_team: j.assigned_team, scheduled_at: j.scheduled_at, end_date: j.end_date, slot: j.slot, status: j.status }];
+        for (const ov of ovs) {
+          if (ov.assigned_team !== vr.assigned_team || ov.status === "cancelled" || !ov.scheduled_at) continue;
+          if (jobsOverlap(cand, { scheduled_at: ov.scheduled_at, end_date: ov.end_date, slot: ov.slot })) { clash = j; break; }
+        }
+        if (clash) break;
+      }
+      if (clash && !await confirmDialog(`⚠️ ทีม ${tnm} มีงานซ้อนช่วงเวลานี้:\n${clash.job_no}${clash.title ? " · " + clash.title : ""}\n\nต้องการจองซ้อนหรือไม่?`)) return;
     }
-    const status = ed.status === "pending" && ed.assigned_team && ed.date ? "scheduled" : ed.status;
+    // primary visit (earliest) drives the job's legacy fields → keeps calendar/งานของฉัน working
+    const primary = visitRows.slice().sort((a, b) => (a.scheduled_at || "").localeCompare(b.scheduled_at || ""))[0] || null;
+    const scheduled_at = primary?.scheduled_at || null;
+    const end_date = primary?.end_date || null;
+    const slot = primary?.slot || null;
+    const tn = primary ? (teams.find((t) => t.id === primary.assigned_team)?.name?.replace("Team ", "") || primary.assigned_team) : null;
+    const status = ed.status === "pending" && primary?.assigned_team ? "scheduled" : ed.status;
     try {
-      await saveJobOrder({ ...ed, scheduled_at, end_date, slot, status });
-      flash(ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว");
+      await saveJobOrder({ ...ed, assigned_team: primary?.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows.map((r) => ({ ...r, status })) });
+      flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (primary?.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
       // offer to notify the customer via LINE (only when linked) — preview + confirm before sending
       let notify = null;
       const tdLabel = jobTypeDef(ed.job_type)[1];
@@ -218,36 +248,34 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             </div>
           </div>
 
-          <div className="fld-row">
-            <label className="fld"><span>มอบหมายทีมช่าง</span>
-              <div className="team-pick-row">
-                {teams.map((t) => (
-                  <button key={t.id} className={"team-pick" + (ed.assigned_team === t.id ? " on" : "")} onClick={() => setF("assigned_team", t.id)}
-                    style={ed.assigned_team === t.id ? { background: t.color, borderColor: t.color, color: "#fff" } : {}}>
-                    <span style={{ width: 8, height: 8, borderRadius: 9, background: ed.assigned_team === t.id ? "#fff" : t.color }} />{t.name.replace("Team ", "")}
-                  </button>
-                ))}
-              </div>
-            </label>
+          <div className="fld"><span>รอบเข้างาน <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(เพิ่มได้หลายรอบ · คนละทีม/คนละวัน/หลายทีมก็ได้)</small></span>
+            {ed.visits.map((v, i) => {
+              const col = teams.find((t) => t.id === v.assigned_team)?.color || "#94a3b8";
+              return (
+                <div className="crm-site" key={i} style={{ borderLeftColor: col, background: col + "14" }}>
+                  <div className="crm-site-head">
+                    <span className="crm-site-badge" style={{ background: col }}>รอบ {i + 1}</span>
+                    {ed.visits.length > 1 && <button className="line-x" onClick={() => delVisit(i)}><UIcon name="x" size={14} /></button>}
+                  </div>
+                  <div className="crm-row">
+                    <Combo className="inp" value={v.assigned_team} onChange={(e) => setVisit(i, "assigned_team", e.target.value)}>
+                      <option value="">— เลือกทีมช่าง —</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name.replace("Team ", "")}</option>)}
+                    </Combo>
+                    <Combo className="inp" value={v.slot} onChange={(e) => setVisit(i, "slot", e.target.value)}>
+                      {SLOTS.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.th}{s.time ? ` (${s.time})` : ""}</option>)}
+                    </Combo>
+                  </div>
+                  <div className="crm-row">
+                    <label className="fld" style={{ flex: 1 }}><span style={{ fontSize: 11 }}>วันเริ่ม</span><input className="inp" type="date" value={v.date} onChange={(e) => setVisit(i, "date", e.target.value)} /></label>
+                    <label className="fld" style={{ flex: 1 }}><span style={{ fontSize: 11 }}>วันสิ้นสุด (เว้นว่างได้)</span><input className="inp" type="date" min={v.date || undefined} value={v.end_date} onChange={(e) => setVisit(i, "end_date", e.target.value)} /></label>
+                    {v.slot === "custom" && <label className="fld" style={{ flex: 1 }}><span style={{ fontSize: 11 }}>เวลาเริ่ม</span><input className="inp" type="time" value={v.time} onChange={(e) => setVisit(i, "time", e.target.value)} /></label>}
+                  </div>
+                </div>
+              );
+            })}
+            <button className="btn-ghost sm" onClick={addVisit}><UIcon name="plus" size={13} /> เพิ่มรอบเข้างาน</button>
           </div>
-          <div className="fld-row">
-            <label className="fld"><span>วันเริ่มงาน</span><input className="inp" type="date" value={ed.date} onChange={(e) => setF("date", e.target.value)} /></label>
-            <label className="fld"><span>วันสิ้นสุด <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(งานหลายวัน · เว้นว่างได้)</small></span>
-              <input className="inp" type="date" min={ed.date || undefined} value={ed.end_date || ""} onChange={(e) => setF("end_date", e.target.value)} /></label>
-          </div>
-          <div className="fld"><span>ช่วงเวลา</span>
-            <div className="slot-pick">
-              {SLOTS.map((s) => (
-                <button key={s.id} type="button" className={"slot-btn" + (ed.slot === s.id ? " on" : "")} onClick={() => setF("slot", s.id)}>
-                  <b>{s.icon} {s.th}</b>{s.time && <small>{s.time}</small>}
-                </button>
-              ))}
-            </div>
-          </div>
-          {ed.slot === "custom" && (
-            <label className="fld" style={{ maxWidth: 220 }}><span>เวลาเริ่ม</span><input className="inp" type="time" value={ed.time} onChange={(e) => setF("time", e.target.value)} /></label>
-          )}
-          <label className="fld"><span>สถานะ</span>
+          <label className="fld"><span>สถานะงาน (ภาพรวม)</span>
             <Combo className="inp" value={ed.status} onChange={(e) => setF("status", e.target.value)}>{STATUS_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Combo>
           </label>
 
@@ -307,7 +335,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 <div className="job-card-id"><span className="job-no">{jo.job_no}</span>
                   {(() => { const td = jobTypeDef(jo.job_type); return <span className="job-type-chip" style={{ background: td[3] }}>{td[2]} {td[1]}</span>; })()}
                   <span className={"job-badge " + st.cls}>{st.th}</span></div>
-                <div className="job-card-meta">{jo.title || "งานติดตั้ง/บริการ"} · ทีม {jo.teamName || "ยังไม่มอบ"}{jo.scheduled_at ? ` · 🗓 ${scheduleLabel(jo)}` : ""}</div>
+                <div className="job-card-meta">{jo.title || "งานติดตั้ง/บริการ"} · ทีม {jo.teamName || "ยังไม่มอบ"}{jo.scheduled_at ? ` · 🗓 ${scheduleLabel(jo)}` : ""}{jo.visits && jo.visits.length > 1 ? ` · 🔁 ${jo.visits.length} รอบ` : ""}</div>
               </div>
               <div className="jo-info">
                 <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{jo.customerName || "ไม่ระบุลูกค้า"}</b>{jo.customerAddr ? <span className="jo-dim"> · {jo.customerAddr}</span> : null}</div>
