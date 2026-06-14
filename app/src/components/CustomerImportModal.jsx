@@ -2,16 +2,22 @@ import React from "react";
 import { bulkImportCustomers } from "../lib/api";
 import { UIcon } from "../icons";
 
-// Flat format (10 cols) — one customer per row (+ optional 1 contact & 1 site):
-// ชนิด · ชื่อลูกค้า · เลขผู้เสียภาษี · VAT · ที่อยู่ · ผู้ติดต่อ · เบอร์โทร · ตำแหน่ง · ที่อยู่ไซต์งาน · หมายเหตุ
-const HEADER = "ชนิด,ชื่อลูกค้า,เลขผู้เสียภาษี,VAT,ที่อยู่,ผู้ติดต่อ,เบอร์โทร,ตำแหน่ง,ที่อยู่ไซต์งาน,หมายเหตุ";
+// Flat format (11 cols) — one customer per row (+ optional 1 contact & 1 site):
+// ชนิด · ชื่อลูกค้า · เลขผู้เสียภาษี · VAT · ที่อยู่ · ผู้ติดต่อ · เบอร์โทร · ตำแหน่ง · ที่อยู่ไซต์งาน · หมายเหตุ · แผนที่
+const HEADER = "ชนิด,ชื่อลูกค้า,เลขผู้เสียภาษี,VAT,ที่อยู่,ผู้ติดต่อ,เบอร์โทร,ตำแหน่ง,ที่อยู่ไซต์งาน,หมายเหตุ,แผนที่";
 const SAMPLE_ROWS = [
-  "นิติบุคคล,บริษัท เอ จำกัด,0105531059913,ใช่,123/4 ถ.สุขุมวิท กรุงเทพฯ 10110,คุณสมชาย,0812345678,ฝ่ายจัดซื้อ,,ลูกค้าเก่า",
-  "บุคคล,คุณสมหญิง ใจดี,,ไม่,88 นนทบุรี 11000,คุณสมหญิง,0890001111,,,",
+  "นิติบุคคล,บริษัท เอ จำกัด,0105531059913,ใช่,123/4 ถ.สุขุมวิท กรุงเทพฯ 10110,คุณสมชาย,0812345678,ฝ่ายจัดซื้อ,,ลูกค้าเก่า,https://maps.app.goo.gl/xxxx",
+  "บุคคล,คุณสมหญิง ใจดี,,ไม่,88 นนทบุรี 11000,คุณสมหญิง,0890001111,,,,",
 ];
 const TEMPLATE = [HEADER, ...SAMPLE_ROWS].join("\n");
 
-const isPerson = (s) => /บุคคล|person|ind/i.test(s || "");
+// "นิติบุคคล" มีคำว่า "บุคคล" → ต้องเช็ก "นิติ/บริษัท/จำกัด" ก่อน ไม่งั้นจะถูกตีเป็นบุคคล
+const custType = (s) => {
+  const t = (s || "").trim();
+  if (/นิติ|บริษัท|ห้าง|หจก|บจก|company|co\.|ltd|จำกัด/i.test(t)) return "company";
+  if (/บุคคล|person|ind/i.test(t)) return "person";
+  return "company";
+};
 const isVat = (s) => { const t = (s || "").trim().toLowerCase(); if (!t) return true; return !/^(ไม่|no|n|false|0)/.test(t); };
 
 export default function CustomerImportModal({ onDone, onClose }) {
@@ -45,13 +51,13 @@ export default function CustomerImportModal({ onDone, onClose }) {
       const cells = line.split(delim).map((c) => c.trim().replace(/^"|"$/g, ""));
       const c0 = (cells[0] || "").toLowerCase();
       if (i === 0 && (c0 === "ชนิด" || c0 === "kind" || c0 === "ชื่อลูกค้า" || c0 === "name")) return; // header
-      const [type, name, tax_id, vat, address, cname, cphone, crole, saddr] = cells;
-      const note = cells.slice(9).join(delim);
+      const [type, name, tax_id, vat, address, cname, cphone, crole, saddr, note, mapUrl] = cells;
       if (!name) { errors.push({ line: i + 1 }); return; }
       rows.push({
-        cust: { type: isPerson(type) ? "person" : "company", name, tax_id: tax_id || "", vat: isVat(vat), address: address || "", note: note || "" },
+        cust: { type: custType(type), name, tax_id: tax_id || "", vat: isVat(vat), address: address || "", note: note || "" },
         contacts: (cname || cphone) ? [{ name: cname || "", phone: cphone || "", role: crole || "" }] : [],
-        sites: saddr ? [{ site_name: "", address: saddr, map_url: "" }] : [],
+        // map pin lands on a site; if no separate site address, reuse the customer address so the pin still has a label
+        sites: (saddr || mapUrl) ? [{ site_name: "", address: saddr || address || "", map_url: mapUrl || "" }] : [],
       });
     });
     setParsed({ rows, errors }); setMsg(null);
@@ -74,10 +80,10 @@ export default function CustomerImportModal({ onDone, onClose }) {
         <div className="modal-body">
           <p className="page-sub" style={{ marginBottom: 8 }}>
             คัดลอกหลายแถวจาก Google Sheets มาวางได้เลย หรืออัปโหลด <b>.csv</b> · 1 แถว = ลูกค้า 1 ราย<br />
-            ลำดับคอลัมน์: <b>ชนิด · ชื่อลูกค้า · เลขผู้เสียภาษี · VAT · ที่อยู่ · ผู้ติดต่อ · เบอร์โทร · ตำแหน่ง · ที่อยู่ไซต์งาน · หมายเหตุ</b>
+            ลำดับคอลัมน์: <b>ชนิด · ชื่อลูกค้า · เลขผู้เสียภาษี · VAT · ที่อยู่ · ผู้ติดต่อ · เบอร์โทร · ตำแหน่ง · ที่อยู่ไซต์งาน · หมายเหตุ · แผนที่</b>
           </p>
           <ul className="bulk-help">
-            <li><b>ชนิด</b> = นิติบุคคล / บุคคล · <b>VAT</b> = ใช่ / ไม่</li>
+            <li><b>ชนิด</b> = นิติบุคคล / บุคคล · <b>VAT</b> = ใช่ / ไม่ · <b>แผนที่</b> = ใส่ลิงก์ Google Maps (ไม่บังคับ)</li>
             <li>ต้องมีอย่างน้อย <b>ชื่อลูกค้า</b> · ช่องอื่นเว้นว่างได้</li>
             <li>แนะนำให้ <b>คัดลอกจาก Google Sheets มาวางตรง ๆ</b> (คั่นด้วย Tab) — ที่อยู่ที่มีลูกน้ำจะไม่เพี้ยน</li>
           </ul>
