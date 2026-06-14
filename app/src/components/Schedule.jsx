@@ -183,7 +183,7 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
                 return (
                   <div key={k + b.id} className={"sw-cell" + (k === todayKey ? " today" : "")}>
                     {here.map((j) => <Chip key={j._key} j={j} />)}
-                    {b.id !== "full" && <FreeChips dayKey={k} bucket={b.id} />}
+                    {canEdit && b.id !== "full" && <FreeChips dayKey={k} bucket={b.id} />}
                   </div>
                 );
               })}
@@ -208,7 +208,7 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
                 {here.length === 0 && <div className="sds-empty">— ว่าง —</div>}
                 {here.map((j) => <Chip key={j._key} j={j} big />)}
               </div>
-              {b.id !== "full" && <div className="sds-free"><FreeChips dayKey={k} bucket={b.id} /></div>}
+              {canEdit && b.id !== "full" && <div className="sds-free"><FreeChips dayKey={k} bucket={b.id} /></div>}
             </div>
           );
         })}

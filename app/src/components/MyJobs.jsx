@@ -7,7 +7,8 @@ import JobTimeline from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
-const TABS = [["todo", "ต้องทำ"], ["doing", "กำลังทำงาน"], ["awaiting", "รออนุมัติ"], ["reschedule", "รอนัดหมายใหม่"], ["done", "เสร็จแล้ว"], ["cancelled", "ยกเลิกแล้ว"]];
+// ช่างไม่เห็นสถานะ "รอนัดหมายใหม่" (อยู่ในมือออฟฟิศ) — ตัดแท็บนั้นออก
+const TABS = [["todo", "ต้องทำ"], ["doing", "กำลังทำงาน"], ["awaiting", "รออนุมัติ"], ["done", "เสร็จแล้ว"], ["cancelled", "ยกเลิกแล้ว"]];
 
 export default function MyJobs({ role, team, me, onWithdraw }) {
   const allTeams = role === "lead_tech"; // หัวหน้าช่างเห็นงานทุกทีม
