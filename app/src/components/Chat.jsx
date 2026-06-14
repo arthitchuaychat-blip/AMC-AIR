@@ -251,10 +251,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   return (
                     <React.Fragment key={m.id}>
                       {daySep && <div className="chat-daysep">{fmtDay(m.created_at)}</div>}
-                      <div className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "")}
+                      <div className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "") + (m.type === "sticker" && m.image_url ? " sticker" : "")}
                         style={coworker ? { background: cwColor, borderColor: cwColor } : undefined}>
                         {coworker && <span className="chat-sender">{senderName}</span>}
-                        {m.image_url ? (
+                        {m.type === "sticker" && m.image_url ? (
+                          <img className="chat-sticker" src={m.image_url} alt="สติกเกอร์" loading="lazy" />
+                        ) : m.image_url ? (
                           <span className="chat-media">
                             <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a>
                             <span className="chat-media-acts">

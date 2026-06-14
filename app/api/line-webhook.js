@@ -144,7 +144,7 @@ export default async function handler(req, res) {
         const row = { line_user_id: convId, direction: "in", type: m.type, line_message_id: m.id };
         if (m.type === "text") row.text = m.text;
         else if (m.type === "image") { row.image_url = await saveImage(m.id); row.text = "[รูปภาพ]"; }
-        else if (m.type === "sticker") { row.text = "[สติกเกอร์]"; }
+        else if (m.type === "sticker") { row.image_url = m.stickerId ? `https://stickershop.line-scdn.net/stickershop/v1/sticker/${m.stickerId}/android/sticker.png` : null; row.text = "[สติกเกอร์]"; }
         else if (m.type === "file") { const ext = ((m.fileName || "").split(".").pop() || "bin").toLowerCase(); row.file_url = await saveContent(m.id, ext); row.file_name = m.fileName || "ไฟล์"; row.text = `[ไฟล์] ${row.file_name}`; }
         else if (m.type === "video") { row.file_url = await saveContent(m.id, "mp4", "video/mp4"); row.file_name = "วิดีโอ.mp4"; row.text = "[วิดีโอ]"; }
         else if (m.type === "audio") { row.file_url = await saveContent(m.id, "m4a", "audio/m4a"); row.file_name = "เสียง.m4a"; row.text = "[เสียง]"; }
