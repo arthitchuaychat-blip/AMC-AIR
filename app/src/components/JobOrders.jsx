@@ -190,11 +190,21 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
       setViewing((cur) => cur ? (fresh.find((x) => x.job_no === jo.job_no) || null) : cur);
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
-  // open the editor to set a new appointment; flip รอนัดหมายใหม่ visit(s) back to นัดแล้ว so the new date lands as scheduled.
-  // onlyIdx = flip just that one visit (per-รอบ); omitted = flip every reschedule visit.
+  // "นัดหมายเพิ่ม": ล๊อกรอบเดิม (เป็นประวัติ = done) แล้วเพิ่มรอบใหม่ (ครั้งถัดไป) ให้ออฟฟิศตั้งวัน
+  // onlyIdx = เจาะจงรอบนั้น; ไม่ใส่ = รอบที่อยู่สถานะนัดหมายเพิ่มทั้งหมด
   function startReschedule(jo, onlyIdx) {
     startEdit(jo);
-    setEd((e) => e ? { ...e, visits: e.visits.map((v, idx) => (v.status === "reschedule" && (onlyIdx == null || onlyIdx === idx)) ? { ...v, status: "scheduled" } : v) } : e);
+    setEd((e) => {
+      if (!e) return e;
+      const visits = e.visits.map((v, idx) => (v.status === "reschedule" && (onlyIdx == null || onlyIdx === idx)) ? { ...v, status: "done" } : v);
+      visits.push(blankVisit()); // รอบใหม่สำหรับนัดหมายครั้งถัดไป
+      return { ...e, visits };
+    });
+  }
+  // unlock an approved (done) round in the editor — needs confirmation
+  async function unlockVisit(i) {
+    if (!await confirmDialog({ title: "ปลดล็อกรอบนี้เพื่อแก้ไข?", message: "รอบที่อนุมัติแล้วจะกลับมาแก้ไขได้ · อย่าลืมตั้งสถานะใหม่หลังแก้เสร็จ", danger: true, confirmText: "ปลดล็อก" })) return;
+    setVisit(i, "status", "in_progress");
   }
 
   // ---------- EDITOR ----------
@@ -265,7 +275,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 <div className="crm-site" key={i} style={{ borderLeftColor: col, background: col + "14", opacity: locked ? 0.85 : 1 }}>
                   <div className="crm-site-head">
                     <span className="crm-site-badge" style={{ background: col }}>รอบ {i + 1}{locked ? " · 🔒 อนุมัติแล้ว" : ""}</span>
-                    {ed.visits.length > 1 && !locked && <button className="line-x" onClick={() => delVisit(i)}><UIcon name="x" size={14} /></button>}
+                    {locked
+                      ? <button className="btn-ghost sm" onClick={() => unlockVisit(i)}>🔓 ปลดล็อก</button>
+                      : ed.visits.length > 1 && <button className="line-x" onClick={() => delVisit(i)}><UIcon name="x" size={14} /></button>}
                   </div>
                   <div className="crm-row">
                     <Combo className="inp" value={v.slot} disabled={locked} onChange={(e) => setVisit(i, "slot", e.target.value)}>
