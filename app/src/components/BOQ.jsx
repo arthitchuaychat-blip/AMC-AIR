@@ -49,7 +49,7 @@ function SectionBlock({ sec, items, pool, onAdd, onSet, onDel, onMove }) {
   );
 }
 
-export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc }) {
+export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc, newForCustomer, onNewConsumed }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -76,6 +76,9 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
   function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", note: "", items: blankItems() }); }
+  function startNewFor(customerId) { setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", note: "", items: blankItems() }); }
+  // open a fresh BOQ pre-filled with this customer (e.g. launched from the chat panel)
+  React.useEffect(() => { if (newForCustomer) { startNewFor(newForCustomer); onNewConsumed && onNewConsumed(); } }, [newForCustomer]);
   // chain lock: can't edit/delete a BOQ that already has a quotation downstream
   const lockMsg = (bo) => bo.hasQuote ? `แก้ไข/ลบ BOQ นี้ไม่ได้ — สร้างใบเสนอราคา ${bo.quoteNo || ""} จาก BOQ นี้แล้ว\nต้องลบใบเสนอราคา (และเอกสารถัดไป) ก่อน` : null;
   function startEdit(bo) {

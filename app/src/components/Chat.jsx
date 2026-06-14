@@ -26,7 +26,7 @@ const STAGES = [
 ];
 const stageDef = (id) => STAGES.find((s) => s.id === id) || STAGES[0];
 
-export default function Chat({ role, onOpenDoc, onGoCustomers }) {
+export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq }) {
   const canSend = ["admin", "sales", "exec", "finance"].includes(role);
   const [contacts, setContacts] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -297,6 +297,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers }) {
                   {cust.sites?.length > 0 && <div className="ci-row">🏠 <span>{cust.sites.length} ไซต์งาน</span></div>}
                   {canSend && <div className="ci-actions">
                     <button className="btn-primary sm" onClick={() => editCustomer(cust)}><UIcon name="edit" size={13} color="#fff" /> แก้ไขข้อมูล</button>
+                    <button className="btn-ghost sm" onClick={() => onCreateBoq && onCreateBoq(cust.id)}>📋 สร้าง BOQ</button>
                     <button className="btn-ghost sm" onClick={() => onGoCustomers && onGoCustomers(cust.name)}>เปิดหน้าลูกค้า</button>
                     <button className="btn-ghost sm" onClick={() => onLink(null)}>ยกเลิกการเชื่อม</button>
                   </div>}

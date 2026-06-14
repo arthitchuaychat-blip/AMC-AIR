@@ -81,6 +81,7 @@ export default function App() {
   const [jobFocus, setJobFocus] = React.useState(null);
   const [custFocus, setCustFocus] = React.useState(null);
   const [boqFocus, setBoqFocus] = React.useState(null);
+  const [boqNewCust, setBoqNewCust] = React.useState(null); // open a new BOQ pre-filled with this customer id
   const [invoiceFocus, setInvoiceFocus] = React.useState(null);
   const [receiptFocus, setReceiptFocus] = React.useState(null);
   const [quoteFromBoq, setQuoteFromBoq] = React.useState(null);
@@ -173,8 +174,10 @@ export default function App() {
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
-        {view === "chat" && <Chat role={role} onOpenDoc={openDoc} onGoCustomers={(name) => { setCustFocus(name); go("customers"); }} />}
+        {view === "chat" && <Chat role={role} onOpenDoc={openDoc} onGoCustomers={(name) => { setCustFocus(name); go("customers"); }}
+          onCreateBoq={(cid) => { setBoqNewCust(String(cid)); go("boq"); }} />}
         {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
+          newForCustomer={boqNewCust} onNewConsumed={() => setBoqNewCust(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenDoc={openDoc} />}
         {view === "quote" && <Quotation role={role} focus={quoteFocus} onFocusConsumed={() => setQuoteFocus(null)}
           fromBoq={quoteFromBoq} onFromBoqConsumed={() => setQuoteFromBoq(null)}
