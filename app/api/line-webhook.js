@@ -47,19 +47,22 @@ async function ensureContact(uid) {
   });
 }
 
-async function saveImage(messageId) {
+// download a LINE message's binary content and store it in the photos bucket; returns the public URL
+async function saveContent(messageId, ext, fallbackType) {
   try {
-    const r = await tfetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, { headers: { Authorization: `Bearer ${TOKEN()}` } }, 10000);
+    const r = await tfetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, { headers: { Authorization: `Bearer ${TOKEN()}` } }, 15000);
     if (!r.ok) return null;
     const buf = Buffer.from(await r.arrayBuffer());
-    const up = await tfetch(`${SB()}/storage/v1/object/photos/line/${messageId}.jpg`, {
+    const ct = r.headers.get("content-type") || fallbackType || "application/octet-stream";
+    const up = await tfetch(`${SB()}/storage/v1/object/photos/line/${messageId}.${ext}`, {
       method: "POST",
-      headers: { apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": r.headers.get("content-type") || "image/jpeg", "x-upsert": "true" },
+      headers: { apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": ct, "x-upsert": "true" },
       body: buf,
-    }, 10000);
-    return up.ok ? `${SB()}/storage/v1/object/public/photos/line/${messageId}.jpg` : null;
+    }, 15000);
+    return up.ok ? `${SB()}/storage/v1/object/public/photos/line/${messageId}.${ext}` : null;
   } catch { return null; }
 }
+const saveImage = (messageId) => saveContent(messageId, "jpg", "image/jpeg");
 
 async function readRaw(req) {
   const chunks = [];
@@ -119,6 +122,10 @@ export default async function handler(req, res) {
         if (m.type === "text") row.text = m.text;
         else if (m.type === "image") { row.image_url = await saveImage(m.id); row.text = "[รูปภาพ]"; }
         else if (m.type === "sticker") { row.text = "[สติกเกอร์]"; }
+        else if (m.type === "file") { const ext = ((m.fileName || "").split(".").pop() || "bin").toLowerCase(); row.file_url = await saveContent(m.id, ext); row.file_name = m.fileName || "ไฟล์"; row.text = `[ไฟล์] ${row.file_name}`; }
+        else if (m.type === "video") { row.file_url = await saveContent(m.id, "mp4", "video/mp4"); row.file_name = "วิดีโอ.mp4"; row.text = "[วิดีโอ]"; }
+        else if (m.type === "audio") { row.file_url = await saveContent(m.id, "m4a", "audio/m4a"); row.file_name = "เสียง.m4a"; row.text = "[เสียง]"; }
+        else if (m.type === "location") { const q = (m.latitude != null && m.longitude != null) ? `${m.latitude},${m.longitude}` : encodeURIComponent(m.address || ""); row.file_url = `https://www.google.com/maps/search/?api=1&query=${q}`; row.text = `📍 ${m.title || m.address || "ตำแหน่งที่ตั้ง"}`; }
         else { row.text = `[${m.type}]`; }
         await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
         await tfetch(`${SB()}/rest/v1/rpc/line_bump_unread`, { method: "POST", headers: sbH(), body: JSON.stringify({ p_uid: uid, p_msg: row.text || "[ข้อความ]" }) });

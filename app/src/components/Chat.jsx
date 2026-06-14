@@ -26,6 +26,24 @@ const STAGES = [
 ];
 const stageDef = (id) => STAGES.find((s) => s.id === id) || STAGES[0];
 
+// distinct colors for coworkers' outgoing bubbles (mine stays the default blue)
+const STAFF_COLORS = ["#0891b2", "#16a34a", "#d97706", "#7c3aed", "#db2777", "#ca8a04", "#0d9488", "#dc2626"];
+// turn URLs in plain text into clickable links
+function linkify(text) {
+  if (!text) return text;
+  return String(text).split(/(https?:\/\/[^\s]+)/g).map((p, i) =>
+    /^https?:\/\//.test(p) ? <a key={i} href={p} target="_blank" rel="noreferrer" className="chat-link">{p}</a> : p);
+}
+// best-effort download (falls back to opening in a new tab if blocked by CORS)
+async function dlFile(url, name) {
+  try {
+    const r = await fetch(url); const b = await r.blob();
+    const u = URL.createObjectURL(b); const a = document.createElement("a");
+    a.href = u; a.download = name || url.split("/").pop() || "download"; document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(u);
+  } catch { window.open(url, "_blank", "noopener"); }
+}
+
 export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey }) {
   const canSend = ["admin", "sales", "exec", "finance"].includes(role);
   const [contacts, setContacts] = React.useState([]);
@@ -68,6 +86,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     getProfile().then((p) => setMyId(p?.id || null)).catch(() => {});
   }, []);
   const staffMap = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
+  const staffColor = React.useMemo(() => Object.fromEntries(staff.map((s, i) => [s.id, STAFF_COLORS[i % STAFF_COLORS.length]])), [staff]);
   async function changeStage(s) { try { await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
   async function changeOwner(uid) { try { await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
   React.useEffect(() => { selRef.current = sel; }, [sel]);
@@ -225,12 +244,34 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                 {msgs.map((m, i) => {
                   const prev = msgs[i - 1];
                   const daySep = !prev || fmtDay(prev.created_at) !== fmtDay(m.created_at);
+                  const out = m.direction === "out";
+                  const coworker = out && m.sent_by && m.sent_by !== myId;
+                  const cwColor = coworker ? (staffColor[m.sent_by] || "#0891b2") : null;
+                  const senderName = m.sent_by ? (staffMap[m.sent_by] || "ทีมงาน") : "ส่งจากแอป";
                   return (
                     <React.Fragment key={m.id}>
                       {daySep && <div className="chat-daysep">{fmtDay(m.created_at)}</div>}
-                      <div className={"chat-bubble " + (m.direction === "out" ? "out" : "in")}>
-                        {m.image_url ? <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a> : <span>{m.text}</span>}
-                        <span className="chat-bubble-time">{fmtTime(m.created_at)}{m.direction === "out" ? " · " + ((m.sent_by && staffMap[m.sent_by]) || "ส่งจากแอป") : ""}</span>
+                      <div className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "")}
+                        style={coworker ? { background: cwColor, borderColor: cwColor } : undefined}>
+                        {coworker && <span className="chat-sender">{senderName}</span>}
+                        {m.image_url ? (
+                          <span className="chat-media">
+                            <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a>
+                            <span className="chat-media-acts">
+                              <a href={m.image_url} target="_blank" rel="noreferrer">เปิด</a>
+                              <button type="button" onClick={() => dlFile(m.image_url, "")}>ดาวน์โหลด</button>
+                            </span>
+                          </span>
+                        ) : m.file_url ? (
+                          <span className="chat-media">
+                            <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || m.text || "เปิดไฟล์"}</a>
+                            <span className="chat-media-acts">
+                              <a href={m.file_url} target="_blank" rel="noreferrer">เปิด</a>
+                              <button type="button" onClick={() => dlFile(m.file_url, m.file_name)}>ดาวน์โหลด</button>
+                            </span>
+                          </span>
+                        ) : <span>{linkify(m.text)}</span>}
+                        <span className="chat-bubble-time">{fmtTime(m.created_at)}{out ? " · " + senderName : ""}</span>
                       </div>
                     </React.Fragment>
                   );

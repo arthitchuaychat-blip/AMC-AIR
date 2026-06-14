@@ -1029,6 +1029,16 @@ select.inp{cursor:pointer}
 .chat-bubble.out{align-self:flex-end;background:var(--primary);color:#fff;border-bottom-right-radius:4px}
 .chat-bubble-time{display:block;font-size:9.5px;opacity:.7;margin-top:3px;text-align:right}
 .chat-img{max-width:200px;max-height:240px;border-radius:9px;display:block}
+/* coworker outgoing bubbles: right side, distinct color + sender name */
+.chat-bubble.coworker{align-self:flex-end;color:#fff;border-bottom-right-radius:4px}
+.chat-sender{display:block;font-size:10.5px;font-weight:700;opacity:.95;margin-bottom:2px}
+.chat-link{color:inherit;text-decoration:underline;word-break:break-all}
+.chat-bubble.in .chat-link{color:var(--primary)}
+.chat-media{display:block}
+.chat-media-acts{display:flex;gap:10px;margin-top:4px;font-size:11px;font-weight:600}
+.chat-media-acts a,.chat-media-acts button{color:inherit;opacity:.92;text-decoration:underline;background:none;border:none;padding:0;cursor:pointer;font:inherit}
+.chat-bubble.in .chat-media-acts a,.chat-bubble.in .chat-media-acts button{color:var(--primary)}
+.chat-file{display:inline-block;color:inherit;font-weight:600;text-decoration:none;word-break:break-word}
 .chat-compose{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border-top:1px solid var(--line)}
 .chat-compose textarea{flex:1;resize:none;max-height:120px;min-height:40px}
 .chat-compose .btn-primary{padding:0 20px;height:40px}

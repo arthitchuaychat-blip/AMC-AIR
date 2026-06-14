@@ -486,6 +486,8 @@ create table if not exists line_messages (
   type            text not null default 'text',
   text            text,
   image_url       text,
+  file_url        text,
+  file_name       text,
   line_message_id text,
   sent_by         uuid references auth.users(id),
   created_at      timestamptz not null default now()
