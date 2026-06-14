@@ -50,22 +50,28 @@ export default function Catalog({ role }) {
   const brandOpts = React.useMemo(() => dedupe(acMats.map((m) => m.brand)).sort((a, b) => a.localeCompare(b, "th")), [acMats]);
   const acTypes = React.useMemo(() => dedupe(acMats.map((m) => m.ac_type)).sort((a, b) => a.localeCompare(b, "th")), [acMats]);
   const btuOpts = React.useMemo(() => [...new Set(acMats.map((m) => m.btu).filter(Boolean).map(Number))].sort((a, b) => a - b), [acMats]);
-  const list = mats.filter((m) =>
+  // One shared collator (th) — far faster than calling String.localeCompare per comparison.
+  const collator = React.useMemo(() => new Intl.Collator("th"), []);
+  // Defer the search term so typing stays smooth while the big list re-filters in the background.
+  const dq = React.useDeferredValue(q);
+  // Memoized so it only recomputes when a filter actually changes — not on every unrelated render
+  // (modal open, toast, hover). This + the render cap is what stops the page from feeling "frozen".
+  const list = React.useMemo(() => mats.filter((m) =>
     (kind === "all" || m.kind === kind) &&
     (kind !== "material" || cat === "all" || m.cat === cat) &&
     (kind !== "ac" || brand === "all" || eqi(m.brand, brand)) &&
     (kind !== "ac" || btu === "all" || String(m.btu) === String(btu)) &&
     (kind !== "ac" || acType === "all" || eqi(m.ac_type, acType)) &&
-    matchText(q, m.th, m.en, m.code, m.catName, m.brand, m.ac_type)
+    matchText(dq, m.th, m.en, m.code, m.catName, m.brand, m.ac_type)
   ).sort((a, b) =>
     (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) ||                       // ชนิด: แอร์ → วัสดุ → บริการ
-    (a.brand || a.catName || "").localeCompare(b.brand || b.catName || "", "th") || // ยี่ห้อ (แอร์) / หมวด (วัสดุ)
-    (a.th || "").localeCompare(b.th || "", "th")                                    // แล้วเรียงตามตัวอักษรชื่อไทย
-  );
-  // Render at most CAP cards at a time — drawing all 1,000+ items every keystroke makes the
-  // page lag so badly that search feels broken. Filtering still runs over the FULL catalog.
-  const CAP = 300;
-  const capped = list.slice(0, CAP);
+    collator.compare(a.brand || a.catName || "", b.brand || b.catName || "") ||   // ยี่ห้อ (แอร์) / หมวด (วัสดุ)
+    collator.compare(a.th || "", b.th || "")                                       // แล้วเรียงตามตัวอักษรชื่อไทย
+  ), [mats, kind, cat, brand, btu, acType, dq, collator]);
+  // Render at most CAP cards at a time — drawing the whole catalog at once is what made the page lag.
+  // Filtering/sort still run over the FULL catalog, so search never misses anything.
+  const CAP = 150;
+  const capped = React.useMemo(() => list.slice(0, CAP), [list]);
 
   async function remove(m) {
     if (!await confirmDialog(`ลบ "${m.th}" ออกจากคลัง? (ประวัติยังเก็บไว้)`)) return;
