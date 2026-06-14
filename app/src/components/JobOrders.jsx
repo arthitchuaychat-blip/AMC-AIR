@@ -3,7 +3,6 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
-import { buildOrderConfirm } from "../lib/confirmText";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 import DocChips from "./DocChips";
@@ -186,13 +185,6 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   }
   async function del(jo) { if (!await confirmDialog(`ลบใบงาน ${jo.job_no}?`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
-  // copy an order-confirmation message to send to the customer (Line OA)
-  function copyConfirm(jo) {
-    const text = buildOrderConfirm(jo);
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => flash("คัดลอกคอนเฟิมออเดอร์แล้ว ✓")).catch(() => window.prompt("คัดลอกข้อความนี้:", text));
-    else window.prompt("คัดลอกข้อความนี้:", text);
-  }
-
   // ---------- EDITOR ----------
   if (ed) {
     return (
@@ -347,7 +339,6 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               </div>
               {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "job", no: jo.job_no }} onOpen={onOpenDoc} />; })()}
               <div className="job-lines"><div className="job-actions">
-                <button className="btn-ghost sm" onClick={() => copyConfirm(jo)}><UIcon name="clipboard" size={14} /> คัดลอกคอนเฟิม</button>
                 <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>
                   <UIcon name="clipboard" size={14} /> {openTl === jo.job_no ? "ซ่อนความเคลื่อนไหว" : "ความเคลื่อนไหว"}
                 </button>
