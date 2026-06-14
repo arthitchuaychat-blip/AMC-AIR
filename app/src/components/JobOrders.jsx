@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage, setJobVisitsStatus, updateJobStatus } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage, updateVisitStatus } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -185,21 +185,24 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(jo) { if (!await confirmDialog(`ลบใบงาน ${jo.job_no}?`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
-  // office approval flow: from "รออนุมัติ" → เสร็จ / รอนัดหมายใหม่
-  async function approveJob(jo) {
-    if (!await confirmDialog({ title: "อนุมัติงานนี้เป็น 'เสร็จ' ?", message: `${jo.job_no}${jo.title ? " · " + jo.title : ""}`, danger: false, confirmText: "อนุมัติ เสร็จ" })) return;
-    try { if (jo.visits?.length) await setJobVisitsStatus(jo.job_no, ["awaiting_approval", "in_progress"], "done", me); else await updateJobStatus(jo.job_no, "done", me); flash("อนุมัติงานเสร็จแล้ว ✓"); await load(); }
-    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  // office acts on ONE รอบ (visit) — approve → เสร็จ, or send → รอนัดหมายใหม่; sibling visits untouched
+  async function visitAction(jo, v, status) {
+    const o = status === "done"
+      ? { title: "อนุมัติรอบนี้เป็น 'เสร็จ' ?", confirmText: "อนุมัติ เสร็จ" }
+      : { title: "ส่งรอบนี้ไป 'รอนัดหมายใหม่' ?", confirmText: "ให้นัดหมายใหม่" };
+    if (!await confirmDialog({ ...o, message: `รอบ · ${v.teamName || "ทีม"} · ${scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}`, danger: false })) return;
+    try {
+      await updateVisitStatus(v.id, jo.job_no, status, me);
+      flash("อัปเดตรอบงานแล้ว ✓");
+      const fresh = await listJobOrders(); setList(fresh);
+      setViewing(fresh.find((x) => x.job_no === jo.job_no) || null);
+    } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function toReschedule(jo) {
-    if (!await confirmDialog({ title: "ส่งงานนี้ไป 'รอนัดหมายใหม่' ?", message: `${jo.job_no}${jo.title ? " · " + jo.title : ""}`, danger: false, confirmText: "ให้นัดหมายใหม่" })) return;
-    try { if (jo.visits?.length) await setJobVisitsStatus(jo.job_no, ["awaiting_approval", "in_progress"], "reschedule", me); else await updateJobStatus(jo.job_no, "reschedule", me); flash("ส่งไปรอนัดหมายใหม่แล้ว"); await load(); }
-    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
-  }
-  // open the editor to set a new appointment; flip รอนัดหมายใหม่ visits back to นัดแล้ว so the new date lands as scheduled
-  function startReschedule(jo) {
+  // open the editor to set a new appointment; flip รอนัดหมายใหม่ visit(s) back to นัดแล้ว so the new date lands as scheduled.
+  // onlyIdx = flip just that one visit (per-รอบ); omitted = flip every reschedule visit.
+  function startReschedule(jo, onlyIdx) {
     startEdit(jo);
-    setEd((e) => e ? { ...e, visits: e.visits.map((v) => v.status === "reschedule" ? { ...v, status: "scheduled" } : v) } : e);
+    setEd((e) => e ? { ...e, visits: e.visits.map((v, idx) => (v.status === "reschedule" && (onlyIdx == null || onlyIdx === idx)) ? { ...v, status: "scheduled" } : v) } : e);
   }
 
   // ---------- EDITOR ----------
@@ -365,8 +368,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "job", no: jo.job_no }} onOpen={onOpenDoc} />; })()}
               {canEdit && jo.status === "awaiting_approval" && (
                 <div className="job-lines"><div className="job-actions">
-                  <button className="btn-primary sm ok" onClick={() => approveJob(jo)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> อนุมัติ · เสร็จ</button>
-                  <button className="btn-ghost sm" onClick={() => toReschedule(jo)}>↻ ให้นัดหมายใหม่</button>
+                  <button className="btn-primary sm ok" onClick={() => setViewing(jo)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> ตรวจ & อนุมัติรายรอบ</button>
                 </div></div>
               )}
               {canEdit && jo.status === "reschedule" && (
@@ -415,6 +417,17 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                     <div className="cd-site" key={v.id || i} style={{ borderLeft: `3px solid ${col}`, background: col + "18", paddingLeft: 9, borderRadius: 8 }}>
                       <div className="cd-site-top"><span>📍 รอบ {i + 1} · {v.teamName || "ยังไม่มอบทีม"}</span><span className={"job-badge " + vst.cls}>{vst.th}</span></div>
                       <div className="cd-site-addr">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}</div>
+                      {canEdit && v.status === "awaiting_approval" && (
+                        <div className="myjob-visit-acts" style={{ marginTop: 7 }}>
+                          <button className="btn-primary sm ok" onClick={() => visitAction(jo, v, "done")}>✓ อนุมัติ เสร็จ</button>
+                          <button className="btn-ghost sm" onClick={() => visitAction(jo, v, "reschedule")}>↻ ให้นัดใหม่</button>
+                        </div>
+                      )}
+                      {canEdit && v.status === "reschedule" && (
+                        <div className="myjob-visit-acts" style={{ marginTop: 7 }}>
+                          <button className="btn-primary sm" onClick={() => { setViewing(null); startReschedule(jo, i); }}>📅 ตั้งนัดใหม่รอบนี้</button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
