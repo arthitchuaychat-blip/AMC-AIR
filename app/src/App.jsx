@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
-import { getProfile, signOut } from "./lib/api";
+import { getProfile, signOut, countUnreadChats } from "./lib/api";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
@@ -52,7 +52,7 @@ const NAV_BY_ROLE = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-14·คำตอบ-v9";
+const BUILD = "2026-06-14·ค้างตอบ-v10";
 
 function SetupNotice() {
   return (
@@ -91,6 +91,7 @@ export default function App() {
   const [quoteFromBoq, setQuoteFromBoq] = React.useState(null);
   const [invoiceFromQuote, setInvoiceFromQuote] = React.useState(null);
   const [receiptFromInvoice, setReceiptFromInvoice] = React.useState(null);
+  const [chatUnread, setChatUnread] = React.useState(0); // chats waiting to be answered → sidebar badge
 
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
@@ -108,6 +109,19 @@ export default function App() {
     if (!profile) return;
     const allowed = NAV_BY_ROLE[profile.role] || ["movements"];
     setView((v) => (v && allowed.includes(v) ? v : allowed[0]));
+  }, [profile]);
+
+  // sidebar badge: count of chats with unread messages — live via realtime, with a polling fallback
+  React.useEffect(() => {
+    if (!profile || !(NAV_BY_ROLE[profile.role] || []).includes("chat")) { setChatUnread(0); return; }
+    let alive = true;
+    const refresh = () => countUnreadChats().then((n) => { if (alive) setChatUnread(n); }).catch(() => {});
+    refresh();
+    const iv = setInterval(refresh, 20000);
+    const ch = supabase.channel("nav-chat-unread")
+      .on("postgres_changes", { event: "*", schema: "public", table: "line_contacts" }, refresh)
+      .subscribe();
+    return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
   }, [profile]);
 
   if (!hasConfig) return <SetupNotice />;
@@ -153,6 +167,7 @@ export default function App() {
                 <UIcon name={n.icon} size={18} strokeWidth={1.9} />
                 <span className="nav-th">{n.th}</span>
                 <span className="nav-en">{n.en}</span>
+                {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
               </button>
             );
           })}

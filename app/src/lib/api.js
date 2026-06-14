@@ -1059,6 +1059,12 @@ export async function linkLineContact(uid, customerId) {
 export async function markLineRead(uid) {
   await supabase.from("line_contacts").update({ unread: 0 }).eq("line_user_id", uid);
 }
+// how many chats still have unread (waiting to be answered) — for the sidebar badge
+export async function countUnreadChats() {
+  const { count, error } = await supabase.from("line_contacts").select("id", { count: "exact", head: true }).gt("unread", 0);
+  if (error) throw error;
+  return count || 0;
+}
 // CRM: set a contact's stage / responsible staff
 export async function setLineStage(uid, stage) {
   const { error } = await supabase.from("line_contacts").update({ stage }).eq("line_user_id", uid);
