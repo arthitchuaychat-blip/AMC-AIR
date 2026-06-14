@@ -269,29 +269,30 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
           <div className="fld"><span>รอบเข้างาน <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(เพิ่มได้หลายรอบ · คนละทีม/คนละวัน/หลายทีมก็ได้)</small></span>
             {ed.visits.map((v, i) => {
               const col = teams.find((t) => t.id === v.assigned_team)?.color || "#94a3b8";
+              const locked = v.status === "done"; // อนุมัติแล้ว = ล๊อก แก้ไม่ได้ กันรีเซ็ต
               return (
-                <div className="crm-site" key={i} style={{ borderLeftColor: col, background: col + "14" }}>
+                <div className="crm-site" key={i} style={{ borderLeftColor: col, background: col + "14", opacity: locked ? 0.85 : 1 }}>
                   <div className="crm-site-head">
-                    <span className="crm-site-badge" style={{ background: col }}>รอบ {i + 1}</span>
-                    {ed.visits.length > 1 && <button className="line-x" onClick={() => delVisit(i)}><UIcon name="x" size={14} /></button>}
+                    <span className="crm-site-badge" style={{ background: col }}>รอบ {i + 1}{locked ? " · 🔒 อนุมัติแล้ว" : ""}</span>
+                    {ed.visits.length > 1 && !locked && <button className="line-x" onClick={() => delVisit(i)}><UIcon name="x" size={14} /></button>}
                   </div>
                   <div className="crm-row">
-                    <Combo className="inp" value={v.assigned_team} onChange={(e) => setVisit(i, "assigned_team", e.target.value)}>
+                    <Combo className="inp" value={v.assigned_team} disabled={locked} onChange={(e) => setVisit(i, "assigned_team", e.target.value)}>
                       <option value="">— เลือกทีมช่าง —</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name.replace("Team ", "")}</option>)}
                     </Combo>
-                    <Combo className="inp" value={v.slot} onChange={(e) => setVisit(i, "slot", e.target.value)}>
+                    <Combo className="inp" value={v.slot} disabled={locked} onChange={(e) => setVisit(i, "slot", e.target.value)}>
                       {SLOTS.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.th}{s.time ? ` (${s.time})` : ""}</option>)}
                     </Combo>
                   </div>
                   <div className="crm-row">
-                    <Combo className="inp" value={v.status || "scheduled"} onChange={(e) => setVisit(i, "status", e.target.value)}>
+                    <Combo className="inp" value={v.status || "scheduled"} disabled={locked} onChange={(e) => setVisit(i, "status", e.target.value)}>
                       {STATUS_OPTS.map(([sv, sl]) => <option key={sv} value={sv}>สถานะ: {sl}</option>)}
                     </Combo>
                   </div>
                   <div className="crm-row">
-                    <label className="fld" style={{ flex: 1 }}><span style={{ fontSize: 11 }}>วันเริ่ม</span><input className="inp" type="date" value={v.date} onChange={(e) => setVisit(i, "date", e.target.value)} /></label>
-                    <label className="fld" style={{ flex: 1 }}><span style={{ fontSize: 11 }}>วันสิ้นสุด (เว้นว่างได้)</span><input className="inp" type="date" min={v.date || undefined} value={v.end_date} onChange={(e) => setVisit(i, "end_date", e.target.value)} /></label>
-                    {v.slot === "custom" && <label className="fld" style={{ flex: 1 }}><span style={{ fontSize: 11 }}>เวลาเริ่ม</span><input className="inp" type="time" value={v.time} onChange={(e) => setVisit(i, "time", e.target.value)} /></label>}
+                    <label className="fld" style={{ flex: 1 }}><span style={{ fontSize: 11 }}>วันเริ่ม</span><input className="inp" type="date" disabled={locked} value={v.date} onChange={(e) => setVisit(i, "date", e.target.value)} /></label>
+                    <label className="fld" style={{ flex: 1 }}><span style={{ fontSize: 11 }}>วันสิ้นสุด (เว้นว่างได้)</span><input className="inp" type="date" disabled={locked} min={v.date || undefined} value={v.end_date} onChange={(e) => setVisit(i, "end_date", e.target.value)} /></label>
+                    {v.slot === "custom" && <label className="fld" style={{ flex: 1 }}><span style={{ fontSize: 11 }}>เวลาเริ่ม</span><input className="inp" type="time" disabled={locked} value={v.time} onChange={(e) => setVisit(i, "time", e.target.value)} /></label>}
                   </div>
                 </div>
               );

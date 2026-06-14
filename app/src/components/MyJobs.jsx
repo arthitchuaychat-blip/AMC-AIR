@@ -140,7 +140,7 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                             <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>แก้ไข/ทำต่อ</button>
                           </>}
                           {v.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศตั้งนัดใหม่</span>}
-                          {v.status === "done" && <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>กลับมาทำต่อ</button>}
+                          {v.status === "done" && <span className="myjob-await">🔒 อนุมัติแล้ว · ปิดงาน</span>}
                         </div>
                       </div>
                     );
@@ -156,7 +156,7 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                   </>}
                   {jo.status === "awaiting_approval" && <><span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span><button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}>แก้ไข/ทำต่อ</button></>}
                   {jo.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศตั้งนัดใหม่</span>}
-                  {jo.status === "done" && <button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}><UIcon name="ret" size={15} /> กลับมาทำต่อ</button>}
+                  {jo.status === "done" && <span className="myjob-await">🔒 อนุมัติแล้ว · ปิดงาน</span>}
                   {jo.status !== "done" && jo.status !== "cancelled" && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
                 </div>
               )}
