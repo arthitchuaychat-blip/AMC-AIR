@@ -7,8 +7,10 @@ import JobTimeline from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
-// ช่างไม่เห็นสถานะ "รอนัดหมายใหม่" (อยู่ในมือออฟฟิศ) — ตัดแท็บนั้นออก
-const TABS = [["todo", "ต้องทำ"], ["doing", "กำลังทำงาน"], ["awaiting", "รออนุมัติ"], ["done", "เสร็จแล้ว"], ["cancelled", "ยกเลิกแล้ว"]];
+// ช่างเห็นทุกสถานะ (รวม "นัดหมายเพิ่ม") แต่ดูได้อย่างเดียวในสถานะ read-only ด้านล่าง
+const TABS = [["todo", "ต้องทำ"], ["doing", "กำลังทำงาน"], ["awaiting", "รออนุมัติ"], ["reschedule", "นัดหมายเพิ่ม"], ["done", "เสร็จแล้ว"], ["cancelled", "ยกเลิกแล้ว"]];
+// สถานะที่ช่างดูได้อย่างเดียว — แก้ไข/โพสต์/เบิกวัสดุไม่ได้
+const TECH_READONLY = ["reschedule", "done", "cancelled"];
 
 export default function MyJobs({ role, team, me, onWithdraw }) {
   const allTeams = role === "lead_tech"; // หัวหน้าช่างเห็นงานทุกทีม
@@ -130,22 +132,24 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                       <div className="myjob-visit" key={v.id}>
                         <div className="myjob-visit-info">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}{allTeams && v.teamName ? ` · ทีม ${v.teamName}` : ""} <span className={"job-badge " + vst.cls}>{vst.th}</span></div>
                         <div className="myjob-visit-acts">
-                          {(v.status === "pending" || v.status === "scheduled") && <button className="btn-primary sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>เริ่มทำรอบนี้</button>}
-                          {v.status === "in_progress" && <>
+                          {/* read-only when the whole job is นัดหมายเพิ่ม/เสร็จ/ยกเลิก — show status text only */}
+                          {!TECH_READONLY.includes(jo.status) && (v.status === "pending" || v.status === "scheduled") && <button className="btn-primary sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>เริ่มทำรอบนี้</button>}
+                          {!TECH_READONLY.includes(jo.status) && v.status === "in_progress" && <>
                             <button className="btn-primary sm ok" onClick={() => setVStatus(jo.job_no, v, "awaiting_approval")}>ส่งอนุมัติ ✓</button>
                             <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "reschedule")}>ขอนัดหมายเพิ่ม</button>
                           </>}
-                          {v.status === "awaiting_approval" && <>
+                          {!TECH_READONLY.includes(jo.status) && v.status === "awaiting_approval" && <>
                             <span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span>
                             <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>แก้ไข/ทำต่อ</button>
                           </>}
+                          {(TECH_READONLY.includes(jo.status) && v.status === "awaiting_approval") && <span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span>}
                           {v.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศนัดหมายเพิ่ม</span>}
                           {v.status === "done" && <span className="myjob-await">🔒 อนุมัติแล้ว · ปิดงาน</span>}
                         </div>
                       </div>
                     );
                   })}
-                  {jo.status !== "done" && jo.status !== "cancelled" && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
+                  {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
                 </div>
               ) : (
                 <div className="myjob-actions">
@@ -157,12 +161,12 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                   {jo.status === "awaiting_approval" && <><span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span><button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}>แก้ไข/ทำต่อ</button></>}
                   {jo.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศนัดหมายเพิ่ม</span>}
                   {jo.status === "done" && <span className="myjob-await">🔒 อนุมัติแล้ว · ปิดงาน</span>}
-                  {jo.status !== "done" && jo.status !== "cancelled" && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
+                  {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
                 </div>
               )}
               {jo.status === "in_progress" && <div className="myjob-hint">เข้าหน้างานได้หลายครั้ง · เบิกวัสดุเพิ่มได้ไม่จำกัด · แนบรูป/คอมเมนต์ลงไทม์ไลน์ด้านล่าง</div>}
 
-              {jo.status !== "cancelled" && <JobTimeline jobNo={jo.job_no} groupNo={jo.group_no || jo.job_no} linked={!!jo.group_no} canPost author={me} flash={flash} />}
+              {jo.status !== "cancelled" && <JobTimeline jobNo={jo.job_no} groupNo={jo.group_no || jo.job_no} linked={!!jo.group_no} canPost={!TECH_READONLY.includes(jo.status)} author={me} flash={flash} />}
             </div>
           );
         })}
