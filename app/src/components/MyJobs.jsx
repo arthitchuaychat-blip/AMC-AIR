@@ -2,14 +2,12 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import { listJobOrders, updateJobStatus, updateVisitStatus } from "../lib/api";
 import { UIcon } from "../icons";
-import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel } from "../lib/schedule";
+import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel, JOB_STATUSES } from "../lib/schedule";
 import JobTimeline from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
 
-const STATUS = {
-  pending: { th: "รอเริ่มงาน", cls: "b-grey" }, scheduled: { th: "นัดแล้ว", cls: "b-blue" },
-  in_progress: { th: "กำลังทำ", cls: "b-amber" }, done: { th: "เสร็จแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" },
-};
+const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
+const TABS = [["todo", "ต้องทำ"], ["doing", "กำลังทำงาน"], ["awaiting", "รออนุมัติ"], ["reschedule", "รอนัดหมายใหม่"], ["done", "เสร็จแล้ว"], ["cancelled", "ยกเลิกแล้ว"]];
 
 export default function MyJobs({ role, team, me, onWithdraw }) {
   const allTeams = role === "lead_tech"; // หัวหน้าช่างเห็นงานทุกทีม
@@ -46,12 +44,15 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
   }
 
-  const isProject = (j) => (j.visits?.length || 0) > 1; // เข้างานมากกว่า 1 ครั้ง = งานโปรเจค
-  const todo = list.filter((j) => j.status === "pending" || j.status === "scheduled");
-  const doingGen = list.filter((j) => j.status === "in_progress" && !isProject(j));
-  const doingProj = list.filter((j) => j.status === "in_progress" && isProject(j));
-  const finished = list.filter((j) => j.status === "done" || j.status === "cancelled");
-  const shown = tab === "todo" ? todo : tab === "doing" ? doingGen : tab === "project" ? doingProj : finished;
+  const byStatus = {
+    todo: list.filter((j) => j.status === "pending" || j.status === "scheduled"),
+    doing: list.filter((j) => j.status === "in_progress"),
+    awaiting: list.filter((j) => j.status === "awaiting_approval"),
+    reschedule: list.filter((j) => j.status === "reschedule"),
+    done: list.filter((j) => j.status === "done"),
+    cancelled: list.filter((j) => j.status === "cancelled"),
+  };
+  const shown = byStatus[tab] || byStatus.todo;
 
   if (!allTeams && !team) {
     return <div className="adm"><div className="adm-head"><div><h1 className="page-title">งานของฉัน</h1></div></div>
@@ -62,17 +63,17 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
     <div className="adm">
       <div className="adm-head">
         <div><h1 className="page-title">{allTeams ? "งานทุกทีม" : "งานของฉัน"} <span className="page-title-en">{allTeams ? "All Jobs · หัวหน้าช่าง" : `My Jobs · ${team}`}</span></h1>
-          <p className="page-sub">{todo.length} ต้องทำ · {doingGen.length + doingProj.length} กำลังทำ</p></div>
-        <div className="seg">
-          <button className={"seg-btn" + (tab === "todo" ? " on" : "")} onClick={() => setTab("todo")}>ต้องทำ ({todo.length})</button>
-          <button className={"seg-btn" + (tab === "doing" ? " on" : "")} onClick={() => setTab("doing")}>กำลังทำ · ทั่วไป ({doingGen.length})</button>
-          <button className={"seg-btn" + (tab === "project" ? " on" : "")} onClick={() => setTab("project")}>กำลังทำ · โปรเจค ({doingProj.length})</button>
-          <button className={"seg-btn" + (tab === "done" ? " on" : "")} onClick={() => setTab("done")}>เสร็จแล้ว ({finished.length})</button>
+          <p className="page-sub">{byStatus.todo.length} ต้องทำ · {byStatus.doing.length} กำลังทำ · {byStatus.awaiting.length} รออนุมัติ</p></div>
+        <div className="cat-filter" style={{ margin: 0 }}>
+          {TABS.map(([v, l]) => (
+            <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
+              style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({byStatus[v].length})</button>
+          ))}
         </div>
       </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && shown.length === 0 && <div className="empty">{tab === "done" ? "ยังไม่มีงานที่เสร็จ" : tab === "project" ? "ยังไม่มีงานโปรเจคที่กำลังทำ" : tab === "doing" ? "ยังไม่มีงานทั่วไปที่กำลังทำ" : "ไม่มีงานค้าง 🎉"}</div>}
+      {!loading && shown.length === 0 && <div className="empty">{tab === "todo" ? "ไม่มีงานค้าง 🎉" : `ไม่มีงานสถานะ "${(TABS.find(([v]) => v === tab) || [])[1] || ""}"`}</div>}
 
       <div className="job-cards">
         {shown.map((jo) => {
@@ -129,7 +130,15 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                         <div className="myjob-visit-info">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}{allTeams && v.teamName ? ` · ทีม ${v.teamName}` : ""} <span className={"job-badge " + vst.cls}>{vst.th}</span></div>
                         <div className="myjob-visit-acts">
                           {(v.status === "pending" || v.status === "scheduled") && <button className="btn-primary sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>เริ่มทำรอบนี้</button>}
-                          {v.status === "in_progress" && <button className="btn-primary sm ok" onClick={() => setVStatus(jo.job_no, v, "done")}>ปิดรอบนี้ ✓</button>}
+                          {v.status === "in_progress" && <>
+                            <button className="btn-primary sm ok" onClick={() => setVStatus(jo.job_no, v, "awaiting_approval")}>ส่งอนุมัติ ✓</button>
+                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "reschedule")}>ขอเลื่อนนัด</button>
+                          </>}
+                          {v.status === "awaiting_approval" && <>
+                            <span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span>
+                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>แก้ไข/ทำต่อ</button>
+                          </>}
+                          {v.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศตั้งนัดใหม่</span>}
                           {v.status === "done" && <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>กลับมาทำต่อ</button>}
                         </div>
                       </div>
@@ -140,7 +149,12 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
               ) : (
                 <div className="myjob-actions">
                   {(jo.status === "pending" || jo.status === "scheduled") && <button className="btn-primary" onClick={() => setStatus(jo, "in_progress")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> รับงาน / เริ่มทำ</button>}
-                  {jo.status === "in_progress" && <button className="btn-primary ok" onClick={() => setStatus(jo, "done")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> ปิดงาน (เสร็จ)</button>}
+                  {jo.status === "in_progress" && <>
+                    <button className="btn-primary ok" onClick={() => setStatus(jo, "awaiting_approval")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> ส่งอนุมัติ</button>
+                    <button className="btn-ghost" onClick={() => setStatus(jo, "reschedule")}>ขอเลื่อนนัด</button>
+                  </>}
+                  {jo.status === "awaiting_approval" && <><span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span><button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}>แก้ไข/ทำต่อ</button></>}
+                  {jo.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศตั้งนัดใหม่</span>}
                   {jo.status === "done" && <button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}><UIcon name="ret" size={15} /> กลับมาทำต่อ</button>}
                   {jo.status !== "done" && jo.status !== "cancelled" && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
                 </div>

@@ -25,14 +25,29 @@ export const JOB_TYPES = [
 ];
 export const jobTypeDef = (t) => JOB_TYPES.find((x) => x[0] === t) || JOB_TYPES[1];
 
-// a job's overall status, derived from its visits (รอบ): done only when every active visit is done
+// shared job/visit statuses — [value, label, badge-class]
+export const JOB_STATUSES = [
+  ["pending", "รอจ่ายงาน", "b-grey"],
+  ["scheduled", "นัดแล้ว", "b-blue"],
+  ["in_progress", "กำลังทำงาน", "b-amber"],
+  ["awaiting_approval", "รออนุมัติ", "b-purple"],
+  ["reschedule", "รอนัดหมายใหม่", "b-orange"],
+  ["done", "เสร็จ", "b-green"],
+  ["cancelled", "ยกเลิกแล้ว", "b-red"],
+];
+export const jobStatusDef = (s) => JOB_STATUSES.find((x) => x[0] === s) || JOB_STATUSES[0];
+export const jobStatusLabel = (s) => jobStatusDef(s)[1];
+
+// a job's overall status, derived from its visits (รอบ): done only when every active visit is done;
+// otherwise the most "actionable" status wins (in_progress > awaiting_approval > reschedule > scheduled > pending)
 export function deriveJobStatus(visits) {
   const active = (visits || []).filter((v) => v.status !== "cancelled");
   if (!active.length) return (visits && visits.length) ? "cancelled" : "pending";
   if (active.every((v) => v.status === "done")) return "done";
-  if (active.some((v) => v.status === "in_progress")) return "in_progress";
-  if (active.some((v) => v.status === "scheduled")) return "scheduled";
-  return "pending";
+  for (const s of ["in_progress", "awaiting_approval", "reschedule", "scheduled", "pending"]) {
+    if (active.some((v) => v.status === s)) return s;
+  }
+  return "scheduled";
 }
 
 export const slotDef = (id) => SLOTS.find((s) => s.id === id) || null;

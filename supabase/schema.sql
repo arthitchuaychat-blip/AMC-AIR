@@ -83,7 +83,7 @@ create table if not exists job_orders (
   scheduled_at  timestamptz,
   end_date      date,                       -- วันสิ้นสุด (งานหลายวัน) · ว่าง = งานวันเดียว
   slot          text check (slot is null or slot in ('morning','afternoon','full','custom')),
-  status        text not null default 'pending' check (status in ('pending','scheduled','in_progress','done','cancelled')),
+  status        text not null default 'pending' check (status in ('pending','scheduled','in_progress','awaiting_approval','reschedule','done','cancelled')),
   completion_note text,
   photos        text[] default '{}',
   created_at    timestamptz not null default now(),
@@ -99,7 +99,7 @@ create table if not exists job_visits (
   slot          text check (slot is null or slot in ('morning','afternoon','full','custom')),
   scheduled_at  timestamptz,
   assigned_team text references teams(id),
-  status        text not null default 'scheduled' check (status in ('pending','scheduled','in_progress','done','cancelled')),
+  status        text not null default 'scheduled' check (status in ('pending','scheduled','in_progress','awaiting_approval','reschedule','done','cancelled')),
   note          text,
   created_at    timestamptz not null default now(),
   created_by    uuid references auth.users(id)

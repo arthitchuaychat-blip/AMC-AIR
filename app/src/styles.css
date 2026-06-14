@@ -594,6 +594,8 @@ select.inp{cursor:pointer}
 .job-badge.b-red{background:linear-gradient(135deg,#ef4444,#dc2626)}
 .job-badge.b-blue{background:linear-gradient(135deg,#3b82f6,#2563eb)}
 .job-badge.b-grey{background:linear-gradient(135deg,#94a3b8,#7c899c)}
+.job-badge.b-purple{background:linear-gradient(135deg,#8b5cf6,#7c3aed)}
+.job-badge.b-orange{background:linear-gradient(135deg,#fb923c,#ea580c)}
 /* legacy open/closed kept vibrant for untouched badges */
 .job-badge.open{background:linear-gradient(135deg,#3b82f6,#2563eb)}
 .job-badge.closed{background:linear-gradient(135deg,#16a34a,#12894a)}
@@ -922,6 +924,7 @@ select.inp{cursor:pointer}
 .myjob-visit-info{font-size:13px;color:var(--ink);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .myjob-visit-acts{display:flex;gap:7px}
 .sched-chip.sc-done{opacity:.5}
+.myjob-await{font-size:12.5px;font-weight:600;color:var(--ink-2);display:inline-flex;align-items:center}
 .myjob-addphoto:hover{border-color:var(--primary);color:var(--primary)}
 .myjob-ev textarea.inp{resize:vertical}
 .myjob-ev .btn-primary.sm{align-self:flex-start;padding:8px 16px;font-size:12.5px}

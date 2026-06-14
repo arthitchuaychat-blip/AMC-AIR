@@ -1,21 +1,20 @@
 import React from "react";
 import { listJobOrders, listTeams } from "../lib/api";
 import { UIcon } from "../icons";
-import { BUCKETS, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef } from "../lib/schedule";
+import { BUCKETS, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef, JOB_STATUSES } from "../lib/schedule";
 
-const STATUS = {
-  pending: "รอจ่ายงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", done: "เสร็จ", cancelled: "ยกเลิก",
-};
 const VIEWS = [["day", "วัน"], ["week", "สัปดาห์"], ["month", "เดือน"]];
-const STATUS_FILTERS = [["all", "ทุกสถานะ"], ["scheduled", "นัดแล้ว"], ["in_progress", "กำลังทำ"], ["done", "เสร็จ"]];
+const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l]) => [v, l]));
+const STATUS_FILTERS = [["all", "ทุกสถานะ"], ["scheduled", "นัดแล้ว"], ["in_progress", "กำลังทำ"], ["awaiting_approval", "รออนุมัติ"], ["reschedule", "รอนัดใหม่"], ["done", "เสร็จ"]];
 const matchStatus = (st, f) => f === "all" || (f === "scheduled" ? (st === "scheduled" || st === "pending") : st === f);
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 // Monday-based start of the week containing d
 const weekStart = (d) => { const x = new Date(d); const dow = (x.getDay() + 6) % 7; return addDays(x, -dow); };
 
-export default function Schedule({ role, onOpenJob, onNewJob }) {
+export default function Schedule({ role, team, onOpenJob, onNewJob }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
+  const myTeamOnly = role === "tech"; // ช่างเห็นเฉพาะทีมตัวเอง · หัวหน้าช่าง/ออฟฟิศเห็นทุกทีม
   const [view, setView] = React.useState("week");
   const [anchor, setAnchor] = React.useState(today0());
   const [teamF, setTeamF] = React.useState("all");
@@ -55,10 +54,10 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
   // index visit-entries by day (yyyy-mm-dd), respecting the team filter
   const byDay = React.useMemo(() => {
     const m = {};
-    entries.filter((e) => (teamF === "all" || e.assigned_team === teamF) && matchStatus(e.status, statusF))
+    entries.filter((e) => (myTeamOnly ? e.assigned_team === team : (teamF === "all" || e.assigned_team === teamF)) && matchStatus(e.status, statusF))
       .forEach((e) => { jobDays(e).forEach((d) => { (m[d] = m[d] || []).push(e); }); });
     return m;
-  }, [entries, teamF, statusF]);
+  }, [entries, teamF, statusF, myTeamOnly, team]);
 
   // which buckets each team has occupied on a given day (full blocks both half-day slots)
   function occupancy(dayKey) {
@@ -106,16 +105,18 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
           <button className="btn-ghost sm" onClick={() => move(1)}><UIcon name="chevR" size={15} /></button>
           <div className="sched-title">{title}</div>
         </div>
-        <div className="cat-filter sched-teams">
-          <button className={"cat-chip" + (teamF === "all" ? " on" : "")} onClick={() => setTeamF("all")}
-            style={teamF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกทีม</button>
-          {teams.map((t) => (
-            <button key={t.id} className={"cat-chip" + (teamF === t.id ? " on" : "")} onClick={() => setTeamF(t.id)}
-              style={teamF === t.id ? { background: t.color, color: "#fff", borderColor: t.color } : {}}>
-              <span style={{ width: 8, height: 8, borderRadius: 9, background: teamF === t.id ? "#fff" : t.color, display: "inline-block", marginRight: 5 }} />{t.name.replace("Team ", "")}
-            </button>
-          ))}
-        </div>
+        {!myTeamOnly && (
+          <div className="cat-filter sched-teams">
+            <button className={"cat-chip" + (teamF === "all" ? " on" : "")} onClick={() => setTeamF("all")}
+              style={teamF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกทีม</button>
+            {teams.map((t) => (
+              <button key={t.id} className={"cat-chip" + (teamF === t.id ? " on" : "")} onClick={() => setTeamF(t.id)}
+                style={teamF === t.id ? { background: t.color, color: "#fff", borderColor: t.color } : {}}>
+                <span style={{ width: 8, height: 8, borderRadius: 9, background: teamF === t.id ? "#fff" : t.color, display: "inline-block", marginRight: 5 }} />{t.name.replace("Team ", "")}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="cat-filter sched-teams" style={{ marginTop: -4 }}>
         {STATUS_FILTERS.map(([v, l]) => (
@@ -138,7 +139,7 @@ export default function Schedule({ role, onOpenJob, onNewJob }) {
     return (
       <button className={"sched-chip" + (big ? " big" : "") + (full ? " full" : "") + (j.status === "done" ? " sc-done" : "")} onClick={() => onOpenJob && onOpenJob(j.job_no)}
         style={{ background: c, borderColor: c }} title={`${j.job_no} · ${scheduleLabel(j)} · ${STATUS[j.status] || ""}`}>
-        <span className="sc-team">{jobTypeDef(j.job_type)[2]} {teamName(j.assigned_team)}{j.status === "in_progress" ? " ●" : j.status === "done" ? " ✓" : ""}</span>
+        <span className="sc-team">{jobTypeDef(j.job_type)[2]} {teamName(j.assigned_team)}{j.status === "in_progress" ? " ●" : j.status === "done" ? " ✓" : j.status === "awaiting_approval" ? " ⏳" : j.status === "reschedule" ? " ↻" : ""}</span>
         <span className="sc-title">{j.title || j.customerName || "งาน"}</span>
         {big && j.customerName && j.title && <span className="sc-sub">{j.customerName}</span>}
         {multi && <span className="sc-badge">หลายวัน</span>}

@@ -3,7 +3,7 @@ import { listJobLogs, addJobLog, uploadMaterialPhoto } from "../lib/api";
 import { ATTACH_ACCEPT } from "../lib/format";
 import AttachThumb from "./AttachThumb";
 
-const STATUS_TH = { pending: "รอเริ่มงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", done: "เสร็จแล้ว", cancelled: "ยกเลิก" };
+const STATUS_TH = { pending: "รอเริ่มงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", awaiting_approval: "รออนุมัติ", reschedule: "รอนัดหมายใหม่", done: "เสร็จแล้ว", cancelled: "ยกเลิก" };
 const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."; };
 
 // Append-only timeline of a job: status changes + photo/comment updates.

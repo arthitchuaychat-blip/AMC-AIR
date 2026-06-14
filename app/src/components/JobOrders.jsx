@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, lineContactByCustomer, sendLineMessage } from "../lib/api";
-import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus } from "../lib/schedule";
+import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -10,11 +10,8 @@ import DocChips from "./DocChips";
 import AttachThumb from "./AttachThumb";
 import { ATTACH_ACCEPT } from "../lib/format";
 
-const STATUS = {
-  pending: { th: "รอจ่ายงาน", cls: "b-grey" }, scheduled: { th: "นัดแล้ว", cls: "b-blue" },
-  in_progress: { th: "กำลังทำ", cls: "b-amber" }, done: { th: "เสร็จ", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" },
-};
-const STATUS_OPTS = [["pending", "รอจ่ายงาน"], ["scheduled", "นัดแล้ว"], ["in_progress", "กำลังทำ"], ["done", "เสร็จ"], ["cancelled", "ยกเลิก"]];
+const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
+const STATUS_OPTS = JOB_STATUSES.map(([v, l]) => [v, l]);
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
@@ -264,6 +261,11 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                     </Combo>
                     <Combo className="inp" value={v.slot} onChange={(e) => setVisit(i, "slot", e.target.value)}>
                       {SLOTS.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.th}{s.time ? ` (${s.time})` : ""}</option>)}
+                    </Combo>
+                  </div>
+                  <div className="crm-row">
+                    <Combo className="inp" value={v.status || "scheduled"} onChange={(e) => setVisit(i, "status", e.target.value)}>
+                      {STATUS_OPTS.map(([sv, sl]) => <option key={sv} value={sv}>สถานะ: {sl}</option>)}
                     </Combo>
                   </div>
                   <div className="crm-row">
