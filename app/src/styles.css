@@ -830,8 +830,9 @@ select.inp{cursor:pointer}
 .doc,.doc *{ -webkit-print-color-adjust:exact; print-color-adjust:exact }
 .doc{font-family:var(--appfont);color:#0f1729;max-width:760px;margin:0 auto;font-size:12.5px;position:relative;padding-top:16px}
 .doc::before{content:"";position:absolute;top:0;left:0;right:0;height:8px;border-radius:6px;background:linear-gradient(90deg,#1f74e0,#33a7ef 60%,#5bc8f5)}
-/* sheet table: thead (letterhead + customer + project + column headers) repeats on every printed page */
-.doc-sheet{width:100%;border-collapse:collapse}
+/* sheet table: thead (letterhead + customer + project + column headers) repeats on every printed page.
+   IMPORTANT: must be border-collapse:separate — Chrome does NOT repeat thead with collapse. */
+.doc-sheet{width:100%;border-collapse:separate;border-spacing:0}
 .ds-head-cell{padding:0;text-align:left;font-weight:400;vertical-align:top}
 .doc-head{display:flex;justify-content:space-between;gap:20px;padding:6px 0 12px;margin-bottom:12px;border-bottom:2px solid #eef0f5}
 .doc-co{display:flex;gap:13px;align-items:flex-start}
