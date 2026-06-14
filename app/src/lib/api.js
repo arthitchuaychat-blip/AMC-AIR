@@ -355,17 +355,31 @@ export async function markPoReceived(po_no) {
 }
 
 // ---------- CRM: customers (+ contacts + sites) ----------
+// fetch every row across pages — adapts to whatever per-request cap the server enforces (uses count to know when done)
+async function _fetchAll(build) {
+  let from = 0, all = [], total = Infinity;
+  while (all.length < total) {
+    const { data, count, error } = await build(from, from + 999);
+    if (error) throw error;
+    if (count != null) total = count;
+    if (!data || !data.length) break;
+    all = all.concat(data);
+    from += data.length;
+    if (count == null && data.length < 1000) break;
+  }
+  return all;
+}
+
 export async function listCustomers() {
   const [c, cc, cs] = await Promise.all([
-    supabase.from("customers").select("*").order("created_at", { ascending: false }),
-    supabase.from("customer_contacts").select("*"),
-    supabase.from("customer_sites").select("*"),
+    _fetchAll((f, t) => supabase.from("customers").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(f, t)),
+    _fetchAll((f, t) => supabase.from("customer_contacts").select("*", { count: "exact" }).range(f, t)),
+    _fetchAll((f, t) => supabase.from("customer_sites").select("*", { count: "exact" }).range(f, t)),
   ]);
-  if (c.error) throw c.error; if (cc.error) throw cc.error; if (cs.error) throw cs.error;
   const byC = {}, byS = {};
-  (cc.data || []).forEach((x) => { (byC[x.customer_id] = byC[x.customer_id] || []).push(x); });
-  (cs.data || []).forEach((x) => { (byS[x.customer_id] = byS[x.customer_id] || []).push(x); });
-  return (c.data || []).map((cu) => ({ ...cu, contacts: byC[cu.id] || [], sites: byS[cu.id] || [] }));
+  cc.forEach((x) => { (byC[x.customer_id] = byC[x.customer_id] || []).push(x); });
+  cs.forEach((x) => { (byS[x.customer_id] = byS[x.customer_id] || []).push(x); });
+  return c.map((cu) => ({ ...cu, contacts: byC[cu.id] || [], sites: byS[cu.id] || [] }));
 }
 
 export async function saveCustomer(cust, contacts, sites) {
@@ -394,9 +408,18 @@ export async function deleteCustomer(id) {
 
 // bulk import customers (each row = {cust, contacts[], sites[]}). Inserts new records.
 export async function bulkImportCustomers(rows) {
-  let n = 0;
-  for (const r of rows) { await saveCustomer(r.cust, r.contacts || [], r.sites || []); n++; }
-  return n;
+  let ok = 0; const errors = [];
+  const CHUNK = 15; // run in small concurrent batches; one bad row no longer aborts the whole import
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const slice = rows.slice(i, i + CHUNK);
+    const res = await Promise.all(slice.map(async (r, j) => {
+      try { await saveCustomer(r.cust, r.contacts || [], r.sites || []); return true; }
+      catch (e) { errors.push(`แถว ${i + j + 1} (${r.cust?.name || "-"}): ${e.message || e}`); return false; }
+    }));
+    ok += res.filter(Boolean).length;
+  }
+  if (errors.length) console.warn("bulkImportCustomers — รายที่ล้มเหลว:", errors);
+  return { ok, failed: errors.length, errors };
 }
 
 // ---------- BOQ (ใบประมาณการต้นทุน) ----------

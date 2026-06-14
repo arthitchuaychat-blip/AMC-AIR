@@ -66,7 +66,11 @@ export default function CustomerImportModal({ onDone, onClose }) {
   async function doImport() {
     if (!parsed?.rows.length || busy) return;
     setBusy(true);
-    try { const n = await bulkImportCustomers(parsed.rows); onDone(n); }
+    try {
+      const res = await bulkImportCustomers(parsed.rows);
+      if (res.failed) { setMsg(`นำเข้าสำเร็จ ${res.ok} ราย · ล้มเหลว ${res.failed} ราย — ${res.errors.slice(0, 2).join(" | ")}`); setBusy(false); }
+      else onDone(res.ok, 0);
+    }
     catch (e) { setMsg("นำเข้าไม่สำเร็จ: " + (e.message || e)); setBusy(false); }
   }
 

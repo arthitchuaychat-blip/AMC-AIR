@@ -55,7 +55,8 @@
       "Bash(rm -f \"Inventory Management/app/public/README-logo.txt\")",
       "Bash(xxd)",
       "Bash(sed -i 's#C:\\\\\\\\\\\\\\\\Users.*csv\";#C:/Users/User/OneDrive/Desktop/files/ลูกค้า-พร้อมอัพโหลด.csv\";#' gen.cjs)",
-      "Bash(node gen.cjs)"
+      "Bash(node gen.cjs)",
+      "Bash(awk '{print $5, $9}')"
     ]
   }
 }

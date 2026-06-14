@@ -160,7 +160,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
       </div>
 
       {importing && <CustomerImportModal onClose={() => setImporting(false)}
-        onDone={(n) => { setImporting(false); flash(`นำเข้าลูกค้า ${n} ราย สำเร็จ`); load(); }} />}
+        onDone={(n, failed) => { setImporting(false); flash(failed ? `นำเข้า ${n} ราย · ล้มเหลว ${failed} ราย` : `นำเข้าลูกค้า ${n} ราย สำเร็จ`, !!failed); load(); }} />}
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{q ? `ไม่พบลูกค้า “${q}”` : "ยังไม่มีลูกค้า"}</div>}
