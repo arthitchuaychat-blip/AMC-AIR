@@ -4,6 +4,7 @@ import { listTeamJobOrders, listJobOrders, updateJobStatus } from "../lib/api";
 import { UIcon } from "../icons";
 import { slotDef, jobDays, parseYmd, thDayMon } from "../lib/schedule";
 import JobTimeline from "./JobTimeline";
+import AttachThumb from "./AttachThumb";
 
 const STATUS = {
   pending: { th: "รอเริ่มงาน", cls: "b-grey" }, scheduled: { th: "นัดแล้ว", cls: "b-blue" },
@@ -92,7 +93,7 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                   <div className="myjob-brief-title">📋 บรีฟจากฝ่ายขาย</div>
                   {jo.sales_note && <div className="myjob-brief-note">{jo.sales_note}</div>}
                   {jo.sales_photos && jo.sales_photos.length > 0 && (
-                    <div className="tl-photos">{jo.sales_photos.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer"><img src={u} alt="" /></a>)}</div>
+                    <div className="tl-photos">{jo.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>
                   )}
                 </div>
               )}

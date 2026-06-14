@@ -1,5 +1,7 @@
 import React from "react";
 import { listJobLogs, addJobLog, uploadMaterialPhoto } from "../lib/api";
+import { ATTACH_ACCEPT } from "../lib/format";
+import AttachThumb from "./AttachThumb";
 
 const STATUS_TH = { pending: "รอเริ่มงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", done: "เสร็จแล้ว", cancelled: "ยกเลิก" };
 const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."; };
@@ -20,7 +22,7 @@ export default function JobTimeline({ jobNo, canPost, author, flash }) {
     const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
     setUploading(true);
     try { const urls = []; for (const f of files) urls.push(await uploadMaterialPhoto(f, jobNo)); setPhotos((p) => [...p, ...urls]); }
-    catch (ex) { flash && flash("อัปโหลดรูปไม่สำเร็จ: " + (ex.message || ex), true); }
+    catch (ex) { flash && flash("อัปโหลดไม่สำเร็จ: " + (ex.message || ex), true); }
     setUploading(false);
   }
   const removePhoto = (i) => setPhotos((p) => p.filter((_, j) => j !== i));
@@ -49,7 +51,7 @@ export default function JobTimeline({ jobNo, canPost, author, flash }) {
                   ? <div className="tl-status">เปลี่ยนสถานะเป็น <b>{STATUS_TH[l.status] || l.status}</b></div>
                   : <>
                       {l.note && <div className="tl-note">{l.note}</div>}
-                      {l.photos?.length > 0 && <div className="tl-photos">{l.photos.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer"><img src={u} alt="" /></a>)}</div>}
+                      {l.photos?.length > 0 && <div className="tl-photos">{l.photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>}
                     </>}
               </div>
             </div>
@@ -62,12 +64,12 @@ export default function JobTimeline({ jobNo, canPost, author, flash }) {
           <div className="myjob-photos">
             {photos.map((u, i) => (
               <div className="myjob-photo" key={i}>
-                <img src={u} alt="" />
-                <button type="button" className="myjob-photo-x" onClick={() => removePhoto(i)} aria-label="ลบรูป">×</button>
+                <AttachThumb url={u} />
+                <button type="button" className="myjob-photo-x" onClick={() => removePhoto(i)} aria-label="ลบไฟล์">×</button>
               </div>
             ))}
-            <label className="myjob-addphoto">{uploading ? "…" : "＋ รูป"}
-              <input type="file" accept="image/*" capture="environment" multiple onChange={onFiles} hidden />
+            <label className="myjob-addphoto">{uploading ? "…" : "＋ รูป/ไฟล์"}
+              <input type="file" accept={ATTACH_ACCEPT} multiple onChange={onFiles} hidden />
             </label>
           </div>
           <textarea className="inp" rows={2} placeholder="เพิ่มบันทึก/คอมเมนต์ความคืบหน้า…" value={note} onChange={(e) => setNote(e.target.value)} />

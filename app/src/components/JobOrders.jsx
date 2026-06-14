@@ -7,6 +7,8 @@ import { buildOrderConfirm } from "../lib/confirmText";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 import DocChips from "./DocChips";
+import AttachThumb from "./AttachThumb";
+import { ATTACH_ACCEPT } from "../lib/format";
 
 const STATUS = {
   pending: { th: "รอจ่ายงาน", cls: "b-grey" }, scheduled: { th: "นัดแล้ว", cls: "b-blue" },
@@ -202,16 +204,16 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
 
           <label className="fld"><span>โน้ตถึงทีมช่าง (ฝ่ายขาย → ช่าง)</span>
             <textarea className="inp" rows={2} style={{ resize: "vertical" }} value={ed.sales_note} onChange={(e) => setF("sales_note", e.target.value)} placeholder="ข้อความ/ข้อควรระวังถึงช่าง เช่น ลูกค้าสะดวกช่วงบ่าย, จอดรถหลังตึก, ระวังพื้นไม้" /></label>
-          <div className="fld"><span>รูปหน้างานเบื้องต้น (ให้ช่างดูก่อนเข้างาน)</span>
+          <div className="fld"><span>รูป/ไฟล์หน้างานเบื้องต้น (ให้ช่างดูก่อนเข้างาน)</span>
             <div className="myjob-photos">
               {(ed.sales_photos || []).map((u, i) => (
                 <div className="myjob-photo" key={i}>
-                  <a href={u} target="_blank" rel="noreferrer"><img src={u} alt="" /></a>
-                  <button type="button" className="myjob-photo-x" onClick={() => removeBriefPhoto(i)} aria-label="ลบรูป">×</button>
+                  <AttachThumb url={u} />
+                  <button type="button" className="myjob-photo-x" onClick={() => removeBriefPhoto(i)} aria-label="ลบไฟล์">×</button>
                 </div>
               ))}
-              <label className="myjob-addphoto">{upBrief ? "…" : "＋ รูป"}
-                <input type="file" accept="image/*" multiple onChange={onBriefFiles} hidden />
+              <label className="myjob-addphoto">{upBrief ? "…" : "＋ รูป/ไฟล์"}
+                <input type="file" accept={ATTACH_ACCEPT} multiple onChange={onBriefFiles} hidden />
               </label>
             </div>
           </div>

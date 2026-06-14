@@ -18,6 +18,12 @@ export const custCode = (id) => (id ? "C" + String(id).padStart(6, "0") : "");
 // round to 2 decimals (money) — avoids accumulating rounding leftovers
 export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
+// attachments — tell images apart from other files (pdf/doc/…) by URL extension
+export const isImageUrl = (u) => /\.(jpe?g|png|gif|webp|heic|heif|bmp|svg|avif)(\?|#|$)/i.test(u || "");
+export const fileExt = (u) => ((String(u || "").split(/[?#]/)[0].split(".").pop()) || "ไฟล์").toUpperCase().slice(0, 5);
+// accept attribute for attach inputs: photos (camera/gallery) + common documents
+export const ATTACH_ACCEPT = "image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt";
+
 // is a date (YYYY-MM-DD or ISO) within [from, to] (inclusive)? empty from/to = open end
 export const inRange = (dateStr, from, to) => {
   if (!from && !to) return true;
