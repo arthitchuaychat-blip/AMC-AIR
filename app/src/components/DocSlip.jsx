@@ -39,7 +39,6 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
               {customer.taxId ? <>เลขประจำตัวผู้เสียภาษี {customer.taxId}</> : null}
               {customer.contactName || customer.contactPhone ? <>{customer.taxId ? " · " : ""}ผู้ติดต่อ {customer.contactName || ""}{customer.contactPhone ? ` ${customer.contactPhone}` : ""}</> : null}
             </div>
-            {customer.mapUrl && <div className="doc-cust-line">📍 หมุดแผนที่: <a href={customer.mapUrl} target="_blank" rel="noreferrer">เปิดแผนที่ (Google Maps)</a></div>}
           </div>
         </div>
 
