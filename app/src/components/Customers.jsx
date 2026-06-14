@@ -7,6 +7,8 @@ import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import CustomerImportModal from "./CustomerImportModal";
 
 const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", vat: true, address: "", note: "" });
+// สีไล่ต่อไซต์ เพื่อแยกกล่องไซต์ให้เห็นง่าย ไม่ตาลาย
+const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626"];
 
 export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
@@ -44,12 +46,12 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
     && (!ql || c.name.toLowerCase().includes(ql) || (c.tax_id || "").includes(q.trim())
       || c.contacts.some((ct) => (ct.phone || "").includes(q.trim()))));
 
-  function startNew() { setEditing({ cust: blankCust(), contacts: [{ name: "", phone: "", role: "" }], sites: [{ site_name: "", address: "", map_url: "" }] }); }
+  function startNew() { setEditing({ cust: blankCust(), contacts: [{ name: "", phone: "", role: "" }], sites: [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }] }); }
   function startEdit(c) {
     setEditing({
       cust: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", vat: c.vat, address: c.address || "", note: c.note || "" },
       contacts: c.contacts.length ? c.contacts.map((x) => ({ name: x.name || "", phone: x.phone || "", role: x.role || "" })) : [{ name: "", phone: "", role: "" }],
-      sites: c.sites.length ? c.sites.map((x) => ({ site_name: x.site_name || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", address: "", map_url: "" }],
+      sites: c.sites.length ? c.sites.map((x) => ({ site_name: x.site_name || "", contact_name: x.contact_name || "", phone: x.phone || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }],
     });
   }
   const setCust = (k, v) => setEditing((e) => ({ ...e, cust: { ...e.cust, [k]: v } }));
@@ -107,18 +109,28 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
             <button className="btn-ghost sm" onClick={() => addRow("contacts", { name: "", phone: "", role: "" })}><UIcon name="plus" size={13} /> เพิ่มผู้ติดต่อ</button>
           </div>
 
-          <div className="fld"><span>ที่อยู่ให้บริการ / ไซต์งาน (เพิ่มได้หลายที่)</span>
-            {e.sites.map((s, i) => (
-              <div className="crm-site" key={i}>
-                <div className="crm-row">
-                  <input className="inp" value={s.site_name} onChange={(ev) => setRow("sites", i, "site_name", ev.target.value)} placeholder="ชื่อไซต์ (เช่น สาขาลาดพร้าว)" />
-                  <input className="inp" value={s.map_url} onChange={(ev) => setRow("sites", i, "map_url", ev.target.value)} placeholder="ลิงก์ Google Maps" />
-                  <button className="line-x" onClick={() => delRow("sites", i)}><UIcon name="x" size={14} /></button>
+          <div className="fld"><span>ไซต์งาน / สถานที่ให้บริการ (เพิ่มได้หลายที่)</span>
+            {e.sites.map((s, i) => {
+              const col = SITE_COLORS[i % SITE_COLORS.length];
+              return (
+                <div className="crm-site" key={i} style={{ borderLeftColor: col, background: col + "24" }}>
+                  <div className="crm-site-head">
+                    <span className="crm-site-badge" style={{ background: col }}>📍 ไซต์ {i + 1}{s.site_name ? " · " + s.site_name : ""}</span>
+                    <button className="line-x" onClick={() => delRow("sites", i)}><UIcon name="x" size={14} /></button>
+                  </div>
+                  <div className="crm-row">
+                    <input className="inp" value={s.site_name} onChange={(ev) => setRow("sites", i, "site_name", ev.target.value)} placeholder="ชื่อไซต์ (เช่น สาขาลาดพร้าว)" />
+                    <input className="inp" value={s.map_url} onChange={(ev) => setRow("sites", i, "map_url", ev.target.value)} placeholder="ลิงก์ Google Maps" />
+                  </div>
+                  <div className="crm-row">
+                    <input className="inp" value={s.contact_name} onChange={(ev) => setRow("sites", i, "contact_name", ev.target.value)} placeholder="👤 ชื่อผู้ติดต่อ (ไซต์นี้)" />
+                    <input className="inp" value={s.phone} onChange={(ev) => setRow("sites", i, "phone", ev.target.value)} placeholder="📞 เบอร์โทร (ไซต์นี้)" />
+                  </div>
+                  <input className="inp" value={s.address} onChange={(ev) => setRow("sites", i, "address", ev.target.value)} placeholder="ที่อยู่ไซต์งาน" />
                 </div>
-                <input className="inp" value={s.address} onChange={(ev) => setRow("sites", i, "address", ev.target.value)} placeholder="ที่อยู่ไซต์งาน" />
-              </div>
-            ))}
-            <button className="btn-ghost sm" onClick={() => addRow("sites", { site_name: "", address: "", map_url: "" })}><UIcon name="plus" size={13} /> เพิ่มไซต์งาน</button>
+              );
+            })}
+            <button className="btn-ghost sm" onClick={() => addRow("sites", { site_name: "", contact_name: "", phone: "", address: "", map_url: "" })}><UIcon name="plus" size={13} /> เพิ่มไซต์งาน</button>
           </div>
 
           <label className="fld"><span>หมายเหตุ</span><input className="inp" value={e.cust.note} onChange={(ev) => setCust("note", ev.target.value)} placeholder="(ไม่บังคับ)" /></label>
@@ -230,13 +242,20 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
 
               <div className="cd-sec">ไซต์งาน ({viewing.sites.length})</div>
               {viewing.sites.length === 0 && <div className="cd-empty">— ไม่มี —</div>}
-              {viewing.sites.map((s, i) => (
-                <div className="cd-site" key={i}>
-                  <div className="cd-site-top"><span>📍 {s.site_name || "ไซต์งาน"}</span>
-                    {s.map_url && <a href={s.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm">แผนที่</a>}</div>
-                  {s.address && <div className="cd-site-addr">{s.address}</div>}
-                </div>
-              ))}
+              {viewing.sites.map((s, i) => {
+                const col = SITE_COLORS[i % SITE_COLORS.length];
+                return (
+                  <div className="cd-site" key={i} style={{ borderLeft: `3px solid ${col}`, background: col + "24", paddingLeft: 9, borderRadius: 8 }}>
+                    <div className="cd-site-top"><span>📍 {s.site_name || `ไซต์ ${i + 1}`}</span>
+                      {s.map_url && <a href={s.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm">แผนที่</a>}</div>
+                    {(s.contact_name || s.phone) && <div className="cd-row" style={{ padding: "2px 0" }}>
+                      <span>👤 {s.contact_name || "—"}</span>
+                      {s.phone && <a href={`tel:${s.phone}`} className="cd-tel">📞 {s.phone}</a>}
+                    </div>}
+                    {s.address && <div className="cd-site-addr">{s.address}</div>}
+                  </div>
+                );
+              })}
 
               {(() => {
                 const shownDocs = viewDocs.filter((e) => docF === "all" || e.type === docF);

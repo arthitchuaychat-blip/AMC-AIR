@@ -70,7 +70,7 @@ export default function CustomerFormModal({ initial, onClose, onSaved }) {
             {sites.map((s, i) => {
               const c = SITE_COLORS[i % SITE_COLORS.length];
               return (
-                <div className="crm-site" key={i} style={{ borderLeftColor: c, background: c + "0d" }}>
+                <div className="crm-site" key={i} style={{ borderLeftColor: c, background: c + "24" }}>
                   <div className="crm-site-head">
                     <span className="crm-site-badge" style={{ background: c }}>📍 ไซต์ {i + 1}{s.site_name ? " · " + s.site_name : ""}</span>
                     <button className="line-x" onClick={() => delRow(setSites, i)}><UIcon name="x" size={14} /></button>
