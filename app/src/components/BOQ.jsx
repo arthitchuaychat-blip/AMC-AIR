@@ -232,35 +232,28 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           metaRows={[{ label: "ชื่องาน", value: printB.title }]}
           projectTitle={printB.title}
           customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone, mapUrl: printB.mapUrl }}
-          terms={printB.note} termsPayment={printB.terms_payment} termsFreebies={printB.terms_freebies} termsWarranty={printB.terms_warranty} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]}>
+          terms={printB.note} termsPayment={printB.terms_payment} termsFreebies={printB.terms_freebies} termsWarranty={printB.terms_warranty} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]}
+          totals={<div className="doc-totals">
+            <div className="doc-grand"><span>ต้นทุนรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div>
+          </div>}>
           {(() => {
             const order = ["ac", "free", "charged", "service"];
             const bySec = {}; printB.items.forEach((x) => { (bySec[x.section] = bySec[x.section] || []).push(x); });
             let n = 0;
-            return (
-              <table className="doc-table">
-                <thead><tr><th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th></tr></thead>
-                <tbody>
-                  {order.filter((sec) => bySec[sec]?.length).map((sec) => {
-                    const rows = bySec[sec];
-                    const sub = rows.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0);
-                    return (
-                      <React.Fragment key={sec}>
-                        <tr className="doc-sec"><td colSpan="6">{SECTION_LABEL[sec] || sec}</td></tr>
-                        {rows.map((x) => { n++; return (
-                          <tr key={x.item_code + n}><td>{n}</td><td>{x.item_code || "-"}</td><td>{x.name}{x.description ? <div className="doc-item-desc">{x.description}</div> : null}</td><td className="r">{fmtNum(x.qty)} {x.unit || ""}</td><td className="r">{fmtBaht(x.unit_cost)}</td><td className="r">{sec === "free" ? "แถม" : fmtBaht(x.qty * x.unit_cost)}</td></tr>
-                        ); })}
-                        <tr className="doc-sec-sum"><td colSpan="5" className="r">รวม{SECTION_LABEL[sec] || sec}</td><td className="r">{sec === "free" ? "—" : fmtBaht(sub)}</td></tr>
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            );
+            return order.filter((sec) => bySec[sec]?.length).map((sec) => {
+              const rows = bySec[sec];
+              const sub = rows.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0);
+              return (
+                <React.Fragment key={sec}>
+                  <tr className="doc-sec"><td colSpan="6">{SECTION_LABEL[sec] || sec}</td></tr>
+                  {rows.map((x) => { n++; return (
+                    <tr key={x.item_code + n}><td>{n}</td><td>{x.item_code || "-"}</td><td>{x.name}{x.description ? <div className="doc-item-desc">{x.description}</div> : null}</td><td className="r">{fmtNum(x.qty)} {x.unit || ""}</td><td className="r">{fmtBaht(x.unit_cost)}</td><td className="r">{sec === "free" ? "แถม" : fmtBaht(x.qty * x.unit_cost)}</td></tr>
+                  ); })}
+                  <tr className="doc-sec-sum"><td colSpan="5" className="r">รวม{SECTION_LABEL[sec] || sec}</td><td className="r">{sec === "free" ? "—" : fmtBaht(sub)}</td></tr>
+                </React.Fragment>
+              );
+            });
           })()}
-          <div className="doc-totals">
-            <div className="doc-grand"><span>ต้นทุนรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div>
-          </div>
         </DocSlip>
       ); })()}
       {toast && <Toast t={toast} />}
