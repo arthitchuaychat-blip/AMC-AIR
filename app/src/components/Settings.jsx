@@ -38,7 +38,6 @@ function CompanyCard({ kind, title, sub, flash }) {
         <label className="fld"><span>เว็บไซต์</span><input className="inp" value={c.website || ""} onChange={(e) => set("website", e.target.value)} placeholder="www.amc-air.com" /></label>
       </div>
       <label className="fld"><span>บัญชีธนาคาร (สำหรับชำระเงิน)</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={c.bank_info || ""} onChange={(e) => set("bank_info", e.target.value)} placeholder={"ธ.กสิกรไทย 130-3-86355-5\nธ.ไทยพาณิชย์ 046-0-70228-9"} /></label>
-      <label className="fld"><span>เงื่อนไขมาตรฐาน (ขึ้นท้ายเอกสารเมื่อไม่ได้กรอกหมายเหตุ)</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={c.default_terms || ""} onChange={(e) => set("default_terms", e.target.value)} placeholder={"ยืนราคา 30 วัน · เครดิต 60 วัน · มัดจำ 50%"} /></label>
       <div style={{ marginTop: 6 }}>
         <button className="btn-primary" disabled={busy} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {busy ? "กำลังบันทึก…" : "บันทึกข้อมูลบริษัท"}</button>
       </div>
