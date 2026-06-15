@@ -563,7 +563,7 @@ select.inp{cursor:pointer}
   .print-area { position:absolute; left:0; top:0; width:100%; padding:0; }
   /* letterhead (thead) repeats on every page; keep blocks from splitting awkwardly */
   .doc-sheet thead { display:table-header-group; }
-  .doc-table tr, .doc-totals, .doc-terms-box, .doc-signs, .doc-cust { page-break-inside:avoid; break-inside:avoid; }
+  .doc-sheet>tbody>tr:not(.ds-full), .doc-totals, .doc-terms-box, .doc-signs, .doc-cust { page-break-inside:avoid; break-inside:avoid; }
   .doc::before { display:none; } /* the decorative bar would otherwise overlap repeated headers */
 }
 .slip{font-family:var(--appfont);color:#000;max-width:720px;margin:0 auto}
