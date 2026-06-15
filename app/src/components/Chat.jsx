@@ -13,8 +13,14 @@ import DocCapture from "./DocCapture";
 import { sendDocFromNode } from "../lib/sendDoc";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
-// curated set of LINE's basic bot-sendable stickers (package 446 — Moon/Brown classics)
-const STICKERS = [1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 2000, 2001, 2002, 2005, 2006, 2007, 2008, 2010].map((id) => ({ pkg: 446, id }));
+// LINE's basic bot-sendable sticker sets (only these official packages can be sent by a bot)
+const _range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+const STICKER_SETS = [
+  { name: "บราวน์ & โคนี่", pkg: 11537, ids: _range(52002734, 52002773) },
+  { name: "มูน & เจมส์", pkg: 446, ids: _range(1988, 2027) },
+  { name: "บราวน์ & โคนี่ (คลาสสิก)", pkg: 789, ids: _range(10855, 10892) },
+  { name: "แซลลี่", pkg: 1070, ids: _range(17839, 17878) },
+];
 const stickerThumb = (id) => `https://stickershop.line-scdn.net/stickershop/v1/sticker/${id}/android/sticker.png`;
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "";
@@ -58,6 +64,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [q, setQ] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [stickerOpen, setStickerOpen] = React.useState(false);
+  const [stickerSet, setStickerSet] = React.useState(0);
   const [showThread, setShowThread] = React.useState(false); // mobile pane toggle
   const [toast, setToast] = React.useState(null);
   const [quickReplies, setQuickReplies] = React.useState([]);
@@ -335,12 +342,19 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <button className="chat-tool ghost" onClick={() => setQrManage(true)}>✏️ จัดการคำตอบ</button>
                   </div>
                   {stickerOpen && (
-                    <div className="chat-stickers">
-                      {STICKERS.map((s) => (
-                        <button key={s.id} className="chat-sticker-pick" disabled={sending} onClick={() => sendSticker(s)} title="ส่งสติกเกอร์">
-                          <img src={stickerThumb(s.id)} alt="" loading="lazy" />
-                        </button>
-                      ))}
+                    <div className="chat-sticker-box">
+                      <div className="chat-sticker-tabs">
+                        {STICKER_SETS.map((set, i) => (
+                          <button key={set.pkg} className={"chat-sticker-tab" + (stickerSet === i ? " on" : "")} onClick={() => setStickerSet(i)}>{set.name}</button>
+                        ))}
+                      </div>
+                      <div className="chat-stickers">
+                        {(STICKER_SETS[stickerSet]?.ids || []).map((id) => (
+                          <button key={id} className="chat-sticker-pick" disabled={sending} onClick={() => sendSticker({ pkg: STICKER_SETS[stickerSet].pkg, id })} title="ส่งสติกเกอร์">
+                            <img src={stickerThumb(id)} alt="" loading="lazy" />
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                   <div className="chat-compose">

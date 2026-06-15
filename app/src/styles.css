@@ -1144,7 +1144,11 @@ select.inp{cursor:pointer}
 .chat-qr{font-family:inherit;font-size:11.5px;border:1px solid #cfe0d6;background:#f0fbf4;color:#16794a;border-radius:8px;padding:4px 10px;cursor:pointer;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-qr:hover{background:#e3f6ea}
 .chat-composer .chat-compose{border-top:none}
-.chat-stickers{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid var(--line-2);max-height:160px;overflow-y:auto}
+.chat-sticker-box{border-top:1px solid var(--line-2)}
+.chat-sticker-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 0}
+.chat-sticker-tab{font-size:11.5px;font-weight:600;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);border-radius:8px;padding:4px 10px;cursor:pointer}
+.chat-sticker-tab.on{background:#111;color:#fff;border-color:#111}
+.chat-stickers{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;max-height:170px;overflow-y:auto}
 .chat-sticker-pick{border:1px solid var(--line);background:#fff;border-radius:10px;padding:4px;cursor:pointer;line-height:0}
 .chat-sticker-pick:hover{background:var(--surface-2)}
 .chat-sticker-pick img{width:52px;height:52px;object-fit:contain}
