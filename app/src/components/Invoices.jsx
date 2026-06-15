@@ -142,11 +142,24 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
           {selQ && (
             <div className="inv-summary">
-              <div><span>ลูกค้า</span><b>{selQ.customerName || "-"} · {custCode(selQ.customer_id)}</b></div>
+              <div><span>ลูกค้า</span><b>{selQ.customerName || "-"} · {custCode(selQ.customer_id)} {selQ.customerType === "company" ? <span className="inv-tag-co">นิติบุคคล</span> : <span className="inv-tag-ind">บุคคลธรรมดา</span>}</b></div>
               <div><span>อ้างอิง</span><b>{selQ.quote_no}{selQ.boq_no ? ` · BOQ ${selQ.boq_no}` : ""}</b></div>
               <div><span>ยอดรวมทั้งสิ้น</span><b>{fmtBaht(selQ.grand)}</b></div>
               <div><span>วางบิลแล้ว</span><b>{fmtBaht(billed[selQ.quote_no] || 0)}</b></div>
               <div className="inv-remain"><span>คงเหลือวางบิลได้</span><b>{fmtBaht(remaining)}</b></div>
+            </div>
+          )}
+
+          {selQ && (
+            <div className="inv-items">
+              <div className="inv-items-head">รายการจากใบเสนอราคา · <span className="ii-svc">บริการ</span> = ฐานหัก ณ ที่จ่าย</div>
+              {snapshotItems(selQ).map((it, i) => (
+                <div className="inv-item-row" key={i}>
+                  <span className="ii-name">{it.name}{it.wht && <span className="ii-svc">บริการ</span>}</span>
+                  <span className="ii-qty">{Number(it.qty)} {it.unit || ""} × {fmtBaht(it.price)}</span>
+                  <span className="ii-amt">{fmtBaht(it.amount)}</span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -182,6 +195,11 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
               </label>
               <div className="fld" />
             </div>
+          )}
+
+          {/* ลูกค้าบุคคลธรรมดา + มีค่าบริการ — บอกให้ชัดว่าไม่หัก ณ ที่จ่าย (ไม่ใช่หายไปเฉยๆ) */}
+          {selQ && !canWhtInv && calc && calc.svcAmt > 0 && (
+            <div className="inv-wht-note">หัก ณ ที่จ่าย: ลูกค้าเป็น <b>บุคคลธรรมดา</b> จึงไม่หัก ณ ที่จ่าย — ถ้าลูกค้าเป็นนิติบุคคล ให้แก้ประเภทลูกค้าในเมนูลูกค้าก่อน ระบบจะคำนวณให้อัตโนมัติ</div>
           )}
 
           {selQ && calc && newTotal > 0 && (
