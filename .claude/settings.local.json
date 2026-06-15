@@ -61,7 +61,8 @@
       "Bash(echo \"exit: $?\")",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\User\\\\OneDrive\\\\Desktop\\\\Inventory Management\" -Recurse -Include \"*.jsx\", \"*.js\", \"*.sql\")",
       "Bash(Select-Object -First 50)",
-      "Bash(Format-Table FullName)"
+      "Bash(Format-Table FullName)",
+      "Bash(npm run *)"
     ]
   }
 }

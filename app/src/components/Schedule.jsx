@@ -1,7 +1,9 @@
 import React from "react";
 import { listJobOrders, listTeams } from "../lib/api";
 import { UIcon } from "../icons";
-import { BUCKETS, slotDef, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef, JOB_STATUSES } from "../lib/schedule";
+import { BUCKETS, slotDef, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef, JOB_STATUSES, jobStatusDef } from "../lib/schedule";
+import JobTimeline from "./JobTimeline";
+import AttachThumb from "./AttachThumb";
 
 const VIEWS = [["list", "รายการ"], ["day", "วัน"], ["week", "สัปดาห์"], ["month", "เดือน"]];
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l]) => [v, l]));
@@ -12,7 +14,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 // Monday-based start of the week containing d
 const weekStart = (d) => { const x = new Date(d); const dow = (x.getDay() + 6) % 7; return addDays(x, -dow); };
 
-export default function Schedule({ role, team, onOpenJob, onNewJob }) {
+export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
   const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
   const myTeamOnly = role === "tech"; // ช่างเห็นเฉพาะทีมตัวเอง · หัวหน้าช่าง/ออฟฟิศเห็นทุกทีม
   const [view, setView] = React.useState("week");
@@ -22,6 +24,7 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
   const [jobs, setJobs] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [detail, setDetail] = React.useState(null); // job/visit entry shown in the popup
 
   React.useEffect(() => { (async () => {
     setLoading(true);
@@ -128,8 +131,61 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
       {loading ? <div className="empty">กำลังโหลด…</div> : (
         view === "list" ? <AgendaView /> : view === "week" ? <WeekView /> : view === "day" ? <DayView /> : <MonthView />
       )}
+
+      {detail && <JobDetailModal job={detail} onClose={() => setDetail(null)} />}
     </div>
   );
+
+  // ---------- JOB POP-UP (ดูงาน + ความเคลื่อนไหว โดยไม่ต้องเด้งไปหน้างานของฉัน) ----------
+  function JobDetailModal({ job: j, onClose }) {
+    const st = jobStatusDef(j.status);
+    const readOnly = ["reschedule", "done", "cancelled"].includes(j.status);
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal sched-detail" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <div className="modal-title">
+              {jobTypeDef(j.job_type)[2]} {j.title || j.customerName || "งาน"}
+              <span>{j.job_no}</span>
+            </div>
+            <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button>
+          </div>
+          <div className="modal-body">
+            <div className="sd-badges">
+              <span className={"job-badge " + st[2]}>{st[1]}</span>
+              {j.assigned_team && <span className="myjob-team">ทีม {teamName(j.assigned_team)}</span>}
+            </div>
+
+            <div className="sd-when">🗓 {scheduleLabel({ scheduled_at: j.scheduled_at, end_date: j.end_date, slot: j.slot })}</div>
+
+            {j.customerName && <div className="myjob-row"><span>🏢</span> <span style={{ flex: 1 }}>{j.customerName}</span></div>}
+            {j.contact_name && <div className="myjob-row"><UIcon name="user" size={15} color="var(--ink-3)" /> {j.contact_name}
+              {j.contact_phone && <a href={`tel:${j.contact_phone}`} className="myjob-call">📞 {j.contact_phone}</a>}</div>}
+            {!j.contact_name && j.contact_phone && <div className="myjob-row"><span>📞</span> <a href={`tel:${j.contact_phone}`} className="myjob-call">{j.contact_phone}</a></div>}
+            {j.address && <div className="myjob-row"><span>📍</span> <span style={{ flex: 1 }}>{j.address}</span>
+              {j.map_url && <a href={j.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm">แผนที่</a>}</div>}
+            {j.details && <div className="myjob-details">{j.details}</div>}
+
+            {(j.sales_note || (j.sales_photos && j.sales_photos.length > 0)) && (
+              <div className="myjob-brief">
+                <div className="myjob-brief-title">📋 บรีฟจากฝ่ายขาย</div>
+                {j.sales_note && <div className="myjob-brief-note">{j.sales_note}</div>}
+                {j.sales_photos && j.sales_photos.length > 0 && (
+                  <div className="tl-photos">{j.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>
+                )}
+              </div>
+            )}
+
+            {typeof onOpenJob === "function" && (
+              <button className="btn-ghost sd-full" onClick={() => { onClose(); onOpenJob(j.job_no); }}>เปิดใบงานเต็ม →</button>
+            )}
+
+            {j.status !== "cancelled" && <JobTimeline jobNo={j.job_no} groupNo={j.group_no || j.job_no} linked={!!j.group_no} canPost={!readOnly} author={me} />}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ---------- LIST / AGENDA (Google-calendar style) ----------
   function AgendaView() {
@@ -152,7 +208,7 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
                   const c = teamColor(j.assigned_team); const sd = slotDef(j.slot);
                   const slotTxt = (!j.slot || j.slot === "custom") ? new Date(j.scheduled_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น." : (sd ? sd.th : "");
                   return (
-                    <button className={"agenda-row" + (j.status === "done" ? " sc-done" : "")} key={j._key} onClick={() => onOpenJob && onOpenJob(j.job_no)} style={{ borderLeftColor: c }}>
+                    <button className={"agenda-row" + (j.status === "done" ? " sc-done" : "")} key={j._key} onClick={() => setDetail(j)} style={{ borderLeftColor: c }}>
                       <span className="agenda-slot">{slotTxt}</span>
                       <span className="agenda-main">{jobTypeDef(j.job_type)[2]} {[j.customerName, j.title].filter(Boolean).join(" · ") || "งาน"}</span>
                       <span className="agenda-meta"><span style={{ width: 8, height: 8, borderRadius: 9, background: c, display: "inline-block", marginRight: 5 }} />{teamName(j.assigned_team)} · <b style={{ color: c }}>{STATUS[j.status] || ""}</b></span>
@@ -173,7 +229,7 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
     const full = slotBucket(j) === "full";
     const multi = jobDays(j).length > 1;
     return (
-      <button className={"sched-chip" + (big ? " big" : "") + (full ? " full" : "") + (j.status === "done" ? " sc-done" : "")} onClick={() => onOpenJob && onOpenJob(j.job_no)}
+      <button className={"sched-chip" + (big ? " big" : "") + (full ? " full" : "") + (j.status === "done" ? " sc-done" : "")} onClick={() => setDetail(j)}
         style={{ background: c, borderColor: c }} title={`${j.job_no} · ${scheduleLabel(j)} · ${STATUS[j.status] || ""}`}>
         <span className="sc-team">{jobTypeDef(j.job_type)[2]} {teamName(j.assigned_team)}{j.status === "in_progress" ? " ●" : j.status === "done" ? " ✓" : j.status === "awaiting_approval" ? " ⏳" : j.status === "reschedule" ? " ↻" : ""}</span>
         <span className="sc-title">{[j.customerName, j.title].filter(Boolean).join(" · ") || "งาน"}</span>
@@ -274,7 +330,7 @@ export default function Schedule({ role, team, onOpenJob, onNewJob }) {
                   {list.slice(0, 3).map((j) => (
                     <span key={j._key} className="sm-job" style={{ background: teamColor(j.assigned_team) }}
                       title={`${teamName(j.assigned_team)} · ${j.title || j.customerName || "งาน"}`}
-                      onClick={(e) => { e.stopPropagation(); onOpenJob && onOpenJob(j.job_no); }}>
+                      onClick={(e) => { e.stopPropagation(); setDetail(j); }}>
                       {jobTypeDef(j.job_type)[2]} {[j.customerName, j.title].filter(Boolean).join(" · ") || teamName(j.assigned_team)}
                     </span>
                   ))}

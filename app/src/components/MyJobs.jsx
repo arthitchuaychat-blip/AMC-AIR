@@ -18,6 +18,8 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
   const [tab, setTab] = React.useState("todo"); // todo | doing | done
+  const [expanded, setExpanded] = React.useState({}); // job_no → show full details/brief/timeline
+  const toggle = (no) => setExpanded((e) => ({ ...e, [no]: !e[no] }));
 
   async function load() {
     if (!allTeams && !team) { setLoading(false); return; }
@@ -124,9 +126,9 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
               {!jo.contact_name && jo.contact_phone && <div className="myjob-row"><span>📞</span> <a href={`tel:${jo.contact_phone}`} className="myjob-call">{jo.contact_phone}</a></div>}
               {jo.address && <div className="myjob-row"><span>📍</span> <span style={{ flex: 1 }}>{jo.address}</span>
                 {jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm">แผนที่</a>}</div>}
-              {jo.details && <div className="myjob-details">{jo.details}</div>}
+              {jo.details && <div className={"myjob-details" + (expanded[jo.job_no] ? "" : " clamp")}>{jo.details}</div>}
 
-              {(jo.sales_note || (jo.sales_photos && jo.sales_photos.length > 0)) && (
+              {expanded[jo.job_no] && (jo.sales_note || (jo.sales_photos && jo.sales_photos.length > 0)) && (
                 <div className="myjob-brief">
                   <div className="myjob-brief-title">📋 บรีฟจากฝ่ายขาย</div>
                   {jo.sales_note && <div className="myjob-brief-note">{jo.sales_note}</div>}
@@ -177,9 +179,12 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                   {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
                 </div>
               )}
-              {jo.status === "in_progress" && <div className="myjob-hint">เข้าหน้างานได้หลายครั้ง · เบิกวัสดุเพิ่มได้ไม่จำกัด · แนบรูป/คอมเมนต์ลงไทม์ไลน์ด้านล่าง</div>}
+              {jo.status === "in_progress" && expanded[jo.job_no] && <div className="myjob-hint">เข้าหน้างานได้หลายครั้ง · เบิกวัสดุเพิ่มได้ไม่จำกัด · แนบรูป/คอมเมนต์ลงไทม์ไลน์ด้านล่าง</div>}
 
-              {jo.status !== "cancelled" && <JobTimeline jobNo={jo.job_no} groupNo={jo.group_no || jo.job_no} linked={!!jo.group_no} canPost={!TECH_READONLY.includes(jo.status)} author={me} flash={flash} />}
+              <button className="myjob-expand" onClick={() => toggle(jo.job_no)}>
+                {expanded[jo.job_no] ? "▴ ย่อ" : "▾ ดูรายละเอียด & ความเคลื่อนไหว"}
+              </button>
+              {expanded[jo.job_no] && jo.status !== "cancelled" && <JobTimeline jobNo={jo.job_no} groupNo={jo.group_no || jo.job_no} linked={!!jo.group_no} canPost={!TECH_READONLY.includes(jo.status)} author={me} flash={flash} />}
             </div>
           );
         })}

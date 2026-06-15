@@ -813,6 +813,13 @@ select.inp{cursor:pointer}
 .myjob-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);padding:5px 0}
 .myjob-call{margin-left:auto;font-weight:700;color:var(--primary)}
 .myjob-details{white-space:pre-line;font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin:8px 0;line-height:1.6}
+.myjob-details.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
+.sched-detail .sd-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.sched-detail .sd-when{font-size:13px;font-weight:600;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:9px 12px;margin-bottom:12px}
+.sched-detail .sd-full{width:100%;margin:10px 0 4px;justify-content:center;font-weight:600}
+.sched-detail .myjob-row{margin:7px 0}
+.myjob-expand{width:100%;margin-top:8px;border:1px dashed var(--line);background:var(--surface-2);color:var(--primary);font-weight:600;font-size:12.5px;border-radius:10px;padding:7px;cursor:pointer}
+.myjob-expand:hover{background:var(--surface)}
 .myjob-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 .myjob-actions .btn-primary,.myjob-actions .btn-ghost{flex:1;min-width:140px}
 .myjob-cust{font-size:13.5px;font-weight:700;color:var(--primary);margin-top:4px}
