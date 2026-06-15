@@ -59,9 +59,26 @@ export const ymd = (d) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDa
 export const parseYmd = (s) => { const [y, m, d] = String(s).split("-").map(Number); return new Date(y, m - 1, d); };
 const THMON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const THDOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+const THDOW_FULL = ["วันอาทิตย์", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์"];
 export const thDayMon = (d) => `${d.getDate()} ${THMON[d.getMonth()]}`;
 export const thDow = (d) => THDOW[d.getDay()];
+export const thDowFull = (d) => THDOW_FULL[d.getDay()];
 export const thMonthYear = (d) => `${THMON[d.getMonth()]} ${d.getFullYear() + 543}`;
+const beYY = (d) => String((d.getFullYear() + 543) % 100).padStart(2, "0");
+// full readable date: "วันจันทร์ 15 มิ.ย. 69"
+export const thFullDate = (d) => `${THDOW_FULL[d.getDay()]} ${d.getDate()} ${THMON[d.getMonth()]} ${beYY(d)}`;
+
+// slot + time range text: "รอบเช้า 10:00–13:00 น." · "เต็มวัน (ทั้งวัน)" · "เวลา 09:30 น."
+export function slotTimeText(jo) {
+  if (!jo.slot || jo.slot === "custom") {
+    if (!jo.scheduled_at) return "เลือกเวลาเอง";
+    const t = new Date(jo.scheduled_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+    return `เวลา ${t} น.`;
+  }
+  if (jo.slot === "full") return "เต็มวัน (ทั้งวัน)";
+  const def = slotDef(jo.slot);
+  return def ? `รอบ${def.th} ${def.time} น.` : "";
+}
 
 // which display bucket a job falls in: 'full' | 'morning' | 'afternoon'
 export function slotBucket(jo) {
@@ -93,18 +110,17 @@ export function jobsOverlap(a, b) {
   return ba === "full" || bb === "full" || ba === bb;
 }
 
-// human label for a job's schedule, e.g. "13 มิ.ย. · เช้า" or "13–15 มิ.ย. · เต็มวัน" or "13 มิ.ย. · 09:30 น."
+// full human label for a job's schedule:
+//   single day → "วันจันทร์ 15 มิ.ย. 69 · รอบเช้า 10:00–13:00 น."
+//   multi-day  → "วันจันทร์ 15 มิ.ย. 69 – พ. 17 มิ.ย. · รอบเช้า 10:00–13:00 น. · 3 วัน"
 export function scheduleLabel(jo) {
   if (!jo.scheduled_at) return "ยังไม่นัด";
   const start = new Date(jo.scheduled_at);
-  const def = slotDef(jo.slot);
-  const slotTxt = (!jo.slot || jo.slot === "custom")
-    ? start.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."
-    : def.th;
+  const slotTxt = slotTimeText(jo);
   const days = jobDays(jo);
   if (days.length > 1) {
     const end = parseYmd(days[days.length - 1]);
-    return `${thDayMon(start)}–${thDayMon(end)} · ${slotTxt} · ${days.length} วัน`;
+    return `${thFullDate(start)} – ${thDow(end)}. ${thDayMon(end)} · ${slotTxt} · ${days.length} วัน`;
   }
-  return `${thDayMon(start)} · ${slotTxt}`;
+  return `${thFullDate(start)} · ${slotTxt}`;
 }
