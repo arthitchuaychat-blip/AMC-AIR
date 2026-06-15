@@ -285,7 +285,6 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         const allAmtP = (printI.items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0);
         const svcAmtP = whtItems.reduce((a, i) => a + (Number(i.amount) || 0), 0);
         const whtBaseP = allAmtP > 0 ? round2((printI.base || 0) * svcAmtP / allAmtP) : 0;
-        const whtNames = whtItems.map((i) => i.name).filter(Boolean);
         return (
         <DocSlip company={co} titleTh="ใบแจ้งหนี้" titleEn="INVOICE" docNo={printI.invoice_no}
           metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, { label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }]}
@@ -299,7 +298,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtBaht(q?.grand || 0)}</b></div>
             <div style={{ marginTop: 4 }}><span>งวดที่ {printI.installment} ({Math.round(printI.pct)}%)</span><b /></div>
             <div className="doc-grand"><span>ยอดชำระงวดนี้</span><b>{fmtBaht(printI.total)}</b></div>
-            {printI.wht_amt > 0 && <div className="doc-wht-note"><span>ฐานค่าบริการที่ถูกหัก ณ ที่จ่าย{whtNames.length ? ` (${whtNames.join(", ")})` : ""}</span><b>{fmtBaht(whtBaseP)}</b></div>}
+            {printI.wht_amt > 0 && <div className="doc-wht-note"><span>ฐานค่าบริการที่ถูกหัก ณ ที่จ่าย</span><b>{fmtBaht(whtBaseP)}</b></div>}
             {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(printI.wht_rate) || 3}% (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
             {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtBaht(printI.total - printI.wht_amt)}</b></div>}
           </div>}>
