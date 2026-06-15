@@ -1041,6 +1041,21 @@ export async function createUser({ email, password, name, role, team }) {
   return data.user;
 }
 
+// admin actions that need the service-role key → serverless function (guarded to admin/exec)
+async function callAdminUser(payload) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch("/api/admin-user", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) { let m = "HTTP " + res.status; try { m = (await res.json()).error || m; } catch { /* ignore */ } throw new Error(m); }
+  return res.json();
+}
+export const adminSetUserEmail = (userId, email) => callAdminUser({ action: "setEmail", userId, email });
+export const adminSetUserPassword = (userId, password) => callAdminUser({ action: "setPassword", userId, password });
+export const adminDeleteUser = (userId) => callAdminUser({ action: "delete", userId });
+
 // ---------- LINE OA chat ----------
 export async function listLineContacts() {
   const [c, cu] = await Promise.all([

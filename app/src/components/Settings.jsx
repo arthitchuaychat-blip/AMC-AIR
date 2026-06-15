@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany } from "../lib/api";
 import { UIcon } from "../icons";
 
 // company letterhead used on printed documents — two variants: VAT (kind="vat") / non-VAT (kind="novat")
@@ -78,19 +78,32 @@ function TeamRow({ team, onChanged, flash }) {
 
 function UserRow({ p, teams, onChanged, flash }) {
   const [name, setName] = React.useState(p.name || "");
+  const [email, setEmail] = React.useState(p.email || "");
   const [role, setRole] = React.useState(p.role || "tech");
   const [team, setTeam] = React.useState(p.team || "");
+  const [pw, setPw] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   async function save() {
     setBusy(true);
-    try { await updateProfile(p.id, { name, role, team }); flash(`บันทึก ${p.email} แล้ว`); onChanged(); }
-    catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
+    try {
+      await updateProfile(p.id, { name, role, team });
+      if (email.trim() && email.trim() !== p.email) await adminSetUserEmail(p.id, email.trim());
+      if (pw.trim()) { await adminSetUserPassword(p.id, pw.trim()); setPw(""); }
+      flash(`บันทึก ${email.trim() || p.email} แล้ว`); onChanged();
+    } catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  async function del() {
+    if (!await confirmDialog(`ลบผู้ใช้ ${p.email}?\nบัญชีนี้จะเข้าระบบไม่ได้อีก (ลบถาวร)`)) return;
+    setBusy(true);
+    try { await adminDeleteUser(p.id); flash(`ลบ ${p.email} แล้ว`); onChanged(); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
   return (
     <div className="set-row set-row-user">
-      <div className="set-email">{p.email}</div>
-      <input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อ" />
+      <input className="inp" style={{ flex: "1.4", minWidth: 150 }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="อีเมล" />
+      <input className="inp" style={{ flex: "1", minWidth: 90 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อ" />
       <Combo className="inp" value={role} onChange={(e) => setRole(e.target.value)}>
         {ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
       </Combo>
@@ -98,7 +111,9 @@ function UserRow({ p, teams, onChanged, flash }) {
         <option value="">— ทีม —</option>
         {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
       </Combo>
+      <input className="inp" style={{ flex: "1", minWidth: 110 }} type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="ตั้งรหัสใหม่ (เว้นว่าง=ไม่เปลี่ยน)" />
       <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
+      <button className="btn-ghost sm danger" disabled={busy} onClick={del} title="ลบผู้ใช้"><UIcon name="trash" size={14} /></button>
     </div>
   );
 }
