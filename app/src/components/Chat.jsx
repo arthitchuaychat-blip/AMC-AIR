@@ -322,7 +322,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <button className="chat-tool ghost" onClick={() => setQrManage(true)}>✏️ จัดการคำตอบ</button>
                   </div>
                   <div className="chat-compose">
-                    <textarea className="inp" rows={1} value={text} placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ…"}
+                    <textarea className="inp chat-input" rows={4} value={text} placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)"}
                       onChange={(e) => setText(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
                     <button className="btn-primary" disabled={sending || !text.trim()} onClick={send}>{sending ? "…" : "ส่ง"}</button>
