@@ -509,7 +509,9 @@ select.inp{cursor:pointer}
 .set-row .code-chip{flex:none;min-width:46px;text-align:center}
 .set-email{flex:1.5;min-width:0;font-size:12.5px;font-weight:600;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set-row .btn-ghost.sm{flex:none}
-.set-row-user{flex-wrap:wrap}
+.set-row-user{flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:10px}
+.set-row-user .inp{background:#fff}
+.set-row-user .inp:first-child{flex-basis:100%;font-weight:700;color:var(--ink)}
 
 /* ---------- catalog: view toggle + list mode ---------- */
 .view-seg .seg-btn{padding:7px 11px}
