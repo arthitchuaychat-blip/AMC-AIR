@@ -1166,7 +1166,7 @@ select.inp{cursor:pointer}
 .tc-pickrow,.tc-checkrow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:13.5px;color:var(--ink)}
 .tc-pickrow:hover,.tc-checkrow:hover{background:var(--surface-2)}
 .tc-av{flex:none;width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;text-transform:uppercase}
-.tc-toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;font-size:13.5px;font-weight:600;padding:11px 20px;border-radius:12px;box-shadow:var(--shadow-lg);z-index:300}
+.tc-toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;font-size:13px;font-weight:600;padding:11px 20px;border-radius:12px;box-shadow:var(--shadow-lg);z-index:300;max-width:90vw;text-align:center;line-height:1.4}
 @media(max-width:760px){.tc-board{flex-direction:column;height:auto}.tc-rooms{width:auto;max-height:38vh}.tc-main{min-height:60vh}}
 /* job picker for confirm */
 .confirm-job{display:block;width:100%;text-align:left;font-family:inherit;border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:10px 13px;margin-bottom:8px;cursor:pointer}

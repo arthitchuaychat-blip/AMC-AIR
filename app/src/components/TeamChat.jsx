@@ -68,7 +68,7 @@ export default function TeamChat() {
     setSending(false);
   }
   async function openDm(otherId) {
-    try { const id = await createDmRoom(otherId); setModal(null); await loadRooms(); setSel(id); } catch (e) { flash("เปิดแชตไม่สำเร็จ"); }
+    try { const id = await createDmRoom(otherId); setModal(null); await loadRooms(); setSel(id); } catch (e) { flash("เปิดแชตไม่สำเร็จ: " + (e?.message || e)); }
   }
 
   const selRoom = rooms.find((r) => r.id === sel);
@@ -144,7 +144,7 @@ export default function TeamChat() {
 
       {modal === "dm" && <DmModal staff={staff.filter((s) => s.id !== me?.id)} onPick={openDm} onClose={() => setModal(null)} />}
       {modal === "group" && <GroupModal staff={staff.filter((s) => s.id !== me?.id)} jobs={jobs}
-        onCreate={async (payload) => { try { const id = await createChatRoom(payload); setModal(null); await loadRooms(); setSel(id); } catch { flash("สร้างกลุ่มไม่สำเร็จ"); } }}
+        onCreate={async (payload) => { try { const id = await createChatRoom(payload); setModal(null); await loadRooms(); setSel(id); } catch (e) { flash("สร้างกลุ่มไม่สำเร็จ: " + (e?.message || e)); } }}
         onClose={() => setModal(null)} />}
       {toast && <div className="tc-toast">{toast}</div>}
     </div>
