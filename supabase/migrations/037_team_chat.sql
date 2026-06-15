@@ -36,7 +36,7 @@ create index if not exists chat_messages_room_idx on chat_messages(room_id, crea
 -- SECURITY DEFINER → อ่าน chat_members ตรงๆ เลี่ยง recursion ใน policy
 create or replace function chat_is_member(p_room bigint) returns boolean
 language sql security definer stable set search_path = public as $$
-  select exists (select 1 from chat_rooms r where r.id = p_room and r.kind = 'company')
+  select exists (select 1 from chat_rooms r where r.id = p_room and (r.kind = 'company' or r.created_by = auth.uid()))
       or exists (select 1 from chat_members m where m.room_id = p_room and m.user_id = auth.uid());
 $$;
 
