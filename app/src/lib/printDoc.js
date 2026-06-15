@@ -22,15 +22,20 @@ export function writeAndPrint(win, selector = ".print-area") {
 <title>เอกสาร AMC AIR</title>
 ${styles}
 <style>
-  @page{ size:A4; margin:13mm 11mm }
+  /* margin:0 removes the browser's auto header/footer band (date · about:blank · url · page no.);
+     our own page margins are applied INSIDE so they repeat on every page. */
+  @page{ size:A4; margin:0 }
   html,body{ margin:0;padding:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact }
   /* undo the app's print hacks so the document (and its repeated header) is fully visible */
   @media screen { .print-area{ display:block !important } }
   @media print { body *{ visibility:visible !important } }
-  .print-area{ position:static !important; width:auto !important; padding:0 }
+  .print-area{ position:static !important; width:auto !important; padding:0 14mm }   /* left/right page margin (every page) */
+  .doc{ max-width:none !important; margin:0 !important; min-height:297mm; padding-top:0; padding-bottom:14mm }
   .doc::before{ display:none }
   .doc-sheet{ border-collapse:separate !important; border-spacing:0 }
   .doc-sheet thead{ display:table-header-group !important }
+  .ds-head-cell{ padding-top:13mm }   /* top page margin — repeats with the header on every page */
+  .doc-signs{ margin-top:auto }       /* signatures pinned to the bottom of the page */
   .doc-table tr,.doc-totals,.doc-terms-box,.doc-cust,.doc-signs{ break-inside:avoid; page-break-inside:avoid }
 </style></head><body>${src.outerHTML}</body></html>`;
 

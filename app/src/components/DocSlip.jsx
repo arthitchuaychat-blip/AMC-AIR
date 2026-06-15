@@ -63,27 +63,26 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
             {children}
             {totals && <tr className="ds-full ds-totals"><td colSpan={6}>{totals}</td></tr>}
             <tr className="ds-full"><td colSpan={6}>
-              <div className="doc-foot">
-                <div className="doc-terms">
-                  {paymentInfo && <div className="doc-terms-box"><div className="doc-terms-title">การชำระเงิน</div><div className="doc-terms-body">{paymentInfo}</div></div>}
-                  {termsPayment && <div className="doc-terms-box"><div className="doc-terms-title">เงื่อนไขการชำระเงิน</div><div className="doc-terms-body">{termsPayment}</div></div>}
-                  {termsFreebies && <div className="doc-terms-box"><div className="doc-terms-title">ชุดวัสดุแถมมาตรฐาน</div><div className="doc-terms-body">{termsFreebies}</div></div>}
-                  {termsWarranty && <div className="doc-terms-box"><div className="doc-terms-title">การรับประกัน</div><div className="doc-terms-body">{termsWarranty}</div></div>}
-                  {bank && <div className="doc-terms-box"><div className="doc-terms-title">ชำระเงินผ่านบัญชี</div><div className="doc-terms-body">{bank}</div></div>}
-                </div>
-                <div className="doc-signs">
-                  {(signLabels.length ? signLabels : ["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]).map((s, i) => (
-                    <div className="doc-sign" key={i}>
-                      <div className="doc-sign-line" />
-                      <div className="doc-sign-label">{s}</div>
-                      <div className="doc-sign-date">วันที่ ......./......./.......</div>
-                    </div>
-                  ))}
-                </div>
+              <div className="doc-terms">
+                {paymentInfo && <div className="doc-terms-box"><div className="doc-terms-title">การชำระเงิน</div><div className="doc-terms-body">{paymentInfo}</div></div>}
+                {termsPayment && <div className="doc-terms-box"><div className="doc-terms-title">เงื่อนไขการชำระเงิน</div><div className="doc-terms-body">{termsPayment}</div></div>}
+                {termsFreebies && <div className="doc-terms-box"><div className="doc-terms-title">ชุดวัสดุแถมมาตรฐาน</div><div className="doc-terms-body">{termsFreebies}</div></div>}
+                {termsWarranty && <div className="doc-terms-box"><div className="doc-terms-title">การรับประกัน</div><div className="doc-terms-body">{termsWarranty}</div></div>}
+                {bank && <div className="doc-terms-box"><div className="doc-terms-title">ชำระเงินผ่านบัญชี</div><div className="doc-terms-body">{bank}</div></div>}
               </div>
             </td></tr>
           </tbody>
         </table>
+        {/* signatures sit OUTSIDE the table so they can be pushed to the bottom of the page */}
+        <div className="doc-signs">
+          {(signLabels.length ? signLabels : ["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]).map((s, i) => (
+            <div className="doc-sign" key={i}>
+              <div className="doc-sign-line" />
+              <div className="doc-sign-label">{s}</div>
+              <div className="doc-sign-date">วันที่ ......./......./.......</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -828,7 +828,7 @@ select.inp{cursor:pointer}
 .slip-meta-wide{grid-column:1/-1}
 /* ===== full print document — modern themed (quotation / BOQ / invoice / receipt) ===== */
 .doc,.doc *{ -webkit-print-color-adjust:exact; print-color-adjust:exact }
-.doc{font-family:var(--appfont);color:#0f1729;max-width:760px;margin:0 auto;font-size:12px;position:relative;padding-top:11px}
+.doc{font-family:var(--appfont);color:#0f1729;max-width:760px;margin:0 auto;font-size:12px;position:relative;padding-top:11px;display:flex;flex-direction:column}
 .doc::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;border-radius:5px;background:linear-gradient(90deg,#1f74e0,#33a7ef 60%,#5bc8f5)}
 /* sheet table: thead (letterhead + customer + project + column headers) repeats on every printed page.
    IMPORTANT: must be border-collapse:separate — Chrome does NOT repeat thead with collapse.
@@ -875,11 +875,11 @@ select.inp{cursor:pointer}
 .doc-totals .doc-grand{font-weight:800;font-size:14px;background:#f7f8fb}
 .doc-totals .doc-grand:last-child{background:linear-gradient(135deg,#1f74e0,#2c63de);color:#fff;font-size:16px;padding-top:9px;padding-bottom:9px}
 .doc-foot{margin-top:18px}
-.doc-terms{display:flex;gap:12px;margin-bottom:28px}
+.doc-terms{display:flex;gap:12px;margin-bottom:18px}
 .doc-terms-box{flex:1;background:#f7f8fb;border:1px solid #eef0f5;border-radius:10px;padding:10px 13px}
 .doc-terms-title{font-weight:800;font-size:11px;margin-bottom:4px;color:#1f74e0;text-transform:uppercase;letter-spacing:.4px}
 .doc-terms-body{font-size:11.5px;white-space:pre-line;line-height:1.55;color:#334155}
-.doc-signs{display:flex;justify-content:space-around;gap:18px;margin-top:34px}
+.doc-signs{display:flex;justify-content:space-around;gap:18px;margin-top:auto;padding-top:30px}
 .doc-sign{text-align:center;flex:1}
 .doc-sign-line{border-top:1.5px dotted #94a3b8;margin:0 12px 6px}
 .doc-sign-label{font-size:12px;font-weight:700;color:#0f1729}
