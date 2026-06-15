@@ -1243,36 +1243,18 @@ export async function sendChatImage(roomId, imageUrl) {
   if (error) throw error;
 }
 
-// find-or-create a 1:1 DM room with another user
+// find-or-create a 1:1 DM room — done in a SECURITY DEFINER RPC so it isn't blocked by insert RLS
 export async function createDmRoom(otherId) {
-  const uid = await _uid();
-  const { data: mine } = await supabase.from("chat_members").select("room_id").eq("user_id", uid);
-  const myIds = (mine || []).map((x) => x.room_id);
-  if (myIds.length) {
-    const { data: dms } = await supabase.from("chat_rooms").select("id").eq("kind", "dm").in("id", myIds);
-    const dmIds = (dms || []).map((r) => r.id);
-    if (dmIds.length) {
-      const { data: shared } = await supabase.from("chat_members").select("room_id").eq("user_id", otherId).in("room_id", dmIds);
-      if (shared && shared.length) return shared[0].room_id; // existing DM
-    }
-  }
-  const { data: room, error } = await supabase.from("chat_rooms").insert({ kind: "dm", created_by: uid }).select("id").single();
+  const { data, error } = await supabase.rpc("chat_start_dm", { p_other: otherId });
   if (error) throw error;
-  const e2 = (await supabase.from("chat_members").insert([{ room_id: room.id, user_id: uid }, { room_id: room.id, user_id: otherId }])).error;
-  if (e2) throw e2;
-  return room.id;
+  return data;
 }
 
-// create a group or project room (ref ties it to a job/quote). memberIds excludes self (added automatically).
+// create a group/project room (+ members) via RPC. memberIds excludes self (added automatically).
 export async function createChatRoom({ name, memberIds = [], refType = null, refNo = null }) {
-  const uid = await _uid();
-  const kind = refNo ? "project" : "group";
-  const { data: room, error } = await supabase.from("chat_rooms").insert({ kind, name: name?.trim() || null, ref_type: refType, ref_no: refNo, created_by: uid }).select("id").single();
+  const { data, error } = await supabase.rpc("chat_create_room", { p_name: name || "", p_members: memberIds, p_ref_type: refType, p_ref_no: refNo });
   if (error) throw error;
-  const ids = [...new Set([uid, ...memberIds])];
-  const e2 = (await supabase.from("chat_members").insert(ids.map((id) => ({ room_id: room.id, user_id: id })))).error;
-  if (e2) throw e2;
-  return room.id;
+  return data;
 }
 
 // mark a room read up to now (creates my membership row for the company room on first open)

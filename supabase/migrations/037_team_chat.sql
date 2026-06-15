@@ -75,3 +75,35 @@ where not exists (select 1 from chat_rooms where kind = 'company');
 
 -- เปิด realtime ให้ข้อความ
 alter publication supabase_realtime add table chat_messages;
+
+-- สร้างห้องผ่าน RPC (SECURITY DEFINER) — เลี่ยงปัญหา insert RLS ทั้งหมด
+create or replace function chat_start_dm(p_other uuid) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare v_me uuid := auth.uid(); v_room bigint;
+begin
+  select r.id into v_room from chat_rooms r
+   where r.kind = 'dm'
+     and exists (select 1 from chat_members m where m.room_id = r.id and m.user_id = v_me)
+     and exists (select 1 from chat_members m where m.room_id = r.id and m.user_id = p_other)
+   limit 1;
+  if v_room is not null then return v_room; end if;
+  insert into chat_rooms(kind, created_by) values ('dm', v_me) returning id into v_room;
+  insert into chat_members(room_id, user_id) values (v_room, v_me), (v_room, p_other);
+  return v_room;
+end; $$;
+
+create or replace function chat_create_room(p_name text, p_members uuid[], p_ref_type text, p_ref_no text) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare v_me uuid := auth.uid(); v_room bigint;
+  v_kind text := case when coalesce(p_ref_no,'') <> '' then 'project' else 'group' end;
+begin
+  insert into chat_rooms(kind, name, ref_type, ref_no, created_by)
+    values (v_kind, nullif(trim(p_name), ''), p_ref_type, nullif(p_ref_no,''), v_me) returning id into v_room;
+  insert into chat_members(room_id, user_id)
+    select v_room, uid from (select distinct unnest(array_append(coalesce(p_members,'{}'::uuid[]), v_me)) as uid) s
+    where uid is not null;
+  return v_room;
+end; $$;
+
+grant execute on function chat_start_dm(uuid) to authenticated;
+grant execute on function chat_create_room(text, uuid[], text, text) to authenticated;
