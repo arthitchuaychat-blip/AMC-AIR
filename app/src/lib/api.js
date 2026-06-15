@@ -1121,6 +1121,7 @@ async function callLineSend(to, payload) {
 export const sendLineMessage = (to, text) => callLineSend(to, { text });
 export const sendLineImage = (to, imageUrl) => callLineSend(to, { imageUrl });
 export const sendLineFile = (to, fileUrl, fileName) => callLineSend(to, { fileUrl, fileName });
+export const sendLineSticker = (to, packageId, stickerId) => callLineSend(to, { packageId, stickerId });
 
 // upload an image to send through the chat → public URL (used by LINE image messages)
 export async function uploadChatImage(file) {

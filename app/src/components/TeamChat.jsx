@@ -142,7 +142,7 @@ export default function TeamChat() {
               <div className="chat-compose">
                 <label className={"chat-tool" + (sending ? " disabled" : "")}>📷<input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} /></label>
                 <label className={"chat-tool" + (sending ? " disabled" : "")}>📎<input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} /></label>
-                <textarea className="inp" rows={1} value={text} placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ…"}
+                <textarea className="inp" rows={3} value={text} placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัด)"}
                   onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
                 <button className="btn-primary" disabled={!text.trim() || sending} onClick={send}>ส่ง</button>
               </div>

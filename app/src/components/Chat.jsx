@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
@@ -13,6 +13,9 @@ import DocCapture from "./DocCapture";
 import { sendDocFromNode } from "../lib/sendDoc";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
+// curated set of LINE's basic bot-sendable stickers (package 446 — Moon/Brown classics)
+const STICKERS = [1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 2000, 2001, 2002, 2005, 2006, 2007, 2008, 2010].map((id) => ({ pkg: 446, id }));
+const stickerThumb = (id) => `https://stickershop.line-scdn.net/stickershop/v1/sticker/${id}/android/sticker.png`;
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "";
 // CRM stages (sales phase) for a LINE contact
@@ -54,6 +57,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [text, setText] = React.useState("");
   const [q, setQ] = React.useState("");
   const [sending, setSending] = React.useState(false);
+  const [stickerOpen, setStickerOpen] = React.useState(false);
   const [showThread, setShowThread] = React.useState(false); // mobile pane toggle
   const [toast, setToast] = React.useState(null);
   const [quickReplies, setQuickReplies] = React.useState([]);
@@ -170,6 +174,14 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     setSending(true);
     try { const url = await uploadChatImage(f); await sendLineFile(sel, url, f.name); }
     catch (ex) { flash("ส่งไฟล์ไม่สำเร็จ: " + (ex.message || ex), true); }
+    setSending(false);
+  }
+  // send a LINE sticker (basic bot-sendable set)
+  async function sendSticker(s) {
+    if (!sel || sending) return;
+    setStickerOpen(false); setSending(true);
+    try { await sendLineSticker(sel, s.pkg, s.id); }
+    catch (ex) { flash("ส่งสติกเกอร์ไม่สำเร็จ: " + (ex.message || ex), true); }
     setSending(false);
   }
 
@@ -311,6 +323,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <label className={"chat-tool" + (sending ? " disabled" : "")}>📎 ไฟล์
                       <input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} />
                     </label>
+                    <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => setStickerOpen((o) => !o)}>😊 สติกเกอร์</button>
                     {quickReplies.map((qr) => {
                       const label = qr.title || qr.text;
                       return (
@@ -321,6 +334,15 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     })}
                     <button className="chat-tool ghost" onClick={() => setQrManage(true)}>✏️ จัดการคำตอบ</button>
                   </div>
+                  {stickerOpen && (
+                    <div className="chat-stickers">
+                      {STICKERS.map((s) => (
+                        <button key={s.id} className="chat-sticker-pick" disabled={sending} onClick={() => sendSticker(s)} title="ส่งสติกเกอร์">
+                          <img src={stickerThumb(s.id)} alt="" loading="lazy" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="chat-compose">
                     <textarea className="inp chat-input" rows={4} value={text} placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)"}
                       onChange={(e) => setText(e.target.value)}

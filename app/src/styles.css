@@ -1144,6 +1144,10 @@ select.inp{cursor:pointer}
 .chat-qr{font-family:inherit;font-size:11.5px;border:1px solid #cfe0d6;background:#f0fbf4;color:#16794a;border-radius:8px;padding:4px 10px;cursor:pointer;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-qr:hover{background:#e3f6ea}
 .chat-composer .chat-compose{border-top:none}
+.chat-stickers{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid var(--line-2);max-height:160px;overflow-y:auto}
+.chat-sticker-pick{border:1px solid var(--line);background:#fff;border-radius:10px;padding:4px;cursor:pointer;line-height:0}
+.chat-sticker-pick:hover{background:var(--surface-2)}
+.chat-sticker-pick img{width:52px;height:52px;object-fit:contain}
 /* ===== internal team chat ===== */
 .tc-board{display:flex;gap:14px;height:calc(100vh - 150px);min-height:440px}
 .tc-rooms{width:290px;flex:none;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--surface)}

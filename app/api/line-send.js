@@ -26,16 +26,19 @@ export default async function handler(req, res) {
   const prof = (pr.ok ? await pr.json() : [])[0];
   if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
 
-  const { to, text, imageUrl, fileUrl, fileName } = await readJson(req);
-  if (!to || (!text?.trim() && !imageUrl && !fileUrl)) return res.status(400).json({ error: "missing to/text" });
+  const { to, text, imageUrl, fileUrl, fileName, packageId, stickerId } = await readJson(req);
+  if (!to || (!text?.trim() && !imageUrl && !fileUrl && !stickerId)) return res.status(400).json({ error: "missing to/text" });
 
   // LINE bots can't push a raw file → send the file as a clickable link in a text message
   const fname = fileName || "ไฟล์เอกสาร";
-  const messages = imageUrl
-    ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }]
-    : fileUrl
-      ? [{ type: "text", text: `📄 ${fname}\n${fileUrl}` }]
-      : [{ type: "text", text }];
+  const stickerImg = stickerId ? `https://stickershop.line-scdn.net/stickershop/v1/sticker/${stickerId}/android/sticker.png` : null;
+  const messages = stickerId
+    ? [{ type: "sticker", packageId: String(packageId), stickerId: String(stickerId) }]
+    : imageUrl
+      ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }]
+      : fileUrl
+        ? [{ type: "text", text: `📄 ${fname}\n${fileUrl}` }]
+        : [{ type: "text", text }];
   const r = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
@@ -43,12 +46,14 @@ export default async function handler(req, res) {
   });
   if (!r.ok) return res.status(502).json({ error: "line: " + (await r.text().catch(() => r.status)) });
 
-  const row = imageUrl
-    ? { line_user_id: to, direction: "out", type: "image", image_url: imageUrl, text: "[รูปภาพ]", sent_by: user.id }
-    : fileUrl
-      ? { line_user_id: to, direction: "out", type: "file", file_url: fileUrl, file_name: fname, text: `[ไฟล์] ${fname}`, sent_by: user.id }
-      : { line_user_id: to, direction: "out", type: "text", text, sent_by: user.id };
-  const last = imageUrl ? "[รูปภาพ]" : fileUrl ? `[ไฟล์] ${fname}` : text;
+  const row = stickerId
+    ? { line_user_id: to, direction: "out", type: "sticker", image_url: stickerImg, text: "[สติกเกอร์]", sent_by: user.id }
+    : imageUrl
+      ? { line_user_id: to, direction: "out", type: "image", image_url: imageUrl, text: "[รูปภาพ]", sent_by: user.id }
+      : fileUrl
+        ? { line_user_id: to, direction: "out", type: "file", file_url: fileUrl, file_name: fname, text: `[ไฟล์] ${fname}`, sent_by: user.id }
+        : { line_user_id: to, direction: "out", type: "text", text, sent_by: user.id };
+  const last = stickerId ? "[สติกเกอร์]" : imageUrl ? "[รูปภาพ]" : fileUrl ? `[ไฟล์] ${fname}` : text;
   await fetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
   await fetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(to)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ last_message: last, last_message_at: new Date().toISOString(), unread: 0 }) });
   return res.status(200).json({ ok: true });
