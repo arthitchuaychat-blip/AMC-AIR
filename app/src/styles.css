@@ -561,7 +561,10 @@ select.inp{cursor:pointer}
   body * { visibility:hidden !important; }
   .print-area, .print-area * { visibility:visible !important; }
   .print-area { position:absolute; left:0; top:0; width:100%; padding:0; }
-  /* letterhead (thead) repeats on every page; keep blocks from splitting awkwardly */
+  /* letterhead (thead) repeats on every page; keep blocks from splitting awkwardly.
+     .doc must be block (not flex) in print — a <table> inside a flex container stops
+     Chrome from repeating <thead> across page breaks. */
+  .doc { display:block !important; }
   .doc-sheet thead { display:table-header-group; }
   .doc-sheet>tbody>tr:not(.ds-full), .doc-totals, .doc-terms-box, .doc-signs, .doc-cust { page-break-inside:avoid; break-inside:avoid; }
   .doc::before { display:none; } /* the decorative bar would otherwise overlap repeated headers */
