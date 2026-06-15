@@ -6,7 +6,7 @@ import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel } from "../lib/schedule";
-import { fmtBaht, fmtNum, custCode, matchText, matchPhone, ATTACH_ACCEPT } from "../lib/format";
+import { fmtBaht, fmtNum, custCode, matchText, matchPhone, eqi, ATTACH_ACCEPT } from "../lib/format";
 import { UIcon, MaterialThumb } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
@@ -68,6 +68,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [acPicker, setAcPicker] = React.useState(false);
   const [acItems, setAcItems] = React.useState([]);
   const [acSearch, setAcSearch] = React.useState("");
+  const [acBrand, setAcBrand] = React.useState("all");
+  const [acBtu, setAcBtu] = React.useState("all");
+  const [acType, setAcType] = React.useState("all");
   const [showThread, setShowThread] = React.useState(false); // mobile pane toggle
   const [toast, setToast] = React.useState(null);
   const [quickReplies, setQuickReplies] = React.useState([]);
@@ -560,21 +563,44 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
           </div>
         </div>
       )}
-      {acPicker && (
+      {acPicker && (() => {
+        const nm = (s) => String(s || "").trim().toLowerCase();
+        const brands = [...new Map(acItems.filter((i) => i.brand).map((i) => [nm(i.brand), i.brand])).values()].sort((a, b) => a.localeCompare(b, "th"));
+        const types = [...new Map(acItems.filter((i) => i.ac_type).map((i) => [nm(i.ac_type), i.ac_type])).values()].sort((a, b) => a.localeCompare(b, "th"));
+        const btus = [...new Set(acItems.map((i) => i.btu).filter(Boolean).map(Number))].sort((a, b) => a - b);
+        const list = acItems.filter((it) =>
+          matchText(acSearch, it.th, it.en, it.code, it.brand, it.ac_type, String(it.btu || ""))
+          && (acBrand === "all" || eqi(it.brand, acBrand))
+          && (acBtu === "all" || String(it.btu) === String(acBtu))
+          && (acType === "all" || eqi(it.ac_type, acType)));
+        return (
         <div className="modal-overlay" onClick={() => setAcPicker(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 560 }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 600 }}>
             <div className="modal-head"><div className="modal-title">เลือกแอร์ส่งให้ลูกค้า</div>
               <button className="drawer-close" onClick={() => setAcPicker(false)}><UIcon name="x" size={20} /></button></div>
             <div className="modal-body">
-              <input className="inp" style={{ marginBottom: 10 }} value={acSearch} onChange={(e) => setAcSearch(e.target.value)} placeholder="🔍 ค้นหา ยี่ห้อ / รุ่น / BTU" />
+              <input className="inp" style={{ marginBottom: 8 }} value={acSearch} onChange={(e) => setAcSearch(e.target.value)} placeholder="🔍 ค้นหา ยี่ห้อ / รุ่น / BTU" />
+              <div className="ac-filters">
+                <Combo className="inp" value={acBrand} onChange={(e) => setAcBrand(e.target.value)}>
+                  <option value="all">ทุกยี่ห้อ</option>{brands.map((b) => <option key={b} value={b}>{b}</option>)}
+                </Combo>
+                <Combo className="inp" value={acBtu} onChange={(e) => setAcBtu(e.target.value)}>
+                  <option value="all">ทุกขนาด BTU</option>{btus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
+                </Combo>
+                <Combo className="inp" value={acType} onChange={(e) => setAcType(e.target.value)}>
+                  <option value="all">ทุกประเภทแอร์</option>{types.map((t) => <option key={t} value={t}>{t}</option>)}
+                </Combo>
+              </div>
+              <div className="ac-result-cnt">พบ {list.length} รายการ</div>
               <div className="ac-picklist">
                 {acItems.length === 0 && <div className="empty" style={{ fontSize: 13 }}>กำลังโหลด… (หรือยังไม่มีรายการแอร์)</div>}
-                {acItems.filter((it) => matchText(acSearch, it.th, it.en, it.code, it.brand, it.ac_type, String(it.btu || ""))).slice(0, 100).map((it) => (
+                {acItems.length > 0 && list.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ไม่พบแอร์ตามเงื่อนไข</div>}
+                {list.slice(0, 100).map((it) => (
                   <button key={it.code} className="ac-pickrow" disabled={sending} onClick={() => sendProduct(it)} title="ส่งให้ลูกค้า">
-                    <MaterialThumb mat={it} size={42} radius={10} />
+                    <MaterialThumb mat={it} size={54} radius={10} />
                     <div className="ac-pickinfo">
                       <div className="ac-pickname">{it.th}</div>
-                      <div className="ac-pickspec">{[it.brand, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null].filter(Boolean).join(" · ")}</div>
+                      <div className="ac-pickspec">{[it.brand, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null].filter(Boolean).join(" · ") || it.code}</div>
                     </div>
                     <div className="ac-pickprice">{fmtBaht(it.salePrice)}<span>ส่ง ›</span></div>
                   </button>
@@ -583,7 +609,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
       {custForm && <CustomerFormModal initial={custForm.initial} onClose={() => setCustForm(null)} onSaved={onCustSaved} />}
       {capJob && <DocCapture type={capJob.type} no={capJob.no}
         onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
