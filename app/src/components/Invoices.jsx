@@ -53,16 +53,14 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   function startNew(quoteNo = "") {
     const q = quoteNo ? quoteByNo[quoteNo] : null;
-    const isCompany = q?.customerType === "company";
     setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: "", basis: "percent", basis_value: 100, note: "",
-      wht: isCompany && !!q?.wht, wht_rate: Number(q?.wht_rate) || 3,
+      wht_rate: Number(q?.wht_rate) || 3,
       terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" });
   }
-  // picking a quote pulls its end-of-document terms + หัก ณ ที่จ่าย forward (still editable below)
+  // picking a quote pulls its end-of-document terms forward (หัก ณ ที่จ่าย คำนวณอัตโนมัติสำหรับนิติบุคคล)
   function pickQuote(qno) {
     const q = quoteByNo[qno];
-    const isCompany = q?.customerType === "company";
-    setEd((e) => ({ ...e, quote_no: qno, wht: isCompany && !!q?.wht, wht_rate: Number(q?.wht_rate) || 3, terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
+    setEd((e) => ({ ...e, quote_no: qno, wht_rate: Number(q?.wht_rate) || 3, terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
   }
   // approved quotes that still have a balance to bill (shown in the picker)
   const billableQuotes = approvedQuotes.filter((q) => round2((q.grand || 0) - (billed[q.quote_no] || 0)) > 0.01);
@@ -88,11 +86,12 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     const allAmt = items.reduce((a, i) => a + (Number(i.amount) || 0), 0);
     const svcAmt = items.filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0);
     const svcRatio = allAmt > 0 ? svcAmt / allAmt : 0;          // สัดส่วนค่าบริการ (ฐานที่ถูกหัก ณ ที่จ่าย)
-    const whtOn = canWhtInv && !!ed.wht;
+    const whtOn = canWhtInv && svcAmt > 0;          // นิติบุคคล + มีรายการค่าบริการ → หักอัตโนมัติ
     const whtRate = Number(ed.wht_rate) || 3;
     const whtBase = round2(baseInst * svcRatio);                // ฐานหัก ณ ที่จ่าย งวดนี้ (ค่าบริการ)
     const whtAmt = whtOn ? lineWhtAmt(items, baseInst, whtRate) : 0;
-    return { f, baseInst, vatInst, svcRatio, svcAmt, allAmt, whtOn, whtRate, whtBase, whtAmt, net: round2(newTotal - whtAmt) };
+    const svcNames = items.filter((i) => i.wht).map((i) => i.name);   // รายการค่าบริการที่เป็นฐานหัก
+    return { f, baseInst, vatInst, svcRatio, svcAmt, allAmt, whtOn, whtRate, whtBase, whtAmt, svcNames, net: round2(newTotal - whtAmt) };
   })();
 
   async function save() {
@@ -102,9 +101,11 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;
     const installment = list.filter((x) => x.quote_no === selQ.quote_no && x.status !== "cancelled").length + 1;
     const base = round2((selQ.afterDisc || 0) * f);
-    // หัก ณ ที่จ่าย — เริ่มต้นตามใบเสนอราคา แต่เลือกได้ตอนทำใบแจ้งหนี้ (เฉพาะลูกค้านิติบุคคล)
-    const useWht = canWhtInv && !!ed.wht;
-    const items = snapshotItems(selQ).map((it) => ({ ...it, wht: useWht && it.wht }));
+    // หัก ณ ที่จ่าย — คำนวณอัตโนมัติสำหรับลูกค้านิติบุคคลที่มีรายการค่าบริการ
+    const snap = snapshotItems(selQ);
+    const hasSvc = snap.some((it) => it.wht);
+    const useWht = canWhtInv && hasSvc;
+    const items = snap.map((it) => ({ ...it, wht: useWht && it.wht }));
     const wht_rate = useWht ? (Number(ed.wht_rate) || 3) : 0;
     const inv = {
       invoice_no: ed.invoice_no, quote_no: selQ.quote_no, boq_no: selQ.boq_no || null,
@@ -167,13 +168,15 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             <div className="fld"><span>ยอดงวดนี้ (รวม VAT)</span><div className="inv-total">{fmtBaht(newTotal)}</div></div>
           </div>
 
-          {canWhtInv && (
+          {canWhtInv && calc && (
             <div className="fld-row">
-              <label className="fld"><span>หัก ณ ที่จ่าย <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(ลูกค้านิติบุคคล)</span></span>
+              <label className="fld"><span>หัก ณ ที่จ่าย <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(นิติบุคคล · คำนวณอัตโนมัติจากค่าบริการ)</span></span>
                 <div className="line-add">
-                  <button type="button" className={"vat-toggle" + (ed.wht ? " on" : "")} style={{ flex: 1 }} onClick={() => setF("wht", !ed.wht)}>{ed.wht ? "หัก ณ ที่จ่าย" : "ไม่หัก ณ ที่จ่าย"}</button>
-                  <div className="inp inp-unit" style={{ width: 110, flex: "none", opacity: ed.wht ? 1 : .5 }}>
-                    <input type="number" min="0" step="0.1" value={ed.wht_rate} disabled={!ed.wht} onChange={(e) => setF("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
+                  <div className="inp" style={{ flex: 1, display: "flex", alignItems: "center", color: calc.whtOn ? "var(--ink)" : "var(--ink-3)" }}>
+                    {calc.whtOn ? `หัก ${calc.whtRate}% จากค่าบริการ ${fmtBaht(calc.whtBase)} = ${fmtBaht(calc.whtAmt)}` : "ไม่มีรายการค่าบริการให้หัก"}
+                  </div>
+                  <div className="inp inp-unit" style={{ width: 110, flex: "none", opacity: calc.whtOn ? 1 : .5 }}>
+                    <input type="number" min="0" step="0.1" value={ed.wht_rate} disabled={!calc.whtOn} onChange={(e) => setF("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
                   </div>
                 </div>
               </label>
@@ -195,8 +198,9 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
               <div className="ivb-row"><span>5) ฐานก่อน VAT งวดนี้ = {fmtBaht(selQ.afterDisc || 0)} × {(calc.f * 100).toFixed(2)}%</span><b>{fmtBaht(calc.baseInst)}</b></div>
               <div className="ivb-row"><span>6) VAT 7% งวดนี้</span><b>{fmtBaht(calc.vatInst)}</b></div>
               <div className="ivb-row ivb-sum"><span>7) ยอดงวดนี้รวม VAT (5+6)</span><b>{fmtBaht(newTotal)}</b></div>
-              {canWhtInv && ed.wht ? (<>
+              {calc.whtOn ? (<>
                 <div className="ivb-sep" />
+                {calc.svcNames.length > 0 && <div className="ivb-row ivb-muted"><span>รายการค่าบริการที่นำมาหัก: {calc.svcNames.join(", ")}</span><b /></div>}
                 <div className="ivb-row ivb-muted"><span>สัดส่วนค่าบริการ (ฐานที่ถูกหัก) = {fmtBaht(calc.svcAmt)} ÷ {fmtBaht(calc.allAmt)}</span><b>{(calc.svcRatio * 100).toFixed(2)}%</b></div>
                 <div className="ivb-row"><span>8) ฐานหัก ณ ที่จ่าย งวดนี้ = {fmtBaht(calc.baseInst)} × {(calc.svcRatio * 100).toFixed(2)}%</span><b>{fmtBaht(calc.whtBase)}</b></div>
                 <div className="ivb-row ivb-wht"><span>9) หัก ณ ที่จ่าย {calc.whtRate}% = {fmtBaht(calc.whtBase)} × {calc.whtRate}%</span><b>− {fmtBaht(calc.whtAmt)}</b></div>
@@ -274,7 +278,15 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         })}
       </div>
 
-      {printI && (() => { const q = quoteByNo[printI.quote_no]; const co = (q ? q.vat : true) ? companies.vat : companies.novat; return (
+      {printI && (() => {
+        const q = quoteByNo[printI.quote_no]; const co = (q ? q.vat : true) ? companies.vat : companies.novat;
+        // ฐานค่าบริการที่นำมาหัก ณ ที่จ่าย ของงวดนี้ (โชว์ให้ลูกค้าเห็นที่มา)
+        const whtItems = (printI.items || []).filter((i) => i.wht);
+        const allAmtP = (printI.items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0);
+        const svcAmtP = whtItems.reduce((a, i) => a + (Number(i.amount) || 0), 0);
+        const whtBaseP = allAmtP > 0 ? round2((printI.base || 0) * svcAmtP / allAmtP) : 0;
+        const whtNames = whtItems.map((i) => i.name).filter(Boolean);
+        return (
         <DocSlip company={co} titleTh="ใบแจ้งหนี้" titleEn="INVOICE" docNo={printI.invoice_no}
           metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, { label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }]}
           projectTitle={printI.title}
@@ -287,7 +299,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtBaht(q?.grand || 0)}</b></div>
             <div style={{ marginTop: 4 }}><span>งวดที่ {printI.installment} ({Math.round(printI.pct)}%)</span><b /></div>
             <div className="doc-grand"><span>ยอดชำระงวดนี้</span><b>{fmtBaht(printI.total)}</b></div>
-            {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
+            {printI.wht_amt > 0 && <div className="doc-wht-note"><span>ฐานค่าบริการที่ถูกหัก ณ ที่จ่าย{whtNames.length ? ` (${whtNames.join(", ")})` : ""}</span><b>{fmtBaht(whtBaseP)}</b></div>}
+            {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(printI.wht_rate) || 3}% (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
             {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtBaht(printI.total - printI.wht_amt)}</b></div>}
           </div>}>
           {(q?.items || []).map((it, i) => (

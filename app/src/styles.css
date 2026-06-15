@@ -893,6 +893,8 @@ select.inp{cursor:pointer}
 .doc-totals{margin:0 0 0 auto;width:330px;font-size:13px;border:1px solid #e7e9f0;border-radius:11px;overflow:hidden}
 .doc-totals>div{display:flex;justify-content:space-between;padding:7px 14px;border-bottom:1px solid #eef0f5}
 .doc-totals>div:last-child{border-bottom:none}
+.doc-totals .doc-wht-note{font-size:11px;color:#5b6472;background:#fafbfd}
+.doc-totals .doc-wht-note span{padding-right:8px}
 .doc-totals .doc-grand{font-weight:800;font-size:14px;background:#f7f8fb}
 .doc-totals .doc-grand:last-child{background:linear-gradient(135deg,#1f74e0,#2c63de);color:#fff;font-size:16px;padding-top:9px;padding-bottom:9px}
 .doc-foot{margin-top:18px}
