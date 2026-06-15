@@ -1,7 +1,7 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
-import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders } from "../lib/api";
-import { matchText } from "../lib/format";
+import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders } from "../lib/api";
+import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { UIcon } from "../icons";
 
 const KIND_ICON = { company: "🏢", dm: "👤", group: "👥", project: "🧰" };
@@ -67,6 +67,12 @@ export default function TeamChat() {
     try { const url = await uploadChatImage(f); await sendChatImage(sel, url); await loadMsgs(sel); } catch { flash("ส่งรูปไม่สำเร็จ"); }
     setSending(false);
   }
+  async function onFile(e) {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel) return;
+    setSending(true);
+    try { const url = await uploadChatImage(f); await sendChatFile(sel, url, f.name); await loadMsgs(sel); } catch (err) { flash("ส่งไฟล์ไม่สำเร็จ: " + (err?.message || err)); }
+    setSending(false);
+  }
   async function openDm(otherId) {
     try { const id = await createDmRoom(otherId); setModal(null); await loadRooms(); setSel(id); } catch (e) { flash("เปิดแชตไม่สำเร็จ: " + (e?.message || e)); }
   }
@@ -124,7 +130,9 @@ export default function TeamChat() {
                   return (
                     <div className={"chat-bubble " + (out ? "out" : "in")} key={m.id}>
                       {!out && <span className="chat-sender">{staffName[m.sender] || "ทีมงาน"}</span>}
-                      {m.image_url ? <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a> : <span>{m.text}</span>}
+                      {m.image_url ? <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a>
+                        : m.file_url ? <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || "เปิดไฟล์"}</a>
+                        : <span>{m.text}</span>}
                       <span className="chat-bubble-time">{new Date(m.created_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                   );
@@ -133,6 +141,7 @@ export default function TeamChat() {
               </div>
               <div className="chat-compose">
                 <label className={"chat-tool" + (sending ? " disabled" : "")}>📷<input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} /></label>
+                <label className={"chat-tool" + (sending ? " disabled" : "")}>📎<input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} /></label>
                 <textarea className="inp" rows={1} value={text} placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ…"}
                   onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
                 <button className="btn-primary" disabled={!text.trim() || sending} onClick={send}>ส่ง</button>

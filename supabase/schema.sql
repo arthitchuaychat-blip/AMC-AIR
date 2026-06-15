@@ -583,7 +583,7 @@ create table if not exists chat_messages (
   id bigint generated always as identity primary key,
   room_id bigint not null references chat_rooms(id) on delete cascade,
   sender uuid references auth.users(id) on delete set null,
-  text text, image_url text, created_at timestamptz not null default now()
+  text text, image_url text, file_url text, file_name text, created_at timestamptz not null default now()
 );
 -- (RLS policies + chat_is_member() helper + seed company room: see migration 037_team_chat.sql)
 

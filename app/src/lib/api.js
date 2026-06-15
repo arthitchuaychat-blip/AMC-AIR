@@ -1204,7 +1204,7 @@ export async function listChatRooms() {
   const ids = (rooms.data || []).map((r) => r.id);
   let msgs = [];
   if (ids.length) {
-    const r = await supabase.from("chat_messages").select("room_id,text,image_url,created_at,sender").in("room_id", ids).order("created_at", { ascending: false }).limit(500);
+    const r = await supabase.from("chat_messages").select("room_id,text,image_url,file_url,file_name,created_at,sender").in("room_id", ids).order("created_at", { ascending: false }).limit(500);
     msgs = r.data || [];
   }
   const last = {}, unread = {};
@@ -1222,7 +1222,7 @@ export async function listChatRooms() {
     if (!title && (r.kind === "group" || r.kind === "project")) title = others.slice(0, 3).join(", ") || "กลุ่ม";
     const lm = last[r.id];
     return { ...r, title, memberNames: others, memberCount: mem.length,
-      lastText: lm ? (lm.text || (lm.image_url ? "[รูปภาพ]" : "")) : "", lastAt: lm ? lm.created_at : r.created_at, unread: unread[r.id] || 0 };
+      lastText: lm ? (lm.text || (lm.image_url ? "[รูปภาพ]" : lm.file_url ? `[ไฟล์] ${lm.file_name || ""}` : "")) : "", lastAt: lm ? lm.created_at : r.created_at, unread: unread[r.id] || 0 };
   }).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
 }
 
@@ -1240,6 +1240,11 @@ export async function sendChatMessage(roomId, text) {
 export async function sendChatImage(roomId, imageUrl) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, image_url: imageUrl, text: null });
+  if (error) throw error;
+}
+export async function sendChatFile(roomId, fileUrl, fileName) {
+  const uid = await _uid();
+  const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, file_url: fileUrl, file_name: fileName || "ไฟล์", text: null });
   if (error) throw error;
 }
 
