@@ -530,7 +530,7 @@ export async function listQuotations() {
   const [q, it, cu, si, ct, jo, inv] = await Promise.all([
     supabase.from("quotations").select("*").order("created_at", { ascending: false }),
     supabase.from("quotation_items").select("*").order("id"),
-    supabase.from("customers").select("id,name,address,tax_id"),
+    supabase.from("customers").select("id,name,address,tax_id,type"),
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("job_orders").select("job_no,quote_no,scheduled_at"),
@@ -541,6 +541,7 @@ export async function listQuotations() {
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const custType = Object.fromEntries((cu.data || []).map((c) => [c.id, c.type]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
@@ -560,7 +561,7 @@ export async function listQuotations() {
     const map_url = (s && s.map_url) || _gmap(address);
     const ct0 = firstContact[qo.customer_id];
     return { ...qo, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
-      customerTaxId: custTax[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
+      customerTaxId: custTax[qo.customer_id] || null, customerType: custType[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
       siteAddress, address, map_url, createdByName: cb[qo.created_by] || null, contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       jobNo: jobByQuote[qo.quote_no]?.job_no || null, hasJob: !!jobByQuote[qo.quote_no], jobScheduledAt: jobByQuote[qo.quote_no]?.scheduled_at || null,
       hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,

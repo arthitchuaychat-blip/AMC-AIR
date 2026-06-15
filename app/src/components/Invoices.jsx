@@ -53,13 +53,16 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   function startNew(quoteNo = "") {
     const q = quoteNo ? quoteByNo[quoteNo] : null;
+    const isCompany = q?.customerType === "company";
     setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: "", basis: "percent", basis_value: 100, note: "",
+      wht: isCompany && !!q?.wht, wht_rate: Number(q?.wht_rate) || 3,
       terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" });
   }
-  // picking a quote pulls its end-of-document terms forward (still editable below)
+  // picking a quote pulls its end-of-document terms + หัก ณ ที่จ่าย forward (still editable below)
   function pickQuote(qno) {
     const q = quoteByNo[qno];
-    setEd((e) => ({ ...e, quote_no: qno, terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
+    const isCompany = q?.customerType === "company";
+    setEd((e) => ({ ...e, quote_no: qno, wht: isCompany && !!q?.wht, wht_rate: Number(q?.wht_rate) || 3, terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
   }
   // approved quotes that still have a balance to bill (shown in the picker)
   const billableQuotes = approvedQuotes.filter((q) => round2((q.grand || 0) - (billed[q.quote_no] || 0)) > 0.01);
@@ -73,6 +76,25 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     return round2(Math.min(t, remaining));
   })();
 
+  // หัก ณ ที่จ่าย เลือกได้ตอนทำใบแจ้งหนี้ — เฉพาะลูกค้านิติบุคคล
+  const canWhtInv = selQ?.customerType === "company";
+  // ----- breakdown ขั้นเป็นตอนของยอดงวดนี้ (โชว์ให้เห็นชัดในตัวแก้ไข) -----
+  const calc = (() => {
+    if (!selQ) return null;
+    const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;       // สัดส่วนงวดนี้เทียบยอดทั้งใบ
+    const baseInst = round2((selQ.afterDisc || 0) * f);          // ฐานก่อน VAT ของงวดนี้
+    const vatInst = round2((selQ.vatAmt || 0) * f);             // VAT 7% ของงวดนี้
+    const items = snapshotItems(selQ);
+    const allAmt = items.reduce((a, i) => a + (Number(i.amount) || 0), 0);
+    const svcAmt = items.filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0);
+    const svcRatio = allAmt > 0 ? svcAmt / allAmt : 0;          // สัดส่วนค่าบริการ (ฐานที่ถูกหัก ณ ที่จ่าย)
+    const whtOn = canWhtInv && !!ed.wht;
+    const whtRate = Number(ed.wht_rate) || 3;
+    const whtBase = round2(baseInst * svcRatio);                // ฐานหัก ณ ที่จ่าย งวดนี้ (ค่าบริการ)
+    const whtAmt = whtOn ? lineWhtAmt(items, baseInst, whtRate) : 0;
+    return { f, baseInst, vatInst, svcRatio, svcAmt, allAmt, whtOn, whtRate, whtBase, whtAmt, net: round2(newTotal - whtAmt) };
+  })();
+
   async function save() {
     if (!selQ) return flash("เลือกใบเสนอราคาก่อน", true);
     if (newTotal <= 0) return flash("ยอดงวดต้องมากกว่า 0 (อาจวางบิลครบ 100% แล้ว)", true);
@@ -80,10 +102,10 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;
     const installment = list.filter((x) => x.quote_no === selQ.quote_no && x.status !== "cancelled").length + 1;
     const base = round2((selQ.afterDisc || 0) * f);
-    // หัก ณ ที่จ่าย ล็อกตามใบเสนอราคา — ถ้าใบเสนอไม่หัก ใบแจ้งหนี้ก็ไม่หักด้วย
-    const useWht = !!selQ.wht;
+    // หัก ณ ที่จ่าย — เริ่มต้นตามใบเสนอราคา แต่เลือกได้ตอนทำใบแจ้งหนี้ (เฉพาะลูกค้านิติบุคคล)
+    const useWht = canWhtInv && !!ed.wht;
     const items = snapshotItems(selQ).map((it) => ({ ...it, wht: useWht && it.wht }));
-    const wht_rate = useWht ? (Number(selQ.wht_rate) || 3) : 0;
+    const wht_rate = useWht ? (Number(ed.wht_rate) || 3) : 0;
     const inv = {
       invoice_no: ed.invoice_no, quote_no: selQ.quote_no, boq_no: selQ.boq_no || null,
       customer_id: selQ.customer_id || null, site_id: selQ.site_id || null,
@@ -144,6 +166,47 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             </label>
             <div className="fld"><span>ยอดงวดนี้ (รวม VAT)</span><div className="inv-total">{fmtBaht(newTotal)}</div></div>
           </div>
+
+          {canWhtInv && (
+            <div className="fld-row">
+              <label className="fld"><span>หัก ณ ที่จ่าย <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(ลูกค้านิติบุคคล)</span></span>
+                <div className="line-add">
+                  <button type="button" className={"vat-toggle" + (ed.wht ? " on" : "")} style={{ flex: 1 }} onClick={() => setF("wht", !ed.wht)}>{ed.wht ? "หัก ณ ที่จ่าย" : "ไม่หัก ณ ที่จ่าย"}</button>
+                  <div className="inp inp-unit" style={{ width: 110, flex: "none", opacity: ed.wht ? 1 : .5 }}>
+                    <input type="number" min="0" step="0.1" value={ed.wht_rate} disabled={!ed.wht} onChange={(e) => setF("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
+                  </div>
+                </div>
+              </label>
+              <div className="fld" />
+            </div>
+          )}
+
+          {selQ && calc && newTotal > 0 && (
+            <div className="inv-breakdown">
+              <div className="ivb-title">ลำดับการคำนวณยอดงวดนี้</div>
+              <div className="ivb-row"><span>1) ยอดก่อน VAT ทั้งใบเสนอราคา</span><b>{fmtBaht(selQ.afterDisc || 0)}</b></div>
+              <div className="ivb-row"><span>2) VAT 7% ทั้งใบ {selQ.vat ? "" : "(ไม่คิด VAT)"}</span><b>{fmtBaht(selQ.vatAmt || 0)}</b></div>
+              <div className="ivb-row ivb-sum"><span>3) ยอดรวมทั้งสิ้นทั้งใบ (1+2)</span><b>{fmtBaht(selQ.grand || 0)}</b></div>
+              <div className="ivb-row ivb-muted"><span>– วางบิลไปแล้ว</span><b>{fmtBaht(billed[selQ.quote_no] || 0)}</b></div>
+              <div className="ivb-row ivb-muted"><span>= คงเหลือวางบิลได้</span><b>{fmtBaht(remaining)}</b></div>
+              <div className="ivb-sep" />
+              <div className="ivb-row"><span>4) งวดนี้ {ed.basis === "percent" ? `${Number(ed.basis_value) || 0}% ของยอดรวมทั้งสิ้น` : "ตามยอดที่กรอก"}</span><b>{fmtBaht(newTotal)}</b></div>
+              <div className="ivb-row ivb-muted"><span>→ สัดส่วนงวดนี้ = {fmtBaht(newTotal)} ÷ {fmtBaht(selQ.grand || 0)}</span><b>{(calc.f * 100).toFixed(2)}%</b></div>
+              <div className="ivb-row"><span>5) ฐานก่อน VAT งวดนี้ = {fmtBaht(selQ.afterDisc || 0)} × {(calc.f * 100).toFixed(2)}%</span><b>{fmtBaht(calc.baseInst)}</b></div>
+              <div className="ivb-row"><span>6) VAT 7% งวดนี้</span><b>{fmtBaht(calc.vatInst)}</b></div>
+              <div className="ivb-row ivb-sum"><span>7) ยอดงวดนี้รวม VAT (5+6)</span><b>{fmtBaht(newTotal)}</b></div>
+              {canWhtInv && ed.wht ? (<>
+                <div className="ivb-sep" />
+                <div className="ivb-row ivb-muted"><span>สัดส่วนค่าบริการ (ฐานที่ถูกหัก) = {fmtBaht(calc.svcAmt)} ÷ {fmtBaht(calc.allAmt)}</span><b>{(calc.svcRatio * 100).toFixed(2)}%</b></div>
+                <div className="ivb-row"><span>8) ฐานหัก ณ ที่จ่าย งวดนี้ = {fmtBaht(calc.baseInst)} × {(calc.svcRatio * 100).toFixed(2)}%</span><b>{fmtBaht(calc.whtBase)}</b></div>
+                <div className="ivb-row ivb-wht"><span>9) หัก ณ ที่จ่าย {calc.whtRate}% = {fmtBaht(calc.whtBase)} × {calc.whtRate}%</span><b>− {fmtBaht(calc.whtAmt)}</b></div>
+                <div className="ivb-row ivb-net"><span>10) ยอดรับสุทธิงวดนี้ (7 − 9)</span><b>{fmtBaht(calc.net)}</b></div>
+              </>) : (
+                <div className="ivb-row ivb-net"><span>8) ยอดรับสุทธิงวดนี้</span><b>{fmtBaht(newTotal)}</b></div>
+              )}
+            </div>
+          )}
+
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setF(k, v)} />
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
