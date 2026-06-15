@@ -1,10 +1,9 @@
 // Cross-device document printing. We render the document into a clean popup window and print that
 // (the in-page print trick prints blank on many mobile browsers).
 //
-// Paged.js lays the document into real A4 pages: the letterhead repeats on every page, the footer
-// shows our own page number ("1 / 2"), and the signature block is pinned to the bottom of the page —
-// so we can leave the browser's auto header/footer (date · about:blank · url) turned off.
-// If Paged.js can't load, we fall back to plain native print (header still repeats via <thead>).
+// The document is one <table> with the letterhead in <thead>; the browser repeats <thead> at the
+// top of every printed page (native pagination). border-collapse:separate is required for Chrome to
+// repeat it.
 
 export function openPrintWindow() {
   try { return window.open("", "_blank"); } catch (_) { return null; }
@@ -23,29 +22,24 @@ export function writeAndPrint(win, selector = ".print-area") {
 <title>เอกสาร AMC AIR</title>
 ${styles}
 <style>
-  /* our own page number in the footer margin → browser auto header/footer can be left off */
-  @page{ size:A4; margin:13mm 11mm 15mm; @bottom-right{ content:counter(page) " / " counter(pages); font-size:9.5px; color:#9aa5b3; } }
+  @page{ size:A4; margin:13mm 11mm }
   html,body{ margin:0;padding:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact }
-  /* IMPORTANT: undo the app's print rules (they hide everything except .print-area, which would hide
-     the pages Paged.js generates outside it → blank pages + missing repeated header). */
+  /* undo the app's print hacks so the document (and its repeated header) is fully visible */
   @media screen { .print-area{ display:block !important } }
   @media print { body *{ visibility:visible !important } }
   .print-area{ position:static !important; width:auto !important; padding:0 }
   .doc::before{ display:none }
+  .doc-sheet{ border-collapse:separate !important; border-spacing:0 }
+  .doc-sheet thead{ display:table-header-group !important }
   .doc-table tr,.doc-totals,.doc-terms-box,.doc-cust,.doc-signs{ break-inside:avoid; page-break-inside:avoid }
-</style>
-<script>
-  window.__printed = false;
-  function __fire(){ if (window.__printed) return; window.__printed = true; try { window.focus(); window.print(); } catch(e){} }
-  window.PagedConfig = { auto: true, after: function(){ setTimeout(__fire, 100); } };
-</script>
-<script src="https://cdn.jsdelivr.net/npm/pagedjs/dist/paged.polyfill.js"></script>
-</head><body>${src.outerHTML}</body></html>`;
+</style></head><body>${src.outerHTML}</body></html>`;
 
   win.document.open();
   win.document.write(doc);
   win.document.close();
 
-  // fallback: if Paged.js never finishes (CDN blocked/offline), print natively after a moment
-  setTimeout(() => { try { if (!win.__printed) { win.__printed = true; win.focus(); win.print(); } } catch (_) {} }, 4500);
+  let done = false;
+  const fire = () => { if (done) return; done = true; try { win.focus(); win.print(); } catch (_) {} };
+  try { win.onload = () => setTimeout(fire, 350); } catch (_) {}
+  setTimeout(fire, 1400); // fallback if onload never fires
 }
