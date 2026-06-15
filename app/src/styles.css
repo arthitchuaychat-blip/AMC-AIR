@@ -1141,6 +1141,33 @@ select.inp{cursor:pointer}
 .chat-qr{font-family:inherit;font-size:11.5px;border:1px solid #cfe0d6;background:#f0fbf4;color:#16794a;border-radius:8px;padding:4px 10px;cursor:pointer;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-qr:hover{background:#e3f6ea}
 .chat-composer .chat-compose{border-top:none}
+/* ===== internal team chat ===== */
+.tc-board{display:flex;gap:14px;height:calc(100vh - 150px);min-height:440px}
+.tc-rooms{width:290px;flex:none;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--surface)}
+.tc-rooms-top{padding:10px}
+.tc-rooms-acts{display:flex;gap:6px;padding:0 10px 10px;border-bottom:1px solid var(--line-2)}
+.tc-rooms-acts .btn-ghost{flex:1;justify-content:center}
+.tc-room-list{flex:1;overflow-y:auto}
+.tc-room{position:relative;display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 12px;border:none;border-bottom:1px solid var(--line-2);background:none;cursor:pointer}
+.tc-room:hover{background:var(--surface-2)}
+.tc-room.on{background:#e9f3fd}
+.tc-room-ic{font-size:20px;flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:9px}
+.tc-room-mid{flex:1;min-width:0;display:flex;flex-direction:column}
+.tc-room-title{font-size:13.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-room-cnt{font-weight:500;color:var(--ink-3);font-size:12px}
+.tc-room-last{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-main{flex:1;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--surface)}
+.tc-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--ink-3);font-size:14px}
+.tc-main-head{display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.tc-main-title{font-size:15px;font-weight:800;color:var(--ink)}
+.tc-main-sub{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:560px}
+.tc-msgs{flex:1;overflow-y:auto;padding:14px;background:#eef3fb;display:flex;flex-direction:column;gap:7px}
+.tc-picklist{max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.tc-pickrow,.tc-checkrow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:13.5px;color:var(--ink)}
+.tc-pickrow:hover,.tc-checkrow:hover{background:var(--surface-2)}
+.tc-av{flex:none;width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;text-transform:uppercase}
+.tc-toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;font-size:13.5px;font-weight:600;padding:11px 20px;border-radius:12px;box-shadow:var(--shadow-lg);z-index:300}
+@media(max-width:760px){.tc-board{flex-direction:column;height:auto}.tc-rooms{width:auto;max-height:38vh}.tc-main{min-height:60vh}}
 /* job picker for confirm */
 .confirm-job{display:block;width:100%;text-align:left;font-family:inherit;border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:10px 13px;margin-bottom:8px;cursor:pointer}
 .confirm-job:hover{border-color:var(--primary);background:var(--surface-2)}

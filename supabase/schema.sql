@@ -565,6 +565,28 @@ create policy dtp_read  on doc_term_presets for select to authenticated using (t
 create policy dtp_write on doc_term_presets for all to authenticated
   using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
 
+-- ---------- แชตภายในองค์กร (team chat) — see migration 037 for full RLS ----------
+create table if not exists chat_rooms (
+  id bigint generated always as identity primary key,
+  kind text not null check (kind in ('company','dm','group','project')),
+  name text, ref_type text, ref_no text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create table if not exists chat_members (
+  room_id bigint not null references chat_rooms(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  last_read_at timestamptz, created_at timestamptz not null default now(),
+  primary key (room_id, user_id)
+);
+create table if not exists chat_messages (
+  id bigint generated always as identity primary key,
+  room_id bigint not null references chat_rooms(id) on delete cascade,
+  sender uuid references auth.users(id) on delete set null,
+  text text, image_url text, created_at timestamptz not null default now()
+);
+-- (RLS policies + chat_is_member() helper + seed company room: see migration 037_team_chat.sql)
+
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles
 -- เช่น: update profiles set role='admin' where email='admin@yourco.com';

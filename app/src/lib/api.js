@@ -1186,6 +1186,102 @@ export async function deleteDocTermPreset(id) {
   if (error) throw error;
 }
 
+// ---------- internal team chat (company room / DMs / groups / project rooms) ----------
+async function _uid() { const { data: { user } } = await supabase.auth.getUser(); return user?.id || null; }
+
+// rooms visible to me (company + ones I'm a member of) with title, last message, unread count
+export async function listChatRooms() {
+  const uid = await _uid();
+  const [rooms, members, staff] = await Promise.all([
+    supabase.from("chat_rooms").select("*"),
+    supabase.from("chat_members").select("room_id,user_id,last_read_at"),
+    supabase.from("profiles").select("id,name,email"),
+  ]);
+  if (rooms.error) throw rooms.error;
+  const nameById = Object.fromEntries((staff.data || []).map((p) => [p.id, p.name || p.email]));
+  const memByRoom = {}; (members.data || []).forEach((m) => { (memByRoom[m.room_id] = memByRoom[m.room_id] || []).push(m); });
+  const myRead = {}; (members.data || []).forEach((m) => { if (m.user_id === uid) myRead[m.room_id] = m.last_read_at; });
+  const ids = (rooms.data || []).map((r) => r.id);
+  let msgs = [];
+  if (ids.length) {
+    const r = await supabase.from("chat_messages").select("room_id,text,image_url,created_at,sender").in("room_id", ids).order("created_at", { ascending: false }).limit(500);
+    msgs = r.data || [];
+  }
+  const last = {}, unread = {};
+  msgs.forEach((m) => {
+    if (!last[m.room_id]) last[m.room_id] = m;
+    const lr = myRead[m.room_id];
+    if (lr && m.sender !== uid && new Date(m.created_at) > new Date(lr)) unread[m.room_id] = (unread[m.room_id] || 0) + 1;
+  });
+  return (rooms.data || []).map((r) => {
+    const mem = memByRoom[r.id] || [];
+    const others = mem.filter((m) => m.user_id !== uid).map((m) => nameById[m.user_id]).filter(Boolean);
+    let title = r.name;
+    if (r.kind === "dm") title = others[0] || "ส่วนตัว";
+    if (!title && r.kind === "company") title = "ทั้งบริษัท";
+    if (!title && (r.kind === "group" || r.kind === "project")) title = others.slice(0, 3).join(", ") || "กลุ่ม";
+    const lm = last[r.id];
+    return { ...r, title, memberNames: others, memberCount: mem.length,
+      lastText: lm ? (lm.text || (lm.image_url ? "[รูปภาพ]" : "")) : "", lastAt: lm ? lm.created_at : r.created_at, unread: unread[r.id] || 0 };
+  }).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
+}
+
+export async function listChatMessages(roomId) {
+  const { data, error } = await supabase.from("chat_messages").select("*").eq("room_id", roomId).order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function sendChatMessage(roomId, text) {
+  const uid = await _uid();
+  const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, text: text.trim() });
+  if (error) throw error;
+}
+export async function sendChatImage(roomId, imageUrl) {
+  const uid = await _uid();
+  const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, image_url: imageUrl, text: null });
+  if (error) throw error;
+}
+
+// find-or-create a 1:1 DM room with another user
+export async function createDmRoom(otherId) {
+  const uid = await _uid();
+  const { data: mine } = await supabase.from("chat_members").select("room_id").eq("user_id", uid);
+  const myIds = (mine || []).map((x) => x.room_id);
+  if (myIds.length) {
+    const { data: dms } = await supabase.from("chat_rooms").select("id").eq("kind", "dm").in("id", myIds);
+    const dmIds = (dms || []).map((r) => r.id);
+    if (dmIds.length) {
+      const { data: shared } = await supabase.from("chat_members").select("room_id").eq("user_id", otherId).in("room_id", dmIds);
+      if (shared && shared.length) return shared[0].room_id; // existing DM
+    }
+  }
+  const { data: room, error } = await supabase.from("chat_rooms").insert({ kind: "dm", created_by: uid }).select("id").single();
+  if (error) throw error;
+  const e2 = (await supabase.from("chat_members").insert([{ room_id: room.id, user_id: uid }, { room_id: room.id, user_id: otherId }])).error;
+  if (e2) throw e2;
+  return room.id;
+}
+
+// create a group or project room (ref ties it to a job/quote). memberIds excludes self (added automatically).
+export async function createChatRoom({ name, memberIds = [], refType = null, refNo = null }) {
+  const uid = await _uid();
+  const kind = refNo ? "project" : "group";
+  const { data: room, error } = await supabase.from("chat_rooms").insert({ kind, name: name?.trim() || null, ref_type: refType, ref_no: refNo, created_by: uid }).select("id").single();
+  if (error) throw error;
+  const ids = [...new Set([uid, ...memberIds])];
+  const e2 = (await supabase.from("chat_members").insert(ids.map((id) => ({ room_id: room.id, user_id: id })))).error;
+  if (e2) throw e2;
+  return room.id;
+}
+
+// mark a room read up to now (creates my membership row for the company room on first open)
+export async function markChatRead(roomId) {
+  const uid = await _uid();
+  const { error } = await supabase.from("chat_members").upsert({ room_id: roomId, user_id: uid, last_read_at: new Date().toISOString() }, { onConflict: "room_id,user_id" });
+  if (error) throw error;
+}
+
 // ---------- cross-document links (full chain both directions) ----------
 // chain is keyed by quote_no: BOQ → quote → invoices/job-orders → receipts
 export async function listDocLinks() {

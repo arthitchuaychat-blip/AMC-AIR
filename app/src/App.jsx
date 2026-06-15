@@ -17,6 +17,7 @@ import Profit from "./components/Profit";
 import JobOrders from "./components/JobOrders";
 import Schedule from "./components/Schedule";
 import Chat from "./components/Chat";
+import TeamChat from "./components/TeamChat";
 import MyJobs from "./components/MyJobs";
 import Invoices from "./components/Invoices";
 import Receipts from "./components/Receipts";
@@ -26,6 +27,7 @@ const NAV = {
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
   chat: { th: "แชต LINE", en: "Chat", icon: "chat" },
+  teamchat: { th: "แชตทีม", en: "Team Chat", icon: "chat" },
   catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
   boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
   quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
@@ -39,20 +41,20 @@ const NAV = {
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
-const FULL_NAV = ["dashboard", "customers", "chat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "catalog", "movements", "jobs", "po", "profit", "settings"];
+const FULL_NAV = ["dashboard", "customers", "chat", "teamchat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "catalog", "movements", "jobs", "po", "profit", "settings"];
 const NAV_BY_ROLE = {
   admin: FULL_NAV,
   exec: FULL_NAV,
   finance: FULL_NAV,
-  sales: ["dashboard", "customers", "chat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "catalog", "profit"],
-  stock: ["catalog", "movements", "jobs", "po"],
-  lead_tech: ["myjobs", "joborders", "schedule", "catalog", "movements", "jobs"],
-  tech: ["myjobs", "schedule", "movements"],
+  sales: ["dashboard", "customers", "chat", "teamchat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "catalog", "profit"],
+  stock: ["teamchat", "catalog", "movements", "jobs", "po"],
+  lead_tech: ["myjobs", "teamchat", "joborders", "schedule", "catalog", "movements", "jobs"],
+  tech: ["myjobs", "teamchat", "schedule", "movements"],
 };
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-15·ขอบสะอาด-v21";
+const BUILD = "2026-06-15·แชตทีม-v22";
 
 function SetupNotice() {
   return (
@@ -197,6 +199,7 @@ export default function App() {
         {view === "chat" && <Chat role={role} onOpenDoc={openDoc} onGoCustomers={(name) => { setCustFocus(name); go("customers"); }}
           onCreateBoq={(cid) => { setBoqNewCust(String(cid)); go("boq"); }}
           onCreateSurvey={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }} />}
+        {view === "teamchat" && <TeamChat />}
         {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
           newForCustomer={boqNewCust} onNewConsumed={() => setBoqNewCust(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenDoc={openDoc} />}
