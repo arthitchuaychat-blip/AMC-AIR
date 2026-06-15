@@ -89,6 +89,13 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
     setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
   }
+  // duplicate: copy items/details into a brand-new BOQ (new number, not _edit) — for similar jobs
+  function duplicate(bo) {
+    const items = blankItems();
+    bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
+    setEd({ boq_no: genNo(), customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title ? bo.title + " (สำเนา)" : "", note: bo.note || "", terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
+    flash("คัดลอกเป็น BOQ ใหม่แล้ว — แก้ไขลูกค้า/รายการได้ แล้วกดบันทึก");
+  }
 
   const cust = custs.find((c) => String(c.id) === String(ed?.customer_id));
   const total = ed ? Object.values(ed.items).flat().reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) : 0;
@@ -218,6 +225,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
                 ? <span className="job-badge b-green">✓ ออกใบเสนอราคาแล้ว</span>
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(bo); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
+              {canEdit && <button className="btn-ghost sm" onClick={() => duplicate(bo)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
               {canEdit && <button className="btn-ghost sm" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
               {canEdit && <button className="btn-ghost sm danger" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
             </div></div>
