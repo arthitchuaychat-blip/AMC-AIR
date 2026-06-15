@@ -1,13 +1,13 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel } from "../lib/schedule";
-import { fmtBaht, custCode, matchText, matchPhone, ATTACH_ACCEPT } from "../lib/format";
-import { UIcon } from "../icons";
+import { fmtBaht, fmtNum, custCode, matchText, matchPhone, ATTACH_ACCEPT } from "../lib/format";
+import { UIcon, MaterialThumb } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
 import { sendDocFromNode } from "../lib/sendDoc";
@@ -65,6 +65,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [sending, setSending] = React.useState(false);
   const [stickerOpen, setStickerOpen] = React.useState(false);
   const [stickerSet, setStickerSet] = React.useState(0);
+  const [acPicker, setAcPicker] = React.useState(false);
+  const [acItems, setAcItems] = React.useState([]);
+  const [acSearch, setAcSearch] = React.useState("");
   const [showThread, setShowThread] = React.useState(false); // mobile pane toggle
   const [toast, setToast] = React.useState(null);
   const [quickReplies, setQuickReplies] = React.useState([]);
@@ -181,6 +184,22 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     setSending(true);
     try { const url = await uploadChatImage(f); await sendLineFile(sel, url, f.name); }
     catch (ex) { flash("ส่งไฟล์ไม่สำเร็จ: " + (ex.message || ex), true); }
+    setSending(false);
+  }
+  // pick an AC from the catalog → send its details + price (and photo if any) to the customer
+  async function openAcPicker() {
+    setAcPicker(true);
+    if (!acItems.length) { try { const m = await listMaterialsLite(); setAcItems(m.filter((x) => x.kind === "ac")); } catch { /* ignore */ } }
+  }
+  async function sendProduct(it) {
+    if (!sel || sending) return;
+    setAcPicker(false); setSending(true);
+    try {
+      const spec = [it.brand, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null].filter(Boolean).join(" · ");
+      const txt = `❄️ ${it.th}${spec ? `\n${spec}` : ""}${it.description ? `\n${it.description}` : ""}\n💰 ราคา ${fmtBaht(it.salePrice)}`;
+      if (it.photoUrl) await sendLineImage(sel, it.photoUrl);
+      await sendLineMessage(sel, txt);
+    } catch (ex) { flash("ส่งรายการแอร์ไม่สำเร็จ: " + (ex.message || ex), true); }
     setSending(false);
   }
   // send a LINE sticker (basic bot-sendable set)
@@ -331,6 +350,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       <input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} />
                     </label>
                     <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => setStickerOpen((o) => !o)}>😊 สติกเกอร์</button>
+                    <button className="chat-tool" disabled={sending} onClick={openAcPicker}>❄️ ส่งแอร์</button>
                     {quickReplies.map((qr) => {
                       const label = qr.title || qr.text;
                       return (
@@ -535,6 +555,30 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => startSend(sendMenuFor, "image")}><UIcon name="camera" size={15} color="#fff" /> รูปภาพ</button>
                 <button className="btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={() => startSend(sendMenuFor, "pdf")}><UIcon name="clipboard" size={15} /> ไฟล์ PDF</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {acPicker && (
+        <div className="modal-overlay" onClick={() => setAcPicker(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 560 }}>
+            <div className="modal-head"><div className="modal-title">เลือกแอร์ส่งให้ลูกค้า</div>
+              <button className="drawer-close" onClick={() => setAcPicker(false)}><UIcon name="x" size={20} /></button></div>
+            <div className="modal-body">
+              <input className="inp" style={{ marginBottom: 10 }} value={acSearch} onChange={(e) => setAcSearch(e.target.value)} placeholder="🔍 ค้นหา ยี่ห้อ / รุ่น / BTU" />
+              <div className="ac-picklist">
+                {acItems.length === 0 && <div className="empty" style={{ fontSize: 13 }}>กำลังโหลด… (หรือยังไม่มีรายการแอร์)</div>}
+                {acItems.filter((it) => matchText(acSearch, it.th, it.en, it.code, it.brand, it.ac_type, String(it.btu || ""))).slice(0, 100).map((it) => (
+                  <button key={it.code} className="ac-pickrow" disabled={sending} onClick={() => sendProduct(it)} title="ส่งให้ลูกค้า">
+                    <MaterialThumb mat={it} size={42} radius={10} />
+                    <div className="ac-pickinfo">
+                      <div className="ac-pickname">{it.th}</div>
+                      <div className="ac-pickspec">{[it.brand, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null].filter(Boolean).join(" · ")}</div>
+                    </div>
+                    <div className="ac-pickprice">{fmtBaht(it.salePrice)}<span>ส่ง ›</span></div>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
