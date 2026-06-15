@@ -2,13 +2,13 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import { listJobOrders, updateJobStatus, updateVisitStatus } from "../lib/api";
 import { UIcon } from "../icons";
-import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel, JOB_STATUSES } from "../lib/schedule";
+import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel, JOB_STATUSES, ymd } from "../lib/schedule";
 import JobTimeline from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
 // ช่างเห็นทุกสถานะ (รวม "นัดหมายเพิ่ม") แต่ดูได้อย่างเดียวในสถานะ read-only ด้านล่าง
-const TABS = [["todo", "ต้องทำ"], ["doing", "กำลังทำงาน"], ["awaiting", "รออนุมัติ"], ["reschedule", "นัดหมายเพิ่ม"], ["done", "เสร็จแล้ว"], ["cancelled", "ยกเลิกแล้ว"]];
+const TABS = [["todo", "ต้องทำ (วันนี้)"], ["upcoming", "งานที่กำลังจะมาถึง"], ["doing", "กำลังทำงาน"], ["awaiting", "รออนุมัติ"], ["reschedule", "นัดหมายเพิ่ม"], ["done", "เสร็จแล้ว"], ["cancelled", "ยกเลิกแล้ว"]];
 // สถานะที่ช่างดูได้อย่างเดียว — แก้ไข/โพสต์/เบิกวัสดุไม่ได้
 const TECH_READONLY = ["reschedule", "done", "cancelled"];
 
@@ -47,11 +47,24 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
   }
 
+  // the job's relevant scheduled datetime for THIS tech: earliest still-to-do visit (for my team), else any visit, else the job
+  const jobAt = (jo) => {
+    const vis = (jo.visits && jo.visits.length) ? (allTeams ? jo.visits : jo.visits.filter((v) => v.assigned_team === team)) : [];
+    const active = vis.filter((v) => v.status === "pending" || v.status === "scheduled");
+    const pool = (active.length ? active : vis).filter((v) => v.scheduled_at).slice().sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+    return pool[0]?.scheduled_at || jo.scheduled_at || null;
+  };
+  const todayY = ymd(new Date());
+  const dayOf = (at) => (at ? ymd(new Date(at)) : null);
+  const sortAsc = (a, b) => (jobAt(a) || "9999").localeCompare(jobAt(b) || "9999"); // nearest time first
+  const todoAll = list.filter((j) => j.status === "pending" || j.status === "scheduled");
   const byStatus = {
-    todo: list.filter((j) => j.status === "pending" || j.status === "scheduled"),
-    doing: list.filter((j) => j.status === "in_progress"),
-    awaiting: list.filter((j) => j.status === "awaiting_approval"),
-    reschedule: list.filter((j) => j.status === "reschedule"),
+    // ต้องทำ = วันนี้ หรือเลยกำหนดแล้ว (หรือยังไม่ระบุวัน) — งานวันถัดไปไปอยู่ "กำลังจะมาถึง"
+    todo: todoAll.filter((j) => { const d = dayOf(jobAt(j)); return !d || d <= todayY; }).sort(sortAsc),
+    upcoming: todoAll.filter((j) => { const d = dayOf(jobAt(j)); return d && d > todayY; }).sort(sortAsc),
+    doing: list.filter((j) => j.status === "in_progress").sort(sortAsc),
+    awaiting: list.filter((j) => j.status === "awaiting_approval").sort(sortAsc),
+    reschedule: list.filter((j) => j.status === "reschedule").sort(sortAsc),
     done: list.filter((j) => j.status === "done"),
     cancelled: list.filter((j) => j.status === "cancelled"),
   };
@@ -66,7 +79,7 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
     <div className="adm">
       <div className="adm-head">
         <div><h1 className="page-title">{allTeams ? "งานทุกทีม" : "งานของฉัน"} <span className="page-title-en">{allTeams ? "All Jobs · หัวหน้าช่าง" : `My Jobs · ${team}`}</span></h1>
-          <p className="page-sub">{byStatus.todo.length} ต้องทำ · {byStatus.doing.length} กำลังทำ · {byStatus.awaiting.length} รออนุมัติ</p></div>
+          <p className="page-sub">{byStatus.todo.length} ต้องทำวันนี้ · {byStatus.upcoming.length} กำลังจะมาถึง · {byStatus.doing.length} กำลังทำ · {byStatus.awaiting.length} รออนุมัติ</p></div>
         <div className="cat-filter" style={{ margin: 0 }}>
           {TABS.map(([v, l]) => (
             <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
@@ -76,7 +89,7 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
       </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && shown.length === 0 && <div className="empty">{tab === "todo" ? "ไม่มีงานค้าง 🎉" : `ไม่มีงานสถานะ "${(TABS.find(([v]) => v === tab) || [])[1] || ""}"`}</div>}
+      {!loading && shown.length === 0 && <div className="empty">{tab === "todo" ? "ไม่มีงานต้องทำวันนี้ 🎉" : tab === "upcoming" ? "ยังไม่มีงานที่กำลังจะมาถึง" : `ไม่มีงานสถานะ "${(TABS.find(([v]) => v === tab) || [])[1] || ""}"`}</div>}
 
       <div className="job-cards">
         {shown.map((jo) => {
