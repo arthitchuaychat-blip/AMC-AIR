@@ -80,13 +80,15 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;
     const installment = list.filter((x) => x.quote_no === selQ.quote_no && x.status !== "cancelled").length + 1;
     const base = round2((selQ.afterDisc || 0) * f);
-    const items = snapshotItems(selQ);
-    const wht_rate = 3;
+    // หัก ณ ที่จ่าย ล็อกตามใบเสนอราคา — ถ้าใบเสนอไม่หัก ใบแจ้งหนี้ก็ไม่หักด้วย
+    const useWht = !!selQ.wht;
+    const items = snapshotItems(selQ).map((it) => ({ ...it, wht: useWht && it.wht }));
+    const wht_rate = useWht ? (Number(selQ.wht_rate) || 3) : 0;
     const inv = {
       invoice_no: ed.invoice_no, quote_no: selQ.quote_no, boq_no: selQ.boq_no || null,
       customer_id: selQ.customer_id || null, site_id: selQ.site_id || null,
       issue_date: ed.issue_date || null, due_date: ed.due_date || null, installment, pct: round2(f * 100),
-      base, vat_amt: round2((selQ.vatAmt || 0) * f), total: newTotal, wht_rate, items, wht_amt: lineWhtAmt(items, base, wht_rate),
+      base, vat_amt: round2((selQ.vatAmt || 0) * f), total: newTotal, wht_rate, items, wht_amt: useWht ? lineWhtAmt(items, base, wht_rate) : 0,
       note: ed.note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty, status: "unpaid",
     };
     try { await saveInvoice(inv); flash(`สร้างใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load(); }

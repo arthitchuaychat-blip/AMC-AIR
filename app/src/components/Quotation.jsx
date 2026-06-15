@@ -82,7 +82,11 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const custBoqs = boqs.filter((b) => !ed?.customer_id || String(b.customer_id) === String(ed?.customer_id));
 
   function setQ(k, v) { setEd((e) => ({ ...e, [k]: v })); }
-  function onCustomer(id) { setEd((e) => ({ ...e, customer_id: id, site_id: "", vat: custs.find((c) => String(c.id) === String(id))?.vat ?? true })); }
+  function onCustomer(id) {
+    const c = custs.find((c) => String(c.id) === String(id));
+    const isCompany = c?.type === "company";
+    setEd((e) => ({ ...e, customer_id: id, site_id: "", vat: c?.vat ?? true, wht: isCompany ? e.wht : false }));
+  }
   const addLine = (m) => setEd((e) => {
     const i = e.items.findIndex((x) => x.code === m.code);
     if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + 1 }; return { ...e, items }; }
@@ -110,7 +114,10 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const afterDisc = subtotal - discount;
   const vatAmt = ed && ed.vat ? afterDisc * 0.07 : 0;
   const grand = afterDisc + vatAmt;
-  const whtAmt = ed && ed.wht ? afterDisc * (Number(ed.wht_rate) || 3) / 100 : 0;
+  // หัก ณ ที่จ่าย — เฉพาะลูกค้านิติบุคคลเท่านั้น
+  const selCust = ed ? custs.find((c) => String(c.id) === String(ed.customer_id)) : null;
+  const canWht = selCust?.type === "company";
+  const whtAmt = ed && ed.wht && canWht ? afterDisc * (Number(ed.wht_rate) || 3) / 100 : 0;
   const netPay = grand - whtAmt;
 
   async function save() {
@@ -235,8 +242,9 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               <button type="button" className={"vat-toggle" + (ed.vat ? " on" : "")} onClick={() => setQ("vat", !ed.vat)}>{ed.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</button>
             </label>
           </div>
+          {canWht && (
           <div className="fld-row">
-            <label className="fld"><span>หัก ณ ที่จ่าย</span>
+            <label className="fld"><span>หัก ณ ที่จ่าย <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(ลูกค้านิติบุคคล)</span></span>
               <div className="line-add">
                 <button type="button" className={"vat-toggle" + (ed.wht ? " on" : "")} style={{ flex: 1 }} onClick={() => setQ("wht", !ed.wht)}>{ed.wht ? "หัก ณ ที่จ่าย" : "ไม่หัก ณ ที่จ่าย"}</button>
                 <div className="inp inp-unit" style={{ width: 110, flex: "none", opacity: ed.wht ? 1 : .5 }}>
@@ -246,14 +254,15 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             </label>
             <div className="fld" />
           </div>
+          )}
 
           <div className="qt-totals">
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(subtotal)}</b></div>
             {discount > 0 && <div><span>ส่วนลด</span><b style={{ color: "var(--down)" }}>− {fmtBaht(discount)}</b></div>}
             {ed.vat && <div><span>VAT 7%</span><b>{fmtBaht(vatAmt)}</b></div>}
             <div className="qt-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(grand)}</b></div>
-            {ed.wht && <div><span>หัก ณ ที่จ่าย {Number(ed.wht_rate) || 3}%</span><b style={{ color: "var(--down)" }}>− {fmtBaht(whtAmt)}</b></div>}
-            {ed.wht && <div className="qt-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(netPay)}</b></div>}
+            {ed.wht && canWht && <div><span>หัก ณ ที่จ่าย {Number(ed.wht_rate) || 3}%</span><b style={{ color: "var(--down)" }}>− {fmtBaht(whtAmt)}</b></div>}
+            {ed.wht && canWht && <div className="qt-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(netPay)}</b></div>}
           </div>
 
           <div className="fld-row">
