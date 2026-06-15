@@ -1,12 +1,12 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel } from "../lib/schedule";
-import { fmtBaht, custCode, matchText, matchPhone } from "../lib/format";
+import { fmtBaht, custCode, matchText, matchPhone, ATTACH_ACCEPT } from "../lib/format";
 import { UIcon } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
@@ -164,6 +164,14 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     catch (ex) { flash("ส่งรูปไม่สำเร็จ: " + (ex.message || ex), true); }
     setSending(false);
   }
+  // send a document/file: upload → push a clickable link to the customer on LINE
+  async function onFile(e) {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel || sending) return;
+    setSending(true);
+    try { const url = await uploadChatImage(f); await sendLineFile(sel, url, f.name); }
+    catch (ex) { flash("ส่งไฟล์ไม่สำเร็จ: " + (ex.message || ex), true); }
+    setSending(false);
+  }
 
   // order-confirmation: pick one of the linked customer's job orders → fill the box for review
   async function openConfirm() {
@@ -299,6 +307,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     {selContact.customer_id && <button className="chat-tool primary" onClick={openConfirm} disabled={sending}>🧾 ส่งคอนเฟิม</button>}
                     <label className={"chat-tool" + (sending ? " disabled" : "")}>📷 รูป
                       <input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
+                    </label>
+                    <label className={"chat-tool" + (sending ? " disabled" : "")}>📎 ไฟล์
+                      <input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} />
                     </label>
                     {quickReplies.map((qr) => {
                       const label = qr.title || qr.text;

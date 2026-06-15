@@ -26,12 +26,16 @@ export default async function handler(req, res) {
   const prof = (pr.ok ? await pr.json() : [])[0];
   if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
 
-  const { to, text, imageUrl } = await readJson(req);
-  if (!to || (!text?.trim() && !imageUrl)) return res.status(400).json({ error: "missing to/text" });
+  const { to, text, imageUrl, fileUrl, fileName } = await readJson(req);
+  if (!to || (!text?.trim() && !imageUrl && !fileUrl)) return res.status(400).json({ error: "missing to/text" });
 
+  // LINE bots can't push a raw file → send the file as a clickable link in a text message
+  const fname = fileName || "ไฟล์เอกสาร";
   const messages = imageUrl
     ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }]
-    : [{ type: "text", text }];
+    : fileUrl
+      ? [{ type: "text", text: `📄 ${fname}\n${fileUrl}` }]
+      : [{ type: "text", text }];
   const r = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
@@ -41,8 +45,10 @@ export default async function handler(req, res) {
 
   const row = imageUrl
     ? { line_user_id: to, direction: "out", type: "image", image_url: imageUrl, text: "[รูปภาพ]", sent_by: user.id }
-    : { line_user_id: to, direction: "out", type: "text", text, sent_by: user.id };
-  const last = imageUrl ? "[รูปภาพ]" : text;
+    : fileUrl
+      ? { line_user_id: to, direction: "out", type: "file", file_url: fileUrl, file_name: fname, text: `[ไฟล์] ${fname}`, sent_by: user.id }
+      : { line_user_id: to, direction: "out", type: "text", text, sent_by: user.id };
+  const last = imageUrl ? "[รูปภาพ]" : fileUrl ? `[ไฟล์] ${fname}` : text;
   await fetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
   await fetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(to)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ last_message: last, last_message_at: new Date().toISOString(), unread: 0 }) });
   return res.status(200).json({ ok: true });
