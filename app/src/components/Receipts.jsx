@@ -31,6 +31,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const [view, setView] = React.useState(null);
   const [search, setSearch] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
+  const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
@@ -138,7 +139,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   }
 
   // ---------- LIST ----------
+  const recVat = (x) => !!quoteByNo[x.quote_no]?.vat;
   const shown = list.filter((x) => (statusF === "all" || x.status === statusF)
+    && (vatF === "all" || (vatF === "vat" ? recVat(x) : !recVat(x)))
     && matchText(search, x.receipt_no, x.customerName, x.quote_no, x.job_no, x.createdByName));
   return (
     <div className="adm">
@@ -158,6 +161,12 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
       </div>
+      <div className="cat-filter" style={{ marginTop: -4 }}>
+        {[["all", "VAT / ไม่ VAT"], ["vat", "รับ VAT"], ["novat", "ไม่ VAT"]].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
+            style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l}</button>
+        ))}
+      </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสร็จ" : "ไม่พบใบเสร็จ"}</div>}
       <div className="job-cards">
@@ -166,7 +175,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           return (
           <div className={"card job-card" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
             <div className="job-card-head clickable-card" onClick={() => setView(x)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setView(x)}>
-              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
+              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span></div>
               <div className="job-card-meta inv-meta">
                 <span className="inv-cust">{x.customerName || "-"}</span>
                 {x.createdByName && <span className="inv-by">👤 {x.createdByName}</span>}
