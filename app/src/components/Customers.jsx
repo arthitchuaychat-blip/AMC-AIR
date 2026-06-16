@@ -4,6 +4,7 @@ import Combo from "./Combo";
 import { listCustomers, saveCustomer, deleteCustomer, listCustomerDocs } from "../lib/api";
 import { UIcon } from "../icons";
 import { custCode, fmtBaht, matchText, matchPhone } from "../lib/format";
+import { can } from "../lib/permissions";
 import { scheduleLabel } from "../lib/schedule";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import CustomerImportModal from "./CustomerImportModal";
@@ -13,7 +14,7 @@ const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", vat:
 const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626"];
 
 export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
-  const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
+  const canEdit = can(role, "customers", "edit");
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [q, setQ] = React.useState("");

@@ -1,8 +1,57 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions } from "../lib/api";
+import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
+
+// editable role → module permission matrix. ธุรการ/ผู้บริหาร can adjust who sees/edits each menu.
+function PermissionsCard({ flash }) {
+  const [perms, setP] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+  React.useEffect(() => { getRolePermissions().then((o) => setP(mergePerms(o))).catch(() => setP(mergePerms(null))); }, []);
+  const NEXT = { none: "view", view: "edit", edit: "none" };          // editable modules cycle 3 states
+  const NEXT2 = { none: "view", view: "none" };                       // view-only modules cycle 2 states
+  const CELL = { none: { t: "—", c: "#9aa3b2", bg: "var(--surface-2)" }, view: { t: "ดู", c: "#1d4ed8", bg: "#e6efff" }, edit: { t: "แก้ไข", c: "#0a6b3d", bg: "#dcf5e8" } };
+  const cycle = (role, mod, editable) => setP((p) => {
+    const cur = p[role][mod] || "none";
+    const nxt = (editable ? NEXT : NEXT2)[cur] ?? "none";
+    return { ...p, [role]: { ...p[role], [mod]: nxt } };
+  });
+  async function save() {
+    setSaving(true);
+    try { await saveRolePermissions(perms); setPerms(mergePerms(perms)); flash("บันทึกสิทธิ์แล้ว ✓ — รีเฟรชหน้าเพื่อให้เมนูอัปเดตครบทุกคน"); }
+    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e) + " (รัน 039_role_permissions.sql แล้วหรือยัง?)", true); }
+    setSaving(false);
+  }
+  if (!perms) return null;
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="sec-head">
+        <div><div className="sec-title">สิทธิ์การใช้งานตามตำแหน่ง</div><div className="sec-sub">กดที่ช่องเพื่อสลับ — แก้ไข / ดู / ไม่เห็น · ธุรการมีสิทธิ์สูงสุด</div></div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn-ghost sm" onClick={() => setP(mergePerms(DEFAULT_PERMS))}>คืนค่าเริ่มต้น</button>
+          <button className="btn-primary sm" disabled={saving} onClick={save}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> บันทึก</button>
+        </div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table className="perm-table">
+          <thead><tr><th style={{ textAlign: "left" }}>เมนู / ฟีเจอร์</th>{PERM_ROLES.map((r) => <th key={r}>{PERM_ROLE_LABEL[r]}</th>)}</tr></thead>
+          <tbody>
+            {PERM_MODULES.map((m) => (
+              <tr key={m.id}>
+                <td style={{ textAlign: "left" }}>{m.label}</td>
+                {PERM_ROLES.map((r) => { const lv = perms[r][m.id] || "none"; const s = CELL[lv]; return (
+                  <td key={r}><button type="button" className="perm-cell" style={{ color: s.c, background: s.bg }} onClick={() => cycle(r, m.id, m.editable)}>{s.t}</button></td>
+                ); })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 // company letterhead used on printed documents — two variants: VAT (kind="vat") / non-VAT (kind="novat")
 function CompanyCard({ kind, title, sub, flash }) {
@@ -176,7 +225,7 @@ function DangerAction({ label, desc, phrase, onRun, flash }) {
   );
 }
 
-export default function Settings() {
+export default function Settings({ role }) {
   const [teams, setTeams] = React.useState([]);
   const [profiles, setProfiles] = React.useState([]);
   const [cats, setCats] = React.useState([]);
@@ -261,6 +310,7 @@ export default function Settings() {
 
       {!loading && (
         <>
+        {can(role, "settings", "edit") && <PermissionsCard flash={flash} />}
         <div className="damage-layout" style={{ marginBottom: 16 }}>
           <CompanyCard kind="vat" title="หัวกระดาษ — แบบมี VAT" sub="ใช้กับใบที่คิด VAT · บัญชีธนาคารชุด VAT" flash={flash} />
           <CompanyCard kind="novat" title="หัวกระดาษ — แบบไม่มี VAT" sub="ใช้กับใบที่ไม่คิด VAT · บัญชีธนาคารชุดไม่มี VAT" flash={flash} />

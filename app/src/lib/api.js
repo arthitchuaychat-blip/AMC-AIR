@@ -474,6 +474,17 @@ export async function saveCompany(c, kind) {
   if (error) throw error;
 }
 
+// role → module permission overrides (stored as one JSON row in app_config). Returns null if unset.
+export async function getRolePermissions() {
+  const { data, error } = await supabase.from("app_config").select("value").eq("key", "role_permissions").maybeSingle();
+  if (error) throw error;
+  return data ? data.value : null;
+}
+export async function saveRolePermissions(perms) {
+  const { error } = await supabase.from("app_config").upsert({ key: "role_permissions", value: perms }, { onConflict: "key" });
+  if (error) throw error;
+}
+
 // build the 3 end-of-document term columns from an editor object (BOQ/quote/invoice/receipt all share these)
 const _termCols = (d) => ({
   terms_payment: d.terms_payment?.trim() || null,

@@ -3,6 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterialsLite, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht, fmtNum, custCode, matchText, matchPhone } from "../lib/format";
+import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
@@ -52,7 +53,7 @@ function SectionBlock({ sec, items, pool, onAdd, onSet, onDel, onMove }) {
 }
 
 export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc, newForCustomer, onNewConsumed }) {
-  const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
+  const canEdit = can(role, "boq", "edit");
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);

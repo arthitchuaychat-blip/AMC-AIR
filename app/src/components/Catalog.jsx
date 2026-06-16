@@ -3,6 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listMaterials, listMaterialsLite, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus } from "../lib/api";
 import { fmtBaht2, fmtNum, eqi, matchText, norm } from "../lib/format";
+import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
 import MaterialModal from "./MaterialModal";
 import MaterialDrawer from "./MaterialDrawer";
@@ -12,7 +13,7 @@ const KINDS = [{ v: "all", l: "ทั้งหมด" }, { v: "ac", l: "เค�
 const KIND_LABEL = { ac: "แอร์", service: "บริการ", material: "วัสดุ" };
 
 export default function Catalog({ role }) {
-  const canEdit = ["admin", "exec", "finance", "stock"].includes(role);
+  const canEdit = can(role, "catalog", "edit");
   const [mats, setMats] = React.useState([]);
   const [cats, setCats] = React.useState([]);
   const [brands, setBrands] = React.useState([]);

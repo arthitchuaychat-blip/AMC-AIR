@@ -3,6 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText } from "../lib/format";
+import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
@@ -19,7 +20,7 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenDoc, focus, onFocusConsumed }) {
-  const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
+  const canEdit = can(role, "receipt", "edit");
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);

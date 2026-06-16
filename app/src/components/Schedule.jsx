@@ -4,6 +4,7 @@ import { UIcon } from "../icons";
 import { BUCKETS, slotDef, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef, JOB_STATUSES, jobStatusDef } from "../lib/schedule";
 import JobTimeline from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
+import { can } from "../lib/permissions";
 
 const VIEWS = [["list", "รายการ"], ["day", "วัน"], ["week", "สัปดาห์"], ["month", "เดือน"]];
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l]) => [v, l]));
@@ -15,7 +16,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 const weekStart = (d) => { const x = new Date(d); const dow = (x.getDay() + 6) % 7; return addDays(x, -dow); };
 
 export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
-  const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
+  const canEdit = can(role, "schedule", "edit");
   const myTeamOnly = role === "tech"; // ช่างเห็นเฉพาะทีมตัวเอง · หัวหน้าช่าง/ออฟฟิศเห็นทุกทีม
   const [view, setView] = React.useState("week");
   const [anchor, setAnchor] = React.useState(today0());

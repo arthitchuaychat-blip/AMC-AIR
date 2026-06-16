@@ -2,6 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterials } from "../lib/api";
 import { fmtBaht, fmtNum, matchText } from "../lib/format";
+import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 
@@ -14,7 +15,7 @@ function genPoNo() {
 }
 
 export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onReceive }) {
-  const isAdmin = ["admin", "exec", "finance", "stock"].includes(role);
+  const isAdmin = can(role, "po", "edit");
   const [pos, setPos] = React.useState([]);
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);

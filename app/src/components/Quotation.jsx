@@ -8,6 +8,7 @@ import DocChips from "./DocChips";
 import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtBaht, custCode, matchText, matchPhone } from "../lib/format";
+import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
@@ -21,7 +22,7 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc }) {
-  const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
+  const canEdit = can(role, "quote", "edit");
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);

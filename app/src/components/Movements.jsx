@@ -3,6 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
+import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -16,7 +17,8 @@ const TYPE_BY = Object.fromEntries(TYPES.map((t) => [t.id, t]));
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
 
 export default function Movements({ role, myTeam, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
-  const isAdmin = ["admin", "exec", "finance", "stock"].includes(role);
+  // ซื้อเข้า/ตัดเสีย/ยกเลิก = สิทธิ์ระดับสโตร์ (ต้องมีสิทธิ์แก้ไข movements และไม่ใช่ช่างภาคสนาม)
+  const isAdmin = can(role, "movements", "edit") && role !== "tech" && role !== "lead_tech";
   const isTech = role === "tech";
   const isLead = role === "lead_tech"; // หัวหน้าช่าง: เบิก/คืนได้ทุกทีม (แต่ไม่ซื้อ/ตัดเสีย)
   // ช่าง + หัวหน้าช่าง ทำได้เฉพาะ เบิกออก/รับคืน — no ซื้อ/ตัดเสีย

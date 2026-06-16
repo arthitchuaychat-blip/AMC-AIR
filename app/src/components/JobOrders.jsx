@@ -8,6 +8,7 @@ import JobTimeline from "./JobTimeline";
 import DocChips from "./DocChips";
 import AttachThumb from "./AttachThumb";
 import { ATTACH_ACCEPT, matchText, matchPhone } from "../lib/format";
+import { can } from "../lib/permissions";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
 const STATUS_OPTS = JOB_STATUSES.map(([v, l]) => [v, l]);
@@ -18,7 +19,7 @@ const blankVisit = () => ({ date: "", end_date: "", slot: "morning", time: "", s
 const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
 
 export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc }) {
-  const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
+  const canEdit = can(role, "joborders", "edit");
   const [openTl, setOpenTl] = React.useState(null);
   const [upBrief, setUpBrief] = React.useState(false);
   const [list, setList] = React.useState([]);

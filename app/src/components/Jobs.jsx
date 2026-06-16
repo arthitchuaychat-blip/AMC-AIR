@@ -2,12 +2,13 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import { listAllJobs, listMaterials, closeJob, reopenJob } from "../lib/api";
 import { fmtBaht, fmtNum, matchText } from "../lib/format";
+import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 
 const FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open", label: "เปิดอยู่" }, { id: "closed", label: "ปิดแล้ว" }];
 
 export default function Jobs({ role }) {
-  const isAdmin = ["admin", "exec", "finance", "stock"].includes(role);
+  const isAdmin = can(role, "jobs", "edit");
   const [jobs, setJobs] = React.useState([]);
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);

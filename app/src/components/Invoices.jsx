@@ -3,6 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText, matchPhone } from "../lib/format";
+import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
@@ -20,7 +21,7 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenDoc, focus, onFocusConsumed }) {
-  const canEdit = ["admin", "sales", "exec", "finance"].includes(role);
+  const canEdit = can(role, "invoice", "edit");
   const [list, setList] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });

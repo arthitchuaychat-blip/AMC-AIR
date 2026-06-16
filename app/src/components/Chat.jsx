@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel } from "../lib/schedule";
 import { fmtBaht, fmtNum, custCode, matchText, matchPhone, eqi, ATTACH_ACCEPT } from "../lib/format";
+import { can } from "../lib/permissions";
 import { UIcon, MaterialThumb } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
@@ -55,7 +56,7 @@ async function dlFile(url, name) {
 }
 
 export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey }) {
-  const canSend = ["admin", "sales", "exec", "finance"].includes(role);
+  const canSend = can(role, "chat", "edit");
   const [contacts, setContacts] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [sel, setSel] = React.useState(null);          // selected line_user_id

@@ -1,6 +1,7 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
-import { getProfile, signOut, countUnreadChats } from "./lib/api";
+import { getProfile, signOut, countUnreadChats, getRolePermissions } from "./lib/api";
+import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
@@ -41,20 +42,10 @@ const NAV = {
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
-const FULL_NAV = ["dashboard", "customers", "chat", "teamchat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "catalog", "movements", "jobs", "po", "profit", "settings"];
-const NAV_BY_ROLE = {
-  admin: FULL_NAV,
-  exec: FULL_NAV,
-  finance: FULL_NAV,
-  sales: ["dashboard", "customers", "chat", "teamchat", "boq", "quote", "invoice", "receipt", "joborders", "schedule", "catalog", "profit"],
-  stock: ["teamchat", "catalog", "movements", "jobs", "po"],
-  lead_tech: ["myjobs", "teamchat", "joborders", "schedule", "catalog", "movements", "jobs"],
-  tech: ["myjobs", "teamchat", "schedule", "movements"],
-};
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-16·คลังตรงกับBOQ-v55";
+const BUILD = "2026-06-16·สิทธิ์ตามตำแหน่งแก้ได้-v56";
 
 function SetupNotice() {
   return (
@@ -75,6 +66,7 @@ export default function App() {
   const [ready, setReady] = React.useState(false);
   const [session, setSession] = React.useState(null);
   const [profile, setProfile] = React.useState(null);
+  const [permsV, setPermsV] = React.useState(0); // bumps when role permissions (re)load → re-render nav
   const [view, setView] = React.useState(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [purchasePrefill, setPurchasePrefill] = React.useState(null);
@@ -107,15 +99,24 @@ export default function App() {
     else setProfile(null);
   }, [session]);
 
+  // load the editable role→module permission overrides (falls back to the shipped defaults)
+  React.useEffect(() => {
+    if (!session) return;
+    getRolePermissions()
+      .then((o) => { setPerms(mergePerms(o)); setPermsV((v) => v + 1); })
+      .catch(() => { setPerms(mergePerms(null)); setPermsV((v) => v + 1); });
+  }, [session]);
+
   React.useEffect(() => {
     if (!profile) return;
-    const allowed = NAV_BY_ROLE[profile.role] || ["movements"];
-    setView((v) => (v && allowed.includes(v) ? v : allowed[0]));
-  }, [profile]);
+    const allowed = navForRole(profile.role);
+    const safe = allowed.length ? allowed : ["teamchat"];
+    setView((v) => (v && safe.includes(v) ? v : safe[0]));
+  }, [profile, permsV]);
 
   // sidebar badge: count of chats with unread messages — live via realtime, with a polling fallback
   React.useEffect(() => {
-    if (!profile || !(NAV_BY_ROLE[profile.role] || []).includes("chat")) { setChatUnread(0); return; }
+    if (!profile || !can(profile.role, "chat")) { setChatUnread(0); return; }
     let alive = true;
     const refresh = () => countUnreadChats().then((n) => { if (alive) setChatUnread(n); }).catch(() => {});
     refresh();
@@ -124,7 +125,7 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "line_contacts" }, refresh)
       .subscribe();
     return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
-  }, [profile]);
+  }, [profile, permsV]);
 
   if (!hasConfig) return <SetupNotice />;
   if (!ready) return <div className="login-stage"><div className="page-sub">กำลังโหลด…</div></div>;
@@ -162,7 +163,7 @@ export default function App() {
 
         <nav className="nav">
           <div className="nav-label">เมนู</div>
-          {(NAV_BY_ROLE[role] || ["movements"]).map((id) => {
+          {navForRole(role).map((id) => {
             const n = NAV[id];
             return (
               <button key={id} className={"nav-item" + (view === id ? " on" : "")} onClick={() => go(id)}>
@@ -217,14 +218,14 @@ export default function App() {
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
           surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} />}
-        {view === "schedule" && <Schedule role={role} team={profile?.team} me={profile?.name || profile?.email} onOpenJob={(jn) => { if ((NAV_BY_ROLE[role] || []).includes("joborders")) { setJobFocus(jn); go("joborders"); } else { go("myjobs"); } }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}
+        {view === "schedule" && <Schedule role={role} team={profile?.team} me={profile?.name || profile?.email} onOpenJob={(jn) => { if (can(role, "joborders")) { setJobFocus(jn); go("joborders"); } else { go("myjobs"); } }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}
         {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}
         {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}
-        {view === "settings" && <Settings />}
+        {view === "settings" && <Settings role={role} />}
       </main>
       <ConfirmHost />
     </div>
