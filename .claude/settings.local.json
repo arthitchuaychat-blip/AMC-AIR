@@ -63,7 +63,8 @@
       "Bash(Select-Object -First 50)",
       "Bash(Format-Table FullName)",
       "Bash(npm run *)",
-      "Bash(cd \"/c/Users/User/OneDrive/Desktop/Inventory Management\" && rm -f app/public/perm-test.html && echo deleted)"
+      "Bash(cd \"/c/Users/User/OneDrive/Desktop/Inventory Management\" && rm -f app/public/perm-test.html && echo deleted)",
+      "Bash(npm install *)"
     ]
   }
 }

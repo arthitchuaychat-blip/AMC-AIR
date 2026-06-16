@@ -2,7 +2,25 @@ import React from "react";
 import { supabase } from "../lib/supabase";
 import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders } from "../lib/api";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
+import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
+
+// header button to turn on LINE-style push notifications for this device
+function NotifyButton() {
+  const [perm, setPerm] = React.useState(notifyPermission());
+  const [busy, setBusy] = React.useState(false);
+  if (!pushSupported()) return null;
+  if (perm === "denied") return <span className="tc-notify off" title="เปิดสิทธิ์แจ้งเตือนได้ในตั้งค่าเบราว์เซอร์">🔕 แจ้งเตือนถูกปิด</span>;
+  if (perm === "granted") return <span className="tc-notify on">🔔 แจ้งเตือนเปิดอยู่</span>;
+  return (
+    <button className="btn-primary sm" disabled={busy} onClick={async () => {
+      setBusy(true);
+      try { await enablePush(); setPerm(notifyPermission()); }
+      catch (e) { alert(e.message || "เปิดแจ้งเตือนไม่สำเร็จ"); }
+      setBusy(false);
+    }}>🔔 เปิดแจ้งเตือน</button>
+  );
+}
 
 const KIND_ICON = { company: "🏢", dm: "👤", group: "👥", project: "🧰" };
 
@@ -85,6 +103,7 @@ export default function TeamChat() {
       <div className="adm-head">
         <div><h1 className="page-title">แชตทีม <span className="page-title-en">Team Chat</span></h1>
           <p className="page-sub">คุยกันภายในองค์กร · ห้องรวม · ทักตัวต่อตัว · กลุ่ม · ห้องงาน</p></div>
+        <div className="cat-head-actions"><NotifyButton /></div>
       </div>
 
       <div className="tc-board">

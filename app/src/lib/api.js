@@ -1267,20 +1267,37 @@ export async function listChatMessages(roomId) {
   return data || [];
 }
 
+// fire-and-forget Web Push to the room's other members (no-op if VAPID isn't configured)
+async function _firePush(roomId, body) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const name = (await getProfile())?.name || "ทีมงาน";
+    fetch("/api/push-send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ roomId, title: "แชตทีม · " + name, body, url: "/" }),
+    }).catch(() => {});
+  } catch (_) {}
+}
+
 export async function sendChatMessage(roomId, text) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, text: text.trim() });
   if (error) throw error;
+  _firePush(roomId, text.trim());
 }
 export async function sendChatImage(roomId, imageUrl) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, image_url: imageUrl, text: null });
   if (error) throw error;
+  _firePush(roomId, "[รูปภาพ]");
 }
 export async function sendChatFile(roomId, fileUrl, fileName) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, file_url: fileUrl, file_name: fileName || "ไฟล์", text: null });
   if (error) throw error;
+  _firePush(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`);
 }
 
 // find-or-create a 1:1 DM room — done in a SECURITY DEFINER RPC so it isn't blocked by insert RLS

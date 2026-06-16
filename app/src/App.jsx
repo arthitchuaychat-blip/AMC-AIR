@@ -2,6 +2,7 @@ import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
 import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
+import { registerSW, autoResubscribe } from "./lib/push";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
@@ -45,7 +46,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-16·แชตทีมป้ายค้างอ่าน-v58";
+const BUILD = "2026-06-16·แชตทีมpush+PWA-v59";
 
 function SetupNotice() {
   return (
@@ -140,6 +141,17 @@ export default function App() {
       .subscribe();
     return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
   }, [profile, permsV, view]);
+
+  // register the service worker + (re)subscribe to push if already permitted
+  React.useEffect(() => { registerSW().catch(() => {}); }, []);
+  React.useEffect(() => { if (session) autoResubscribe(); }, [session]);
+
+  // app-icon badge (installed PWA): total unread across LINE + team chat
+  React.useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.setAppBadge) return;
+    const total = (teamUnread || 0) + (chatUnread || 0);
+    try { total > 0 ? navigator.setAppBadge(total) : navigator.clearAppBadge(); } catch (_) {}
+  }, [teamUnread, chatUnread]);
 
   if (!hasConfig) return <SetupNotice />;
   if (!ready) return <div className="login-stage"><div className="page-sub">กำลังโหลด…</div></div>;
