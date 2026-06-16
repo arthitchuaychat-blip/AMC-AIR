@@ -31,6 +31,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const [ed, setEd] = React.useState(null);
   const [printQ, setPrintQ] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
+  const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [search, setSearch] = React.useState("");
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
@@ -305,10 +306,17 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
       </div>
+      <div className="cat-filter" style={{ marginTop: -4 }}>
+        {[["all", "VAT / ไม่ VAT"], ["vat", "รับ VAT"], ["novat", "ไม่ VAT"]].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
+            style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l}</button>
+        ))}
+      </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
         const fl = list.filter((q) => (statusF === "all" || q.status === statusF)
+          && (vatF === "all" || (vatF === "vat" ? !!q.vat : !q.vat))
           && (matchText(search, q.quote_no, q.customerName, q.contactName, q.title, q.boq_no) || matchPhone(search, q.contactPhone)));
         return (<>
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสนอราคา" : "ไม่พบใบเสนอราคาที่ตรงเงื่อนไข"}</div>}
@@ -318,7 +326,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           return (
             <div className={"card job-card" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
               <div className="job-card-head" style={{ cursor: "default" }}>
-                <div className="job-card-id"><span className="job-no">{q.quote_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
+                <div className="job-card-id"><span className="job-no">{q.quote_no}</span><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q.vat ? "vat-on" : "vat-off")}>{q.vat ? "VAT" : "NO VAT"}</span></div>
                 <div className="job-card-meta inv-meta">
                   <span className="inv-cust">{q.title || "ใบเสนอราคา"}</span>
                   <span className="inv-hint">{q.items.length} รายการ</span>
