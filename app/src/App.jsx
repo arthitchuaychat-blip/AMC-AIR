@@ -3,6 +3,7 @@ import { supabase, hasConfig } from "./lib/supabase";
 import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { registerSW, autoResubscribe } from "./lib/push";
+import InstallBanner from "./components/InstallBanner";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
@@ -46,7 +47,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-16·แชตทีมpush+PWA-v59";
+const BUILD = "2026-06-16·แบนเนอร์ติดตั้งแอป-v60";
 
 function SetupNotice() {
   return (
@@ -221,6 +222,7 @@ export default function App() {
       </aside>
 
       <main className="main">
+        <InstallBanner />
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
