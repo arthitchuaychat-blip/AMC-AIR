@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost, markPoReceived } from "../lib/api";
+import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
@@ -44,19 +44,36 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [pickQty, setPickQty] = React.useState(1);
   const [pickPrice, setPickPrice] = React.useState("");
   const [receivePo, setReceivePo] = React.useState(null);
+  // picker filters (เหมือนหน้า BOQ): ชนิด + หมวดวัสดุ
+  const [mvKind, setMvKind] = React.useState("all"); // all | ac | material
+  const [mvCat, setMvCat] = React.useState("all");
 
   // job flow (return / damage-from-job)
   const [selJob, setSelJob] = React.useState("");
   const [qtyByCode, setQtyByCode] = React.useState({});
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
+  // only stock-tracked items can move; then narrow by the picker filters
+  const matCats = React.useMemo(() => {
+    const seen = {}; mats.forEach((m) => { if (m.tracked && m.kind === "material" && m.cat) seen[m.cat] = m.catName || m.cat; });
+    return Object.entries(seen).sort((a, b) => a[1].localeCompare(b[1], "th"));
+  }, [mats]);
+  const pickList = React.useMemo(() => mats.filter((m) =>
+    m.tracked &&
+    (mvKind === "all" || m.kind === mvKind) &&
+    (mvKind !== "material" || mvCat === "all" || m.cat === mvCat)
+  ), [mats, mvKind, mvCat]);
   const T = TYPE_BY[type];
   // which UI flow is active
   const flow = type === "return" ? "job" : type === "damage" ? (damageMode === "job" ? "job" : "cart") : "cart";
 
   async function load() {
     setLoading(true);
-    const [m, tm, r, j] = await Promise.all([listMaterials(), listTeams(), listRecentTransactions(60), listOpenJobs()]);
+    // lite list (materials table) is the authoritative item set — matches the catalog/BOQ picker;
+    // the material_stock view only supplies current stock numbers, merged in by code.
+    const [lite, full, tm, r, j] = await Promise.all([listMaterialsLite(), listMaterials(), listTeams(), listRecentTransactions(60), listOpenJobs()]);
+    const stockByCode = {}; full.forEach((x) => { if (x.code != null) stockByCode[x.code] = x.stock; });
+    const m = lite.map((x) => (x.code in stockByCode ? { ...x, stock: stockByCode[x.code] } : x));
     setMats(m); setTeams(tm); setRecent(r); setJobs(j);
     const firstTracked = m.find((x) => x.tracked);
     if (!pickCode && firstTracked) setPickCode(firstTracked.code);
@@ -67,6 +84,8 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   // technicians are locked to their own team
   React.useEffect(() => { if (isTech && myTeam) setTeam(myTeam); }, [isTech, myTeam]);
   React.useEffect(() => { const m = matMap[pickCode]; if (m) setPickPrice(String(m.cost)); }, [pickCode, mats]);
+  // when the picker filter narrows the list, keep the selected item valid
+  React.useEffect(() => { if (pickList.length && !pickList.some((m) => m.code === pickCode)) setPickCode(pickList[0].code); }, [pickList]);
   // technician "withdraw for this job" → preset type=withdraw, team, job no
   React.useEffect(() => {
     if (!withdrawCtx) return;
@@ -286,9 +305,19 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
               </div>
 
               <div className="fld"><span>เพิ่มรายการวัสดุ</span>
+                <div className="line-add" style={{ marginBottom: 6 }}>
+                  <Combo className="inp" style={{ maxWidth: 150 }} value={mvKind} onChange={(e) => { setMvKind(e.target.value); setMvCat("all"); }}>
+                    <option value="all">ทุกชนิด</option><option value="material">วัสดุ</option><option value="ac">เครื่องปรับอากาศ</option>
+                  </Combo>
+                  {mvKind === "material" && (
+                    <Combo className="inp" value={mvCat} onChange={(e) => setMvCat(e.target.value)}>
+                      <option value="all">ทุกหมวด</option>{matCats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                    </Combo>
+                  )}
+                </div>
                 <div className="line-add">
                   <Combo className="inp" value={pickCode} onChange={(e) => setPickCode(e.target.value)}>
-                    {mats.filter((m) => m.tracked).map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
+                    {pickList.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
                   </Combo>
                   {type === "purchase" && (
                     <div className="inp inp-unit line-price" title="ราคา/หน่วยที่ซื้อ">
