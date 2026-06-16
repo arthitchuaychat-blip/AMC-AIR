@@ -1255,6 +1255,12 @@ export async function listChatRooms() {
   }).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
 }
 
+// total unread team-chat messages across my rooms — for the sidebar badge + app-icon badge
+export async function countUnreadTeamChats() {
+  const rooms = await listChatRooms();
+  return rooms.reduce((a, r) => a + (r.unread || 0), 0);
+}
+
 export async function listChatMessages(roomId) {
   const { data, error } = await supabase.from("chat_messages").select("*").eq("room_id", roomId).order("created_at", { ascending: true });
   if (error) throw error;

@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
-import { getProfile, signOut, countUnreadChats, getRolePermissions } from "./lib/api";
+import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
@@ -45,7 +45,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-16·เคลื่อนไหวครบ+กรอง-v57";
+const BUILD = "2026-06-16·แชตทีมป้ายค้างอ่าน-v58";
 
 function SetupNotice() {
   return (
@@ -85,7 +85,8 @@ export default function App() {
   const [quoteFromBoq, setQuoteFromBoq] = React.useState(null);
   const [invoiceFromQuote, setInvoiceFromQuote] = React.useState(null);
   const [receiptFromInvoice, setReceiptFromInvoice] = React.useState(null);
-  const [chatUnread, setChatUnread] = React.useState(0); // chats waiting to be answered → sidebar badge
+  const [chatUnread, setChatUnread] = React.useState(0); // LINE chats waiting to be answered → sidebar badge
+  const [teamUnread, setTeamUnread] = React.useState(0); // unread team-chat messages → sidebar badge
 
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
@@ -126,6 +127,19 @@ export default function App() {
       .subscribe();
     return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
   }, [profile, permsV]);
+
+  // sidebar badge: unread team-chat messages — live via realtime, polling fallback
+  React.useEffect(() => {
+    if (!profile || !can(profile.role, "teamchat")) { setTeamUnread(0); return; }
+    let alive = true;
+    const refresh = () => countUnreadTeamChats().then((n) => { if (alive) setTeamUnread(n); }).catch(() => {});
+    refresh();
+    const iv = setInterval(refresh, 20000);
+    const ch = supabase.channel("nav-team-unread")
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, refresh)
+      .subscribe();
+    return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
+  }, [profile, permsV, view]);
 
   if (!hasConfig) return <SetupNotice />;
   if (!ready) return <div className="login-stage"><div className="page-sub">กำลังโหลด…</div></div>;
@@ -171,6 +185,7 @@ export default function App() {
                 <span className="nav-th">{n.th}</span>
                 <span className="nav-en">{n.en}</span>
                 {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
+                {id === "teamchat" && teamUnread > 0 && <span className="nav-badge" title={`${teamUnread} ข้อความใหม่`}>{teamUnread > 99 ? "99+" : teamUnread}</span>}
               </button>
             );
           })}
