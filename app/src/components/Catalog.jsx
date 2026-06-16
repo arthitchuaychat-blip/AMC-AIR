@@ -40,8 +40,14 @@ export default function Catalog({ role }) {
       const [lite, c, b, bt] = await Promise.all([listMaterialsLite(), listCategories(), listBrands(), listBtus()]);
       setMats(lite); setCats(c); setBrands(b); setBtus(bt);
       setLoading(false);
-      // Then upgrade to live stock numbers in the background — the heavy query no longer blocks the UI.
-      listMaterials().then((full) => setMats(full)).catch(() => {});
+      // Then MERGE live stock numbers from the material_stock view by code — do NOT replace the list.
+      // (The view GROUPs BY code, so replacing would drop any materials sharing a code; the lite list
+      //  from the materials table is the authoritative item set and matches the BOQ/quotation picker.)
+      listMaterials().then((full) => {
+        const stockByCode = {};
+        full.forEach((m) => { if (m.code != null) stockByCode[m.code] = m.stock; });
+        setMats((cur) => cur.map((m) => (m.code in stockByCode ? { ...m, stock: stockByCode[m.code] } : m)));
+      }).catch(() => {});
     } catch (e) { setErr(e.message || String(e)); setLoading(false); }
   }
   React.useEffect(() => { load(); }, []);
