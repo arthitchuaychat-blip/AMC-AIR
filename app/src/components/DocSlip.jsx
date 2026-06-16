@@ -13,8 +13,8 @@ import React from "react";
 //   children = the item <tr> rows (each with 6 <td>s)
 //   totals   = the totals block (rendered as a full-width row after the items)
 
-// shared column widths — content area is A4 minus side margins (≈186mm); รายการ takes the rest
-const COL_W = ["9mm", "26mm", null, "16mm", "22mm", "26mm"];
+// shared column widths — content area is A4 minus side margins (≈186mm); รายการ (col 3) takes the rest
+const COL_W = ["8mm", "30mm", null, "15mm", "23mm", "27mm"];
 const ColGroup = () => (
   <colgroup>{COL_W.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>
 );

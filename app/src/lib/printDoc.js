@@ -41,14 +41,18 @@ ${styles}
   .doc::before{ display:none }
   /* running header — block on screen (so we can measure it), fixed on every page in print.
      It is full page width with its own side padding; the body table gets its side margins from @page,
-     so both line up at the same x. */
-  .doc-running{ width:210mm; box-sizing:border-box; padding:13mm ${SIDE} 5mm; background:#fff; margin:0 auto }
+     so both line up at the same x. Chrome positions fixed top:0 at the top of the CONTENT area (below
+     the @page top margin), so fire() lifts it up by the reserved margin (negative top) to sit flush at
+     the physical top edge, with the body flowing below it. */
+  .doc-running{ width:210mm; box-sizing:border-box; padding:7mm ${SIDE} 5mm; background:#fff; margin:0 auto }
   @media print {
     .doc{ width:auto; margin:0 !important }
     .doc-running{ position:fixed; top:0; left:0; right:0; width:auto; margin:0; z-index:10 }
   }
   .doc-colstrip,.doc-sheet{ width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0 }
   .doc-colstrip{ margin-top:4px }
+  /* long product codes wrap inside their column instead of spilling into the รายการ column */
+  .doc-sheet>tbody>tr>td:nth-child(2){ overflow-wrap:anywhere; word-break:break-word }
   .doc-signs{ margin-top:28px }
   .doc-sheet>tbody>tr:not(.ds-full),.doc-totals,.doc-terms-box,.doc-cust,.doc-signs{ break-inside:avoid; page-break-inside:avoid }
 </style></head><body>${src.outerHTML}</body></html>`;
@@ -62,11 +66,14 @@ ${styles}
     if (done) return; done = true;
     try {
       // measure the running header (block layout, 210mm wide = print width) and reserve that much
-      // top margin on every page so the fixed header never overlaps the body.
+      // top margin on every page. Then lift the fixed header up by the same amount (negative top) so
+      // it sits in that top margin band at the physical page edge, with the body flowing below it.
       const hd = win.document.querySelector(".doc-running");
-      const top = (hd ? hd.offsetHeight : 200) + 8; // px + small buffer
+      const h = hd ? hd.offsetHeight : 200;
+      const top = h + 6; // reserved top margin (px) = header height + small gap
       const st = win.document.createElement("style");
-      st.textContent = `@page{ size:A4; margin:${top}px ${SIDE} ${BOTTOM} ${SIDE} }`;
+      st.textContent = `@page{ size:A4; margin:${top}px ${SIDE} ${BOTTOM} ${SIDE} }
+        @media print{ .doc-running{ top:-${top}px } }`;
       win.document.head.appendChild(st);
     } catch (_) {}
     try { win.focus(); win.print(); } catch (_) {}
