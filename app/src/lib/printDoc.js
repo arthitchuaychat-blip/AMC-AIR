@@ -30,13 +30,16 @@ ${styles}
   @media screen { .print-area{ display:block !important } }
   @media print { body *{ visibility:visible !important } }
   .print-area{ position:static !important; width:auto !important; padding:0 14mm }   /* left/right page margin (every page) */
-  .doc{ max-width:none !important; margin:0 !important; min-height:297mm; padding-top:0; padding-bottom:14mm }
+  /* The table's <thead> repeats on every page ONLY if no ancestor is flex/relative/has a forced height.
+     So .doc must be a plain static block here (NOT flex / relative / min-height) — otherwise Chrome
+     prints the letterhead on page 1 only. Signatures therefore flow after the terms (not pinned). */
+  .doc{ display:block !important; position:static !important; min-height:0 !important; max-width:none !important; margin:0 !important; padding:0 0 14mm !important }
   .doc::before{ display:none }
-  .doc-sheet{ border-collapse:separate !important; border-spacing:0 }
+  .doc-sheet{ border-collapse:separate !important; border-spacing:0; width:100% }
   .doc-sheet thead{ display:table-header-group !important }
   .ds-head-cell{ padding-top:13mm }   /* top page margin — repeats with the header on every page */
-  .doc-signs{ margin-top:auto }       /* signatures pinned to the bottom of the page */
-  .doc-table tr,.doc-totals,.doc-terms-box,.doc-cust,.doc-signs{ break-inside:avoid; page-break-inside:avoid }
+  .doc-signs{ margin-top:28px }
+  .doc-sheet>tbody>tr:not(.ds-full),.doc-totals,.doc-terms-box,.doc-cust,.doc-signs{ break-inside:avoid; page-break-inside:avoid }
 </style></head><body>${src.outerHTML}</body></html>`;
 
   win.document.open();
