@@ -11,18 +11,16 @@ export function openPrintWindow() {
   try { return window.open("", "_blank"); } catch (_) { return null; }
 }
 
-const MM = 96 / 25.4;          // CSS px per mm at 96dpi
-const SIDE_MM = 12, TOP_MM = 12, BOTTOM_MM = 14;
-const CONTENT_W_MM = 210 - SIDE_MM * 2;   // ≈186mm
+export const MM = 96 / 25.4;          // CSS px per mm at 96dpi
+export const SIDE_MM = 12, TOP_MM = 12, BOTTOM_MM = 14;
+export const CONTENT_W_MM = 210 - SIDE_MM * 2;   // ≈186mm
 
-export function writeAndPrint(win, selector = ".print-area") {
-  const src = document.querySelector(selector);
-  if (!src) { if (win) win.close(); return; }
-  if (!win) { window.print(); return; } // popup blocked → fall back to in-page print (desktop)
-
+// Full standalone document HTML (head with the app's styles + the A4 print rules, then the body).
+// Shared by the print popup AND the PDF/image capture used for LINE — so both look identical.
+export function buildDocHtml(printAreaHTML) {
   const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
     .map((n) => n.outerHTML).join("\n");
-  const doc = `<!doctype html><html lang="th"><head><meta charset="utf-8">
+  return `<!doctype html><html lang="th"><head><meta charset="utf-8">
 <base href="${location.origin}/">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>เอกสาร AMC AIR</title>
@@ -46,25 +44,31 @@ ${styles}
   .pg-break{ page-break-after:always; break-after:page }
   .doc-signs{ margin-top:24px }
   .doc-sheet>tbody>tr,.doc-totals,.doc-terms-box,.doc-cust{ break-inside:avoid; page-break-inside:avoid }
-</style></head><body>${src.outerHTML}</body></html>`;
+</style></head><body>${printAreaHTML}</body></html>`;
+}
+
+export function writeAndPrint(win, selector = ".print-area") {
+  const src = document.querySelector(selector);
+  if (!src) { if (win) win.close(); return; }
+  if (!win) { window.print(); return; } // popup blocked → fall back to in-page print (desktop)
 
   win.document.open();
-  win.document.write(doc);
+  win.document.write(buildDocHtml(src.outerHTML));
   win.document.close();
 
   let done = false;
   const fire = () => {
     if (done) return; done = true;
-    try { paginate(win); } catch (_) { /* leave the single-table layout as-is */ }
+    try { paginate(win.document); } catch (_) { /* leave the single-table layout as-is */ }
     try { win.focus(); win.print(); } catch (_) {}
   };
   try { win.onload = () => setTimeout(fire, 450); } catch (_) {}
   setTimeout(fire, 1600); // fallback if onload never fires
 }
 
-// Split the one long body table into per-page blocks, each led by a copy of the running header.
-function paginate(win) {
-  const d = win.document;
+// Split the one long body table into per-page .pg blocks, each led by a copy of the running header.
+// Returns the array of .pg elements (used by the PDF capture). Operates on the given document.
+export function paginate(d) {
   const docEl = d.querySelector(".doc");
   const headerEl = d.querySelector(".doc-running");
   const bodyTable = d.querySelector(".doc-sheet");
@@ -105,4 +109,5 @@ function paginate(win) {
   }).join("");
 
   docEl.innerHTML = html;
+  return Array.from(docEl.querySelectorAll(".pg"));
 }

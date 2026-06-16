@@ -1,12 +1,35 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { uploadDocFile, sendLineImage, sendLineMessage } from "./api";
+import { buildDocHtml, paginate, MM, SIDE_MM, TOP_MM, BOTTOM_MM, CONTENT_W_MM } from "./printDoc";
 
-// Capture a DOM node (an A4-sized DocSlip wrapper) to a PNG via html2canvas.
-async function captureNode(node) {
-  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch { /* ignore */ } }
-  const canvas = await html2canvas(node, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: node.scrollWidth, windowHeight: node.scrollHeight });
-  return { dataUrl: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height };
+// Render the document through the SAME pipeline as printing (off-screen iframe + paginate), then
+// capture each A4 page — so the file sent on LINE has the exact proportions/pagination as the print.
+async function renderPages(printAreaHTML) {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  // give the iframe the A4 content width (px) so wrapping/heights match print exactly
+  const wPx = Math.round(CONTENT_W_MM * MM);
+  iframe.style.cssText = `position:fixed;left:-10000px;top:0;width:${wPx + 40}px;height:1600px;border:0;background:#fff;`;
+  document.body.appendChild(iframe);
+  try {
+    const doc = iframe.contentDocument;
+    doc.open(); doc.write(buildDocHtml(printAreaHTML)); doc.close();
+    // wait for layout + fonts + images inside the iframe
+    await new Promise((r) => setTimeout(r, 250));
+    if (doc.fonts && doc.fonts.ready) { try { await doc.fonts.ready; } catch (_) {} }
+    await Promise.all([...doc.querySelectorAll("img")].map((im) => im.complete ? null : new Promise((r) => { im.onload = im.onerror = r; })));
+    const pgEls = paginate(doc) || [doc.querySelector(".doc")].filter(Boolean);
+    const win = iframe.contentWindow;
+    const pages = [];
+    for (const el of pgEls) {
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: win.innerWidth, windowHeight: win.innerHeight });
+      pages.push({ dataUrl: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height });
+    }
+    return pages;
+  } finally {
+    document.body.removeChild(iframe);
+  }
 }
 
 function dataUrlToBlob(dataUrl) {
@@ -17,26 +40,35 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([arr], { type: "image/png" });
 }
 
-// tile a tall image across A4 pages
-function toPdfBlob({ dataUrl, width, height }) {
+// one captured A4 page per PDF page, fit within the page margins, aspect preserved
+function pagesToPdfBlob(pages) {
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
-  const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-  const imgH = (height / width) * pw;
-  let heightLeft = imgH, position = 0;
-  pdf.addImage(dataUrl, "PNG", 0, position, pw, imgH);
-  heightLeft -= ph;
-  while (heightLeft > 0.5) { position -= ph; pdf.addPage(); pdf.addImage(dataUrl, "PNG", 0, position, pw, imgH); heightLeft -= ph; }
+  const PT = 72 / 25.4; // pt per mm
+  const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
+  const side = SIDE_MM * PT, top = TOP_MM * PT;
+  const maxW = pageW - side * 2, maxH = pageH - top - BOTTOM_MM * PT;
+  pages.forEach((p, i) => {
+    if (i) pdf.addPage();
+    let w = maxW, h = (p.height / p.width) * maxW;
+    if (h > maxH) { h = maxH; w = (p.width / p.height) * maxH; }
+    pdf.addImage(p.dataUrl, "PNG", (pageW - w) / 2, top, w, h);
+  });
   return pdf.output("blob");
 }
 
-// capture `node`, then send to the customer on LINE — mode: "image" | "pdf"
+// capture `node` (.print-area or its wrapper), then send to the customer on LINE — mode: "image" | "pdf"
 export async function sendDocFromNode(node, lineUserId, mode, label) {
-  const cap = await captureNode(node);
+  const printArea = node.querySelector(".print-area") || node;
+  const pages = await renderPages(printArea.outerHTML);
+  if (!pages.length) throw new Error("สร้างเอกสารไม่สำเร็จ");
   if (mode === "image") {
-    const url = await uploadDocFile(dataUrlToBlob(cap.dataUrl), "png", "image/png");
-    await sendLineImage(lineUserId, url);
+    // a single PNG: if multi-page, send each page in order
+    for (const p of pages) {
+      const url = await uploadDocFile(dataUrlToBlob(p.dataUrl), "png", "image/png");
+      await sendLineImage(lineUserId, url);
+    }
   } else {
-    const url = await uploadDocFile(toPdfBlob(cap), "pdf", "application/pdf");
+    const url = await uploadDocFile(pagesToPdfBlob(pages), "pdf", "application/pdf");
     await sendLineMessage(lineUserId, `📄 ${label}\n${url}`);
   }
 }
