@@ -474,6 +474,14 @@ export async function saveCompany(c, kind) {
   if (error) throw error;
 }
 
+// test the FlowAccount OpenAPI connection (sandbox) via our serverless function
+export async function flowaccountTest() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("ยังไม่ได้เข้าสู่ระบบ");
+  const r = await fetch("/api/flowaccount-test", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } });
+  return r.json();
+}
+
 // role → module permission overrides (stored as one JSON row in app_config). Returns null if unset.
 export async function getRolePermissions() {
   const { data, error } = await supabase.from("app_config").select("value").eq("key", "role_permissions").maybeSingle();

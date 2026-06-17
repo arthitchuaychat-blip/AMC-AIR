@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest } from "../lib/api";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
 
@@ -225,6 +225,35 @@ function DangerAction({ label, desc, phrase, onRun, flash }) {
   );
 }
 
+// FlowAccount OpenAPI — sandbox connection test
+function FlowAccountCard() {
+  const [res, setRes] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  async function test() {
+    setBusy(true); setRes(null);
+    try { setRes(await flowaccountTest()); }
+    catch (e) { setRes({ ok: false, msg: e.message || String(e) }); }
+    setBusy(false);
+  }
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="sec-head">
+        <div><div className="sec-title">FlowAccount (ทดสอบ Sandbox)</div>
+          <div className="sec-sub">เชื่อมต่อแบบ 1 client → 1 บริษัท (client_id + client_secret) · ใส่คีย์ที่ Vercel ก่อน</div></div>
+        <button className="btn-primary sm" disabled={busy} onClick={test}>{busy ? "กำลังทดสอบ…" : "ทดสอบการเชื่อมต่อ"}</button>
+      </div>
+      {res && (
+        <div className="fa-result" style={{ background: res.ok ? "#dcf5e8" : "#ffedd5", borderColor: res.ok ? "#b7e6cb" : "#fed7aa", color: res.ok ? "#0a6b3d" : "#9a3412" }}>
+          {res.ok
+            ? `✅ เชื่อมต่อสำเร็จ (env: ${res.env}) · ได้ access token แล้ว (อายุ ${res.expiresIn || "-"} วินาที)`
+            : `❌ ยังไม่สำเร็จ — ${res.reason || ""} ${res.status ? "(HTTP " + res.status + ")" : ""}\n${res.msg || ""}`}
+        </div>
+      )}
+      <p className="page-sub" style={{ marginTop: 8 }}>ขั้นตอน: ใส่ <b>FLOWACCOUNT_CLIENT_ID</b>, <b>FLOWACCOUNT_CLIENT_SECRET</b> (และ <b>FLOWACCOUNT_ENV=sandbox</b>) ใน Vercel → Redeploy → กดทดสอบ</p>
+    </div>
+  );
+}
+
 export default function Settings({ role }) {
   const [teams, setTeams] = React.useState([]);
   const [profiles, setProfiles] = React.useState([]);
@@ -311,6 +340,7 @@ export default function Settings({ role }) {
       {!loading && (
         <>
         {can(role, "settings", "edit") && <PermissionsCard flash={flash} />}
+        {can(role, "settings", "edit") && <FlowAccountCard />}
         <div className="damage-layout" style={{ marginBottom: 16 }}>
           <CompanyCard kind="vat" title="หัวกระดาษ — แบบมี VAT" sub="ใช้กับใบที่คิด VAT · บัญชีธนาคารชุด VAT" flash={flash} />
           <CompanyCard kind="novat" title="หัวกระดาษ — แบบไม่มี VAT" sub="ใช้กับใบที่ไม่คิด VAT · บัญชีธนาคารชุดไม่มี VAT" flash={flash} />

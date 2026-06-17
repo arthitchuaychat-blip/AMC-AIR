@@ -65,7 +65,11 @@
       "Bash(npm run *)",
       "Bash(cd \"/c/Users/User/OneDrive/Desktop/Inventory Management\" && rm -f app/public/perm-test.html && echo deleted)",
       "Bash(npm install *)",
-      "Bash(node -e \"const k=require\\('web-push'\\).generateVAPIDKeys\\(\\); console.log\\('VAPID_PUBLIC_KEY='+k.publicKey\\); console.log\\('VAPID_PRIVATE_KEY='+k.privateKey\\);\")"
+      "Bash(node -e \"const k=require\\('web-push'\\).generateVAPIDKeys\\(\\); console.log\\('VAPID_PUBLIC_KEY='+k.publicKey\\); console.log\\('VAPID_PRIVATE_KEY='+k.privateKey\\);\")",
+      "WebFetch(domain:developers.flowaccount.com)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
