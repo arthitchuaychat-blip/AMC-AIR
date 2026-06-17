@@ -31,6 +31,8 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   const [ed, setEd] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
   const [typeF, setTypeF] = React.useState("all");
+  const [dateFrom, setDateFrom] = React.useState("");
+  const [dateTo, setDateTo] = React.useState("");
   const [viewing, setViewing] = React.useState(null); // job being viewed (detail modal)
   const [approveCtx, setApproveCtx] = React.useState(null); // { jo, v } → approval choice popup
   const [q, setQ] = React.useState("");
@@ -318,6 +320,13 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
       <div className="adm-head">
         <div><h1 className="page-title">ใบงาน <span className="page-title-en">Job Orders</span></h1><p className="page-sub">{list.length} ใบ · มอบหมาย & จัดคิวงานช่าง</p></div>
         <div className="cat-head-actions">
+          <div className="jo-datefilter">
+            <UIcon name="calendar" size={15} color="var(--ink-3)" />
+            <input className="inp" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="ตั้งแต่วันที่" />
+            <span className="jo-date-dash">–</span>
+            <input className="inp" type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} title="ถึงวันที่" />
+            {(dateFrom || dateTo) && <button className="cat-search-x" title="ล้างวันที่" onClick={() => { setDateFrom(""); setDateTo(""); }}><UIcon name="x" size={15} /></button>}
+          </div>
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
             <input placeholder="ค้นหาเลขงาน / ลูกค้า / เบอร์โทร / ทีมช่าง" value={q} onChange={(e) => setQ(e.target.value)} />
             {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
@@ -351,9 +360,24 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
+        // all visit dates of a job (YYYY-MM-DD) — falls back to the legacy single scheduled_at
+        const jobDates = (jo) => {
+          const ds = (jo.visits || []).map((v) => v.scheduled_at).filter(Boolean).map((s) => new Date(s).toISOString().slice(0, 10));
+          if (!ds.length && jo.scheduled_at) ds.push(new Date(jo.scheduled_at).toISOString().slice(0, 10));
+          return ds;
+        };
+        const inDateRange = (jo) => {
+          if (!dateFrom && !dateTo) return true;
+          const ds = jobDates(jo);
+          if (!ds.length) return false; // no date → excluded when filtering by date
+          return ds.some((d) => (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo));
+        };
+        const jobAt = (jo) => { const t = jo.scheduled_at ? new Date(jo.scheduled_at).getTime() : NaN; return Number.isNaN(t) ? Infinity : t; };
         const fl = list.filter((jo) => (statusF === "all" || jo.status === statusF)
           && (typeF === "all" || (jo.job_type || "install") === typeF)
-          && (matchText(q, jo.job_no, jo.customerName, jo.teamName, jo.title, jo.quote_no, jo.address) || matchPhone(q, jo.contact_phone)));
+          && inDateRange(jo)
+          && (matchText(q, jo.job_no, jo.customerName, jo.teamName, jo.title, jo.quote_no, jo.address) || matchPhone(q, jo.contact_phone)))
+          .sort((a, b) => jobAt(a) - jobAt(b) || a.job_no.localeCompare(b.job_no)); // วันใกล้ → ไกล (ไม่มีวันอยู่ท้าย)
         return (<>
           {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบงาน" : "ไม่พบใบงานที่ตรงเงื่อนไข"}</div>}
           <div className="job-cards">
