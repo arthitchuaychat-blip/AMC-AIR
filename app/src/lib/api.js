@@ -1023,10 +1023,44 @@ export async function listMaterialMovements(code) {
 
 // ---------- ADMIN: manage teams (admin only — RLS) ----------
 export async function saveTeam(t) {
-  const { error } = await supabase.from("teams").upsert(
-    { id: t.id.trim().toUpperCase(), name: t.name.trim(), lead: t.lead?.trim() || null },
-    { onConflict: "id" }
-  );
+  const row = { id: t.id.trim().toUpperCase(), name: t.name.trim(), lead: t.lead?.trim() || null };
+  if (t.type !== undefined) row.type = t.type || "permanent";
+  if (t.phone !== undefined) row.phone = t.phone?.trim() || null;
+  if (t.tax_id !== undefined) row.tax_id = t.tax_id?.trim() || null;
+  if (t.bank_info !== undefined) row.bank_info = t.bank_info?.trim() || null;
+  if (t.payout_rate !== undefined) row.payout_rate = Number(t.payout_rate) || 0;
+  const { error } = await supabase.from("teams").upsert(row, { onConflict: "id" });
+  if (error) throw error;
+}
+
+// ===================== SUBCONTRACTOR (labor + payout) =====================
+// save the per-line labor for a job order
+export async function saveJobLabor(jobNo, lines, total) {
+  const { error } = await supabase.from("job_orders").update({ labor_lines: lines, labor_total: Number(total) || 0 }).eq("job_no", jobNo);
+  if (error) throw error;
+}
+// office review of a sub job (rating 1-5 + claim flag)
+export async function saveJobReview(jobNo, rating, isClaim) {
+  const { error } = await supabase.from("job_orders").update({ rating: rating || null, is_claim: !!isClaim }).eq("job_no", jobNo);
+  if (error) throw error;
+}
+export async function listSubPayouts() {
+  const { data, error } = await supabase.from("sub_payouts").select("*").order("created_at", { ascending: false });
+  if (error) throw error; return data || [];
+}
+// create a payout batch for a sub team → mark its jobs paid
+export async function createSubPayout({ team, jobNos, gross, whtRate, whtAmt, net, note }) {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("sub_payouts").insert({
+    team, job_nos: jobNos, gross: Number(gross) || 0, wht_rate: Number(whtRate) || 0, wht_amt: Number(whtAmt) || 0,
+    net: Number(net) || 0, status: "unpaid", note: note || null, created_by: uid,
+  }).select("id").single();
+  if (error) throw error;
+  await supabase.from("job_orders").update({ payout_id: data.id, labor_paid: true }).in("job_no", jobNos);
+  return data.id;
+}
+export async function paySubPayout(id, method) {
+  const { error } = await supabase.from("sub_payouts").update({ status: "paid", paid_at: new Date().toISOString(), method: method || null }).eq("id", id);
   if (error) throw error;
 }
 export async function deleteTeam(id) {

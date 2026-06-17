@@ -100,12 +100,17 @@ const roleLabel = (v) => (ROLES.find((r) => r.v === v) || {}).l || v;
 function TeamRow({ team, onChanged, flash }) {
   const [name, setName] = React.useState(team.name);
   const [lead, setLead] = React.useState(team.lead || "");
+  const [type, setType] = React.useState(team.type || "permanent");
+  const [phone, setPhone] = React.useState(team.phone || "");
+  const [taxId, setTaxId] = React.useState(team.tax_id || "");
+  const [bank, setBank] = React.useState(team.bank_info || "");
+  const [rate, setRate] = React.useState(team.payout_rate ?? 80);
   const [busy, setBusy] = React.useState(false);
   async function save() {
     if (!await confirmDialog(`ยืนยันบันทึกการแก้ไขทีม ${team.id} ?`)) return;
     setBusy(true);
-    try { await saveTeam({ id: team.id, name, lead }); flash(`บันทึกทีม ${team.id} แล้ว`); onChanged(); }
-    catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
+    try { await saveTeam({ id: team.id, name, lead, type, phone, tax_id: taxId, bank_info: bank, payout_rate: rate }); flash(`บันทึกทีม ${team.id} แล้ว`); onChanged(); }
+    catch (e) { flash("ผิดพลาด: " + (e.message || e) + " (รัน 042_subcontractor.sql แล้วหรือยัง?)", true); }
     setBusy(false);
   }
   async function del() {
@@ -114,12 +119,27 @@ function TeamRow({ team, onChanged, flash }) {
     catch (e) { flash("ลบไม่ได้ — มีข้อมูลผูกอยู่", true); }
   }
   return (
-    <div className="set-row set-row-team">
-      <span className="code-chip" style={{ background: team.color, color: "#fff", borderColor: team.color }}>{team.id}</span>
-      <input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อทีม" />
-      <input className="inp" value={lead} onChange={(e) => setLead(e.target.value)} placeholder="หัวหน้า" />
-      <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
-      <button className="btn-ghost sm danger" onClick={del}><UIcon name="trash" size={14} /></button>
+    <div className="set-team-card">
+      <div className="set-row set-row-team">
+        <span className="code-chip" style={{ background: team.color, color: "#fff", borderColor: team.color }}>{team.id}</span>
+        <input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อทีม" />
+        <select className="inp" style={{ width: 120, flex: "none" }} value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="permanent">ทีมประจำ</option><option value="sub">ช่างซัพ</option>
+        </select>
+        <input className="inp" value={lead} onChange={(e) => setLead(e.target.value)} placeholder="หัวหน้า" />
+        <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
+        <button className="btn-ghost sm danger" onClick={del}><UIcon name="trash" size={14} /></button>
+      </div>
+      {type === "sub" && (
+        <div className="set-row set-sub-detail">
+          <input className="inp" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="เบอร์โทร" />
+          <input className="inp" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="เลขผู้เสียภาษี" />
+          <input className="inp" value={bank} onChange={(e) => setBank(e.target.value)} placeholder="บัญชีธนาคาร" />
+          <span className="inp inp-unit" style={{ width: 130, flex: "none" }} title="อัตราค่าแรงดีฟอลต์ = % ของราคาขาย">
+            <input type="number" min="0" max="100" value={rate} onChange={(e) => setRate(Number(e.target.value) || 0)} /><span className="unit-suf">% ขาย</span>
+          </span>
+        </div>
+      )}
     </div>
   );
 }

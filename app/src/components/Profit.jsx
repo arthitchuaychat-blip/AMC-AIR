@@ -32,12 +32,13 @@ export default function Profit() {
         jobs.forEach((j) => { const m = mat[j.job_no]; if (m) { withdraw += m.withdraw; ret += m.return; } });
         const matNet = withdraw - ret;                              // วัสดุที่ใช้จริงสุทธิ
 
+        const labor = jobs.reduce((a, j) => a + (Number(j.labor_total) || 0), 0); // ค่าแรงช่างซัพ
         const sale = q.afterDisc;                                   // ยอดขายสุทธิ (ก่อน VAT)
         const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : null;
         const gross = cost == null ? null : sale - cost;            // กำไรขั้นต้น
-        const net = gross == null ? null : gross - matNet;          // กำไรสุทธิ/งาน
+        const net = gross == null ? null : gross - matNet - labor;  // กำไรสุทธิ/งาน (หักวัสดุ + ค่าแรงช่างซัพ)
         const margin = net == null || sale <= 0 ? null : (net / sale) * 100;
-        out.push({ q, jobs, sale, cost, gross, withdraw, ret, matNet, net, margin });
+        out.push({ q, jobs, sale, cost, gross, withdraw, ret, matNet, labor, net, margin });
       });
       setRows(out);
     } catch (e) { setErr(e.message || String(e)); }

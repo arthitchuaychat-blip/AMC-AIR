@@ -752,6 +752,31 @@ select.inp{cursor:pointer}
 .hr-table td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--surface-2);font-variant-numeric:tabular-nums}
 .hr-table .hr-ok{color:#0a6b3d;font-weight:700}.hr-table .hr-bad{color:#dc2626;font-weight:800}.hr-table .hr-warn{color:#b45309;font-weight:700}
 .hr-q-inp{width:62px;padding:5px 6px;text-align:center}
+/* ---------- subcontractor ---------- */
+.set-team-card{border:1px solid var(--line);border-radius:11px;padding:8px 10px;margin-bottom:8px;background:var(--surface)}
+.set-sub-detail{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}
+.sub-job-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--surface-2)}
+.sub-job-main{flex:1;min-width:0}
+.sub-job-amt{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink-3);text-align:right;min-width:130px}
+.sub-job-amt b{color:var(--ink)}
+.sub-lab-head,.sub-lab-row{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12.5px;border-bottom:1px solid var(--surface-2)}
+.sub-lab-head{font-size:11.5px;color:var(--ink-3);font-weight:700}
+.sub-lab-name{flex:1}.sub-lab-sale{width:96px;text-align:right;color:var(--ink-3)}
+.sub-lab-inp{width:120px;flex:none}.sub-lab-head>span:nth-child(2){width:96px;text-align:right}.sub-lab-head>span:last-child{width:120px;text-align:center}
+.sub-lab-total{display:flex;justify-content:space-between;padding:9px 2px;font-size:14px;font-weight:800;border-top:2px solid var(--line);margin-top:4px}
+.sub-lab-total b{color:var(--primary)}
+.sub-review{display:flex;gap:18px;align-items:flex-end;margin-top:12px;border-top:1px solid var(--line);padding-top:12px;flex-wrap:wrap}
+.sub-stars{display:flex;gap:3px}
+.sub-star{border:none;background:transparent;font-size:22px;color:#d4d8e0;cursor:pointer;line-height:1;padding:0}
+.sub-star.on{color:#f5a623}
+.sub-claim{display:flex;align-items:center;gap:7px;font-size:13px}
+.sub-pay-team{border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:10px}
+.sub-pay-tname{font-weight:800;margin-bottom:6px}
+.sub-pay-job{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;border-bottom:1px solid var(--surface-2)}
+.sub-pay-no{font-weight:600;display:flex;align-items:center;gap:5px}
+.sub-pay-sum{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:13px;background:var(--surface-2);border-radius:9px;padding:8px 11px}
+.sub-pay-sum b{color:var(--primary)}
+.sub-payout-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--surface-2);font-size:13px}
 .jo-datefilter{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px 8px}
 .jo-datefilter .inp{border:none;padding:4px 4px;font-size:12.5px;width:128px;background:transparent}
 .jo-datefilter .jo-date-dash{color:var(--ink-3)}
