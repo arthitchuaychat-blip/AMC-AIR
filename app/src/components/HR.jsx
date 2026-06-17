@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { UIcon } from "../icons";
@@ -279,6 +279,63 @@ function StaffTab({ staff, settings, holidays, onReload, flash }) {
           </div>
         </div>
       </div>
+
+      <QuotaCard staff={staff} settings={settings} flash={flash} />
     </>
+  );
+}
+
+// per-person leave quota (this year). Edit the entitlement; remaining = quota − approved used.
+function QuotaCard({ staff, settings, flash }) {
+  const year = new Date().getFullYear();
+  const def = (settings && settings.quota) || { vacation: 6, personal: 3, sick: 30 };
+  const [over, setOver] = React.useState({});   // userId → {vacation,personal,sick}
+  const [used, setUsed] = React.useState({});    // userId → {vacation,personal,sick}
+  const [loading, setLoading] = React.useState(true);
+  async function load() {
+    try {
+      const [q, lv] = await Promise.all([getLeaveQuotas(year), listLeaves("approved")]);
+      setOver(Object.fromEntries(q.map((r) => [r.user_id, r])));
+      const u = {}; lv.filter((l) => String(l.start_date).startsWith(String(year))).forEach((l) => { (u[l.user_id] = u[l.user_id] || {})[l.type] = (u[l.user_id]?.[l.type] || 0) + Number(l.days || 0); });
+      setUsed(u);
+    } catch (e) { flash("โหลดโควต้าไม่สำเร็จ: " + (e.message || e), true); }
+    setLoading(false);
+  }
+  React.useEffect(() => { load(); }, []);
+  const qOf = (id) => ({ vacation: over[id]?.vacation ?? def.vacation, personal: over[id]?.personal ?? def.personal, sick: over[id]?.sick ?? def.sick });
+  async function save(id, type, val) {
+    const next = { ...qOf(id), [type]: Math.max(0, Number(val) || 0) };
+    setOver((o) => ({ ...o, [id]: { ...(o[id] || {}), ...next } }));
+    try { await saveLeaveQuota(id, year, next); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  const COLS = [["vacation", "พักร้อน"], ["personal", "ลากิจ"], ["sick", "ลาป่วย"]];
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="sec-head"><div><div className="sec-title">โควต้าวันลารายบุคคล (ปี {year + 543})</div>
+        <div className="sec-sub">ปรับจำนวนวันลาของแต่ละคนได้ · เหลือ = โควต้า − ที่อนุมัติแล้ว</div></div></div>
+      {loading ? <div className="empty">กำลังโหลด…</div> : (
+        <div style={{ overflowX: "auto" }}>
+          <table className="hr-table hr-quota-table">
+            <thead>
+              <tr><th style={{ textAlign: "left" }}>ชื่อ</th>{COLS.map(([k, l]) => <th key={k} colSpan={2}>{l}</th>)}</tr>
+              <tr><th></th>{COLS.map(([k]) => <React.Fragment key={k}><th>โควต้า</th><th>เหลือ</th></React.Fragment>)}</tr>
+            </thead>
+            <tbody>
+              {staff.map((p) => { const q = qOf(p.id); return (
+                <tr key={p.id}>
+                  <td style={{ textAlign: "left" }}><b>{p.name || p.email}</b><div className="jo-dim">{p.department || "-"}</div></td>
+                  {COLS.map(([k]) => { const rem = q[k] - (used[p.id]?.[k] || 0); return (
+                    <React.Fragment key={k}>
+                      <td><input className="inp hr-q-inp" type="number" min="0" value={q[k]} onChange={(e) => save(p.id, k, e.target.value)} /></td>
+                      <td className={rem < 0 ? "hr-bad" : rem === 0 ? "hr-warn" : "hr-ok"}>{rem}</td>
+                    </React.Fragment>
+                  ); })}
+                </tr>
+              ); })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

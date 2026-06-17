@@ -1,5 +1,5 @@
 import React from "react";
-import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto } from "../lib/api";
+import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota } from "../lib/api";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { UIcon } from "../icons";
 
@@ -21,6 +21,7 @@ export default function Attendance({ me }) {
   const [recent, setRecent] = React.useState([]);
   const [leaves, setLeaves] = React.useState([]);
   const [holidays, setHolidays] = React.useState(new Set());
+  const [myQuota, setMyQuota] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [toast, setToast] = React.useState(null);
   const fileRef = React.useRef(null);
@@ -33,8 +34,8 @@ export default function Attendance({ me }) {
   async function load() {
     try {
       const since = new Date(); since.setDate(since.getDate() - 30);
-      const [t, s, r, lv, hol] = await Promise.all([myAttendanceToday(), getHrSettings(), listMyAttendance(hrYmd(since)), listMyLeaves(), listHolidays()]);
-      setToday(t); setSettings(s || DEFAULT_HR_SETTINGS); setRecent(r); setLeaves(lv); setHolidays(new Set((hol || []).map((h) => h.day)));
+      const [t, s, r, lv, hol, q] = await Promise.all([myAttendanceToday(), getHrSettings(), listMyAttendance(hrYmd(since)), listMyLeaves(), listHolidays(), getMyLeaveQuota(new Date().getFullYear())]);
+      setToday(t); setSettings(s || DEFAULT_HR_SETTINGS); setRecent(r); setLeaves(lv); setHolidays(new Set((hol || []).map((h) => h.day))); setMyQuota(q);
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setToday(null); }
   }
   React.useEffect(() => { load(); }, []);
@@ -62,7 +63,9 @@ export default function Attendance({ me }) {
   const year = new Date().getFullYear();
   const usedByType = {};
   leaves.filter((l) => l.status === "approved" && String(l.start_date).startsWith(String(year))).forEach((l) => { usedByType[l.type] = (usedByType[l.type] || 0) + Number(l.days || 0); });
-  const quota = (settings && settings.quota) || DEFAULT_HR_SETTINGS.quota;
+  const baseQuota = (settings && settings.quota) || DEFAULT_HR_SETTINGS.quota;
+  // per-person override (HR-set) wins over the company default
+  const quota = { vacation: myQuota?.vacation ?? baseQuota.vacation, personal: myQuota?.personal ?? baseQuota.personal, sick: myQuota?.sick ?? baseQuota.sick };
 
   return (
     <div className="adm">

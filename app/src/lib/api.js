@@ -1256,6 +1256,23 @@ export async function decideLeave(id, status, note) {
   if (error) throw error;
 }
 
+// per-person leave quota (per year). Falls back to hr_settings defaults in the UI when no row.
+export async function getLeaveQuotas(year) {
+  const { data, error } = await supabase.from("hr_leave_quota").select("*").eq("year", year);
+  if (error) throw error; return data || [];
+}
+export async function getMyLeaveQuota(year) {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("hr_leave_quota").select("*").eq("user_id", uid).eq("year", year).maybeSingle();
+  if (error) throw error; return data || null;
+}
+export async function saveLeaveQuota(userId, year, q) {
+  const { error } = await supabase.from("hr_leave_quota").upsert(
+    { user_id: userId, year, vacation: Number(q.vacation) || 0, personal: Number(q.personal) || 0, sick: Number(q.sick) || 0 },
+    { onConflict: "user_id,year" });
+  if (error) throw error;
+}
+
 // staff list with HR fields (for the HR settings + reports)
 export async function listHrStaff() {
   const { data, error } = await supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date").order("name");
