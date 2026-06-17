@@ -10,8 +10,9 @@ const WHT_RATE = 3;
 // labor lines default to rate% of each line's sale amount (accounting can edit)
 function buildLines(items, rate) {
   return (items || []).map((it) => {
-    const sale = round2(Number(it.qty) * Number(it.unit_price));
-    return { code: it.item_code || null, name: it.name, sale, labor: round2(sale * (Number(rate) || 0) / 100) };
+    const qty = Number(it.qty) || 0, price = Number(it.unit_price) || 0;
+    const sale = round2(qty * price);
+    return { code: it.item_code || null, name: it.name, qty, unit: it.unit || "", price, sale, labor: round2(sale * (Number(rate) || 0) / 100) };
   });
 }
 const sumLabor = (lines) => round2((lines || []).reduce((a, l) => a + (Number(l.labor) || 0), 0));
@@ -99,7 +100,10 @@ function LaborTab({ jobs, quoteBy, teamById, onReload, flash }) {
 }
 
 function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
-  const init = (job.labor_lines && job.labor_lines.length) ? job.labor_lines : buildLines(quote?.items, rate);
+  // always rebuild from the quote (keeps qty/price/หน่วย), then overlay any saved labor amounts by line
+  const fresh = buildLines(quote?.items, rate);
+  const saved = job.labor_lines || [];
+  const init = fresh.map((l, i) => (saved[i] && saved[i].labor != null ? { ...l, labor: Number(saved[i].labor) || 0 } : l));
   const [lines, setLines] = React.useState(init);
   const [rating, setRating] = React.useState(job.rating || 0);
   const [claim, setClaim] = React.useState(!!job.is_claim);
@@ -119,10 +123,12 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
         <div className="modal-head"><div className="modal-title">ค่าแรงเหมา · {job.job_no}<span>{job.customerName || ""}</span></div>
           <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
-          <div className="sub-lab-head"><span>รายการ</span><span>ราคาขาย</span><span>ค่าแรง</span></div>
+          <div className="sub-lab-head"><span>รายการ</span><span>จำนวน</span><span>ราคา/หน่วย</span><span>ราคาขาย</span><span>ค่าแรง</span></div>
           {lines.map((l, i) => (
             <div className="sub-lab-row" key={i}>
               <span className="sub-lab-name">{l.name}</span>
+              <span className="sub-lab-qty">{l.qty} {l.unit}</span>
+              <span className="sub-lab-unit">{fmtBaht(l.price)}</span>
               <span className="sub-lab-sale">{fmtBaht(l.sale)}</span>
               <span className="inp inp-unit sub-lab-inp"><span className="unit-pre">฿</span><input type="number" min="0" value={l.labor} onChange={(e) => setLabor(i, e.target.value)} /></span>
             </div>

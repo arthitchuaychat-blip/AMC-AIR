@@ -53,7 +53,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-16·ช่างซัพค่าแรง+จ่ายเงิน-v67";
+const BUILD = "2026-06-16·ค่าแรงโชว์จำนวน+ราคาต่อหน่วย-v68";
 
 function SetupNotice() {
   return (

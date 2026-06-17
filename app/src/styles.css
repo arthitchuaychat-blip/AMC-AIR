@@ -759,10 +759,17 @@ select.inp{cursor:pointer}
 .sub-job-main{flex:1;min-width:0}
 .sub-job-amt{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink-3);text-align:right;min-width:130px}
 .sub-job-amt b{color:var(--ink)}
-.sub-lab-head,.sub-lab-row{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12.5px;border-bottom:1px solid var(--surface-2)}
+.sub-lab-head,.sub-lab-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;border-bottom:1px solid var(--surface-2)}
 .sub-lab-head{font-size:11.5px;color:var(--ink-3);font-weight:700}
-.sub-lab-name{flex:1}.sub-lab-sale{width:96px;text-align:right;color:var(--ink-3)}
-.sub-lab-inp{width:120px;flex:none}.sub-lab-head>span:nth-child(2){width:96px;text-align:right}.sub-lab-head>span:last-child{width:120px;text-align:center}
+.sub-lab-name{flex:1;min-width:0}
+.sub-lab-qty{width:78px;text-align:right;color:var(--ink-3);white-space:nowrap}
+.sub-lab-unit{width:84px;text-align:right;color:var(--ink-3)}
+.sub-lab-sale{width:92px;text-align:right;color:var(--ink-3)}
+.sub-lab-inp{width:112px;flex:none}
+.sub-lab-head>span:nth-child(2){width:78px;text-align:right}
+.sub-lab-head>span:nth-child(3){width:84px;text-align:right}
+.sub-lab-head>span:nth-child(4){width:92px;text-align:right}
+.sub-lab-head>span:last-child{width:112px;text-align:center}
 .sub-lab-total{display:flex;justify-content:space-between;padding:9px 2px;font-size:14px;font-weight:800;border-top:2px solid var(--line);margin-top:4px}
 .sub-lab-total b{color:var(--primary)}
 .sub-review{display:flex;gap:18px;align-items:flex-end;margin-top:12px;border-top:1px solid var(--line);padding-top:12px;flex-wrap:wrap}
