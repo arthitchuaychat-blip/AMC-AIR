@@ -70,7 +70,8 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(cd \"/c/Users/User/OneDrive/Desktop/Inventory Management\" && rm -f app/public/hr-test.html && echo deleted)"
+      "Bash(cd \"/c/Users/User/OneDrive/Desktop/Inventory Management\" && rm -f app/public/hr-test.html && echo deleted)",
+      "Bash(cd \"/c/Users/User/OneDrive/Desktop/Inventory Management\" && sed -n '/function openDoc/,/^  }/p' app/src/App.jsx | head -12; echo '--- JobOrders focus handling ---'; grep -n 'focus\\\\|onFocusConsumed\\\\|setViewing\\\\|setQ\\(' app/src/components/JobOrders.jsx | head)"
     ]
   }
 }

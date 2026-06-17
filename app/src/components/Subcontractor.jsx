@@ -17,7 +17,7 @@ function buildLines(items, rate) {
 }
 const sumLabor = (lines) => round2((lines || []).reduce((a, l) => a + (Number(l.labor) || 0), 0));
 
-export default function Subcontractor({ role }) {
+export default function Subcontractor({ role, onOpenDoc }) {
   const [tab, setTab] = React.useState("labor");
   const [jobs, setJobs] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
@@ -58,7 +58,7 @@ export default function Subcontractor({ role }) {
             style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
         </div>
 
-        {tab === "labor" && <LaborTab jobs={subJobs} quoteBy={quoteBy} teamById={teamById} onReload={load} flash={flash} />}
+        {tab === "labor" && <LaborTab jobs={subJobs} quoteBy={quoteBy} teamById={teamById} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
         {tab === "pay" && <PayTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} payouts={payouts} onReload={load} flash={flash} />}
         {tab === "score" && <ScoreTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} matCost={matCost} payouts={payouts} />}
       </>}
@@ -69,7 +69,7 @@ export default function Subcontractor({ role }) {
 }
 
 // ---------- LABOR per job ----------
-function LaborTab({ jobs, quoteBy, teamById, onReload, flash }) {
+function LaborTab({ jobs, quoteBy, teamById, onReload, flash, onOpenDoc }) {
   const [edit, setEdit] = React.useState(null); // job being edited
   const STATUS = { done: { t: "เสร็จ", c: "b-green" }, in_progress: { t: "กำลังทำ", c: "b-amber" }, scheduled: { t: "นัดแล้ว", c: "b-blue" }, pending: { t: "รอจ่ายงาน", c: "b-grey" }, awaiting_approval: { t: "รออนุมัติ", c: "b-purple" }, reschedule: { t: "นัดเพิ่ม", c: "b-orange" } };
   return (
@@ -80,7 +80,7 @@ function LaborTab({ jobs, quoteBy, teamById, onReload, flash }) {
         {jobs.map((j) => { const q = quoteBy[j.quote_no]; const st = STATUS[j.status] || STATUS.pending; return (
           <div className="sub-job-row" key={j.job_no}>
             <div className="sub-job-main">
-              <div><b>{j.job_no}</b> <span className={"job-badge " + st.c}>{st.t}</span>
+              <div><button type="button" className="sub-job-link" onClick={() => onOpenDoc && onOpenDoc("job", j.job_no)} title="เปิดใบงาน · ดูความเคลื่อนไหว">{j.job_no}</button> <span className={"job-badge " + st.c}>{st.t}</span>
                 {q?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}
                 {j.labor_paid && <span className="vat-badge" style={{ background: "#e6efff", color: "#1d4ed8" }}>จ่ายแล้ว</span>}
                 {j.is_claim && <span className="vat-badge vat-off">เคลม</span>}</div>
