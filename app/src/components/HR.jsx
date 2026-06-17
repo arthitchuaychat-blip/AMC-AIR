@@ -133,32 +133,34 @@ function ReportTab({ staff, settings, holSet, flash }) {
   const now = new Date();
   const [ym, setYm] = React.useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [rows, setRows] = React.useState(null);
+  const [raw, setRaw] = React.useState(null); // { attByUserDay, leaveDaySet, from, calcTo }
+  const [detail, setDetail] = React.useState(null); // staff row clicked
   const [loading, setLoading] = React.useState(false);
   async function run() {
     setLoading(true);
     try {
       const [from, to] = monthRange(ym);
-      const [att, leaves] = await Promise.all([listAttendance(from, to), listLeaves("approved")]);
+      const today = todayYmd();
+      const calcTo = to < today ? to : today;     // don't count future days as absent
+      const [att, leaves] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved")]);
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
-      const leaveDaySet = {}; leaves.forEach((l) => { for (let d = hrParseYmd(l.start_date); d <= hrParseYmd(l.end_date); d.setDate(d.getDate() + 1)) { const k = hrYmd(d); if (k >= from && k <= to) (leaveDaySet[l.user_id] = leaveDaySet[l.user_id] || {})[k] = l.type; } });
+      const leaveDaySet = {}; leaves.forEach((l) => { for (let d = hrParseYmd(l.start_date); d <= hrParseYmd(l.end_date); d.setDate(d.getDate() + 1)) { const k = hrYmd(d); if (k >= from && k <= calcTo) (leaveDaySet[l.user_id] = leaveDaySet[l.user_id] || {})[k] = l.type; } });
       const result = staff.map((p) => {
         let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, absent = 0, workdays = 0, leaveCnt = 0;
-        const [from2, to2] = [from, to];
-        for (let d = hrParseYmd(from2); d <= hrParseYmd(to2); d.setDate(d.getDate() + 1)) {
+        for (let d = hrParseYmd(from); d <= hrParseYmd(calcTo); d.setDate(d.getDate() + 1)) {
           const k = hrYmd(d);
-          const work = isWorkday(k, p.work_pattern || "mon_sat", p.sat_group, holSet);
-          const a = attByUserDay[p.id]?.[k];
           const onLeave = leaveDaySet[p.id]?.[k];
           if (onLeave) { leaveCnt++; continue; }
-          if (!work) continue;
+          if (!isWorkday(k, p.work_pattern || "mon_sat", p.sat_group, holSet)) continue;
           workdays++;
+          const a = attByUserDay[p.id]?.[k];
           if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } otMin += s.otMin; }
           else absent++;
         }
         return { p, present, lateCnt, lateMin, otMin, absent, workdays, leaveCnt };
       });
       result.sort((a, b) => b.absent - a.absent || b.lateCnt - a.lateCnt); // worst first (for review)
-      setRows(result);
+      setRows(result); setRaw({ attByUserDay, leaveDaySet, from, calcTo });
     } catch (e) { flash("คำนวณไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -173,10 +175,29 @@ function ReportTab({ staff, settings, holSet, flash }) {
     const a = document.createElement("a"); a.href = url; a.download = `hr-${ym}.csv`; a.click(); URL.revokeObjectURL(url);
   }
 
+  // build per-day detail for one person (for the drill-down modal)
+  function personDays(p) {
+    if (!raw) return [];
+    const out = [];
+    for (let d = hrParseYmd(raw.calcTo); d >= hrParseYmd(raw.from); d.setDate(d.getDate() - 1)) {
+      const k = hrYmd(d);
+      const onLeave = raw.leaveDaySet[p.id]?.[k];
+      const work = isWorkday(k, p.work_pattern || "mon_sat", p.sat_group, holSet);
+      if (!onLeave && !work) continue; // skip plain days off
+      const a = raw.attByUserDay[p.id]?.[k];
+      let kind = "off", s = null;
+      if (onLeave) kind = "leave";
+      else if (a?.check_in_at) { s = dayStat(a, settings); kind = s.isLate ? "late" : "present"; }
+      else kind = "absent";
+      out.push({ k, kind, leaveType: onLeave, a, s });
+    }
+    return out;
+  }
+
   return (
     <div className="card">
       <div className="sec-head">
-        <div><div className="sec-title">สถิติรายเดือน</div><div className="sec-sub">เรียงคนที่ขาด/สายมากสุดขึ้นก่อน — ใช้พิจารณาปรับเงินเดือน/เลิกจ้าง</div></div>
+        <div><div className="sec-title">สถิติรายเดือน <span className="sec-sub" style={{ fontWeight: 400 }}>(นับถึงวันนี้)</span></div><div className="sec-sub">กดที่ชื่อเพื่อดูรายวัน · เรียงคนขาด/สายมากสุดขึ้นก่อน</div></div>
         <div style={{ display: "flex", gap: 8 }}>
           <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} />
           <button className="btn-ghost sm" onClick={exportCsv} disabled={!rows}>ส่งออก CSV</button>
@@ -188,8 +209,8 @@ function ReportTab({ staff, settings, holSet, flash }) {
             <thead><tr><th style={{ textAlign: "left" }}>ชื่อ</th><th>แผนก</th><th>วันทำงาน</th><th>มา</th><th>ขาด</th><th>ลา</th><th>สาย</th><th>สายรวม</th><th>OT</th></tr></thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.p.id}>
-                  <td style={{ textAlign: "left" }}><b>{r.p.name || r.p.email}</b></td>
+                <tr key={r.p.id} className="hr-row-click" onClick={() => setDetail(r)}>
+                  <td style={{ textAlign: "left" }}><b>{r.p.name || r.p.email}</b> <span className="hr-row-go">ดู ›</span></td>
                   <td>{r.p.department || "-"}</td>
                   <td>{r.workdays}</td>
                   <td className="hr-ok">{r.present}</td>
@@ -204,6 +225,48 @@ function ReportTab({ staff, settings, holSet, flash }) {
           </table>
         </div>
       )}
+
+      {detail && <PersonDetail row={detail} days={personDays(detail.p)} onClose={() => setDetail(null)} />}
+    </div>
+  );
+}
+
+function PersonDetail({ row, days, onClose }) {
+  const KIND = {
+    present: { t: "มา", c: "b-green" }, late: { t: "มาสาย", c: "b-amber" },
+    absent: { t: "ขาด", c: "b-red" }, leave: { t: "ลา", c: "b-blue" },
+  };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">{row.p.name || row.p.email}<span>{row.p.department || ""}</span></div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <div className="hr-detail-sum">
+            <span className="hr-ok">มา {row.present}</span><span className="hr-bad">ขาด {row.absent}</span>
+            <span>ลา {row.leaveCnt}</span><span className="hr-warn">สาย {row.lateCnt}</span>
+            <span>OT {fmtMin(row.otMin)}</span>
+          </div>
+          <div className="set-list">
+            {days.length === 0 && <div className="empty sm">ไม่มีข้อมูลในเดือนนี้</div>}
+            {days.map((d) => { const b = KIND[d.kind] || KIND.absent; return (
+              <div className="hr-detail-row" key={d.k}>
+                <span className="hr-detail-d">{thDate(d.k)}</span>
+                <span className="hr-detail-mid">
+                  {d.kind === "leave" ? leaveLabel(d.leaveType)
+                    : d.a?.check_in_at ? <>เข้า <b>{fmtTime(d.a.check_in_at)}</b> · ออก <b>{fmtTime(d.a.check_out_at)}</b>
+                      {d.s?.isLate && <span className="att-tag late sm">สาย {fmtMin(d.s.lateMin)}</span>}
+                      {d.s?.otMin > 0 && <span className="att-tag ot sm">OT {fmtMin(d.s.otMin)}</span>}</>
+                    : "—"}
+                </span>
+                <span className={"job-badge " + b.c}>{d.kind === "leave" ? leaveLabel(d.leaveType) : b.t}</span>
+              </div>
+            ); })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

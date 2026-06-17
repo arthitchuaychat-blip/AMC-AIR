@@ -752,6 +752,13 @@ select.inp{cursor:pointer}
 .hr-table td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--surface-2);font-variant-numeric:tabular-nums}
 .hr-table .hr-ok{color:#0a6b3d;font-weight:700}.hr-table .hr-bad{color:#dc2626;font-weight:800}.hr-table .hr-warn{color:#b45309;font-weight:700}
 .hr-q-inp{width:62px;padding:5px 6px;text-align:center}
+.hr-row-click{cursor:pointer}.hr-row-click:hover{background:var(--surface-2)}
+.hr-row-go{font-size:11px;color:var(--primary);font-weight:600;opacity:.7}
+.hr-detail-sum{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.hr-detail-sum>span{font-size:12px;font-weight:700;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:3px 10px}
+.hr-detail-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--surface-2);font-size:12.5px}
+.hr-detail-d{flex:none;width:96px;font-weight:600}
+.hr-detail-mid{flex:1;color:var(--ink-2)}
 .hr-quota-table th{border-bottom:1px solid var(--surface-2)}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;font-size:13.5px;font-weight:600;padding:12px 22px;border-radius:12px;box-shadow:var(--shadow-lg);z-index:200}
 .toast.bad{background:#dc2626}
