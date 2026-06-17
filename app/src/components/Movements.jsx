@@ -1,9 +1,10 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, updateMaterialCost, markPoReceived } from "../lib/api";
+import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { can } from "../lib/permissions";
+import { scheduleLabel } from "../lib/schedule";
 import { MaterialThumb, UIcon } from "../icons";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -35,6 +36,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [type, setType] = React.useState("withdraw");
   const [team, setTeam] = React.useState("");
   const [jobNo, setJobNo] = React.useState("");
+  const [jobOrders, setJobOrders] = React.useState([]);
   const [reason, setReason] = React.useState(REASONS[0]);
   const [damageMode, setDamageMode] = React.useState("job"); // job | central
 
@@ -53,6 +55,10 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [qtyByCode, setQtyByCode] = React.useState({});
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
+  // job orders assigned to the picked team (active) — for the เบิก job picker, nearest date first
+  const teamJobs = React.useMemo(() => jobOrders
+    .filter((j) => j.assigned_team === team && j.status !== "cancelled")
+    .sort((a, b) => (a.scheduled_at || "").localeCompare(b.scheduled_at || "")), [jobOrders, team]);
   // only stock-tracked items can move; then narrow by the picker filters
   const matCats = React.useMemo(() => {
     const seen = {}; mats.forEach((m) => { if (m.tracked && m.kind === "material" && m.cat) seen[m.cat] = m.catName || m.cat; });
@@ -71,7 +77,8 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     setLoading(true);
     // lite list (materials table) is the authoritative item set — matches the catalog/BOQ picker;
     // the material_stock view only supplies current stock numbers, merged in by code.
-    const [lite, full, tm, r, j] = await Promise.all([listMaterialsLite(), listMaterials(), listTeams(), listRecentTransactions(60), listOpenJobs()]);
+    const [lite, full, tm, r, j, jord] = await Promise.all([listMaterialsLite(), listMaterials(), listTeams(), listRecentTransactions(60), listOpenJobs(), listJobOrders()]);
+    setJobOrders(jord || []);
     const stockByCode = {}; full.forEach((x) => { if (x.code != null) stockByCode[x.code] = x.stock; });
     const m = lite.map((x) => (x.code in stockByCode ? { ...x, stock: stockByCode[x.code] } : x));
     setMats(m); setTeams(tm); setRecent(r); setJobs(j);
@@ -278,7 +285,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                 <label className="fld"><span>ทีม · Team</span>
                   <div className="team-pick-row">
                     {(isTech ? teams.filter((t) => t.id === myTeam) : teams).map((t) => (
-                      <button key={t.id} className={"team-pick" + (team === t.id ? " on" : "")} onClick={() => !isTech && setTeam(t.id)}
+                      <button key={t.id} className={"team-pick" + (team === t.id ? " on" : "")} onClick={() => { if (!isTech) { setTeam(t.id); setJobNo(""); } }}
                         style={team === t.id ? { background: t.color, borderColor: t.color, color: "#fff", cursor: isTech ? "default" : "pointer" } : {}}>
                         <span style={{ width: 8, height: 8, borderRadius: 9, background: team === t.id ? "#fff" : t.color }} />
                         {t.name.replace("Team ", "")}
@@ -289,10 +296,22 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
               )}
 
               <div className="fld-row">
-                {type !== "damage" && (
-                  <label className="fld"><span>{type === "purchase" ? "เลขใบสั่งซื้อ (PO)" : "เลขที่งาน · Job No."}</span>
-                    <input className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)}
-                      placeholder={type === "purchase" ? "เช่น PO-260610-01" : "เช่น JB-260610-03"} />
+                {type === "purchase" && (
+                  <label className="fld"><span>เลขใบสั่งซื้อ (PO)</span>
+                    <input className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)} placeholder="เช่น PO-260610-01" />
+                  </label>
+                )}
+                {type !== "purchase" && type !== "damage" && (
+                  <label className="fld"><span>ใบงานที่เบิกให้ · Job</span>
+                    {!team ? <div className="inp" style={{ color: "var(--ink-3)" }}>เลือกทีมก่อน</div>
+                      : teamJobs.length ? (
+                        <Combo className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)}>
+                          <option value="">— เลือกใบงานของทีมนี้ —</option>
+                          {teamJobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.title || j.customerName || "งาน"}{j.scheduled_at ? ` · ${scheduleLabel(j)}` : ""}</option>)}
+                        </Combo>
+                      ) : (
+                        <input className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)} placeholder="ทีมนี้ยังไม่มีใบงาน — พิมพ์เลขงานเองได้" />
+                      )}
                   </label>
                 )}
                 {type === "damage" && (
