@@ -389,7 +389,16 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 <div className="job-card-id"><span className="job-no">{jo.job_no}</span>
                   {(() => { const td = jobTypeDef(jo.job_type); return <span className="job-type-chip" style={{ background: td[3] }}>{td[2]} {td[1]}</span>; })()}
                   <span className={"job-badge " + st.cls}>{st.th}</span></div>
-                <div className="job-card-meta">{jo.title || "งานติดตั้ง/บริการ"} · ทีม {jo.teamName || "ยังไม่มอบ"}{jo.scheduled_at ? ` · 🗓 ${scheduleLabel(jo)}` : ""}{jo.visits && jo.visits.length > 1 ? ` · 🔁 ${jo.visits.length} รอบ` : ""}</div>
+                <div className="job-card-meta">
+                  <div className="jcm-title">{jo.title || "งานติดตั้ง/บริการ"}</div>
+                  <div className="jcm-when">🗓 ทีม {jo.teamName || "ยังไม่มอบ"}{jo.scheduled_at ? ` · ${scheduleLabel(jo)}` : " · ยังไม่กำหนดวัน"}{jo.visits && jo.visits.length > 1 ? ` · 🔁 ${jo.visits.length} รอบ` : ""}</div>
+                  {(jo.salesName || jo.createdByName) && (
+                    <div className="jcm-by">
+                      {jo.salesName && <span>🧑‍💼 ขายโดย <b>{jo.salesName}</b></span>}
+                      {jo.createdByName && <span>✍️ ออกใบงานโดย <b>{jo.createdByName}</b></span>}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="jo-info">
                 <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{jo.customerName || "ไม่ระบุลูกค้า"}</b>{jo.customerAddr ? <span className="jo-dim"> · {jo.customerAddr}</span> : null}</div>

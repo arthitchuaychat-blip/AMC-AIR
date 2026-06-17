@@ -796,7 +796,7 @@ export async function listJobOrders() {
     supabase.from("teams").select("id,name"),
     supabase.from("customer_sites").select("id,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat"),
+    supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat,created_by"),
     supabase.from("quotation_items").select("quote_no,name,unit,qty,unit_price,kind"),
     supabase.from("job_visits").select("*").order("visit_date", { ascending: true }),
   ]);
@@ -807,6 +807,8 @@ export async function listJobOrders() {
   const visitsByJob = {}; (jv?.data || []).forEach((v) => { (visitsByJob[v.job_no] = visitsByJob[v.job_no] || []).push({ ...v, teamName: v.assigned_team ? (tn[v.assigned_team] || v.assigned_team) : null }); });
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
+  const cb = await _creators(); // id → name (for job creator + quote salesperson)
+  const salesByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, cb[x.created_by] || null]));
   const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
   // grand total per quote + confirmation item list (AC + service only, no materials) for the order-confirmation copy
   const subByQuote = {}, confirmByQuote = {};
@@ -815,7 +817,7 @@ export async function listJobOrders() {
     if (x.kind === "ac" || x.kind === "service") (confirmByQuote[x.quote_no] = confirmByQuote[x.quote_no] || []).push({ name: x.name, qty: Number(x.qty), unit: x.unit });
   });
   const grandByQuote = {}; (qt.data || []).forEach((x) => { const sub = subByQuote[x.quote_no] || 0; const disc = x.discount_type === "percent" ? sub * Number(x.discount_value || 0) / 100 : Number(x.discount_value || 0); const after = sub - disc; grandByQuote[x.quote_no] = after + (x.vat ? after * 0.07 : 0); });
-  return (j.data || []).map((jo) => ({ ..._resolveJo(jo, cn, ca, sm, tn, cc), visits: visitsByJob[jo.job_no] || [], boq_no: jo.quote_no ? (boqByQuote[jo.quote_no] || null) : null, quoteGrand: jo.quote_no ? (grandByQuote[jo.quote_no] || 0) : 0, confirmItems: jo.quote_no ? (confirmByQuote[jo.quote_no] || []) : null }));
+  return (j.data || []).map((jo) => ({ ..._resolveJo(jo, cn, ca, sm, tn, cc), visits: visitsByJob[jo.job_no] || [], boq_no: jo.quote_no ? (boqByQuote[jo.quote_no] || null) : null, quoteGrand: jo.quote_no ? (grandByQuote[jo.quote_no] || 0) : 0, confirmItems: jo.quote_no ? (confirmByQuote[jo.quote_no] || []) : null, createdByName: cb[jo.created_by] || null, salesName: jo.quote_no ? (salesByQuote[jo.quote_no] || null) : null }));
 }
 
 // job-order history for one customer (newest first) — for the customer detail timeline
