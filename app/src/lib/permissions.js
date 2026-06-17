@@ -24,6 +24,8 @@ export const MODULES = [
   { id: "customers", label: "ลูกค้า", editable: true },
   { id: "chat", label: "แชต LINE (ลูกค้า)", editable: true },
   { id: "teamchat", label: "แชตทีม (ภายใน)", editable: false },
+  { id: "attendance", label: "เข้างาน/ลา (ของฉัน)", editable: true },
+  { id: "hr", label: "HR (จัดการพนักงาน)", editable: true },
   { id: "boq", label: "BOQ", editable: true },
   { id: "quote", label: "ใบเสนอราคา", editable: true },
   { id: "invoice", label: "ใบแจ้งหนี้", editable: true },
@@ -43,13 +45,13 @@ const E = "edit", V = "view", N = "none";
 
 // DEFAULT_PERMS[role][module] — see the matrix shared with the user. ธุรการ is the most powerful.
 export const DEFAULT_PERMS = {
-  admin:     { dashboard: V, customers: E, chat: E, teamchat: E, boq: E, quote: E, invoice: E, receipt: E, profit: V, myjobs: N, joborders: E, schedule: E, catalog: E, movements: E, jobs: E, po: E, settings: E },
-  exec:      { dashboard: V, customers: E, chat: E, teamchat: E, boq: E, quote: E, invoice: E, receipt: E, profit: V, myjobs: N, joborders: E, schedule: E, catalog: V, movements: V, jobs: V, po: V, settings: E },
-  finance:   { dashboard: V, customers: E, chat: E, teamchat: E, boq: V, quote: V, invoice: E, receipt: E, profit: V, myjobs: N, joborders: V, schedule: V, catalog: V, movements: N, jobs: V, po: E, settings: N },
-  sales:     { dashboard: V, customers: E, chat: E, teamchat: E, boq: E, quote: E, invoice: E, receipt: E, profit: V, myjobs: N, joborders: E, schedule: E, catalog: V, movements: N, jobs: N, po: N, settings: N },
-  stock:     { dashboard: N, customers: N, chat: N, teamchat: E, boq: N, quote: N, invoice: N, receipt: N, profit: N, myjobs: N, joborders: N, schedule: N, catalog: E, movements: E, jobs: E, po: E, settings: N },
-  lead_tech: { dashboard: N, customers: N, chat: N, teamchat: E, boq: N, quote: N, invoice: N, receipt: N, profit: N, myjobs: E, joborders: V, schedule: V, catalog: V, movements: E, jobs: V, po: N, settings: N },
-  tech:      { dashboard: N, customers: N, chat: N, teamchat: E, boq: N, quote: N, invoice: N, receipt: N, profit: N, myjobs: E, joborders: N, schedule: V, catalog: N, movements: E, jobs: N, po: N, settings: N },
+  admin:     { dashboard: V, customers: E, chat: E, teamchat: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, profit: V, myjobs: N, joborders: E, schedule: E, catalog: E, movements: E, jobs: E, po: E, settings: E },
+  exec:      { dashboard: V, customers: E, chat: E, teamchat: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, profit: V, myjobs: N, joborders: E, schedule: E, catalog: V, movements: V, jobs: V, po: V, settings: E },
+  finance:   { dashboard: V, customers: E, chat: E, teamchat: E, attendance: E, hr: N, boq: V, quote: V, invoice: E, receipt: E, profit: V, myjobs: N, joborders: V, schedule: V, catalog: V, movements: N, jobs: V, po: E, settings: N },
+  sales:     { dashboard: V, customers: E, chat: E, teamchat: E, attendance: E, hr: N, boq: E, quote: E, invoice: E, receipt: E, profit: V, myjobs: N, joborders: E, schedule: E, catalog: V, movements: N, jobs: N, po: N, settings: N },
+  stock:     { dashboard: N, customers: N, chat: N, teamchat: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, profit: N, myjobs: N, joborders: N, schedule: N, catalog: E, movements: E, jobs: E, po: E, settings: N },
+  lead_tech: { dashboard: N, customers: N, chat: N, teamchat: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, profit: N, myjobs: E, joborders: V, schedule: V, catalog: V, movements: E, jobs: V, po: N, settings: N },
+  tech:      { dashboard: N, customers: N, chat: N, teamchat: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, profit: N, myjobs: E, joborders: N, schedule: V, catalog: N, movements: E, jobs: N, po: N, settings: N },
 };
 
 const RANK = { none: 0, view: 1, edit: 2 };

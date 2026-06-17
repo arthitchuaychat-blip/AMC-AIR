@@ -4,6 +4,8 @@ import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePer
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { registerSW, autoResubscribe } from "./lib/push";
 import InstallBanner from "./components/InstallBanner";
+import Attendance from "./components/Attendance";
+import HR from "./components/HR";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
@@ -31,6 +33,8 @@ const NAV = {
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
   chat: { th: "แชต LINE", en: "Chat", icon: "chat" },
   teamchat: { th: "แชตทีม", en: "Team Chat", icon: "chat" },
+  attendance: { th: "เข้างาน/ลา", en: "Attendance", icon: "calendar" },
+  hr: { th: "บุคคล (HR)", en: "HR", icon: "user" },
   catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
   boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
   quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
@@ -47,7 +51,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-16·FlowAccountทดสอบเชื่อมต่อ-v62";
+const BUILD = "2026-06-16·ระบบHRเข้างาน+ลา-v63";
 
 function SetupNotice() {
   return (
@@ -254,6 +258,8 @@ export default function App() {
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}
         {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}
+        {view === "attendance" && <Attendance me={profile} />}
+        {view === "hr" && <HR role={role} />}
         {view === "settings" && <Settings role={role} />}
       </main>
       <ConfirmHost />

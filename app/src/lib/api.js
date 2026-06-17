@@ -1160,6 +1160,112 @@ export async function uploadDocFile(blob, ext, contentType) {
   return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
 
+// ===================== HR (attendance / leave / holidays) =====================
+const _today = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+
+export async function uploadAttendancePhoto(blob) {
+  const path = `attendance/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`;
+  const { error } = await supabase.storage.from("photos").upload(path, blob, { upsert: true, contentType: "image/jpeg" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
+
+export async function getHrSettings() {
+  const { data, error } = await supabase.from("app_config").select("value").eq("key", "hr_settings").maybeSingle();
+  if (error) throw error;
+  return data ? data.value : null;
+}
+export async function saveHrSettings(s) {
+  const { error } = await supabase.from("app_config").upsert({ key: "hr_settings", value: s }, { onConflict: "key" });
+  if (error) throw error;
+}
+export async function listHolidays() {
+  const { data, error } = await supabase.from("hr_holidays").select("*").order("day");
+  if (error) throw error; return data || [];
+}
+export async function saveHoliday(day, name) {
+  const { error } = await supabase.from("hr_holidays").upsert({ day, name: name || "วันหยุด" }, { onConflict: "day" });
+  if (error) throw error;
+}
+export async function deleteHoliday(day) {
+  const { error } = await supabase.from("hr_holidays").delete().eq("day", day);
+  if (error) throw error;
+}
+
+export async function myAttendanceToday() {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("hr_attendance").select("*").eq("user_id", uid).eq("work_date", _today()).maybeSingle();
+  if (error) throw error; return data || null;
+}
+export async function checkIn({ lat, lng, photo }) {
+  const uid = await _uid(), day = _today();
+  const ex = await supabase.from("hr_attendance").select("id,check_in_at").eq("user_id", uid).eq("work_date", day).maybeSingle();
+  if (ex.data && ex.data.check_in_at) throw new Error("เช็คอินวันนี้ไปแล้ว");
+  const row = { check_in_at: new Date().toISOString(), check_in_lat: lat ?? null, check_in_lng: lng ?? null, check_in_photo: photo || null };
+  const { error } = ex.data
+    ? await supabase.from("hr_attendance").update(row).eq("id", ex.data.id)
+    : await supabase.from("hr_attendance").insert({ user_id: uid, work_date: day, ...row });
+  if (error) throw error;
+}
+export async function checkOut({ lat, lng, photo }) {
+  const uid = await _uid(), day = _today();
+  const ex = await supabase.from("hr_attendance").select("id,check_in_at").eq("user_id", uid).eq("work_date", day).maybeSingle();
+  if (!ex.data || !ex.data.check_in_at) throw new Error("ยังไม่ได้เช็คอินวันนี้");
+  const { error } = await supabase.from("hr_attendance").update({
+    check_out_at: new Date().toISOString(), check_out_lat: lat ?? null, check_out_lng: lng ?? null, check_out_photo: photo || null,
+  }).eq("id", ex.data.id);
+  if (error) throw error;
+}
+export async function listMyAttendance(fromDay) {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("hr_attendance").select("*").eq("user_id", uid).gte("work_date", fromDay).order("work_date", { ascending: false });
+  if (error) throw error; return data || [];
+}
+// manager: all attendance in a date range, joined with staff name/department
+export async function listAttendance(fromDay, toDay) {
+  const [att, profs] = await Promise.all([
+    supabase.from("hr_attendance").select("*").gte("work_date", fromDay).lte("work_date", toDay).order("work_date", { ascending: false }),
+    supabase.from("profiles").select("id,name,department,work_pattern,sat_group"),
+  ]);
+  if (att.error) throw att.error;
+  const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
+  return (att.data || []).map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: pm[a.user_id]?.department || "", work_pattern: pm[a.user_id]?.work_pattern, sat_group: pm[a.user_id]?.sat_group }));
+}
+
+export async function submitLeave({ type, start_date, end_date, days, reason }) {
+  const uid = await _uid();
+  const { error } = await supabase.from("hr_leaves").insert({ user_id: uid, type, start_date, end_date, days, reason: reason || null });
+  if (error) throw error;
+}
+export async function listMyLeaves() {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("hr_leaves").select("*").eq("user_id", uid).order("created_at", { ascending: false });
+  if (error) throw error; return data || [];
+}
+export async function listLeaves(status) {
+  let q = supabase.from("hr_leaves").select("*").order("created_at", { ascending: false });
+  if (status) q = q.eq("status", status);
+  const [lv, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,department")]);
+  if (lv.error) throw lv.error;
+  const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
+  return (lv.data || []).map((l) => ({ ...l, name: pm[l.user_id]?.name || "-", department: pm[l.user_id]?.department || "" }));
+}
+export async function decideLeave(id, status, note) {
+  const uid = await _uid();
+  const { error } = await supabase.from("hr_leaves").update({ status, decided_by: uid, decided_at: new Date().toISOString(), decide_note: note || null }).eq("id", id);
+  if (error) throw error;
+}
+
+// staff list with HR fields (for the HR settings + reports)
+export async function listHrStaff() {
+  const { data, error } = await supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date").order("name");
+  if (error) throw error; return data || [];
+}
+export async function updateHrProfile(id, fields) {
+  const { error } = await supabase.from("profiles").update(fields).eq("id", id);
+  if (error) throw error;
+}
+
 // the LINE contact linked to a customer (so documents can be sent to them) — null if not linked
 export async function lineContactByCustomer(customerId) {
   if (!customerId) return null;

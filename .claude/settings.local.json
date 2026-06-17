@@ -69,7 +69,8 @@
       "WebFetch(domain:developers.flowaccount.com)",
       "WebSearch",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(cd \"/c/Users/User/OneDrive/Desktop/Inventory Management\" && rm -f app/public/hr-test.html && echo deleted)"
     ]
   }
 }

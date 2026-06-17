@@ -720,6 +720,39 @@ select.inp{cursor:pointer}
 .perm-table td:first-child,.perm-table th:first-child{position:sticky;left:0;background:var(--surface);z-index:1}
 .perm-cell{width:100%;min-width:52px;border:1px solid var(--line);border-radius:8px;padding:5px 4px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
 .perm-cell:hover{filter:brightness(.96)}
+/* ---------- HR / attendance ---------- */
+.att-clock{margin-bottom:16px}
+.att-now{display:flex;gap:14px;margin-bottom:12px}
+.att-now-l{flex:1;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:11px 14px;display:flex;flex-direction:column;gap:2px}
+.att-now-l>span{font-size:12px;color:var(--ink-3)}
+.att-now-l>b{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.att-tag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:1px 7px;width:fit-content;margin-top:2px}
+.att-tag.ok{background:#dcf5e8;color:#0a6b3d}.att-tag.late{background:#ffedd5;color:#9a3412}.att-tag.ot{background:#e6efff;color:#1d4ed8}
+.att-tag.sm{font-size:10px;padding:0 5px;margin-left:4px}
+.att-actions{margin-bottom:8px}
+.att-big{width:100%;font-size:16px;padding:14px;border-radius:13px}
+.att-done{text-align:center;font-weight:700;color:#0a6b3d;padding:12px;background:#dcf5e8;border-radius:13px}
+.att-bal{display:flex;gap:10px;margin-bottom:12px}
+.att-bal-item{flex:1;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:10px;text-align:center}
+.att-bal-item>span{display:block;font-size:11.5px;color:var(--ink-3)}
+.att-bal-item>b{font-size:22px;font-weight:800;color:var(--primary)}
+.att-bal-item>small{font-size:11px;color:var(--ink-3)}
+.att-leaveform .fld-row{margin-bottom:8px}
+.att-leave-row,.att-hist{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--surface-2);font-size:13px}
+.att-hist{gap:8px}.att-hist-d{flex:1;font-weight:600}
+.att-days{font-size:11.5px;color:var(--ink-3);font-weight:600}
+.hr-today-row,.hr-leave-row,.hr-staff-row,.hr-hol-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--surface-2);font-size:13px}
+.hr-today-row .hr-name,.hr-staff-row .hr-name{flex:1;display:flex;flex-direction:column;line-height:1.3}
+.hr-times{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink-2);min-width:150px}
+.hr-leave-row{justify-content:space-between}
+.hr-leave-act{display:flex;align-items:center;gap:7px;flex:none}
+.hr-hol-row{justify-content:space-between}
+.hr-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:560px}
+.hr-table th{font-size:11.5px;font-weight:700;color:var(--ink-3);padding:7px 8px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+.hr-table td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--surface-2);font-variant-numeric:tabular-nums}
+.hr-table .hr-ok{color:#0a6b3d;font-weight:700}.hr-table .hr-bad{color:#dc2626;font-weight:800}.hr-table .hr-warn{color:#b45309;font-weight:700}
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;font-size:13.5px;font-weight:600;padding:12px 22px;border-radius:12px;box-shadow:var(--shadow-lg);z-index:200}
+.toast.bad{background:#dc2626}
 .install-bar{display:flex;align-items:center;gap:11px;background:linear-gradient(135deg,#e9f3fd,#eef3fb);border:1px solid #cfe0f5;border-radius:13px;padding:10px 13px;margin:0 0 14px}
 .install-bar .install-ic{font-size:20px;flex:none;line-height:1}
 .install-bar .install-tx{flex:1;display:flex;flex-direction:column;line-height:1.35}
