@@ -1198,6 +1198,10 @@ select.inp{cursor:pointer}
 /* ===== LINE chat board ===== */
 .chat-wrap{display:flex;height:72vh;min-height:460px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
 .chat-list{width:270px;flex:none;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--surface-2)}
+.chat-channel-tabs{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.chat-ch{flex:1;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-3);border-radius:9px;padding:6px 8px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit}
+.chat-ch.on.line{background:#06c755;border-color:#06c755;color:#fff}
+.chat-ch.on.fb{background:#0866ff;border-color:#0866ff;color:#fff}
 .chat-search{display:flex;align-items:center;gap:7px;padding:9px 11px;border-bottom:1px solid var(--line)}
 .chat-search input{border:none;background:none;outline:none;font-family:inherit;font-size:13px;width:100%;color:var(--ink)}
 .chat-convos{flex:1;overflow-y:auto}

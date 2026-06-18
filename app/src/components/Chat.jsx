@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listCustomers, listCustomerDocs, listJobOrders, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
@@ -94,11 +94,20 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [myId, setMyId] = React.useState(null);
   const [stageF, setStageF] = React.useState("all");     // list filter by stage
   const [mineOnly, setMineOnly] = React.useState(false); // list filter: assigned to me
+  const [channel, setChannel] = React.useState("line"); // "line" | "fb" — unified inbox switch
+  const isFb = channel === "fb";
+  // channel-aware data calls (FB returns the same shape, psid aliased to line_user_id)
+  const chListContacts = () => (isFb ? listFbContacts() : listLineContacts());
+  const chListMessages = (id) => (isFb ? listFbMessages(id) : listLineMessages(id));
+  const chMarkRead = (id) => (isFb ? markFbRead(id) : markLineRead(id));
+  const chSendText = (id, t) => (isFb ? sendFbMessage(id, t) : sendLineMessage(id, t));
+  const chSendImage = (id, url) => (isFb ? sendFbImage(id, url) : sendLineImage(id, url));
+  const chLink = (id, cid) => (isFb ? linkFbContact(id, cid) : linkLineContact(id, cid));
   const selRef = React.useRef(null);
   const endRef = React.useRef(null);
 
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
-  async function loadContacts() { try { setContacts(await listLineContacts()); } catch (e) { flash("โหลดแชตไม่สำเร็จ: " + (e.message || e), true); } }
+  async function loadContacts() { try { setContacts(await chListContacts()); } catch (e) { flash("โหลดแชตไม่สำเร็จ: " + (e.message || e), true); } }
 
   async function loadQr() { try { setQuickReplies(await listQuickReplies()); } catch { /* ignore */ } }
   React.useEffect(() => {
@@ -109,23 +118,28 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   }, []);
   const staffMap = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
   const staffColor = React.useMemo(() => Object.fromEntries(staff.map((s, i) => [s.id, STAFF_COLORS[i % STAFF_COLORS.length]])), [staff]);
-  async function changeStage(s) { try { await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
-  async function changeOwner(uid) { try { await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeStage(s) { if (isFb) return; try { await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeOwner(uid) { if (isFb) return; try { await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
   React.useEffect(() => { selRef.current = sel; }, [sel]);
   React.useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
-  // realtime: new messages + contact changes
+  // reload + reset when switching channel (LINE ↔ FB)
+  React.useEffect(() => { setSel(null); setMsgs([]); setShowThread(false); loadContacts(); }, [channel]);
+
+  // realtime: new messages + contact changes (subscribes to the active channel's tables)
   React.useEffect(() => {
-    const ch = supabase.channel("line-rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "line_messages" }, (p) => {
-        const row = p.new;
+    const msgTable = isFb ? "fb_messages" : "line_messages";
+    const contactTable = isFb ? "fb_contacts" : "line_contacts";
+    const ch = supabase.channel(channel + "-rt")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: msgTable }, (p) => {
+        const row = p.new; const uid = row.line_user_id || row.psid;
         loadContacts();
-        if (row.line_user_id === selRef.current) { setMsgs((m) => m.some((x) => x.id === row.id) ? m : [...m, row]); markLineRead(row.line_user_id); }
+        if (uid === selRef.current) { setMsgs((m) => m.some((x) => x.id === row.id) ? m : [...m, { ...row, line_user_id: uid }]); chMarkRead(uid); }
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "line_contacts" }, () => loadContacts())
+      .on("postgres_changes", { event: "*", schema: "public", table: contactTable }, () => loadContacts())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [channel]);
 
   // document + job history for the linked customer (right info panel)
   const linkedCustId = (contacts.find((c) => c.line_user_id === sel) || {}).customer_id || null;
@@ -137,7 +151,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
 
   async function openContact(c) {
     setSel(c.line_user_id); setShowThread(true); setShowInfo(false);
-    try { setMsgs(await listLineMessages(c.line_user_id)); if (c.unread) { markLineRead(c.line_user_id); loadContacts(); } }
+    try { setMsgs(await chListMessages(c.line_user_id)); if (c.unread) { chMarkRead(c.line_user_id); loadContacts(); } }
     catch (e) { flash("โหลดข้อความไม่สำเร็จ", true); }
   }
 
@@ -154,7 +168,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     const wasLink = custForm?.link;
     setCustForm(null);
     try {
-      if (wasLink && id) await linkLineContact(sel, id);
+      if (wasLink && id) await chLink(sel, id);
       setCusts(await listCustomers());
       await loadContacts();
       if (linkedCustId) listCustomerDocs(linkedCustId).then(setInfoDocs).catch(() => {});
@@ -165,12 +179,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function send() {
     const t = text.trim(); if (!t || !sel || sending) return;
     setSending(true);
-    try { await sendLineMessage(sel, t); setText(""); }     // realtime INSERT appends the 'out' row
+    try { await chSendText(sel, t); setText(""); if (isFb) setMsgs(await chListMessages(sel)); }   // LINE appends via realtime; FB refresh
     catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setSending(false);
   }
   async function onLink(cid) {
-    try { await linkLineContact(sel, cid); await loadContacts(); flash(cid ? "เชื่อมลูกค้าแล้ว ✓" : "ยกเลิกการเชื่อมแล้ว"); }
+    try { await chLink(sel, cid); await loadContacts(); flash(cid ? "เชื่อมลูกค้าแล้ว ✓" : "ยกเลิกการเชื่อมแล้ว"); }
     catch (e) { flash("เชื่อมไม่สำเร็จ: " + (e.message || e), true); }
   }
 
@@ -178,7 +192,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function onImage(e) {
     const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel || sending) return;
     setSending(true);
-    try { const url = await uploadChatImage(f); await sendLineImage(sel, url); }
+    try { const url = await uploadChatImage(f); await chSendImage(sel, url); if (isFb) setMsgs(await chListMessages(sel)); }
     catch (ex) { flash("ส่งรูปไม่สำเร็จ: " + (ex.message || ex), true); }
     setSending(false);
   }
@@ -201,8 +215,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     try {
       const spec = [it.brand, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null].filter(Boolean).join(" · ");
       const txt = `❄️ ${it.th}${spec ? `\n${spec}` : ""}${it.description ? `\n${it.description}` : ""}\n💰 ราคา ${fmtBaht(it.salePrice)}`;
-      if (it.photoUrl) await sendLineImage(sel, it.photoUrl);
-      await sendLineMessage(sel, txt);
+      if (it.photoUrl) await chSendImage(sel, it.photoUrl);
+      await chSendText(sel, txt);
+      if (isFb) setMsgs(await chListMessages(sel));
     } catch (ex) { flash("ส่งรายการแอร์ไม่สำเร็จ: " + (ex.message || ex), true); }
     setSending(false);
   }
@@ -256,6 +271,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       <div className={"chat-wrap" + (showThread ? " show-thread" : "") + (showInfo ? " show-info" : "")}>
         {/* conversation list */}
         <div className="chat-list">
+          <div className="chat-channel-tabs">
+            <button className={"chat-ch" + (!isFb ? " on line" : "")} onClick={() => setChannel("line")}>LINE</button>
+            <button className={"chat-ch" + (isFb ? " on fb" : "")} onClick={() => setChannel("fb")}>Facebook</button>
+          </div>
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
@@ -273,7 +292,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <button key={c.line_user_id} className={"chat-convo" + (sel === c.line_user_id ? " on" : "")} onClick={() => openContact(c)}>
                 <div className="chat-av">{c.picture_url ? <img src={c.picture_url} alt="" /> : initial(c.display_name)}</div>
                 <div className="chat-convo-body">
-                  <div className="chat-convo-top"><b>{c.display_name || "LINE User"}</b><span>{fmtTime(c.last_message_at)}</span></div>
+                  <div className="chat-convo-top"><b>{c.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</b><span>{fmtTime(c.last_message_at)}</span></div>
                   <div className="chat-convo-last">{c.last_message || "—"}</div>
                   <div className="chat-convo-tags">
                     <span className="conv-stage" style={{ background: sd.color }}>{sd.label}</span>
@@ -296,7 +315,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                 <button className="chat-back" onClick={() => setShowThread(false)}><UIcon name="chevR" size={18} style={{ transform: "rotate(180deg)" }} /></button>
                 <div className="chat-av sm">{selContact.picture_url ? <img src={selContact.picture_url} alt="" /> : initial(selContact.display_name)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="chat-thread-name">{selContact.display_name || "LINE User"}</div>
+                  <div className="chat-thread-name">{selContact.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</div>
                   <div className="chat-thread-sub">{selContact.customerName ? `🔗 ${selContact.customerName}` : "ยังไม่เชื่อมลูกค้า"}</div>
                 </div>
                 <button className="chat-info-toggle" onClick={() => setShowInfo((s) => !s)} title="ข้อมูลลูกค้า"><UIcon name="building" size={18} /></button>
@@ -350,10 +369,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <label className={"chat-tool" + (sending ? " disabled" : "")}>📷 รูป
                       <input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
                     </label>
-                    <label className={"chat-tool" + (sending ? " disabled" : "")}>📎 ไฟล์
+                    {!isFb && <label className={"chat-tool" + (sending ? " disabled" : "")}>📎 ไฟล์
                       <input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} />
-                    </label>
-                    <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => setStickerOpen((o) => !o)}>😊 สติกเกอร์</button>
+                    </label>}
+                    {!isFb && <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => setStickerOpen((o) => !o)}>😊 สติกเกอร์</button>}
                     <button className="chat-tool" disabled={sending} onClick={openAcPicker}>❄️ ส่งแอร์</button>
                     {quickReplies.map((qr) => {
                       const label = qr.title || qr.text;
@@ -454,7 +473,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                             <div className="cd-job-meta">🗓 {dateTxt}{e.teamName ? ` · 👷 ${e.teamName}` : ""}{e.amount != null ? ` · ${fmtBaht(e.amount)}` : ""}</div>
                             <div className="cd-job-no-row">
                               <span className="cd-job-no">{e.no} · ดูรายละเอียด ›</span>
-                              {sendable && canSend && <button className="cd-send" disabled={!!capJob} onClick={(ev) => { ev.stopPropagation(); setSendMenuFor(e); }}>📤 ส่ง</button>}
+                              {sendable && canSend && !isFb && <button className="cd-send" disabled={!!capJob} onClick={(ev) => { ev.stopPropagation(); setSendMenuFor(e); }}>📤 ส่ง</button>}
                             </div>
                           </div>
                         </div>
