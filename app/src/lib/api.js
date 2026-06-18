@@ -1046,24 +1046,74 @@ export async function saveJobReview(jobNo, rating, isClaim) {
   const { error } = await supabase.from("job_orders").update({ rating: rating || null, is_claim: !!isClaim }).eq("job_no", jobNo);
   if (error) throw error;
 }
+// confirm / un-confirm a job's labor (locks it, then it shows up under "ค่าแรงรอจ่าย")
+export async function confirmJobLabor(jobNo, confirmed) {
+  const uid = await _uid();
+  const patch = confirmed
+    ? { labor_confirmed: true, labor_confirmed_at: new Date().toISOString(), labor_confirmed_by: uid }
+    : { labor_confirmed: false, labor_confirmed_at: null, labor_confirmed_by: null };
+  const { error } = await supabase.from("job_orders").update(patch).eq("job_no", jobNo);
+  if (error) throw error;
+}
 export async function listSubPayouts() {
   const { data, error } = await supabase.from("sub_payouts").select("*").order("created_at", { ascending: false });
   if (error) throw error; return data || [];
 }
-// create a payout batch for a sub team → mark its jobs paid
-export async function createSubPayout({ team, jobNos, gross, whtRate, whtAmt, net, note }) {
+const _r2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
+// create a payout batch for a sub team from per-job allocation lines (supports partial / split payments).
+// lines: [{job_no, amount, vat, total, customerName}]  → wht 3% applies only to the VAT-billed jobs' allocated amount.
+export async function createSubPayout({ team, lines, whtRate, note }) {
   const uid = await _uid();
+  const ls = (lines || []).filter((l) => (Number(l.amount) || 0) > 0);
+  if (!ls.length) throw new Error("ไม่มีรายการที่จะจ่าย");
+  const jobNos = ls.map((l) => l.job_no);
+  const gross = _r2(ls.reduce((a, l) => a + (Number(l.amount) || 0), 0));
+  const vatBase = _r2(ls.filter((l) => l.vat).reduce((a, l) => a + (Number(l.amount) || 0), 0));
+  const whtAmt = _r2(vatBase * (Number(whtRate) || 0) / 100);
+  const net = _r2(gross - whtAmt);
   const { data, error } = await supabase.from("sub_payouts").insert({
-    team, job_nos: jobNos, gross: Number(gross) || 0, wht_rate: Number(whtRate) || 0, wht_amt: Number(whtAmt) || 0,
-    net: Number(net) || 0, status: "unpaid", note: note || null, created_by: uid,
+    team, job_nos: jobNos, lines: ls, gross, wht_rate: Number(whtRate) || 0, wht_amt: whtAmt,
+    net, status: "unpaid", note: note || null, created_by: uid,
   }).select("id").single();
   if (error) throw error;
-  await supabase.from("job_orders").update({ payout_id: data.id, labor_paid: true }).in("job_no", jobNos);
+  // bump each job's cumulative allocated amount; lock the job when fully allocated
+  const { data: jrows } = await supabase.from("job_orders").select("job_no,labor_total,labor_paid_amt").in("job_no", jobNos);
+  const cur = Object.fromEntries((jrows || []).map((j) => [j.job_no, j]));
+  for (const l of ls) {
+    const j = cur[l.job_no]; if (!j) continue;
+    const paid = _r2((Number(j.labor_paid_amt) || 0) + (Number(l.amount) || 0));
+    const done = paid >= (Number(j.labor_total) || 0) - 0.01;
+    await supabase.from("job_orders").update({ labor_paid_amt: paid, labor_paid: done, payout_id: data.id }).eq("job_no", l.job_no);
+  }
   return data.id;
 }
 export async function paySubPayout(id, method) {
   const { error } = await supabase.from("sub_payouts").update({ status: "paid", paid_at: new Date().toISOString(), method: method || null }).eq("id", id);
   if (error) throw error;
+}
+// cancel an unpaid payout → give the allocated amounts back so the jobs return to "รอจ่าย"
+export async function cancelSubPayout(id) {
+  const { data: p, error } = await supabase.from("sub_payouts").select("id,status,lines,job_nos").eq("id", id).single();
+  if (error) throw error;
+  if (p.status === "paid") throw new Error("ใบนี้บันทึกจ่ายแล้ว ยกเลิกไม่ได้");
+  const lines = p.lines || [];
+  const jobNos = lines.length ? lines.map((l) => l.job_no) : (p.job_nos || []);
+  if (jobNos.length) {
+    const { data: jrows } = await supabase.from("job_orders").select("job_no,labor_paid_amt").in("job_no", jobNos);
+    const cur = Object.fromEntries((jrows || []).map((j) => [j.job_no, j]));
+    if (lines.length) {
+      for (const l of lines) {
+        const j = cur[l.job_no]; if (!j) continue;
+        const paid = Math.max(0, _r2((Number(j.labor_paid_amt) || 0) - (Number(l.amount) || 0)));
+        await supabase.from("job_orders").update({ labor_paid_amt: paid, labor_paid: false }).eq("job_no", l.job_no);
+      }
+    } else {
+      // legacy payout without per-job lines → fully release
+      await supabase.from("job_orders").update({ labor_paid_amt: 0, labor_paid: false }).in("job_no", jobNos);
+    }
+  }
+  const { error: delErr } = await supabase.from("sub_payouts").delete().eq("id", id);
+  if (delErr) throw delErr;
 }
 export async function deleteTeam(id) {
   const { error } = await supabase.from("teams").delete().eq("id", id);

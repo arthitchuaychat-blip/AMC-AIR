@@ -789,7 +789,23 @@ select.inp{cursor:pointer}
 .sub-pay-no{font-weight:600;display:flex;align-items:center;gap:5px}
 .sub-pay-sum{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:13px;background:var(--surface-2);border-radius:9px;padding:8px 11px}
 .sub-pay-sum b{color:var(--primary)}
+.sub-pay-split{margin-top:8px}
+.sub-split-modes{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .sub-payout-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--surface-2);font-size:13px}
+/* subcontractor payout slip (download / send to team chat) */
+.payout-slip{background:#fff;color:#1f2733;border:1px solid var(--line);border-radius:10px;padding:18px 18px 14px;font-size:13px}
+.ps-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #1f2733;padding-bottom:7px;margin-bottom:8px}
+.ps-head b{font-size:16px}
+.ps-team{font-weight:600;margin-bottom:10px}
+.ps-bank{font-weight:400;color:#6b7280;font-size:12px;margin-top:2px}
+.ps-table{width:100%;border-collapse:collapse;margin-bottom:8px}
+.ps-table th,.ps-table td{text-align:left;padding:5px 6px;border-bottom:1px solid #eef1f5;font-size:12.5px}
+.ps-table th{color:#6b7280;font-weight:700;font-size:11px;text-transform:uppercase}
+.ps-table .r{text-align:right;font-variant-numeric:tabular-nums}
+.ps-tot{display:flex;justify-content:space-between;padding:3px 6px;font-size:13px}
+.ps-net{border-top:1px solid #1f2733;margin-top:4px;padding-top:7px;font-size:15px}
+.ps-net b{color:#16a34a}
+.ps-status{margin-top:8px;font-size:11.5px;color:#6b7280}
 .jo-datefilter{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px 8px}
 .jo-datefilter .inp{border:none;padding:4px 4px;font-size:12.5px;width:128px;background:transparent}
 .jo-datefilter .jo-date-dash{color:var(--ink-3)}
