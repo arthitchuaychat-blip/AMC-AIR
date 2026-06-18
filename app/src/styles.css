@@ -923,12 +923,12 @@ select.inp{cursor:pointer}
 .pf-cust{font-size:11px;color:var(--ink-3)}
 @media(max-width:640px){.pf-row{grid-template-columns:1.4fr 1fr 1fr 60px}.pf-row span:nth-child(3){display:none}}
 /* กำไร/งาน table */
-.jp-row{display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr 1.1fr 1fr 46px;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:13px}
+.jp-row{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1.05fr 1.05fr 1fr 44px;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:13px}
 .jp-row.jp-head{font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.3px;background:var(--surface-2)}
 .jp-row .r{text-align:right;font-variant-numeric:tabular-nums}
 .jp-cust{font-size:11px;color:var(--ink-3)}
 .jp-sub{font-size:10px;color:var(--ink-3);font-variant-numeric:tabular-nums}
-@media(max-width:760px){.jp-row{grid-template-columns:1.4fr 1fr 46px}.jp-row span:nth-child(2),.jp-row span:nth-child(3),.jp-row span:nth-child(4),.jp-row span:nth-child(5){display:none}}
+@media(max-width:760px){.jp-row{grid-template-columns:1.4fr 1fr 44px}.jp-row span:nth-child(2),.jp-row span:nth-child(3),.jp-row span:nth-child(4),.jp-row span:nth-child(5),.jp-row span:nth-child(6){display:none}}
 
 /* ---------- technician: my jobs ---------- */
 .myjob{padding:16px}
