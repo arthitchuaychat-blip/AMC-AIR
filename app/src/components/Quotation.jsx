@@ -5,6 +5,7 @@ import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, lis
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
+import ChatCustomerLink from "./ChatCustomerLink";
 import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtBaht, custCode, matchText, matchPhone } from "../lib/format";
@@ -21,7 +22,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc }) {
+export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "quote", "edit");
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -341,6 +342,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               </div>
               {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "quote", no: q.quote_no }} onOpen={onOpenDoc} />; })()}
               <div className="job-lines"><div className="job-actions">
+                <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => duplicate(q)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
                 {canEdit && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}

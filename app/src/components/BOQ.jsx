@@ -8,6 +8,7 @@ import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
 import DocChips from "./DocChips";
+import ChatCustomerLink from "./ChatCustomerLink";
 import GrowArea from "./GrowArea";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
@@ -52,7 +53,7 @@ function SectionBlock({ sec, items, pool, onAdd, onSet, onDel, onMove }) {
   );
 }
 
-export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc, newForCustomer, onNewConsumed }) {
+export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc, newForCustomer, onNewConsumed, onGoChat }) {
   const canEdit = can(role, "boq", "edit");
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -222,6 +223,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
             </div>
             {(() => { const ch = docLinks.byQuote[bo.quoteNo] || {}; return <DocChips quoteNo={bo.quoteNo} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "boq", no: bo.boq_no }} onOpen={onOpenDoc} />; })()}
             <div className="job-lines"><div className="job-actions">
+              <ChatCustomerLink role={role} customerId={bo.customer_id} onGoChat={onGoChat} />
               {onCreateQuote && (bo.hasQuote
                 ? <span className="job-badge b-green">✓ ออกใบเสนอราคาแล้ว</span>
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}

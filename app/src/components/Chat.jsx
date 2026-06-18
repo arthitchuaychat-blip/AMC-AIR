@@ -55,7 +55,7 @@ async function dlFile(url, name) {
   } catch { window.open(url, "_blank", "noopener"); }
 }
 
-export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey }) {
+export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey, focus, onFocusConsumed }) {
   const canSend = can(role, "chat", "edit");
   const [contacts, setContacts] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -105,6 +105,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const chLink = (id, cid) => (isFb ? linkFbContact(id, cid) : linkLineContact(id, cid));
   const selRef = React.useRef(null);
   const endRef = React.useRef(null);
+  const pendingOpenRef = React.useRef(null); // line_user_id/psid to open once contacts (re)load after a channel switch
 
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
   async function loadContacts() { try { setContacts(await chListContacts()); } catch (e) { flash("โหลดแชตไม่สำเร็จ: " + (e.message || e), true); } }
@@ -154,6 +155,32 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     try { setMsgs(await chListMessages(c.line_user_id)); if (c.unread) { chMarkRead(c.line_user_id); loadContacts(); } }
     catch (e) { flash("โหลดข้อความไม่สำเร็จ", true); }
   }
+
+  // "แชตลูกค้า" deep-link from a document: find this customer's contact (LINE or FB), switch
+  // to that channel if needed, and open the thread. Looks across both channels.
+  React.useEffect(() => {
+    if (focus == null) return;
+    let alive = true;
+    (async () => {
+      const [lc, fc] = await Promise.all([listLineContacts().catch(() => []), listFbContacts().catch(() => [])]);
+      if (!alive) return;
+      onFocusConsumed && onFocusConsumed();
+      const inLine = lc.find((c) => String(c.customer_id) === String(focus));
+      const inFb = fc.find((c) => String(c.customer_id) === String(focus));
+      const target = inLine ? { ch: "line", c: inLine } : inFb ? { ch: "fb", c: inFb } : null;
+      if (!target) { flash("ลูกค้ารายนี้ยังไม่มีแชตที่เชื่อมไว้", true); return; }
+      if (target.ch !== channel) { pendingOpenRef.current = target.c.line_user_id; setChannel(target.ch); }
+      else openContact(target.c);
+    })();
+    return () => { alive = false; };
+  }, [focus]);
+
+  // after a channel switch the contact list reloads — open the contact we were asked to focus
+  React.useEffect(() => {
+    if (!pendingOpenRef.current) return;
+    const c = contacts.find((x) => x.line_user_id === pendingOpenRef.current);
+    if (c) { pendingOpenRef.current = null; openContact(c); }
+  }, [contacts]);
 
   // open the full customer form (in a popup) to add a new customer from this LINE contact, then auto-link
   function addNewCustomer() {

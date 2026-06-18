@@ -6,6 +6,7 @@ import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 import DocChips from "./DocChips";
+import ChatCustomerLink from "./ChatCustomerLink";
 import AttachThumb from "./AttachThumb";
 import { ATTACH_ACCEPT, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -18,7 +19,7 @@ const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/s
 const blankVisit = () => ({ date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
 const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
 
-export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc }) {
+export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
   const [openTl, setOpenTl] = React.useState(null);
   const [upBrief, setUpBrief] = React.useState(false);
@@ -422,6 +423,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 </div></div>
               )}
               <div className="job-lines"><div className="job-actions">
+                <ChatCustomerLink role={role} customerId={jo.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>
                   <UIcon name="clipboard" size={14} /> {openTl === jo.job_no ? "ซ่อนความเคลื่อนไหว" : "ความเคลื่อนไหว"}
                 </button>
