@@ -2,6 +2,17 @@
 // app menu, the labor payout slip, chat quick replies, and a per-job brief for technicians.
 // Numbers / names / addresses stay as-is; only labels are translated.
 // NOTE: machine-assisted translations — have a Burmese speaker proofread before heavy use.
+import React from "react";
+
+// current UI language, shared via context (App owns the state + the ไทย/မြန်မာ toggle)
+export const LangContext = React.createContext("th");
+export const useLang = () => React.useContext(LangContext);
+// pick a string by the active language (Thai is the default/fallback)
+export const tr = (lang, th, my) => (lang === "my" ? (my || th) : th);
+
+// leave types + statuses (data-driven labels)
+export const LEAVE_MY = { vacation: "အနားယူခွင့်", personal: "ကိုယ်ရေးကိစ္စခွင့်", sick: "ဖျားနာခွင့်" };
+export const LV_STATUS_MY = { pending: "အတည်ပြုရန် စောင့်ဆိုင်း", approved: "အတည်ပြုပြီး", rejected: "ပယ်ချ" };
 
 // nav key → Burmese label (keys match NAV in App.jsx)
 export const NAV_MY = {

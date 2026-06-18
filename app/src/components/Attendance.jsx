@@ -1,6 +1,7 @@
 import React from "react";
 import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota } from "../lib/api";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { useLang, LEAVE_MY, LV_STATUS_MY } from "../lib/i18n";
 import { UIcon } from "../icons";
 
 const LV_BADGE = { pending: { th: "รออนุมัติ", cls: "b-amber" }, approved: { th: "อนุมัติ", cls: "b-green" }, rejected: { th: "ไม่อนุมัติ", cls: "b-red" } };
@@ -16,6 +17,9 @@ function getGPS() {
 }
 
 export default function Attendance({ me }) {
+  const lang = useLang();
+  const L = (th, my) => (lang === "my" ? my : th);          // Thai default, Burmese when toggled
+  const lvType = (id) => (lang === "my" ? (LEAVE_MY[id] || leaveLabel(id)) : leaveLabel(id));
   const [today, setToday] = React.useState(undefined); // undefined=loading
   const [settings, setSettings] = React.useState(DEFAULT_HR_SETTINGS);
   const [recent, setRecent] = React.useState([]);
@@ -69,28 +73,28 @@ export default function Attendance({ me }) {
 
   return (
     <div className="adm">
-      <div className="adm-head"><div><h1 className="page-title">เข้างาน / ลา <span className="page-title-en">Attendance</span></h1>
-        <p className="page-sub">เวลาทำงาน {settings.start}–{settings.end} น. · {mustWorkToday ? "วันนี้เป็นวันทำงาน" : "วันนี้เป็นวันหยุดของคุณ"}</p></div></div>
+      <div className="adm-head"><div><h1 className="page-title">{L("เข้างาน / ลา", "အလုပ်တက် / ခွင့်")} <span className="page-title-en">Attendance</span></h1>
+        <p className="page-sub">{L("เวลาทำงาน", "အလုပ်ချိန်")} {settings.start}–{settings.end} {L("น.", "")} · {mustWorkToday ? L("วันนี้เป็นวันทำงาน", "ဒီနေ့ အလုပ်ရက်ဖြစ်သည်") : L("วันนี้เป็นวันหยุดของคุณ", "ဒီနေ့ သင့်နားရက်ဖြစ်သည်")}</p></div></div>
 
       <input ref={fileRef} type="file" accept="image/*" capture="user" style={{ display: "none" }} onChange={onPhoto} />
 
       {/* check-in / check-out card */}
       <div className="card att-clock">
-        {today === undefined ? <div className="empty">กำลังโหลด…</div> : (
+        {today === undefined ? <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div> : (
           <>
             <div className="att-now">
-              <div className="att-now-l"><span>เข้างาน</span><b>{today?.check_in_at ? fmtTime(today.check_in_at) : "—"}</b>
-                {st?.checkedIn && (st.isLate ? <span className="att-tag late">สาย {fmtMin(st.lateMin)}</span> : <span className="att-tag ok">ตรงเวลา</span>)}</div>
-              <div className="att-now-l"><span>ออกงาน</span><b>{today?.check_out_at ? fmtTime(today.check_out_at) : "—"}</b>
+              <div className="att-now-l"><span>{L("เข้างาน", "အလုပ်ဝင်")}</span><b>{today?.check_in_at ? fmtTime(today.check_in_at) : "—"}</b>
+                {st?.checkedIn && (st.isLate ? <span className="att-tag late">{L("สาย", "နောက်ကျ")} {fmtMin(st.lateMin)}</span> : <span className="att-tag ok">{L("ตรงเวลา", "အချိန်မီ")}</span>)}</div>
+              <div className="att-now-l"><span>{L("ออกงาน", "အလုပ်ဆင်း")}</span><b>{today?.check_out_at ? fmtTime(today.check_out_at) : "—"}</b>
                 {st?.checkedOut && st.otMin > 0 && <span className="att-tag ot">OT {fmtMin(st.otMin)}</span>}
-                {st?.checkedOut && st.earlyMin > 0 && <span className="att-tag late">ออกก่อน {fmtMin(st.earlyMin)}</span>}</div>
+                {st?.checkedOut && st.earlyMin > 0 && <span className="att-tag late">{L("ออกก่อน", "စောထွက်")} {fmtMin(st.earlyMin)}</span>}</div>
             </div>
             <div className="att-actions">
-              {!today?.check_in_at && <button className="btn-primary att-big" disabled={busy} onClick={() => trigger("in")}>📸 เช็คอินเข้างาน</button>}
-              {today?.check_in_at && !today?.check_out_at && <button className="btn-primary att-big ok" disabled={busy} onClick={() => trigger("out")}>📸 เช็คเอาท์ออกงาน</button>}
-              {today?.check_in_at && today?.check_out_at && <div className="att-done">✅ บันทึกเวลาวันนี้ครบแล้ว</div>}
+              {!today?.check_in_at && <button className="btn-primary att-big" disabled={busy} onClick={() => trigger("in")}>📸 {L("เช็คอินเข้างาน", "အလုပ်ဝင်ချိန် မှတ်တမ်းတင်")}</button>}
+              {today?.check_in_at && !today?.check_out_at && <button className="btn-primary att-big ok" disabled={busy} onClick={() => trigger("out")}>📸 {L("เช็คเอาท์ออกงาน", "အလုပ်ဆင်းချိန် မှတ်တမ်းတင်")}</button>}
+              {today?.check_in_at && today?.check_out_at && <div className="att-done">✅ {L("บันทึกเวลาวันนี้ครบแล้ว", "ဒီနေ့ အချိန်မှတ်တမ်း ပြည့်စုံပါပြီ")}</div>}
             </div>
-            <p className="page-sub" style={{ margin: 0 }}>ระบบจะถ่ายเซลฟี่ + บันทึกพิกัด GPS ตอนเช็คอิน/เอาท์</p>
+            <p className="page-sub" style={{ margin: 0 }}>{L("ระบบจะถ่ายเซลฟี่ + บันทึกพิกัด GPS ตอนเช็คอิน/เอาท์", "Check-in/out တွင် Selfie ရိုက်ပြီး GPS တည်နေရာ မှတ်တမ်းတင်ပါမည်")}</p>
           </>
         )}
       </div>
@@ -98,24 +102,24 @@ export default function Attendance({ me }) {
       {/* leave balance + request */}
       <div className="damage-layout">
         <div className="card">
-          <div className="sec-head"><div><div className="sec-title">วันลาคงเหลือ (ปี {year + 543})</div></div></div>
+          <div className="sec-head"><div><div className="sec-title">{L("วันลาคงเหลือ", "ကျန်ရှိသော ခွင့်ရက်")} ({L("ปี", "နှစ်")} {lang === "my" ? year : year + 543})</div></div></div>
           <div className="att-bal">
             {LEAVE_TYPES.map((t) => { const q = quota[t.id] ?? 0, used = usedByType[t.id] || 0; return (
-              <div className="att-bal-item" key={t.id}><span>{t.label}</span><b>{Math.max(0, q - used)}</b><small>/ {q} วัน</small></div>
+              <div className="att-bal-item" key={t.id}><span>{lvType(t.id)}</span><b>{Math.max(0, q - used)}</b><small>/ {q} {L("วัน", "ရက်")}</small></div>
             ); })}
           </div>
-          <LeaveForm pattern={pattern} satGroup={satGroup} holidays={holidays} onDone={(m) => { flash(m); load(); }} flash={flash} />
+          <LeaveForm pattern={pattern} satGroup={satGroup} holidays={holidays} onDone={(m) => { flash(m); load(); }} flash={flash} L={L} lvType={lvType} />
         </div>
 
         <div className="card">
-          <div className="sec-head"><div><div className="sec-title">ใบลาของฉัน</div></div></div>
+          <div className="sec-head"><div><div className="sec-title">{L("ใบลาของฉัน", "ကျွန်ုပ်၏ ခွင့်လျှောက်လွှာများ")}</div></div></div>
           <div className="set-list">
-            {leaves.length === 0 && <div className="empty sm">ยังไม่มีใบลา</div>}
+            {leaves.length === 0 && <div className="empty sm">{L("ยังไม่มีใบลา", "ခွင့်လျှောက်လွှာ မရှိသေးပါ")}</div>}
             {leaves.map((l) => { const b = LV_BADGE[l.status] || LV_BADGE.pending; return (
               <div className="att-leave-row" key={l.id}>
-                <div><b>{leaveLabel(l.type)}</b> · {thDate(l.start_date)}{l.end_date !== l.start_date ? ` – ${thDate(l.end_date)}` : ""} <span className="att-days">{l.days} วัน</span>
+                <div><b>{lvType(l.type)}</b> · {thDate(l.start_date)}{l.end_date !== l.start_date ? ` – ${thDate(l.end_date)}` : ""} <span className="att-days">{l.days} {L("วัน", "ရက်")}</span>
                   {l.reason && <div className="jo-dim">{l.reason}</div>}</div>
-                <span className={"job-badge " + b.cls}>{b.th}</span>
+                <span className={"job-badge " + b.cls}>{lang === "my" ? (LV_STATUS_MY[l.status] || b.th) : b.th}</span>
               </div>
             ); })}
           </div>
@@ -124,14 +128,14 @@ export default function Attendance({ me }) {
 
       {/* recent attendance */}
       <div className="card">
-        <div className="sec-head"><div><div className="sec-title">ประวัติเข้างาน 30 วันล่าสุด</div></div></div>
+        <div className="sec-head"><div><div className="sec-title">{L("ประวัติเข้างาน 30 วันล่าสุด", "နောက်ဆုံး ၃၀ ရက် အလုပ်တက်မှတ်တမ်း")}</div></div></div>
         <div className="set-list">
-          {recent.length === 0 && <div className="empty sm">ยังไม่มีบันทึก</div>}
+          {recent.length === 0 && <div className="empty sm">{L("ยังไม่มีบันทึก", "မှတ်တမ်း မရှိသေးပါ")}</div>}
           {recent.map((a) => { const s = dayStat(a, settings); return (
             <div className="att-hist" key={a.id}>
               <span className="att-hist-d">{thDate(a.work_date)}</span>
-              <span>เข้า <b>{fmtTime(a.check_in_at)}</b> {s.isLate && <span className="att-tag late sm">สาย {fmtMin(s.lateMin)}</span>}</span>
-              <span>ออก <b>{fmtTime(a.check_out_at)}</b> {s.otMin > 0 && <span className="att-tag ot sm">OT {fmtMin(s.otMin)}</span>}</span>
+              <span>{L("เข้า", "ဝင်")} <b>{fmtTime(a.check_in_at)}</b> {s.isLate && <span className="att-tag late sm">{L("สาย", "နောက်ကျ")} {fmtMin(s.lateMin)}</span>}</span>
+              <span>{L("ออก", "ထွက်")} <b>{fmtTime(a.check_out_at)}</b> {s.otMin > 0 && <span className="att-tag ot sm">OT {fmtMin(s.otMin)}</span>}</span>
             </div>
           ); })}
         </div>
@@ -142,7 +146,7 @@ export default function Attendance({ me }) {
   );
 }
 
-function LeaveForm({ pattern, satGroup, holidays, onDone, flash }) {
+function LeaveForm({ pattern, satGroup, holidays, onDone, flash, L, lvType }) {
   const [type, setType] = React.useState("vacation");
   const [start, setStart] = React.useState(todayYmd());
   const [end, setEnd] = React.useState(todayYmd());
@@ -152,23 +156,23 @@ function LeaveForm({ pattern, satGroup, holidays, onDone, flash }) {
   async function submit() {
     if (!start || !end || end < start) return flash("เลือกช่วงวันที่ให้ถูกต้อง", true);
     setBusy(true);
-    try { await submitLeave({ type, start_date: start, end_date: end, days, reason }); setReason(""); onDone("ส่งใบลาแล้ว รออนุมัติ ✓"); }
-    catch (e) { flash("ส่งใบลาไม่สำเร็จ: " + (e.message || e), true); }
+    try { await submitLeave({ type, start_date: start, end_date: end, days, reason }); setReason(""); onDone(L("ส่งใบลาแล้ว รออนุมัติ ✓", "ခွင့်လျှောက်လွှာ ပို့ပြီး · အတည်ပြုရန် စောင့်ဆိုင်း ✓")); }
+    catch (e) { flash(L("ส่งใบลาไม่สำเร็จ: ", "ခွင့်လျှောက်၍ မရပါ: ") + (e.message || e), true); }
     setBusy(false);
   }
   return (
     <div className="att-leaveform">
       <div className="fld-row">
-        <label className="fld"><span>ประเภท</span>
-          <select className="inp" value={type} onChange={(e) => setType(e.target.value)}>{LEAVE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
-        <label className="fld"><span>จำนวน (วันทำงาน)</span><div className="inp" style={{ display: "flex", alignItems: "center", fontWeight: 700 }}>{days} วัน</div></label>
+        <label className="fld"><span>{L("ประเภท", "အမျိုးအစား")}</span>
+          <select className="inp" value={type} onChange={(e) => setType(e.target.value)}>{LEAVE_TYPES.map((t) => <option key={t.id} value={t.id}>{lvType ? lvType(t.id) : t.label}</option>)}</select></label>
+        <label className="fld"><span>{L("จำนวน (วันทำงาน)", "ရက်အရေအတွက် (အလုပ်ရက်)")}</span><div className="inp" style={{ display: "flex", alignItems: "center", fontWeight: 700 }}>{days} {L("วัน", "ရက်")}</div></label>
       </div>
       <div className="fld-row">
-        <label className="fld"><span>ตั้งแต่</span><input className="inp" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-        <label className="fld"><span>ถึง</span><input className="inp" type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} /></label>
+        <label className="fld"><span>{L("ตั้งแต่", "မှ")}</span><input className="inp" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+        <label className="fld"><span>{L("ถึง", "အထိ")}</span><input className="inp" type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} /></label>
       </div>
-      <label className="fld"><span>เหตุผล</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เช่น ไปธุระ / ป่วย" /></label>
-      <button className="btn-primary" disabled={busy || days < 1} onClick={submit}>ส่งใบลา</button>
+      <label className="fld"><span>{L("เหตุผล", "အကြောင်းပြချက်")}</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={L("เช่น ไปธุระ / ป่วย", "ဥပမာ - ကိစ္စရှိ / ဖျားနာ")} /></label>
+      <button className="btn-primary" disabled={busy || days < 1} onClick={submit}>{L("ส่งใบลา", "ခွင့်တင်ရန်")}</button>
     </div>
   );
 }

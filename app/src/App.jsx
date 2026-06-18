@@ -2,7 +2,7 @@ import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
 import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
-import { NAV_MY } from "./lib/i18n";
+import { NAV_MY, LangContext } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
 import InstallBanner from "./components/InstallBanner";
 import Attendance from "./components/Attendance";
@@ -54,7 +54,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-18·ภาษาพม่า เมนู/สลิป/ใบงาน/แชต-v78";
+const BUILD = "2026-06-18·พม่า: หน้าเข้างาน/ลา + context-v79";
 
 function SetupNotice() {
   return (
@@ -182,6 +182,7 @@ export default function App() {
   }
 
   return (
+    <LangContext.Provider value={lang}>
     <div className="app">
       {/* mobile top bar */}
       <div className="topbar">
@@ -280,5 +281,6 @@ export default function App() {
       </main>
       <ConfirmHost />
     </div>
+    </LangContext.Provider>
   );
 }
