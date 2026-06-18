@@ -5,12 +5,12 @@
 export const SLOTS = [
   { id: "morning",   th: "เช้า",     time: "10:00–13:00", start: "10:00", icon: "🌅" },
   { id: "afternoon", th: "บ่าย",     time: "14:00–17:00", start: "14:00", icon: "🌇" },
-  { id: "full",      th: "เต็มวัน",   time: "ทั้งวัน",       start: "08:00", icon: "☀️" },
+  { id: "full",      th: "เต็มวัน",   time: "10:00–17:00",  start: "10:00", icon: "☀️" },
   { id: "custom",    th: "กำหนดเอง",  time: "เลือกเวลาเอง",  start: "08:00", icon: "⏰" },
 ];
 // the three display buckets used by the calendar grid (custom collapses into morning/afternoon)
 export const BUCKETS = [
-  { id: "full",      th: "เต็มวัน", time: "ทั้งวัน" },
+  { id: "full",      th: "เต็มวัน", time: "10:00–17:00" },
   { id: "morning",   th: "เช้า",    time: "10:00–13:00" },
   { id: "afternoon", th: "บ่าย",    time: "14:00–17:00" },
 ];
@@ -68,14 +68,14 @@ const beYY = (d) => String((d.getFullYear() + 543) % 100).padStart(2, "0");
 // full readable date: "วันจันทร์ 15 มิ.ย. 69"
 export const thFullDate = (d) => `${THDOW_FULL[d.getDay()]} ${d.getDate()} ${THMON[d.getMonth()]} ${beYY(d)}`;
 
-// slot + time range text: "รอบเช้า 10:00–13:00 น." · "เต็มวัน (ทั้งวัน)" · "เวลา 09:30 น."
+// slot + time range text: "รอบเช้า 10:00–13:00 น." · "เต็มวัน (10:00–17:00 น.)" · "เวลา 09:30 น."
 export function slotTimeText(jo) {
   if (!jo.slot || jo.slot === "custom") {
     if (!jo.scheduled_at) return "เลือกเวลาเอง";
     const t = new Date(jo.scheduled_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
     return `เวลา ${t} น.`;
   }
-  if (jo.slot === "full") return "เต็มวัน (ทั้งวัน)";
+  if (jo.slot === "full") return "เต็มวัน (10:00–17:00 น.)";
   const def = slotDef(jo.slot);
   return def ? `รอบ${def.th} ${def.time} น.` : "";
 }
