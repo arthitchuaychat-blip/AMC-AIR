@@ -811,6 +811,21 @@ select.inp{cursor:pointer}
 .ps-status{margin-top:8px;font-size:11.5px;color:#6b7280}
 .ps-my{font-weight:400;color:#6b7280;font-size:11px;line-height:1.3}
 .ps-table th .ps-my{font-size:10px;text-transform:none}
+.jo-edit-layout{display:flex;gap:16px;align-items:flex-start}
+.jo-sched-panel{flex:1 1 300px;min-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;position:sticky;top:16px;max-height:calc(100vh - 40px);overflow:auto}
+.jo-sched-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid;padding-bottom:7px;margin-bottom:8px}
+.jo-sched-head span{font-size:11px;color:var(--ink-3)}
+.jo-sched-hint{font-size:11px;color:var(--ink-3);margin-bottom:8px}
+.jo-sched-empty{font-size:12.5px;color:var(--ink-3);padding:14px 4px;text-align:center}
+.jo-sched-list{display:flex;flex-direction:column;gap:8px}
+.jo-sched-day{border:1px solid var(--line-2);border-radius:10px;padding:7px 9px}
+.jo-sched-day.clash{border-color:#f59e0b;background:#fffaf0}
+.jo-sched-date{font-weight:700;font-size:12px;margin-bottom:4px}
+.jo-sched-item{display:flex;flex-direction:column;font-size:11.5px;padding:2px 0;border-top:1px dashed var(--line-2)}
+.jo-sched-item:first-of-type{border-top:none}
+.jo-sched-slot{font-weight:600;color:var(--ink-2)}
+.jo-sched-job{color:var(--ink-3)}
+@media(max-width:1080px){.jo-edit-layout{flex-direction:column}.jo-sched-panel{position:static;max-height:none;width:100%;flex:none}}
 .jo-datefilter{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px 8px}
 .jo-datefilter .inp{border:none;padding:4px 4px;font-size:12.5px;width:128px;background:transparent}
 .jo-datefilter .jo-date-dash{color:var(--ink-3)}

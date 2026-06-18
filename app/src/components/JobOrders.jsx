@@ -219,7 +219,8 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
       <div className="adm">
         <div className="adm-head"><div><h1 className="page-title">ใบงาน <span className="page-title-en">Job Order</span></h1>
           <p className="page-sub">ข้อมูลงาน · มอบหมายทีมช่าง · นัดวัน-เวลา</p></div></div>
-        <div className="card" style={{ maxWidth: 800 }}>
+        <div className="jo-edit-layout">
+        <div className="card" style={{ maxWidth: 800, flex: "1 1 540px" }}>
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบงาน</span><input className="inp" value={ed.job_no} onChange={(e) => setF("job_no", e.target.value)} /></label>
             <label className="fld"><span>ประเภทงาน</span>
@@ -311,6 +312,8 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
             <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึกใบงาน</button>
           </div>
+        </div>
+        <TeamSchedulePanel teamId={ed.assigned_team} team={teams.find((t) => t.id === ed.assigned_team)} jobs={list} edVisits={ed.visits} excludeJobNo={ed.job_no} />
         </div>
         {toast && <Toast t={toast} />}
       </div>
@@ -541,4 +544,57 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
 
 function Toast({ t }) {
   return <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", background: t.bad ? "#dc2626" : "#16a34a", color: "#fff", fontSize: 13.5, fontWeight: 600, padding: "12px 22px", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 200, maxWidth: "90%", textAlign: "center" }}>{t.m}</div>;
+}
+
+// side panel: the selected team's existing queue, so you can pick a clash-free slot while editing
+const _isoYmd = (s) => { if (!s) return ""; const d = new Date(s); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const _slotOf = (id) => SLOTS.find((s) => s.id === id) || { icon: "🕒", th: id, time: "" };
+const _dShow = (ymd) => { const d = new Date(ymd + "T00:00:00"); return d.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" }); };
+
+function TeamSchedulePanel({ teamId, team, jobs, edVisits, excludeJobNo }) {
+  if (!teamId) return <div className="jo-sched-panel"><div className="jo-sched-empty">เลือกทีมช่างก่อน เพื่อดูคิวงานของทีมนั้น</div></div>;
+  const col = team?.color || "#1f74e0";
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+  const edDates = new Set((edVisits || []).map((v) => v.date).filter(Boolean));
+
+  // collect this team's upcoming bookings from every other job
+  const items = [];
+  (jobs || []).forEach((j) => {
+    if (j.job_no === excludeJobNo) return;
+    const vs = (j.visits && j.visits.length) ? j.visits : [{ assigned_team: j.assigned_team, scheduled_at: j.scheduled_at, end_date: j.end_date, slot: j.slot, status: j.status, visit_date: j.scheduled_at ? _isoYmd(j.scheduled_at) : null }];
+    vs.forEach((v) => {
+      const t = v.assigned_team || j.assigned_team;
+      if (t !== teamId || v.status === "cancelled") return;
+      const date = v.visit_date || (v.scheduled_at ? _isoYmd(v.scheduled_at) : null);
+      if (!date) return;
+      items.push({ date, end_date: v.end_date, slot: v.slot, status: v.status, job_no: j.job_no, customer: j.customerName, title: j.title });
+    });
+  });
+  const future = items.filter((b) => (b.end_date || b.date) >= today).sort((a, b) => a.date.localeCompare(b.date));
+  const grouped = {}; future.forEach((b) => { (grouped[b.date] = grouped[b.date] || []).push(b); });
+  const dates = Object.keys(grouped).sort();
+
+  return (
+    <div className="jo-sched-panel">
+      <div className="jo-sched-head" style={{ borderColor: col }}>
+        <b style={{ color: col }}>คิวงานทีม {team?.name?.replace("Team ", "") || teamId}</b>
+        <span>{future.length} รอบที่จะถึง</span>
+      </div>
+      {edDates.size > 0 && <div className="jo-sched-hint">🟠 = วันที่คุณกำลังจะลงในใบงานนี้ (ถ้าซ้ำวันกับคิวเดิม ระวังชนกัน)</div>}
+      {dates.length === 0 && <div className="jo-sched-empty">ทีมนี้ยังไม่มีคิวงานที่จะถึง — ลงรอบได้เลย</div>}
+      <div className="jo-sched-list">
+        {dates.map((d) => (
+          <div className={"jo-sched-day" + (edDates.has(d) ? " clash" : "")} key={d}>
+            <div className="jo-sched-date">{_dShow(d)}{edDates.has(d) ? " 🟠" : ""}</div>
+            {grouped[d].map((b, i) => { const s = _slotOf(b.slot); return (
+              <div className="jo-sched-item" key={i}>
+                <span className="jo-sched-slot">{s.icon} {s.th}{s.time ? ` ${s.time}` : ""}</span>
+                <span className="jo-sched-job">{b.job_no} · {b.customer || b.title || "งาน"}</span>
+              </div>
+            ); })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
