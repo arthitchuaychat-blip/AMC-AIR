@@ -1143,6 +1143,45 @@ export async function countUnreadChats() {
   if (error) throw error;
   return count || 0;
 }
+
+// ===================== FACEBOOK MESSENGER (mirrors LINE shape; psid aliased to line_user_id) =====================
+export async function listFbContacts() {
+  const [c, cu] = await Promise.all([
+    supabase.from("fb_contacts").select("*").order("last_message_at", { ascending: false, nullsFirst: false }),
+    supabase.from("customers").select("id,name"),
+  ]);
+  if (c.error) throw c.error;
+  const cn = Object.fromEntries((cu.data || []).map((x) => [x.id, x.name]));
+  // line_user_id alias so the existing inbox UI can render FB contacts unchanged
+  return (c.data || []).map((r) => ({ ...r, line_user_id: r.psid, channel: "fb", customerName: r.customer_id ? cn[r.customer_id] : null }));
+}
+export async function listFbMessages(psid) {
+  const { data, error } = await supabase.from("fb_messages").select("*").eq("psid", psid).order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((m) => ({ ...m, line_user_id: m.psid }));
+}
+export async function linkFbContact(psid, customerId) {
+  const { error } = await supabase.from("fb_contacts").update({ customer_id: customerId || null }).eq("psid", psid);
+  if (error) throw error;
+}
+export async function markFbRead(psid) {
+  await supabase.from("fb_contacts").update({ unread: 0 }).eq("psid", psid);
+}
+export async function countUnreadFb() {
+  const { count, error } = await supabase.from("fb_contacts").select("psid", { count: "exact", head: true }).gt("unread", 0);
+  if (error) throw error;
+  return count || 0;
+}
+async function _fbSend(to, payload) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("ยังไม่ได้เข้าสู่ระบบ");
+  const r = await fetch("/api/fb-send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ to, ...payload }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.ok === false) throw new Error(j.error || j.msg || "ส่งไม่สำเร็จ");
+  return j;
+}
+export const sendFbMessage = (psid, text) => _fbSend(psid, { text });
+export const sendFbImage = (psid, imageUrl) => _fbSend(psid, { imageUrl });
 // CRM: set a contact's stage / responsible staff
 export async function setLineStage(uid, stage) {
   const { error } = await supabase.from("line_contacts").update({ stage }).eq("line_user_id", uid);
