@@ -2,6 +2,7 @@ import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
 import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
+import { NAV_MY } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
 import InstallBanner from "./components/InstallBanner";
 import Attendance from "./components/Attendance";
@@ -53,7 +54,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-18·ช่างซัพ ยืนยัน/แบ่งจ่าย/สลิป-v77";
+const BUILD = "2026-06-18·ภาษาพม่า เมนู/สลิป/ใบงาน/แชต-v78";
 
 function SetupNotice() {
   return (
@@ -77,6 +78,7 @@ export default function App() {
   const [permsV, setPermsV] = React.useState(0); // bumps when role permissions (re)load → re-render nav
   const [view, setView] = React.useState(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [lang, setLang] = React.useState(() => { try { return localStorage.getItem("amc_lang") || "th"; } catch { return "th"; } });
   const [purchasePrefill, setPurchasePrefill] = React.useState(null);
   const [poPrefill, setPoPrefill] = React.useState(null);
   const [joPrefill, setJoPrefill] = React.useState(null);
@@ -150,6 +152,8 @@ export default function App() {
     return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
   }, [profile, permsV, view]);
 
+  React.useEffect(() => { try { localStorage.setItem("amc_lang", lang); } catch (_) {} }, [lang]);
+
   // register the service worker + (re)subscribe to push if already permitted
   React.useEffect(() => { registerSW().catch(() => {}); }, []);
   React.useEffect(() => { if (session) autoResubscribe(); }, [session]);
@@ -196,14 +200,21 @@ export default function App() {
         </div>
 
         <nav className="nav">
-          <div className="nav-label">เมนู</div>
+          <div className="nav-label">เมนู
+            <span className="lang-toggle">
+              <button className={lang === "th" ? "on" : ""} onClick={() => setLang("th")}>ไทย</button>
+              <button className={lang === "my" ? "on" : ""} onClick={() => setLang("my")}>မြန်မာ</button>
+            </span>
+          </div>
           {navForRole(role).map((id) => {
             const n = NAV[id];
+            const primary = lang === "my" ? (NAV_MY[id] || n.th) : n.th;
+            const secondary = lang === "my" ? n.th : n.en;
             return (
               <button key={id} className={"nav-item" + (view === id ? " on" : "")} onClick={() => go(id)}>
                 <UIcon name={n.icon} size={18} strokeWidth={1.9} />
-                <span className="nav-th">{n.th}</span>
-                <span className="nav-en">{n.en}</span>
+                <span className="nav-th">{primary}</span>
+                <span className="nav-en">{secondary}</span>
                 {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
                 {id === "teamchat" && teamUnread > 0 && <span className="nav-badge" title={`${teamUnread} ข้อความใหม่`}>{teamUnread > 99 ? "99+" : teamUnread}</span>}
               </button>

@@ -8,6 +8,7 @@ import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel } from "../lib/schedule";
 import { fmtBaht, fmtNum, custCode, matchText, matchPhone, eqi, ATTACH_ACCEPT } from "../lib/format";
 import { can } from "../lib/permissions";
+import { QR_MY } from "../lib/i18n";
 import { UIcon, MaterialThumb } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
@@ -94,6 +95,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [myId, setMyId] = React.useState(null);
   const [stageF, setStageF] = React.useState("all");     // list filter by stage
   const [mineOnly, setMineOnly] = React.useState(false); // list filter: assigned to me
+  const [myQr, setMyQr] = React.useState(false);         // show Burmese quick-reply chips
   const [channel, setChannel] = React.useState("line"); // "line" | "fb" — unified inbox switch
   const isFb = channel === "fb";
   // channel-aware data calls (FB returns the same shape, psid aliased to line_user_id)
@@ -409,8 +411,18 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                         </button>
                       );
                     })}
+                    <button className={"chat-tool" + (myQr ? " primary" : "")} onClick={() => setMyQr((o) => !o)}>🇲🇲 พม่า</button>
                     <button className="chat-tool ghost" onClick={() => setQrManage(true)}>✏️ จัดการคำตอบ</button>
                   </div>
+                  {myQr && (
+                    <div className="chat-qr-my">
+                      {QR_MY.map((qr, i) => (
+                        <button key={i} className="chat-qr" title={qr.text} onClick={() => insertQr(qr.text)}>
+                          <span className="chat-qr-th">{qr.title}</span> {qr.text.length > 20 ? qr.text.slice(0, 20) + "…" : qr.text}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {stickerOpen && (
                     <div className="chat-sticker-box">
                       <div className="chat-sticker-tabs">

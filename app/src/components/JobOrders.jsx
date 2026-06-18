@@ -10,6 +10,7 @@ import ChatCustomerLink from "./ChatCustomerLink";
 import AttachThumb from "./AttachThumb";
 import { ATTACH_ACCEPT, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
+import { buildJobBriefMy } from "../lib/i18n";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
 const STATUS_OPTS = JOB_STATUSES.map(([v, l]) => [v, l]);
@@ -22,6 +23,7 @@ const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id
 export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
   const [openTl, setOpenTl] = React.useState(null);
+  const [briefMy, setBriefMy] = React.useState(null); // { job, text } → Burmese job brief modal
   const [upBrief, setUpBrief] = React.useState(false);
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -424,6 +426,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               )}
               <div className="job-lines"><div className="job-actions">
                 <ChatCustomerLink role={role} customerId={jo.customer_id} onGoChat={onGoChat} />
+                <button className="btn-ghost sm" title="ใบงานภาษาพม่า (ส่งให้ช่าง)" onClick={() => setBriefMy({ job: jo, text: buildJobBriefMy(jo, jo.scheduled_at ? new Date(jo.scheduled_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : (scheduleLabel ? scheduleLabel(jo) : "")) })}>🇲🇲 ใบงานพม่า</button>
                 <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>
                   <UIcon name="clipboard" size={14} /> {openTl === jo.job_no ? "ซ่อนความเคลื่อนไหว" : "ความเคลื่อนไหว"}
                 </button>
@@ -518,6 +521,19 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
         );
       })()}
 
+      {briefMy && (
+        <div className="modal-overlay" onClick={() => setBriefMy(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
+            <div className="modal-head"><div className="modal-title">ใบงานภาษาพม่า · {briefMy.job.job_no}<span>အလုပ်အမှာစာ</span></div>
+              <button className="modal-x" onClick={() => setBriefMy(null)}><UIcon name="x" size={18} /></button></div>
+            <div className="modal-body">
+              <textarea className="inp" readOnly rows={11} value={briefMy.text} style={{ fontSize: 13, lineHeight: 1.6 }} onFocus={(e) => e.target.select()} />
+            </div>
+            <div className="modal-foot"><button className="btn-ghost" onClick={() => setBriefMy(null)}>ปิด</button>
+              <button className="btn-primary" onClick={() => { navigator.clipboard?.writeText(briefMy.text).then(() => flash("คัดลอกแล้ว — วางส่งให้ช่างได้เลย")).catch(() => {}); }}><UIcon name="clipboard" size={15} color="#fff" /> คัดลอก</button></div>
+          </div>
+        </div>
+      )}
       {toast && <Toast t={toast} />}
     </div>
   );

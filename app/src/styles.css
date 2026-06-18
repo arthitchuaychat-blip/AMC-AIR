@@ -38,7 +38,10 @@ input,select{font-family:inherit}
 
 /* ---------- NAV ---------- */
 .nav{display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto;margin-top:2px}
-.nav-label{font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-3);padding:8px 12px 6px}
+.nav-label{font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-3);padding:8px 12px 6px;display:flex;align-items:center;justify-content:space-between}
+.lang-toggle{display:inline-flex;gap:2px;background:var(--surface-2);border-radius:7px;padding:2px}
+.lang-toggle button{border:none;background:transparent;color:var(--ink-3);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;cursor:pointer;letter-spacing:0;text-transform:none}
+.lang-toggle button.on{background:var(--primary);color:#fff}
 .nav-item{display:grid;grid-template-columns:18px 1fr;grid-template-rows:auto auto;column-gap:11px;align-items:center;text-align:left;padding:9px 12px;border-radius:10px;color:var(--ink-2);transition:.13s;position:relative}
 .nav-badge{position:absolute;right:10px;top:50%;transform:translateY(-50%);min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:#ef4444;color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.18)}
 .nav-item.on .nav-badge{background:#fff;color:#2c63de}
@@ -806,6 +809,8 @@ select.inp{cursor:pointer}
 .ps-net{border-top:1px solid #1f2733;margin-top:4px;padding-top:7px;font-size:15px}
 .ps-net b{color:#16a34a}
 .ps-status{margin-top:8px;font-size:11.5px;color:#6b7280}
+.ps-my{font-weight:400;color:#6b7280;font-size:11px;line-height:1.3}
+.ps-table th .ps-my{font-size:10px;text-transform:none}
 .jo-datefilter{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px 8px}
 .jo-datefilter .inp{border:none;padding:4px 4px;font-size:12.5px;width:128px;background:transparent}
 .jo-datefilter .jo-date-dash{color:var(--ink-3)}
@@ -1300,6 +1305,8 @@ select.inp{cursor:pointer}
 .chat-tool.disabled{opacity:.5;pointer-events:none}
 .chat-qr{font-family:inherit;font-size:11.5px;border:1px solid #cfe0d6;background:#f0fbf4;color:#16794a;border-radius:8px;padding:4px 10px;cursor:pointer;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-qr:hover{background:#e3f6ea}
+.chat-qr-my{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line-2)}
+.chat-qr-th{font-weight:700;color:#0d5e38;font-size:10px}
 .chat-composer .chat-compose{border-top:none}
 .chat-sticker-box{border-top:1px solid var(--line-2)}
 .chat-sticker-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 0}

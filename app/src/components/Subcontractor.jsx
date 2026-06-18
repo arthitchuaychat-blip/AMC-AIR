@@ -4,6 +4,7 @@ import { jsPDF } from "jspdf";
 import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2 } from "../lib/format";
+import { SLIP_MY } from "../lib/i18n";
 import { UIcon } from "../icons";
 
 const TABS = [["labor", "ค่าแรง/งาน"], ["pay", "ค่าแรงรอจ่าย"], ["score", "สกอร์การ์ดทีม"]];
@@ -363,19 +364,19 @@ function PayoutSlip({ payout, team, onClose, flash }) {
           <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
           <div ref={ref} className="payout-slip">
-            <div className="ps-head"><b>ใบจ่ายค่าแรงช่างซัพ</b><span>{fmtDate(payout.created_at)}</span></div>
-            <div className="ps-team">ทีม {team.name}{team.phone ? ` · ${team.phone}` : ""}{team.tax_id ? ` · เลขผู้เสียภาษี ${team.tax_id}` : ""}{team.bank_info ? <div className="ps-bank">บัญชี: {team.bank_info}</div> : null}</div>
-            <table className="ps-table"><thead><tr><th>ใบงาน</th><th>ลูกค้า</th><th className="r">ค่าแรง</th></tr></thead>
+            <div className="ps-head"><b>ใบจ่ายค่าแรงช่างซัพ<div className="ps-my">{SLIP_MY.title}</div></b><span>{fmtDate(payout.created_at)}</span></div>
+            <div className="ps-team">ทีม / {SLIP_MY.team}: {team.name}{team.phone ? ` · ${team.phone}` : ""}{team.tax_id ? ` · เลขผู้เสียภาษี ${team.tax_id}` : ""}{team.bank_info ? <div className="ps-bank">บัญชี: {team.bank_info}</div> : null}</div>
+            <table className="ps-table"><thead><tr><th>ใบงาน<div className="ps-my">{SLIP_MY.jobNo}</div></th><th>ลูกค้า<div className="ps-my">{SLIP_MY.customer}</div></th><th className="r">ค่าแรง<div className="ps-my">{SLIP_MY.labor}</div></th></tr></thead>
               <tbody>
                 {lines.map((l, i) => (
                   <tr key={i}><td>{l.job_no}{l.vat ? " (VAT)" : ""}</td><td>{l.customerName || "-"}</td><td className="r">{l.amount == null ? "-" : fmtBaht(l.amount)}</td></tr>
                 ))}
               </tbody>
             </table>
-            <div className="ps-tot"><span>รวมค่าแรง</span><b>{fmtBaht(payout.gross)}</b></div>
-            <div className="ps-tot"><span>หัก ณ ที่จ่าย {payout.wht_rate || WHT_RATE}% (เฉพาะงาน VAT)</span><b>−{fmtBaht(payout.wht_amt)}</b></div>
-            <div className="ps-tot ps-net"><span>จ่ายสุทธิ</span><b>{fmtBaht(payout.net)}</b></div>
-            <div className="ps-status">สถานะ: {payout.status === "paid" ? `จ่ายแล้ว ${fmtDate(payout.paid_at)}` : "รอจ่าย"}</div>
+            <div className="ps-tot"><span>รวมค่าแรง / {SLIP_MY.total}</span><b>{fmtBaht(payout.gross)}</b></div>
+            <div className="ps-tot"><span>หัก ณ ที่จ่าย {payout.wht_rate || WHT_RATE}% / {SLIP_MY.wht}</span><b>−{fmtBaht(payout.wht_amt)}</b></div>
+            <div className="ps-tot ps-net"><span>จ่ายสุทธิ / {SLIP_MY.net}</span><b>{fmtBaht(payout.net)}</b></div>
+            <div className="ps-status">สถานะ / {SLIP_MY.status}: {payout.status === "paid" ? `จ่ายแล้ว ${fmtDate(payout.paid_at)} · ${SLIP_MY.paid}` : `รอจ่าย · ${SLIP_MY.unpaid}`}</div>
           </div>
           <div className="fld" style={{ marginTop: 14 }}><span>ส่งเข้าห้องแชตทีม</span>
             <select className="inp" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
