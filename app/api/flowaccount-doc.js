@@ -51,7 +51,9 @@ export default async function handler(req, res) {
   const items = (input.items || []).map((it) => {
     const qty = Number(it.quantity) || 1, price = Number(it.pricePerUnit) || 0;
     const total = it.total != null ? r2(it.total) : r2(qty * price);
-    return { type: it.kind === "service" ? 1 : 3, sku: it.sku || "", name: it.name || "-", quantity: qty,
+    // no sku → FlowAccount treats each line as a standalone item (no product-master create/match,
+    // avoids "ProductCodeDuplicate" when the same code is sent across documents)
+    return { type: it.kind === "service" ? 1 : 3, sku: "", name: it.name || "-", quantity: qty,
       unitName: it.unitName || "หน่วย", pricePerUnit: price, total, discount: 0, discountPercentage: 0, vatRate: isVat ? 7 : 0 };
   });
   // compute the document totals so FlowAccount's subtotal/VAT/grand are consistent with the lines
