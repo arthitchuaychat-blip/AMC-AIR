@@ -1213,6 +1213,29 @@ export async function updateSubPayout({ id, lines, whtRate }) {
   }
   return id;
 }
+// hard-delete a payout (admin/finance correction) — works on paid ones too;
+// releases each job's cumulative paid amount back so the labor returns to "รอจ่าย".
+export async function deleteSubPayout(id) {
+  const { data: p, error } = await supabase.from("sub_payouts").select("id,lines,job_nos").eq("id", id).single();
+  if (error) throw error;
+  const lines = p.lines || [];
+  const jobNos = lines.length ? lines.map((l) => l.job_no) : (p.job_nos || []);
+  if (jobNos.length) {
+    const { data: jrows } = await supabase.from("job_orders").select("job_no,labor_paid_amt").in("job_no", jobNos);
+    const cur = Object.fromEntries((jrows || []).map((j) => [j.job_no, j]));
+    if (lines.length) {
+      for (const l of lines) {
+        const j = cur[l.job_no]; if (!j) continue;
+        const paid = Math.max(0, _r2((Number(j.labor_paid_amt) || 0) - (Number(l.amount) || 0)));
+        await supabase.from("job_orders").update({ labor_paid_amt: paid, labor_paid: false, payout_id: null }).eq("job_no", l.job_no);
+      }
+    } else {
+      await supabase.from("job_orders").update({ labor_paid_amt: 0, labor_paid: false, payout_id: null }).in("job_no", jobNos);
+    }
+  }
+  const { error: delErr } = await supabase.from("sub_payouts").delete().eq("id", id);
+  if (delErr) throw delErr;
+}
 export async function deleteTeam(id) {
   const { error } = await supabase.from("teams").delete().eq("id", id);
   if (error) throw error;

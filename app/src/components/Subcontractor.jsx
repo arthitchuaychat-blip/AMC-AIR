@@ -1,7 +1,7 @@
 import React from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage } from "../lib/api";
+import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2 } from "../lib/format";
 import { UIcon } from "../icons";
@@ -233,6 +233,12 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
     try { await cancelSubPayout(p.id); flash("ยกเลิกใบรอจ่ายแล้ว"); onReload(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
+  async function del(p) {
+    if (!await confirmDialog(`ลบใบจ่ายนี้ถาวร? (กู้คืนไม่ได้)\nยอดค่าแรงที่ตัดไว้จะคืนกลับเข้า “รอจ่าย”`)) return;
+    setBusy(true);
+    try { await deleteSubPayout(p.id); flash("ลบใบจ่ายแล้ว"); onReload(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
 
   return (
     <>
@@ -258,6 +264,7 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
                 {canEditPayout && <button className="btn-ghost sm" disabled={busy} title="แก้ไขยอดค่าแรงจ่าย (ธุรการ/บัญชี)" onClick={() => setEditPo(p)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {p.status !== "paid" && <button className="btn-primary sm ok" disabled={busy} onClick={() => markPaid(p)}>บันทึกจ่ายเงิน</button>}
                 {p.status !== "paid" && <button className="btn-ghost sm danger" disabled={busy} onClick={() => cancel(p)}>ยกเลิก</button>}
+                {canEditPayout && <button className="btn-ghost sm danger" disabled={busy} title="ลบใบจ่ายถาวร (ธุรการ/บัญชี)" onClick={() => del(p)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div>
             </div>
           ))}

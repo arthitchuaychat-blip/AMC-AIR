@@ -58,7 +58,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-21·ช่างซัพ: ธุรการ/บัญชี แก้ไขใบจ่ายค่าแรงได้ (รวมที่จ่ายแล้ว)-v122";
+const BUILD = "2026-06-21·ช่างซัพ: ธุรการ/บัญชี ลบใบจ่ายค่าแรงได้ (คืนยอดค้างจ่าย)-v123";
 
 function SetupNotice() {
   return (
