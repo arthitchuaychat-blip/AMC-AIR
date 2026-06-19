@@ -44,8 +44,10 @@ export default async function handler(req, res) {
   } catch (e) { return res.status(200).json({ ok: false, reason: "network", msg: String(e) }); }
 
   // 2) build the FlowAccount SimpleDocument payload from our normalized input
+  // FlowAccount item type: 1=service, 3=non-inventory, 5=inventory(stock). Inline stock (5) is not
+  // supported → use 1 for service lines, 3 for everything else so no stock record is created.
   const items = (input.items || []).map((it) => ({
-    type: 5, sku: it.sku || "", name: it.name || "-", quantity: Number(it.quantity) || 1,
+    type: it.kind === "service" ? 1 : 3, sku: it.sku || "", name: it.name || "-", quantity: Number(it.quantity) || 1,
     unitName: it.unitName || "หน่วย", pricePerUnit: Number(it.pricePerUnit) || 0,
     total: Number(it.total) || 0, discount: Number(it.discount) || 0, discountPercentage: 0,
   }));

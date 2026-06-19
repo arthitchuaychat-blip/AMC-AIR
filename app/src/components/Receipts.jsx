@@ -91,7 +91,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
     if (!await confirmDialog(`ส่งใบกำกับภาษีของ ${x.receipt_no} เข้า FlowAccount?`)) return;
     setFaBusy(x.receipt_no);
     try {
-      const items = (q?.items || []).map((it) => ({ sku: it.item_code || "", name: it.name, quantity: Number(it.qty) || 1, unitName: it.unit || "หน่วย", pricePerUnit: Number(it.unit_price) || 0, total: round2(Number(it.qty) * Number(it.unit_price)) }));
+      const items = (q?.items || []).map((it) => ({ sku: it.item_code || "", name: it.name, kind: it.kind, quantity: Number(it.qty) || 1, unitName: it.unit || "หน่วย", pricePerUnit: Number(it.unit_price) || 0, total: round2(Number(it.qty) * Number(it.unit_price)) }));
       const res = await flowaccountSendDoc({
         docType: "tax-invoice", contactName: x.customerName, contactAddress: x.siteAddress || x.customerAddr,
         contactTaxId: x.customerTaxId, contactCode: custCode(x.customerCode), contactNumber: x.contactPhone,
