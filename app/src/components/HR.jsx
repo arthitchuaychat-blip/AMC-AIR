@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -52,15 +52,17 @@ function TodayTab({ staff, settings, holSet, flash }) {
   const [att, setAtt] = React.useState([]);
   const [onLeave, setOnLeave] = React.useState({});
   const [loading, setLoading] = React.useState(true);
+  const [edit, setEdit] = React.useState(null); // { p, a } row being corrected
   const day = todayYmd();
-  React.useEffect(() => { (async () => {
+  async function load() {
     try {
       const [a, lv] = await Promise.all([listAttendance(day, day), listLeaves("approved")]);
       setAtt(a);
       const m = {}; lv.forEach((l) => { if (l.start_date <= day && l.end_date >= day) m[l.user_id] = l.type; }); setOnLeave(m);
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
-  })(); }, []);
+  }
+  React.useEffect(() => { load(); }, []);
   const attBy = Object.fromEntries(att.map((a) => [a.user_id, a]));
   const rows = staff.map((p) => {
     const a = attBy[p.id], s = a ? dayStat(a, settings) : null;
@@ -88,8 +90,42 @@ function TodayTab({ staff, settings, holSet, flash }) {
               <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otMin > 0 && <span className="att-tag ot sm">OT {fmtMin(s.otMin)}</span>}</span>
             </div>
             <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]) : b.t}</span>
+            <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>
           </div>
         ); })}
+      </div>
+      {edit && <AttEditModal day={day} row={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
+    </div>
+  );
+}
+
+// HR/admin manual correction of a person's check-in/out for the day
+function AttEditModal({ day, row, onClose, onSaved, flash }) {
+  const toHM = (iso) => { if (!iso) return ""; const d = new Date(iso); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  const [ci, setCi] = React.useState(toHM(row.a?.check_in_at));
+  const [co, setCo] = React.useState(toHM(row.a?.check_out_at));
+  const [busy, setBusy] = React.useState(false);
+  const toIso = (hm) => hm ? new Date(`${day}T${hm}:00`).toISOString() : null;
+  async function save() {
+    setBusy(true);
+    try { await adminSaveAttendance(row.p.id, day, toIso(ci), toIso(co)); flash("บันทึกเวลาแล้ว ✓"); onSaved(); }
+    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 380 }}>
+        <div className="modal-head"><div className="modal-title">แก้ไขเวลา · {row.p.name || row.p.email}<span>{thDate(day)}</span></div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="fld-row">
+            <label className="fld"><span>เวลาเข้า</span><input className="inp" type="time" value={ci} onChange={(e) => setCi(e.target.value)} /></label>
+            <label className="fld"><span>เวลาออก</span><input className="inp" type="time" value={co} onChange={(e) => setCo(e.target.value)} /></label>
+          </div>
+          <p className="page-sub" style={{ marginTop: 6 }}>เว้นว่าง = ลบเวลานั้น (เช่น เคลียร์ให้เป็นยังไม่เข้า) · สาย/OT คำนวณใหม่อัตโนมัติ</p>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy} onClick={save}>บันทึก</button></div>
       </div>
     </div>
   );
@@ -102,8 +138,9 @@ function LeavesTab({ flash }) {
   async function load() { try { setList(await listLeaves()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
   React.useEffect(() => { load(); }, []);
   async function decide(l, status) {
-    if (!await confirmDialog(`${status === "approved" ? "อนุมัติ" : "ไม่อนุมัติ"}ใบลาของ ${l.name}?`)) return;
-    try { await decideLeave(l.id, status); flash(status === "approved" ? "อนุมัติแล้ว" : "ไม่อนุมัติแล้ว"); load(); }
+    const lbl = { approved: "อนุมัติ", rejected: "ไม่อนุมัติ", pending: "คืนเป็นรออนุมัติ" }[status];
+    if (!await confirmDialog(`${lbl}ใบลาของ ${l.name}?`)) return;
+    try { await decideLeave(l.id, status); flash(lbl + "แล้ว"); load(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   const B = { pending: { t: "รออนุมัติ", c: "b-amber" }, approved: { t: "อนุมัติ", c: "b-green" }, rejected: { t: "ไม่อนุมัติ", c: "b-red" } };
@@ -121,10 +158,9 @@ function LeavesTab({ flash }) {
               {l.reason && <div className="jo-dim">เหตุผล: {l.reason}</div>}</div>
             <div className="hr-leave-act">
               <span className={"job-badge " + b.c}>{b.t}</span>
-              {l.status === "pending" && <>
-                <button className="btn-primary sm ok" onClick={() => decide(l, "approved")}>อนุมัติ</button>
-                <button className="btn-ghost sm" onClick={() => decide(l, "rejected")}>ไม่อนุมัติ</button>
-              </>}
+              {l.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(l, "approved")}>อนุมัติ</button>}
+              {l.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(l, "rejected")}>ไม่อนุมัติ</button>}
+              {l.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(l, "pending")}>คืนรออนุมัติ</button>}
             </div>
           </div>
         ); })}

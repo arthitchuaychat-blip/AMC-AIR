@@ -1466,6 +1466,14 @@ export async function updateHrProfile(id, fields) {
   if (error) throw error;
 }
 
+// admin/HR manually set a person's check-in/out for a day (correction). times = ISO or null.
+export async function adminSaveAttendance(userId, workDate, checkInAt, checkOutAt) {
+  const { error } = await supabase.from("hr_attendance").upsert(
+    { user_id: userId, work_date: workDate, check_in_at: checkInAt || null, check_out_at: checkOutAt || null },
+    { onConflict: "user_id,work_date" });
+  if (error) throw error;
+}
+
 // ---------- PAYROLL (เงินเดือน) ----------
 export async function listPayslips(period) {
   const { data, error } = await supabase.from("payslips").select("*").eq("period", period);
