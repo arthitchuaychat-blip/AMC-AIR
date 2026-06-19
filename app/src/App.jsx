@@ -22,6 +22,7 @@ import BOQ from "./components/BOQ";
 import Quotation from "./components/Quotation";
 import Profit from "./components/Profit";
 import CashFlow from "./components/CashFlow";
+import BillingNotes from "./components/BillingNotes";
 import JobOrders from "./components/JobOrders";
 import Schedule from "./components/Schedule";
 import Chat from "./components/Chat";
@@ -44,6 +45,7 @@ const NAV = {
   quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
   invoice: { th: "ใบแจ้งหนี้", en: "Invoices", icon: "clipboard" },
   receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
+  billing: { th: "ใบวางบิล", en: "Billing Notes", icon: "clipboard" },
   profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
   cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "trend" },
   joborders: { th: "ใบงาน", en: "Job Orders", icon: "clipboard" },
@@ -56,7 +58,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-19·เอกสาร: ยกเลิกตามลำดับ+ลบเฉพาะธุรการ+ตัดกำไร-v88";
+const BUILD = "2026-06-19·ใบวางบิล (รวมใบแจ้งหนี้ลูกค้า) → ออกใบเสร็จ-v89";
 
 function SetupNotice() {
   return (
@@ -271,6 +273,8 @@ export default function App() {
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "receipt" && <Receipts role={role} focus={receiptFocus} onFocusConsumed={() => setReceiptFocus(null)} fromInvoice={receiptFromInvoice} onFromInvoiceConsumed={() => setReceiptFromInvoice(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
+        {view === "billing" && <BillingNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
+          onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
         {view === "profit" && <Profit />}
         {view === "cashflow" && <CashFlow />}
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
