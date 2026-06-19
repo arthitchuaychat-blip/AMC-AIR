@@ -820,6 +820,14 @@ select.inp{cursor:pointer}
 .gcal-more summary{font-size:12.5px;color:var(--primary);cursor:pointer;padding:4px 0}
 .gcal-more .gcal-link{margin-top:6px}
 .doc-date{font-size:11px;color:var(--ink-3);font-weight:600;white-space:nowrap}
+/* payroll */
+.hr-pay-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--surface-2)}
+.hr-pay-row .hr-name{min-width:150px;flex:1}
+.hr-sso{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.pay-table td,.pay-table th{text-align:right;white-space:nowrap}
+.pay-table td:first-child,.pay-table th:first-child{text-align:left}
+.pay-adj{width:96px}
+.pay-adj input{text-align:right}
 /* billing notes */
 .bn-invlist{padding:8px 4px 2px;border-top:1px solid var(--line-2);margin-top:4px;display:flex;flex-direction:column;gap:6px}
 .bn-invrow{display:flex;align-items:center;gap:9px;font-size:13px}

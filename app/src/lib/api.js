@@ -1466,6 +1466,31 @@ export async function updateHrProfile(id, fields) {
   if (error) throw error;
 }
 
+// ---------- PAYROLL (เงินเดือน) ----------
+export async function listPayslips(period) {
+  const { data, error } = await supabase.from("payslips").select("*").eq("period", period);
+  if (error) throw error; return data || [];
+}
+// upsert one payslip line (one per period+user)
+export async function savePayslip(p) {
+  const uid = await _uid();
+  const { error } = await supabase.from("payslips").upsert({
+    period: p.period, user_id: p.user_id, pay_type: p.pay_type || null,
+    base: p.base || 0, ot_pay: p.ot_pay || 0,
+    present_days: p.present_days || 0, absent_days: p.absent_days || 0, leave_days: p.leave_days || 0, over_leave_days: p.over_leave_days || 0,
+    late_min: p.late_min || 0, ot_min: p.ot_min || 0,
+    d_late: p.d_late || 0, d_absent: p.d_absent || 0, d_leave: p.d_leave || 0, d_sso: p.d_sso || 0,
+    bonus: p.bonus || 0, other_deduct: p.other_deduct || 0, other_note: p.other_note || null,
+    net: p.net || 0, status: p.status || "draft", note: p.note || null, created_by: uid, updated_at: new Date().toISOString(),
+  }, { onConflict: "period,user_id" });
+  if (error) throw error;
+}
+export async function setPayslipPaid(period, paid) {
+  const patch = paid ? { status: "paid", paid_at: new Date().toISOString() } : { status: "draft", paid_at: null };
+  const { error } = await supabase.from("payslips").update(patch).eq("period", period);
+  if (error) throw error;
+}
+
 // the LINE contact linked to a customer (so documents can be sent to them) — null if not linked
 export async function lineContactByCustomer(customerId) {
   if (!customerId) return null;

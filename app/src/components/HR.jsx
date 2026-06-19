@@ -1,10 +1,12 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
+import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 
-const TABS = [["today", "วันนี้"], ["leaves", "อนุมัติลา"], ["report", "รายงาน/สถิติ"], ["staff", "กะ & ตั้งค่า"]];
+const TABS = [["today", "วันนี้"], ["leaves", "อนุมัติลา"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["staff", "กะ & ตั้งค่า"]];
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
@@ -35,6 +37,7 @@ export default function HR({ role }) {
       {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "leaves" && <LeavesTab flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
+      {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "staff" && <StaffTab staff={staff} settings={settings} holidays={holidays} onReload={loadBase} flash={flash} />}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
@@ -272,6 +275,108 @@ function PersonDetail({ row, days, onClose }) {
 }
 
 // ---------- STAFF SCHEDULES + SETTINGS ----------
+// ---------- PAYROLL (เงินเดือน) ----------
+function PayrollTab({ staff, settings, holSet, flash }) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const [ym, setYm] = React.useState(() => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; });
+  const { from, to } = payPeriod(ym);
+  const [rows, setRows] = React.useState(null);
+  const [paidStatus, setPaidStatus] = React.useState("draft");
+  const [adj, setAdj] = React.useState({});     // user_id → { bonus, other_deduct }
+  const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState(false);
+  const lastDay = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [att, leaves, slips] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym)]);
+      const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
+      const leaveDaySet = {}, yearUsed = {}; const yr = ym.slice(0, 4);
+      leaves.forEach((l) => {
+        for (let d = hrParseYmd(l.start_date); d <= hrParseYmd(l.end_date); d.setDate(d.getDate() + 1)) { const k = hrYmd(d); if (k >= from && k <= to) (leaveDaySet[l.user_id] = leaveDaySet[l.user_id] || {})[k] = l.type; }
+        if (String(l.start_date).startsWith(yr)) { (yearUsed[l.user_id] = yearUsed[l.user_id] || {}); yearUsed[l.user_id][l.type] = (yearUsed[l.user_id][l.type] || 0) + Number(l.days || 0); }
+      });
+      const quota = settings.quota || DEFAULT_HR_SETTINGS.quota;
+      const slipBy = Object.fromEntries(slips.map((s) => [s.user_id, s]));
+      setPaidStatus(slips.length && slips.every((s) => s.status === "paid") ? "paid" : "draft");
+      const initAdj = {};
+      const result = staff.map((p) => {
+        const st = periodStats(p, attByUserDay, leaveDaySet, from, to, holSet, settings);
+        const yu = yearUsed[p.id] || {}; let over = 0;
+        ["vacation", "personal", "sick"].forEach((t) => { over += Math.max(0, (yu[t] || 0) - (quota[t] ?? 0)); });
+        st.overLeave = Math.min(st.leaveDays, over);
+        const slip = slipBy[p.id];
+        initAdj[p.id] = { bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0 };
+        return { p, st, slip };
+      });
+      setAdj(initAdj); setRows(result);
+    } catch (e) { flash("คำนวณไม่สำเร็จ: " + (e.message || e) + " (รัน 051_payroll.sql แล้วหรือยัง?)", true); setRows([]); }
+    setLoading(false);
+  }
+  React.useEffect(() => { load(); }, [ym]);
+
+  const calcOf = (r) => computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0 }, r.st, {});
+  const setA = (id, k, v) => setAdj((s) => ({ ...s, [id]: { ...s[id], [k]: Number(v) || 0 } }));
+  const payable = (rows || []).filter((r) => (Number(r.p.base_pay) || 0) > 0 || r.st.present > 0);
+  const totalNet = payable.reduce((a, r) => a + calcOf(r).net, 0);
+
+  async function saveRun(markPaid) {
+    setBusy(true);
+    try {
+      for (const r of payable) {
+        const c = calcOf(r);
+        await savePayslip({ period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
+          base: c.base, ot_pay: c.otPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
+          late_min: r.st.lateMin, ot_min: r.st.otMin, d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso,
+          bonus: c.bonus, other_deduct: c.otherDeduct, net: c.net, status: markPaid ? "paid" : "draft" });
+      }
+      if (markPaid) await setPayslipPaid(ym, true);
+      flash(markPaid ? "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓" : "บันทึกรอบเงินเดือนแล้ว ✓"); await load();
+    } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+
+  return (
+    <div className="card">
+      <div className="sec-head">
+        <div><div className="sec-title">เงินเดือน · รอบ {ym}</div>
+          <div className="sec-sub">รอบตัดวันที่ 25 — {from} ถึง {to} · จ่ายวันสิ้นเดือน (วันที่ {lastDay}) {paidStatus === "paid" ? "· ✅ จ่ายแล้ว" : ""}</div></div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} />
+          <button className="btn-ghost sm" disabled={busy || !payable.length} onClick={() => saveRun(false)}>บันทึกรอบ</button>
+          <button className="btn-primary sm ok" disabled={busy || !payable.length} onClick={() => saveRun(true)}>ทำจ่ายทั้งรอบ</button>
+        </div>
+      </div>
+      {loading ? <div className="empty">กำลังคำนวณ…</div> : payable.length === 0 ? <div className="empty">ยังไม่มีพนักงานที่ตั้งฐานเงินเดือน — ไปตั้งที่แท็บ “กะ & ตั้งค่า”</div> : (
+        <div style={{ overflowX: "auto" }}>
+          <table className="hr-table pay-table">
+            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th></tr></thead>
+            <tbody>
+              {payable.map((r) => { const c = calcOf(r); return (
+                <tr key={r.p.id}>
+                  <td style={{ textAlign: "left" }}><b>{r.p.name || r.p.email}</b><div className="jo-dim">{r.p.pay_type === "daily" ? `รายวัน · มา ${r.st.present} วัน` : "รายเดือน"}{r.st.absent ? ` · ขาด ${r.st.absent}` : ""}{r.st.lateMin ? ` · สาย ${Math.round(r.st.lateMin)} น.` : ""}</div></td>
+                  <td>{fmtBaht(c.base)}</td>
+                  <td className="hr-ok">{c.otHours ? `${c.otHours.toFixed(1)} = ${fmtBaht(c.otPay)}` : "—"}</td>
+                  <td className={c.dLate ? "hr-bad" : ""}>{c.dLate ? "−" + fmtBaht(c.dLate) : "—"}</td>
+                  <td className={c.dAbsent ? "hr-bad" : ""}>{c.dAbsent ? "−" + fmtBaht(c.dAbsent) : "—"}</td>
+                  <td className={c.dLeave ? "hr-bad" : ""}>{c.dLeave ? "−" + fmtBaht(c.dLeave) : "—"}</td>
+                  <td className={c.dSso ? "hr-bad" : ""}>{c.dSso ? "−" + fmtBaht(c.dSso) : "—"}</td>
+                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
+                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
+                  <td style={{ fontWeight: 800, color: "var(--up)" }}>{fmtBaht(c.net)}</td>
+                </tr>
+              ); })}
+            </tbody>
+            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={8} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td></tr></tfoot>
+          </table>
+        </div>
+      )}
+      <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (สูงสุด 750) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ”</p>
+    </div>
+  );
+}
+
 function StaffTab({ staff, settings, holidays, onReload, flash }) {
   const [s, setS] = React.useState(settings);
   const [nh, setNh] = React.useState({ day: "", name: "" });
@@ -302,6 +407,25 @@ function StaffTab({ staff, settings, holidays, onReload, flash }) {
           <label className="fld"><span>โควต้าพักร้อน/ปี</span><input className="inp" type="number" min="0" value={s.quota?.vacation ?? 6} onChange={(e) => setS({ ...s, quota: { ...s.quota, vacation: Number(e.target.value) || 0 } })} /></label>
           <label className="fld"><span>โควต้าลากิจ/ปี</span><input className="inp" type="number" min="0" value={s.quota?.personal ?? 3} onChange={(e) => setS({ ...s, quota: { ...s.quota, personal: Number(e.target.value) || 0 } })} /></label>
           <label className="fld"><span>โควต้าลาป่วย/ปี</span><input className="inp" type="number" min="0" value={s.quota?.sick ?? 30} onChange={(e) => setS({ ...s, quota: { ...s.quota, sick: Number(e.target.value) || 0 } })} /></label>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="sec-head"><div><div className="sec-title">ค่าจ้าง / เงินเดือน (ต่อคน)</div><div className="sec-sub">ตั้งฐานเงินเดือน (รายเดือน/รายวัน) · เรต OT ต่อชั่วโมง · ประกันสังคม 5%</div></div></div>
+        <div className="set-list">
+          {staff.map((p) => (
+            <div className="hr-pay-row" key={p.id}>
+              <div className="hr-name"><b>{p.name || p.email}</b></div>
+              <select className="inp" style={{ width: 110 }} value={p.pay_type || "monthly"} onChange={(e) => setPattern(p, "pay_type", e.target.value)}>
+                <option value="monthly">รายเดือน</option><option value="daily">รายวัน</option>
+              </select>
+              <span className="inp inp-unit" style={{ width: 130 }} title={p.pay_type === "daily" ? "ค่าแรงต่อวัน" : "เงินเดือนต่อเดือน"}><span className="unit-pre">฿</span>
+                <input type="number" min="0" defaultValue={p.base_pay || 0} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (Number(p.base_pay) || 0)) setPattern(p, "base_pay", v); }} /></span>
+              <span className="inp inp-unit" style={{ width: 130 }} title="เรต OT ต่อชั่วโมง"><span className="unit-pre">OT ฿</span>
+                <input type="number" min="0" defaultValue={p.ot_rate || 0} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (Number(p.ot_rate) || 0)) setPattern(p, "ot_rate", v); }} /><span className="unit-suf">/ชม.</span></span>
+              <label className="hr-sso"><input type="checkbox" checked={!!p.sso} onChange={(e) => setPattern(p, "sso", e.target.checked)} /> ประกันสังคม</label>
+            </div>
+          ))}
         </div>
       </div>
 
