@@ -1,7 +1,7 @@
 // Test the FlowAccount OpenAPI connection (sandbox by default) — gets an access token using the
 // "one client to one company" flow (client_id + client_secret only). Returns ok + token info, never
 // the raw token. Credentials live in Vercel env; this proves connectivity before we build doc-create.
-//   FLOWACCOUNT_CLIENT_ID, FLOWACCOUNT_CLIENT_SECRET, FLOWACCOUNT_ENV (sandbox | v1, default sandbox)
+//   FLOWACCOUNT_CLIENT_ID, FLOWACCOUNT_CLIENT_SECRET, FLOWACCOUNT_ENV (sandbox token endpoint = "test", prod = "v1"; default "test")
 
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
   if (!OFFICE.includes(role)) return res.status(403).json({ error: "forbidden" });
 
   const id = process.env.FLOWACCOUNT_CLIENT_ID, secret = process.env.FLOWACCOUNT_CLIENT_SECRET;
-  const env = process.env.FLOWACCOUNT_ENV || "sandbox";
+  const env = process.env.FLOWACCOUNT_ENV || "test";
   if (!id || !secret) return res.status(200).json({ ok: false, reason: "no-creds", env, msg: "ยังไม่ได้ตั้ง FLOWACCOUNT_CLIENT_ID / FLOWACCOUNT_CLIENT_SECRET ใน Vercel" });
 
   const body = new URLSearchParams({ grant_type: "client_credentials", scope: "flowaccount-api", client_id: id, client_secret: secret });
