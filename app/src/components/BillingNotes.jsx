@@ -1,13 +1,21 @@
 import React from "react";
-import { listBillingNotes, saveBillingNote, setBillingNoteStatus, deleteBillingNote, listInvoices, listCustomers, getCompanies } from "../lib/api";
+import { listBillingNotes, saveBillingNote, setBillingNoteStatus, deleteBillingNote, listInvoices, listCustomers, getCompanies, listDocLinks } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
-import { fmtBaht, custCode, fmtDocDate } from "../lib/format";
+import { fmtBaht, custCode, fmtDocDate, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
+import DocChips from "./DocChips";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
+
+// สถานะรวมของใบวางบิล: ยกเลิก / ออกใบเสร็จครบ / วางบิล (ยังออกใบเสร็จไม่ครบ)
+const bnStatus = (b) => {
+  if (b.status === "cancelled") return "cancelled";
+  const n = b.invoices.length, r = b.invoices.filter((iv) => iv.hasReceipt).length;
+  return n > 0 && r >= n ? "done" : "open";
+};
 
 const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 const genNo = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BN-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; };
@@ -24,13 +32,16 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
   const [openInv, setOpenInv] = React.useState(null); // billing_no whose invoices are expanded
   const [printB, setPrintB] = React.useState(null);
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [search, setSearch] = React.useState("");
+  const [statusF, setStatusF] = React.useState("all");
+  const [docLinks, setDocLinks] = React.useState({ byQuote: {}, invToQuote: {} });
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
   const printWin = React.useRef(null);
 
   async function load() {
     setLoading(true);
-    try { const [bn, iv, cu, co] = await Promise.all([listBillingNotes(), listInvoices(), listCustomers(), getCompanies()]); setList(bn); setInvoices(iv); setCusts(cu); setCompanies(co || { vat: {}, novat: {} }); }
+    try { const [bn, iv, cu, co, dl] = await Promise.all([listBillingNotes(), listInvoices(), listCustomers(), getCompanies(), listDocLinks()]); setList(bn); setInvoices(iv); setCusts(cu); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -47,13 +58,29 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
       <div className="adm-head">
         <div><h1 className="page-title">ใบวางบิล <span className="page-title-en">Billing Notes</span></h1>
           <p className="page-sub">รวมใบแจ้งหนี้ค้างชำระของลูกค้ารายเดียวกัน → ส่งวางบิล → ออกใบเสร็จต่อทีละใบแจ้งหนี้</p></div>
-        {canEdit && <button className="btn-primary" onClick={() => setEd({ billing_no: genNo(), customer_id: "", issue_date: today(), note: "", sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
+        <div className="cat-head-actions">
+          <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
+            <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบแจ้งหนี้" value={search} onChange={(e) => setSearch(e.target.value)} />
+            {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
+          </div>
+          {canEdit && <button className="btn-primary" onClick={() => setEd({ billing_no: genNo(), customer_id: "", issue_date: today(), note: "", sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
+        </div>
       </div>
 
-      <div className="cat-filter"><DateRangeBar value={dateR} onChange={setDateR} /></div>
-      {list.length === 0 && <div className="empty">ยังไม่มีใบวางบิล</div>}
+      <div className="cat-filter">
+        {[["all", "ทั้งหมด"], ["open", "วางบิล"], ["done", "ออกใบเสร็จครบ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
+        <DateRangeBar value={dateR} onChange={setDateR} />
+      </div>
+      {(() => { const shown = list.filter((b) => (statusF === "all" || bnStatus(b) === statusF)
+        && inDateRange(b.issue_date, dateR)
+        && (matchText(search, b.billing_no, b.customerName, ...(b.invoice_nos || [])) || matchPhone(search, b.contactPhone)));
+        return (<>
+      {shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบวางบิล" : "ไม่พบใบวางบิล"}</div>}
       <div className="job-cards">
-        {list.filter((b) => inDateRange(b.issue_date, dateR)).map((b) => (
+        {shown.map((b) => (
           <div className={"card job-card" + (b.status === "cancelled" ? " closed" : "")} key={b.billing_no}>
             <div className="job-card-head">
               <div className="job-card-id"><span className="job-no">{b.billing_no}</span>
@@ -79,6 +106,24 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
               </div>
               <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(b.issue_date || b.created_at)}</span><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></div>
             </div>
+            {/* แถวเชื่อมโยงเอกสาร: รวมทุกใบแจ้งหนี้ในใบวางบิลนี้ → BOQ / ใบเสนอราคา / งาน / ใบเสร็จ ทั้งสายงาน */}
+            {(() => {
+              const ch = { boqs: new Set(), quotes: new Set(), jobs: new Set(), invs: new Set(), rcs: new Set() };
+              b.invoices.forEach((iv) => {
+                const qn = docLinks.invToQuote[iv.invoice_no];
+                ch.invs.add(iv.invoice_no);
+                if (!qn) return;
+                ch.quotes.add(qn);
+                const g = docLinks.byQuote[qn] || {};
+                if (g.boqNo) ch.boqs.add(g.boqNo);
+                (g.jobNos || []).forEach((n) => ch.jobs.add(n));
+                (g.receiptNos || []).forEach((n) => ch.rcs.add(n));
+              });
+              return [...ch.quotes].map((qn, i) => {
+                const g = docLinks.byQuote[qn] || {};
+                return <DocChips key={qn + i} boqNo={g.boqNo} quoteNo={qn} jobNos={g.jobNos} invoiceNos={g.invoiceNos} receiptNos={g.receiptNos} onOpen={onOpenDoc} />;
+              });
+            })()}
             <div className="job-lines"><div className="job-actions">
               <ChatCustomerLink role={role} customerId={b.customer_id} onGoChat={onGoChat} />
               <button className="btn-ghost sm" onClick={() => setOpenInv(openInv === b.billing_no ? null : b.billing_no)}><UIcon name="clipboard" size={14} /> {openInv === b.billing_no ? "ซ่อนรายการ" : "ดูใบแจ้งหนี้ / ออกใบเสร็จ"}</button>
@@ -104,6 +149,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
           </div>
         ))}
       </div>
+        </>); })()}
 
       {ed && <CreateModal ed={ed} setEd={setEd} custs={custs} invoices={invoices}
         billedInvNos={new Set(list.filter((b) => b.status !== "cancelled").flatMap((b) => b.invoice_nos || []))}

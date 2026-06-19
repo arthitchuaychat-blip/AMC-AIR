@@ -58,7 +58,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-20·ใบวางบิล: โชว์รายการใบแจ้งหนี้บนหัวการ์ด-v114";
+const BUILD = "2026-06-20·ใบวางบิล: ลิงก์เชื่อมโยง+ค้นหา+กรองสถานะ ให้เหมือนเอกสารอื่น-v115";
 
 function SetupNotice() {
   return (
