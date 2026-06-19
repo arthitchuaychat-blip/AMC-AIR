@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks } from "../lib/api";
+import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks, listCustomers } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -27,6 +27,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   const [list, setList] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
+  const [custs, setCusts] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
@@ -41,7 +42,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   async function load() {
     setLoading(true);
-    try { const [iv, q, co, dl] = await Promise.all([listInvoices(), listQuotations(), getCompanies(), listDocLinks()]); setList(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
+    try { const [iv, q, co, dl, cu] = await Promise.all([listInvoices(), listQuotations(), getCompanies(), listDocLinks(), listCustomers()]); setList(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); setCusts(cu); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -81,7 +82,11 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   })();
 
   // หัก ณ ที่จ่าย เลือกได้ตอนทำใบแจ้งหนี้ — เฉพาะลูกค้านิติบุคคล
-  const canWhtInv = selQ?.customerType === "company";
+  // อ่านประเภทลูกค้า "สด" จากฐานข้อมูล (กันค่าค้างจากใบเสนอราคาเก่า เมื่อแก้ประเภทลูกค้าภายหลัง)
+  const custById = React.useMemo(() => Object.fromEntries(custs.map((c) => [String(c.id), c])), [custs]);
+  const liveCustType = selQ ? custById[String(selQ.customer_id)]?.type : null;
+  const custType = liveCustType || selQ?.customerType;
+  const canWhtInv = custType === "company";
   // ----- breakdown ขั้นเป็นตอนของยอดงวดนี้ (โชว์ให้เห็นชัดในตัวแก้ไข) -----
   const calc = (() => {
     if (!selQ) return null;
@@ -148,7 +153,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
           {selQ && (
             <div className="inv-summary">
-              <div><span>ลูกค้า</span><b>{selQ.customerName || "-"} · {custCode(selQ.customer_id)} {selQ.customerType === "company" ? <span className="inv-tag-co">นิติบุคคล</span> : <span className="inv-tag-ind">บุคคลธรรมดา</span>}</b></div>
+              <div><span>ลูกค้า</span><b>{selQ.customerName || "-"} · {custCode(selQ.customer_id)} {canWhtInv ? <span className="inv-tag-co">นิติบุคคล</span> : <span className="inv-tag-ind">บุคคลธรรมดา</span>}</b></div>
               <div><span>อ้างอิง</span><b>{selQ.quote_no}{selQ.boq_no ? ` · BOQ ${selQ.boq_no}` : ""}</b></div>
               <div><span>ยอดรวมทั้งสิ้น</span><b>{fmtBaht(selQ.grand)}</b></div>
               <div><span>วางบิลแล้ว</span><b>{fmtBaht(billed[selQ.quote_no] || 0)}</b></div>
