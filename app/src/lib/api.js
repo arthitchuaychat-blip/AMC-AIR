@@ -481,6 +481,16 @@ export async function flowaccountTest() {
   const r = await fetch("/api/flowaccount-test", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } });
   return r.json();
 }
+// create a document in FlowAccount from a normalized payload → returns the raw FlowAccount response
+export async function flowaccountSendDoc(input) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("ยังไม่ได้เข้าสู่ระบบ");
+  const r = await fetch("/api/flowaccount-doc", {
+    method: "POST", headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return r.json();
+}
 
 // role → module permission overrides (stored as one JSON row in app_config). Returns null if unset.
 export async function getRolePermissions() {

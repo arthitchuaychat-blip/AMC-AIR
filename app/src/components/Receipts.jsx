@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks } from "../lib/api";
+import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks, flowaccountSendDoc } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -37,6 +37,8 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [faBusy, setFaBusy] = React.useState(null);   // receipt_no being sent to FlowAccount
+  const [faRes, setFaRes] = React.useState(null);     // { x, res } result modal
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
@@ -84,6 +86,24 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   }
   async function del(x) { if (!await confirmDialog(`ลบถาวรใบเสร็จ ${x.receipt_no}? (ใบแจ้งหนี้จะกลับเป็นค้างชำระ · กู้คืนไม่ได้)`)) return; try { await deleteReceipt(x.receipt_no, x.invoice_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
   async function cancel(x) { if (!await confirmDialog(`ยกเลิกใบเสร็จ ${x.receipt_no}? (เก็บประวัติไว้ · ใบแจ้งหนี้กลับเป็นค้างชำระ)`)) return; try { await setReceiptStatus(x.receipt_no, "cancelled", x.invoice_no); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function sendToFlow(x) {
+    const q = quoteByNo[x.quote_no];
+    if (!await confirmDialog(`ส่งใบกำกับภาษีของ ${x.receipt_no} เข้า FlowAccount?`)) return;
+    setFaBusy(x.receipt_no);
+    try {
+      const items = (q?.items || []).map((it) => ({ sku: it.item_code || "", name: it.name, quantity: Number(it.qty) || 1, unitName: it.unit || "หน่วย", pricePerUnit: Number(it.unit_price) || 0, total: round2(Number(it.qty) * Number(it.unit_price)) }));
+      const res = await flowaccountSendDoc({
+        docType: "tax-invoice", contactName: x.customerName, contactAddress: x.siteAddress || x.customerAddr,
+        contactTaxId: x.customerTaxId, contactCode: custCode(x.customerCode), contactNumber: x.contactPhone,
+        publishedOn: x.issue_date, dueDate: x.issue_date, isVat: !!q?.vat, isVatInclusive: false,
+        grandTotal: q?.grand || x.total, items, remarks: `อ้างอิงใบเสร็จ ${x.receipt_no}`,
+      });
+      setFaRes({ x, res });
+      if (res.ok) flash(`ส่งเข้า FlowAccount แล้ว ✓${res.serial ? " เลขที่ " + res.serial : ""}`);
+      else flash("FlowAccount ไม่สำเร็จ — ดูรายละเอียดในกล่อง", true);
+    } catch (e) { setFaRes({ x, res: { ok: false, msg: e.message || String(e) } }); flash("ผิดพลาด: " + (e.message || e), true); }
+    setFaBusy(null);
+  }
 
   // ---------- EDITOR ----------
   if (ed) {
@@ -197,6 +217,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
               {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintR(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
+              {canEdit && recVat(x) && x.status !== "cancelled" && <button className="btn-ghost sm" disabled={faBusy === x.receipt_no} onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : "↗ FlowAccount"}</button>}
               {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
               {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
             </div></div>
@@ -244,6 +265,21 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           onClose={() => setView(null)}
           onSave={async ({ items, rate, whtAmt, net }) => { await setReceiptWht(view.receipt_no, items, items.some((i) => i.wht), rate, whtAmt, net); flash("บันทึกหัก ณ ที่จ่ายแล้ว ✓"); setView(null); await load(); }}
         />
+      )}
+      {faRes && (
+        <div className="modal-overlay" onClick={() => setFaRes(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
+            <div className="modal-head"><div className="modal-title">ส่งเข้า FlowAccount · {faRes.x.receipt_no}</div>
+              <button className="modal-x" onClick={() => setFaRes(null)}><UIcon name="x" size={18} /></button></div>
+            <div className="modal-body">
+              {faRes.res.ok
+                ? <div className="fa-result" style={{ background: "#dcf5e8", borderColor: "#b7e6cb", color: "#0a6b3d" }}>✅ สร้างเอกสารใน FlowAccount แล้ว{faRes.res.serial ? ` · เลขที่ ${faRes.res.serial}` : ""}{faRes.res.id ? ` · id ${faRes.res.id}` : ""}</div>
+                : <div className="fa-result" style={{ background: "#ffedd5", borderColor: "#fed7aa", color: "#9a3412" }}>❌ ไม่สำเร็จ — {faRes.res.reason || ""} {faRes.res.status ? `(HTTP ${faRes.res.status})` : ""}</div>}
+              {!faRes.res.ok && faRes.res.msg && <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, background: "var(--surface-2)", padding: 10, borderRadius: 8, marginTop: 8, maxHeight: 240, overflow: "auto" }}>{faRes.res.msg}</pre>}
+            </div>
+            <div className="modal-foot"><button className="btn-primary" onClick={() => setFaRes(null)}>ปิด</button></div>
+          </div>
+        </div>
       )}
       {toast && <Toast t={toast} />}
     </div>
