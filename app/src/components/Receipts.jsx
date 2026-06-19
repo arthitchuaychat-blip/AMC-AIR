@@ -218,13 +218,21 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           return (
           <div className={"card job-card" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
             <div className="job-card-head clickable-card" onClick={() => setView(x)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setView(x)}>
-              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span>{x.flowaccount_no && <span className="vat-badge" style={{ background: "#e0f0ff", color: "#1d4ed8" }} title="เลขที่เอกสารใน FlowAccount">FA: {x.flowaccount_no}</span>}</div>
+              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span>{x.flowaccount_no && <span className="fa-no-badge" title="เลขที่เอกสารใน FlowAccount"><b>FlowAccount</b> {x.flowaccount_no}</span>}</div>
               <div className="job-card-meta inv-meta">
                 <span className="inv-cust">{x.customerName || "-"}</span>
                 {x.createdByName && <span className="inv-by">👤 {x.createdByName}</span>}
                 <span className="inv-hint">ดูรายการ ›</span>
               </div>
-              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(x.issue_date || x.created_at)}</span><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
+              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(x.issue_date || x.created_at)}</span>
+                {x.wht_amt > 0 ? (
+                  <div className="rec-amt-bd">
+                    <div className="rab-row"><span>ก่อนหัก ณ ที่จ่าย</span><b>{fmtBaht(x.total)}</b></div>
+                    <div className="rab-row rab-wht"><span>หัก ณ ที่จ่าย {Number(x.wht_rate) || 3}%</span><b>− {fmtBaht(x.wht_amt)}</b></div>
+                    <div className="rab-row rab-net"><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
+                  </div>
+                ) : (<><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></>)}
+              </div>
             </div>
             {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={onOpenDoc} />; })()}
             <div className="job-lines"><div className="job-actions">
@@ -232,7 +240,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
               {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintR(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-              {canEdit && recVat(x) && x.status !== "cancelled" && <button className={"btn-ghost sm" + (x.flowaccount_no ? " ok" : "")} disabled={faBusy === x.receipt_no} title={x.flowaccount_no ? `ส่งแล้ว เลขที่ ${x.flowaccount_no} · กดเพื่อส่งซ้ำ` : "ส่งใบกำกับภาษีเข้า FlowAccount"} onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : x.flowaccount_no ? "✓ FlowAccount" : "↗ FlowAccount"}</button>}
+              {canEdit && recVat(x) && x.status !== "cancelled" && <button className={"btn-ghost sm" + (x.flowaccount_no ? " fa-sent" : "")} disabled={faBusy === x.receipt_no} title={x.flowaccount_no ? `ส่งแล้ว เลขที่ ${x.flowaccount_no} · กดเพื่อส่งซ้ำ` : "ส่งใบกำกับภาษีเข้า FlowAccount"} onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : x.flowaccount_no ? "✓ FlowAccount" : "↗ FlowAccount"}</button>}
               {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
               {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
             </div></div>

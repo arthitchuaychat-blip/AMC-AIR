@@ -849,6 +849,20 @@ select.inp{cursor:pointer}
 .bn-invsummary{display:flex;flex-direction:column;gap:4px;margin-top:5px}
 .bn-invchip{display:flex;align-items:center;flex-wrap:wrap;gap:7px;font-size:12.5px}
 .bn-invchip>b{font-weight:600}
+/* FlowAccount document number badge — big & clear */
+.fa-no-badge{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;padding:4px 11px;border-radius:9px;background:#e0f0ff;color:#1d4ed8;border:1px solid #b9d8ff;letter-spacing:.2px}
+.fa-no-badge>b{font-weight:800;font-size:11.5px;text-transform:uppercase;opacity:.75}
+/* FlowAccount button — green/sent state */
+.btn-ghost.fa-sent{background:#dcf5e8;border-color:#9ed9b9;color:#0a6b3d;font-weight:700}
+.btn-ghost.fa-sent:hover{background:#cdeedd}
+/* receipt amount breakdown (before WHT / WHT / net) */
+.rec-amt-bd{display:flex;flex-direction:column;gap:2px;min-width:200px}
+.rab-row{display:flex;justify-content:space-between;gap:16px;font-size:12.5px;color:var(--ink-2)}
+.rab-row b{font-weight:600}
+.rab-wht b{color:var(--down)}
+.rab-net{margin-top:4px;padding-top:4px;border-top:1px solid var(--line-2)}
+.rab-net span{color:var(--ink);font-weight:600;font-size:13px}
+.rab-net b{font-weight:800;font-size:16px;color:var(--ink)}
 .bn-picklist{max-height:240px;overflow:auto;border:1px solid var(--line-2);border-radius:10px;padding:4px}
 .bn-pickrow{display:flex;align-items:center;gap:9px;padding:6px 6px;border-bottom:1px solid var(--surface-2);font-size:13px;cursor:pointer}
 .bn-pickrow:last-child{border-bottom:none}
