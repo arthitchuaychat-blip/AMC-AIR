@@ -26,6 +26,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
   const [teams, setTeams] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [detail, setDetail] = React.useState(null); // job/visit entry shown in the popup
+  const [gcal, setGcal] = React.useState(false); // Google Calendar subscribe panel
 
   React.useEffect(() => { (async () => {
     setLoading(true);
@@ -99,6 +100,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
           <div className="seg">{VIEWS.map(([v, l]) => (
             <button key={v} className={"seg-btn" + (view === v ? " on" : "")} onClick={() => setView(v)}>{l}</button>
           ))}</div>
+          {canEdit && <button className="btn-ghost sm" onClick={() => setGcal(true)} title="ซิงค์ตารางงานเข้า Google Calendar"><UIcon name="calendar" size={15} /> Google ปฏิทิน</button>}
         </div>
       </div>
 
@@ -134,6 +136,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
       )}
 
       {detail && <JobDetailModal job={detail} onClose={() => setDetail(null)} />}
+      {gcal && <GoogleCalModal teams={teams} currentTeam={teamF !== "all" ? teams.find((t) => t.id === teamF) : null} onClose={() => setGcal(false)} />}
     </div>
   );
 
@@ -344,4 +347,60 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
       </div>
     );
   }
+}
+
+// Google Calendar subscribe panel — build the secret feed URL the user pastes into Google Calendar
+function GoogleCalModal({ teams, currentTeam, onClose }) {
+  const [token, setToken] = React.useState(() => { try { return localStorage.getItem("amc_cal_token") || ""; } catch { return ""; } });
+  const [copied, setCopied] = React.useState("");
+  React.useEffect(() => { try { localStorage.setItem("amc_cal_token", token); } catch (_) {} }, [token]);
+  const origin = (typeof window !== "undefined" && window.location.origin) || "https://amc-air.vercel.app";
+  const base = token ? `${origin}/api/calendar?token=${encodeURIComponent(token)}` : "";
+  const teamUrl = (id) => `${base}&team=${id}`;
+  const copy = (url, key) => { navigator.clipboard?.writeText(url).then(() => { setCopied(key); setTimeout(() => setCopied(""), 1800); }).catch(() => {}); };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 600 }}>
+        <div className="modal-head"><div className="modal-title">เชื่อมตารางงานเข้า Google Calendar<span>subscribe แบบอ่านอย่างเดียว · อัปเดตเอง</span></div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <ol className="gcal-steps">
+            <li>ตั้งค่า Environment Variable <code>CALENDAR_FEED_TOKEN</code> ใน Vercel (ตั้งรหัสลับเองยาว ๆ เช่น <code>amc-cal-7h2k9</code>) แล้ว Redeploy</li>
+            <li>วาง token เดียวกันลงช่องด้านล่าง</li>
+            <li>คัดลอกลิงก์ → เปิด <b>Google Calendar</b> (เว็บ) → ข้าง “ปฏิทินอื่นๆ” กด <b>＋ → จาก URL</b> → วางลิงก์ → <b>เพิ่มปฏิทิน</b></li>
+          </ol>
+          <label className="fld"><span>CALENDAR_FEED_TOKEN (ตามที่ตั้งใน Vercel)</span>
+            <input className="inp" value={token} onChange={(e) => setToken(e.target.value.trim())} placeholder="วาง token ลับที่ตั้งไว้" /></label>
+
+          {!token && <div className="empty sm" style={{ marginTop: 10 }}>ใส่ token ก่อน เพื่อสร้างลิงก์ subscribe</div>}
+          {token && (
+            <div className="gcal-links">
+              <div className="gcal-link">
+                <div><b>งานทุกทีม</b><div className="gcal-url">{base}</div></div>
+                <button className="btn-ghost sm" onClick={() => copy(base, "all")}>{copied === "all" ? "คัดลอกแล้ว ✓" : "คัดลอก"}</button>
+              </div>
+              {currentTeam && (
+                <div className="gcal-link">
+                  <div><b>เฉพาะทีม {currentTeam.name.replace("Team ", "")}</b><div className="gcal-url">{teamUrl(currentTeam.id)}</div></div>
+                  <button className="btn-ghost sm" onClick={() => copy(teamUrl(currentTeam.id), "cur")}>{copied === "cur" ? "คัดลอกแล้ว ✓" : "คัดลอก"}</button>
+                </div>
+              )}
+              <details className="gcal-more">
+                <summary>ลิงก์แยกแต่ละทีม (เผื่ออยากให้ช่างแต่ละทีม subscribe เฉพาะของตัวเอง)</summary>
+                {teams.map((t) => (
+                  <div className="gcal-link" key={t.id}>
+                    <div><b>{t.name.replace("Team ", "")}</b><div className="gcal-url">{teamUrl(t.id)}</div></div>
+                    <button className="btn-ghost sm" onClick={() => copy(teamUrl(t.id), t.id)}>{copied === t.id ? "✓" : "คัดลอก"}</button>
+                  </div>
+                ))}
+              </details>
+            </div>
+          )}
+          <p className="page-sub" style={{ marginTop: 12 }}>* เป็นการ “ติดตาม” แบบอ่านอย่างเดียว — แก้ใน Google จะไม่ย้อนกลับมาที่ระบบ · Google รีเฟรชฟีดเองทุก ~ไม่กี่ชั่วโมง</p>
+        </div>
+        <div className="modal-foot"><button className="btn-primary" onClick={onClose}>เสร็จ</button></div>
+      </div>
+    </div>
+  );
 }

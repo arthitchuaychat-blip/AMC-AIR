@@ -54,7 +54,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-18·เต็มวัน=10:00-17:00 ทุกที่+คอนเฟิม-v81";
+const BUILD = "2026-06-19·ซิงค์ตารางงาน → Google Calendar (ICS feed)-v82";
 
 function SetupNotice() {
   return (
