@@ -115,6 +115,9 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
 function CreateModal({ ed, setEd, custs, invoices, onSaved, flash }) {
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setEd((e) => ({ ...e, [k]: v }));
+  // only customers that actually have unpaid invoices show in the picker
+  const billableCustIds = React.useMemo(() => new Set(invoices.filter((x) => x.status === "unpaid").map((x) => String(x.customer_id))), [invoices]);
+  const billableCusts = custs.filter((c) => billableCustIds.has(String(c.id)));
   // unpaid invoices for the chosen customer (and not already cancelled)
   const custInv = ed.customer_id ? invoices.filter((x) => String(x.customer_id) === String(ed.customer_id) && x.status === "unpaid") : [];
   const chosen = custInv.filter((x) => ed.sel[x.invoice_no]);
@@ -136,7 +139,7 @@ function CreateModal({ ed, setEd, custs, invoices, onSaved, flash }) {
           <div className="fld-row">
             <label className="fld"><span>ลูกค้า</span>
               <select className="inp" value={ed.customer_id} onChange={(e) => setEd((s) => ({ ...s, customer_id: e.target.value, sel: {} }))}>
-                <option value="">— เลือกลูกค้า —</option>{custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="">{billableCusts.length ? "— เลือกลูกค้า —" : "— ไม่มีลูกค้าที่มีใบแจ้งหนี้ค้าง —"}</option>{billableCusts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select></label>
             <label className="fld"><span>วันที่วางบิล</span><input className="inp" type="date" value={ed.issue_date} onChange={(e) => set("issue_date", e.target.value)} /></label>
           </div>
