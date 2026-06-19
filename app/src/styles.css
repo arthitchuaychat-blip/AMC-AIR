@@ -840,6 +840,12 @@ select.inp{cursor:pointer}
 .cf-ic.danger{color:var(--down)}
 .cf-ic:hover{background:var(--surface-2)}
 @media(max-width:680px){.cf-cols{grid-template-columns:1fr}}
+.cf-table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
+.cf-table th{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-3);background:var(--surface-2);padding:9px 12px;text-align:right;white-space:nowrap}
+.cf-table td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.cf-table tbody tr:hover{background:var(--surface-2)}
+.cf-table td.up{color:var(--up)}.cf-table td.down{color:var(--down)}
+.cf-table tfoot td{font-weight:800;border-top:2px solid var(--line);background:var(--surface-2)}
 .jo-edit-layout{display:flex;gap:16px;align-items:flex-start}
 .jo-sched-panel{flex:1 1 300px;min-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;position:sticky;top:16px;max-height:calc(100vh - 40px);overflow:auto}
 .jo-sched-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid;padding-bottom:7px;margin-bottom:8px}
