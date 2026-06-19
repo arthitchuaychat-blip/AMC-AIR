@@ -5,6 +5,7 @@ import { UIcon } from "../icons";
 import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel, JOB_STATUSES, ymd } from "../lib/schedule";
 import JobTimeline from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
+import { buildJobBriefMy } from "../lib/i18n";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
 // ช่างเห็นทุกสถานะ (รวม "นัดหมายเพิ่ม") แต่ดูได้อย่างเดียวในสถานะ read-only ด้านล่าง
@@ -135,6 +136,15 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                   {jo.sales_photos && jo.sales_photos.length > 0 && (
                     <div className="tl-photos">{jo.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>
                   )}
+                </div>
+              )}
+
+              {expanded[jo.job_no] && (
+                <div className="myjob-brief">
+                  <div className="myjob-brief-title">🇲🇲 ใบงาน (ภาษาพม่า)
+                    <button className="btn-ghost sm" style={{ marginLeft: "auto" }} onClick={() => { navigator.clipboard?.writeText(buildJobBriefMy(jo, scheduleLabel({ scheduled_at: sv.scheduled_at, end_date: sv.end_date, slot: sv.slot }))).then(() => flash("ကူးယူပြီးပါပြီ (คัดลอกแล้ว)")).catch(() => {}); }}><UIcon name="clipboard" size={13} /> ကူးယူ</button>
+                  </div>
+                  <div className="myjob-brief-my">{buildJobBriefMy(jo, scheduleLabel({ scheduled_at: sv.scheduled_at, end_date: sv.end_date, slot: sv.slot }))}</div>
                 </div>
               )}
 
