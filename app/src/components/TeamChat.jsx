@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
-import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders } from "../lib/api";
+import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember } from "../lib/api";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
@@ -23,6 +23,7 @@ function NotifyButton() {
 }
 
 const KIND_ICON = { company: "🏢", dm: "👤", group: "👥", project: "🧰" };
+const OFFICE = ["admin", "exec", "finance", "sales"]; // back-office: may manage group members
 
 export default function TeamChat() {
   const [me, setMe] = React.useState(null);
@@ -140,8 +141,10 @@ export default function TeamChat() {
             <>
               <div className="tc-main-head">
                 <span className="tc-room-ic">{KIND_ICON[selRoom.kind]}</span>
-                <div><div className="tc-main-title">{selRoom.title}</div>
+                <div style={{ flex: 1 }}><div className="tc-main-title">{selRoom.title}</div>
                   <div className="tc-main-sub">{selRoom.kind === "company" ? "ทุกคนในองค์กร" : selRoom.kind === "dm" ? "แชตส่วนตัว" : (selRoom.memberNames || []).concat(me?.name ? [me.name] : []).join(", ")}{selRoom.ref_no ? ` · งาน ${selRoom.ref_no}` : ""}</div></div>
+                {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") &&
+                  <button className="btn-ghost sm" onClick={() => setModal("members")}><UIcon name="user" size={14} /> จัดการสมาชิก</button>}
               </div>
               <div className="tc-msgs">
                 {msgs.map((m) => {
@@ -174,6 +177,7 @@ export default function TeamChat() {
       {modal === "group" && <GroupModal staff={staff.filter((s) => s.id !== me?.id)} jobs={jobs}
         onCreate={async (payload) => { try { const id = await createChatRoom(payload); setModal(null); await loadRooms(); setSel(id); } catch (e) { flash("สร้างกลุ่มไม่สำเร็จ: " + (e?.message || e)); } }}
         onClose={() => setModal(null)} />}
+      {modal === "members" && selRoom && <MembersModal room={selRoom} staff={staff} onClose={() => setModal(null)} onChanged={loadRooms} flash={flash} />}
       {toast && <div className="tc-toast">{toast}</div>}
     </div>
   );
@@ -236,6 +240,56 @@ function GroupModal({ staff, jobs, onCreate, onClose }) {
             onClick={() => onCreate({ name: name || (job ? `งาน ${job.job_no}` : "กลุ่ม"), memberIds: ids, refType: job ? "job" : null, refNo: job ? job.job_no : null })}>
             <UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> สร้างห้อง
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// back-office: add/remove members of a group or project room
+function MembersModal({ room, staff, onClose, onChanged, flash }) {
+  const [memberIds, setMemberIds] = React.useState(null); // null = loading
+  const [q, setQ] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const nameById = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s])), [staff]);
+  async function load() { try { setMemberIds(await listRoomMembers(room.id)); } catch (e) { flash("โหลดสมาชิกไม่สำเร็จ: " + (e?.message || e)); setMemberIds([]); } }
+  React.useEffect(() => { load(); }, [room.id]);
+  const set = new Set(memberIds || []);
+  const add = async (uid) => { setBusy(true); try { await addChatMember(room.id, uid); await load(); onChanged && onChanged(); } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e?.message || e)); } setBusy(false); };
+  const remove = async (uid) => { setBusy(true); try { await removeChatMember(room.id, uid); await load(); onChanged && onChanged(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e?.message || e)); } setBusy(false); };
+  const others = staff.filter((s) => !set.has(s.id) && matchText(q, s.name, s.email));
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
+        <div className="modal-head"><div className="modal-title">จัดการสมาชิก · {room.title}</div><button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button></div>
+        <div className="modal-body">
+          {memberIds === null ? <div className="empty">กำลังโหลด…</div> : <>
+            <div className="fld"><span>สมาชิกในห้อง ({memberIds.length})</span>
+              <div className="tc-picklist">
+                {memberIds.length === 0 && <div className="empty sm">ยังไม่มีสมาชิก</div>}
+                {memberIds.map((uid) => (
+                  <div key={uid} className="tc-checkrow">
+                    <span className="tc-av">{(nameById[uid]?.name || "?")[0]}</span>
+                    <span style={{ flex: 1 }}>{nameById[uid]?.name || uid}</span>
+                    <button className="btn-ghost sm danger" disabled={busy} onClick={() => remove(uid)}>นำออก</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="fld" style={{ marginTop: 10 }}><span>เพิ่มสมาชิก (พนักงาน/ช่าง)</span>
+              <input className="inp" placeholder="ค้นหาชื่อ" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 6 }} />
+              <div className="tc-picklist">
+                {others.length === 0 && <div className="empty sm">ไม่พบ</div>}
+                {others.map((s) => (
+                  <div key={s.id} className="tc-checkrow">
+                    <span className="tc-av">{(s.name || "?")[0]}</span>
+                    <span style={{ flex: 1 }}>{s.name}</span>
+                    <button className="btn-ghost sm" disabled={busy} onClick={() => add(s.id)}>＋ เพิ่ม</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>}
         </div>
       </div>
     </div>

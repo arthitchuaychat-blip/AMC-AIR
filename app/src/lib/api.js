@@ -1480,9 +1480,23 @@ export async function deleteDocTermPreset(id) {
 // ---------- internal team chat (company room / DMs / groups / project rooms) ----------
 async function _uid() { const { data: { user } } = await supabase.auth.getUser(); return user?.id || null; }
 
-// create/refresh the two auto team-chat groups (พนักงานประจำ / ช่างซัพ) — admin/exec only
+// add all permanent staff to the "พนักงานประจำ" group (insert-only) — admin/exec only
 export async function syncChatGroups() {
   const { error } = await supabase.rpc("chat_sync_groups");
+  if (error) throw error;
+}
+// back-office group-membership management
+export async function listRoomMembers(roomId) {
+  const { data, error } = await supabase.rpc("chat_room_members", { p_room: roomId });
+  if (error) throw error;
+  return (data || []).map((r) => (typeof r === "string" ? r : r.user_id || r));
+}
+export async function addChatMember(roomId, userId) {
+  const { error } = await supabase.rpc("chat_admin_add_member", { p_room: roomId, p_user: userId });
+  if (error) throw error;
+}
+export async function removeChatMember(roomId, userId) {
+  const { error } = await supabase.rpc("chat_admin_remove_member", { p_room: roomId, p_user: userId });
   if (error) throw error;
 }
 

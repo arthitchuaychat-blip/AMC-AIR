@@ -59,15 +59,15 @@ function ChatGroupsCard({ flash }) {
   const [busy, setBusy] = React.useState(false);
   async function run() {
     setBusy(true);
-    try { await syncChatGroups(); flash("จัดกลุ่มแชตแล้ว ✓ — มีห้อง “พนักงานประจำ” และ “ช่างซัพ” ในแชตทีม"); }
-    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน 047_chat_groups.sql แล้วหรือยัง?)", true); }
+    try { await syncChatGroups(); flash("เพิ่มพนักงานประจำเข้ากลุ่ม “พนักงานประจำ” แล้ว ✓ — จัดสมาชิกเพิ่มได้ที่แชตทีม"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน 047/048 chat_groups แล้วหรือยัง?)", true); }
     setBusy(false);
   }
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="sec-head"><div><div className="sec-title">กลุ่มแชตทีม (ประจำ / ช่างซัพ)</div>
-        <div className="sec-sub">สร้าง 2 ห้องอัตโนมัติแยกพนักงานประจำกับช่างซัพ · กดอีกครั้งเมื่อมีคนเข้า/ออก เพื่ออัปเดตสมาชิก</div></div>
-        <button className="btn-primary sm" disabled={busy} onClick={run}><UIcon name="chat" size={15} color="#fff" /> จัดกลุ่มแชตอัตโนมัติ</button></div>
+      <div className="sec-head"><div><div className="sec-title">กลุ่มแชต “พนักงานประจำ”</div>
+        <div className="sec-sub">เพิ่มพนักงานประจำทั้งหมดเข้าห้อง “พนักงานประจำ” (เพิ่มอย่างเดียว ไม่ลบใคร) · จากนั้นจัดกลุ่ม/สมาชิกเองได้ที่แชตทีม → “จัดการสมาชิก”</div></div>
+        <button className="btn-primary sm" disabled={busy} onClick={run}><UIcon name="chat" size={15} color="#fff" /> เพิ่มพนักงานประจำเข้ากลุ่ม</button></div>
     </div>
   );
 }
