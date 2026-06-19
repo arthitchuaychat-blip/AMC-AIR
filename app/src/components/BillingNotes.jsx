@@ -68,13 +68,15 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
       </div>
 
       <div className="cat-filter">
-        {[["all", "ทั้งหมด"], ["open", "วางบิล"], ["done", "ออกใบเสร็จครบ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
+        {[["all", "ทั้งหมด"], ["open", "วางบิล"], ["unpaid", "ค้างชำระ"], ["done", "ออกใบเสร็จครบ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
-      {(() => { const shown = list.filter((b) => (statusF === "all" || bnStatus(b) === statusF)
+      {(() => { const shown = list.filter((b) => (statusF === "all" ? true
+          : statusF === "unpaid" ? (b.status !== "cancelled" && b.invoices.some((iv) => iv.status === "unpaid"))
+          : bnStatus(b) === statusF)
         && inDateRange(b.issue_date, dateR)
         && (matchText(search, b.billing_no, b.customerName, ...(b.invoice_nos || [])) || matchPhone(search, b.contactPhone)));
         return (<>
