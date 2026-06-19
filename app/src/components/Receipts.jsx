@@ -99,7 +99,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
         docType: "tax-invoice", contactName: x.customerName, contactAddress: x.siteAddress || x.customerAddr,
         contactTaxId: x.customerTaxId, contactCode: custCode(x.customerCode), contactNumber: x.contactPhone,
         publishedOn: x.issue_date, dueDate: x.issue_date, isVat: !!q?.vat, isVatInclusive: false,
-        grandTotal: q?.grand || x.total, items, remarks: `อ้างอิงใบเสร็จ ${x.receipt_no}`,
+        discountAmount: Number(q?.discount) || 0, items, remarks: `อ้างอิงใบเสร็จ ${x.receipt_no}`,
       });
       setFaRes({ x, res });
       if (res.ok) { try { await saveReceiptFlowAccount(x.receipt_no, res.id, res.serial); } catch (_) {} await load(); flash(`ส่งเข้า FlowAccount แล้ว ✓${res.serial ? " เลขที่ " + res.serial : ""}`); }

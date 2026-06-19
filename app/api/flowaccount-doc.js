@@ -44,21 +44,31 @@ export default async function handler(req, res) {
   } catch (e) { return res.status(200).json({ ok: false, reason: "network", msg: String(e) }); }
 
   // 2) build the FlowAccount SimpleDocument payload from our normalized input
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const isVat = !!input.isVat;
   // FlowAccount item type: 1=service, 3=non-inventory, 5=inventory(stock). Inline stock (5) is not
   // supported → use 1 for service lines, 3 for everything else so no stock record is created.
-  const items = (input.items || []).map((it) => ({
-    type: it.kind === "service" ? 1 : 3, sku: it.sku || "", name: it.name || "-", quantity: Number(it.quantity) || 1,
-    unitName: it.unitName || "หน่วย", pricePerUnit: Number(it.pricePerUnit) || 0,
-    total: Number(it.total) || 0, discount: Number(it.discount) || 0, discountPercentage: 0,
-  }));
+  const items = (input.items || []).map((it) => {
+    const qty = Number(it.quantity) || 1, price = Number(it.pricePerUnit) || 0;
+    const total = it.total != null ? r2(it.total) : r2(qty * price);
+    return { type: it.kind === "service" ? 1 : 3, sku: it.sku || "", name: it.name || "-", quantity: qty,
+      unitName: it.unitName || "หน่วย", pricePerUnit: price, total, discount: 0, discountPercentage: 0, vatRate: isVat ? 7 : 0 };
+  });
+  // compute the document totals so FlowAccount's subtotal/VAT/grand are consistent with the lines
+  const subTotal = r2(items.reduce((a, i) => a + i.total, 0));
+  const discountAmount = r2(input.discountAmount);
+  const totalAfterDiscount = r2(subTotal - discountAmount);
+  const vatAmount = isVat ? r2(totalAfterDiscount * 7 / 100) : 0;
+  const grandTotal = r2(totalAfterDiscount + vatAmount);
   const doc = {
     recordId: 0,
     contactCode: input.contactCode || "", contactName: input.contactName || "-",
     contactAddress: input.contactAddress || "", contactTaxId: input.contactTaxId || "",
     contactBranch: input.contactBranch || "สำนักงานใหญ่", contactNumber: input.contactNumber || "",
     publishedOn: input.publishedOn, creditType: 3, creditDays: 0, dueDate: input.dueDate || input.publishedOn,
-    isVat: !!input.isVat, isVatInclusive: !!input.isVatInclusive,
-    grandTotal: Number(input.grandTotal) || 0, remarks: input.remarks || "", items,
+    isManualVat: false, isVat, isVatInclusive: !!input.isVatInclusive,
+    subTotal, discountAmount, totalAfterDiscount, vatAmount, grandTotal,
+    remarks: input.remarks || "", items,
   };
 
   // 3) create the document
