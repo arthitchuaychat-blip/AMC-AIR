@@ -21,6 +21,7 @@ import Customers from "./components/Customers";
 import BOQ from "./components/BOQ";
 import Quotation from "./components/Quotation";
 import Profit from "./components/Profit";
+import CashFlow from "./components/CashFlow";
 import JobOrders from "./components/JobOrders";
 import Schedule from "./components/Schedule";
 import Chat from "./components/Chat";
@@ -44,6 +45,7 @@ const NAV = {
   invoice: { th: "ใบแจ้งหนี้", en: "Invoices", icon: "clipboard" },
   receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
   profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
+  cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "trend" },
   joborders: { th: "ใบงาน", en: "Job Orders", icon: "clipboard" },
   schedule: { th: "ปฏิทินงาน", en: "Schedule", icon: "calendar" },
   movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "withdraw" },
@@ -54,7 +56,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-19·ใบงาน: แตะช่องว่างทีมเพื่อลงคิว-v83";
+const BUILD = "2026-06-19·กระแสเงินสด จริง/ประมาณการรายวัน-v84";
 
 function SetupNotice() {
   return (
@@ -264,6 +266,7 @@ export default function App() {
         {view === "receipt" && <Receipts role={role} focus={receiptFocus} onFocusConsumed={() => setReceiptFocus(null)} fromInvoice={receiptFromInvoice} onFromInvoiceConsumed={() => setReceiptFromInvoice(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "profit" && <Profit />}
+        {view === "cashflow" && <CashFlow />}
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
           surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}

@@ -1474,6 +1474,76 @@ export async function deleteDocTermPreset(id) {
 // ---------- internal team chat (company room / DMs / groups / project rooms) ----------
 async function _uid() { const { data: { user } } = await supabase.auth.getUser(); return user?.id || null; }
 
+// ===================== CASH FLOW (ledger of money in/out · projected vs actual) =====================
+export async function listCashEntries() {
+  const { data, error } = await supabase.from("cash_entries").select("*").order("entry_date", { ascending: true });
+  if (error) throw error; return data || [];
+}
+export async function addCashEntry(e) {
+  const uid = await _uid();
+  const { error } = await supabase.from("cash_entries").insert({
+    direction: e.direction, status: e.status, entry_date: e.entry_date,
+    amount: Number(e.amount) || 0, note: e.note || null, source_type: "manual", edited: true, created_by: uid,
+  });
+  if (error) throw error;
+}
+export async function updateCashEntry(id, f) {
+  const patch = { updated_at: new Date().toISOString(), edited: true };
+  ["direction", "status", "entry_date", "note"].forEach((k) => { if (f[k] !== undefined) patch[k] = f[k]; });
+  if (f.amount !== undefined) patch.amount = Number(f.amount) || 0;
+  const { error } = await supabase.from("cash_entries").update(patch).eq("id", id);
+  if (error) throw error;
+}
+export async function deleteCashEntry(id) {
+  const { error } = await supabase.from("cash_entries").delete().eq("id", id);
+  if (error) throw error;
+}
+export async function getOpeningBalance() {
+  const { data } = await supabase.from("cash_entries").select("amount").eq("source_type", "opening").maybeSingle();
+  return Number(data?.amount) || 0;
+}
+export async function setOpeningBalance(amount) {
+  const { data } = await supabase.from("cash_entries").select("id").eq("source_type", "opening").maybeSingle();
+  if (data?.id) { await supabase.from("cash_entries").update({ amount: Number(amount) || 0, updated_at: new Date().toISOString() }).eq("id", data.id); }
+  else { const uid = await _uid(); await supabase.from("cash_entries").insert({ direction: "in", status: "actual", entry_date: "2000-01-01", amount: Number(amount) || 0, note: "เงินสดยกมา", source_type: "opening", source_ref: "opening", created_by: uid }); }
+}
+// seed/refresh ledger lines from documents (idempotent; never overwrites user-edited rows)
+export async function syncCashEntriesFromDocs() {
+  const _d = (ts) => (ts ? String(ts).slice(0, 10) : null);
+  const [inv, rec, pay, po, poItems, cust, team, existing] = await Promise.all([
+    supabase.from("invoices").select("invoice_no,due_date,issue_date,total,wht_amt,status,customer_id"),
+    supabase.from("receipts").select("receipt_no,issue_date,net,total,status,customer_id"),
+    supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at"),
+    supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at"),
+    supabase.from("po_items").select("po_no,qty,price"),
+    supabase.from("customers").select("id,name"),
+    supabase.from("teams").select("id,name"),
+    supabase.from("cash_entries").select("id,source_type,source_ref,edited").neq("source_type", "manual"),
+  ]);
+  const cn = Object.fromEntries((cust.data || []).map((c) => [c.id, c.name]));
+  const tn = Object.fromEntries((team.data || []).map((t) => [t.id, (t.name || "").replace("Team ", "")]));
+  const poTotal = {}; (poItems.data || []).forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + Number(it.qty) * Number(it.price); });
+
+  const desired = [];
+  // only UNPAID invoices are "expected income" — once paid, the money shows as its receipt (no double count)
+  (inv.data || []).forEach((x) => { if (x.status !== "unpaid") return; desired.push({ source_type: "invoice", source_ref: x.invoice_no, direction: "in", status: "projected", entry_date: x.due_date || x.issue_date, amount: Math.max(0, (Number(x.total) || 0) - (Number(x.wht_amt) || 0)), note: `ใบแจ้งหนี้ ${x.invoice_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
+  (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entry_date: x.issue_date, amount: Number(x.net || x.total) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
+  (pay.data || []).forEach((x) => { const paid = x.status === "paid"; desired.push({ source_type: "payout", source_ref: String(x.id), direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: Number(x.net) || 0, note: `จ่ายช่างซัพ${tn[x.team] ? " " + tn[x.team] : ""}` }); });
+  (po.data || []).forEach((x) => { if (x.status === "cancelled") return; const got = x.status === "received"; desired.push({ source_type: "po", source_ref: x.po_no, direction: "out", status: got ? "actual" : "projected", entry_date: got ? _d(x.received_at) : _d(x.created_at), amount: poTotal[x.po_no] || 0, note: `ใบสั่งซื้อ ${x.po_no}${x.supplier ? " · " + x.supplier : ""}` }); });
+
+  const exMap = {}; (existing.data || []).forEach((e) => { exMap[`${e.source_type}:${e.source_ref}`] = e; });
+  const uid = await _uid();
+  const toInsert = []; let updated = 0;
+  for (const d of desired) {
+    if (!d.entry_date || !(d.amount > 0)) continue;
+    const ex = exMap[`${d.source_type}:${d.source_ref}`];
+    if (!ex) toInsert.push({ ...d, created_by: uid });
+    else if (!ex.edited) { await supabase.from("cash_entries").update({ direction: d.direction, status: d.status, entry_date: d.entry_date, amount: d.amount, note: d.note, updated_at: new Date().toISOString() }).eq("id", ex.id); updated++; }
+  }
+  if (toInsert.length) { const { error } = await supabase.from("cash_entries").insert(toInsert); if (error) throw error; }
+  return { added: toInsert.length, updated };
+}
+
 // rooms visible to me (company + ones I'm a member of) with title, last message, unread count
 export async function listChatRooms() {
   const uid = await _uid();

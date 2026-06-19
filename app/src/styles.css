@@ -819,6 +819,27 @@ select.inp{cursor:pointer}
 .gcal-more{margin-top:6px}
 .gcal-more summary{font-size:12.5px;color:var(--primary);cursor:pointer;padding:4px 0}
 .gcal-more .gcal-link{margin-top:6px}
+/* cash flow */
+.cf-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.cf-opening{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)}
+.cf-carry{font-size:12.5px;color:var(--ink-3);margin:4px 0 12px}
+.cf-day{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px;background:var(--surface)}
+.cf-day-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;border-bottom:1px solid var(--line-2);padding-bottom:7px}
+.cf-day-date{font-weight:800;font-size:13.5px}
+.cf-day-bal{font-size:12px;color:var(--ink-3)}
+.cf-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cf-cols.single{grid-template-columns:1fr}
+.cf-col-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-3);margin-bottom:5px}
+.cf-col-empty{font-size:12px;color:var(--ink-3);padding:4px 0}
+.cf-line{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line-2);font-size:12.5px}
+.cf-amt{font-weight:700;font-variant-numeric:tabular-nums;min-width:84px;text-align:right}
+.cf-note{flex:1;color:var(--ink-2);display:flex;flex-direction:column;line-height:1.3}
+.cf-src{font-size:10px;color:var(--ink-3)}
+.cf-acts{display:flex;gap:4px;flex:none}
+.cf-ic{border:1px solid var(--line-2);background:var(--surface);border-radius:7px;padding:3px 5px;cursor:pointer;color:var(--ink-2)}
+.cf-ic.danger{color:var(--down)}
+.cf-ic:hover{background:var(--surface-2)}
+@media(max-width:680px){.cf-cols{grid-template-columns:1fr}}
 .jo-edit-layout{display:flex;gap:16px;align-items:flex-start}
 .jo-sched-panel{flex:1 1 300px;min-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;position:sticky;top:16px;max-height:calc(100vh - 40px);overflow:auto}
 .jo-sched-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid;padding-bottom:7px;margin-bottom:8px}

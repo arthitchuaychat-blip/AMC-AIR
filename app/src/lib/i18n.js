@@ -30,6 +30,7 @@ export const NAV_MY = {
   invoice: "ငွေတောင်းခံလွှာ",
   receipt: "ပြေစာ/အခွန်ပြေစာ",
   profit: "အမြတ်/အလုပ်",
+  cashflow: "ငွေသား စီးဆင်းမှု",
   joborders: "အလုပ်အမှာစာ",
   schedule: "အလုပ် ပြက္ခဒိန်",
   movements: "ပစ္စည်း ထုတ်/ပြန်",
