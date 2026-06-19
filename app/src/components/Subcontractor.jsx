@@ -4,7 +4,6 @@ import { jsPDF } from "jspdf";
 import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2 } from "../lib/format";
-import { SLIP_MY } from "../lib/i18n";
 import { UIcon } from "../icons";
 
 const TABS = [["labor", "ค่าแรง/งาน"], ["pay", "ค่าแรงรอจ่าย"], ["score", "สกอร์การ์ดทีม"]];
@@ -358,6 +357,25 @@ function PayoutSlip({ payout, team, onClose, flash }) {
       pdf.addImage(c.toDataURL("image/png"), "PNG", 0, 0, w, h); pdf.save(`payout-${team.name}.pdf`);
     } catch (e) { flash("สร้าง PDF ไม่สำเร็จ: " + (e.message || e), true); } setBusy(false);
   }
+  // ส่งสลิปตรงให้หัวหน้าช่าง: ใช้ Web Share API (มือถือ) → เลือกแอป LINE → เลือกหัวหน้าช่างคนนั้น
+  async function shareToLead() {
+    setBusy(true);
+    try {
+      const c = await capture();
+      const blob = await new Promise((res) => c.toBlob(res, "image/png"));
+      const file = new File([blob], `payout-${team.name}.png`, { type: "image/png" });
+      const txt = `📋 สลิปจ่ายค่าแรง · ทีม ${team.name}${team.lead ? ` (หัวหน้า ${team.lead})` : ""}\nรวม ${fmtBaht(payout.gross)} − หัก ณ ที่จ่าย ${fmtBaht(payout.wht_amt)} = จ่ายสุทธิ ${fmtBaht(payout.net)} (${lines.length} งาน)`;
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "สลิปจ่ายค่าแรงช่างซัพ", text: txt });
+        flash("เปิดหน้าต่างแชร์แล้ว — เลือกหัวหน้าช่างได้เลย ✓");
+      } else {
+        // อุปกรณ์ไม่รองรับแชร์ไฟล์ (เดสก์ท็อปส่วนใหญ่) → ดาวน์โหลดรูปให้แทน
+        const a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = `payout-${team.name}.png`; document.body.appendChild(a); a.click(); a.remove();
+        flash("อุปกรณ์นี้แชร์ตรงไม่ได้ — ดาวน์โหลดรูปให้แล้ว ส่งให้หัวหน้าช่างได้เลย", true);
+      }
+    } catch (e) { if (e.name !== "AbortError") flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
   async function sendChat() {
     if (!roomId) return flash("เลือกห้องแชตทีมก่อน", true);
     setBusy(true);
@@ -381,21 +399,26 @@ function PayoutSlip({ payout, team, onClose, flash }) {
           <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
           <div ref={ref} className="payout-slip">
-            <div className="ps-head"><b>ใบจ่ายค่าแรงช่างซัพ<div className="ps-my">{SLIP_MY.title}</div></b><span>{fmtDate(payout.created_at)}</span></div>
-            <div className="ps-team">ทีม / {SLIP_MY.team}: {team.name}{team.phone ? ` · ${team.phone}` : ""}{team.tax_id ? ` · เลขผู้เสียภาษี ${team.tax_id}` : ""}{team.bank_info ? <div className="ps-bank">บัญชี: {team.bank_info}</div> : null}</div>
-            <table className="ps-table"><thead><tr><th>ใบงาน<div className="ps-my">{SLIP_MY.jobNo}</div></th><th>ลูกค้า<div className="ps-my">{SLIP_MY.customer}</div></th><th className="r">ค่าแรง<div className="ps-my">{SLIP_MY.labor}</div></th></tr></thead>
+            <div className="ps-head"><b>ใบจ่ายค่าแรงช่างซัพ</b><span>{fmtDate(payout.created_at)}</span></div>
+            <div className="ps-team">ทีม: {team.name}{team.lead ? ` · หัวหน้า ${team.lead}` : ""}{team.phone ? ` · ${team.phone}` : ""}{team.tax_id ? ` · เลขผู้เสียภาษี ${team.tax_id}` : ""}{team.bank_info ? <div className="ps-bank">บัญชี: {team.bank_info}</div> : null}</div>
+            <table className="ps-table"><thead><tr><th>ใบงาน</th><th>ลูกค้า</th><th className="r">ค่าแรง</th></tr></thead>
               <tbody>
                 {lines.map((l, i) => (
                   <tr key={i}><td>{l.job_no}{l.vat ? " (VAT)" : ""}</td><td>{l.customerName || "-"}</td><td className="r">{l.amount == null ? "-" : fmtBaht(l.amount)}</td></tr>
                 ))}
               </tbody>
             </table>
-            <div className="ps-tot"><span>รวมค่าแรง / {SLIP_MY.total}</span><b>{fmtBaht(payout.gross)}</b></div>
-            <div className="ps-tot"><span>หัก ณ ที่จ่าย {payout.wht_rate || WHT_RATE}% / {SLIP_MY.wht}</span><b>−{fmtBaht(payout.wht_amt)}</b></div>
-            <div className="ps-tot ps-net"><span>จ่ายสุทธิ / {SLIP_MY.net}</span><b>{fmtBaht(payout.net)}</b></div>
-            <div className="ps-status">สถานะ / {SLIP_MY.status}: {payout.status === "paid" ? `จ่ายแล้ว ${fmtDate(payout.paid_at)} · ${SLIP_MY.paid}` : `รอจ่าย · ${SLIP_MY.unpaid}`}</div>
+            <div className="ps-tot"><span>รวมค่าแรง</span><b>{fmtBaht(payout.gross)}</b></div>
+            <div className="ps-tot"><span>หัก ณ ที่จ่าย {payout.wht_rate || WHT_RATE}%</span><b>−{fmtBaht(payout.wht_amt)}</b></div>
+            <div className="ps-tot ps-net"><span>จ่ายสุทธิ</span><b>{fmtBaht(payout.net)}</b></div>
+            <div className="ps-status">สถานะ: {payout.status === "paid" ? `จ่ายแล้ว ${fmtDate(payout.paid_at)}` : "รอจ่าย"}</div>
           </div>
-          <div className="fld" style={{ marginTop: 14 }}><span>ส่งเข้าห้องแชตทีม</span>
+          {/* ส่งตรงให้หัวหน้าช่างซัพคนนี้ */}
+          <div className="ps-lead">
+            <div className="ps-lead-info"><b>หัวหน้าช่าง:</b> {team.lead || "—"}{team.phone && <> · <a href={`tel:${team.phone}`}>📞 {team.phone}</a></>}</div>
+            <button className="btn-primary sm" disabled={busy} onClick={shareToLead}><UIcon name="chat" size={14} color="#fff" /> 📲 ส่งสลิปให้หัวหน้าช่าง</button>
+          </div>
+          <div className="fld" style={{ marginTop: 14 }}><span>หรือส่งเข้าห้องแชตทีม</span>
             <select className="inp" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
               {rooms.length === 0 && <option value="">— ไม่มีห้องแชต —</option>}
               {rooms.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
