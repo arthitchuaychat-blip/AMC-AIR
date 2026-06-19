@@ -827,6 +827,10 @@ export async function setReceiptStatus(receipt_no, status, invoice_no) {
   if (error) throw error;
   if (invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", invoice_no);
 }
+export async function saveReceiptFlowAccount(receipt_no, faId, faNo) {
+  const { error } = await supabase.from("receipts").update({ flowaccount_id: faId ? String(faId) : null, flowaccount_no: faNo || null, flowaccount_at: new Date().toISOString() }).eq("receipt_no", receipt_no);
+  if (error) throw error;
+}
 export async function deleteReceipt(receipt_no, invoice_no) {
   const { error } = await supabase.from("receipts").delete().eq("receipt_no", receipt_no);
   if (error) throw error;
