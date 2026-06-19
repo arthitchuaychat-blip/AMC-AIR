@@ -11,6 +11,7 @@ import TrendCharts from "./TrendCharts";
 const pad2 = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const PRESETS = [
+  { id: "today", label: "วันนี้", range: () => { const t = ymd(new Date()); return { from: t, to: t }; } },
   { id: "month", label: "เดือนนี้", range: () => { const n = new Date(); return { from: `${n.getFullYear()}-${pad2(n.getMonth() + 1)}-01`, to: "" }; } },
   { id: "year", label: "ปีนี้", range: () => { const n = new Date(); return { from: `${n.getFullYear()}-01-01`, to: "" }; } },
   { id: "7d", label: "7 วัน", range: () => { const n = new Date(); const s = new Date(n); s.setDate(n.getDate() - 6); return { from: ymd(s), to: "" }; } },
@@ -37,7 +38,7 @@ function StatCard({ icon, color, label, value, sub, accent, onClick }) {
 
 export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
   const [preset, setPreset] = React.useState("month");
-  const [from, setFrom] = React.useState(PRESETS[0].range().from);
+  const [from, setFrom] = React.useState(PRESETS.find((p) => p.id === "month").range().from);
   const [to, setTo] = React.useState("");
   const [detail, setDetail] = React.useState(null);
   const [mats, setMats] = React.useState([]);

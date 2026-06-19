@@ -9,6 +9,7 @@ import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import ChatCustomerLink from "./ChatCustomerLink";
+import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -35,6 +36,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [search, setSearch] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
+  const [dateR, setDateR] = React.useState({ from: "", to: "" });
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
@@ -249,6 +251,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const invVat = (x) => !!quoteByNo[x.quote_no]?.vat;
   const shown = list.filter((x) => (statusF === "all" || x.status === statusF)
     && (vatF === "all" || (vatF === "vat" ? invVat(x) : !invVat(x)))
+    && inDateRange(x.issue_date, dateR)
     && (matchText(search, x.invoice_no, x.customerName, x.quote_no, x.createdByName) || matchPhone(search, x.contactPhone)));
   return (
     <div className="adm">
@@ -273,6 +276,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
             style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l}</button>
         ))}
+        <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบแจ้งหนี้" : "ไม่พบใบแจ้งหนี้"}</div>}

@@ -7,6 +7,7 @@ import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
+import DateRangeBar, { inDateRange } from "./DateRangeBar";
 
 const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 const genNo = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BN-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; };
@@ -22,6 +23,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
   const [ed, setEd] = React.useState(null);     // create modal
   const [openInv, setOpenInv] = React.useState(null); // billing_no whose invoices are expanded
   const [printB, setPrintB] = React.useState(null);
+  const [dateR, setDateR] = React.useState({ from: "", to: "" });
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
   const printWin = React.useRef(null);
@@ -48,9 +50,10 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
         {canEdit && <button className="btn-primary" onClick={() => setEd({ billing_no: genNo(), customer_id: "", issue_date: today(), note: "", sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
       </div>
 
+      <div className="cat-filter"><DateRangeBar value={dateR} onChange={setDateR} /></div>
       {list.length === 0 && <div className="empty">ยังไม่มีใบวางบิล</div>}
       <div className="job-cards">
-        {list.map((b) => (
+        {list.filter((b) => inDateRange(b.issue_date, dateR)).map((b) => (
           <div className={"card job-card" + (b.status === "cancelled" ? " closed" : "")} key={b.billing_no}>
             <div className="job-card-head">
               <div className="job-card-id"><span className="job-no">{b.billing_no}</span>

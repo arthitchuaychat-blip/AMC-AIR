@@ -6,6 +6,7 @@ import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import ChatCustomerLink from "./ChatCustomerLink";
+import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtBaht, custCode, matchText, matchPhone } from "../lib/format";
@@ -35,6 +36,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const [printQ, setPrintQ] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
+  const [dateR, setDateR] = React.useState({ from: "", to: "" });
   const [search, setSearch] = React.useState("");
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
@@ -305,7 +307,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       </div>
 
       <div className="cat-filter">
-        {[["all", "ทั้งหมด"], ...STATUS_OPTS].map(([v, l]) => (
+        {[["all", "ทั้งหมด"], ...STATUS_OPTS, ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
@@ -315,12 +317,14 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
             style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l}</button>
         ))}
+        <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
         const fl = list.filter((q) => (statusF === "all" || q.status === statusF)
           && (vatF === "all" || (vatF === "vat" ? !!q.vat : !q.vat))
+          && inDateRange(q.issue_date, dateR)
           && (matchText(search, q.quote_no, q.customerName, q.contactName, q.title, q.boq_no) || matchPhone(search, q.contactPhone)));
         return (<>
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสนอราคา" : "ไม่พบใบเสนอราคาที่ตรงเงื่อนไข"}</div>}

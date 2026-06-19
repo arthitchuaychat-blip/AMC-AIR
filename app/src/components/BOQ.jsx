@@ -9,6 +9,7 @@ import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
 import DocChips from "./DocChips";
 import ChatCustomerLink from "./ChatCustomerLink";
+import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import GrowArea from "./GrowArea";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
@@ -56,6 +57,7 @@ function SectionBlock({ sec, items, pool, onAdd, onSet, onDel, onMove }) {
 export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc, newForCustomer, onNewConsumed, onGoChat }) {
   const canEdit = can(role, "boq", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
+  const [dateR, setDateR] = React.useState({ from: "", to: "" });
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);
@@ -209,9 +211,10 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้าง BOQ</button>}
         </div>
       </div>
+      <div className="cat-filter"><DateRangeBar value={dateR} onChange={setDateR} /></div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
-        const fl = list.filter((bo) => matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title) || matchPhone(search, bo.contactPhone));
+        const fl = list.filter((bo) => inDateRange(bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title) || matchPhone(search, bo.contactPhone)));
         return (<>
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">

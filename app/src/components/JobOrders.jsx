@@ -341,6 +341,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             <input className="inp" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="ตั้งแต่วันที่" />
             <span className="jo-date-dash">–</span>
             <input className="inp" type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} title="ถึงวันที่" />
+            <button className="btn-ghost sm" onClick={() => { const d = new Date(), p = (n) => String(n).padStart(2, "0"), t = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; setDateFrom(t); setDateTo(t); }}>วันนี้</button>
             {(dateFrom || dateTo) && <button className="cat-search-x" title="ล้างวันที่" onClick={() => { setDateFrom(""); setDateTo(""); }}><UIcon name="x" size={15} /></button>}
           </div>
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />

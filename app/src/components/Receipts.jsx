@@ -9,6 +9,7 @@ import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import ChatCustomerLink from "./ChatCustomerLink";
+import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -35,6 +36,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const [search, setSearch] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
+  const [dateR, setDateR] = React.useState({ from: "", to: "" });
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
@@ -146,6 +148,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const recVat = (x) => !!quoteByNo[x.quote_no]?.vat;
   const shown = list.filter((x) => (statusF === "all" || x.status === statusF)
     && (vatF === "all" || (vatF === "vat" ? recVat(x) : !recVat(x)))
+    && inDateRange(x.issue_date, dateR)
     && matchText(search, x.receipt_no, x.customerName, x.quote_no, x.job_no, x.createdByName));
   return (
     <div className="adm">
@@ -160,10 +163,11 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
         </div>
       </div>
       <div className="cat-filter">
-        {[["all", "ทั้งหมด"], ["pending", "รอชำระเงิน"], ["paid", "ชำระเงินแล้ว"]].map(([v, l]) => (
+        {[["all", "ทั้งหมด"], ["pending", "รอชำระเงิน"], ["paid", "ชำระเงินแล้ว"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
+        <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
         {[["all", "VAT / ไม่ VAT"], ["vat", "รับ VAT"], ["novat", "ไม่ VAT"]].map(([v, l]) => (

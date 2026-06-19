@@ -5,6 +5,7 @@ import { fmtBaht, fmtNum, matchText } from "../lib/format";
 import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
+import DateRangeBar, { inDateRange } from "./DateRangeBar";
 
 const STATUS = { open: { th: "รอรับของ", cls: "b-amber" }, received: { th: "รับแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
 const PO_FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open", label: "รอรับของ" }, { id: "received", label: "รับแล้ว" }, { id: "cancelled", label: "ยกเลิก" }];
@@ -24,9 +25,11 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const [pick, setPick] = React.useState({ code: "", qty: 1, price: "" });
   const [q, setQ] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
+  const [dateR, setDateR] = React.useState({ from: "", to: "" });
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
   const shown = pos.filter((po) => (statusF === "all" || po.status === statusF)
+    && inDateRange(po.created_at, dateR)
     && (matchText(q, po.po_no, po.supplier, po.note) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
 
   async function load() {
@@ -148,11 +151,12 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
       </div>
 
       <div className="cat-filter" style={{ justifyContent: "space-between" }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {PO_FILTERS.map((f) => (
             <button key={f.id} className={"cat-chip" + (statusF === f.id ? " on" : "")} onClick={() => setStatusF(f.id)}
               style={statusF === f.id ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{f.label}</button>
           ))}
+          <DateRangeBar value={dateR} onChange={setDateR} />
         </div>
         <div className="cat-search">
           <UIcon name="search" size={17} color="var(--ink-3)" />

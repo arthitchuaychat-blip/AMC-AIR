@@ -58,7 +58,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-19·ใบวางบิล (รวมใบแจ้งหนี้ลูกค้า) → ออกใบเสร็จ-v89";
+const BUILD = "2026-06-19·ตัวกรองวันที่+ปุ่มวันนี้ ทุกหน้าเอกสาร-v90";
 
 function SetupNotice() {
   return (
