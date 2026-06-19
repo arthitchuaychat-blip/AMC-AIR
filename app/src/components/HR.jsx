@@ -1,12 +1,12 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 
-const TABS = [["today", "วันนี้"], ["leaves", "อนุมัติลา"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["staff", "กะ & ตั้งค่า"]];
+const TABS = [["today", "วันนี้"], ["leaves", "อนุมัติลา"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
@@ -38,6 +38,7 @@ export default function HR({ role }) {
       {tab === "leaves" && <LeavesTab flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
+      {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "staff" && <StaffTab staff={staff} settings={settings} holidays={holidays} onReload={loadBase} flash={flash} />}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
@@ -275,6 +276,79 @@ function PersonDetail({ row, days, onClose }) {
 }
 
 // ---------- STAFF SCHEDULES + SETTINGS ----------
+// ---------- PERFORMANCE (ประสิทธิผล) ----------
+function PerfTab({ staff, settings, holSet, flash }) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const [ym, setYm] = React.useState(() => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; });
+  const [rows, setRows] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  async function load() {
+    setLoading(true);
+    try {
+      const [from, to] = monthRange(ym);
+      const today = todayYmd(); const calcTo = to < today ? to : today;
+      const [att, leaves, jobs, teams] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved"), listJobOrders(), listTeams()]);
+      const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
+      const leaveDaySet = {}; leaves.forEach((l) => { for (let d = hrParseYmd(l.start_date); d <= hrParseYmd(l.end_date); d.setDate(d.getDate() + 1)) { const k = hrYmd(d); if (k >= from && k <= calcTo) (leaveDaySet[l.user_id] = leaveDaySet[l.user_id] || {})[k] = l.type; } });
+      const teamName = Object.fromEntries(teams.map((t) => [t.id, (t.name || "").replace("Team ", "")]));
+      const jm = {};
+      jobs.forEach((j) => { if (!j.assigned_team) return; const d = j.scheduled_at ? hrYmd(new Date(j.scheduled_at)) : null; if (!d || d < from || d > to) return; const m = jm[j.assigned_team] || (jm[j.assigned_team] = { done: 0, ratingSum: 0, ratingN: 0, claims: 0, resched: 0 }); if (j.status === "done") m.done++; if (j.rating > 0) { m.ratingSum += j.rating; m.ratingN++; } if (j.is_claim) m.claims++; if (j.status === "reschedule") m.resched++; });
+      const result = staff.map((p) => {
+        const st = periodStats(p, attByUserDay, leaveDaySet, from, calcTo, holSet, settings);
+        const onTime = st.workdays ? Math.round((st.present - st.lateCnt) / st.workdays * 100) : null;
+        const m = jm[p.team] || { done: 0, ratingSum: 0, ratingN: 0, claims: 0, resched: 0 };
+        const avgRating = m.ratingN ? (m.ratingSum / m.ratingN) : null;
+        const otHours = (st.otMin || 0) / 60;
+        let score = 0, wsum = 0;
+        if (onTime != null) { score += onTime * 0.5; wsum += 0.5; }
+        if (st.workdays) { score += (st.present / st.workdays * 100) * 0.2; wsum += 0.2; }
+        if (avgRating != null) { score += (avgRating / 5 * 100) * 0.3; wsum += 0.3; }
+        let comp = wsum ? Math.round(score / wsum) : null;
+        if (comp != null) comp = Math.max(0, comp - m.claims * 5);
+        return { p, st, onTime, otHours, m, avgRating, comp, team: teamName[p.team] || "—" };
+      });
+      result.sort((a, b) => (b.comp ?? -1) - (a.comp ?? -1));
+      setRows(result);
+    } catch (e) { flash("คำนวณไม่สำเร็จ: " + (e.message || e), true); setRows([]); }
+    setLoading(false);
+  }
+  React.useEffect(() => { load(); }, [ym]);
+  const scoreColor = (s) => s == null ? "var(--ink-3)" : s >= 80 ? "var(--up)" : s >= 60 ? "#d97706" : "var(--down)";
+  return (
+    <div className="card">
+      <div className="sec-head">
+        <div><div className="sec-title">ประสิทธิผลพนักงาน · {ym}</div><div className="sec-sub">ตรงเวลา + งานของทีม (เสร็จ/คะแนน/เคลม) + OT · เรียงคะแนนสูงสุดก่อน</div></div>
+        <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} />
+      </div>
+      {loading ? <div className="empty">กำลังคำนวณ…</div> : !rows.length ? <div className="empty">ไม่มีข้อมูล</div> : (
+        <div style={{ overflowX: "auto" }}>
+          <table className="hr-table">
+            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ทีม</th><th>มา/ขาด/ลา</th><th>สาย</th><th>ตรงเวลา</th><th>OT(ชม.)</th><th>งานเสร็จ(ทีม)</th><th>คะแนนงาน</th><th>เคลม</th><th>เลื่อนนัด</th><th>คะแนนรวม</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.p.id}>
+                  <td style={{ textAlign: "left" }}><b>{r.p.name || r.p.email}</b></td>
+                  <td>{r.team}</td>
+                  <td>{r.st.present}/{r.st.absent}/{r.st.leaveDays}</td>
+                  <td className={r.st.lateCnt ? "hr-warn" : ""}>{r.st.lateCnt || "—"}</td>
+                  <td>{r.onTime != null ? r.onTime + "%" : "—"}</td>
+                  <td className="hr-ok">{r.otHours ? r.otHours.toFixed(1) : "—"}</td>
+                  <td>{r.m.done || "—"}</td>
+                  <td>{r.avgRating != null ? `★ ${r.avgRating.toFixed(1)}` : "—"}</td>
+                  <td className={r.m.claims ? "hr-bad" : ""}>{r.m.claims || "—"}</td>
+                  <td className={r.m.resched ? "hr-warn" : ""}>{r.m.resched || "—"}</td>
+                  <td style={{ fontWeight: 800, color: scoreColor(r.comp) }}>{r.comp != null ? r.comp : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="page-sub" style={{ marginTop: 10 }}>* งาน/คะแนน/เคลม นับจากงานของ “ทีม” ที่พนักงานสังกัด (งานผูกกับทีม ไม่ใช่รายคน) · คะแนนรวม = ตรงเวลา 50% + มาทำงาน 20% + คะแนนงาน 30% − เคลม×5</p>
+    </div>
+  );
+}
+
 // ---------- PAYROLL (เงินเดือน) ----------
 function PayrollTab({ staff, settings, holSet, flash }) {
   const pad = (n) => String(n).padStart(2, "0");
