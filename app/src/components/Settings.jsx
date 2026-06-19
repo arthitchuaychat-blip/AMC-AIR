@@ -287,7 +287,7 @@ function FlowAccountCard() {
             : `❌ ยังไม่สำเร็จ — ${res.reason || ""} ${res.status ? "(HTTP " + res.status + ")" : ""}\n${res.msg || ""}`}
         </div>
       )}
-      <p className="page-sub" style={{ marginTop: 8 }}>ขั้นตอน: ใส่ <b>FLOWACCOUNT_CLIENT_ID</b>, <b>FLOWACCOUNT_CLIENT_SECRET</b> (และ <b>FLOWACCOUNT_ENV=sandbox</b>) ใน Vercel → Redeploy → กดทดสอบ</p>
+      <p className="page-sub" style={{ marginTop: 8 }}>ขั้นตอน: ใส่ <b>FLOWACCOUNT_CLIENT_ID</b>, <b>FLOWACCOUNT_CLIENT_SECRET</b> และ <b>FLOWACCOUNT_ENV=test</b> (สำหรับ sandbox) ใน Vercel → Redeploy → กดทดสอบ</p>
     </div>
   );
 }
