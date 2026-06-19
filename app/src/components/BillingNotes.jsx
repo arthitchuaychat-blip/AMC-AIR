@@ -57,7 +57,11 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
           <div className={"card job-card" + (b.status === "cancelled" ? " closed" : "")} key={b.billing_no}>
             <div className="job-card-head">
               <div className="job-card-id"><span className="job-no">{b.billing_no}</span>
-                {b.status === "cancelled" ? <span className="job-badge b-red">ยกเลิกแล้ว</span> : <span className="job-badge b-blue">วางบิล</span>}</div>
+                {b.status === "cancelled" ? <span className="job-badge b-red">ยกเลิกแล้ว</span> : <span className="job-badge b-blue">วางบิล</span>}
+                {b.status !== "cancelled" && (() => { const n = b.invoices.length, r = b.invoices.filter((iv) => iv.hasReceipt).length;
+                  if (n > 0 && r >= n) return <span className="job-badge b-green">✓ ออกใบเสร็จครบแล้ว</span>;
+                  if (r > 0) return <span className="job-badge b-amber">ออกใบเสร็จ {r}/{n}</span>;
+                  return <span className="job-badge b-grey">ยังไม่ออกใบเสร็จ</span>; })()}</div>
               <div className="job-card-meta inv-meta">
                 <span className="inv-cust">{b.customerName || "-"} · {custCode(b.customerCode)}</span>
                 <span className="inv-period">{b.invoices.length} ใบแจ้งหนี้{b.missing ? ` · (${b.missing} ใบถูกลบ)` : ""}</span>
