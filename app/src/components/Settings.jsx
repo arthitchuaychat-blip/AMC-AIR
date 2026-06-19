@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups } from "../lib/api";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
 
@@ -54,6 +54,24 @@ function PermissionsCard({ flash }) {
 }
 
 // company letterhead used on printed documents — two variants: VAT (kind="vat") / non-VAT (kind="novat")
+// auto-maintained team-chat groups: พนักงานประจำ vs ช่างซัพ (membership by team type)
+function ChatGroupsCard({ flash }) {
+  const [busy, setBusy] = React.useState(false);
+  async function run() {
+    setBusy(true);
+    try { await syncChatGroups(); flash("จัดกลุ่มแชตแล้ว ✓ — มีห้อง “พนักงานประจำ” และ “ช่างซัพ” ในแชตทีม"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน 047_chat_groups.sql แล้วหรือยัง?)", true); }
+    setBusy(false);
+  }
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="sec-head"><div><div className="sec-title">กลุ่มแชตทีม (ประจำ / ช่างซัพ)</div>
+        <div className="sec-sub">สร้าง 2 ห้องอัตโนมัติแยกพนักงานประจำกับช่างซัพ · กดอีกครั้งเมื่อมีคนเข้า/ออก เพื่ออัปเดตสมาชิก</div></div>
+        <button className="btn-primary sm" disabled={busy} onClick={run}><UIcon name="chat" size={15} color="#fff" /> จัดกลุ่มแชตอัตโนมัติ</button></div>
+    </div>
+  );
+}
+
 function CompanyCard({ kind, title, sub, flash }) {
   const [c, setC] = React.useState({});
   const [busy, setBusy] = React.useState(false);
@@ -360,6 +378,7 @@ export default function Settings({ role }) {
       {!loading && (
         <>
         {can(role, "settings", "edit") && <PermissionsCard flash={flash} />}
+        {can(role, "settings", "edit") && <ChatGroupsCard flash={flash} />}
         {can(role, "settings", "edit") && <FlowAccountCard />}
         <div className="damage-layout" style={{ marginBottom: 16 }}>
           <CompanyCard kind="vat" title="หัวกระดาษ — แบบมี VAT" sub="ใช้กับใบที่คิด VAT · บัญชีธนาคารชุด VAT" flash={flash} />

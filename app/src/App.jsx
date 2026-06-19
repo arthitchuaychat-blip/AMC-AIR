@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
-import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions } from "./lib/api";
+import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { NAV_MY, LangContext } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
@@ -56,7 +56,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-19·กระแสเงินสด ราย วัน/สัปดาห์/เดือน/ปี-v85";
+const BUILD = "2026-06-19·แยกช่างซัพจาก HR + กลุ่มแชตประจำ/ซัพ-v86";
 
 function SetupNotice() {
   return (
@@ -77,6 +77,7 @@ export default function App() {
   const [ready, setReady] = React.useState(false);
   const [session, setSession] = React.useState(null);
   const [profile, setProfile] = React.useState(null);
+  const [teams, setTeams] = React.useState([]); // to tell if the logged-in user is on a subcontractor team
   const [permsV, setPermsV] = React.useState(0); // bumps when role permissions (re)load → re-render nav
   const [view, setView] = React.useState(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -121,12 +122,17 @@ export default function App() {
       .catch(() => { setPerms(mergePerms(null)); setPermsV((v) => v + 1); });
   }, [session]);
 
+  React.useEffect(() => { if (session) listTeams().then(setTeams).catch(() => {}); }, [session]);
+  // subcontractor-team members don't belong in HR/attendance — hide those menus for them
+  const mySub = !!(profile && teams.some((t) => t.id === profile.team && t.type === "sub"));
+  const navIds = (r) => navForRole(r).filter((id) => !(mySub && (id === "attendance" || id === "hr")));
+
   React.useEffect(() => {
     if (!profile) return;
-    const allowed = navForRole(profile.role);
+    const allowed = navIds(profile.role);
     const safe = allowed.length ? allowed : ["teamchat"];
     setView((v) => (v && safe.includes(v) ? v : safe[0]));
-  }, [profile, permsV]);
+  }, [profile, permsV, mySub]);
 
   // sidebar badge: count of chats with unread messages — live via realtime, with a polling fallback
   React.useEffect(() => {
@@ -209,7 +215,7 @@ export default function App() {
               <button className={lang === "my" ? "on" : ""} onClick={() => setLang("my")}>မြန်မာ</button>
             </span>
           </div>
-          {navForRole(role).map((id) => {
+          {navIds(role).map((id) => {
             const n = NAV[id];
             const primary = lang === "my" ? (NAV_MY[id] || n.th) : n.th;
             const secondary = lang === "my" ? n.th : n.en;

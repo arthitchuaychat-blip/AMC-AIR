@@ -1400,8 +1400,14 @@ export async function saveLeaveQuota(userId, year, q) {
 
 // staff list with HR fields (for the HR settings + reports)
 export async function listHrStaff() {
-  const { data, error } = await supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date").order("name");
-  if (error) throw error; return data || [];
+  // HR covers permanent staff only — subcontractor-team members are excluded (managed on the ช่างซัพ page)
+  const [pr, tm] = await Promise.all([
+    supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date").order("name"),
+    supabase.from("teams").select("id,type"),
+  ]);
+  if (pr.error) throw pr.error;
+  const subIds = new Set((tm.data || []).filter((t) => t.type === "sub").map((t) => t.id));
+  return (pr.data || []).filter((p) => !subIds.has(p.team));
 }
 export async function updateHrProfile(id, fields) {
   const { error } = await supabase.from("profiles").update(fields).eq("id", id);
@@ -1473,6 +1479,12 @@ export async function deleteDocTermPreset(id) {
 
 // ---------- internal team chat (company room / DMs / groups / project rooms) ----------
 async function _uid() { const { data: { user } } = await supabase.auth.getUser(); return user?.id || null; }
+
+// create/refresh the two auto team-chat groups (พนักงานประจำ / ช่างซัพ) — admin/exec only
+export async function syncChatGroups() {
+  const { error } = await supabase.rpc("chat_sync_groups");
+  if (error) throw error;
+}
 
 // ===================== CASH FLOW (ledger of money in/out · projected vs actual) =====================
 export async function listCashEntries() {
