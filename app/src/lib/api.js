@@ -780,15 +780,17 @@ export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, n
 // toggle a receipt's paid status (and sync the linked invoice)
 // ---------- BILLING NOTES (ใบวางบิล) ----------
 export async function listBillingNotes() {
-  const [bn, iv, cu, si, ct] = await Promise.all([
+  const [bn, iv, cu, si, ct, rc] = await Promise.all([
     supabase.from("billing_notes").select("*").order("created_at", { ascending: false }),
     supabase.from("invoices").select("invoice_no,total,installment,pct,status,issue_date,quote_no"),
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
+    supabase.from("receipts").select("invoice_no,status"),
   ]);
   if (bn.error) throw bn.error;
-  const invByNo = Object.fromEntries((iv.data || []).map((x) => [x.invoice_no, x]));
+  const receiptedInv = new Set((rc.data || []).filter((r) => r.status !== "cancelled").map((r) => r.invoice_no));
+  const invByNo = Object.fromEntries((iv.data || []).map((x) => [x.invoice_no, { ...x, hasReceipt: receiptedInv.has(x.invoice_no) }]));
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));

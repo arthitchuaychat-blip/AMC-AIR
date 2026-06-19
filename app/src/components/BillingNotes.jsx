@@ -80,7 +80,9 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
                     <span className="jo-dim">งวดที่ {iv.installment} · {Math.round(iv.pct)}%</span>
                     <span className={"job-badge " + (iv.status === "paid" ? "b-green" : iv.status === "cancelled" ? "b-red" : "b-amber")}>{iv.status === "paid" ? "จ่ายแล้ว" : iv.status === "cancelled" ? "ยกเลิก" : "ค้างชำระ"}</span>
                     <b style={{ flex: 1, textAlign: "right" }}>{fmtBaht(iv.total)}</b>
-                    {canEdit && iv.status === "unpaid" && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(iv.invoice_no)}><UIcon name="clipboard" size={13} color="#fff" /> ออกใบเสร็จ</button>}
+                    {iv.hasReceipt
+                      ? <span className="job-badge b-green">✓ ออกใบเสร็จแล้ว</span>
+                      : (canEdit && iv.status === "unpaid" && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(iv.invoice_no)}><UIcon name="clipboard" size={13} color="#fff" /> ออกใบเสร็จ</button>)}
                   </div>
                 ))}
               </div>
@@ -89,7 +91,9 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
         ))}
       </div>
 
-      {ed && <CreateModal ed={ed} setEd={setEd} custs={custs} invoices={invoices} onSaved={() => { setEd(null); load(); }} flash={flash} />}
+      {ed && <CreateModal ed={ed} setEd={setEd} custs={custs} invoices={invoices}
+        billedInvNos={new Set(list.filter((b) => b.status !== "cancelled").flatMap((b) => b.invoice_nos || []))}
+        onSaved={() => { setEd(null); load(); }} flash={flash} />}
 
       {/* off-screen print area */}
       {printB && (() => {
@@ -112,14 +116,16 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
   );
 }
 
-function CreateModal({ ed, setEd, custs, invoices, onSaved, flash }) {
+function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash }) {
+  const billed = billedInvNos || new Set();
+  const isBillable = (x) => x.status === "unpaid" && !billed.has(x.invoice_no); // ค้างชำระ + ยังไม่ถูกวางบิล
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   // only customers that actually have unpaid invoices show in the picker
-  const billableCustIds = React.useMemo(() => new Set(invoices.filter((x) => x.status === "unpaid").map((x) => String(x.customer_id))), [invoices]);
+  const billableCustIds = React.useMemo(() => new Set(invoices.filter(isBillable).map((x) => String(x.customer_id))), [invoices, billed]);
   const billableCusts = custs.filter((c) => billableCustIds.has(String(c.id)));
-  // unpaid invoices for the chosen customer (and not already cancelled)
-  const custInv = ed.customer_id ? invoices.filter((x) => String(x.customer_id) === String(ed.customer_id) && x.status === "unpaid") : [];
+  // unpaid invoices for the chosen customer that haven't already been put on a billing note
+  const custInv = ed.customer_id ? invoices.filter((x) => String(x.customer_id) === String(ed.customer_id) && isBillable(x)) : [];
   const chosen = custInv.filter((x) => ed.sel[x.invoice_no]);
   const total = chosen.reduce((a, x) => a + (Number(x.total) || 0), 0);
   async function save() {
