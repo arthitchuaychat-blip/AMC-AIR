@@ -218,7 +218,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           return (
           <div className={"card job-card" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
             <div className="job-card-head clickable-card" onClick={() => setView(x)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setView(x)}>
-              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span></div>
+              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span>{x.flowaccount_no && <span className="vat-badge" style={{ background: "#e0f0ff", color: "#1d4ed8" }} title="เลขที่เอกสารใน FlowAccount">FA: {x.flowaccount_no}</span>}</div>
               <div className="job-card-meta inv-meta">
                 <span className="inv-cust">{x.customerName || "-"}</span>
                 {x.createdByName && <span className="inv-by">👤 {x.createdByName}</span>}
