@@ -24,6 +24,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "quote", "edit");
+  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);
@@ -143,7 +144,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(q) { const lk = lockMsg(q); if (lk) return alert(lk); if (!await confirmDialog(`ลบ ${q.quote_no}?`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(q) { const lk = lockMsg(q); if (lk) return alert(lk); if (!await confirmDialog(`ลบถาวร ${q.quote_no}? (กู้คืนไม่ได้)`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancel(q) { const lk = lockMsg(q); if (lk) return alert(lk); if (!await confirmDialog(`ยกเลิก ${q.quote_no}? (เก็บประวัติไว้ · ตัดออกจากกำไร)`)) return; try { await setQuotationStatus(q.quote_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   async function approve(q) {
     if (!await confirmDialog(`ยืนยันอนุมัติใบเสนอราคา ${q.quote_no} ?`)) return;
     try { await setQuotationStatus(q.quote_no, "approved"); flash(`อนุมัติ ${q.quote_no} แล้ว ✓`); await load(); }
@@ -342,6 +344,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               </div>
               {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "quote", no: q.quote_no }} onOpen={onOpenDoc} />; })()}
               <div className="job-lines"><div className="job-actions">
+                {q.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
                 <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => duplicate(q)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
@@ -352,7 +355,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                   : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>))}
                 {q.status === "approved" && q.hasJob && <span className="job-badge b-green">✓ สร้างใบงานแล้ว</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
-                {canEdit && <button className="btn-ghost sm danger" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
+                {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => cancel(q)}>ยกเลิก</button>}
+                {canDelete && <button className="btn-ghost sm danger" disabled={q.hasInvoice || q.hasJob} title={(q.hasInvoice || q.hasJob) ? (lockMsg(q) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>
             </div>
           );

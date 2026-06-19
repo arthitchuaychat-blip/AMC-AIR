@@ -431,7 +431,7 @@ export async function listBoqs() {
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("quotations").select("quote_no,boq_no"),
+    supabase.from("quotations").select("quote_no,boq_no,status"),
   ]);
   if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const byBoq = {}; (it.data || []).forEach((x) => { (byBoq[x.boq_no] = byBoq[x.boq_no] || []).push(x); });
@@ -440,7 +440,7 @@ export async function listBoqs() {
   const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
-  const quoteByBoq = {}; (qt.data || []).forEach((q) => { if (q.boq_no && !quoteByBoq[q.boq_no]) quoteByBoq[q.boq_no] = q.quote_no; });
+  const quoteByBoq = {}; (qt.data || []).forEach((q) => { if (q.boq_no && q.status !== "cancelled" && !quoteByBoq[q.boq_no]) quoteByBoq[q.boq_no] = q.quote_no; });
   const cb = await _creators();
   return (b.data || []).map((bo) => {
     const items = byBoq[bo.boq_no] || [];
@@ -543,6 +543,14 @@ export async function deleteBoq(boq_no) {
   const { error } = await supabase.from("boqs").delete().eq("boq_no", boq_no);
   if (error) throw error;
 }
+export async function setBoqStatus(boq_no, status) {
+  const { error } = await supabase.from("boqs").update({ status }).eq("boq_no", boq_no);
+  if (error) throw error;
+}
+export async function setJobStatus(job_no, status) {
+  const { error } = await supabase.from("job_orders").update({ status }).eq("job_no", job_no);
+  if (error) throw error;
+}
 
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
 export async function listQuotations() {
@@ -552,7 +560,7 @@ export async function listQuotations() {
     supabase.from("customers").select("id,name,address,tax_id,type"),
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("job_orders").select("job_no,quote_no,scheduled_at"),
+    supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status"),
     supabase.from("invoices").select("quote_no,total,status"),
   ]);
   if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
@@ -563,7 +571,7 @@ export async function listQuotations() {
   const custType = Object.fromEntries((cu.data || []).map((c) => [c.id, c.type]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
-  const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
+  const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
   const billedByQ = {}; (inv.data || []).forEach((x) => { if (x.status !== "cancelled") billedByQ[x.quote_no] = (billedByQ[x.quote_no] || 0) + Number(x.total || 0); });
   const cb = await _creators();
   return (q.data || []).map((qo) => {
@@ -645,7 +653,7 @@ export async function listInvoices() {
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no,title"),
-    supabase.from("receipts").select("invoice_no"),
+    supabase.from("receipts").select("invoice_no,status"),
   ]);
   if (iv.error) throw iv.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
@@ -655,7 +663,7 @@ export async function listInvoices() {
   const cc = _firstContacts(ct.data);
   const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
   const titleByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.title]));
-  const receiptedInv = new Set((rc.data || []).map((r) => r.invoice_no));
+  const receiptedInv = new Set((rc.data || []).filter((r) => r.status !== "cancelled").map((r) => r.invoice_no));
   const cb = await _creators();
   return (iv.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];

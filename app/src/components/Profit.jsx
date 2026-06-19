@@ -27,6 +27,7 @@ export default function Profit() {
 
       const out = [];
       qs.forEach((q) => {
+        if (q.status === "cancelled") return;            // ใบเสนอราคาที่ยกเลิก → ตัดออกจากกำไร
         const jobs = jobsByQuote[q.quote_no] || [];
         if (!jobs.length) return;                                   // ยังไม่มีใบงาน → ยังไม่ใช่งานที่ทำ
         const active = jobs.filter((j) => j.status !== "cancelled");

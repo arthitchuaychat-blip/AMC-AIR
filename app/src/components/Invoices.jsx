@@ -23,6 +23,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenDoc, focus, onFocusConsumed, onGoChat }) {
   const canEdit = can(role, "invoice", "edit");
+  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   const [list, setList] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
@@ -301,7 +302,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 {canEdit && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintI(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" disabled={x.hasReceipt} title={lockMsg(x) || ""} onClick={() => cancel(x)}>ยกเลิก</button>}
-                {canEdit && <button className="btn-ghost sm danger" disabled={x.hasReceipt} title={lockMsg(x) || ""} onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
+                {canDelete && <button className="btn-ghost sm danger" disabled={x.hasReceipt} title={x.hasReceipt ? (lockMsg(x) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
               </div></div>
             </div>
           );

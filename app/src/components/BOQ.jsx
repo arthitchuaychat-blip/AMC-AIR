@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listBoqs, saveBoq, deleteBoq, listCustomers, listMaterialsLite, getCompanies, listDocLinks } from "../lib/api";
+import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, listDocLinks } from "../lib/api";
 import { fmtBaht, fmtNum, custCode, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -55,6 +55,7 @@ function SectionBlock({ sec, items, pool, onAdd, onSet, onDel, onMove }) {
 
 export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc, newForCustomer, onNewConsumed, onGoChat }) {
   const canEdit = can(role, "boq", "edit");
+  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);
@@ -125,9 +126,15 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   }
   async function del(bo) {
     const lk = lockMsg(bo); if (lk) return alert(lk);
-    if (!await confirmDialog(`ลบ ${bo.boq_no}?`)) return;
+    if (!await confirmDialog(`ลบถาวร ${bo.boq_no}? (ลบทิ้งทั้งหมด กู้คืนไม่ได้)`)) return;
     try { await deleteBoq(bo.boq_no); flash("ลบแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function cancel(bo) {
+    const lk = lockMsg(bo); if (lk) return alert(lk);
+    if (!await confirmDialog(`ยกเลิก ${bo.boq_no}? (เก็บประวัติไว้ ไม่ลบทิ้ง)`)) return;
+    try { await setBoqStatus(bo.boq_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
 
   // ---------- EDITOR ----------
@@ -223,14 +230,16 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
             </div>
             {(() => { const ch = docLinks.byQuote[bo.quoteNo] || {}; return <DocChips quoteNo={bo.quoteNo} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "boq", no: bo.boq_no }} onOpen={onOpenDoc} />; })()}
             <div className="job-lines"><div className="job-actions">
+              {bo.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
               <ChatCustomerLink role={role} customerId={bo.customer_id} onGoChat={onGoChat} />
               {onCreateQuote && (bo.hasQuote
                 ? <span className="job-badge b-green">✓ ออกใบเสนอราคาแล้ว</span>
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(bo); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canEdit && <button className="btn-ghost sm" onClick={() => duplicate(bo)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
-              {canEdit && <button className="btn-ghost sm" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
-              {canEdit && <button className="btn-ghost sm danger" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
+              {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+              {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => cancel(bo)}>ยกเลิก</button>}
+              {canDelete && <button className="btn-ghost sm danger" disabled={bo.hasQuote} title={bo.hasQuote ? (lockMsg(bo) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
             </div></div>
           </div>
         ))}

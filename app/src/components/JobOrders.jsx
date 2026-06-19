@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, createLinkedJob } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, createLinkedJob } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -22,6 +22,7 @@ const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id
 
 export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
+  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   const [openTl, setOpenTl] = React.useState(null);
   const [briefMy, setBriefMy] = React.useState(null); // { job, text } → Burmese job brief modal
   const [upBrief, setUpBrief] = React.useState(false);
@@ -185,7 +186,8 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(jo) { if (!await confirmDialog(`ลบใบงาน ${jo.job_no}?`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(jo) { if (!await confirmDialog(`ลบถาวรใบงาน ${jo.job_no}? (กู้คืนไม่ได้)`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancelJob(jo) { if (!await confirmDialog(`ยกเลิกใบงาน ${jo.job_no}? (เก็บประวัติไว้)`)) return; try { await setJobStatus(jo.job_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   // linked job orders (A/B/C) sharing a group — for assigning extra teams, with a shared timeline
   const groupKey = (j) => j.group_no || j.job_no;
   const siblingsOf = (j) => list.filter((x) => groupKey(x) === groupKey(j)).sort((a, b) => a.job_no.localeCompare(b.job_no));
@@ -443,7 +445,8 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 </button>
                 {canEdit && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
                 {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
-                {canEdit && <button className="btn-ghost sm danger" onClick={() => del(jo)}><UIcon name="trash" size={14} /> ลบ</button>}
+                {canEdit && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancelJob(jo)}>ยกเลิก</button>}
+                {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(jo)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div></div>
               {openTl === jo.job_no && <JobTimeline jobNo={jo.job_no} groupNo={groupKey(jo)} linked={!!jo.group_no} canPost={canEdit} author={me} flash={flash} />}
             </div>
@@ -505,7 +508,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 {jo.sales_photos?.length > 0 && <div className="tl-photos" style={{ marginTop: 8 }}>{jo.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>}
               </div>
               <div className="modal-foot">
-                {canEdit && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const j = jo; setViewing(null); del(j); }}><UIcon name="trash" size={15} /> ลบ</button>}
+                {canDelete && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const j = jo; setViewing(null); del(j); }}><UIcon name="trash" size={15} /> ลบ</button>}
                 {canEdit && <button className="btn-ghost" onClick={() => addLinked(jo)}><UIcon name="plus" size={15} /> ใบงานเชื่อม</button>}
                 {canEdit && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
               </div>

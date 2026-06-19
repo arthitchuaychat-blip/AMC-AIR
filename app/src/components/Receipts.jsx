@@ -22,6 +22,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenDoc, focus, onFocusConsumed, onGoChat }) {
   const canEdit = can(role, "receipt", "edit");
+  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -79,7 +80,8 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
     try { await saveReceipt(r); flash(r.status === "paid" ? `ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว` : `ออกใบเสร็จ (รอชำระเงิน) แล้ว`); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(x) { if (!await confirmDialog(`ลบใบเสร็จ ${x.receipt_no}? (ใบแจ้งหนี้จะกลับเป็นค้างชำระ)`)) return; try { await deleteReceipt(x.receipt_no, x.invoice_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(x) { if (!await confirmDialog(`ลบถาวรใบเสร็จ ${x.receipt_no}? (ใบแจ้งหนี้จะกลับเป็นค้างชำระ · กู้คืนไม่ได้)`)) return; try { await deleteReceipt(x.receipt_no, x.invoice_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancel(x) { if (!await confirmDialog(`ยกเลิกใบเสร็จ ${x.receipt_no}? (เก็บประวัติไว้ · ใบแจ้งหนี้กลับเป็นค้างชำระ)`)) return; try { await setReceiptStatus(x.receipt_no, "cancelled", x.invoice_no); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
 
   // ---------- EDITOR ----------
   if (ed) {
@@ -187,10 +189,12 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
             </div>
             {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={onOpenDoc} />; })()}
             <div className="job-lines"><div className="job-actions">
+              {x.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
               <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
               {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintR(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-              {canEdit && <button className="btn-ghost sm danger" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
+              {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
+              {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
             </div></div>
           </div>
           );
