@@ -94,12 +94,23 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
     if (!await confirmDialog(msg)) return;
     setFaBusy(x.receipt_no);
     try {
-      const items = (q?.items || []).map((it) => ({ sku: it.item_code || "", name: it.name, kind: it.kind, quantity: Number(it.qty) || 1, unitName: it.unit || "หน่วย", pricePerUnit: Number(it.unit_price) || 0, total: round2(Number(it.qty) * Number(it.unit_price)) }));
+      // full receipt (≈ whole quote) → detailed line items; partial installment → one summary line for งวดนี้
+      const isFull = q && Math.abs((Number(x.total) || 0) - (Number(q.grand) || 0)) < 1;
+      let items, discountAmount;
+      if (isFull) {
+        items = (q?.items || []).map((it) => ({ sku: it.item_code || "", name: it.name, kind: it.kind, quantity: Number(it.qty) || 1, unitName: it.unit || "หน่วย", pricePerUnit: Number(it.unit_price) || 0, total: round2(Number(it.qty) * Number(it.unit_price)) }));
+        discountAmount = Number(q?.discount) || 0;
+      } else {
+        const pct = q?.grand ? Math.round((Number(x.total) || 0) / q.grand * 100) : null;
+        const base = round2(Number(x.base) || 0);
+        items = [{ name: `รับชำระตามใบแจ้งหนี้ ${x.invoice_no || ""}${pct ? ` · งวดนี้ ${pct}%` : ""}`, quantity: 1, unitName: "งวด", pricePerUnit: base, total: base }];
+        discountAmount = 0;
+      }
       const res = await flowaccountSendDoc({
         docType: "tax-invoice", contactName: x.customerName, contactAddress: x.siteAddress || x.customerAddr,
         contactTaxId: x.customerTaxId, contactCode: custCode(x.customerCode), contactNumber: x.contactPhone,
         publishedOn: x.issue_date, dueDate: x.issue_date, isVat: !!q?.vat, isVatInclusive: false,
-        discountAmount: Number(q?.discount) || 0, items,
+        discountAmount, items,
         remarks: `อ้างอิงใบเสร็จ ${x.receipt_no}` + (x.wht_amt > 0 ? ` · หัก ณ ที่จ่าย ${x.wht_rate || 3}% = ${fmtBaht(x.wht_amt)} · รับสุทธิ ${fmtBaht(x.net)}` : ""),
       });
       setFaRes({ x, res });
