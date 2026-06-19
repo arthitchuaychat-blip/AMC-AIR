@@ -846,6 +846,9 @@ select.inp{cursor:pointer}
 /* billing notes */
 .bn-invlist{padding:8px 4px 2px;border-top:1px solid var(--line-2);margin-top:4px;display:flex;flex-direction:column;gap:6px}
 .bn-invrow{display:flex;align-items:center;gap:9px;font-size:13px}
+.bn-invsummary{display:flex;flex-direction:column;gap:4px;margin-top:5px}
+.bn-invchip{display:flex;align-items:center;flex-wrap:wrap;gap:7px;font-size:12.5px}
+.bn-invchip>b{font-weight:600}
 .bn-picklist{max-height:240px;overflow:auto;border:1px solid var(--line-2);border-radius:10px;padding:4px}
 .bn-pickrow{display:flex;align-items:center;gap:9px;padding:6px 6px;border-bottom:1px solid var(--surface-2);font-size:13px;cursor:pointer}
 .bn-pickrow:last-child{border-bottom:none}

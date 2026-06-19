@@ -66,6 +66,16 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
                 <span className="inv-cust">{b.customerName || "-"} · {custCode(b.customerCode)}</span>
                 <span className="inv-period">{b.invoices.length} ใบแจ้งหนี้{b.missing ? ` · (${b.missing} ใบถูกลบ)` : ""}</span>
                 <span className="inv-period">{b.issue_date || ""}</span>
+                <div className="bn-invsummary">
+                  {b.invoices.map((iv) => (
+                    <span className="bn-invchip" key={iv.invoice_no}>
+                      <b>{iv.invoice_no}</b>
+                      <span className="jo-dim">งวด {iv.installment} · {Math.round(iv.pct)}%</span>
+                      <span className={"job-badge " + (iv.status === "paid" ? "b-green" : iv.status === "cancelled" ? "b-red" : "b-amber")}>{iv.status === "paid" ? "จ่ายแล้ว" : iv.status === "cancelled" ? "ยกเลิก" : "ค้างชำระ"}</span>
+                      {iv.hasReceipt && <span className="job-badge b-green">✓ ออกใบเสร็จแล้ว</span>}
+                    </span>
+                  ))}
+                </div>
               </div>
               <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(b.issue_date || b.created_at)}</span><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></div>
             </div>
