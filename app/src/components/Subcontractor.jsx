@@ -131,10 +131,10 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
               <div className="sub-job-main">
                 <div><button type="button" className="sub-job-link" onClick={() => onOpenDoc && onOpenDoc("job", j.job_no)} title="เปิดใบงาน · ดูความเคลื่อนไหว">{j.job_no}</button> <span className={"job-badge " + st.c}>{st.t}</span>
                   {q?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}
-                  <span className={"job-badge " + ls.c}>{ls.t}</span>
                   {j.is_claim && <span className="vat-badge vat-off">เคลม</span>}</div>
                 <div className="jo-dim">{j.customerName || "-"} · ทีม {teamById[j.assigned_team]?.name || j.assigned_team} · {j.title || "งาน"}</div>
               </div>
+              <div className="sub-job-state"><span className={"job-badge " + ls.c}>{ls.t}</span></div>
               <div className="sub-job-amt">
                 <span>มูลค่างาน <b>{fmtBaht(q?.afterDisc || 0)}</b></span>
                 <span>ค่าแรง <b className={j.labor_total > 0 ? "" : "hr-warn"}>{j.labor_total > 0 ? fmtBaht(j.labor_total) : "ยังไม่กรอก"}</b></span>

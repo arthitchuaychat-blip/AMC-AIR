@@ -766,8 +766,10 @@ select.inp{cursor:pointer}
 .sub-job-main{flex:1;min-width:0}
 .sub-job-link{border:none;background:transparent;color:var(--primary);font-weight:800;font-size:13.5px;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px}
 .sub-job-link:hover{opacity:.8}
+.sub-job-state{display:flex;justify-content:flex-end;min-width:170px}
 .sub-job-amt{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink-3);text-align:right;min-width:130px}
 .sub-job-amt b{color:var(--ink)}
+@media (max-width:760px){.sub-job-state{min-width:0}}
 .sub-lab-head,.sub-lab-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;border-bottom:1px solid var(--surface-2)}
 .sub-lab-head{font-size:11.5px;color:var(--ink-3);font-weight:700}
 .sub-lab-name{flex:1;min-width:0}
