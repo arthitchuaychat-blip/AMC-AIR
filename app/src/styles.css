@@ -808,7 +808,19 @@ select.inp{cursor:pointer}
 .ps-tot{display:flex;justify-content:space-between;padding:3px 6px;font-size:13px}
 .ps-net{border-top:1px solid #1f2733;margin-top:4px;padding-top:7px;font-size:15px}
 .ps-net b{color:#16a34a}
+.ps-remain{color:#b45309}
+.ps-remain b{color:#b45309}
 .ps-status{margin-top:8px;font-size:11.5px;color:#6b7280}
+/* per-job blocks on the slip (job no / customer / phone / address / per-line WHT) */
+.ps-jobs{display:flex;flex-direction:column;gap:7px;margin-bottom:9px}
+.ps-job{border:1px solid #eef1f5;border-radius:8px;padding:7px 9px}
+.ps-job-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ps-job-no{font-weight:700;font-size:13px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.ps-job-amt{font-size:14px;font-variant-numeric:tabular-nums}
+.ps-job-sub{font-size:11.5px;color:#6b7280;margin-top:2px}
+.ps-job-split{font-size:11.5px;color:#b45309;font-weight:600;margin-top:3px}
+.ps-wht-tag{font-size:10px;font-weight:700;color:#9a3412;background:#ffedd5;border:1px solid #fed7aa;border-radius:5px;padding:1px 6px}
+.ps-nowht-tag{font-size:10px;font-weight:700;color:#3f6212;background:#ecfccb;border:1px solid #d9f99d;border-radius:5px;padding:1px 6px}
 .ps-lead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:10px}
 .ps-lead-info{font-size:13px;color:var(--ink-2)}
 .ps-lead-info a{color:#1f74e0;text-decoration:none;font-weight:600}

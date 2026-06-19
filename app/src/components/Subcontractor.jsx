@@ -216,6 +216,7 @@ function PayTab({ jobs, quoteBy, subTeams, teamById, payouts, onReload, flash })
   const payable = jobs.filter((j) => j.labor_confirmed && remaining(j) > 0.01);
   const byTeam = {}; payable.forEach((j) => { (byTeam[j.assigned_team] = byTeam[j.assigned_team] || []).push(j); });
   const teamName = (id) => teamById[id]?.name || id;
+  const jobByNo = React.useMemo(() => Object.fromEntries(jobs.map((j) => [j.job_no, j])), [jobs]);
 
   async function markPaid(p) {
     if (!await confirmDialog(`ยืนยันว่าจ่ายเงินแล้ว ${fmtBaht(p.net)} ?`)) return;
@@ -259,7 +260,7 @@ function PayTab({ jobs, quoteBy, subTeams, teamById, payouts, onReload, flash })
         </div>
       </div>
 
-      {slip && <PayoutSlip payout={slip} team={teamById[slip.team] || { id: slip.team, name: slip.team }} onClose={() => setSlip(null)} flash={flash} />}
+      {slip && <PayoutSlip payout={slip} team={teamById[slip.team] || { id: slip.team, name: slip.team }} jobByNo={jobByNo} onClose={() => setSlip(null)} flash={flash} />}
     </>
   );
 }
@@ -333,13 +334,25 @@ function PayTeam({ team, list, quoteBy, flash, onCreated }) {
 }
 
 // ---------- payout slip: download (image/pdf) + send to a team chat room ----------
-function PayoutSlip({ payout, team, onClose, flash }) {
+function PayoutSlip({ payout, team, jobByNo = {}, onClose, flash }) {
   const ref = React.useRef(null);
   const [rooms, setRooms] = React.useState([]);
   const [roomId, setRoomId] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => { listChatRooms().then((r) => { setRooms(r); setRoomId(r[0]?.id || ""); }).catch(() => {}); }, []);
-  const lines = payout.lines || (payout.job_nos || []).map((n) => ({ job_no: n, amount: null, customerName: null, vat: null }));
+  const rawLines = payout.lines || (payout.job_nos || []).map((n) => ({ job_no: n, amount: null, customerName: null, vat: null }));
+  // enrich each line with live job info (phone/address) + this-round / remaining split
+  const lines = rawLines.map((l) => {
+    const j = jobByNo[l.job_no] || {};
+    const full = round2(Number(l.total) || Number(j.labor_total) || 0);
+    const thisRound = l.amount == null ? null : round2(Number(l.amount) || 0);
+    const paidAll = round2(Number(j.labor_paid_amt) || (thisRound || 0));   // cumulative incl. this round
+    const remAfter = round2(Math.max(0, full - paidAll));
+    return { ...l, customerName: l.customerName || j.customerName || null, phone: j.contact_phone || null, address: j.address || null,
+      title: j.title || null, full, thisRound, remAfter, partial: thisRound != null && (remAfter > 0.01 || thisRound < full - 0.01) };
+  });
+  const totalRemaining = round2(lines.reduce((a, l) => a + (l.remAfter || 0), 0));
+  const anyPartial = lines.some((l) => l.partial);
 
   async function capture() {
     return html2canvas(ref.current, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
@@ -401,16 +414,23 @@ function PayoutSlip({ payout, team, onClose, flash }) {
           <div ref={ref} className="payout-slip">
             <div className="ps-head"><b>ใบจ่ายค่าแรงช่างซัพ</b><span>{fmtDate(payout.created_at)}</span></div>
             <div className="ps-team">ทีม: {team.name}{team.lead ? ` · หัวหน้า ${team.lead}` : ""}{team.phone ? ` · ${team.phone}` : ""}{team.tax_id ? ` · เลขผู้เสียภาษี ${team.tax_id}` : ""}{team.bank_info ? <div className="ps-bank">บัญชี: {team.bank_info}</div> : null}</div>
-            <table className="ps-table"><thead><tr><th>ใบงาน</th><th>ลูกค้า</th><th className="r">ค่าแรง</th></tr></thead>
-              <tbody>
-                {lines.map((l, i) => (
-                  <tr key={i}><td>{l.job_no}{l.vat ? " (VAT)" : ""}</td><td>{l.customerName || "-"}</td><td className="r">{l.amount == null ? "-" : fmtBaht(l.amount)}</td></tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="ps-tot"><span>รวมค่าแรง</span><b>{fmtBaht(payout.gross)}</b></div>
-            <div className="ps-tot"><span>หัก ณ ที่จ่าย {payout.wht_rate || WHT_RATE}%</span><b>−{fmtBaht(payout.wht_amt)}</b></div>
-            <div className="ps-tot ps-net"><span>จ่ายสุทธิ</span><b>{fmtBaht(payout.net)}</b></div>
+            <div className="ps-jobs">
+              {lines.map((l, i) => (
+                <div className="ps-job" key={i}>
+                  <div className="ps-job-top">
+                    <span className="ps-job-no">{l.job_no}{l.vat ? <span className="ps-wht-tag">หัก ณ ที่จ่าย 3%</span> : <span className="ps-nowht-tag">ไม่หัก ณ ที่จ่าย</span>}</span>
+                    <b className="ps-job-amt">{l.thisRound == null ? "-" : fmtBaht(l.thisRound)}</b>
+                  </div>
+                  <div className="ps-job-sub">{l.customerName || "-"}{l.title ? ` · ${l.title}` : ""}</div>
+                  {(l.phone || l.address) && <div className="ps-job-sub">{l.phone ? `📞 ${l.phone}` : ""}{l.phone && l.address ? " · " : ""}{l.address ? `📍 ${l.address}` : ""}</div>}
+                  {l.partial && <div className="ps-job-split">จ่ายงวดนี้ {fmtBaht(l.thisRound)} · คงเหลือค้างจ่าย {fmtBaht(l.remAfter)} (ค่าแรงเต็ม {fmtBaht(l.full)})</div>}
+                </div>
+              ))}
+            </div>
+            <div className="ps-tot"><span>รวมค่าแรงงวดนี้</span><b>{fmtBaht(payout.gross)}</b></div>
+            <div className="ps-tot"><span>หัก ณ ที่จ่าย {payout.wht_rate || WHT_RATE}% (เฉพาะงาน VAT)</span><b>−{fmtBaht(payout.wht_amt)}</b></div>
+            <div className="ps-tot ps-net"><span>ยอดที่ต้องจ่ายงวดนี้ (สุทธิ)</span><b>{fmtBaht(payout.net)}</b></div>
+            {anyPartial && totalRemaining > 0.01 && <div className="ps-tot ps-remain"><span>คงเหลือค้างจ่าย (ยกไปงวดหน้า)</span><b>{fmtBaht(totalRemaining)}</b></div>}
             <div className="ps-status">สถานะ: {payout.status === "paid" ? `จ่ายแล้ว ${fmtDate(payout.paid_at)}` : "รอจ่าย"}</div>
           </div>
           {/* ส่งตรงให้หัวหน้าช่างซัพคนนี้ */}
