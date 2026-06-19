@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks, listCustomers } from "../lib/api";
-import { fmtBaht2, custCode, round2, matchText, matchPhone } from "../lib/format";
+import { fmtBaht2, custCode, round2, matchText, matchPhone, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
@@ -300,7 +300,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                   {x.createdByName && <span className="inv-by">👤 {x.createdByName}</span>}
                   <span className="inv-hint">ดูรายการ ›</span>
                 </div>
-                <div className="job-card-cost"><span>ยอดงวดนี้</span><b>{fmtBaht(x.total)}</b></div>
+                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(x.issue_date || x.created_at)}</span><span>ยอดงวดนี้</span><b>{fmtBaht(x.total)}</b></div>
               </div>
               {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
               {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "invoice", no: x.invoice_no }} onOpen={onOpenDoc} />; })()}

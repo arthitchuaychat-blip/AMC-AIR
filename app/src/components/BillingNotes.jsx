@@ -1,7 +1,7 @@
 import React from "react";
 import { listBillingNotes, saveBillingNote, setBillingNoteStatus, deleteBillingNote, listInvoices, listCustomers, getCompanies } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
-import { fmtBaht, custCode } from "../lib/format";
+import { fmtBaht, custCode, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
@@ -63,7 +63,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
                 <span className="inv-period">{b.invoices.length} ใบแจ้งหนี้{b.missing ? ` · (${b.missing} ใบถูกลบ)` : ""}</span>
                 <span className="inv-period">{b.issue_date || ""}</span>
               </div>
-              <div className="job-card-cost"><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></div>
+              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(b.issue_date || b.created_at)}</span><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></div>
             </div>
             <div className="job-lines"><div className="job-actions">
               <ChatCustomerLink role={role} customerId={b.customer_id} onGoChat={onGoChat} />

@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, listDocLinks } from "../lib/api";
-import { fmtBaht, fmtNum, custCode, matchText, matchPhone } from "../lib/format";
+import { fmtBaht, fmtNum, custCode, matchText, matchPhone, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -229,7 +229,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
                 {bo.createdByName && <span className="inv-by">👤 {bo.createdByName}</span>}
                 <span className="inv-hint">{bo.items.length} รายการ</span>
               </div>
-              <div className="job-card-cost"><span>ต้นทุนรวม</span><b>{fmtBaht(bo.total)}</b></div>
+              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(bo.created_at)}</span><span>ต้นทุนรวม</span><b>{fmtBaht(bo.total)}</b></div>
             </div>
             {(() => { const ch = docLinks.byQuote[bo.quoteNo] || {}; return <DocChips quoteNo={bo.quoteNo} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "boq", no: bo.boq_no }} onOpen={onOpenDoc} />; })()}
             <div className="job-lines"><div className="job-actions">

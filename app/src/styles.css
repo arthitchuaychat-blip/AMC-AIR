@@ -819,6 +819,7 @@ select.inp{cursor:pointer}
 .gcal-more{margin-top:6px}
 .gcal-more summary{font-size:12.5px;color:var(--primary);cursor:pointer;padding:4px 0}
 .gcal-more .gcal-link{margin-top:6px}
+.doc-date{font-size:11px;color:var(--ink-3);font-weight:600;white-space:nowrap}
 /* billing notes */
 .bn-invlist{padding:8px 4px 2px;border-top:1px solid var(--line-2);margin-top:4px;display:flex;flex-direction:column;gap:6px}
 .bn-invrow{display:flex;align-items:center;gap:9px;font-size:13px}

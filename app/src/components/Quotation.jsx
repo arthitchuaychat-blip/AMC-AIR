@@ -9,7 +9,7 @@ import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
-import { fmtBaht, custCode, matchText, matchPhone } from "../lib/format";
+import { fmtBaht, custCode, matchText, matchPhone, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -339,7 +339,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                   <span className="inv-cust">{q.title || "ใบเสนอราคา"}</span>
                   <span className="inv-hint">{q.items.length} รายการ</span>
                 </div>
-                <div className="job-card-cost"><span>ยอดสุทธิ</span><b>{fmtBaht(q.grand)}</b></div>
+                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(q.issue_date || q.created_at)}</span><span>ยอดสุทธิ</span><b>{fmtBaht(q.grand)}</b></div>
               </div>
               <div className="jo-info">
                 <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{q.customerName || "ไม่ระบุลูกค้า"}</b>{q.customerAddr ? <span className="jo-dim"> · {q.customerAddr}</span> : null}{q.createdByName ? <span className="jo-dim"> · 👤 สร้างโดย {q.createdByName}</span> : null}</div>

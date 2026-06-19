@@ -36,6 +36,13 @@ export const UNITS = ["เมตร", "ชิ้น", "ตัว", "ชุด", 
 // auto customer code derived from the DB id (sequential, unique, no extra column)
 export const custCode = (id) => (id ? "C" + String(id).padStart(6, "0") : "");
 
+// short Thai document date (accepts a YYYY-MM-DD date or an ISO timestamp)
+export const fmtDocDate = (s) => {
+  if (!s) return "";
+  const d = new Date(typeof s === "string" && s.length === 10 ? s + "T00:00:00" : s);
+  return isNaN(d) ? "" : d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
+};
+
 // round to 2 decimals (money) — avoids accumulating rounding leftovers
 export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 

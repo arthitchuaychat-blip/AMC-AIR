@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks } from "../lib/api";
-import { fmtBaht2, custCode, round2, matchText } from "../lib/format";
+import { fmtBaht2, custCode, round2, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
@@ -189,7 +189,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
                 {x.createdByName && <span className="inv-by">👤 {x.createdByName}</span>}
                 <span className="inv-hint">ดูรายการ ›</span>
               </div>
-              <div className="job-card-cost"><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
+              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(x.issue_date || x.created_at)}</span><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
             </div>
             {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={onOpenDoc} />; })()}
             <div className="job-lines"><div className="job-actions">

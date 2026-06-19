@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterials } from "../lib/api";
-import { fmtBaht, fmtNum, matchText } from "../lib/format";
+import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -177,7 +177,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               <div className="job-card-head" style={{ cursor: "default" }}>
                 <div className="job-card-id"><span className="job-no">{po.po_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
                 <div className="job-card-meta">{po.supplier || "ไม่ระบุร้าน"} · {po.items.length} รายการ{po.note ? ` · ${po.note}` : ""}</div>
-                <div className="job-card-cost"><span>มูลค่ารวม</span><b>{fmtBaht(po.total)}</b></div>
+                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.created_at)}</span><span>มูลค่ารวม</span><b>{fmtBaht(po.total)}</b></div>
               </div>
               <div className="job-lines">
                 {po.items.map((it) => { const m = matMap[it.material_code]; return (
