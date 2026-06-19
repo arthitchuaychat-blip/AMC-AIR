@@ -58,7 +58,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-20·ใบเสร็จ: ป้าย FA ใหญ่ขึ้น+ปุ่มสีเขียวเมื่อส่งแล้ว+ยอดก่อน/หัก/หลังหัก-v117";
+const BUILD = "2026-06-20·ช่างซัพ: ตัวกรองทีม+สถานะงาน ในแท็บค่าแรง/งาน-v118";
 
 function SetupNotice() {
   return (

@@ -68,7 +68,7 @@ export default function Subcontractor({ role, onOpenDoc }) {
             style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
         </div>
 
-        {tab === "labor" && <LaborTab jobs={subJobs} quoteBy={quoteBy} teamById={teamById} canLabor={canLabor} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
+        {tab === "labor" && <LaborTab jobs={subJobs} quoteBy={quoteBy} teamById={teamById} subTeams={subTeams} canLabor={canLabor} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
         {tab === "pay" && canPay && <PayTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} teamById={teamById} payouts={payouts} onReload={load} flash={flash} />}
         {tab === "score" && <ScoreTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} matCost={matCost} payouts={payouts} />}
       </>}
@@ -79,10 +79,16 @@ export default function Subcontractor({ role, onOpenDoc }) {
 }
 
 // ---------- LABOR per job (fill → confirm) ----------
-function LaborTab({ jobs, quoteBy, teamById, canLabor, onReload, flash, onOpenDoc }) {
+function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash, onOpenDoc }) {
   const [edit, setEdit] = React.useState(null);
   const [busy, setBusy] = React.useState(null);
+  const [teamF, setTeamF] = React.useState("all");
+  const [statusF, setStatusF] = React.useState("all");
   const STATUS = { done: { t: "เสร็จ", c: "b-green" }, in_progress: { t: "กำลังทำ", c: "b-amber" }, scheduled: { t: "นัดแล้ว", c: "b-blue" }, pending: { t: "รอจ่ายงาน", c: "b-grey" }, awaiting_approval: { t: "รออนุมัติ", c: "b-purple" }, reschedule: { t: "นัดเพิ่ม", c: "b-orange" } };
+  // only show team / status options that actually appear in the current job list
+  const teamOpts = (subTeams || []).filter((t) => jobs.some((j) => j.assigned_team === t.id));
+  const statusOpts = [["all", "ทุกสถานะ"], ...Object.entries(STATUS).filter(([k]) => jobs.some((j) => j.status === k)).map(([k, v]) => [k, v.t])];
+  const shown = jobs.filter((j) => (teamF === "all" || j.assigned_team === teamF) && (statusF === "all" || j.status === statusF));
 
   async function confirm(j, val) {
     setBusy(j.job_no);
@@ -103,9 +109,20 @@ function LaborTab({ jobs, quoteBy, teamById, canLabor, onReload, flash, onOpenDo
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">ค่าแรงเหมาต่องาน</div><div className="sec-sub">กรอกค่าแรงรายบรรทัด (ดีฟอลต์ = % ของราคาขาย) → เมื่องาน “เสร็จ” กด “ยืนยันค่าแรง” เพื่อส่งไปหน้ารอจ่าย</div></div></div>
+      <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
+        <select className="inp" style={{ width: "auto", flex: "none" }} value={teamF} onChange={(e) => setTeamF(e.target.value)}>
+          <option value="all">ทุกทีมช่างซัพ</option>
+          {teamOpts.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        {statusOpts.map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
+      </div>
       <div className="set-list">
         {jobs.length === 0 && <div className="empty sm">ยังไม่มีงานของทีมช่างซัพ</div>}
-        {jobs.map((j) => {
+        {jobs.length > 0 && shown.length === 0 && <div className="empty sm">ไม่พบงานตามตัวกรอง</div>}
+        {shown.map((j) => {
           const q = quoteBy[j.quote_no]; const st = STATUS[j.status] || STATUS.pending; const ls = state(j);
           const locked = (Number(j.labor_paid_amt) || 0) > 0;        // already in a payout → can't edit/unconfirm
           const canConfirm = canLabor && j.status === "done" && j.labor_total > 0 && !j.labor_confirmed;
