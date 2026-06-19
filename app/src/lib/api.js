@@ -1183,6 +1183,36 @@ export async function cancelSubPayout(id) {
   const { error: delErr } = await supabase.from("sub_payouts").delete().eq("id", id);
   if (delErr) throw delErr;
 }
+// edit an existing payout's per-job amounts (accounting correction; works on paid ones too).
+// recomputes gross/wht/net and adjusts each job's cumulative labor_paid_amt by the delta.
+export async function updateSubPayout({ id, lines, whtRate }) {
+  const { data: old, error: e0 } = await supabase.from("sub_payouts").select("id,lines,job_nos,wht_rate").eq("id", id).single();
+  if (e0) throw e0;
+  const oldAmt = Object.fromEntries((old.lines || []).map((l) => [l.job_no, Number(l.amount) || 0]));
+  const ls = (lines || []).filter((l) => (Number(l.amount) || 0) > 0);
+  if (!ls.length) throw new Error("ต้องมีอย่างน้อย 1 รายการที่มียอด");
+  const rate = whtRate != null ? Number(whtRate) : (Number(old.wht_rate) || 0);
+  const jobNos = ls.map((l) => l.job_no);
+  const gross = _r2(ls.reduce((a, l) => a + (Number(l.amount) || 0), 0));
+  const vatBase = _r2(ls.filter((l) => l.vat).reduce((a, l) => a + (Number(l.amount) || 0), 0));
+  const whtAmt = _r2(vatBase * rate / 100);
+  const net = _r2(gross - whtAmt);
+  const { error } = await supabase.from("sub_payouts").update({ lines: ls, job_nos: jobNos, gross, wht_rate: rate, wht_amt: whtAmt, net }).eq("id", id);
+  if (error) throw error;
+  // re-balance each job's cumulative paid amount by (new − old) for this payout
+  const newAmt = Object.fromEntries(ls.map((l) => [l.job_no, Number(l.amount) || 0]));
+  const allJobs = [...new Set([...Object.keys(oldAmt), ...jobNos])];
+  const { data: jrows } = await supabase.from("job_orders").select("job_no,labor_total,labor_paid_amt").in("job_no", allJobs);
+  const cur = Object.fromEntries((jrows || []).map((j) => [j.job_no, j]));
+  for (const jn of allJobs) {
+    const j = cur[jn]; if (!j) continue;
+    const delta = _r2((newAmt[jn] || 0) - (oldAmt[jn] || 0));
+    const paid = Math.max(0, _r2((Number(j.labor_paid_amt) || 0) + delta));
+    const done = paid >= (Number(j.labor_total) || 0) - 0.01;
+    await supabase.from("job_orders").update({ labor_paid_amt: paid, labor_paid: done }).eq("job_no", jn);
+  }
+  return id;
+}
 export async function deleteTeam(id) {
   const { error } = await supabase.from("teams").delete().eq("id", id);
   if (error) throw error;

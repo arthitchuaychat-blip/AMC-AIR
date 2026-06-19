@@ -1,7 +1,7 @@
 import React from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage } from "../lib/api";
+import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2 } from "../lib/format";
 import { UIcon } from "../icons";
@@ -10,6 +10,7 @@ const TABS = [["labor", "ค่าแรง/งาน"], ["pay", "ค่าแ�
 const WHT_RATE = 3;
 const PAY_ROLES = ["admin", "exec", "finance"];        // who can create/confirm payments (money out)
 const LABOR_ROLES = ["admin", "exec", "finance", "sales"]; // who can fill + confirm labor
+const EDIT_PAYOUT_ROLES = ["admin", "finance"];        // ธุรการ + บัญชี: แก้ไขใบจ่าย (รวมที่จ่ายแล้ว)
 
 // labor lines default to rate% of each line's sale amount (accounting can edit)
 function buildLines(items, rate) {
@@ -68,7 +69,7 @@ export default function Subcontractor({ role, onOpenDoc }) {
         </div>
 
         {tab === "labor" && <LaborTab jobs={subJobs} quoteBy={quoteBy} teamById={teamById} subTeams={subTeams} canLabor={canLabor} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
-        {tab === "pay" && canPay && <PayTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} teamById={teamById} payouts={payouts} onReload={load} flash={flash} />}
+        {tab === "pay" && canPay && <PayTab role={role} jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} teamById={teamById} payouts={payouts} onReload={load} flash={flash} />}
         {tab === "score" && <ScoreTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} matCost={matCost} payouts={payouts} />}
       </>}
 
@@ -209,9 +210,11 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
 }
 
 // ---------- ค่าแรงรอจ่าย (split payments) ----------
-function PayTab({ jobs, quoteBy, subTeams, teamById, payouts, onReload, flash }) {
+function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, flash }) {
   const [slip, setSlip] = React.useState(null); // payout to show as a slip
+  const [editPo, setEditPo] = React.useState(null); // payout being edited
   const [busy, setBusy] = React.useState(false);
+  const canEditPayout = EDIT_PAYOUT_ROLES.includes(role);
   // confirmed + still owing
   const payable = jobs.filter((j) => j.labor_confirmed && remaining(j) > 0.01);
   const byTeam = {}; payable.forEach((j) => { (byTeam[j.assigned_team] = byTeam[j.assigned_team] || []).push(j); });
@@ -252,6 +255,7 @@ function PayTab({ jobs, quoteBy, subTeams, teamById, payouts, onReload, flash })
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
                 {p.status === "paid" ? <span className="job-badge b-green">จ่ายแล้ว</span> : <span className="job-badge b-orange">รอจ่าย</span>}
                 <button className="btn-ghost sm" onClick={() => setSlip(p)}><UIcon name="catalog" size={14} /> สลิป/ส่ง</button>
+                {canEditPayout && <button className="btn-ghost sm" disabled={busy} title="แก้ไขยอดค่าแรงจ่าย (ธุรการ/บัญชี)" onClick={() => setEditPo(p)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {p.status !== "paid" && <button className="btn-primary sm ok" disabled={busy} onClick={() => markPaid(p)}>บันทึกจ่ายเงิน</button>}
                 {p.status !== "paid" && <button className="btn-ghost sm danger" disabled={busy} onClick={() => cancel(p)}>ยกเลิก</button>}
               </div>
@@ -261,7 +265,55 @@ function PayTab({ jobs, quoteBy, subTeams, teamById, payouts, onReload, flash })
       </div>
 
       {slip && <PayoutSlip payout={slip} team={teamById[slip.team] || { id: slip.team, name: slip.team }} jobByNo={jobByNo} onClose={() => setSlip(null)} flash={flash} />}
+      {editPo && <EditPayout payout={editPo} team={teamById[editPo.team] || { id: editPo.team, name: editPo.team }} jobByNo={jobByNo} onClose={() => setEditPo(null)} onSaved={() => { setEditPo(null); onReload(); }} flash={flash} />}
     </>
+  );
+}
+
+// แก้ไขยอดค่าแรงจ่ายของแต่ละงานในใบจ่าย (ธุรการ/บัญชี) — รวมใบที่จ่ายแล้ว
+function EditPayout({ payout, team, jobByNo = {}, onClose, onSaved, flash }) {
+  const init = (payout.lines || []).map((l) => ({ ...l, amount: Number(l.amount) || 0 }));
+  const [lines, setLines] = React.useState(init);
+  const [busy, setBusy] = React.useState(false);
+  const setAmt = (i, v) => setLines((ls) => ls.map((l, j) => j === i ? { ...l, amount: Number(v) || 0 } : l));
+  const gross = round2(lines.reduce((a, l) => a + (Number(l.amount) || 0), 0));
+  const vatBase = round2(lines.filter((l) => l.vat).reduce((a, l) => a + (Number(l.amount) || 0), 0));
+  const whtAmt = round2(vatBase * WHT_RATE / 100);
+  const net = round2(gross - whtAmt);
+  async function save() {
+    if (gross <= 0) return flash("ต้องมียอดอย่างน้อย 1 รายการ", true);
+    if (!await confirmDialog(`บันทึกแก้ไขใบจ่าย? รวม ${fmtBaht(gross)} − หัก ${fmtBaht(whtAmt)} = สุทธิ ${fmtBaht(net)}\n(ยอดจ่ายสะสม/ค้างจ่ายของงานจะถูกปรับตาม)`)) return;
+    setBusy(true);
+    try { await updateSubPayout({ id: payout.id, lines, whtRate: WHT_RATE }); flash("แก้ไขใบจ่ายแล้ว ✓"); onSaved(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 560 }}>
+        <div className="modal-head"><div className="modal-title">แก้ไขใบจ่ายค่าแรง · ทีม {team.name}{payout.status === "paid" ? <span style={{ color: "var(--down)" }}> · จ่ายแล้ว</span> : ""}</div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <p className="page-sub" style={{ marginTop: 0 }}>ปรับยอดค่าแรงที่จ่ายต่อรายการงาน · หัก ณ ที่จ่าย 3% เฉพาะงาน VAT · ยอดจ่ายสะสมของงานจะถูกปรับให้อัตโนมัติ</p>
+          {lines.map((l, i) => {
+            const j = jobByNo[l.job_no] || {};
+            const full = round2(Number(l.total) || Number(j.labor_total) || 0);
+            return (
+              <div className="sub-pay-job" key={l.job_no} style={{ alignItems: "center" }}>
+                <span className="sub-pay-no">{l.job_no} {l.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}</span>
+                <span className="jo-dim" style={{ flex: 1 }}>{l.customerName || j.customerName || "-"}{full > 0 ? ` · เต็ม ${fmtBaht(full)}` : ""}</span>
+                <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span><input type="number" min="0" value={l.amount} onChange={(e) => setAmt(i, e.target.value)} /></span>
+              </div>
+            );
+          })}
+          <div className="sub-lab-total" style={{ marginTop: 10 }}><span>รวมค่าแรงงวดนี้</span><b>{fmtBaht(gross)}</b></div>
+          <div className="ps-tot"><span>หัก ณ ที่จ่าย {WHT_RATE}% (เฉพาะงาน VAT)</span><b>−{fmtBaht(whtAmt)}</b></div>
+          <div className="sub-lab-total"><span>จ่ายสุทธิ</span><b style={{ color: "#16a34a" }}>{fmtBaht(net)}</b></div>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy || gross <= 0} onClick={save}>บันทึกการแก้ไข</button></div>
+      </div>
+    </div>
   );
 }
 
