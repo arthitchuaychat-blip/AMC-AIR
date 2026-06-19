@@ -833,6 +833,17 @@ select.inp{cursor:pointer}
 .jo-sched-item:first-of-type{border-top:none}
 .jo-sched-slot{font-weight:600;color:var(--ink-2)}
 .jo-sched-job{color:var(--ink-3)}
+.jo-av-list{display:flex;flex-direction:column;gap:7px}
+.jo-av-day{border-bottom:1px solid var(--line-2);padding-bottom:7px}
+.jo-av-date{font-weight:700;font-size:12px;margin-bottom:5px}
+.jo-av-slots{display:flex;flex-wrap:wrap;gap:5px}
+.jo-av-chip{font-family:inherit;font-size:11px;border-radius:8px;padding:4px 9px;border:1px solid;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jo-av-chip.free{background:#f0fbf4;border-color:#bfe6cd;color:#16794a;cursor:pointer}
+.jo-av-chip.free:hover{background:#dbf3e4}
+.jo-av-chip.full{background:#eef5ff;border-color:#cfe0ff;color:#1d4ed8;cursor:pointer}
+.jo-av-chip.full:hover{background:#e0ecff}
+.jo-av-chip.booked{background:#fbeaea;border-color:#f3c4c4;color:#b42318;cursor:default}
+.jo-av-chip.mine{background:#fff7ed;border-color:#fed7aa;color:#c2410c}
 @media(max-width:1080px){.jo-edit-layout{flex-direction:column}.jo-sched-panel{position:static;max-height:none;width:100%;flex:none}}
 .jo-datefilter{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px 8px}
 .jo-datefilter .inp{border:none;padding:4px 4px;font-size:12.5px;width:128px;background:transparent}

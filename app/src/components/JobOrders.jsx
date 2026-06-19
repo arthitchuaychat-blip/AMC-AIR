@@ -113,6 +113,14 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   }
   const setVisit = (i, k, v) => setEd((e) => ({ ...e, visits: e.visits.map((r, j) => j === i ? { ...r, [k]: v } : r) }));
   const addVisit = () => setEd((e) => ({ ...e, visits: [...e.visits, blankVisit()] }));
+  // tap a free slot in the side panel → fill the first empty รอบ, else add a new รอบ
+  const pickSlot = (date, slot) => setEd((e) => {
+    const visits = [...(e.visits || [])];
+    const idx = visits.findIndex((v) => !v.date && v.status !== "done");
+    if (idx >= 0) visits[idx] = { ...visits[idx], date, slot };
+    else visits.push({ ...blankVisit(), date, slot });
+    return { ...e, visits };
+  });
   const delVisit = (i) => setEd((e) => ({ ...e, visits: e.visits.length > 1 ? e.visits.filter((_, j) => j !== i) : e.visits }));
   async function onBriefFiles(e) {
     const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
@@ -313,7 +321,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึกใบงาน</button>
           </div>
         </div>
-        <TeamSchedulePanel teamId={ed.assigned_team} team={teams.find((t) => t.id === ed.assigned_team)} jobs={list} edVisits={ed.visits} excludeJobNo={ed.job_no} />
+        <TeamSchedulePanel teamId={ed.assigned_team} team={teams.find((t) => t.id === ed.assigned_team)} jobs={list} edVisits={ed.visits} excludeJobNo={ed.job_no} onPick={pickSlot} />
         </div>
         {toast && <Toast t={toast} />}
       </div>
@@ -546,54 +554,77 @@ function Toast({ t }) {
   return <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", background: t.bad ? "#dc2626" : "#16a34a", color: "#fff", fontSize: 13.5, fontWeight: 600, padding: "12px 22px", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 200, maxWidth: "90%", textAlign: "center" }}>{t.m}</div>;
 }
 
-// side panel: the selected team's existing queue, so you can pick a clash-free slot while editing
+// side panel: the selected team's availability for the next 3 weeks — tap a free slot to book it
 const _isoYmd = (s) => { if (!s) return ""; const d = new Date(s); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-const _slotOf = (id) => SLOTS.find((s) => s.id === id) || { icon: "🕒", th: id, time: "" };
+const _isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const _dShow = (ymd) => { const d = new Date(ymd + "T00:00:00"); return d.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" }); };
+const PANEL_DAYS = 21;
 
-function TeamSchedulePanel({ teamId, team, jobs, edVisits, excludeJobNo }) {
-  if (!teamId) return <div className="jo-sched-panel"><div className="jo-sched-empty">เลือกทีมช่างก่อน เพื่อดูคิวงานของทีมนั้น</div></div>;
+function TeamSchedulePanel({ teamId, team, jobs, edVisits, excludeJobNo, onPick }) {
+  if (!teamId) return <div className="jo-sched-panel"><div className="jo-sched-empty">เลือกทีมช่างก่อน เพื่อดูช่องว่างของทีม</div></div>;
   const col = team?.color || "#1f74e0";
-  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
-  const edDates = new Set((edVisits || []).map((v) => v.date).filter(Boolean));
 
-  // collect this team's upcoming bookings from every other job
-  const items = [];
+  // occupancy by date → which slot is taken (full/custom block the whole day)
+  const occ = {};
+  const mark = (date, slot, info) => {
+    const o = occ[date] || (occ[date] = {});
+    if (slot === "morning") o.morning = o.morning || info;
+    else if (slot === "afternoon") o.afternoon = o.afternoon || info;
+    else { o.morning = o.morning || info; o.afternoon = o.afternoon || info; }
+  };
   (jobs || []).forEach((j) => {
-    if (j.job_no === excludeJobNo) return;
+    if (j.job_no === excludeJobNo || j.status === "cancelled") return;
     const vs = (j.visits && j.visits.length) ? j.visits : [{ assigned_team: j.assigned_team, scheduled_at: j.scheduled_at, end_date: j.end_date, slot: j.slot, status: j.status, visit_date: j.scheduled_at ? _isoYmd(j.scheduled_at) : null }];
     vs.forEach((v) => {
       const t = v.assigned_team || j.assigned_team;
       if (t !== teamId || v.status === "cancelled") return;
-      const date = v.visit_date || (v.scheduled_at ? _isoYmd(v.scheduled_at) : null);
-      if (!date) return;
-      items.push({ date, end_date: v.end_date, slot: v.slot, status: v.status, job_no: j.job_no, customer: j.customerName, title: j.title });
+      const startYmd = v.visit_date || (v.scheduled_at ? _isoYmd(v.scheduled_at) : null);
+      if (!startYmd) return;
+      const endYmd = (v.end_date && v.end_date > startYmd) ? v.end_date : startYmd;
+      const info = { job_no: j.job_no, customer: j.customerName };
+      let d = new Date(startYmd + "T00:00:00"); const e = new Date(endYmd + "T00:00:00");
+      while (d <= e) { mark(_isoLocal(d), v.slot, info); d.setDate(d.getDate() + 1); }
     });
   });
-  const future = items.filter((b) => (b.end_date || b.date) >= today).sort((a, b) => a.date.localeCompare(b.date));
-  const grouped = {}; future.forEach((b) => { (grouped[b.date] = grouped[b.date] || []).push(b); });
-  const dates = Object.keys(grouped).sort();
+
+  // this job's own picks (so we don't offer them again + show as "เลือกแล้ว")
+  const mine = {};
+  (edVisits || []).forEach((v) => { if (v.date) (mine[v.date] = mine[v.date] || new Set()).add(v.slot); });
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = []; for (let i = 0; i < PANEL_DAYS; i++) { const d = new Date(today); d.setDate(d.getDate() + i); days.push(_isoLocal(d)); }
+
+  const chip = (date, slotId, label) => {
+    const o = occ[date] || {};
+    const taken = slotId === "full" ? (o.morning || o.afternoon) : o[slotId];
+    const mineHere = mine[date] && (mine[date].has(slotId) || mine[date].has("full"));
+    if (mineHere) return <span className="jo-av-chip mine">🟠 {label} · เลือกแล้ว</span>;
+    if (taken) return <span className="jo-av-chip booked" title={`${taken.job_no} ${taken.customer || ""}`}>{label} · มีงาน</span>;
+    return <button type="button" className="jo-av-chip free" onClick={() => onPick && onPick(date, slotId)}>＋ {label} ว่าง</button>;
+  };
 
   return (
     <div className="jo-sched-panel">
       <div className="jo-sched-head" style={{ borderColor: col }}>
-        <b style={{ color: col }}>คิวงานทีม {team?.name?.replace("Team ", "") || teamId}</b>
-        <span>{future.length} รอบที่จะถึง</span>
+        <b style={{ color: col }}>ลงคิวทีม {team?.name?.replace("Team ", "") || teamId}</b>
+        <span>แตะช่องว่างเพื่อลงคิว</span>
       </div>
-      {edDates.size > 0 && <div className="jo-sched-hint">🟠 = วันที่คุณกำลังจะลงในใบงานนี้ (ถ้าซ้ำวันกับคิวเดิม ระวังชนกัน)</div>}
-      {dates.length === 0 && <div className="jo-sched-empty">ทีมนี้ยังไม่มีคิวงานที่จะถึง — ลงรอบได้เลย</div>}
-      <div className="jo-sched-list">
-        {dates.map((d) => (
-          <div className={"jo-sched-day" + (edDates.has(d) ? " clash" : "")} key={d}>
-            <div className="jo-sched-date">{_dShow(d)}{edDates.has(d) ? " 🟠" : ""}</div>
-            {grouped[d].map((b, i) => { const s = _slotOf(b.slot); return (
-              <div className="jo-sched-item" key={i}>
-                <span className="jo-sched-slot">{s.icon} {s.th}{s.time ? ` ${s.time}` : ""}</span>
-                <span className="jo-sched-job">{b.job_no} · {b.customer || b.title || "งาน"}</span>
+      <div className="jo-sched-hint">🟢 ว่าง (กดเพื่อเลือก) · 🔴 มีงานแล้ว · 🟠 รอบที่กำลังลง</div>
+      <div className="jo-av-list">
+        {days.map((d) => {
+          const o = occ[d] || {};
+          const bothFree = !o.morning && !o.afternoon && !mine[d];
+          return (
+            <div className="jo-av-day" key={d}>
+              <div className="jo-av-date">{_dShow(d)}</div>
+              <div className="jo-av-slots">
+                {chip(d, "morning", "เช้า")}
+                {chip(d, "afternoon", "บ่าย")}
+                {bothFree && <button type="button" className="jo-av-chip full" onClick={() => onPick && onPick(d, "full")}>＋ เต็มวัน</button>}
               </div>
-            ); })}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
