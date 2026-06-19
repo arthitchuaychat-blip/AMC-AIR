@@ -441,7 +441,10 @@ function ScoreTab({ jobs, quoteBy, subTeams, matCost, payouts }) {
     const done = tj.filter((j) => j.status === "done");
     const value = round2(done.reduce((a, j) => a + (quoteBy[j.quote_no]?.afterDisc || 0), 0));
     const labor = round2(tj.reduce((a, j) => a + (Number(j.labor_total) || 0), 0));
-    const paid = round2(payouts.filter((p) => p.team === t.id && p.status === "paid").reduce((a, p) => a + (Number(p.net) || 0), 0));
+    const paidPo = payouts.filter((p) => p.team === t.id && p.status === "paid");
+    const paid = round2(paidPo.reduce((a, p) => a + (Number(p.net) || 0), 0));        // จ่ายสุทธิจริง
+    const wht = round2(paidPo.reduce((a, p) => a + (Number(p.wht_amt) || 0), 0));      // หัก ณ ที่จ่าย ที่หักไปแล้ว
+    const paidGross = round2(paidPo.reduce((a, p) => a + (Number(p.gross) || 0), 0));  // ยอดค่าแรงที่เคลียร์แล้ว (สุทธิ+หัก)
     const claims = tj.filter((j) => j.is_claim).length;
     const resched = tj.filter((j) => j.status === "reschedule").length;
     const rated = tj.filter((j) => j.rating > 0);
@@ -449,14 +452,14 @@ function ScoreTab({ jobs, quoteBy, subTeams, matCost, payouts }) {
     let profitSum = 0, profitN = 0;
     done.forEach((j) => { const q = quoteBy[j.quote_no]; if (!q) return; const m = matCost[j.job_no]; const matNet = m ? (m.withdraw - m.return) : 0; profitSum += (q.afterDisc || 0) - matNet - (Number(j.labor_total) || 0); profitN++; });
     const avgProfit = profitN ? round2(profitSum / profitN) : null;
-    return { t, jobs: tj.length, done: done.length, value, labor, paid, unpaid: round2(labor - paid), claims, resched, avgRating, avgProfit };
+    return { t, jobs: tj.length, done: done.length, value, labor, paid, wht, unpaid: round2(labor - paidGross), claims, resched, avgRating, avgProfit };
   });
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">สกอร์การ์ดทีมช่างซัพ</div><div className="sec-sub">ใช้พิจารณาจ้างต่อ / เพิ่มงาน / ตัดออก</div></div></div>
       <div style={{ overflowX: "auto" }}>
         <table className="hr-table">
-          <thead><tr><th style={{ textAlign: "left" }}>ทีม</th><th>งานเสร็จ</th><th>มูลค่างาน</th><th>ค่าแรงรวม</th><th>จ่ายแล้ว</th><th>ค้างจ่าย</th><th>เคลม</th><th>เลื่อนนัด</th><th>คะแนน</th><th>กำไรเฉลี่ย/งาน</th></tr></thead>
+          <thead><tr><th style={{ textAlign: "left" }}>ทีม</th><th>งานเสร็จ</th><th>มูลค่างาน</th><th>ค่าแรงรวม</th><th>จ่ายสุทธิแล้ว</th><th>หัก ณ ที่จ่าย</th><th>ค้างจ่าย</th><th>เคลม</th><th>เลื่อนนัด</th><th>คะแนน</th><th>กำไรเฉลี่ย/งาน</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.t.id}>
@@ -465,7 +468,8 @@ function ScoreTab({ jobs, quoteBy, subTeams, matCost, payouts }) {
                 <td>{fmtBaht(r.value)}</td>
                 <td>{fmtBaht(r.labor)}</td>
                 <td className="hr-ok">{fmtBaht(r.paid)}</td>
-                <td className={r.unpaid > 0 ? "hr-warn" : ""}>{fmtBaht(r.unpaid)}</td>
+                <td className={r.wht > 0 ? "hr-warn" : ""}>{r.wht > 0 ? fmtBaht(r.wht) : "-"}</td>
+                <td className={r.unpaid > 0.01 ? "hr-bad" : "hr-ok"}>{fmtBaht(r.unpaid)}</td>
                 <td className={r.claims ? "hr-bad" : ""}>{r.claims}</td>
                 <td className={r.resched ? "hr-warn" : ""}>{r.resched}</td>
                 <td>{r.avgRating != null ? `★ ${r.avgRating}` : "-"}</td>
