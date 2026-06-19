@@ -210,12 +210,14 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
               <div className="agenda-items">
                 {items.map((j) => {
                   const c = teamColor(j.assigned_team); const sd = slotDef(j.slot);
-                  const slotTxt = (!j.slot || j.slot === "custom") ? new Date(j.scheduled_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น." : (sd ? sd.th : "");
+                  const slotTxt = (!j.slot || j.slot === "custom")
+                    ? new Date(j.scheduled_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."
+                    : (sd ? (sd.time || sd.th) : "");
                   return (
                     <button className={"agenda-row" + (j.status === "done" ? " sc-done" : "")} key={j._key} onClick={() => setDetail(j)} style={{ borderLeftColor: c }}>
                       <span className="agenda-slot">{slotTxt}</span>
-                      <span className="agenda-main">{jobTypeDef(j.job_type)[2]} {[j.customerName, j.title].filter(Boolean).join(" · ") || "งาน"}</span>
                       <span className="agenda-meta"><span style={{ width: 8, height: 8, borderRadius: 9, background: c, display: "inline-block", marginRight: 5 }} />{teamName(j.assigned_team)} · <b style={{ color: c }}>{STATUS[j.status] || ""}</b></span>
+                      <span className="agenda-main">{jobTypeDef(j.job_type)[2]} {[j.customerName, j.title].filter(Boolean).join(" · ") || "งาน"}</span>
                     </button>
                   );
                 })}
