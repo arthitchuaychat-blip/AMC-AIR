@@ -234,8 +234,15 @@ export async function recordTransaction(t) {
 }
 
 // bulk insert many lines (same job) at once
+// one reference number per recording action (batch) — WD/RT/PC/DG-YYMMDD-HHMMSS
+function txnRefNo(type) {
+  const pfx = { withdraw: "WD", return: "RT", purchase: "PC", damage: "DG" }[type] || "MV";
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `${pfx}-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
 export async function recordTransactions(rows) {
   const { data: { user } } = await supabase.auth.getUser();
+  const ref = txnRefNo(rows[0]?.type);   // all lines recorded together share one ref number
   const payload = rows.map((t) => ({
     txn_date: t.txn_date || new Date().toISOString().slice(0, 10),
     type: t.type,
@@ -245,6 +252,7 @@ export async function recordTransactions(rows) {
     qty: Number(t.qty),
     unit_cost: Number(t.unit_cost) || 0,
     reason: t.type === "damage" ? (t.reason || null) : null,
+    ref_no: ref,
     recorded_by: user?.id || null,
   }));
   const { error } = await supabase.from("transactions").insert(payload);

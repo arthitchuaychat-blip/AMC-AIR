@@ -195,17 +195,15 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     try { await deleteTransaction(r.id); flash("ยกเลิกรายการแล้ว"); await load(); }
     catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  // group the recent ledger so one job (per movement type) = one collapsible line.
-  // rows without a job (purchases / central damage) group per type per day.
+  // group the recent ledger by recording batch (ref_no) → one record action = one line,
+  // even for the same job. Fallback key for legacy rows without a ref: created-at second.
   const groups = React.useMemo(() => {
     const map = new Map();
     for (const r of recent) {
-      const key = r.job_no ? `${r.type}|${r.job_no}` : `${r.type}|@${r.txn_date}|${r.team || ""}`;
+      const key = r.ref_no || (r.created_at ? `t${String(r.created_at).slice(0, 19)}` : `id${r.id}`);
       let g = map.get(key);
-      if (!g) { g = { key, type: r.type, job_no: r.job_no, team: r.team, dateMin: r.txn_date, dateMax: r.txn_date, rows: [] }; map.set(key, g); }
+      if (!g) { g = { key, ref_no: r.ref_no, type: r.type, job_no: r.job_no, team: r.team, date: r.txn_date, rows: [] }; map.set(key, g); }
       g.rows.push(r);
-      if (r.txn_date < g.dateMin) g.dateMin = r.txn_date;
-      if (r.txn_date > g.dateMax) g.dateMax = r.txn_date;
     }
     return [...map.values()];
   }, [recent]);
@@ -214,7 +212,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   function printGroup(g) {
     printWin.current = openPrintWindow();
     setPrintData({
-      typeTh: TYPE_BY[g.type].th, job_no: g.job_no, team: g.team, date: g.dateMin === g.dateMax ? g.dateMax : `${g.dateMin} – ${g.dateMax}`,
+      typeTh: TYPE_BY[g.type].th, ref_no: g.ref_no, job_no: g.job_no, team: g.team, date: g.date,
       lines: g.rows.map((x) => { const m = matMap[x.material_code]; return { th: m?.th || x.material_code, code: x.material_code, qty: x.qty, unit: m?.unit || "", value: Number(x.value || 0), reason: x.reason }; }),
       total: g.rows.reduce((a, x) => a + Number(x.value || 0), 0),
     });
@@ -414,7 +412,6 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
               const single = g.rows.length === 1;
               const firstM = matMap[g.rows[0].material_code];
               const total = g.rows.reduce((a, x) => a + Number(x.value || 0), 0);
-              const dateLabel = g.dateMin === g.dateMax ? g.dateMax : `${g.dateMin} – ${g.dateMax}`;
               return (
                 <div className={"ledger-group" + (open ? " open" : "")} key={g.key}>
                   <div className="ledger-row" role="button" tabIndex={0} onClick={() => toggle(g.key)} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && toggle(g.key)}>
@@ -424,9 +421,10 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                     <div className="ledger-info">
                       <div className="ledger-type" style={{ color: mv.color }}>{mv.th} · {single ? (firstM ? firstM.th : g.rows[0].material_code) : `${g.rows.length} รายการ`}</div>
                       <div className="ledger-meta">
+                        {g.ref_no ? <><span className="tx-ref">{g.ref_no}</span><span className="dot">·</span></> : null}
                         {g.team ? <>{g.team}<span className="dot">·</span></> : null}
                         {g.job_no ? <><span className="tx-job">{g.job_no}</span><span className="dot">·</span></> : null}
-                        {dateLabel}
+                        {g.date}
                       </div>
                     </div>
                     <div className="ledger-amt">
@@ -480,6 +478,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
               <div className="slip-title">ใบ{printData.typeTh}</div>
             </div>
             <div className="slip-meta">
+              <div>เลขที่อ้างอิง: <b>{printData.ref_no || "-"}</b></div>
               <div>ประเภท: <b>{printData.typeTh}</b></div>
               <div>เลขที่งาน/PO: <b>{printData.job_no || "-"}</b></div>
               <div>ทีม: <b>{printData.team || "-"}</b></div>
