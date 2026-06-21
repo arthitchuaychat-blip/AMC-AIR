@@ -1044,6 +1044,11 @@ export async function deleteTransaction(id) {
   const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) throw error;
 }
+// edit a movement's quantity (stock + value recompute automatically from the transactions table)
+export async function updateTransaction(id, qty) {
+  const { error } = await supabase.from("transactions").update({ qty: Number(qty) }).eq("id", id);
+  if (error) throw error;
+}
 
 export async function listRecentTransactions(limit = 60) {
   const { data, error } = await supabase

@@ -461,8 +461,24 @@ select.inp{cursor:pointer}
 
 /* ledger */
 .ledger{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-.ledger-row{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid var(--line-2)}
+.ledger-group{border-bottom:1px solid var(--line-2)}
+.ledger-group:last-child{border-bottom:none}
+.ledger-group.open{background:var(--surface-2)}
+.ledger-row{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid var(--line-2);cursor:pointer}
+.ledger-group .ledger-row{border-bottom:none}
+.ledger-group.open .ledger-row{background:var(--surface)}
 .ledger-row:last-child{border-bottom:none}
+/* expanded per-item lines */
+.ledger-items{display:flex;flex-direction:column;padding:2px 14px 8px 57px;gap:1px}
+.ledger-item{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line-2)}
+.ledger-item:last-child{border-bottom:none}
+.li-name{flex:1;min-width:0;font-size:12px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.li-code{font-size:10px;color:var(--ink-3)}
+.li-qty{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;flex:none}
+.li-val{font-size:11.5px;color:var(--ink-3);min-width:74px;text-align:right;flex:none}
+.li-edit{width:120px;flex:none}
+.li-edit input{width:100%}
+.li-total{font-size:12px;font-weight:700;border-top:1px solid var(--line);border-bottom:none;margin-top:2px;padding-top:6px}
 .ledger-badge{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none}
 .ledger-info{flex:1;min-width:0}
 .ledger-type{font-size:12.5px;font-weight:700}

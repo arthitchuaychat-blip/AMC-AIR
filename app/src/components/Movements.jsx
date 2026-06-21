@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived } from "../lib/api";
+import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { can } from "../lib/permissions";
 import { scheduleLabel } from "../lib/schedule";
@@ -32,6 +32,9 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [toast, setToast] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [printData, setPrintData] = React.useState(null);
+  const [expanded, setExpanded] = React.useState(() => new Set()); // group keys that are open
+  const [editId, setEditId] = React.useState(null);   // transaction id being edited
+  const [editQty, setEditQty] = React.useState("");
 
   const [type, setType] = React.useState("withdraw");
   const [team, setTeam] = React.useState("");
@@ -192,14 +195,36 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     try { await deleteTransaction(r.id); flash("ยกเลิกรายการแล้ว"); await load(); }
     catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  function printSlip(row) {
+  // group the recent ledger so one job (per movement type) = one collapsible line.
+  // rows without a job (purchases / central damage) group per type per day.
+  const groups = React.useMemo(() => {
+    const map = new Map();
+    for (const r of recent) {
+      const key = r.job_no ? `${r.type}|${r.job_no}` : `${r.type}|@${r.txn_date}|${r.team || ""}`;
+      let g = map.get(key);
+      if (!g) { g = { key, type: r.type, job_no: r.job_no, team: r.team, dateMin: r.txn_date, dateMax: r.txn_date, rows: [] }; map.set(key, g); }
+      g.rows.push(r);
+      if (r.txn_date < g.dateMin) g.dateMin = r.txn_date;
+      if (r.txn_date > g.dateMax) g.dateMax = r.txn_date;
+    }
+    return [...map.values()];
+  }, [recent]);
+  const toggle = (key) => setExpanded((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
+
+  function printGroup(g) {
     printWin.current = openPrintWindow();
-    const group = row.job_no ? recent.filter((x) => x.job_no === row.job_no && x.type === row.type) : [row];
     setPrintData({
-      typeTh: TYPE_BY[row.type].th, job_no: row.job_no, team: row.team, date: row.txn_date,
-      lines: group.map((g) => { const m = matMap[g.material_code]; return { th: m?.th || g.material_code, code: g.material_code, qty: g.qty, unit: m?.unit || "", value: Number(g.value || 0), reason: g.reason }; }),
-      total: group.reduce((a, g) => a + Number(g.value || 0), 0),
+      typeTh: TYPE_BY[g.type].th, job_no: g.job_no, team: g.team, date: g.dateMin === g.dateMax ? g.dateMax : `${g.dateMin} – ${g.dateMax}`,
+      lines: g.rows.map((x) => { const m = matMap[x.material_code]; return { th: m?.th || x.material_code, code: x.material_code, qty: x.qty, unit: m?.unit || "", value: Number(x.value || 0), reason: x.reason }; }),
+      total: g.rows.reduce((a, x) => a + Number(x.value || 0), 0),
     });
+  }
+  async function saveEdit(r) {
+    const q = Number(editQty) || 0;
+    if (q < 1) { flash("จำนวนต้องมากกว่า 0", true); return; }
+    if (q === Number(r.qty)) { setEditId(null); return; }
+    try { await updateTransaction(r.id, q); setEditId(null); flash("แก้ไขจำนวนแล้ว ✓"); await load(); }
+    catch (e) { flash("แก้ไขไม่สำเร็จ: " + (e.message || e), true); }
   }
 
   return (
@@ -383,31 +408,59 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           {loading && <div className="empty sm">กำลังโหลด…</div>}
           {!loading && recent.length === 0 && <div className="empty sm">ยังไม่มีธุรกรรม</div>}
           <div className="ledger">
-            {recent.map((r) => {
-              const m = matMap[r.material_code];
-              const mv = TYPE_BY[r.type];
+            {groups.map((g) => {
+              const mv = TYPE_BY[g.type];
+              const open = expanded.has(g.key);
+              const single = g.rows.length === 1;
+              const firstM = matMap[g.rows[0].material_code];
+              const total = g.rows.reduce((a, x) => a + Number(x.value || 0), 0);
+              const dateLabel = g.dateMin === g.dateMax ? g.dateMax : `${g.dateMin} – ${g.dateMax}`;
               return (
-                <div className="ledger-row" key={r.id}>
-                  <span className="ledger-badge" style={{ background: `color-mix(in srgb, ${mv.color} 13%, white)`, color: mv.color }}>
-                    <UIcon name={mv.icon} size={14} strokeWidth={2} color={mv.color} />
-                  </span>
-                  <div className="ledger-info">
-                    <div className="ledger-type" style={{ color: mv.color }}>{mv.th} · {m ? m.th : r.material_code}</div>
-                    <div className="ledger-meta">
-                      {r.team ? <>{r.team}<span className="dot">·</span></> : null}
-                      {r.job_no ? <><span className="tx-job">{r.job_no}</span><span className="dot">·</span></> : null}
-                      {r.reason ? <><span className="reason-tag sm">{r.reason}</span><span className="dot">·</span></> : null}
-                      {r.txn_date}
+                <div className={"ledger-group" + (open ? " open" : "")} key={g.key}>
+                  <div className="ledger-row" role="button" tabIndex={0} onClick={() => toggle(g.key)} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && toggle(g.key)}>
+                    <span className="ledger-badge" style={{ background: `color-mix(in srgb, ${mv.color} 13%, white)`, color: mv.color }}>
+                      <UIcon name={mv.icon} size={14} strokeWidth={2} color={mv.color} />
+                    </span>
+                    <div className="ledger-info">
+                      <div className="ledger-type" style={{ color: mv.color }}>{mv.th} · {single ? (firstM ? firstM.th : g.rows[0].material_code) : `${g.rows.length} รายการ`}</div>
+                      <div className="ledger-meta">
+                        {g.team ? <>{g.team}<span className="dot">·</span></> : null}
+                        {g.job_no ? <><span className="tx-job">{g.job_no}</span><span className="dot">·</span></> : null}
+                        {dateLabel}
+                      </div>
+                    </div>
+                    <div className="ledger-amt">
+                      <div className="ledger-qty" style={{ color: mv.color }}>{single ? `${mv.dir > 0 ? "+" : "−"}${fmtNum(g.rows[0].qty)} ${firstM?.unit || ""}` : `${g.rows.length} ชนิด`}</div>
+                      <div className="ledger-date">{fmtBaht(total)}</div>
+                    </div>
+                    <div className="led-actions" onClick={(e) => e.stopPropagation()}>
+                      <button className="led-btn" title="พิมพ์" onClick={() => printGroup(g)}><UIcon name="catalog" size={14} /></button>
+                      <button className="led-btn" title={open ? "ย่อ" : "ดูรายการ"} onClick={() => toggle(g.key)}><UIcon name={open ? "chevD" : "chevR"} size={14} /></button>
                     </div>
                   </div>
-                  <div className="ledger-amt">
-                    <div className="ledger-qty" style={{ color: mv.color }}>{mv.dir > 0 ? "+" : "−"}{fmtNum(r.qty)} {m?.unit || ""}</div>
-                    <div className="ledger-date">{fmtBaht(r.value)}</div>
-                  </div>
-                  <div className="led-actions">
-                    <button className="led-btn" title="พิมพ์" onClick={() => printSlip(r)}><UIcon name="catalog" size={14} /></button>
-                    {isAdmin && <button className="led-btn danger" title="ยกเลิก" onClick={() => cancel(r)}><UIcon name="trash" size={14} /></button>}
-                  </div>
+                  {open && (
+                    <div className="ledger-items">
+                      {g.rows.map((r) => { const m = matMap[r.material_code]; const editing = editId === r.id; return (
+                        <div className="ledger-item" key={r.id}>
+                          <div className="li-name">{m ? m.th : r.material_code} <span className="li-code">{r.material_code}</span>{r.reason ? <span className="reason-tag sm">{r.reason}</span> : null}</div>
+                          {editing
+                            ? <span className="inp inp-unit li-edit"><input type="number" min="1" value={editQty} autoFocus onChange={(e) => setEditQty(e.target.value)} /><span className="unit-suf">{m?.unit || ""}</span></span>
+                            : <span className="li-qty" style={{ color: mv.color }}>{mv.dir > 0 ? "+" : "−"}{fmtNum(r.qty)} {m?.unit || ""}</span>}
+                          <span className="li-val">{fmtBaht(r.value)}</span>
+                          <div className="led-actions">
+                            {isAdmin && (editing
+                              ? <><button className="led-btn" title="บันทึก" onClick={() => saveEdit(r)}><UIcon name="check" size={14} /></button>
+                                   <button className="led-btn" title="ยกเลิกแก้ไข" onClick={() => setEditId(null)}><UIcon name="x" size={14} /></button></>
+                              : <>
+                                  <button className="led-btn" title="แก้ไขจำนวน" onClick={() => { setEditId(r.id); setEditQty(String(r.qty)); }}><UIcon name="edit" size={14} /></button>
+                                  <button className="led-btn danger" title="ยกเลิก" onClick={() => cancel(r)}><UIcon name="trash" size={14} /></button>
+                                </>)}
+                          </div>
+                        </div>
+                      ); })}
+                      {!single && <div className="ledger-item li-total"><div className="li-name">รวม {g.rows.length} รายการ</div><span className="li-val"><b>{fmtBaht(total)}</b></span><div /></div>}
+                    </div>
+                  )}
                 </div>
               );
             })}
