@@ -39,8 +39,11 @@ export function computePayslip(emp, st, opt = {}) {
   const dLate = opt.deductLate === false ? 0 : r0((st.lateMin || 0) / 60 * hourly);
   const dAbsent = (opt.deductAbsent === false || !monthly) ? 0 : r0((st.absent || 0) * daily); // daily: absence already unpaid
   const dLeave = (opt.deductOverLeave === false || !monthly) ? 0 : r0(overLeave * daily);
+  // ประกันสังคม ม.33: หัก 5% ของค่าจ้าง โดยคิดจากเพดานฐานค่าจ้างสูงสุด 17,500 บาท/เดือน
+  // (เงินเดือน ≥ 17,500 → 875 เต็มเพดาน · เงินเดือน < 17,500 → 5% ของเงินเดือนจริง)
+  const SSO_BASE_CAP = 17500;
   const ssoBase = monthly ? basePay : base;
-  const dSso = emp.sso ? Math.min(750, r0(ssoBase * 0.05)) : 0;
+  const dSso = emp.sso ? r0(Math.min(ssoBase, SSO_BASE_CAP) * 0.05) : 0;
   const bonus = Number(emp.bonus) || 0, otherDeduct = Number(emp.other_deduct) || 0;
   const dAdvance = Number(emp.advance) || 0;   // เบิกเงินล่วงหน้า ที่อนุมัติแล้ว → หักในรอบนี้
   const gross = base + otPay + bonus;

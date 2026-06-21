@@ -545,7 +545,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           </table>
         </div>
       )}
-      <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (สูงสุด 750) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ”</p>
+      <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (เพดานฐาน 17,500 = สูงสุด 875) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ”</p>
 
       {printSlip && (() => { const r = printSlip.row, c = printSlip.calc, p = r.p; return (
         <div className="print-area payslip-print">
@@ -576,6 +576,29 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           <div className="ps-sign"><div>ลงชื่อ ........................ ผู้จ่ายเงิน</div><div>ลงชื่อ ........................ ผู้รับเงิน</div></div>
         </div>
       ); })()}
+    </div>
+  );
+}
+
+// one editable salary row — controlled so saved values show clearly (and re-sync after reload)
+function PayRow({ p, onSave }) {
+  const [payType, setPayType] = React.useState(p.pay_type || "monthly");
+  const [basePay, setBasePay] = React.useState(p.base_pay ?? 0);
+  const [otRate, setOtRate] = React.useState(p.ot_rate ?? 0);
+  const [sso, setSso] = React.useState(!!p.sso);
+  React.useEffect(() => { setPayType(p.pay_type || "monthly"); setBasePay(p.base_pay ?? 0); setOtRate(p.ot_rate ?? 0); setSso(!!p.sso); }, [p.pay_type, p.base_pay, p.ot_rate, p.sso]);
+  const saveNum = (field, val, prev) => { const v = Number(val) || 0; if (v !== (Number(prev) || 0)) onSave(field, v); };
+  return (
+    <div className="hr-pay-row">
+      <div className="hr-name"><b>{p.name || p.email}</b></div>
+      <select className="inp" style={{ width: 110 }} value={payType} onChange={(e) => { setPayType(e.target.value); onSave("pay_type", e.target.value); }}>
+        <option value="monthly">รายเดือน</option><option value="daily">รายวัน</option>
+      </select>
+      <span className="inp inp-unit" style={{ width: 130 }} title={payType === "daily" ? "ค่าแรงต่อวัน" : "เงินเดือนต่อเดือน"}><span className="unit-pre">฿</span>
+        <input type="number" min="0" value={basePay} onChange={(e) => setBasePay(e.target.value)} onBlur={(e) => saveNum("base_pay", e.target.value, p.base_pay)} /></span>
+      <span className="inp inp-unit" style={{ width: 130 }} title="เรต OT ต่อชั่วโมง"><span className="unit-pre">OT ฿</span>
+        <input type="number" min="0" value={otRate} onChange={(e) => setOtRate(e.target.value)} onBlur={(e) => saveNum("ot_rate", e.target.value, p.ot_rate)} /><span className="unit-suf">/ชม.</span></span>
+      <label className="hr-sso"><input type="checkbox" checked={sso} onChange={(e) => { setSso(e.target.checked); onSave("sso", e.target.checked); }} /> ประกันสังคม</label>
     </div>
   );
 }
@@ -614,21 +637,9 @@ function StaffTab({ staff, settings, holidays, onReload, flash }) {
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="sec-head"><div><div className="sec-title">ค่าจ้าง / เงินเดือน (ต่อคน)</div><div className="sec-sub">ตั้งฐานเงินเดือน (รายเดือน/รายวัน) · เรต OT ต่อชั่วโมง · ประกันสังคม 5%</div></div></div>
+        <div className="sec-head"><div><div className="sec-title">ค่าจ้าง / เงินเดือน (ต่อคน)</div><div className="sec-sub">ตั้งฐานเงินเดือน (รายเดือน/รายวัน) · เรต OT ต่อชั่วโมง · ประกันสังคม 5% (เพดาน 17,500 = สูงสุด 875)</div></div></div>
         <div className="set-list">
-          {staff.map((p) => (
-            <div className="hr-pay-row" key={p.id}>
-              <div className="hr-name"><b>{p.name || p.email}</b></div>
-              <select className="inp" style={{ width: 110 }} value={p.pay_type || "monthly"} onChange={(e) => setPattern(p, "pay_type", e.target.value)}>
-                <option value="monthly">รายเดือน</option><option value="daily">รายวัน</option>
-              </select>
-              <span className="inp inp-unit" style={{ width: 130 }} title={p.pay_type === "daily" ? "ค่าแรงต่อวัน" : "เงินเดือนต่อเดือน"}><span className="unit-pre">฿</span>
-                <input type="number" min="0" defaultValue={p.base_pay || 0} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (Number(p.base_pay) || 0)) setPattern(p, "base_pay", v); }} /></span>
-              <span className="inp inp-unit" style={{ width: 130 }} title="เรต OT ต่อชั่วโมง"><span className="unit-pre">OT ฿</span>
-                <input type="number" min="0" defaultValue={p.ot_rate || 0} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (Number(p.ot_rate) || 0)) setPattern(p, "ot_rate", v); }} /><span className="unit-suf">/ชม.</span></span>
-              <label className="hr-sso"><input type="checkbox" checked={!!p.sso} onChange={(e) => setPattern(p, "sso", e.target.checked)} /> ประกันสังคม</label>
-            </div>
-          ))}
+          {staff.map((p) => <PayRow key={p.id} p={p} onSave={(field, val) => setPattern(p, field, val)} />)}
         </div>
       </div>
 
