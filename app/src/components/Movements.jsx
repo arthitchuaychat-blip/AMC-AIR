@@ -390,12 +390,13 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                   {pickList.length === 0 && <div className="empty sm" style={{ gridColumn: "1/-1" }}>ไม่พบวัสดุตามตัวกรอง</div>}
                   {pickList.map((m) => (
                     <button type="button" className="mv-card" key={m.code} onClick={() => openQty(m)} title="กดเพื่อเพิ่มเข้ารายการ">
-                      <MaterialThumb mat={m} size={44} radius={10} />
+                      <div className="mv-card-photo"><MaterialThumb mat={m} size={108} radius={12} /></div>
                       <div className="mv-card-info">
                         <div className="mv-card-name">{m.th || m.name}</div>
-                        <div className="mv-card-sub">{m.code} · เหลือ <b>{fmtNum(m.stock)}</b> {m.unit}</div>
+                        <div className="mv-card-sub">{m.code}</div>
+                        <div className="mv-card-stock">เหลือ <b>{fmtNum(m.stock)}</b> {m.unit}</div>
                       </div>
-                      <span className="mv-card-add"><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /></span>
+                      <span className="mv-card-add"><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่ม</span>
                     </button>
                   ))}
                 </div>

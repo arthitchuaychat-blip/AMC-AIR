@@ -133,7 +133,7 @@ export async function listMaterialsLite() {
   const all = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase.from("materials")
-      .select("code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,tracked,min_stock,init_stock")
+      .select("code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock")
       .eq("active", true).range(from, from + PAGE - 1);
     if (error) throw error;
     all.push(...(data || []));

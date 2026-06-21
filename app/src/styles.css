@@ -558,14 +558,17 @@ select.inp{cursor:pointer}
 .line-add .btn-ghost.sm{flex:none}
 /* visual material picker (food-menu style) */
 .mv-search{margin-bottom:8px}
-.mv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;max-height:340px;overflow-y:auto;padding:2px;margin-bottom:6px}
-.mv-card{display:flex;align-items:center;gap:10px;text-align:left;padding:9px 10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;cursor:pointer;font-family:inherit;transition:border-color .12s,box-shadow .12s,transform .06s}
-.mv-card:hover{border-color:var(--primary);box-shadow:0 3px 10px rgba(16,24,40,.1)}
-.mv-card:active{transform:scale(.985)}
+.mv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;max-height:560px;overflow-y:auto;padding:2px;margin-bottom:6px}
+.mv-card{display:flex;flex-direction:column;gap:8px;text-align:left;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:16px;cursor:pointer;font-family:inherit;transition:border-color .12s,box-shadow .12s,transform .06s}
+.mv-card:hover{border-color:var(--primary);box-shadow:0 6px 18px rgba(16,24,40,.12)}
+.mv-card:active{transform:scale(.99)}
+.mv-card-photo{width:100%}
+.mv-card-photo>*{width:100%!important;height:140px!important;border-radius:12px!important;object-fit:cover}
 .mv-card-info{flex:1;min-width:0}
-.mv-card-name{font-size:12.5px;font-weight:700;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.mv-card-sub{font-size:10.5px;color:var(--ink-3);margin-top:2px}
-.mv-card-add{flex:none;width:26px;height:26px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center}
+.mv-card-name{font-size:14px;font-weight:700;line-height:1.35;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.mv-card-sub{font-size:11.5px;color:var(--ink-3);margin-top:3px;font-family:var(--mono)}
+.mv-card-stock{font-size:12px;color:var(--ink-2);margin-top:2px}
+.mv-card-add{display:flex;align-items:center;justify-content:center;gap:5px;font-size:13px;font-weight:700;color:#fff;background:var(--primary);border-radius:10px;padding:8px}
 /* qty modal */
 .mv-pick-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .mv-pick-name{font-size:15px;font-weight:800}
