@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, markAdvancesPaid } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -7,7 +7,7 @@ import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 
-const TABS = [["today", "วันนี้"], ["leaves", "อนุมัติลา"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
+const TABS = [["today", "วันนี้"], ["leaves", "อนุมัติลา"], ["advances", "เบิกล่วงหน้า"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
@@ -37,6 +37,7 @@ export default function HR({ role }) {
 
       {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "leaves" && <LeavesTab flash={flash} />}
+      {tab === "advances" && <AdvancesTab flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
@@ -165,6 +166,48 @@ function LeavesTab({ flash }) {
           </div>
         ); })}
       </div>
+    </div>
+  );
+}
+
+// ---------- CASH ADVANCES (เบิกเงินล่วงหน้า) ----------
+function AdvancesTab({ flash }) {
+  const [list, setList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  async function load() { try { setList(await listAdvances()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
+  React.useEffect(() => { load(); }, []);
+  async function decide(a, status) {
+    const lbl = { approved: "อนุมัติ", rejected: "ไม่อนุมัติ", pending: "คืนเป็นรออนุมัติ" }[status];
+    if (!await confirmDialog(`${lbl}คำขอเบิก ${fmtBaht(a.amount)} ของ ${a.name}?`)) return;
+    try { await decideAdvance(a.id, status); flash(lbl + "แล้ว"); load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  const B = { pending: { t: "รออนุมัติ", c: "b-amber" }, approved: { t: "อนุมัติ · รอหัก", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", c: "b-red" }, paid: { t: "หักแล้ว", c: "b-green" } };
+  if (loading) return <div className="empty">กำลังโหลด…</div>;
+  const pending = list.filter((a) => a.status === "pending");
+  const approvedSum = list.filter((a) => a.status === "approved").reduce((s, a) => s + (Number(a.amount) || 0), 0);
+  return (
+    <div className="card">
+      <div className="sec-head"><div><div className="sec-title">เบิกเงินล่วงหน้า</div>
+        <div className="sec-sub">รออนุมัติ {pending.length} รายการ · อนุมัติแล้วรอหักในรอบถัดไป {fmtBaht(approvedSum)}</div></div></div>
+      <div className="set-list">
+        {list.length === 0 && <div className="empty sm">ยังไม่มีคำขอเบิก</div>}
+        {list.map((a) => { const b = B[a.status] || B.pending; return (
+          <div className="hr-leave-row" key={a.id}>
+            <div><b>{a.name}</b> <span className="jo-dim">{a.department}</span><br />
+              <b>{fmtBaht(a.amount)}</b> · {thDate(a.request_date)}
+              {a.reason && <div className="jo-dim">เหตุผล: {a.reason}</div>}
+              {a.status === "paid" && a.period && <div className="jo-dim">หักในรอบ {a.period}</div>}</div>
+            <div className="hr-leave-act">
+              <span className={"job-badge " + b.c}>{b.t}</span>
+              {a.status !== "paid" && a.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
+              {a.status !== "paid" && a.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
+              {a.status !== "paid" && a.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
+            </div>
+          </div>
+        ); })}
+      </div>
+      <p className="page-sub" style={{ marginTop: 8 }}>* ยอดที่ “อนุมัติ” แล้วจะถูกหักอัตโนมัติในรอบเงินเดือนถัดไป แล้วเปลี่ยนเป็น “หักแล้ว” เมื่อกดทำจ่ายทั้งรอบ</p>
     </div>
   );
 }
@@ -394,6 +437,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [rows, setRows] = React.useState(null);
   const [paidStatus, setPaidStatus] = React.useState("draft");
   const [adj, setAdj] = React.useState({});     // user_id → { bonus, other_deduct }
+  const [advByUser, setAdvByUser] = React.useState({});   // user_id → approved-unsettled advance total
+  const [advIdsByUser, setAdvIdsByUser] = React.useState({}); // user_id → [advance ids] to settle on pay
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
   const [company, setCompany] = React.useState({});
@@ -407,7 +452,11 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   async function load() {
     setLoading(true);
     try {
-      const [att, leaves, slips] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym)]);
+      const [att, leaves, slips, advs] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym), listAdvances("approved")]);
+      // approved advances not yet settled (period not set) → deduct in this run
+      const advSum = {}, advIds = {};
+      advs.filter((a) => !a.period).forEach((a) => { advSum[a.user_id] = (advSum[a.user_id] || 0) + (Number(a.amount) || 0); (advIds[a.user_id] = advIds[a.user_id] || []).push(a.id); });
+      setAdvByUser(advSum); setAdvIdsByUser(advIds);
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
       const leaveDaySet = {}, yearUsed = {}; const yr = ym.slice(0, 4);
       leaves.forEach((l) => {
@@ -433,7 +482,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   }
   React.useEffect(() => { load(); }, [ym]);
 
-  const calcOf = (r) => computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0 }, r.st, {});
+  const calcOf = (r) => computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0 }, r.st, {});
   const setA = (id, k, v) => setAdj((s) => ({ ...s, [id]: { ...s[id], [k]: Number(v) || 0 } }));
   const payable = (rows || []).filter((r) => (Number(r.p.base_pay) || 0) > 0 || r.st.present > 0);
   const totalNet = payable.reduce((a, r) => a + calcOf(r).net, 0);
@@ -445,10 +494,15 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         const c = calcOf(r);
         await savePayslip({ period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
           base: c.base, ot_pay: c.otPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
-          late_min: r.st.lateMin, ot_min: r.st.otMin, d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso,
+          late_min: r.st.lateMin, ot_min: r.st.otMin, d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
           bonus: c.bonus, other_deduct: c.otherDeduct, net: c.net, status: markPaid ? "paid" : "draft" });
       }
-      if (markPaid) await setPayslipPaid(ym, true);
+      if (markPaid) {
+        await setPayslipPaid(ym, true);
+        // settle the advances deducted this run so they aren't deducted again next month
+        const ids = payable.flatMap((r) => advIdsByUser[r.p.id] || []);
+        await markAdvancesPaid(ym, ids);
+      }
       flash(markPaid ? "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓" : "บันทึกรอบเงินเดือนแล้ว ✓"); await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
@@ -468,7 +522,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       {loading ? <div className="empty">กำลังคำนวณ…</div> : payable.length === 0 ? <div className="empty">ยังไม่มีพนักงานที่ตั้งฐานเงินเดือน — ไปตั้งที่แท็บ “กะ & ตั้งค่า”</div> : (
         <div style={{ overflowX: "auto" }}>
           <table className="hr-table pay-table">
-            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
+            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>หักเบิกล่วงหน้า</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
             <tbody>
               {payable.map((r) => { const c = calcOf(r); return (
                 <tr key={r.p.id}>
@@ -479,6 +533,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                   <td className={c.dAbsent ? "hr-bad" : ""}>{c.dAbsent ? "−" + fmtBaht(c.dAbsent) : "—"}</td>
                   <td className={c.dLeave ? "hr-bad" : ""}>{c.dLeave ? "−" + fmtBaht(c.dLeave) : "—"}</td>
                   <td className={c.dSso ? "hr-bad" : ""}>{c.dSso ? "−" + fmtBaht(c.dSso) : "—"}</td>
+                  <td className={c.dAdvance ? "hr-bad" : ""}>{c.dAdvance ? "−" + fmtBaht(c.dAdvance) : "—"}</td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
                   <td style={{ fontWeight: 800, color: "var(--up)" }}>{fmtBaht(c.net)}</td>
@@ -486,7 +541,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                 </tr>
               ); })}
             </tbody>
-            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={8} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td><td /></tr></tfoot>
+            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={9} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td><td /></tr></tfoot>
           </table>
         </div>
       )}
@@ -511,6 +566,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
               {c.dAbsent > 0 && <tr><td>หักขาดงาน</td><td className="r">−{fmtBaht(c.dAbsent)}</td></tr>}
               {c.dLeave > 0 && <tr><td>หักลาเกินสิทธิ์</td><td className="r">−{fmtBaht(c.dLeave)}</td></tr>}
               {c.dSso > 0 && <tr><td>ประกันสังคม 5%</td><td className="r">−{fmtBaht(c.dSso)}</td></tr>}
+              {c.dAdvance > 0 && <tr><td>หักเบิกเงินล่วงหน้า</td><td className="r">−{fmtBaht(c.dAdvance)}</td></tr>}
               {c.otherDeduct > 0 && <tr><td>หักอื่นๆ</td><td className="r">−{fmtBaht(c.otherDeduct)}</td></tr>}
               <tr className="ps-sub"><td>รวมรายการหัก</td><td className="r">−{fmtBaht(c.ded)}</td></tr>
               <tr className="ps-net"><td>เงินได้สุทธิ</td><td className="r">{fmtBaht(c.net)}</td></tr>

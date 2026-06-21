@@ -1502,6 +1502,42 @@ export async function decideLeave(id, status, note) {
   if (error) throw error;
 }
 
+// ---------- CASH ADVANCES (เบิกเงินล่วงหน้า) ----------
+export async function submitAdvance({ amount, reason }) {
+  const uid = await _uid();
+  const { error } = await supabase.from("hr_advances").insert({ user_id: uid, amount: Number(amount) || 0, reason: reason || null, created_by: uid });
+  if (error) throw error;
+}
+export async function listMyAdvances() {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("hr_advances").select("*").eq("user_id", uid).order("created_at", { ascending: false });
+  if (error) throw error; return data || [];
+}
+// staff can withdraw their own request while it's still pending
+export async function cancelMyAdvance(id) {
+  const { error } = await supabase.from("hr_advances").delete().eq("id", id).eq("status", "pending");
+  if (error) throw error;
+}
+export async function listAdvances(status) {
+  let q = supabase.from("hr_advances").select("*").order("created_at", { ascending: false });
+  if (status) q = q.eq("status", status);
+  const [av, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,department")]);
+  if (av.error) throw av.error;
+  const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
+  return (av.data || []).map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: pm[a.user_id]?.department || "" }));
+}
+export async function decideAdvance(id, status, note) {
+  const uid = await _uid();
+  const { error } = await supabase.from("hr_advances").update({ status, decided_by: uid, decided_at: new Date().toISOString(), decide_note: note || null }).eq("id", id);
+  if (error) throw error;
+}
+// settle approved advances once their payroll run is paid (so they aren't deducted twice)
+export async function markAdvancesPaid(period, ids) {
+  if (!ids || !ids.length) return;
+  const { error } = await supabase.from("hr_advances").update({ status: "paid", period }).in("id", ids);
+  if (error) throw error;
+}
+
 // per-person leave quota (per year). Falls back to hr_settings defaults in the UI when no row.
 export async function getLeaveQuotas(year) {
   const { data, error } = await supabase.from("hr_leave_quota").select("*").eq("year", year);
@@ -1556,7 +1592,7 @@ export async function savePayslip(p) {
     base: p.base || 0, ot_pay: p.ot_pay || 0,
     present_days: p.present_days || 0, absent_days: p.absent_days || 0, leave_days: p.leave_days || 0, over_leave_days: p.over_leave_days || 0,
     late_min: p.late_min || 0, ot_min: p.ot_min || 0,
-    d_late: p.d_late || 0, d_absent: p.d_absent || 0, d_leave: p.d_leave || 0, d_sso: p.d_sso || 0,
+    d_late: p.d_late || 0, d_absent: p.d_absent || 0, d_leave: p.d_leave || 0, d_sso: p.d_sso || 0, d_advance: p.d_advance || 0,
     bonus: p.bonus || 0, other_deduct: p.other_deduct || 0, other_note: p.other_note || null,
     net: p.net || 0, status: p.status || "draft", note: p.note || null, created_by: uid, updated_at: new Date().toISOString(),
   }, { onConflict: "period,user_id" });

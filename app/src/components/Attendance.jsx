@@ -1,10 +1,17 @@
 import React from "react";
-import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota } from "../lib/api";
+import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance } from "../lib/api";
+import { fmtBaht } from "../lib/format";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { useLang, LEAVE_MY, LV_STATUS_MY } from "../lib/i18n";
 import { UIcon } from "../icons";
 
 const LV_BADGE = { pending: { th: "รออนุมัติ", cls: "b-amber" }, approved: { th: "อนุมัติ", cls: "b-green" }, rejected: { th: "ไม่อนุมัติ", cls: "b-red" } };
+const ADV_BADGE = {
+  pending: { th: "รออนุมัติ", my: "အတည်ပြုရန်", cls: "b-amber" },
+  approved: { th: "อนุมัติ · รอหัก", my: "အတည်ပြုပြီး", cls: "b-blue" },
+  rejected: { th: "ไม่อนุมัติ", my: "ငြင်းပယ်", cls: "b-red" },
+  paid: { th: "หักแล้ว", my: "နုတ်ယူပြီး", cls: "b-green" },
+};
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 
 function getGPS() {
@@ -24,6 +31,7 @@ export default function Attendance({ me }) {
   const [settings, setSettings] = React.useState(DEFAULT_HR_SETTINGS);
   const [recent, setRecent] = React.useState([]);
   const [leaves, setLeaves] = React.useState([]);
+  const [advances, setAdvances] = React.useState([]);
   const [holidays, setHolidays] = React.useState(new Set());
   const [myQuota, setMyQuota] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
@@ -38,8 +46,8 @@ export default function Attendance({ me }) {
   async function load() {
     try {
       const since = new Date(); since.setDate(since.getDate() - 30);
-      const [t, s, r, lv, hol, q] = await Promise.all([myAttendanceToday(), getHrSettings(), listMyAttendance(hrYmd(since)), listMyLeaves(), listHolidays(), getMyLeaveQuota(new Date().getFullYear())]);
-      setToday(t); setSettings(s || DEFAULT_HR_SETTINGS); setRecent(r); setLeaves(lv); setHolidays(new Set((hol || []).map((h) => h.day))); setMyQuota(q);
+      const [t, s, r, lv, hol, q, av] = await Promise.all([myAttendanceToday(), getHrSettings(), listMyAttendance(hrYmd(since)), listMyLeaves(), listHolidays(), getMyLeaveQuota(new Date().getFullYear()), listMyAdvances()]);
+      setToday(t); setSettings(s || DEFAULT_HR_SETTINGS); setRecent(r); setLeaves(lv); setHolidays(new Set((hol || []).map((h) => h.day))); setMyQuota(q); setAdvances(av);
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setToday(null); }
   }
   React.useEffect(() => { load(); }, []);
@@ -126,6 +134,34 @@ export default function Attendance({ me }) {
         </div>
       </div>
 
+      {/* cash advance request + my advances */}
+      <div className="damage-layout">
+        <div className="card">
+          <div className="sec-head"><div><div className="sec-title">{L("เบิกเงินล่วงหน้า", "ကြိုတင်ငွေထုတ်")}</div>
+            <div className="sec-sub">{L("ส่งคำขอเบิก · หักจากเงินเดือนรอบถัดไปเมื่ออนุมัติ", "တောင်းဆို၍ အတည်ပြုပါက နောက်လစာမှ နုတ်ယူမည်")}</div></div></div>
+          <AdvanceForm onDone={(m) => { flash(m); load(); }} flash={flash} L={L} />
+        </div>
+
+        <div className="card">
+          <div className="sec-head"><div><div className="sec-title">{L("การเบิกของฉัน", "ကျွန်ုပ်၏ ကြိုတင်ထုတ်ယူမှု")}</div></div></div>
+          <div className="set-list">
+            {advances.length === 0 && <div className="empty sm">{L("ยังไม่มีรายการเบิก", "ကြိုတင်ထုတ်ယူမှု မရှိသေးပါ")}</div>}
+            {advances.map((a) => { const b = ADV_BADGE[a.status] || ADV_BADGE.pending; return (
+              <div className="att-leave-row" key={a.id}>
+                <div><b>{fmtBaht(a.amount)}</b> <span className="jo-dim">· {thDate(a.request_date)}</span>
+                  {a.reason && <div className="jo-dim">{a.reason}</div>}
+                  {a.status === "paid" && a.period && <div className="jo-dim">{L("หักในรอบ", "နုတ်ယူသည့်လ")} {a.period}</div>}
+                  {a.decide_note && <div className="jo-dim">{L("หมายเหตุ", "မှတ်ချက်")}: {a.decide_note}</div>}</div>
+                <div className="hr-leave-act">
+                  <span className={"job-badge " + b.cls}>{L(b.th, b.my)}</span>
+                  {a.status === "pending" && <button className="btn-ghost sm" onClick={async () => { try { await cancelMyAdvance(a.id); flash(L("ยกเลิกคำขอแล้ว", "တောင်းဆိုမှု ပယ်ဖျက်ပြီး")); load(); } catch (e) { flash((e.message || e), true); } }}>{L("ยกเลิก", "ပယ်ဖျက်")}</button>}
+                </div>
+              </div>
+            ); })}
+          </div>
+        </div>
+      </div>
+
       {/* recent attendance */}
       <div className="card">
         <div className="sec-head"><div><div className="sec-title">{L("ประวัติเข้างาน 30 วันล่าสุด", "နောက်ဆုံး ၃၀ ရက် အလုပ်တက်မှတ်တမ်း")}</div></div></div>
@@ -142,6 +178,28 @@ export default function Attendance({ me }) {
       </div>
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
+    </div>
+  );
+}
+
+function AdvanceForm({ onDone, flash, L }) {
+  const [amount, setAmount] = React.useState("");
+  const [reason, setReason] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  async function submit() {
+    const amt = Number(amount) || 0;
+    if (amt <= 0) return flash(L("กรอกจำนวนเงินที่ต้องการเบิก", "ထုတ်ယူမည့်ပမာဏ ဖြည့်ပါ"), true);
+    setBusy(true);
+    try { await submitAdvance({ amount: amt, reason }); setAmount(""); setReason(""); onDone(L("ส่งคำขอเบิกแล้ว รออนุมัติ ✓", "ကြိုတင်ထုတ် တောင်းဆိုပြီး · အတည်ပြုရန် စောင့်ဆိုင်း ✓")); }
+    catch (e) { flash(L("ส่งคำขอไม่สำเร็จ: ", "တောင်းဆို၍ မရပါ: ") + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="att-leaveform">
+      <label className="fld"><span>{L("จำนวนเงินที่ขอเบิก (บาท)", "ထုတ်ယူလိုသည့်ပမာဏ (ဘတ်)")}</span>
+        <span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" step="100" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" /></span></label>
+      <label className="fld"><span>{L("เหตุผล", "အကြောင်းပြချက်")}</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={L("เช่น ค่ารักษา / เหตุฉุกเฉิน", "ဥပမာ - ဆေးကုသစရိတ် / အရေးပေါ်")} /></label>
+      <button className="btn-primary" disabled={busy || !(Number(amount) > 0)} onClick={submit}>{L("ส่งคำขอเบิก", "တောင်းဆိုရန်")}</button>
     </div>
   );
 }

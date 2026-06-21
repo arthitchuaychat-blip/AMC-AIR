@@ -42,7 +42,8 @@ export function computePayslip(emp, st, opt = {}) {
   const ssoBase = monthly ? basePay : base;
   const dSso = emp.sso ? Math.min(750, r0(ssoBase * 0.05)) : 0;
   const bonus = Number(emp.bonus) || 0, otherDeduct = Number(emp.other_deduct) || 0;
+  const dAdvance = Number(emp.advance) || 0;   // เบิกเงินล่วงหน้า ที่อนุมัติแล้ว → หักในรอบนี้
   const gross = base + otPay + bonus;
-  const ded = dLate + dAbsent + dLeave + dSso + otherDeduct;
-  return { monthly, base, otHours, otPay, dLate, dAbsent, dLeave, dSso, bonus, otherDeduct, gross, ded, net: gross - ded };
+  const ded = dLate + dAbsent + dLeave + dSso + otherDeduct + dAdvance;
+  return { monthly, base, otHours, otPay, dLate, dAbsent, dLeave, dSso, dAdvance, bonus, otherDeduct, gross, ded, net: gross - ded };
 }
