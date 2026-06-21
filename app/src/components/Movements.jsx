@@ -48,6 +48,10 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [pickCode, setPickCode] = React.useState("");
   const [pickQty, setPickQty] = React.useState(1);
   const [pickPrice, setPickPrice] = React.useState("");
+  const [pickSearch, setPickSearch] = React.useState("");
+  const [qtyModal, setQtyModal] = React.useState(null); // material being added (food-menu style)
+  const [modalQty, setModalQty] = React.useState(1);
+  const [modalPrice, setModalPrice] = React.useState("");
   const [receivePo, setReceivePo] = React.useState(null);
   // picker filters (เหมือนหน้า BOQ): ชนิด + หมวดวัสดุ
   const [mvKind, setMvKind] = React.useState("all"); // all | ac | material
@@ -67,11 +71,15 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     const seen = {}; mats.forEach((m) => { if (m.tracked && m.kind === "material" && m.cat) seen[m.cat] = m.catName || m.cat; });
     return Object.entries(seen).sort((a, b) => a[1].localeCompare(b[1], "th"));
   }, [mats]);
-  const pickList = React.useMemo(() => mats.filter((m) =>
-    m.tracked &&
-    (mvKind === "all" || m.kind === mvKind) &&
-    (mvKind !== "material" || mvCat === "all" || m.cat === mvCat)
-  ), [mats, mvKind, mvCat]);
+  const pickList = React.useMemo(() => {
+    const q = pickSearch.trim().toLowerCase();
+    return mats.filter((m) =>
+      m.tracked &&
+      (mvKind === "all" || m.kind === mvKind) &&
+      (mvKind !== "material" || mvCat === "all" || m.cat === mvCat) &&
+      (!q || `${m.code} ${m.th || ""} ${m.name || ""}`.toLowerCase().includes(q))
+    );
+  }, [mats, mvKind, mvCat, pickSearch]);
   const T = TYPE_BY[type];
   // which UI flow is active
   const flow = type === "return" ? "job" : type === "damage" ? (damageMode === "job" ? "job" : "cart") : "cart";
@@ -139,6 +147,22 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
       return [...ls, { code: pickCode, qty: Number(pickQty), price }];
     });
     setPickQty(1);
+  }
+  // add/merge a line directly (used by the visual picker modal)
+  function addItem(code, qty, price) {
+    const q = Number(qty) || 0;
+    if (!code || q < 1) return;
+    setLines((ls) => {
+      const i = ls.findIndex((l) => l.code === code);
+      if (i >= 0) { const c = [...ls]; c[i] = { ...c[i], qty: c[i].qty + q, price }; return c; }
+      return [...ls, { code, qty: q, price }];
+    });
+  }
+  function openQty(m) { setQtyModal(m); setModalQty(1); setModalPrice(String(m.cost ?? 0)); }
+  function addFromModal() {
+    if (!qtyModal) return;
+    addItem(qtyModal.code, modalQty, type === "purchase" ? (Number(modalPrice) || 0) : undefined);
+    setQtyModal(null);
   }
   const removeLine = (code) => setLines((ls) => ls.filter((l) => l.code !== code));
   const cartValid = lines.length > 0 && (type === "purchase" || type === "damage" || team);
@@ -357,24 +381,25 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                     </Combo>
                   )}
                 </div>
-                <div className="line-add">
-                  <Combo className="inp" value={pickCode} onChange={(e) => setPickCode(e.target.value)}>
-                    {pickList.map((m) => <option key={m.code} value={m.code}>{m.code} · {m.th} (เหลือ {m.stock} {m.unit})</option>)}
-                  </Combo>
-                  {type === "purchase" && (
-                    <div className="inp inp-unit line-price" title="ราคา/หน่วยที่ซื้อ">
-                      <span className="unit-pre">฿</span>
-                      <input type="number" min="0" step="0.01" value={pickPrice} onChange={(e) => setPickPrice(e.target.value)} />
-                      <span className="unit-suf">/{matMap[pickCode]?.unit || "หน่วย"}</span>
-                    </div>
-                  )}
-                  <div className="inp inp-unit line-qty" title="จำนวน">
-                    <input type="number" min="1" value={pickQty} onChange={(e) => setPickQty(Math.max(1, Number(e.target.value) || 1))} />
-                    <span className="unit-suf">{matMap[pickCode]?.unit || "หน่วย"}</span>
-                  </div>
-                  <button className="btn-ghost sm" onClick={addLine}><UIcon name="plus" size={14} /> เพิ่ม</button>
+                <div className="cat-search mv-search" style={{ marginBottom: 8 }}>
+                  <UIcon name="search" size={16} color="var(--ink-3)" />
+                  <input placeholder="พิมพ์ค้นหา รหัส / ชื่อวัสดุ" value={pickSearch} onChange={(e) => setPickSearch(e.target.value)} />
+                  {pickSearch && <button className="cat-search-x" onClick={() => setPickSearch("")}><UIcon name="x" size={14} /></button>}
                 </div>
-                {type === "purchase" && <p className="page-sub" style={{ marginTop: 6 }}>ใส่ราคาที่ซื้อจริงครั้งนี้ · ระบบจะคำนวณต้นทุนเฉลี่ยใหม่ให้อัตโนมัติ</p>}
+                <div className="mv-grid">
+                  {pickList.length === 0 && <div className="empty sm" style={{ gridColumn: "1/-1" }}>ไม่พบวัสดุตามตัวกรอง</div>}
+                  {pickList.map((m) => (
+                    <button type="button" className="mv-card" key={m.code} onClick={() => openQty(m)} title="กดเพื่อเพิ่มเข้ารายการ">
+                      <MaterialThumb mat={m} size={44} radius={10} />
+                      <div className="mv-card-info">
+                        <div className="mv-card-name">{m.th || m.name}</div>
+                        <div className="mv-card-sub">{m.code} · เหลือ <b>{fmtNum(m.stock)}</b> {m.unit}</div>
+                      </div>
+                      <span className="mv-card-add"><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /></span>
+                    </button>
+                  ))}
+                </div>
+                {type === "purchase" && <p className="page-sub" style={{ marginTop: 6 }}>กดวัสดุ → ใส่ราคาที่ซื้อจริง + จำนวน · ระบบคำนวณต้นทุนเฉลี่ยใหม่ให้อัตโนมัติ</p>}
               </div>
 
               {linesView.length > 0 && (
@@ -465,6 +490,40 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           </div>
         </div>
       </div>
+
+      {/* qty picker modal (food-menu style) */}
+      {qtyModal && (
+        <div className="modal-overlay" onClick={() => setQtyModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
+            <div className="modal-head"><div className="modal-title">เพิ่มรายการ · {T.th}</div>
+              <button className="modal-x" onClick={() => setQtyModal(null)}><UIcon name="x" size={18} /></button></div>
+            <div className="modal-body">
+              <div className="mv-pick-head">
+                <MaterialThumb mat={qtyModal} size={64} radius={12} />
+                <div><div className="mv-pick-name">{qtyModal.th || qtyModal.name}</div>
+                  <div className="mv-pick-sub">{qtyModal.code} · เหลือ <b>{fmtNum(qtyModal.stock)}</b> {qtyModal.unit}</div></div>
+              </div>
+              {type === "purchase" && (
+                <label className="fld"><span>ราคา/หน่วยที่ซื้อ</span>
+                  <div className="inp inp-unit"><span className="unit-pre">฿</span>
+                    <input type="number" min="0" step="0.01" value={modalPrice} autoFocus onChange={(e) => setModalPrice(e.target.value)} />
+                    <span className="unit-suf">/{qtyModal.unit || "หน่วย"}</span></div>
+                </label>
+              )}
+              <label className="fld"><span>จำนวน</span>
+                <div className="mv-qty-step">
+                  <button type="button" onClick={() => setModalQty((q) => Math.max(1, (Number(q) || 1) - 1))}><UIcon name="minus" size={18} /></button>
+                  <input type="number" min="1" value={modalQty} onChange={(e) => setModalQty(Math.max(1, Number(e.target.value) || 1))} />
+                  <span className="mv-qty-unit">{qtyModal.unit || "หน่วย"}</span>
+                  <button type="button" onClick={() => setModalQty((q) => (Number(q) || 1) + 1)}><UIcon name="plus" size={18} /></button>
+                </div>
+              </label>
+            </div>
+            <div className="modal-foot"><button className="btn-ghost" onClick={() => setQtyModal(null)}>ยกเลิก</button>
+              <button className="btn-primary" style={{ background: T.color }} onClick={addFromModal}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มเข้ารายการ</button></div>
+          </div>
+        </div>
+      )}
 
       {/* print slip (hidden on screen) */}
       <div className="print-area">

@@ -556,6 +556,25 @@ select.inp{cursor:pointer}
 .line-add .inp{flex:1;min-width:0}
 .line-add .line-qty{flex:none;width:80px}
 .line-add .btn-ghost.sm{flex:none}
+/* visual material picker (food-menu style) */
+.mv-search{margin-bottom:8px}
+.mv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;max-height:340px;overflow-y:auto;padding:2px;margin-bottom:6px}
+.mv-card{display:flex;align-items:center;gap:10px;text-align:left;padding:9px 10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;cursor:pointer;font-family:inherit;transition:border-color .12s,box-shadow .12s,transform .06s}
+.mv-card:hover{border-color:var(--primary);box-shadow:0 3px 10px rgba(16,24,40,.1)}
+.mv-card:active{transform:scale(.985)}
+.mv-card-info{flex:1;min-width:0}
+.mv-card-name{font-size:12.5px;font-weight:700;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.mv-card-sub{font-size:10.5px;color:var(--ink-3);margin-top:2px}
+.mv-card-add{flex:none;width:26px;height:26px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center}
+/* qty modal */
+.mv-pick-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.mv-pick-name{font-size:15px;font-weight:800}
+.mv-pick-sub{font-size:12px;color:var(--ink-3);margin-top:2px}
+.mv-qty-step{display:flex;align-items:center;gap:8px}
+.mv-qty-step button{width:42px;height:42px;border-radius:11px;border:1px solid var(--line);background:var(--surface-2);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none}
+.mv-qty-step button:hover{border-color:var(--primary)}
+.mv-qty-step input{flex:1;min-width:0;text-align:center;font-size:20px;font-weight:800;padding:9px;border:1px solid var(--line);border-radius:11px;font-family:inherit}
+.mv-qty-unit{font-size:13px;color:var(--ink-3);flex:none}
 .line-list{display:flex;flex-direction:column;gap:6px;margin:4px 0 16px;padding:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px}
 .line-row{display:flex;align-items:center;gap:10px}
 .line-info{flex:1;min-width:0}
