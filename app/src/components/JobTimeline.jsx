@@ -1,27 +1,32 @@
 import React from "react";
 import { listJobLogs, listJobLogsByGroup, addJobLog, uploadMaterialPhoto } from "../lib/api";
-import { ATTACH_ACCEPT } from "../lib/format";
+import { ATTACH_ACCEPT, isImageUrl } from "../lib/format";
 import AttachThumb from "./AttachThumb";
+import Lightbox from "./Lightbox";
 
 const STATUS_TH = { pending: "รอเริ่มงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", awaiting_approval: "รออนุมัติ", reschedule: "นัดหมายเพิ่ม", done: "เสร็จแล้ว", cancelled: "ยกเลิก" };
-// action wording per status — so the timeline says clearly who did what
 const STATUS_ACTION = { pending: "🕒 รอจ่ายงาน", scheduled: "📌 นัดหมายแล้ว", in_progress: "🔧 เริ่ม/กำลังทำงาน", awaiting_approval: "📤 ส่งอนุมัติ", reschedule: "📅 ส่งไปนัดหมายเพิ่ม", done: "✅ อนุมัติงานเสร็จ", cancelled: "❌ ยกเลิกงาน" };
 const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."; };
 
-// Append-only timeline of a job: status changes + photo/comment updates.
-// canPost=true shows the add-entry box (unlimited photos + comment per entry).
-export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, flash }) {
-  const [logs, setLogs] = React.useState(null);
+// photos of one entry → image cells (open the lightbox) + file chips. onOpen(images, index)
+function Photos({ photos, onOpen }) {
+  if (!photos?.length) return null;
+  const imgs = photos.filter(isImageUrl);
+  return (
+    <div className="tl-photos">
+      {photos.map((u, i) => isImageUrl(u)
+        ? <button type="button" className="tl-photo" key={i} onClick={() => onOpen(imgs, imgs.indexOf(u))}><img src={u} alt="" /></button>
+        : <AttachThumb key={i} url={u} />)}
+    </div>
+  );
+}
+
+// shared add box (top-level comment or a reply when parentId/jobNo is the parent's)
+function Composer({ jobNo, author, parentId, placeholder, onPosted, flash, compact }) {
   const [note, setNote] = React.useState("");
   const [photos, setPhotos] = React.useState([]);
   const [uploading, setUploading] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
-
-  // shared board across a linked-job group (resolved server-side so it works even when the list is filtered)
-  const shared = !!linked && !!groupNo;
-  async function load() { try { setLogs(shared ? await listJobLogsByGroup(groupNo) : await listJobLogs(jobNo)); } catch (e) { flash && flash("โหลดความเคลื่อนไหวไม่สำเร็จ: " + (e.message || e), true); setLogs([]); } }
-  React.useEffect(() => { load(); }, [jobNo, groupNo, linked]);
-
   async function onFiles(e) {
     const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
     setUploading(true);
@@ -29,60 +34,93 @@ export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, f
     catch (ex) { flash && flash("อัปโหลดไม่สำเร็จ: " + (ex.message || ex), true); }
     setUploading(false);
   }
-  const removePhoto = (i) => setPhotos((p) => p.filter((_, j) => j !== i));
-
   async function post() {
     if (!note.trim() && photos.length === 0) return;
     setBusy(true);
-    try { await addJobLog(jobNo, { note, photos, author }); setNote(""); setPhotos([]); await load(); flash && flash("เพิ่มบันทึกแล้ว ✓"); }
+    try { await addJobLog(jobNo, { note, photos, author, parent_id: parentId || null }); setNote(""); setPhotos([]); await onPosted(); flash && flash(parentId ? "ตอบกลับแล้ว ✓" : "เพิ่มบันทึกแล้ว ✓"); }
     catch (e) { flash && flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
+  return (
+    <div className={"tl-add" + (compact ? " tl-add-reply" : "")}>
+      <div className="myjob-photos">
+        {photos.map((u, i) => (
+          <div className="myjob-photo" key={i}><AttachThumb url={u} />
+            <button type="button" className="myjob-photo-x" onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} aria-label="ลบไฟล์">×</button></div>
+        ))}
+        <label className="myjob-addphoto">{uploading ? "…" : "＋ รูป/ไฟล์"}<input type="file" accept={ATTACH_ACCEPT} multiple onChange={onFiles} hidden /></label>
+      </div>
+      <textarea className="inp" rows={compact ? 1 : 2} placeholder={placeholder || "เพิ่มบันทึก/คอมเมนต์ความคืบหน้า…"} value={note} onChange={(e) => setNote(e.target.value)} />
+      <button className="btn-primary sm" disabled={busy || uploading || (!note.trim() && photos.length === 0)} onClick={post}>{busy ? "กำลังบันทึก…" : (parentId ? "ตอบกลับ" : "เพิ่มลงไทม์ไลน์")}</button>
+    </div>
+  );
+}
+
+// Append-only timeline of a job: status changes + photo/comment updates (with replies).
+export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, flash }) {
+  const [logs, setLogs] = React.useState(null);
+  const [lightbox, setLightbox] = React.useState(null);   // { images, index }
+  const [replyTo, setReplyTo] = React.useState(null);     // parent log id whose reply box is open
+
+  const shared = !!linked && !!groupNo;
+  async function load() { try { setLogs(shared ? await listJobLogsByGroup(groupNo) : await listJobLogs(jobNo)); } catch (e) { flash && flash("โหลดความเคลื่อนไหวไม่สำเร็จ: " + (e.message || e), true); setLogs([]); } }
+  React.useEffect(() => { load(); }, [jobNo, groupNo, linked]);
+  const openLb = (images, index) => setLightbox({ images, index });
+
+  // split into top-level entries + replies grouped by parent
+  const tops = (logs || []).filter((l) => !l.parent_id);
+  const repliesBy = {}; (logs || []).filter((l) => l.parent_id).forEach((r) => { (repliesBy[r.parent_id] = repliesBy[r.parent_id] || []).push(r); });
 
   return (
     <div className="tl">
       <div className="tl-title">ความเคลื่อนไหวของงาน · Timeline{shared ? " (รวมใบงานเชื่อม)" : ""}</div>
 
-      {canPost && (
-        <div className="tl-add">
-          <div className="myjob-photos">
-            {photos.map((u, i) => (
-              <div className="myjob-photo" key={i}>
-                <AttachThumb url={u} />
-                <button type="button" className="myjob-photo-x" onClick={() => removePhoto(i)} aria-label="ลบไฟล์">×</button>
+      {canPost && <Composer jobNo={jobNo} author={author} onPosted={load} flash={flash} />}
+
+      {logs === null && <div className="tl-empty">กำลังโหลด…</div>}
+      {logs && tops.length === 0 && <div className="tl-empty">ยังไม่มีความเคลื่อนไหว</div>}
+      {logs && tops.length > 0 && (
+        <div className="tl-list">
+          {tops.slice().reverse().map((l) => {
+            const replies = (repliesBy[l.id] || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+            const isComment = l.type !== "status" && l.type !== "edit";
+            return (
+              <div className={"tl-item" + (l.type === "status" ? " status" : "")} key={l.id}>
+                <span className="tl-dot" />
+                <div className="tl-body">
+                  <div className="tl-meta">{fmtWhen(l.created_at)}{l.author ? ` · ${l.author}` : ""}{shared ? <span className="tl-jobtag">{l.job_no}</span> : null}</div>
+                  {l.type === "status"
+                    ? <div className="tl-status">{STATUS_ACTION[l.status] || `เปลี่ยนสถานะเป็น ${STATUS_TH[l.status] || l.status}`}</div>
+                    : l.type === "edit"
+                    ? <div className="tl-status">✏️ บันทึก/แก้ไขใบงาน{l.status ? ` · สถานะ: ${STATUS_TH[l.status] || l.status}` : ""}</div>
+                    : <>
+                        {l.note && <div className="tl-note">{l.note}</div>}
+                        <Photos photos={l.photos} onOpen={openLb} />
+                      </>}
+
+                  {/* replies */}
+                  {(replies.length > 0 || (canPost && isComment)) && (
+                    <div className="tl-replies">
+                      {replies.map((r) => (
+                        <div className="tl-reply" key={r.id}>
+                          <div className="tl-meta">↳ {fmtWhen(r.created_at)}{r.author ? ` · ${r.author}` : ""}</div>
+                          {r.note && <div className="tl-note">{r.note}</div>}
+                          <Photos photos={r.photos} onOpen={openLb} />
+                        </div>
+                      ))}
+                      {canPost && isComment && (replyTo === l.id
+                        ? <Composer jobNo={l.job_no} author={author} parentId={l.id} placeholder="ตอบกลับคอมเมนต์นี้…" compact onPosted={() => { setReplyTo(null); load(); }} flash={flash} />
+                        : <button className="tl-reply-btn" onClick={() => setReplyTo(l.id)}>↳ ตอบกลับ</button>)}
+                    </div>
+                  )}
+                </div>
               </div>
-            ))}
-            <label className="myjob-addphoto">{uploading ? "…" : "＋ รูป/ไฟล์"}
-              <input type="file" accept={ATTACH_ACCEPT} multiple onChange={onFiles} hidden />
-            </label>
-          </div>
-          <textarea className="inp" rows={2} placeholder="เพิ่มบันทึก/คอมเมนต์ความคืบหน้า…" value={note} onChange={(e) => setNote(e.target.value)} />
-          <button className="btn-primary sm" disabled={busy || uploading || (!note.trim() && photos.length === 0)} onClick={post}>{busy ? "กำลังบันทึก…" : "เพิ่มลงไทม์ไลน์"}</button>
+            );
+          })}
         </div>
       )}
 
-      {logs === null && <div className="tl-empty">กำลังโหลด…</div>}
-      {logs && logs.length === 0 && <div className="tl-empty">ยังไม่มีความเคลื่อนไหว</div>}
-      {logs && logs.length > 0 && (
-        <div className="tl-list">
-          {logs.slice().reverse().map((l) => (
-            <div className={"tl-item" + (l.type === "status" ? " status" : "")} key={l.id}>
-              <span className="tl-dot" />
-              <div className="tl-body">
-                <div className="tl-meta">{fmtWhen(l.created_at)}{l.author ? ` · ${l.author}` : ""}{shared ? <span className="tl-jobtag">{l.job_no}</span> : null}</div>
-                {l.type === "status"
-                  ? <div className="tl-status">{STATUS_ACTION[l.status] || `เปลี่ยนสถานะเป็น ${STATUS_TH[l.status] || l.status}`}</div>
-                  : l.type === "edit"
-                  ? <div className="tl-status">✏️ บันทึก/แก้ไขใบงาน{l.status ? ` · สถานะ: ${STATUS_TH[l.status] || l.status}` : ""}</div>
-                  : <>
-                      {l.note && <div className="tl-note">{l.note}</div>}
-                      {l.photos?.length > 0 && <div className="tl-photos">{l.photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>}
-                    </>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {lightbox && <Lightbox images={lightbox.images} index={lightbox.index} onClose={() => setLightbox(null)} />}
     </div>
   );
 }

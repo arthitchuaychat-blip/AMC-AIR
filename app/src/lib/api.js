@@ -966,11 +966,11 @@ export async function listJobLogsByGroup(groupNo) {
 }
 
 // add one timeline entry (a comment + any photos). Unlimited entries per job.
-export async function addJobLog(job_no, { note, photos, author }) {
+export async function addJobLog(job_no, { note, photos, author, parent_id }) {
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from("job_logs").insert({
     job_no, type: "update", note: note?.trim() || null, photos: photos || [],
-    author: author || null, created_by: user?.id || null,
+    parent_id: parent_id || null, author: author || null, created_by: user?.id || null,
   });
   if (error) throw error;
 }
