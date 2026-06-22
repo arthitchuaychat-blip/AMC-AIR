@@ -267,6 +267,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           <div className="qt-totals">
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(subtotal)}</b></div>
             {discount > 0 && <div><span>ส่วนลด</span><b style={{ color: "var(--down)" }}>− {fmtBaht(discount)}</b></div>}
+            {discount > 0 && <div><span>ยอดหลังหักส่วนลด</span><b>{fmtBaht(afterDisc)}</b></div>}
             {ed.vat && <div><span>VAT 7%</span><b>{fmtBaht(vatAmt)}</b></div>}
             <div className="qt-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(grand)}</b></div>
             {ed.wht && canWht && <div><span>หัก ณ ที่จ่าย {Number(ed.wht_rate) || 3}%</span><b style={{ color: "var(--down)" }}>− {fmtBaht(whtAmt)}</b></div>}
@@ -383,6 +384,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           totals={<div className="doc-totals">
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(printQ.subtotal)}</b></div>
             {printQ.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(printQ.discount)}</b></div>}
+            {printQ.discount > 0 && <div><span>ยอดหลังหักส่วนลด</span><b>{fmtBaht(printQ.afterDisc)}</b></div>}
             {printQ.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printQ.vatAmt)}</b></div> : null}
             <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(printQ.grand)}</b></div>
             {printQ.wht ? <div><span>หัก ณ ที่จ่าย {Number(printQ.wht_rate) || 3}%</span><b>− {fmtBaht(printQ.whtAmt)}</b></div> : null}
