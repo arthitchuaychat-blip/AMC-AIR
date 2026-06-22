@@ -1,10 +1,10 @@
 import React from "react";
 import Combo from "./Combo";
 import { fmtBaht2, fmtNum } from "../lib/format";
-import { UIcon } from "../icons";
+import { UIcon, MaterialThumb } from "../icons";
 
 // Right-side product browser for document editors: tab by kind (แอร์/วัสดุ/บริการ),
-// drill down with sub-filters, click an item to add it to the document.
+// drill down with sub-filters, tap a photo card → enter quantity → add (same flow as Stock Movements).
 const TABS = [{ v: "ac", l: "แอร์" }, { v: "material", l: "วัสดุ" }, { v: "service", l: "บริการ" }];
 
 export default function ItemBrowser({ mats, onAdd, matTargets }) {
@@ -15,6 +15,8 @@ export default function ItemBrowser({ mats, onAdd, matTargets }) {
   const [btu, setBtu] = React.useState("all");
   const [cat, setCat] = React.useState("all");
   const [matTarget, setMatTarget] = React.useState(matTargets?.[0]?.id);
+  const [qtyModal, setQtyModal] = React.useState(null); // material being added
+  const [modalQty, setModalQty] = React.useState(1);
 
   const brands = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "ac" && m.brand).map((m) => m.brand))].sort((a, b) => a.localeCompare(b)), [mats]);
   const acTypes = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "ac" && m.ac_type).map((m) => m.ac_type))].sort((a, b) => a.localeCompare(b, "th")), [mats]);
@@ -31,6 +33,14 @@ export default function ItemBrowser({ mats, onAdd, matTargets }) {
     return true;
   });
   const shown = list.slice(0, 80);
+  const subLine = (m) => m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? fmtNum(m.btu) + " BTU" : null].filter(Boolean).join(" · ") : (m.catName || "");
+
+  function openQty(m) { setQtyModal(m); setModalQty(1); }
+  function addFromModal() {
+    if (!qtyModal) return;
+    onAdd(qtyModal, qtyModal.kind === "material" ? matTarget : undefined, modalQty);
+    setQtyModal(null);
+  }
 
   return (
     <div className="ib">
@@ -58,20 +68,52 @@ export default function ItemBrowser({ mats, onAdd, matTargets }) {
         </div>
       )}
       <div className="ib-count">{list.length} รายการ</div>
-      <div className="ib-list">
-        {shown.length === 0 && <div className="ib-empty">ไม่พบรายการ</div>}
+      <div className="mv-grid ib-cardgrid">
+        {shown.length === 0 && <div className="ib-empty" style={{ gridColumn: "1/-1" }}>ไม่พบรายการ</div>}
         {shown.map((m) => (
-          <button key={m.code} className="ib-item" onClick={() => onAdd(m, m.kind === "material" ? matTarget : undefined)} title="เพิ่มเข้าเอกสาร">
-            <div className="ib-item-main">
-              <div className="ib-item-name">{m.th}</div>
-              <div className="ib-item-sub">{m.code}{m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? fmtNum(m.btu) + " BTU" : null].filter(Boolean).map((x) => " · " + x).join("") : (m.catName ? " · " + m.catName : "")}</div>
+          <button type="button" className="mv-card" key={m.code} onClick={() => openQty(m)} title="กดเพื่อเพิ่มเข้าเอกสาร">
+            <div className="mv-card-photo"><MaterialThumb mat={m} size={108} radius={12} /></div>
+            <div className="mv-card-info">
+              <div className="mv-card-name">{m.th}</div>
+              <div className="mv-card-sub">{m.code}{subLine(m) ? " · " + subLine(m) : ""}</div>
+              <div className="mv-card-stock">{fmtBaht2(m.cost)}</div>
             </div>
-            <div className="ib-item-price">{fmtBaht2(m.cost)}</div>
-            <span className="ib-add"><UIcon name="plus" size={14} color="#fff" strokeWidth={2.6} /></span>
+            <span className="mv-card-add"><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่ม</span>
           </button>
         ))}
-        {list.length > shown.length && <div className="ib-empty">…อีก {list.length - shown.length} รายการ — กรอง/ค้นหาเพิ่ม</div>}
+        {list.length > shown.length && <div className="ib-empty" style={{ gridColumn: "1/-1" }}>…อีก {list.length - shown.length} รายการ — กรอง/ค้นหาเพิ่ม</div>}
       </div>
+
+      {qtyModal && (
+        <div className="modal-overlay" onClick={() => setQtyModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
+            <div className="modal-head"><div className="modal-title">เพิ่มเข้าเอกสาร</div>
+              <button className="modal-x" onClick={() => setQtyModal(null)}><UIcon name="x" size={18} /></button></div>
+            <div className="modal-body">
+              <div className="mv-pick-head">
+                <MaterialThumb mat={qtyModal} size={64} radius={12} />
+                <div><div className="mv-pick-name">{qtyModal.th}</div>
+                  <div className="mv-pick-sub">{qtyModal.code}{subLine(qtyModal) ? " · " + subLine(qtyModal) : ""}</div></div>
+              </div>
+              {qtyModal.kind === "material" && matTargets && (
+                <div className="ib-target" style={{ marginBottom: 12 }}><span>เพิ่มเข้า:</span>
+                  {matTargets.map((t) => <button key={t.id} className={"ib-target-btn" + (matTarget === t.id ? " on" : "")} onClick={() => setMatTarget(t.id)}>{t.label}</button>)}
+                </div>
+              )}
+              <label className="fld"><span>จำนวน {qtyModal.unit ? `(${qtyModal.unit})` : ""}</span>
+                <div className="mv-qty-step">
+                  <button type="button" onClick={() => setModalQty((x) => Math.max(1, (Number(x) || 1) - 1))}><UIcon name="minus" size={18} /></button>
+                  <input type="number" min="1" value={modalQty} onChange={(e) => setModalQty(Math.max(1, Number(e.target.value) || 1))} />
+                  <span className="mv-qty-unit">{qtyModal.unit || "หน่วย"}</span>
+                  <button type="button" onClick={() => setModalQty((x) => (Number(x) || 1) + 1)}><UIcon name="plus" size={18} /></button>
+                </div>
+              </label>
+            </div>
+            <div className="modal-foot"><button className="btn-ghost" onClick={() => setQtyModal(null)}>ยกเลิก</button>
+              <button className="btn-primary" onClick={addFromModal}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มเข้าเอกสาร</button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

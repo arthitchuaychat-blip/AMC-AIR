@@ -115,10 +115,10 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const addItem = (sec, it) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: [...e.items[sec], it] } }));
   const moveItem = (sec, i, dir) => setEd((e) => { const a = [...e.items[sec]]; const j = i + dir; if (j < 0 || j >= a.length) return e; [a[i], a[j]] = [a[j], a[i]]; return { ...e, items: { ...e.items, [sec]: a } }; });
   // add from the right-side browser → route to the section matching the item's kind (material defaults to "คิดเงิน")
-  const browserAdd = (m, target) => {
+  const browserAdd = (m, target, qty = 1) => {
     const sec = m.kind === "ac" ? "ac" : m.kind === "service" ? "service" : (target || "charged");
-    addItem(sec, { code: m.code, name: m.th, unit: m.unit, qty: 1, unit_cost: m.cost, description: m.description || "" });
-    flash(`+ ${m.th}`);
+    addItem(sec, { code: m.code, name: m.th, unit: m.unit, qty: Number(qty) || 1, unit_cost: m.cost, description: m.description || "" });
+    flash(`+ ${m.th} × ${Number(qty) || 1}`);
   };
   const setItem = (sec, i, k, v) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: e.items[sec].map((x, j) => j === i ? { ...x, [k]: v } : x) } }));
   const delItem = (sec, i) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: e.items[sec].filter((_, j) => j !== i) } }));

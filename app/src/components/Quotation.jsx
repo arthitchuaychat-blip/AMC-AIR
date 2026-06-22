@@ -94,10 +94,11 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     const isCompany = c?.type === "company";
     setEd((e) => ({ ...e, customer_id: id, site_id: "", vat: c?.vat ?? true, wht: isCompany ? e.wht : false }));
   }
-  const addLine = (m) => setEd((e) => {
+  const addLine = (m, _target, qty = 1) => setEd((e) => {
+    const add = Number(qty) || 1;
     const i = e.items.findIndex((x) => x.code === m.code);
-    if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + 1 }; return { ...e, items }; }
-    return { ...e, items: [...e.items, { code: m.code, name: m.th, unit: m.unit, qty: 1, unit_price: m.salePrice || 0, kind: m.kind, description: m.description || "" }] };
+    if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + add }; return { ...e, items }; }
+    return { ...e, items: [...e.items, { code: m.code, name: m.th, unit: m.unit, qty: add, unit_price: m.salePrice || 0, kind: m.kind, description: m.description || "" }] };
   });
   const setLine = (i, k, v) => setEd((e) => ({ ...e, items: e.items.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
   const delLine = (i) => setEd((e) => ({ ...e, items: e.items.filter((_, j) => j !== i) }));
