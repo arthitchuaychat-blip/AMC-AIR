@@ -20,6 +20,7 @@ export default function TaskBoard({ role, me }) {
   const [staff, setStaff] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [scope, setScope] = React.useState("all");      // all | assigned (ที่ฉันสั่ง) | received (มอบให้ฉัน)
+  const [personF, setPersonF] = React.useState("all");  // filter by a specific staff member
   const [showCancelled, setShowCancelled] = React.useState(false);
   const [editTask, setEditTask] = React.useState(null);
   const [detailId, setDetailId] = React.useState(null);
@@ -37,7 +38,9 @@ export default function TaskBoard({ role, me }) {
   const canManage = (t) => myId === t.assigner || role === "admin" || role === "exec";
   const canStatus = (t) => canManage(t) || myId === t.assignee;
 
-  const scoped = tasks.filter((t) => scope === "all" ? true : scope === "assigned" ? t.assigner === myId : t.assignee === myId);
+  const scoped = tasks
+    .filter((t) => scope === "all" ? true : scope === "assigned" ? t.assigner === myId : t.assignee === myId)
+    .filter((t) => personF === "all" || t.assignee === personF || t.assigner === personF);
   const visible = scoped.filter((t) => showCancelled ? true : t.status !== "cancelled");
   const cancelledCount = scoped.filter((t) => t.status === "cancelled").length;
   const detail = detailId ? tasks.find((t) => t.id === detailId) : null;
@@ -60,6 +63,17 @@ export default function TaskBoard({ role, me }) {
         ))}
         {cancelledCount > 0 && <button className={"cat-chip" + (showCancelled ? " on" : "")} onClick={() => setShowCancelled((v) => !v)}
           style={showCancelled ? { background: "#dc2626", color: "#fff", borderColor: "#dc2626" } : {}}>ยกเลิก ({cancelledCount})</button>}
+        {(() => {
+          const ids = new Set(); tasks.forEach((t) => { if (t.assignee) ids.add(t.assignee); if (t.assigner) ids.add(t.assigner); });
+          const opts = staff.filter((p) => ids.has(p.id));
+          if (!opts.length) return null;
+          return (
+            <select className="inp" style={{ width: "auto", flex: "none", marginLeft: 4 }} value={personF} onChange={(e) => setPersonF(e.target.value)}>
+              <option value="all">👤 ทุกพนักงาน</option>
+              {opts.map((p) => <option key={p.id} value={p.id}>{p.name || p.email}</option>)}
+            </select>
+          );
+        })()}
       </div>
 
       {loading ? <div className="empty">กำลังโหลด…</div> : (
