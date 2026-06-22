@@ -392,6 +392,10 @@ select.inp{cursor:pointer}
 .tx-meta{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink-3);margin-top:2px;flex-wrap:wrap}
 .tx-meta .dot{opacity:.5}
 .tx-job{font-family:var(--mono);font-weight:600}
+/* back-office-only note (never printed) */
+.int-note-fld span small{font-weight:400;color:var(--ink-3)}
+.int-note-tag{font-size:11.5px;color:#92400e;background:#fff7ed;border:1px dashed #fdba74;border-radius:8px;padding:5px 9px;margin-top:6px;line-height:1.4;word-break:break-word}
+.int-note-tag b{font-weight:700}
 .tx-ref{font-family:var(--mono);font-weight:700;color:var(--primary);background:color-mix(in srgb, var(--primary) 10%, transparent);padding:0 5px;border-radius:5px}
 .reason-tag.sm{font-size:9.5px;padding:0 6px}
 .tx-tag-in{background:color-mix(in srgb,var(--up) 12%,white);color:var(--up);font-weight:700;padding:1px 7px;border-radius:6px;font-size:9.5px}

@@ -9,6 +9,7 @@ import DocChips from "./DocChips";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
+import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 
 // สถานะรวมของใบวางบิล: ยกเลิก / ออกใบเสร็จครบ / วางบิล (ยังออกใบเสร็จไม่ครบ)
 const bnStatus = (b) => {
@@ -126,6 +127,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
                 return <DocChips key={qn + i} boqNo={g.boqNo} quoteNo={qn} jobNos={g.jobNos} invoiceNos={g.invoiceNos} receiptNos={g.receiptNos} onOpen={onOpenDoc} />;
               });
             })()}
+            <InternalNoteTag note={b.internal_note} />
             <div className="job-lines"><div className="job-actions">
               <ChatCustomerLink role={role} customerId={b.customer_id} onGoChat={onGoChat} />
               <button className="btn-ghost sm" onClick={() => setOpenInv(openInv === b.billing_no ? null : b.billing_no)}><UIcon name="clipboard" size={14} /> {openInv === b.billing_no ? "ซ่อนรายการ" : "ดูใบแจ้งหนี้ / ออกใบเสร็จ"}</button>
@@ -194,7 +196,7 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
     if (!ed.customer_id) return flash("เลือกลูกค้าก่อน", true);
     if (!chosen.length) return flash("เลือกใบแจ้งหนี้อย่างน้อย 1 ใบ", true);
     setBusy(true);
-    try { await saveBillingNote({ billing_no: ed.billing_no, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" }); flash("สร้างใบวางบิลแล้ว ✓"); onSaved(); }
+    try { await saveBillingNote({ billing_no: ed.billing_no, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, internal_note: ed.internal_note, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" }); flash("สร้างใบวางบิลแล้ว ✓"); onSaved(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -227,6 +229,7 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
             </div>
           )}
           <label className="fld"><span>หมายเหตุ (ไม่บังคับ)</span><input className="inp" value={ed.note} onChange={(e) => set("note", e.target.value)} placeholder="เช่น กำหนดชำระภายใน 7 วัน" /></label>
+          <InternalNoteField value={ed.internal_note} onChange={(v) => set("internal_note", v)} />
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
           <button className="btn-primary" disabled={busy || !chosen.length} onClick={save}>สร้างใบวางบิล</button></div>

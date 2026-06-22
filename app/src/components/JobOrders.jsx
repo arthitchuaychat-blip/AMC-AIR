@@ -8,6 +8,7 @@ import JobTimeline from "./JobTimeline";
 import DocChips from "./DocChips";
 import ChatCustomerLink from "./ChatCustomerLink";
 import AttachThumb from "./AttachThumb";
+import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { ATTACH_ACCEPT, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
 
@@ -17,7 +18,7 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
 const blankVisit = () => ({ date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
-const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
+const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", internal_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
 
 export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
@@ -108,7 +109,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     setEd({ ...jo, _edit: true, job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "",
       assigned_team: jo.assigned_team || jo.visits?.[0]?.assigned_team || "",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
-      sales_note: jo.sales_note || "", sales_photos: jo.sales_photos || [], visits, status: jo.status || "pending" });
+      sales_note: jo.sales_note || "", internal_note: jo.internal_note || "", sales_photos: jo.sales_photos || [], visits, status: jo.status || "pending" });
   }
   const setVisit = (i, k, v) => setEd((e) => ({ ...e, visits: e.visits.map((r, j) => j === i ? { ...r, [k]: v } : r) }));
   const addVisit = () => setEd((e) => ({ ...e, visits: [...e.visits, blankVisit()] }));
@@ -261,6 +262,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
 
           <label className="fld"><span>โน้ตถึงทีมช่าง (ฝ่ายขาย → ช่าง)</span>
             <textarea className="inp" rows={2} style={{ resize: "vertical" }} value={ed.sales_note} onChange={(e) => setF("sales_note", e.target.value)} placeholder="ข้อความ/ข้อควรระวังถึงช่าง เช่น ลูกค้าสะดวกช่วงบ่าย, จอดรถหลังตึก, ระวังพื้นไม้" /></label>
+          <InternalNoteField value={ed.internal_note} onChange={(v) => setF("internal_note", v)} />
           <div className="fld"><span>รูป/ไฟล์หน้างานเบื้องต้น (ให้ช่างดูก่อนเข้างาน)</span>
             <div className="myjob-photos">
               {(ed.sales_photos || []).map((u, i) => (
@@ -421,6 +423,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
               {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "job", no: jo.job_no }} onOpen={onOpenDoc} />; })()}
+              <InternalNoteTag note={jo.internal_note} />
               {(() => { const sibs = siblingsOf(jo); return sibs.length > 1 ? (
                 <div className="job-group-chips"><span style={{ fontSize: 12, color: "var(--ink-2)" }}>🔗 ใบงานเชื่อม:</span>
                   {sibs.map((s) => <button key={s.job_no} className={"job-group-chip" + (s.job_no === jo.job_no ? " cur" : "")} onClick={() => setViewing(s)}>{s.job_no}</button>)}
