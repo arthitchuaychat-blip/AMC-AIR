@@ -416,6 +416,11 @@ select.inp{cursor:pointer}
 .nb-sub{font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nb-when{font-size:10.5px;color:var(--ink-3)}
 .nb-dot{width:8px;height:8px;border-radius:50%;background:var(--primary);flex:none;margin-top:5px}
+.nb-foot{padding:10px 14px;border-top:1px solid var(--line-2);font-size:11.5px}
+.nb-foot-ok{color:#0a6b3d;font-weight:600}
+.nb-foot-dim{color:var(--ink-3);line-height:1.4}
+.nb-enable{width:100%;border:1px solid var(--primary);background:color-mix(in srgb,var(--primary) 8%,transparent);color:var(--primary);font-weight:700;font-size:12.5px;padding:9px;border-radius:9px;cursor:pointer}
+.nb-enable:hover{background:color-mix(in srgb,var(--primary) 16%,transparent)}
 /* job positions chips (HR) */
 .pos-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .pos-chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:5px 6px 5px 12px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line)}

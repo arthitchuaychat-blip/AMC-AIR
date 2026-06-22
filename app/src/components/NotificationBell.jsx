@@ -1,5 +1,6 @@
 import React from "react";
 import { listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead } from "../lib/api";
+import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
 
 const CAT_ICON = { team_chat: "💬", task: "📋", job: "🔧", hr: "🧑‍💼", customer_chat: "💬" };
@@ -13,7 +14,16 @@ export default function NotificationBell({ onOpen }) {
   const [open, setOpen] = React.useState(false);
   const [items, setItems] = React.useState([]);
   const [unread, setUnread] = React.useState(0);
+  const [perm, setPerm] = React.useState(notifyPermission());
+  const [busy, setBusy] = React.useState(false);
   const ref = React.useRef(null);
+
+  async function enable() {
+    setBusy(true);
+    try { await enablePush(); setPerm(notifyPermission()); }
+    catch (e) { alert(e.message || "เปิดการแจ้งเตือนนอกแอปไม่สำเร็จ"); }
+    setBusy(false);
+  }
 
   async function refresh() { try { setUnread(await countUnreadNotifications()); } catch (_) {} }
   async function loadList() { try { setItems(await listNotifications(40)); } catch (_) {} }
@@ -52,6 +62,12 @@ export default function NotificationBell({ onOpen }) {
                 {!n.read_at && <span className="nb-dot" />}
               </button>
             ))}
+          </div>
+          <div className="nb-foot">
+            {!pushSupported() ? <span className="nb-foot-dim">อุปกรณ์นี้ไม่รองรับการแจ้งเตือนนอกแอป</span>
+              : perm === "granted" ? <span className="nb-foot-ok">✓ แจ้งเตือนนอกแอป (Push) เปิดอยู่</span>
+              : perm === "denied" ? <span className="nb-foot-dim">การแจ้งเตือนถูกบล็อก — เปิดสิทธิ์ในตั้งค่าเบราว์เซอร์ (มือถือ iPhone ต้อง “เพิ่มลงหน้าโฮม” ก่อน)</span>
+              : <button className="nb-enable" disabled={busy} onClick={enable}>🔔 {busy ? "กำลังเปิด…" : "เปิดแจ้งเตือนเด้งนอกแอป (Push)"}</button>}
           </div>
         </div>
       )}
