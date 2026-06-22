@@ -448,7 +448,12 @@ export async function listBoqs() {
   const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
-  const quoteByBoq = {}; (qt.data || []).forEach((q) => { if (q.boq_no && q.status !== "cancelled" && !quoteByBoq[q.boq_no]) quoteByBoq[q.boq_no] = q.quote_no; });
+  // linked (non-cancelled) quote per BOQ + whether any of them is approved (drives the edit lock)
+  const quoteByBoq = {}; (qt.data || []).forEach((q) => {
+    if (!q.boq_no || q.status === "cancelled") return;
+    const e = quoteByBoq[q.boq_no] || (quoteByBoq[q.boq_no] = { no: q.quote_no, approved: false });
+    if (q.status === "approved") { e.approved = true; e.no = q.quote_no; }
+  });
   const cb = await _creators();
   return (b.data || []).map((bo) => {
     const items = byBoq[bo.boq_no] || [];
@@ -459,7 +464,7 @@ export async function listBoqs() {
       siteName: s?.site_name || null, siteAddress: s?.address || null, createdByName: cb[bo.created_by] || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || custAddr[bo.customer_id]),
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
-      quoteNo: quoteByBoq[bo.boq_no] || null, hasQuote: !!quoteByBoq[bo.boq_no],
+      quoteNo: quoteByBoq[bo.boq_no]?.no || null, hasQuote: !!quoteByBoq[bo.boq_no], quoteApproved: !!quoteByBoq[bo.boq_no]?.approved,
       items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
   });
 }

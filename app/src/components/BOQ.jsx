@@ -88,9 +88,12 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   // open a fresh BOQ pre-filled with this customer (e.g. launched from the chat panel)
   React.useEffect(() => { if (newForCustomer) { startNewFor(newForCustomer); onNewConsumed && onNewConsumed(); } }, [newForCustomer]);
   // chain lock: can't edit/delete a BOQ that already has a quotation downstream
+  // delete/cancel: blocked once any quote is created from this BOQ (chain safety)
   const lockMsg = (bo) => bo.hasQuote ? `แก้ไข/ลบ BOQ นี้ไม่ได้ — สร้างใบเสนอราคา ${bo.quoteNo || ""} จาก BOQ นี้แล้ว\nต้องลบใบเสนอราคา (และเอกสารถัดไป) ก่อน` : null;
+  // edit: allowed while the linked quote is still a draft; locked only once it's approved
+  const editLockMsg = (bo) => bo.quoteApproved ? `แก้ไข BOQ นี้ไม่ได้ — ใบเสนอราคา ${bo.quoteNo || ""} อนุมัติแล้ว\n(แก้ไขได้เฉพาะตอนใบเสนอราคายังไม่อนุมัติ)` : null;
   function startEdit(bo) {
-    const lk = lockMsg(bo); if (lk) return alert(lk);
+    const lk = editLockMsg(bo); if (lk) return alert(lk);
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
     setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", internal_note: bo.internal_note || "", terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
@@ -243,7 +246,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(bo); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canEdit && <button className="btn-ghost sm" onClick={() => duplicate(bo)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
-              {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+              {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" disabled={bo.quoteApproved} title={editLockMsg(bo) || ""} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
               {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => cancel(bo)}>ยกเลิก</button>}
               {canDelete && <button className="btn-ghost sm danger" disabled={bo.hasQuote} title={bo.hasQuote ? (lockMsg(bo) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
             </div></div>
