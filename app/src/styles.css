@@ -396,6 +396,11 @@ select.inp{cursor:pointer}
 .int-note-fld span small{font-weight:400;color:var(--ink-3)}
 .int-note-tag{font-size:11.5px;color:#92400e;background:#fff7ed;border:1px dashed #fdba74;border-radius:8px;padding:5px 9px;margin-top:6px;line-height:1.4;word-break:break-word}
 .int-note-tag b{font-weight:700}
+/* job positions chips (HR) */
+.pos-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.pos-chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:5px 6px 5px 12px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line)}
+.pos-chip-x{width:20px;height:20px;border-radius:50%;border:none;background:#e5e7eb;color:#374151;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pos-chip-x:hover{background:#dc2626;color:#fff}
 /* ===== Task board (กระดานสั่งงาน) ===== */
 .tb-board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .tb-col{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:10px;min-width:0}

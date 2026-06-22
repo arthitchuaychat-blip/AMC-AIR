@@ -505,6 +505,17 @@ export async function flowaccountSendDoc(input) {
   return r.json();
 }
 
+// managed list of job positions / แผนก (stored as one JSON array in app_config). null if unset.
+export async function getPositions() {
+  const { data, error } = await supabase.from("app_config").select("value").eq("key", "positions").maybeSingle();
+  if (error) throw error;
+  return Array.isArray(data?.value) ? data.value : null;
+}
+export async function savePositions(list) {
+  const { error } = await supabase.from("app_config").upsert({ key: "positions", value: list || [] }, { onConflict: "key" });
+  if (error) throw error;
+}
+
 // role → module permission overrides (stored as one JSON row in app_config). Returns null if unset.
 export async function getRolePermissions() {
   const { data, error } = await supabase.from("app_config").select("value").eq("key", "role_permissions").maybeSingle();
