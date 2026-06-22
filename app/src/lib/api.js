@@ -987,7 +987,11 @@ export async function addJobLog(job_no, { note, photos, author, parent_id }) {
     parent_id: parent_id || null, author: author || null, created_by: user?.id || null,
   });
   if (error) throw error;
+  const watchers = await _jobWatchers(job_no);
+  notify(watchers, { category: "job", title: `💬 ความเคลื่อนไหวงาน ${job_no}`, body: (note || "[ไฟล์แนบ]").slice(0, 120), url: "joborders", ref_type: "job", ref_no: job_no });
 }
+
+const _JOB_ST_TH = { pending: "รอเริ่มงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", awaiting_approval: "รออนุมัติ", reschedule: "นัดหมายเพิ่ม", done: "เสร็จแล้ว", cancelled: "ยกเลิก" };
 
 export async function saveJobOrder(jo, author) {
   const { data: { user } } = await supabase.auth.getUser();
@@ -1011,6 +1015,11 @@ export async function saveJobOrder(jo, author) {
   }
   // audit trail: record who created/edited the job (best-effort)
   await supabase.from("job_logs").insert({ job_no: jo.job_no, type: "edit", status: jo.status || null, author: author || null, created_by: user?.id || null });
+  // handoff: notify the assigned team's members
+  if (jo.assigned_team) {
+    const { data: tm } = await supabase.from("profiles").select("id").eq("team", jo.assigned_team);
+    notify((tm || []).map((p) => p.id), { category: "job", title: `🔧 มอบหมายงาน ${jo.job_no}`, body: jo.title || "", url: "joborders", ref_type: "job", ref_no: jo.job_no });
+  }
 }
 
 export async function updateJobStatus(job_no, status, author) {
@@ -1019,6 +1028,7 @@ export async function updateJobStatus(job_no, status, author) {
   // record the status change on the timeline (best-effort — don't fail the status update if logging fails)
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("job_logs").insert({ job_no, type: "status", status, author: author || null, created_by: user?.id || null });
+  notify(await _jobWatchers(job_no), { category: "job", title: `📋 งาน ${job_no} → ${_JOB_ST_TH[status] || status}`, url: "joborders", ref_type: "job", ref_no: job_no });
 }
 
 // office quick action: move every visit of a job whose status is in fromStatuses → toStatus,
@@ -1030,6 +1040,7 @@ export async function setJobVisitsStatus(jobNo, fromStatuses, toStatus, author) 
   if (!count) { const e = (await supabase.from("job_orders").update({ status: toStatus }).eq("job_no", jobNo)).error; if (e) throw e; }
   else { const { data, error } = await supabase.rpc("set_job_visits_status", { p_job: jobNo, p_from: fromStatuses, p_to: toStatus }); if (error) throw error; var jobStatus = data; }
   await supabase.from("job_logs").insert({ job_no: jobNo, type: "status", status: toStatus, author: author || null, created_by: user?.id || null });
+  notify(await _jobWatchers(jobNo), { category: "job", title: `📋 งาน ${jobNo} → ${_JOB_ST_TH[toStatus] || toStatus}`, url: "joborders", ref_type: "job", ref_no: jobNo });
   return jobStatus || toStatus;
 }
 
@@ -1039,6 +1050,7 @@ export async function updateVisitStatus(visitId, jobNo, status, author) {
   const { data, error } = await supabase.rpc("set_visit_status", { p_visit_id: visitId, p_status: status });
   if (error) throw error;
   await supabase.from("job_logs").insert({ job_no: jobNo, type: "status", status, author: author || null, created_by: user?.id || null });
+  notify(await _jobWatchers(jobNo), { category: "job", title: `📋 งาน ${jobNo} (รอบ) → ${_JOB_ST_TH[status] || status}`, url: "joborders", ref_type: "job", ref_no: jobNo });
   return data;
 }
 
@@ -1280,6 +1292,83 @@ export async function listProfiles() {
   return data || [];
 }
 
+// ---------- NOTIFICATIONS (การแจ้งเตือนกิจกรรม) ----------
+export const NOTIFY_CATS = [
+  { id: "team_chat", label: "แชตทีม" },
+  { id: "task", label: "กระดานสั่งงาน" },
+  { id: "job", label: "ใบงาน / งานช่าง" },
+  { id: "hr", label: "HR (เข้างาน/ลา/เบิก/อนุมัติ)" },
+  { id: "customer_chat", label: "แชตลูกค้า (LINE/FB)" },
+];
+async function _usersByRole(roles) {
+  if (!roles?.length) return [];
+  const { data } = await supabase.from("profiles").select("id").in("role", roles);
+  return (data || []).map((p) => p.id);
+}
+// who watches a job: office (admin/exec/sales) + the assigned team's members
+async function _jobWatchers(job_no) {
+  try {
+    const { data: jo } = await supabase.from("job_orders").select("assigned_team").eq("job_no", job_no).maybeSingle();
+    const office = await _usersByRole(["admin", "exec", "sales"]);
+    let team = [];
+    if (jo?.assigned_team) { const { data } = await supabase.from("profiles").select("id").eq("team", jo.assigned_team); team = (data || []).map((p) => p.id); }
+    return [...new Set([...office, ...team])];
+  } catch { return []; }
+}
+let _notifyCfg = null;
+async function _notifySettings() {
+  if (_notifyCfg) return _notifyCfg;
+  try { const { data } = await supabase.from("app_config").select("value").eq("key", "notify_settings").maybeSingle(); _notifyCfg = data?.value || {}; }
+  catch { _notifyCfg = {}; }
+  return _notifyCfg;
+}
+export async function getNotifySettings() {
+  const { data, error } = await supabase.from("app_config").select("value").eq("key", "notify_settings").maybeSingle();
+  if (error) throw error;
+  return (data?.value && typeof data.value === "object") ? data.value : null;
+}
+export async function saveNotifySettings(cfg) {
+  _notifyCfg = cfg || {};
+  const { error } = await supabase.from("app_config").upsert({ key: "notify_settings", value: cfg || {} }, { onConflict: "key" });
+  if (error) throw error;
+}
+// create notifications (+ optional push) for recipients, minus the actor, respecting per-role on/off. Never throws.
+export async function notify(recipientIds, { category, title, body, url, ref_type, ref_no, push = true }) {
+  try {
+    const uid = await _uid();
+    const ids = [...new Set((recipientIds || []).filter((id) => id && id !== uid))];
+    if (!ids.length) return;
+    const { data: profs } = await supabase.from("profiles").select("id,role").in("id", ids);
+    const settings = await _notifySettings();
+    const allowed = (profs || []).filter((p) => { const s = settings[p.role]; return !s || s[category] !== false; }).map((p) => p.id);
+    if (!allowed.length) return;
+    await supabase.from("notifications").insert(allowed.map((id) => ({ user_id: id, category, title, body: body || null, url: url || null, ref_type: ref_type || null, ref_no: ref_no || null, actor: uid })));
+    if (push) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ userIds: allowed, title, body: (body || "").slice(0, 180), url: "/" }) }).catch(() => {});
+    }
+  } catch (_) { /* notifications must never break the underlying action */ }
+}
+export async function listNotifications(limit = 40) {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("notifications").select("*").eq("user_id", uid).order("created_at", { ascending: false }).limit(limit);
+  if (error) throw error; return data || [];
+}
+export async function countUnreadNotifications() {
+  const uid = await _uid();
+  const { count, error } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", uid).is("read_at", null);
+  if (error) throw error; return count || 0;
+}
+export async function markNotificationRead(id) {
+  const { error } = await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+}
+export async function markAllNotificationsRead() {
+  const uid = await _uid();
+  const { error } = await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", uid).is("read_at", null);
+  if (error) throw error;
+}
+
 // ---------- TASK BOARD (กระดานสั่งงาน) ----------
 export async function listTasks() {
   const [t, profs, cc] = await Promise.all([
@@ -1300,14 +1389,21 @@ export async function saveTask(t) {
     status: t.status || "todo", due_date: t.due_date || null,
     attachments: t.attachments || [], updated_at: new Date().toISOString(),
   };
-  if (t.id) { const { error } = await supabase.from("tasks").update(row).eq("id", t.id); if (error) throw error; return t.id; }
+  if (t.id) { const { error } = await supabase.from("tasks").update(row).eq("id", t.id); if (error) throw error;
+    if (row.assignee) notify([row.assignee], { category: "task", title: `📌 อัปเดตงาน: ${row.title}`, url: "tasks", ref_type: "task", ref_no: t.id });
+    return t.id; }
   row.assigner = uid;
   const { data, error } = await supabase.from("tasks").insert(row).select("id").single();
-  if (error) throw error; return data.id;
+  if (error) throw error;
+  if (row.assignee) notify([row.assignee], { category: "task", title: `📌 ได้รับมอบหมายงานใหม่: ${row.title}`, body: row.detail || "", url: "tasks", ref_type: "task", ref_no: data.id });
+  return data.id;
 }
 export async function setTaskStatus(id, status) {
   const { error } = await supabase.from("tasks").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) throw error;
+  const ST = { todo: "รอเริ่ม", doing: "กำลังทำ", done: "เสร็จ", cancelled: "ยกเลิก" };
+  const { data: t } = await supabase.from("tasks").select("title,assigner,assignee").eq("id", id).maybeSingle();
+  if (t) notify([t.assigner, t.assignee], { category: "task", title: `🔄 งาน "${t.title}" → ${ST[status] || status}`, url: "tasks", ref_type: "task", ref_no: id });
 }
 export async function deleteTask(id) {
   const { error } = await supabase.from("tasks").delete().eq("id", id);
@@ -1326,6 +1422,8 @@ export async function addTaskComment(taskId, body, attachments) {
   const uid = await _uid();
   const { error } = await supabase.from("task_comments").insert({ task_id: taskId, author: uid, body: body?.trim() || null, attachments: attachments || [] });
   if (error) throw error;
+  const { data: t } = await supabase.from("tasks").select("title,assigner,assignee").eq("id", taskId).maybeSingle();
+  if (t) notify([t.assigner, t.assignee], { category: "task", title: `💬 คอมเมนต์ในงาน: ${t.title}`, body: (body || "[ไฟล์แนบ]").slice(0, 120), url: "tasks", ref_type: "task", ref_no: taskId });
 }
 export async function deleteTaskComment(id) {
   const { error } = await supabase.from("task_comments").delete().eq("id", id);
@@ -1543,6 +1641,8 @@ export async function checkIn({ lat, lng, photo }) {
     ? await supabase.from("hr_attendance").update(row).eq("id", ex.data.id)
     : await supabase.from("hr_attendance").insert({ user_id: uid, work_date: day, ...row });
   if (error) throw error;
+  const me = await getProfile();
+  notify(await _usersByRole(["admin", "exec"]), { category: "hr", title: `🕒 ${me?.name || "พนักงาน"} เช็คอินเข้างาน`, url: "hr", ref_type: "attendance" });
 }
 export async function checkOut({ lat, lng, photo }) {
   const uid = await _uid(), day = _today();
@@ -1573,6 +1673,8 @@ export async function submitLeave({ type, start_date, end_date, days, reason }) 
   const uid = await _uid();
   const { error } = await supabase.from("hr_leaves").insert({ user_id: uid, type, start_date, end_date, days, reason: reason || null });
   if (error) throw error;
+  const me = await getProfile();
+  notify(await _usersByRole(["admin", "exec"]), { category: "hr", title: `📝 ${me?.name || "พนักงาน"} ขอลา (${days} วัน)`, body: reason || "", url: "hr", ref_type: "leave" });
 }
 export async function listMyLeaves() {
   const uid = await _uid();
@@ -1591,6 +1693,9 @@ export async function decideLeave(id, status, note) {
   const uid = await _uid();
   const { error } = await supabase.from("hr_leaves").update({ status, decided_by: uid, decided_at: new Date().toISOString(), decide_note: note || null }).eq("id", id);
   if (error) throw error;
+  const { data: lv } = await supabase.from("hr_leaves").select("user_id").eq("id", id).maybeSingle();
+  const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
+  if (lv) notify([lv.user_id], { category: "hr", title: `📝 ใบลาของคุณ: ${lbl}`, body: note || "", url: "attendance", ref_type: "leave" });
 }
 
 // ---------- CASH ADVANCES (เบิกเงินล่วงหน้า) ----------
@@ -1598,6 +1703,8 @@ export async function submitAdvance({ amount, reason }) {
   const uid = await _uid();
   const { error } = await supabase.from("hr_advances").insert({ user_id: uid, amount: Number(amount) || 0, reason: reason || null, created_by: uid });
   if (error) throw error;
+  const me = await getProfile();
+  notify(await _usersByRole(["admin", "finance", "exec"]), { category: "hr", title: `💵 ${me?.name || "พนักงาน"} ขอเบิกเงินล่วงหน้า ${Number(amount) || 0} บาท`, body: reason || "", url: "hr", ref_type: "advance" });
 }
 export async function listMyAdvances() {
   const uid = await _uid();
@@ -1621,6 +1728,9 @@ export async function decideAdvance(id, status, note) {
   const uid = await _uid();
   const { error } = await supabase.from("hr_advances").update({ status, decided_by: uid, decided_at: new Date().toISOString(), decide_note: note || null }).eq("id", id);
   if (error) throw error;
+  const { data: av } = await supabase.from("hr_advances").select("user_id,amount").eq("id", id).maybeSingle();
+  const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
+  if (av) notify([av.user_id], { category: "hr", title: `💵 คำขอเบิก ${av.amount || 0} บาท: ${lbl}`, body: note || "", url: "attendance", ref_type: "advance" });
 }
 // settle approved advances once their payroll run is paid (so they aren't deducted twice)
 export async function markAdvancesPaid(period, ids) {
@@ -1914,23 +2024,31 @@ async function _firePush(roomId, body) {
   } catch (_) {}
 }
 
+// in-app notification for a team-chat room's members (push is handled separately by _firePush)
+async function _notifyChatRoom(roomId, body) {
+  try {
+    const { data: mem } = await supabase.from("chat_members").select("user_id").eq("room_id", roomId);
+    const me = await getProfile();
+    notify((mem || []).map((m) => m.user_id), { category: "team_chat", title: `แชตทีม · ${me?.name || "ทีมงาน"}`, body, url: "teamchat", ref_type: "room", ref_no: String(roomId), push: false });
+  } catch (_) {}
+}
 export async function sendChatMessage(roomId, text) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, text: text.trim() });
   if (error) throw error;
-  _firePush(roomId, text.trim());
+  _firePush(roomId, text.trim()); _notifyChatRoom(roomId, text.trim());
 }
 export async function sendChatImage(roomId, imageUrl) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, image_url: imageUrl, text: null });
   if (error) throw error;
-  _firePush(roomId, "[รูปภาพ]");
+  _firePush(roomId, "[รูปภาพ]"); _notifyChatRoom(roomId, "[รูปภาพ]");
 }
 export async function sendChatFile(roomId, fileUrl, fileName) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, file_url: fileUrl, file_name: fileName || "ไฟล์", text: null });
   if (error) throw error;
-  _firePush(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`);
+  _firePush(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`); _notifyChatRoom(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`);
 }
 
 // find-or-create a 1:1 DM room — done in a SECURITY DEFINER RPC so it isn't blocked by insert RLS

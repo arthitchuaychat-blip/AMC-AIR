@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS } from "../lib/api";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
 
@@ -43,6 +43,45 @@ function PermissionsCard({ flash }) {
                 <td style={{ textAlign: "left" }}>{m.label}</td>
                 {PERM_ROLES.map((r) => { const lv = perms[r][m.id] || "none"; const s = CELL[lv]; return (
                   <td key={r}><button type="button" className="perm-cell" style={{ color: s.c, background: s.bg }} onClick={() => cycle(r, m.id, m.editable)}>{s.t}</button></td>
+                ); })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// per-role notification on/off matrix (role × category). Default = all on.
+function NotifyCard({ flash }) {
+  const [cfg, setCfg] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+  React.useEffect(() => { getNotifySettings().then((o) => setCfg(o || {})).catch(() => setCfg({})); }, []);
+  const isOn = (role, cat) => { const s = cfg?.[role]; return !s || s[cat] !== false; };
+  const toggle = (role, cat) => setCfg((c) => ({ ...c, [role]: { ...(c[role] || {}), [cat]: !isOn(role, cat) } }));
+  async function save() {
+    setSaving(true);
+    try { await saveNotifySettings(cfg); flash("บันทึกการแจ้งเตือนแล้ว ✓"); }
+    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e) + " (รัน 058_notifications.sql แล้วหรือยัง?)", true); }
+    setSaving(false);
+  }
+  if (!cfg) return null;
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="sec-head">
+        <div><div className="sec-title">การแจ้งเตือน — เปิด/ปิดตามตำแหน่ง</div><div className="sec-sub">กดที่ช่องเพื่อเปิด/ปิดการแจ้งเตือนแต่ละกลุ่มกิจกรรม สำหรับแต่ละตำแหน่ง</div></div>
+        <button className="btn-primary sm" disabled={saving} onClick={save}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> บันทึก</button>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table className="perm-table">
+          <thead><tr><th style={{ textAlign: "left" }}>กลุ่มกิจกรรม</th>{PERM_ROLES.map((r) => <th key={r}>{PERM_ROLE_LABEL[r]}</th>)}</tr></thead>
+          <tbody>
+            {NOTIFY_CATS.map((c) => (
+              <tr key={c.id}>
+                <td style={{ textAlign: "left" }}>{c.label}</td>
+                {PERM_ROLES.map((r) => { const on = isOn(r, c.id); return (
+                  <td key={r}><button type="button" className="perm-cell" style={on ? { color: "#0a6b3d", background: "#dcf5e8" } : { color: "#9aa3b2", background: "var(--surface-2)" }} onClick={() => toggle(r, c.id)}>{on ? "เปิด" : "ปิด"}</button></td>
                 ); })}
               </tr>
             ))}
@@ -378,6 +417,7 @@ export default function Settings({ role }) {
       {!loading && (
         <>
         {can(role, "settings", "edit") && <PermissionsCard flash={flash} />}
+        {can(role, "settings", "edit") && <NotifyCard flash={flash} />}
         {can(role, "settings", "edit") && <ChatGroupsCard flash={flash} />}
         {can(role, "settings", "edit") && <FlowAccountCard />}
         <div className="damage-layout" style={{ marginBottom: 16 }}>

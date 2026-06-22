@@ -25,12 +25,17 @@ export default async function handler(req, res) {
   if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
   const sender = await ur.json();
 
-  const { roomId, title, body, url } = await readJson(req);
-  if (!roomId) return res.status(400).json({ error: "missing roomId" });
+  const { roomId, userIds, title, body, url } = await readJson(req);
+  if (!roomId && !(Array.isArray(userIds) && userIds.length)) return res.status(400).json({ error: "missing roomId/userIds" });
 
-  // recipients = members of the room, minus the sender
-  const mr = await fetch(`${SB()}/rest/v1/chat_members?room_id=eq.${encodeURIComponent(roomId)}&select=user_id`, { headers: sbH() });
-  const members = (mr.ok ? await mr.json() : []).map((m) => m.user_id).filter((id) => id && id !== sender.id);
+  // recipients: explicit userIds (notification center) OR all members of a chat room — minus the sender
+  let members;
+  if (Array.isArray(userIds) && userIds.length) {
+    members = [...new Set(userIds)].filter((id) => id && id !== sender.id);
+  } else {
+    const mr = await fetch(`${SB()}/rest/v1/chat_members?room_id=eq.${encodeURIComponent(roomId)}&select=user_id`, { headers: sbH() });
+    members = (mr.ok ? await mr.json() : []).map((m) => m.user_id).filter((id) => id && id !== sender.id);
+  }
   if (!members.length) return res.status(200).json({ ok: true, sent: 0 });
 
   // their device subscriptions
@@ -40,7 +45,7 @@ export default async function handler(req, res) {
   if (!subs.length) return res.status(200).json({ ok: true, sent: 0 });
 
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:admin@amcair.net", pub, priv);
-  const payload = JSON.stringify({ title: title || "ข้อความใหม่ในแชตทีม", body: (body || "").slice(0, 180), url: url || "/", tag: `room-${roomId}` });
+  const payload = JSON.stringify({ title: title || "การแจ้งเตือนใหม่", body: (body || "").slice(0, 180), url: url || "/", tag: roomId ? `room-${roomId}` : "notif" });
 
   const dead = [];
   await Promise.all(subs.map(async (s) => {

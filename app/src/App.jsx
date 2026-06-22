@@ -28,6 +28,7 @@ import Schedule from "./components/Schedule";
 import Chat from "./components/Chat";
 import TeamChat from "./components/TeamChat";
 import TaskBoard from "./components/TaskBoard";
+import NotificationBell from "./components/NotificationBell";
 import MyJobs from "./components/MyJobs";
 import Invoices from "./components/Invoices";
 import Receipts from "./components/Receipts";
@@ -60,7 +61,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-21·ใบวางบิล: แสดงยอดสุทธิหลังหัก ณ ที่จ่าย (นิติบุคคล)-v141";
+const BUILD = "2026-06-22·ระบบแจ้งเตือนรวม: กระดิ่งในแอป+push, 5 กลุ่มกิจกรรม, เปิด/ปิดรายตำแหน่ง-v142";
 
 function SetupNotice() {
   return (
@@ -201,6 +202,7 @@ export default function App() {
         <button className="topbar-burger" onClick={() => setMenuOpen(true)} aria-label="เมนู"><UIcon name="menu" size={22} /></button>
         <Logo size={30} radius={8} />
         <div className="brand-name" style={{ fontSize: 17 }}>AMC <span>Management</span></div>
+        <div style={{ marginLeft: "auto" }}><NotificationBell onOpen={(v) => { go(v); setMenuOpen(false); }} /></div>
       </div>
       {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
       <aside className={"sidebar" + (menuOpen ? " open" : "")}>
@@ -210,6 +212,7 @@ export default function App() {
             <div className="brand-name">AMC <span>Management</span></div>
             <div className="brand-sub">Management System</div>
           </div>
+          <div className="brand-bell"><NotificationBell onOpen={(v) => { go(v); setMenuOpen(false); }} /></div>
         </div>
 
         <nav className="nav">

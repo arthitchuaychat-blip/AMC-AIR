@@ -3,6 +3,7 @@
 // Webhook URL: https://<โดเมนแอป>/api/line-webhook
 // ดีบัก: ?check=1 · ?dbcheck=1 · ?selftest=1 · ?linetest=1 (เช็กว่าต่อ api.line.me ได้ไหม)
 import crypto from "crypto";
+import webpush from "web-push";
 
 export const config = { api: { bodyParser: false } }; // ต้องการ raw body เพื่อเช็กลายเซ็น
 
@@ -92,6 +93,29 @@ async function readRaw(req) {
   return Buffer.concat(chunks);
 }
 
+// notify back-office (sales/admin/exec) about an inbound customer message — bell + web push.
+// respects the per-role on/off matrix (app_config.notify_settings.customer_chat). Best-effort.
+async function notifyCustomerChat(title, body) {
+  try {
+    const cfgR = await tfetch(`${SB()}/rest/v1/app_config?key=eq.notify_settings&select=value`, { headers: sbH() });
+    const cfg = (cfgR.ok ? ((await cfgR.json())[0]?.value) : null) || {};
+    const pr = await tfetch(`${SB()}/rest/v1/profiles?role=in.("sales","admin","exec")&select=id,role`, { headers: sbH() });
+    const profs = pr.ok ? await pr.json() : [];
+    const ids = profs.filter((p) => { const s = cfg[p.role]; return !s || s.customer_chat !== false; }).map((p) => p.id);
+    if (!ids.length) return;
+    await tfetch(`${SB()}/rest/v1/notifications`, { method: "POST", headers: sbH(), body: JSON.stringify(ids.map((id) => ({ user_id: id, category: "customer_chat", title, body: (body || "").slice(0, 180), url: "chat", ref_type: "line" }))) });
+    const pub = process.env.VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
+    if (!pub || !priv) return;
+    const inList = ids.map((id) => `"${id}"`).join(",");
+    const sr = await tfetch(`${SB()}/rest/v1/push_subscriptions?user_id=in.(${inList})&select=endpoint,p256dh,auth`, { headers: sbH() });
+    const subs = sr.ok ? await sr.json() : [];
+    if (!subs.length) return;
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:admin@amcair.net", pub, priv);
+    const payload = JSON.stringify({ title, body: (body || "").slice(0, 180), url: "/", tag: "notif" });
+    await Promise.all(subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 1800 }).catch(() => {})));
+  } catch (_) { /* ignore */ }
+}
+
 export default async function handler(req, res) {
   const params = new URLSearchParams((req.url.split("?")[1] || ""));
 
@@ -152,6 +176,7 @@ export default async function handler(req, res) {
         else { row.text = `[${m.type}]`; }
         await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
         await tfetch(`${SB()}/rest/v1/rpc/line_bump_unread`, { method: "POST", headers: sbH(), body: JSON.stringify({ p_uid: convId, p_msg: row.text || "[ข้อความ]" }) });
+        await notifyCustomerChat("💬 ข้อความใหม่จากลูกค้า (LINE)", row.text || "[ข้อความ]");
       }
     }
   } catch (e) {
