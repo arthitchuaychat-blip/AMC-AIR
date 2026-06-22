@@ -27,6 +27,7 @@ import JobOrders from "./components/JobOrders";
 import Schedule from "./components/Schedule";
 import Chat from "./components/Chat";
 import TeamChat from "./components/TeamChat";
+import TaskBoard from "./components/TaskBoard";
 import MyJobs from "./components/MyJobs";
 import Invoices from "./components/Invoices";
 import Receipts from "./components/Receipts";
@@ -37,6 +38,7 @@ const NAV = {
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
   chat: { th: "แชต LINE", en: "Chat", icon: "chat" },
   teamchat: { th: "แชตทีม", en: "Team Chat", icon: "chat" },
+  tasks: { th: "กระดานสั่งงาน", en: "Task Board", icon: "clipboard" },
   attendance: { th: "เข้างาน/ลา", en: "Attendance", icon: "calendar" },
   hr: { th: "บุคคล (HR)", en: "HR", icon: "user" },
   subcontract: { th: "ช่างซัพ", en: "Subcontractors", icon: "purchase" },
@@ -58,7 +60,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-21·ใบงาน: เพิ่มตัวกรองทีมช่าง-v135";
+const BUILD = "2026-06-21·กระดานสั่งงาน: สั่ง/มอบหมาย+แนบไฟล์+คอมเมนต์+สถานะ (Kanban)-v136";
 
 function SetupNotice() {
   return (
@@ -260,6 +262,7 @@ export default function App() {
           onCreateBoq={(cid) => { setBoqNewCust(String(cid)); go("boq"); }}
           onCreateSurvey={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }} />}
         {view === "teamchat" && <TeamChat />}
+        {view === "tasks" && <TaskBoard role={role} me={profile} />}
         {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
           newForCustomer={boqNewCust} onNewConsumed={() => setBoqNewCust(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}

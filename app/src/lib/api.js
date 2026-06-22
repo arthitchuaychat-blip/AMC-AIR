@@ -1265,6 +1265,65 @@ export async function listProfiles() {
   if (error) throw error;
   return data || [];
 }
+
+// ---------- TASK BOARD (กระดานสั่งงาน) ----------
+export async function listTasks() {
+  const [t, profs, cc] = await Promise.all([
+    supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+    supabase.from("profiles").select("id,name,email"),
+    supabase.from("task_comments").select("task_id"),
+  ]);
+  if (t.error) throw t.error;
+  const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
+  const cnt = {}; (cc.data || []).forEach((c) => { cnt[c.task_id] = (cnt[c.task_id] || 0) + 1; });
+  return (t.data || []).map((x) => ({ ...x, assignerName: nm[x.assigner] || "—", assigneeName: nm[x.assignee] || "—", commentCount: cnt[x.id] || 0 }));
+}
+export async function saveTask(t) {
+  const uid = await _uid();
+  const row = {
+    title: t.title?.trim(), detail: t.detail?.trim() || null,
+    assignee: t.assignee || null, priority: t.priority || "normal",
+    status: t.status || "todo", due_date: t.due_date || null,
+    attachments: t.attachments || [], updated_at: new Date().toISOString(),
+  };
+  if (t.id) { const { error } = await supabase.from("tasks").update(row).eq("id", t.id); if (error) throw error; return t.id; }
+  row.assigner = uid;
+  const { data, error } = await supabase.from("tasks").insert(row).select("id").single();
+  if (error) throw error; return data.id;
+}
+export async function setTaskStatus(id, status) {
+  const { error } = await supabase.from("tasks").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+}
+export async function deleteTask(id) {
+  const { error } = await supabase.from("tasks").delete().eq("id", id);
+  if (error) throw error;
+}
+export async function listTaskComments(taskId) {
+  const [c, profs] = await Promise.all([
+    supabase.from("task_comments").select("*").eq("task_id", taskId).order("created_at", { ascending: true }),
+    supabase.from("profiles").select("id,name,email"),
+  ]);
+  if (c.error) throw c.error;
+  const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
+  return (c.data || []).map((x) => ({ ...x, authorName: nm[x.author] || "—" }));
+}
+export async function addTaskComment(taskId, body, attachments) {
+  const uid = await _uid();
+  const { error } = await supabase.from("task_comments").insert({ task_id: taskId, author: uid, body: body?.trim() || null, attachments: attachments || [] });
+  if (error) throw error;
+}
+export async function deleteTaskComment(id) {
+  const { error } = await supabase.from("task_comments").delete().eq("id", id);
+  if (error) throw error;
+}
+export async function uploadTaskFile(file) {
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `tasks/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "application/octet-stream" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
 export async function updateProfile(id, fields) {
   const payload = { role: fields.role, name: fields.name || null, team: fields.role === "tech" ? (fields.team || null) : null };
   const { error } = await supabase.from("profiles").update(payload).eq("id", id);
