@@ -9,7 +9,8 @@ const isoOf = (ts) => (ts ? isoLocal(new Date(ts)) : null);
 const dShow = (ymd) => { const d = new Date(ymd + "T00:00:00"); return d.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" }); };
 
 export default function TeamQueuePanel({ jobs, teams }) {
-  const permTeams = (teams || []).filter((t) => t.type !== "sub");
+  // permanent teams first, then subcontractor teams (marked "ซัพ")
+  const permTeams = [...(teams || [])].sort((a, b) => (a.type === "sub" ? 1 : 0) - (b.type === "sub" ? 1 : 0));
   // occ[teamId][date] = { morning:info, afternoon:info }
   const occ = {};
   const mark = (tid, date, slot, info) => {
@@ -55,7 +56,7 @@ export default function TeamQueuePanel({ jobs, teams }) {
                 };
                 return (
                   <div className="tq-team" key={t.id}>
-                    <span className="tq-tname"><span className="tq-tdot" style={{ background: t.color }} />{(t.name || t.id).replace("Team ", "")}</span>
+                    <span className="tq-tname"><span className="tq-tdot" style={{ background: t.color }} />{(t.name || t.id).replace("Team ", "")}{t.type === "sub" && <span className="tq-sub">ซัพ</span>}</span>
                     <span className="tq-slots">{dot("morning", "เช้า")}{dot("afternoon", "บ่าย")}</span>
                   </div>
                 );

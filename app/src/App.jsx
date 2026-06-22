@@ -61,7 +61,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-22·แชต: แผงคิวช่าง/ตารางว่างในหน้าแชต (เช็คคิวตอบลูกค้าได้ทันที)-v144";
+const BUILD = "2026-06-22·แชต: แผงคิวช่าง รวมช่างซัพด้วย (ป้ายซัพ)-v145";
 
 function SetupNotice() {
   return (
