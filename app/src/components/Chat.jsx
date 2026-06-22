@@ -1,7 +1,8 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
@@ -82,6 +83,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [qrEdit, setQrEdit] = React.useState(null); // { id, title, text } while editing one reply
   const [qrSearch, setQrSearch] = React.useState("");
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
+  const [teams, setTeams] = React.useState([]);       // permanent teams for the queue panel
+  const [showQueue, setShowQueue] = React.useState(false); // คิวช่าง section toggle in the info panel
   const [jobPicker, setJobPicker] = React.useState(null);
   const [sendMenuFor, setSendMenuFor] = React.useState(null); // doc entry whose "ส่งเป็น รูป/PDF" popup is open
   const [capJob, setCapJob] = React.useState(null); // { type, no, mode, to, label } → render off-screen + capture + send
@@ -124,6 +127,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function changeStage(s) { if (isFb) return; try { await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
   async function changeOwner(uid) { if (isFb) return; try { await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
   React.useEffect(() => { selRef.current = sel; }, [sel]);
+  // teams + jobs for the คิวช่าง panel (so we can answer queue questions instantly)
+  React.useEffect(() => { listTeams().then(setTeams).catch(() => {}); listJobOrders().then(setJobs).catch(() => {}); }, []);
   React.useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
   // reload + reset when switching channel (LINE ↔ FB)
@@ -462,6 +467,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <div className="ci-head"><span>ข้อมูลลูกค้า</span>
                 <button className="ci-close" onClick={() => setShowInfo(false)}><UIcon name="x" size={16} /></button></div>
               <div className="ci-body">
+                <div className="ci-queue">
+                  <button className="ci-queue-head" onClick={() => setShowQueue((v) => !v)}>
+                    <span>🗓 คิวช่าง · ตารางว่าง</span>
+                    <UIcon name={showQueue ? "chevD" : "chevR"} size={15} />
+                  </button>
+                  {showQueue && <TeamQueuePanel jobs={jobs || []} teams={teams} />}
+                </div>
                 <div className="ci-crm">
                   <label className="ci-field"><span>สถานะลูกค้า (เฟส)</span>
                     {canSend
