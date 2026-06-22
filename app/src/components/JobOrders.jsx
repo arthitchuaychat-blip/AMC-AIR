@@ -34,6 +34,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   const [ed, setEd] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
   const [typeF, setTypeF] = React.useState("all");
+  const [teamF, setTeamF] = React.useState("all");
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
   const [viewing, setViewing] = React.useState(null); // job being viewed (detail modal)
@@ -375,6 +376,17 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
         ))}
       </div>
 
+      {(() => { const jobTeamIds = new Set(list.map((j) => j.assigned_team).filter(Boolean)); const teamOpts = teams.filter((t) => jobTeamIds.has(t.id)); if (!teamOpts.length) return null; return (
+        <div className="cat-filter">
+          <button className={"cat-chip" + (teamF === "all" ? " on" : "")} onClick={() => setTeamF("all")}
+            style={teamF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกทีม</button>
+          {teamOpts.map((t) => (
+            <button key={t.id} className={"cat-chip" + (teamF === t.id ? " on" : "")} onClick={() => setTeamF(t.id)}
+              style={teamF === t.id ? { background: t.color, color: "#fff", borderColor: t.color } : {}}>{(t.name || t.id).replace("Team ", "")}</button>
+          ))}
+        </div>
+      ); })()}
+
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
         // all visit dates of a job (YYYY-MM-DD) — falls back to the legacy single scheduled_at
@@ -392,6 +404,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
         const jobAt = (jo) => { const t = jo.scheduled_at ? new Date(jo.scheduled_at).getTime() : NaN; return Number.isNaN(t) ? Infinity : t; };
         const fl = list.filter((jo) => (statusF === "all" || jo.status === statusF)
           && (typeF === "all" || (jo.job_type || "install") === typeF)
+          && (teamF === "all" || jo.assigned_team === teamF)
           && inDateRange(jo)
           && (matchText(q, jo.job_no, jo.customerName, jo.teamName, jo.title, jo.quote_no, jo.address) || matchPhone(q, jo.contact_phone)))
           .sort((a, b) => jobAt(a) - jobAt(b) || a.job_no.localeCompare(b.job_no)); // วันใกล้ → ไกล (ไม่มีวันอยู่ท้าย)
