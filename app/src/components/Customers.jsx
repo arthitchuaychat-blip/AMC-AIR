@@ -55,7 +55,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   function startNew() { setEditing({ cust: blankCust(), contacts: [{ name: "", phone: "", role: "" }], sites: [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }] }); }
   function startEdit(c) {
     setEditing({
-      cust: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", vat: c.vat, address: c.address || "", note: c.note || "" },
+      cust: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", email: c.email || "", vat: c.vat, address: c.address || "", note: c.note || "" },
       contacts: c.contacts.length ? c.contacts.map((x) => ({ name: x.name || "", phone: x.phone || "", role: x.role || "" })) : [{ name: "", phone: "", role: "" }],
       sites: c.sites.length ? c.sites.map((x) => ({ site_name: x.site_name || "", contact_name: x.contact_name || "", phone: x.phone || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }],
     });
@@ -232,6 +232,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
                 <div className="cd-k">รหัสลูกค้า</div><div className="cd-v">{custCode(viewing.id)}</div>
                 <div className="cd-k">ประเภท</div><div className="cd-v">{viewing.type === "company" ? "นิติบุคคล" : "บุคคลธรรมดา"}</div>
                 <div className="cd-k">เลขผู้เสียภาษี</div><div className="cd-v">{viewing.tax_id || "—"}</div>
+                <div className="cd-k">อีเมล</div><div className="cd-v">{viewing.email ? <a href={`mailto:${viewing.email}`}>{viewing.email}</a> : "—"}</div>
                 <div className="cd-k">ภาษี</div><div className="cd-v">{viewing.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</div>
                 <div className="cd-k">ที่อยู่หลัก</div><div className="cd-v">{viewing.address || "—"}</div>
                 {viewing.note && <><div className="cd-k">หมายเหตุ</div><div className="cd-v">{viewing.note}</div></>}

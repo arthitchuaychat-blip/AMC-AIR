@@ -61,7 +61,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-22·PO: ตัวเลือกสินค้าแบบการ์ดมีรูป+ใส่จำนวน/ราคา (เหมือนหน้าเบิก)-v147";
+const BUILD = "2026-06-22·ลูกค้า: เพิ่มช่องอีเมล (ฟอร์ม+รายละเอียด+แชต)-v148";
 
 function SetupNotice() {
   return (

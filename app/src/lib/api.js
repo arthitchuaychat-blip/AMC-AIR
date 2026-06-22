@@ -393,7 +393,7 @@ export async function listCustomers() {
 
 export async function saveCustomer(cust, contacts, sites) {
   const { data: { user } } = await supabase.auth.getUser();
-  const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null };
+  const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, email: cust.email?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null };
   let id = cust.id;
   if (id) {
     const e = (await supabase.from("customers").update(fields).eq("id", id)).error; if (e) throw e;

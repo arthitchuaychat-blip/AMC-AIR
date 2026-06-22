@@ -493,6 +493,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   {phone && <div className="ci-row">📞 <a href={`tel:${phone}`}>{phone}</a></div>}
                   {cust.address && <div className="ci-row">📍 <span>{cust.address}</span></div>}
                   {cust.tax_id && <div className="ci-row">🧾 <span>{cust.tax_id}</span></div>}
+                  {cust.email && <div className="ci-row">✉️ <a href={`mailto:${cust.email}`}>{cust.email}</a></div>}
                   {cust.sites?.length > 0 && <div className="ci-row">🏠 <span>{cust.sites.length} ไซต์งาน</span></div>}
                   {canSend && <div className="ci-actions">
                     <button className="btn-primary sm" onClick={() => editCustomer(cust)}><UIcon name="edit" size={13} color="#fff" /> แก้ไขข้อมูล</button>
