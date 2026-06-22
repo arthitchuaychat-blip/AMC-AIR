@@ -806,8 +806,8 @@ export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, n
 export async function listBillingNotes() {
   const [bn, iv, cu, si, ct, rc] = await Promise.all([
     supabase.from("billing_notes").select("*").order("created_at", { ascending: false }),
-    supabase.from("invoices").select("invoice_no,total,installment,pct,status,issue_date,quote_no"),
-    supabase.from("customers").select("id,name,address,tax_id"),
+    supabase.from("invoices").select("invoice_no,total,wht_amt,installment,pct,status,issue_date,quote_no"),
+    supabase.from("customers").select("id,name,address,tax_id,type"),
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("receipts").select("invoice_no,status"),
@@ -818,16 +818,19 @@ export async function listBillingNotes() {
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const ctype = Object.fromEntries((cu.data || []).map((c) => [c.id, c.type]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   return (bn.data || []).map((b) => {
     const invoices = (b.invoice_nos || []).map((no) => invByNo[no]).filter(Boolean);
     const total = invoices.reduce((a, x) => a + (Number(x.total) || 0), 0);
+    const wht = invoices.reduce((a, x) => a + (Number(x.wht_amt) || 0), 0);   // หัก ณ ที่จ่าย รวม (นิติบุคคล)
     const s = b.site_id ? sm[b.site_id] : null; const ct0 = cc[b.customer_id];
     return { ...b, customerName: cn[b.customer_id] || null, customerCode: b.customer_id || null, customerTaxId: cx[b.customer_id] || null,
+      customerType: ctype[b.customer_id] || null,
       customerAddr: ca[b.customer_id] || null, siteAddress: s?.address || null, mapUrl: (s && s.map_url) || _gmap(s?.address || ca[b.customer_id]),
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
-      invoices, total, missing: (b.invoice_nos || []).length - invoices.length };
+      invoices, total, wht, net: Math.round((total - wht) * 100) / 100, missing: (b.invoice_nos || []).length - invoices.length };
   });
 }
 export async function saveBillingNote(b) {

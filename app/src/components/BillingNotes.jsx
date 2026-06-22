@@ -107,7 +107,15 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
                   ))}
                 </div>
               </div>
-              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(b.issue_date || b.created_at)}</span><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></div>
+              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(b.issue_date || b.created_at)}</span>
+                {b.wht > 0 ? (
+                  <div className="rec-amt-bd">
+                    <div className="rab-row"><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></div>
+                    <div className="rab-row rab-wht"><span>หัก ณ ที่จ่าย</span><b>− {fmtBaht(b.wht)}</b></div>
+                    <div className="rab-row rab-net"><span>ยอดสุทธิที่ต้องชำระ</span><b>{fmtBaht(b.net)}</b></div>
+                  </div>
+                ) : (<><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></>)}
+              </div>
             </div>
             {/* แถวเชื่อมโยงเอกสาร: รวมทุกใบแจ้งหนี้ในใบวางบิลนี้ → BOQ / ใบเสนอราคา / งาน / ใบเสร็จ ทั้งสายงาน */}
             {(() => {
@@ -167,7 +175,13 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
             metaRows={[{ label: "วันที่", value: printB.issue_date }, { label: "จำนวนใบแจ้งหนี้", value: String(printB.invoices.length) }]}
             customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone, mapUrl: printB.mapUrl }}
             terms={printB.note} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}
-            totals={<div className="doc-totals"><div className="doc-grand"><span>ยอดวางบิลรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div></div>}>
+            totals={<div className="doc-totals">
+              {printB.wht > 0 ? <>
+                <div><span>ยอดวางบิลรวม</span><b>{fmtBaht(printB.total)}</b></div>
+                <div><span>หัก ณ ที่จ่าย</span><b>− {fmtBaht(printB.wht)}</b></div>
+                <div className="doc-grand"><span>ยอดสุทธิที่ต้องชำระ</span><b>{fmtBaht(printB.net)}</b></div>
+              </> : <div className="doc-grand"><span>ยอดวางบิลรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div>}
+            </div>}>
             {printB.invoices.map((iv, i) => (
               <tr key={iv.invoice_no}><td>{i + 1}</td><td>{iv.invoice_no}</td><td>ใบแจ้งหนี้ · งวดที่ {iv.installment} ({Math.round(iv.pct)}%){iv.issue_date ? ` · ${iv.issue_date}` : ""}</td><td className="r" /><td className="r" /><td className="r">{fmtBaht(iv.total)}</td></tr>
             ))}
@@ -192,6 +206,8 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
   const custInv = ed.customer_id ? invoices.filter((x) => String(x.customer_id) === String(ed.customer_id) && isBillable(x)) : [];
   const chosen = custInv.filter((x) => ed.sel[x.invoice_no]);
   const total = chosen.reduce((a, x) => a + (Number(x.total) || 0), 0);
+  const whtSel = chosen.reduce((a, x) => a + (Number(x.wht_amt) || 0), 0);   // หัก ณ ที่จ่าย รวมที่เลือก
+  const netSel = Math.round((total - whtSel) * 100) / 100;
   async function save() {
     if (!ed.customer_id) return flash("เลือกลูกค้าก่อน", true);
     if (!chosen.length) return flash("เลือกใบแจ้งหนี้อย่างน้อย 1 ใบ", true);
@@ -226,6 +242,15 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
                   </label>
                 ))}
               </div>
+              {chosen.length > 0 && (
+                <div className="bn-sum">
+                  <div className="bn-sum-row"><span>ยอดวางบิลรวม</span><b>{fmtBaht(total)}</b></div>
+                  {whtSel > 0 && <>
+                    <div className="bn-sum-row bn-sum-wht"><span>หัก ณ ที่จ่าย (นิติบุคคล)</span><b>− {fmtBaht(whtSel)}</b></div>
+                    <div className="bn-sum-row bn-sum-net"><span>ยอดสุทธิที่ลูกค้าต้องชำระ</span><b>{fmtBaht(netSel)}</b></div>
+                  </>}
+                </div>
+              )}
             </div>
           )}
           <label className="fld"><span>หมายเหตุ (ไม่บังคับ)</span><input className="inp" value={ed.note} onChange={(e) => set("note", e.target.value)} placeholder="เช่น กำหนดชำระภายใน 7 วัน" /></label>
