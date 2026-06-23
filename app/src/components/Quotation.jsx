@@ -151,8 +151,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(q) { const lk = lockMsg(q); if (lk) return alert(lk); if (!await confirmDialog(`ลบถาวร ${q.quote_no}? (กู้คืนไม่ได้)`)) return; try { await deleteQuotation(q.quote_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
-  async function cancel(q) { const lk = lockMsg(q); if (lk) return alert(lk); if (!await confirmDialog(`ยกเลิก ${q.quote_no}? (เก็บประวัติไว้ · ตัดออกจากกำไร)`)) return; try { await setQuotationStatus(q.quote_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(q) { const lk = lockMsg(q); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบเสนอราคา ${q.quote_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ (ไม่บังคับ)", placeholder: "เช่น ทำผิด · ซ้ำ" } }); if (reason === false) return; try { await deleteQuotation(q.quote_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancel(q) { const lk = lockMsg(q); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบเสนอราคา ${q.quote_no}?`, message: "เก็บประวัติไว้ · ตัดออกจากกำไร", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก (ไม่บังคับ)", placeholder: "เช่น ลูกค้าไม่อนุมัติ" } }); if (reason === false) return; try { await setQuotationStatus(q.quote_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   async function approve(q) {
     if (!await confirmDialog(`ยืนยันอนุมัติใบเสนอราคา ${q.quote_no} ?`)) return;
     try { await setQuotationStatus(q.quote_no, "approved"); flash(`อนุมัติ ${q.quote_no} แล้ว ✓`); await load(); }

@@ -134,8 +134,9 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   }
   async function del(bo) {
     const lk = lockMsg(bo); if (lk) return alert(lk);
-    if (!await confirmDialog(`ลบถาวร ${bo.boq_no}? (ลบทิ้งทั้งหมด กู้คืนไม่ได้)`)) return;
-    try { await deleteBoq(bo.boq_no); flash("ลบแล้ว"); await load(); }
+    const reason = await confirmDialog({ title: `ลบ BOQ ${bo.boq_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ (ไม่บังคับ)", placeholder: "เช่น ทำผิด · ซ้ำ" } });
+    if (reason === false) return;
+    try { await deleteBoq(bo.boq_no, reason); flash("ลบแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function cancel(bo) {

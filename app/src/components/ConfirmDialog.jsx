@@ -3,18 +3,25 @@ import React from "react";
 // Promise-based confirm to replace window.confirm with a styled in-app modal.
 //   if (!(await confirmDialog("ลบรายการนี้?"))) return;
 //   if (!(await confirmDialog({ title, message, danger:false, confirmText }))) return;
-// Mount <ConfirmHost/> once at the app root. Falls back to window.confirm if the host isn't mounted.
+// Optional reason capture — resolves to the entered string ("" if blank) on confirm, or false on cancel:
+//   const reason = await confirmDialog({ title, message, prompt: { label, placeholder } });
+//   if (reason === false) return;   // cancelled
+// Mount <ConfirmHost/> once at the app root. Falls back to window.confirm/prompt if the host isn't mounted.
 let _open = null;
 export function confirmDialog(opts) {
   const o = typeof opts === "string" ? { message: opts } : (opts || {});
   return new Promise((resolve) => {
-    if (!_open) { resolve(window.confirm(o.message || o.title || "ยืนยัน?")); return; }
+    if (!_open) {
+      if (o.prompt) { const r = window.prompt(o.message || o.title || "", ""); resolve(r === null ? false : r); return; }
+      resolve(window.confirm(o.message || o.title || "ยืนยัน?")); return;
+    }
     _open({
       title: o.title || "ยืนยันการทำรายการ",
       message: o.message || "",
       confirmText: o.confirmText || "ยืนยัน",
       cancelText: o.cancelText || "ยกเลิก",
       danger: o.danger !== false,
+      prompt: o.prompt || null,
       resolve,
     });
   });
@@ -22,25 +29,39 @@ export function confirmDialog(opts) {
 
 export function ConfirmHost() {
   const [st, setSt] = React.useState(null);
-  React.useEffect(() => { _open = (s) => setSt(s); return () => { _open = null; }; }, []);
+  const [reason, setReason] = React.useState("");
+  React.useEffect(() => { _open = (s) => { setReason(""); setSt(s); }; return () => { _open = null; }; }, []);
   React.useEffect(() => {
     if (!st) return;
     const finish = (v) => { st.resolve(v); setSt(null); };
-    const onKey = (e) => { if (e.key === "Escape") finish(false); else if (e.key === "Enter") finish(true); };
+    const onKey = (e) => {
+      if (e.key === "Escape") finish(false);
+      // when capturing a reason, let Enter add newlines in the textarea instead of submitting
+      else if (e.key === "Enter" && !st.prompt) finish(true);
+    };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [st]);
   if (!st) return null;
   const done = (v) => { st.resolve(v); setSt(null); };
+  const confirm = () => done(st.prompt ? reason.trim() : true);   // prompt mode → resolve the reason string
   return (
     <div className="confirm-overlay" onMouseDown={() => done(false)}>
       <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()}>
         <div className={"confirm-icon" + (st.danger ? " danger" : "")}>{st.danger ? "⚠️" : "❓"}</div>
         <div className="confirm-title">{st.title}</div>
         {st.message && <div className="confirm-msg">{st.message}</div>}
+        {st.prompt && (
+          <div className="confirm-prompt">
+            {st.prompt.label && <label className="confirm-prompt-label">{st.prompt.label}</label>}
+            <textarea className="inp" rows={2} autoFocus value={reason}
+              placeholder={st.prompt.placeholder || "ระบุเหตุผล…"}
+              onChange={(e) => setReason(e.target.value)} />
+          </div>
+        )}
         <div className="confirm-acts">
           <button className="btn-ghost" onClick={() => done(false)}>{st.cancelText}</button>
-          <button className={st.danger ? "btn-danger" : "btn-primary"} onClick={() => done(true)} autoFocus>{st.confirmText}</button>
+          <button className={st.danger ? "btn-danger" : "btn-primary"} onClick={confirm} autoFocus={!st.prompt}>{st.confirmText}</button>
         </div>
       </div>
     </div>

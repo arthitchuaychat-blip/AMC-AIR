@@ -1,7 +1,8 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs } from "../lib/api";
+import { fmtBaht } from "../lib/format";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
 
@@ -331,6 +332,96 @@ function FlowAccountCard() {
   );
 }
 
+// ประวัติการลบ/ยกเลิก/อนุมัติเอกสารการเงิน (audit trail — มิ migration 067)
+const AUDIT_TYPES = { all: "ทุกประเภท", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", quotation: "ใบเสนอราคา", boq: "BOQ", billing_note: "ใบวางบิล", job_order: "ใบงาน", transaction: "เคลื่อนไหวสต๊อก", cash_entry: "กระแสเงินสด" };
+const AUDIT_ACTIONS = { all: "ทุกการกระทำ", delete: "ลบ", cancel: "ยกเลิก", approve: "อนุมัติ", status: "เปลี่ยนสถานะ", update: "แก้ไข" };
+const AUDIT_ACTION_BADGE = { delete: { t: "ลบ", c: "#fff", bg: "#dc2626" }, cancel: { t: "ยกเลิก", c: "#9a3412", bg: "#ffedd5" }, approve: { t: "อนุมัติ", c: "#0a6b3d", bg: "#dcf5e8" }, status: { t: "สถานะ", c: "#1d4ed8", bg: "#e6efff" }, update: { t: "แก้ไข", c: "#1d4ed8", bg: "#e6efff" } };
+
+function AuditCard({ flash }) {
+  const [rows, setRows] = React.useState(null);
+  const [type, setType] = React.useState("all");
+  const [action, setAction] = React.useState("all");
+  const [q, setQ] = React.useState("");
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
+  const [open, setOpen] = React.useState(null);   // id whose snapshot is expanded
+  const [busy, setBusy] = React.useState(false);
+
+  async function load() {
+    setBusy(true);
+    try { setRows(await listAuditLogs({ type, action, from, to, q })); }
+    catch (e) { flash("โหลดประวัติไม่สำเร็จ: " + (e.message || e) + " (รัน 067_audit_log.sql แล้วหรือยัง?)", true); setRows([]); }
+    setBusy(false);
+  }
+  React.useEffect(() => { load(); }, [type, action, from, to]);
+
+  const fmtTs = (ts) => { try { return new Date(ts).toLocaleString("th-TH", { day: "2-digit", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch { return ts; } };
+  const money = (v) => (typeof v === "number" ? fmtBaht(v) : v);
+  // a few human-friendly fields to surface from a snapshot, per type
+  function snapSummary(r) {
+    const s = r.snapshot; if (!s) return null;
+    const pick = [];
+    if (s.customer_id != null) pick.push(["ลูกค้า (id)", s.customer_id]);
+    if (s.total != null) pick.push(["ยอดรวม", money(Number(s.total))]);
+    if (s.net != null) pick.push(["สุทธิ", money(Number(s.net))]);
+    if (s.status) pick.push(["สถานะ", s.status]);
+    if (s.issue_date) pick.push(["วันที่", s.issue_date]);
+    if (Array.isArray(s.items)) pick.push(["จำนวนรายการ", s.items.length]);
+    return pick;
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="sec-head">
+        <div><div className="sec-title">ประวัติการลบ / ยกเลิก เอกสาร <span style={{ fontWeight: 500, color: "var(--ink-3)" }}>(Audit Trail)</span></div>
+          <div className="sec-sub">ใครลบ/ยกเลิกเอกสารอะไร เมื่อไหร่ ทำไม · เก็บข้อมูลเต็มของใบที่ถูกลบไว้กู้คืนได้</div></div>
+        <button className="btn-ghost sm" disabled={busy} onClick={load}>🔄 รีเฟรช</button>
+      </div>
+
+      <div className="audit-filters">
+        <Combo className="inp" value={type} onChange={(e) => setType(e.target.value)}>
+          {Object.entries(AUDIT_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </Combo>
+        <Combo className="inp" value={action} onChange={(e) => setAction(e.target.value)}>
+          {Object.entries(AUDIT_ACTIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </Combo>
+        <input className="inp" type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="ตั้งแต่วันที่" />
+        <input className="inp" type="date" value={to} onChange={(e) => setTo(e.target.value)} title="ถึงวันที่" />
+        <input className="inp" placeholder="ค้นหา เลขที่ / ชื่อผู้ทำ / เหตุผล" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") load(); }} />
+      </div>
+
+      {rows === null ? <div className="empty">กำลังโหลด…</div>
+        : rows.length === 0 ? <div className="empty sm">ยังไม่มีประวัติ (หรือยังไม่ได้รัน migration 067)</div>
+        : (
+          <div className="audit-list">
+            {rows.map((r) => {
+              const b = AUDIT_ACTION_BADGE[r.action] || { t: r.action, c: "#475569", bg: "var(--surface-2)" };
+              const sum = open === r.id ? snapSummary(r) : null;
+              return (
+                <div key={r.id} className="audit-row">
+                  <div className="audit-main">
+                    <span className="audit-badge" style={{ color: b.c, background: b.bg }}>{b.t}</span>
+                    <span className="audit-type">{AUDIT_TYPES[r.target_type] || r.target_type}</span>
+                    <b className="audit-no">{r.target_no || "—"}</b>
+                    <span className="audit-by">โดย {r.actor_name || "—"}</span>
+                    <span className="audit-ts">{fmtTs(r.ts)}</span>
+                    {r.snapshot && <button className="btn-ghost xs" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? "ซ่อน" : "ดูข้อมูล"}</button>}
+                  </div>
+                  {r.reason && <div className="audit-reason">เหตุผล: {r.reason}</div>}
+                  {sum && (
+                    <div className="audit-snap">
+                      {sum.map(([k, v], i) => <span key={i} className="audit-snap-item"><i>{k}:</i> {String(v)}</span>)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+    </div>
+  );
+}
+
 export default function Settings({ role }) {
   const [teams, setTeams] = React.useState([]);
   const [profiles, setProfiles] = React.useState([]);
@@ -417,6 +508,7 @@ export default function Settings({ role }) {
       {!loading && (
         <>
         {can(role, "settings", "edit") && <PermissionsCard flash={flash} />}
+        {can(role, "settings", "edit") && <AuditCard flash={flash} />}
         {can(role, "settings", "edit") && <NotifyCard flash={flash} />}
         {can(role, "settings", "edit") && <ChatGroupsCard flash={flash} />}
         {can(role, "settings", "edit") && <FlowAccountCard />}

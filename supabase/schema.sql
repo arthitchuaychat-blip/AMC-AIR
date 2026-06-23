@@ -586,6 +586,26 @@ create table if not exists chat_messages (
 );
 -- (RLS policies + chat_is_member() helper + seed company room: see migration 037_team_chat.sql)
 
+-- audit trail (มิ migration 067) — who deleted/cancelled which financial doc, when, why (+ snapshot)
+create table if not exists audit_logs (
+  id          bigserial primary key,
+  ts          timestamptz not null default now(),
+  actor       uuid references auth.users(id) on delete set null,
+  actor_name  text,
+  action      text not null,
+  target_type text not null,
+  target_no   text,
+  reason      text,
+  snapshot    jsonb
+);
+create index if not exists audit_logs_target_idx on audit_logs (target_type, target_no);
+create index if not exists audit_logs_ts_idx on audit_logs (ts desc);
+alter table audit_logs enable row level security;
+drop policy if exists audit_insert on audit_logs;
+create policy audit_insert on audit_logs for insert to authenticated with check (true);
+drop policy if exists audit_read on audit_logs;
+create policy audit_read on audit_logs for select to authenticated using (my_role() in ('admin','exec','finance'));
+
 -- ============================================================
 -- หลังรันแล้ว: สร้างผู้ใช้ใน Authentication → ค่อยตั้ง role/team ใน profiles
 -- เช่น: update profiles set role='admin' where email='admin@yourco.com';

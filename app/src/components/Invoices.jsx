@@ -134,8 +134,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   }
   // chain lock: can't edit/delete/cancel an invoice that already has a receipt downstream
   const lockMsg = (x) => x.hasReceipt ? "แก้ไข/ลบ/ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว\nต้องลบใบเสร็จก่อน" : null;
-  async function del(x) { const lk = lockMsg(x); if (lk) return alert(lk); if (!await confirmDialog(`ลบใบแจ้งหนี้ ${x.invoice_no}?`)) return; try { await deleteInvoice(x.invoice_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
-  async function cancel(x) { const lk = lockMsg(x); if (lk) return alert(lk); if (!await confirmDialog(`ยกเลิกใบแจ้งหนี้ ${x.invoice_no}? (ยอดจะคืนกลับไปคงเหลือ)`)) return; try { await setInvoiceStatus(x.invoice_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(x) { const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบแจ้งหนี้ ${x.invoice_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ (ไม่บังคับ)", placeholder: "เช่น ออกผิด · ลูกค้ายกเลิก" } }); if (reason === false) return; try { await deleteInvoice(x.invoice_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancel(x) { const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบแจ้งหนี้ ${x.invoice_no}?`, message: "ยอดจะคืนกลับไปคงเหลือ", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก (ไม่บังคับ)", placeholder: "เช่น แก้ไขยอด · ลูกค้าเปลี่ยนใจ" } }); if (reason === false) return; try { await setInvoiceStatus(x.invoice_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
 
   // ---------- EDITOR ----------
   if (ed) {

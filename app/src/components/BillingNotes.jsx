@@ -50,8 +50,8 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { if (!printB) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintB(null); }, 120); return () => clearTimeout(t); }, [printB]);
 
-  async function cancel(b) { if (!await confirmDialog(`ยกเลิกใบวางบิล ${b.billing_no}? (เก็บประวัติไว้)`)) return; try { await setBillingNoteStatus(b.billing_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
-  async function del(b) { if (!await confirmDialog(`ลบถาวรใบวางบิล ${b.billing_no}? (กู้คืนไม่ได้)`)) return; try { await deleteBillingNote(b.billing_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancel(b) { const reason = await confirmDialog({ title: `ยกเลิกใบวางบิล ${b.billing_no}?`, message: "เก็บประวัติไว้", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก (ไม่บังคับ)", placeholder: "เช่น แก้ไขรายการ" } }); if (reason === false) return; try { await setBillingNoteStatus(b.billing_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(b) { const reason = await confirmDialog({ title: `ลบใบวางบิล ${b.billing_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ (ไม่บังคับ)", placeholder: "เช่น ทำผิด · ซ้ำ" } }); if (reason === false) return; try { await deleteBillingNote(b.billing_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
   if (loading) return <div className="adm"><div className="empty">กำลังโหลด…</div></div>;
 

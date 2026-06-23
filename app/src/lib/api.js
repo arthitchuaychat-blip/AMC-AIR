@@ -593,13 +593,18 @@ export async function syncBoqItems(boq_no, items) {
   return rows.length;
 }
 
-export async function deleteBoq(boq_no) {
+export async function deleteBoq(boq_no, reason) {
   // chain safety: block if a quotation was created from this BOQ (checked live, not from the UI flag)
   const { count, error: ce } = await supabase.from("quotations").select("quote_no", { count: "exact", head: true }).eq("boq_no", boq_no);
   if (ce) throw ce;
   if ((count || 0) > 0) throw new Error("ลบ BOQ นี้ไม่ได้ — มีใบเสนอราคาอ้างอิงอยู่ · ต้องลบใบเสนอราคา (และเอกสารถัดไป) ก่อน");
+  const [{ data: head }, { data: items }] = await Promise.all([
+    supabase.from("boqs").select("*").eq("boq_no", boq_no).maybeSingle(),
+    supabase.from("boq_items").select("*").eq("boq_no", boq_no),
+  ]);
   const { error } = await supabase.from("boqs").delete().eq("boq_no", boq_no);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "boq", target_no: boq_no, reason, snapshot: head ? { ...head, items: items || [] } : null });
 }
 export async function setBoqStatus(boq_no, status) {
   const { error } = await supabase.from("boqs").update({ status }).eq("boq_no", boq_no);
@@ -680,7 +685,7 @@ export async function saveQuotation(q, items) {
   }
 }
 
-export async function deleteQuotation(quote_no) {
+export async function deleteQuotation(quote_no, reason) {
   // chain safety: block if an invoice or job order was created from this quotation
   const [iv, jo] = await Promise.all([
     supabase.from("invoices").select("invoice_no", { count: "exact", head: true }).eq("quote_no", quote_no),
@@ -688,15 +693,22 @@ export async function deleteQuotation(quote_no) {
   ]);
   if (iv.error) throw iv.error; if (jo.error) throw jo.error;
   if ((iv.count || 0) > 0 || (jo.count || 0) > 0) throw new Error("ลบใบเสนอราคานี้ไม่ได้ — มีใบแจ้งหนี้/ใบงานอ้างอิงอยู่ · ต้องลบเอกสารถัดไปก่อน");
+  const [{ data: head }, { data: items }] = await Promise.all([
+    supabase.from("quotations").select("*").eq("quote_no", quote_no).maybeSingle(),
+    supabase.from("quotation_items").select("*").eq("quote_no", quote_no),
+  ]);
   const { error } = await supabase.from("quotations").delete().eq("quote_no", quote_no);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "quotation", target_no: quote_no, reason, snapshot: head ? { ...head, items: items || [] } : null });
 }
 
-export async function setQuotationStatus(quote_no, status) {
+export async function setQuotationStatus(quote_no, status, reason) {
   const patch = { status };
   if (status === "approved") patch.approved_at = new Date().toISOString();
   const { error } = await supabase.from("quotations").update(patch).eq("quote_no", quote_no);
   if (error) throw error;
+  if (status === "cancelled" || status === "approved")
+    await logAudit({ action: status === "approved" ? "approve" : "cancel", target_type: "quotation", target_no: quote_no, reason });
 }
 
 // id → name map of document creators (for the "ผู้สร้างเอกสาร" audit line)
@@ -761,7 +773,7 @@ export async function setInvoiceWht(invoice_no, items, wht_rate, wht_amt) {
   const { error } = await supabase.from("invoices").update({ items: items || [], wht_rate: Number(wht_rate) || 3, wht_amt: Number(wht_amt) || 0 }).eq("invoice_no", invoice_no);
   if (error) throw error;
 }
-export async function setInvoiceStatus(invoice_no, status) {
+export async function setInvoiceStatus(invoice_no, status, reason) {
   // chain safety: cannot cancel an invoice that already has a receipt
   if (status === "cancelled") {
     const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no);
@@ -770,14 +782,17 @@ export async function setInvoiceStatus(invoice_no, status) {
   }
   const { error } = await supabase.from("invoices").update({ status }).eq("invoice_no", invoice_no);
   if (error) throw error;
+  if (status === "cancelled") await logAudit({ action: "cancel", target_type: "invoice", target_no: invoice_no, reason });
 }
-export async function deleteInvoice(invoice_no) {
+export async function deleteInvoice(invoice_no, reason) {
   // chain safety: block if a receipt was issued from this invoice
   const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no);
   if (ce) throw ce;
   if ((count || 0) > 0) throw new Error("ลบใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว · ต้องลบใบเสร็จก่อน");
+  const { data: snap } = await supabase.from("invoices").select("*").eq("invoice_no", invoice_no).maybeSingle();
   const { error } = await supabase.from("invoices").delete().eq("invoice_no", invoice_no);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "invoice", target_no: invoice_no, reason, snapshot: snap });
 }
 
 // ---------- RECEIPTS (ใบเสร็จรับเงิน) ----------
@@ -874,28 +889,34 @@ export async function saveBillingNote(b) {
   }, { onConflict: "billing_no" });
   if (error) throw error;
 }
-export async function setBillingNoteStatus(billing_no, status) {
+export async function setBillingNoteStatus(billing_no, status, reason) {
   const { error } = await supabase.from("billing_notes").update({ status }).eq("billing_no", billing_no);
   if (error) throw error;
+  if (status === "cancelled") await logAudit({ action: "cancel", target_type: "billing_note", target_no: billing_no, reason });
 }
-export async function deleteBillingNote(billing_no) {
+export async function deleteBillingNote(billing_no, reason) {
+  const { data: snap } = await supabase.from("billing_notes").select("*").eq("billing_no", billing_no).maybeSingle();
   const { error } = await supabase.from("billing_notes").delete().eq("billing_no", billing_no);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "billing_note", target_no: billing_no, reason, snapshot: snap });
 }
 
-export async function setReceiptStatus(receipt_no, status, invoice_no) {
+export async function setReceiptStatus(receipt_no, status, invoice_no, reason) {
   const { error } = await supabase.from("receipts").update({ status }).eq("receipt_no", receipt_no);
   if (error) throw error;
   if (invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", invoice_no);
+  if (status === "cancelled") await logAudit({ action: "cancel", target_type: "receipt", target_no: receipt_no, reason });
 }
 export async function saveReceiptFlowAccount(receipt_no, faId, faNo) {
   const { error } = await supabase.from("receipts").update({ flowaccount_id: faId ? String(faId) : null, flowaccount_no: faNo || null, flowaccount_at: new Date().toISOString() }).eq("receipt_no", receipt_no);
   if (error) throw error;
 }
-export async function deleteReceipt(receipt_no, invoice_no) {
+export async function deleteReceipt(receipt_no, invoice_no, reason) {
+  const { data: snap } = await supabase.from("receipts").select("*").eq("receipt_no", receipt_no).maybeSingle();
   const { error } = await supabase.from("receipts").delete().eq("receipt_no", receipt_no);
   if (error) throw error;
   if (invoice_no) await supabase.from("invoices").update({ status: "unpaid" }).eq("invoice_no", invoice_no);
+  await logAudit({ action: "delete", target_type: "receipt", target_no: receipt_no, reason, snapshot: snap });
 }
 
 // ---------- JOB ORDERS (ใบงาน) ----------
@@ -1089,9 +1110,14 @@ export async function updateVisitStatus(visitId, jobNo, status, author) {
   return data;
 }
 
-export async function deleteJobOrder(job_no) {
+export async function deleteJobOrder(job_no, reason) {
+  const [{ data: head }, { data: visits }] = await Promise.all([
+    supabase.from("job_orders").select("*").eq("job_no", job_no).maybeSingle(),
+    supabase.from("job_visits").select("*").eq("job_no", job_no),
+  ]);
   const { error } = await supabase.from("job_orders").delete().eq("job_no", job_no);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "job_order", target_no: job_no, reason, snapshot: head ? { ...head, visits: visits || [] } : null });
 }
 
 // ใบงานเชื่อม: แตกใบใหม่จากใบหนึ่ง (เลขราก + A/B/C) คัดลอกข้อมูลลูกค้า/งาน · ทีม+รอบให้ออฟฟิศกำหนดเอง
@@ -1114,9 +1140,11 @@ export async function createLinkedJob(base) {
 }
 
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
-export async function deleteTransaction(id) {
+export async function deleteTransaction(id, reason) {
+  const { data: snap } = await supabase.from("transactions").select("*").eq("id", id).maybeSingle();
   const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "transaction", target_no: id, reason, snapshot: snap });
 }
 // edit a movement's quantity (stock + value recompute automatically from the transactions table)
 export async function updateTransaction(id, qty) {
@@ -2031,6 +2059,44 @@ export async function deleteDocTermPreset(id) {
 // ---------- internal team chat (company room / DMs / groups / project rooms) ----------
 async function _uid() { const { data: { user } } = await supabase.auth.getUser(); return user?.id || null; }
 
+// ---------- audit trail (มิ migration 067) ----------
+// Records who did a destructive/financial action, when, why, and (for deletes) the full
+// record snapshot — so a hard-deleted document can still be reviewed/recovered later.
+let _actorNameCache = null;
+async function _actorName() {
+  if (_actorNameCache) return _actorNameCache;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from("profiles").select("name,email").eq("id", user.id).maybeSingle();
+  _actorNameCache = data?.name || data?.email || null;
+  return _actorNameCache;
+}
+// best-effort: an audit-write failure must NEVER block the primary action
+export async function logAudit({ action, target_type, target_no, reason, snapshot }) {
+  try {
+    const uid = await _uid();
+    const actor_name = await _actorName();
+    await supabase.from("audit_logs").insert({
+      actor: uid, actor_name, action, target_type,
+      target_no: target_no != null ? String(target_no) : null,
+      reason: reason ? String(reason).slice(0, 500) : null,
+      snapshot: snapshot || null,
+    });
+  } catch (_) { /* ignore — table may not exist yet, or RLS blocks; never throw */ }
+}
+export async function listAuditLogs({ type = "all", action = "all", from, to, q, limit = 300 } = {}) {
+  let query = supabase.from("audit_logs").select("*").order("ts", { ascending: false }).limit(limit);
+  if (type && type !== "all") query = query.eq("target_type", type);
+  if (action && action !== "all") query = query.eq("action", action);
+  if (from) query = query.gte("ts", from + "T00:00:00");
+  if (to) query = query.lte("ts", to + "T23:59:59");
+  const { data, error } = await query;
+  if (error) throw error;
+  let rows = data || [];
+  if (q) { const n = q.toLowerCase(); rows = rows.filter((r) => [r.target_no, r.actor_name, r.reason].some((f) => String(f || "").toLowerCase().includes(n))); }
+  return rows;
+}
+
 // add all permanent staff to the "พนักงานประจำ" group (insert-only) — admin/exec only
 export async function syncChatGroups() {
   const { error } = await supabase.rpc("chat_sync_groups");
@@ -2071,9 +2137,11 @@ export async function updateCashEntry(id, f) {
   const { error } = await supabase.from("cash_entries").update(patch).eq("id", id);
   if (error) throw error;
 }
-export async function deleteCashEntry(id) {
+export async function deleteCashEntry(id, reason) {
+  const { data: snap } = await supabase.from("cash_entries").select("*").eq("id", id).maybeSingle();
   const { error } = await supabase.from("cash_entries").delete().eq("id", id);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "cash_entry", target_no: id, reason, snapshot: snap });
 }
 export async function getOpeningBalance() {
   const { data } = await supabase.from("cash_entries").select("amount").eq("source_type", "opening").maybeSingle();
