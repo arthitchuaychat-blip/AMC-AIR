@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
-import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams } from "./lib/api";
+import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams, unreadByModule, markModuleRead } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { NAV_MY, LangContext } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
@@ -62,8 +62,10 @@ const NAV = {
 };
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
+// chat & teamchat have their own dedicated badges — skip the notification-based one for them
+const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-23·แชต: ปุ่มสร้างงาน(กระดานสั่งงาน)บนหัวแชต ใช้ได้ทุกแชต-v163";
+const BUILD = "2026-06-23·เมนู: เลขแจ้งเตือนกิจกรรม/ค้างอ่านบนทุกเมนู (เหมือน badge แชต)-v164";
 
 function SetupNotice() {
   return (
@@ -110,6 +112,7 @@ export default function App() {
   const [taskPrefill, setTaskPrefill] = React.useState(null); // {customerId,name} → open Task Board create-form (จากแชต)
   const [chatUnread, setChatUnread] = React.useState(0); // LINE chats waiting to be answered → sidebar badge
   const [teamUnread, setTeamUnread] = React.useState(0); // unread team-chat messages → sidebar badge
+  const [notifCounts, setNotifCounts] = React.useState({}); // unread notifications per category → per-menu badges
 
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
@@ -142,6 +145,18 @@ export default function App() {
     const safe = allowed.length ? allowed : ["teamchat"];
     setView((v) => (v && safe.includes(v) ? v : safe[0]));
   }, [profile, permsV, mySub]);
+
+  // sidebar badges: unread notifications grouped by category → number on each menu (like the LINE chat badge)
+  const refreshNavNotif = React.useCallback(() => { unreadByModule().then(setNotifCounts).catch(() => {}); }, []);
+  React.useEffect(() => {
+    if (!profile) { setNotifCounts({}); return; }
+    refreshNavNotif();
+    const iv = setInterval(refreshNavNotif, 20000);
+    const ch = supabase.channel("nav-notif")
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, refreshNavNotif)
+      .subscribe();
+    return () => { clearInterval(iv); supabase.removeChannel(ch); };
+  }, [profile, refreshNavNotif]);
 
   // sidebar badge: count of chats with unread messages — live via realtime, with a polling fallback
   React.useEffect(() => {
@@ -212,6 +227,11 @@ export default function App() {
   function go(id) {
     if (view && view !== id) { setNavHist((h) => [...h, view]); window.history.pushState(null, ""); }
     setView(id); setMenuOpen(false);
+    // opening a menu clears its "unread activity" badge
+    if (!NAV_BADGE_SKIP[id] && (notifCounts[id] || 0) > 0) {
+      setNotifCounts((m) => ({ ...m, [id]: 0 }));
+      markModuleRead(id).then(refreshNavNotif).catch(() => {});
+    }
   }
   function goBack() {
     setNavHist((h) => { if (!h.length) return h; setView(h[h.length - 1]); setMenuOpen(false); return h.slice(0, -1); });
@@ -264,6 +284,7 @@ export default function App() {
                 <span className="nav-en">{secondary}</span>
                 {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
                 {id === "teamchat" && teamUnread > 0 && <span className="nav-badge" title={`${teamUnread} ข้อความใหม่`}>{teamUnread > 99 ? "99+" : teamUnread}</span>}
+                {!NAV_BADGE_SKIP[id] && (notifCounts[id] || 0) > 0 && <span className="nav-badge" title="กิจกรรมใหม่ที่ยังไม่ได้อ่าน">{notifCounts[id] > 99 ? "99+" : notifCounts[id]}</span>}
               </button>
             );
           })}

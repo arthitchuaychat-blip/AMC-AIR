@@ -1382,6 +1382,20 @@ export async function markAllNotificationsRead() {
   const { error } = await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", uid).is("read_at", null);
   if (error) throw error;
 }
+// unread notification counts per menu (grouped by url = module id) → sidebar badges per menu
+export async function unreadByModule() {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("notifications").select("url").eq("user_id", uid).is("read_at", null).not("url", "is", null).limit(1000);
+  if (error) throw error;
+  const m = {}; (data || []).forEach((n) => { if (n.url) m[n.url] = (m[n.url] || 0) + 1; });
+  return m;
+}
+// mark every unread notification for one menu read (when the user opens it)
+export async function markModuleRead(moduleId) {
+  const uid = await _uid();
+  const { error } = await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", uid).eq("url", moduleId).is("read_at", null);
+  if (error) throw error;
+}
 
 // ---------- TASK BOARD (กระดานสั่งงาน) ----------
 export async function listTasks() {
