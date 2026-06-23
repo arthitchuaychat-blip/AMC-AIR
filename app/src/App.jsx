@@ -33,6 +33,7 @@ import NotificationBell from "./components/NotificationBell";
 import MyJobs from "./components/MyJobs";
 import Invoices from "./components/Invoices";
 import Receipts from "./components/Receipts";
+import Receivables from "./components/Receivables";
 
 const NAV = {
   myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
@@ -50,6 +51,7 @@ const NAV = {
   invoice: { th: "ใบแจ้งหนี้", en: "Invoices", icon: "clipboard" },
   receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
   billing: { th: "ใบวางบิล", en: "Billing Notes", icon: "clipboard" },
+  receivables: { th: "เงินค้างรับ", en: "Receivables", icon: "trend" },
   profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
   cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "trend" },
   expenses: { th: "เบิกจ่าย", en: "Expenses", icon: "withdraw" },
@@ -65,7 +67,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-23·การเงิน: audit log + กู้คืนเอกสารที่ลบ + เหตุผลตอนลบ/ยกเลิก-v173";
+const BUILD = "2026-06-23·เงินค้างรับ (AR aging): ตามอายุหนี้/ตามลูกค้า + โทร/แชต/ดูใบ-v174";
 
 function SetupNotice() {
   return (
@@ -347,6 +349,7 @@ export default function App() {
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "billing" && <BillingNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
+        {view === "receivables" && <Receivables role={role} onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "profit" && <Profit />}
         {view === "cashflow" && <CashFlow />}
         {view === "expenses" && <Expenses role={role} me={profile} />}
