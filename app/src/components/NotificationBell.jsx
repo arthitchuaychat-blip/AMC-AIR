@@ -37,7 +37,7 @@ export default function NotificationBell({ onOpen }) {
 
   async function click(n) {
     if (!n.read_at) { try { await markNotificationRead(n.id); } catch (_) {} refresh(); setItems((xs) => xs.map((x) => x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)); }
-    if (n.url && onOpen) { onOpen(n.url); setOpen(false); }
+    if ((n.url || n.ref_type) && onOpen) { onOpen(n); setOpen(false); }   // deep-link to the exact record
   }
   async function readAll() { try { await markAllNotificationsRead(); setItems((xs) => xs.map((x) => ({ ...x, read_at: x.read_at || new Date().toISOString() }))); setUnread(0); } catch (_) {} }
 

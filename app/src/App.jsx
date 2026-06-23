@@ -65,7 +65,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-23·ใบงาน: ตัวกรองชื่อช่าง (dropdown รายชื่อบุคคล) ใช้ได้รวมหัวหน้าช่าง-v168";
+const BUILD = "2026-06-23·แจ้งเตือน: กดแล้วลิงก์ไปที่รายการจริง (งาน/คอมเมนต์/แชตลูกค้า/แชตทีม)-v169";
 
 function SetupNotice() {
   return (
@@ -109,6 +109,8 @@ export default function App() {
   const [invoiceFromQuote, setInvoiceFromQuote] = React.useState(null);
   const [receiptFromInvoice, setReceiptFromInvoice] = React.useState(null);
   const [chatFocus, setChatFocus] = React.useState(null); // open the chat thread of this customer id (from a doc's "แชตลูกค้า")
+  const [taskFocus, setTaskFocus] = React.useState(null); // open this task's detail (from a notification)
+  const [teamFocus, setTeamFocus] = React.useState(null); // open this team-chat room (from a notification)
   const [taskPrefill, setTaskPrefill] = React.useState(null); // {customerId,name} → open Task Board create-form (จากแชต)
   const [chatUnread, setChatUnread] = React.useState(0); // LINE chats waiting to be answered → sidebar badge
   const [teamUnread, setTeamUnread] = React.useState(0); // unread team-chat messages → sidebar badge
@@ -245,6 +247,16 @@ export default function App() {
     else if (type === "receipt") { setReceiptFocus(no); go("receipt"); }
   }
 
+  // click a notification → jump straight to the exact record it refers to
+  function openNotif(n) {
+    const t = n.ref_type, no = n.ref_no;
+    if (t === "job" && no) { setJobFocus(no); go("joborders"); }
+    else if (t === "task" && no) { setTaskFocus(no); go("tasks"); }
+    else if ((n.category === "customer_chat" || t === "line") && no) { setChatFocus(String(no)); go("chat"); }
+    else if (t === "room" && no) { setTeamFocus(no); go("teamchat"); }
+    else if (n.url) { go(n.url); }   // fall back to the relevant menu
+  }
+
   return (
     <LangContext.Provider value={lang}>
     <div className="app">
@@ -253,7 +265,7 @@ export default function App() {
         <button className="topbar-burger" onClick={() => setMenuOpen(true)} aria-label="เมนู"><UIcon name="menu" size={22} /></button>
         <Logo size={30} radius={8} />
         <div className="brand-name" style={{ fontSize: 17 }}>AMC <span>Management</span></div>
-        <div style={{ marginLeft: "auto" }}><NotificationBell onOpen={(v) => { go(v); setMenuOpen(false); }} /></div>
+        <div style={{ marginLeft: "auto" }}><NotificationBell onOpen={(n) => { openNotif(n); setMenuOpen(false); }} /></div>
       </div>
       {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
       <aside className={"sidebar" + (menuOpen ? " open" : "")}>
@@ -263,7 +275,7 @@ export default function App() {
             <div className="brand-name">AMC <span>Management</span></div>
             <div className="brand-sub">Management System</div>
           </div>
-          <div className="brand-bell"><NotificationBell onOpen={(v) => { go(v); setMenuOpen(false); }} /></div>
+          <div className="brand-bell"><NotificationBell onOpen={(n) => { openNotif(n); setMenuOpen(false); }} /></div>
         </div>
 
         <nav className="nav">
@@ -318,8 +330,8 @@ export default function App() {
           onCreateBoq={(cid) => { setBoqNewCust(String(cid)); go("boq"); }}
           onCreateSurvey={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }}
           onCreateTask={(cid, name) => { setTaskPrefill({ customerId: cid ? String(cid) : null, name: name || null }); go("tasks"); }} />}
-        {view === "teamchat" && <TeamChat />}
-        {view === "tasks" && <TaskBoard role={role} me={profile} prefill={taskPrefill} onPrefillConsumed={() => setTaskPrefill(null)} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
+        {view === "teamchat" && <TeamChat focus={teamFocus} onFocusConsumed={() => setTeamFocus(null)} />}
+        {view === "tasks" && <TaskBoard role={role} me={profile} prefill={taskPrefill} onPrefillConsumed={() => setTaskPrefill(null)} focus={taskFocus} onFocusConsumed={() => setTaskFocus(null)} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
           newForCustomer={boqNewCust} onNewConsumed={() => setBoqNewCust(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}

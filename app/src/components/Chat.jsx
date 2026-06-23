@@ -172,8 +172,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       const [lc, fc] = await Promise.all([listLineContacts().catch(() => []), listFbContacts().catch(() => [])]);
       if (!alive) return;
       onFocusConsumed && onFocusConsumed();
-      const inLine = lc.find((c) => String(c.customer_id) === String(focus));
-      const inFb = fc.find((c) => String(c.customer_id) === String(focus));
+      // focus = a customer id (from a doc) OR a LINE/FB conversation id (from a notification)
+      const inLine = lc.find((c) => String(c.customer_id) === String(focus) || String(c.line_user_id) === String(focus));
+      const inFb = fc.find((c) => String(c.customer_id) === String(focus) || String(c.line_user_id) === String(focus));
       const target = inLine ? { ch: "line", c: inLine } : inFb ? { ch: "fb", c: inFb } : null;
       if (!target) { flash("ลูกค้ารายนี้ยังไม่มีแชตที่เชื่อมไว้", true); return; }
       if (target.ch !== channel) { pendingOpenRef.current = target.c.line_user_id; setChannel(target.ch); }

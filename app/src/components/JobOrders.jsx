@@ -53,7 +53,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   React.useEffect(() => { load(); }, []);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   // open focused on a specific job order (from the dashboard report link)
-  React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setQ(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
+  React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setTeamF("all"); setTypeF("all"); setDateFrom(""); setDateTo(""); setQ(focus); setOpenTl(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
 
   // open editor prefilled from an approved quotation. Use the quote's own resolved
   // contact/site fields (always present from listQuotations) so it doesn't depend on

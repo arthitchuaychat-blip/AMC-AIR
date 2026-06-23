@@ -95,7 +95,7 @@ async function readRaw(req) {
 
 // notify back-office (sales/admin/exec) about an inbound customer message — bell + web push.
 // respects the per-role on/off matrix (app_config.notify_settings.customer_chat). Best-effort.
-async function notifyCustomerChat(title, body) {
+async function notifyCustomerChat(title, body, convId) {
   try {
     const cfgR = await tfetch(`${SB()}/rest/v1/app_config?key=eq.notify_settings&select=value`, { headers: sbH() });
     const cfg = (cfgR.ok ? ((await cfgR.json())[0]?.value) : null) || {};
@@ -103,7 +103,7 @@ async function notifyCustomerChat(title, body) {
     const profs = pr.ok ? await pr.json() : [];
     const ids = profs.filter((p) => { const s = cfg[p.role]; return !s || s.customer_chat !== false; }).map((p) => p.id);
     if (!ids.length) return;
-    await tfetch(`${SB()}/rest/v1/notifications`, { method: "POST", headers: sbH(), body: JSON.stringify(ids.map((id) => ({ user_id: id, category: "customer_chat", title, body: (body || "").slice(0, 180), url: "chat", ref_type: "line" }))) });
+    await tfetch(`${SB()}/rest/v1/notifications`, { method: "POST", headers: sbH(), body: JSON.stringify(ids.map((id) => ({ user_id: id, category: "customer_chat", title, body: (body || "").slice(0, 180), url: "chat", ref_type: "line", ref_no: convId || null }))) });
     const pub = process.env.VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
     if (!pub || !priv) return;
     const inList = ids.map((id) => `"${id}"`).join(",");
@@ -176,7 +176,7 @@ export default async function handler(req, res) {
         else { row.text = `[${m.type}]`; }
         await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
         await tfetch(`${SB()}/rest/v1/rpc/line_bump_unread`, { method: "POST", headers: sbH(), body: JSON.stringify({ p_uid: convId, p_msg: row.text || "[ข้อความ]" }) });
-        await notifyCustomerChat("💬 ข้อความใหม่จากลูกค้า (LINE)", row.text || "[ข้อความ]");
+        await notifyCustomerChat("💬 ข้อความใหม่จากลูกค้า (LINE)", row.text || "[ข้อความ]", convId);
       }
     }
   } catch (e) {

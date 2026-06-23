@@ -25,7 +25,7 @@ function NotifyButton() {
 const KIND_ICON = { company: "🏢", dm: "👤", group: "👥", project: "🧰" };
 const OFFICE = ["admin", "exec", "finance", "sales"]; // back-office: may manage group members
 
-export default function TeamChat() {
+export default function TeamChat({ focus, onFocusConsumed }) {
   const [me, setMe] = React.useState(null);
   const [rooms, setRooms] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
@@ -65,6 +65,9 @@ export default function TeamChat() {
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
+
+  // open a specific room (from a notification)
+  React.useEffect(() => { if (focus == null) return; setSel(Number(focus)); onFocusConsumed && onFocusConsumed(); }, [focus]);
 
   React.useEffect(() => {
     if (!sel) return;
