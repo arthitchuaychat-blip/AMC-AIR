@@ -533,12 +533,14 @@ const _termCols = (d) => ({
   terms_freebies: d.terms_freebies?.trim() || null,
   terms_warranty: d.terms_warranty?.trim() || null,
 });
+// per-document signature snapshot (chosen by the issuer at creation time)
+const _signCols = (d) => ({ sign_url: d.sign_url || null, sign_name: d.sign_name || null });
 
 export async function saveBoq(boq, items) {
   const { data: { user } } = await supabase.auth.getUser();
   const e1 = (await supabase.from("boqs").upsert({
     boq_no: boq.boq_no, customer_id: boq.customer_id || null, site_id: boq.site_id || null,
-    title: boq.title?.trim() || null, note: boq.note?.trim() || null, internal_note: boq.internal_note?.trim() || null, ..._termCols(boq), status: boq.status || "open", created_by: user?.id || null,
+    title: boq.title?.trim() || null, note: boq.note?.trim() || null, internal_note: boq.internal_note?.trim() || null, ..._termCols(boq), ..._signCols(boq), status: boq.status || "open", created_by: user?.id || null,
   }, { onConflict: "boq_no" })).error;
   if (e1) throw e1;
   const e2 = (await supabase.from("boq_items").delete().eq("boq_no", boq.boq_no)).error;
@@ -637,7 +639,7 @@ export async function saveQuotation(q, items) {
     title: q.title?.trim() || null, status: q.status || "draft",
     issue_date: q.issue_date || null, valid_until: q.valid_until || null,
     discount_type: q.discount_type || "amount", discount_value: Number(q.discount_value) || 0,
-    vat: !!q.vat, wht: !!q.wht, wht_rate: Number(q.wht_rate) || 3, note: q.note?.trim() || null, internal_note: q.internal_note?.trim() || null, ..._termCols(q),
+    vat: !!q.vat, wht: !!q.wht, wht_rate: Number(q.wht_rate) || 3, note: q.note?.trim() || null, internal_note: q.internal_note?.trim() || null, ..._termCols(q), ..._signCols(q),
     approved_at: q.status === "approved" ? (q.approved_at || new Date().toISOString()) : null,
     created_by: user?.id || null,
   }, { onConflict: "quote_no" })).error;
@@ -725,7 +727,7 @@ export async function saveInvoice(inv) {
     installment: Number(inv.installment) || 1, pct: Number(inv.pct) || 0,
     base: Number(inv.base) || 0, vat_amt: Number(inv.vat_amt) || 0, total: Number(inv.total) || 0,
     wht_amt: Number(inv.wht_amt) || 0, wht_rate: Number(inv.wht_rate) || 3, items: inv.items || [],
-    note: inv.note?.trim() || null, internal_note: inv.internal_note?.trim() || null, ..._termCols(inv), status: inv.status || "unpaid", created_by: user?.id || null,
+    note: inv.note?.trim() || null, internal_note: inv.internal_note?.trim() || null, ..._termCols(inv), ..._signCols(inv), status: inv.status || "unpaid", created_by: user?.id || null,
   }, { onConflict: "invoice_no" });
   if (error) throw error;
 }
@@ -791,7 +793,7 @@ export async function saveReceipt(r) {
     customer_id: r.customer_id || null, site_id: r.site_id || null, issue_date: r.issue_date || null, payment_method: r.payment_method || null,
     base: Number(r.base) || 0, vat_amt: Number(r.vat_amt) || 0, total: Number(r.total) || 0, wht_amt: Number(r.wht_amt) || 0, net: Number(r.net) || 0,
     wht: !!r.wht, wht_rate: Number(r.wht_rate) || 3, items: r.items || [],
-    status, note: r.note?.trim() || null, internal_note: r.internal_note?.trim() || null, ..._termCols(r), created_by: user?.id || null,
+    status, note: r.note?.trim() || null, internal_note: r.internal_note?.trim() || null, ..._termCols(r), ..._signCols(r), created_by: user?.id || null,
   }, { onConflict: "receipt_no" });
   if (error) throw error;
   if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no);
@@ -837,7 +839,7 @@ export async function saveBillingNote(b) {
   const uid = await _uid();
   const { error } = await supabase.from("billing_notes").upsert({
     billing_no: b.billing_no, customer_id: b.customer_id || null, site_id: b.site_id || null,
-    issue_date: b.issue_date || null, note: b.note || null, internal_note: b.internal_note?.trim() || null, invoice_nos: b.invoice_nos || [],
+    issue_date: b.issue_date || null, note: b.note || null, internal_note: b.internal_note?.trim() || null, invoice_nos: b.invoice_nos || [], ..._signCols(b),
     status: b.status || "open", created_by: uid,
   }, { onConflict: "billing_no" });
   if (error) throw error;

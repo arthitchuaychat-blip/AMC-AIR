@@ -13,7 +13,8 @@ import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import GrowArea from "./GrowArea";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
-import { InternalNoteField, InternalNoteTag } from "./InternalNote";
+import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
+import { mySignature, defaultSignOn } from "../lib/sign";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 const SECTION_LABEL = { ac: "เครื่องปรับอากาศ", free: "วัสดุแถม (ไม่คิดเงิน)", charged: "วัสดุคิดเงิน", service: "ค่าบริการ" };
@@ -83,8 +84,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
-  function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", note: "", terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
-  function startNewFor(customerId) { setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", note: "", terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
+  function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
+  function startNewFor(customerId) { setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
   // open a fresh BOQ pre-filled with this customer (e.g. launched from the chat panel)
   React.useEffect(() => { if (newForCustomer) { startNewFor(newForCustomer); onNewConsumed && onNewConsumed(); } }, [newForCustomer]);
   // chain lock: can't edit/delete a BOQ that already has a quotation downstream
@@ -96,13 +97,13 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     const lk = editLockMsg(bo); if (lk) return alert(lk);
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
-    setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", internal_note: bo.internal_note || "", terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
+    setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", note: bo.note || "", internal_note: bo.internal_note || "", sign_on: !!bo.sign_url, terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
   }
   // duplicate: copy items/details into a brand-new BOQ (new number, not _edit) — for similar jobs
   function duplicate(bo) {
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
-    setEd({ boq_no: genNo(), customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title ? bo.title + " (สำเนา)" : "", note: bo.note || "", terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
+    setEd({ boq_no: genNo(), customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title ? bo.title + " (สำเนา)" : "", note: bo.note || "", sign_on: defaultSignOn(), terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
     flash("คัดลอกเป็น BOQ ใหม่แล้ว — แก้ไขลูกค้า/รายการได้ แล้วกดบันทึก");
   }
 
@@ -127,7 +128,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     const flat = Object.entries(ed.items).flatMap(([sec, arr]) => arr.filter((x) => x.qty > 0).map((x) => ({ ...x, section: sec })));
     if (!flat.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไข BOQ ${ed.boq_no} ?`)) return;
-    try { await saveBoq(ed, flat); flash("บันทึก BOQ แล้ว"); setEd(null); await load(); }
+    const sig = ed.sign_on ? mySignature() : null;
+    try { await saveBoq({ ...ed, sign_url: sig?.url || null, sign_name: sig?.name || null }, flat); flash("บันทึก BOQ แล้ว"); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(bo) {
@@ -191,6 +193,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           <div className="line-total" style={{ fontSize: 15 }}><span>ต้นทุนรวมทั้งสิ้น</span><b style={{ fontSize: 20 }}>{fmtBaht(total)}</b></div>
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setEd((e) => ({ ...e, [k]: v }))} />
           <InternalNoteField value={ed.internal_note} onChange={(v) => setEd((e) => ({ ...e, internal_note: v }))} />
+          <SignToggle on={ed.sign_on} onChange={(v) => setEd((e) => ({ ...e, sign_on: v }))} />
           <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
             <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึก BOQ</button>
@@ -261,7 +264,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           metaRows={[{ label: "ชื่องาน", value: printB.title }]}
           projectTitle={printB.title}
           customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone, mapUrl: printB.mapUrl }}
-          terms={printB.note} termsPayment={printB.terms_payment} termsFreebies={printB.terms_freebies} termsWarranty={printB.terms_warranty} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]}
+          terms={printB.note} termsPayment={printB.terms_payment} termsFreebies={printB.terms_freebies} termsWarranty={printB.terms_warranty} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]} signUrl={printB.sign_url} signName={printB.sign_name}
           totals={<div className="doc-totals">
             <div className="doc-grand"><span>ต้นทุนรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div>
           </div>}>

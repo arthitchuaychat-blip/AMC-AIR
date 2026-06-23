@@ -29,9 +29,10 @@ function officerSign() {
   } catch { return null; }
 }
 
-export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, projectTitle, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], children, totals }) {
+export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, projectTitle, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], signUrl, signName, children, totals }) {
   const co = company || {};
-  const sign = officerSign();
+  // explicit per-document signature (saved on the doc) wins; otherwise fall back to the device toggle
+  const sign = signUrl !== undefined ? (signUrl ? { url: signUrl, name: signName || "" } : null) : officerSign();
   return (
     <div className="print-area">
       <div className="doc">

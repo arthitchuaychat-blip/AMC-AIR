@@ -394,6 +394,8 @@ select.inp{cursor:pointer}
 .tx-job{font-family:var(--mono);font-weight:600}
 /* back-office-only note (never printed) */
 .int-note-fld span small{font-weight:400;color:var(--ink-3)}
+.sign-toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
+.sign-toggle-prev{height:30px;max-width:120px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#fff;padding:1px;margin-left:4px}
 .int-note-tag{font-size:11.5px;color:#92400e;background:#fff7ed;border:1px dashed #fdba74;border-radius:8px;padding:5px 9px;margin-top:6px;line-height:1.4;word-break:break-word}
 .int-note-tag b{font-weight:700}
 /* ===== คิวช่าง panel in the chat info sidebar ===== */

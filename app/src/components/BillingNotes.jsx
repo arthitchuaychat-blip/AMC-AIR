@@ -9,7 +9,8 @@ import DocChips from "./DocChips";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
-import { InternalNoteField, InternalNoteTag } from "./InternalNote";
+import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
+import { mySignature, defaultSignOn } from "../lib/sign";
 
 // สถานะรวมของใบวางบิล: ยกเลิก / ออกใบเสร็จครบ / วางบิล (ยังออกใบเสร็จไม่ครบ)
 const bnStatus = (b) => {
@@ -64,7 +65,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
             <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบแจ้งหนี้" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
-          {canEdit && <button className="btn-primary" onClick={() => setEd({ billing_no: genNo(), customer_id: "", issue_date: today(), note: "", sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
+          {canEdit && <button className="btn-primary" onClick={() => setEd({ billing_no: genNo(), customer_id: "", issue_date: today(), note: "", sign_on: defaultSignOn(), sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
         </div>
       </div>
 
@@ -174,7 +175,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
           <DocSlip company={co} titleTh="ใบวางบิล / ใบแจ้งหนี้รวม" titleEn="BILLING NOTE" docNo={printB.billing_no}
             metaRows={[{ label: "วันที่", value: printB.issue_date }, { label: "จำนวนใบแจ้งหนี้", value: String(printB.invoices.length) }]}
             customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, address: printB.siteAddress || printB.customerAddr, contactName: printB.contactName, contactPhone: printB.contactPhone, mapUrl: printB.mapUrl }}
-            terms={printB.note} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}
+            terms={printB.note} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]} signUrl={printB.sign_url} signName={printB.sign_name}
             totals={<div className="doc-totals">
               {printB.wht > 0 ? <>
                 <div><span>ยอดวางบิลรวม</span><b>{fmtBaht(printB.total)}</b></div>
@@ -212,7 +213,8 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
     if (!ed.customer_id) return flash("เลือกลูกค้าก่อน", true);
     if (!chosen.length) return flash("เลือกใบแจ้งหนี้อย่างน้อย 1 ใบ", true);
     setBusy(true);
-    try { await saveBillingNote({ billing_no: ed.billing_no, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, internal_note: ed.internal_note, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" }); flash("สร้างใบวางบิลแล้ว ✓"); onSaved(); }
+    const sig = ed.sign_on ? mySignature() : null;
+    try { await saveBillingNote({ billing_no: ed.billing_no, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, internal_note: ed.internal_note, sign_url: sig?.url || null, sign_name: sig?.name || null, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" }); flash("สร้างใบวางบิลแล้ว ✓"); onSaved(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -255,6 +257,7 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
           )}
           <label className="fld"><span>หมายเหตุ (ไม่บังคับ)</span><input className="inp" value={ed.note} onChange={(e) => set("note", e.target.value)} placeholder="เช่น กำหนดชำระภายใน 7 วัน" /></label>
           <InternalNoteField value={ed.internal_note} onChange={(v) => set("internal_note", v)} />
+          <SignToggle on={ed.sign_on} onChange={(v) => set("sign_on", v)} />
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
           <button className="btn-primary" disabled={busy || !chosen.length} onClick={save}>สร้างใบวางบิล</button></div>

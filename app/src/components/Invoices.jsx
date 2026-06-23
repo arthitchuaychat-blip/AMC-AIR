@@ -8,7 +8,8 @@ import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
-import { InternalNoteField, InternalNoteTag } from "./InternalNote";
+import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
+import { mySignature, defaultSignOn } from "../lib/sign";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import LineWhtModal from "./LineWhtModal";
@@ -62,7 +63,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   function startNew(quoteNo = "") {
     const q = quoteNo ? quoteByNo[quoteNo] : null;
-    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: "", basis: "percent", basis_value: 100, note: "", internal_note: "",
+    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: "", basis: "percent", basis_value: 100, note: "", internal_note: "", sign_on: defaultSignOn(),
       wht_rate: Number(q?.wht_rate) || 3,
       terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" });
   }
@@ -126,6 +127,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       issue_date: ed.issue_date || null, due_date: ed.due_date || null, installment, pct: round2(f * 100),
       base, vat_amt: round2((selQ.vatAmt || 0) * f), total: newTotal, wht_rate, items, wht_amt: useWht ? lineWhtAmt(items, base, wht_rate) : 0,
       note: ed.note, internal_note: ed.internal_note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty, status: "unpaid",
+      ...(() => { const sig = ed.sign_on ? mySignature() : null; return { sign_url: sig?.url || null, sign_name: sig?.name || null }; })(),
     };
     try { await saveInvoice(inv); flash(`สร้างใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
@@ -244,6 +246,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setF(k, v)} />
           <InternalNoteField value={ed.internal_note} onChange={(v) => setF("internal_note", v)} />
+          <SignToggle on={ed.sign_on} onChange={(v) => setF("sign_on", v)} />
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
@@ -338,7 +341,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, { label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }]}
           projectTitle={printI.title}
           customer={{ name: printI.customerName, code: custCode(printI.customerCode), taxId: printI.customerTaxId, address: printI.siteAddress || printI.customerAddr, contactName: printI.contactName, contactPhone: printI.contactPhone, mapUrl: printI.mapUrl }}
-          terms={printI.note || co.default_terms} termsPayment={printI.terms_payment} termsFreebies={printI.terms_freebies} termsWarranty={printI.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}
+          terms={printI.note || co.default_terms} termsPayment={printI.terms_payment} termsFreebies={printI.terms_freebies} termsWarranty={printI.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]} signUrl={printI.sign_url} signName={printI.sign_name}
           totals={<div className="doc-totals">
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(q?.subtotal || 0)}</b></div>
             {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(q.discount)}</b></div>}

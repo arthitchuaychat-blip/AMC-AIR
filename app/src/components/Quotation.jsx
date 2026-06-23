@@ -4,7 +4,8 @@ import Combo from "./Combo";
 import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems } from "../lib/api";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
-import { InternalNoteField, InternalNoteTag } from "./InternalNote";
+import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
+import { mySignature, defaultSignOn } from "../lib/sign";
 import DocChips from "./DocChips";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
@@ -57,7 +58,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
-  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, note: "", terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
+  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
   // create a new quotation prefilled from a BOQ (customer/site + pulled items)
   function startFromBoq(boqNo) {
     const b = boqs.find((x) => x.boq_no === boqNo); if (!b) return;
@@ -66,7 +67,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       const m = matMap[x.item_code];
       return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
     });
-    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, note: "", terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
+    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, note: "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
   }
   React.useEffect(() => { if (!fromBoq || !boqs.length) return; startFromBoq(fromBoq); onFromBoqConsumed && onFromBoqConsumed(); }, [fromBoq, boqs]);
   // chain lock: can't edit/delete a quotation that already has an invoice or job order downstream
@@ -75,12 +76,12 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     : null;
   function startEdit(q) {
     const lk = lockMsg(q); if (lk) return alert(lk);
-    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", internal_note: q.internal_note || "", terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at,
+    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind, description: x.description || "" })) });
   }
   // duplicate: copy a quote's items/details into a brand-new quotation (new number, not _edit) — for repeat/similar quotes
   function duplicate(q) {
-    setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", title: q.title ? q.title + " (สำเนา)" : "", status: "draft", issue_date: today(), valid_until: "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "",
+    setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", title: q.title ? q.title + " (สำเนา)" : "", status: "draft", issue_date: today(), valid_until: "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", sign_on: defaultSignOn(), terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "",
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind, description: x.description || "" })) });
     flash("คัดลอกเป็นใบเสนอราคาใหม่แล้ว — แก้ไขแล้วกดบันทึก");
   }
@@ -132,7 +133,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
     try {
-      await saveQuotation(ed, ed.items);
+      const sig = ed.sign_on ? mySignature() : null;
+      await saveQuotation({ ...ed, sign_url: sig?.url || null, sign_name: sig?.name || null }, ed.items);
       // sync new items back into the linked BOQ (add only — never removes BOQ items)
       let synced = 0;
       if (ed.boq_no) {
@@ -283,6 +285,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setQ(k, v)} />
           <InternalNoteField value={ed.internal_note} onChange={(v) => setQ("internal_note", v)} />
+          <SignToggle on={ed.sign_on} onChange={(v) => setQ("sign_on", v)} />
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
@@ -381,7 +384,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           projectTitle={printQ.title}
           customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, address: printQ.siteAddress || printQ.customerAddr, contactName: printQ.contactName, contactPhone: printQ.contactPhone, mapUrl: printQ.map_url }}
           terms={printQ.note || co.default_terms} termsPayment={printQ.terms_payment} termsFreebies={printQ.terms_freebies} termsWarranty={printQ.terms_warranty} bank={co.bank_info}
-          signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}
+          signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]} signUrl={printQ.sign_url} signName={printQ.sign_name}
           totals={<div className="doc-totals">
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(printQ.subtotal)}</b></div>
             {printQ.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(printQ.discount)}</b></div>}
