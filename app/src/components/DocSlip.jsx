@@ -67,7 +67,7 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
                   {customer.taxId ? <>เลขประจำตัวผู้เสียภาษี {customer.taxId}</> : null}
                   {customer.contactName || customer.contactPhone ? <>{customer.taxId ? " · " : ""}ผู้ติดต่อ {customer.contactName || ""}{customer.contactPhone ? ` ${customer.contactPhone}` : ""}</> : null}
                 </div>
-                {(customer.siteAddress || customer.siteName) && (
+                {(customer.siteName || customer.siteAddress || customer.siteContactName || customer.siteContactPhone) && (
                   <div className="doc-cust-site">
                     <span className="doc-cust-site-l">📍 หน้างาน{customer.siteName ? ` · ${customer.siteName}` : ""}</span>
                     {customer.siteAddress && <div className="doc-cust-line">{customer.siteAddress}</div>}

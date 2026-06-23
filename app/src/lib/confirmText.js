@@ -6,12 +6,15 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "2-dig
 
 // jo = job order object จาก listJobOrders() (มี confirmItems, quoteGrand, scheduled_at, slot, customerName ฯลฯ)
 export function buildOrderConfirm(jo) {
-  // หน้างาน = ข้อมูลไซต์จริงเท่านั้น (ไม่ดึงที่อยู่หลักมาแทน) — ถ้าไม่มี ก็เว้นว่าง/ไม่แสดง
+  // หน้างาน = ข้อมูลไซต์เท่าที่มี (ไซต์ที่ผูกไว้ หรือที่กรอกในใบงานเอง) — แต่ไม่ดึงที่อยู่หลักมาแทน
+  const svcAddr = jo.siteAddress || (jo.address && jo.address !== jo.customerAddr ? jo.address : "");
+  const svcCName = jo.siteContactName || (jo.contact_name && jo.contact_name !== jo.mainContactName ? jo.contact_name : "");
+  const svcCPhone = jo.siteContactPhone || (jo.contact_phone && jo.contact_phone !== jo.mainContactPhone ? jo.contact_phone : "");
   const siteLines = [];
   if (jo.siteName) siteLines.push(`สถานที่ให้บริการ (หน้างาน) : ${jo.siteName}`);
-  if (jo.siteAddress) siteLines.push(`ที่อยู่หน้างาน : ${jo.siteAddress}`);
-  if (jo.siteContactName || jo.siteContactPhone) siteLines.push(`ผู้ติดต่อหน้างาน : ${jo.siteContactName || ""}${jo.siteContactPhone ? ` (${jo.siteContactPhone})` : ""}`);
-  if (jo.siteAddress && jo.map_url) siteLines.push(`หมุดโลเคชั่น : ${jo.map_url}`);
+  if (svcAddr) siteLines.push(`ที่อยู่หน้างาน : ${svcAddr}`);
+  if (svcCName || svcCPhone) siteLines.push(`ผู้ติดต่อหน้างาน : ${svcCName || ""}${svcCPhone ? ` (${svcCPhone})` : ""}`);
+  if (svcAddr && jo.map_url) siteLines.push(`หมุดโลเคชั่น : ${jo.map_url}`);
 
   const lines = [
     `วันที่สั่งซื้อ : ${fmtDate(jo.created_at)}`,

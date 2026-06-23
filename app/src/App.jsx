@@ -61,7 +61,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-23·คอนเฟิมไลน์: ที่อยู่หน้างานใช้ข้อมูลไซต์จริงเท่านั้น (ไม่ดึงที่อยู่หลัก)-v156";
+const BUILD = "2026-06-23·หน้างาน: แสดงข้อมูลไซต์เท่าที่มี (แม้ไม่ครบ) ทั้งเอกสาร+คอนเฟิม-v157";
 
 function SetupNotice() {
   return (
