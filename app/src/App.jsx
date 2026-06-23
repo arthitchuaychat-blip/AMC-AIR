@@ -61,7 +61,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-23·หน้างาน: แสดงข้อมูลไซต์เท่าที่มี (แม้ไม่ครบ) ทั้งเอกสาร+คอนเฟิม-v157";
+const BUILD = "2026-06-23·เพิ่มปุ่มย้อนกลับทุกหน้า + รองรับปุ่ม Back ของเครื่อง-v158";
 
 function SetupNotice() {
   return (
@@ -85,6 +85,7 @@ export default function App() {
   const [teams, setTeams] = React.useState([]); // to tell if the logged-in user is on a subcontractor team
   const [permsV, setPermsV] = React.useState(0); // bumps when role permissions (re)load → re-render nav
   const [view, setView] = React.useState(null);
+  const [navHist, setNavHist] = React.useState([]); // stack of previous views → ปุ่มย้อนกลับ
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [lang, setLang] = React.useState(() => { try { return localStorage.getItem("amc_lang") || "th"; } catch { return "th"; } });
   const [purchasePrefill, setPurchasePrefill] = React.useState(null);
@@ -186,13 +187,32 @@ export default function App() {
     try { total > 0 ? navigator.setAppBadge(total) : navigator.clearAppBadge(); } catch (_) {}
   }, [teamUnread, chatUnread]);
 
+  // hardware/browser Back → go back through the in-app view history (instead of leaving the app)
+  React.useEffect(() => {
+    const onPop = () => setNavHist((h) => {
+      if (!h.length) return h;
+      setView(h[h.length - 1]); setMenuOpen(false);
+      window.history.pushState(null, ""); // keep a buffer so the next Back is handled too
+      return h.slice(0, -1);
+    });
+    window.history.pushState(null, "");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   if (!hasConfig) return <SetupNotice />;
   if (!ready) return <div className="login-stage"><div className="page-sub">กำลังโหลด…</div></div>;
   if (!session) return <Login />;
 
   const role = profile?.role || "tech";
 
-  function go(id) { setView(id); setMenuOpen(false); }
+  function go(id) {
+    if (view && view !== id) { setNavHist((h) => [...h, view]); window.history.pushState(null, ""); }
+    setView(id); setMenuOpen(false);
+  }
+  function goBack() {
+    setNavHist((h) => { if (!h.length) return h; setView(h[h.length - 1]); setMenuOpen(false); return h.slice(0, -1); });
+  }
   // unified cross-document navigation (used by the "เชื่อมโยง" chips on every doc)
   function openDoc(type, no) {
     if (type === "boq") { setBoqFocus(no); go("boq"); }
@@ -264,6 +284,7 @@ export default function App() {
       </aside>
 
       <main className="main">
+        {navHist.length > 0 && <button className="page-back" onClick={goBack}><UIcon name="chevR" size={15} style={{ transform: "rotate(180deg)" }} /> ย้อนกลับ</button>}
         <InstallBanner />
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
