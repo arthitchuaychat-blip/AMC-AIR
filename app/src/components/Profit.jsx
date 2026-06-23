@@ -1,5 +1,5 @@
 import React from "react";
-import { listQuotations, listBoqs, listJobOrders, jobMaterialCost } from "../lib/api";
+import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 
 // กำไร/งาน — 1 ใบเสนอราคา = 1 งาน (รวมทุกใบงานที่อยู่ใต้ใบเสนอราคานั้น รวมใบงานเชื่อม)
@@ -18,7 +18,7 @@ export default function Profit() {
   async function load() {
     setLoading(true); setErr(null);
     try {
-      const [qs, bs, jos, mat] = await Promise.all([listQuotations(), listBoqs(), listJobOrders(), jobMaterialCost()]);
+      const [qs, bs, jos, mat, exp] = await Promise.all([listQuotations(), listBoqs(), listJobOrders(), jobMaterialCost(), jobExpenseCost()]);
       const boqCost = Object.fromEntries(bs.map((b) => [b.boq_no, b.total]));
       const jobByNo = Object.fromEntries(jos.map((j) => [j.job_no, j]));
       // group job orders by quote (1 ใบเสนอราคา = 1 งาน)
@@ -37,19 +37,20 @@ export default function Profit() {
         // ต่อใบงาน: วัสดุเบิก/คืน + ค่าแรงช่างซัพ (เพื่อกางดูรายละเอียดได้)
         const detail = jobs.map((j) => {
           const m = mat[j.job_no] || { withdraw: 0, return: 0 };
-          return { job: j, withdraw: m.withdraw, ret: m.return, matNet: m.withdraw - m.return, labor: Number(j.labor_total) || 0 };
+          return { job: j, withdraw: m.withdraw, ret: m.return, matNet: m.withdraw - m.return, labor: Number(j.labor_total) || 0, expense: Number(exp[j.job_no]) || 0 };
         });
         const withdraw = detail.reduce((a, d) => a + d.withdraw, 0);
         const ret = detail.reduce((a, d) => a + d.ret, 0);
         const matNet = withdraw - ret;                              // วัสดุที่ใช้จริงสุทธิ (รวมทุกใบงาน)
         const labor = detail.reduce((a, d) => a + d.labor, 0);      // ค่าแรงช่างซัพ (รวมทุกใบงาน)
+        const expenses = detail.reduce((a, d) => a + d.expense, 0); // ค่าใช้จ่ายเบิกจ่ายของงาน (รวมทุกใบงาน)
 
         const sale = q.afterDisc;                                   // ยอดขายสุทธิ ก่อน VAT (นับครั้งเดียว)
         const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : null;
         const gross = cost == null ? null : sale - cost;            // กำไรขั้นต้น
-        const net = gross == null ? null : gross - matNet - labor;  // กำไรสุทธิ/งาน
+        const net = gross == null ? null : gross - matNet - labor - expenses;  // กำไรสุทธิ/งาน
         const margin = net == null || sale <= 0 ? null : (net / sale) * 100;
-        out.push({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, net, margin });
+        out.push({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, net, margin });
       });
       setRows(out);
 
@@ -111,7 +112,7 @@ export default function Profit() {
           {rows.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ</span><span className="r">กำไรขั้นต้น</span><span className="r">วัสดุเบิกจริง</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ</span><span className="r">%</span></div>
-              {rows.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, net, margin }) => {
+              {rows.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, net, margin }) => {
                 const isOpen = !!open[q.quote_no];
                 return (
                   <React.Fragment key={q.quote_no}>
@@ -134,12 +135,13 @@ export default function Profit() {
                             <span style={{ textAlign: "right", color: "var(--ink-2)" }}>
                               {d.matNet === 0 ? "ไม่มีวัสดุ" : <>วัสดุ {fmtBaht(d.matNet)}{d.ret > 0 ? ` (เบิก ${fmtBaht(d.withdraw)} − คืน ${fmtBaht(d.ret)})` : ""}</>}
                               {d.labor > 0 && <> · ค่าแรงซัพ {fmtBaht(d.labor)}</>}
+                              {d.expense > 0 && <> · ค่าใช้จ่ายเบิก {fmtBaht(d.expense)}</>}
                             </span>
                           </div>
                         ))}
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0 0", fontWeight: 700 }}>
                           <span>รวมทั้งงาน</span>
-                          <span style={{ textAlign: "right" }}>วัสดุ {fmtBaht(matNet)} · ค่าแรงซัพ {fmtBaht(labor)}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
+                          <span style={{ textAlign: "right" }}>วัสดุ {fmtBaht(matNet)} · ค่าแรงซัพ {fmtBaht(labor)}{expenses > 0 ? ` · ค่าใช้จ่ายเบิก ${fmtBaht(expenses)}` : ""}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
                         </div>
                       </div>
                     )}

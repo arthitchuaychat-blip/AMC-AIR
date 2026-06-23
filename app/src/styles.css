@@ -398,6 +398,14 @@ select.inp{cursor:pointer}
 .sign-toggle-prev{height:30px;max-width:120px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#fff;padding:1px;margin-left:4px}
 .int-note-tag{font-size:11.5px;color:#92400e;background:#fff7ed;border:1px dashed #fdba74;border-radius:8px;padding:5px 9px;margin-top:6px;line-height:1.4;word-break:break-word}
 .int-note-tag b{font-weight:700}
+/* ===== Expenses (เบิกจ่าย) ===== */
+.exp-accounts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+.exp-acc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.exp-acc-name{font-size:13px;font-weight:700;color:var(--ink-2)}
+.exp-acc-bal{font-size:22px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums}
+.exp-atts{display:flex;flex-direction:column;gap:8px;padding:0 12px 8px}
+.exp-att-grp{display:flex;flex-direction:column;gap:5px}
+.exp-att-grp>span{font-size:11.5px;color:var(--ink-3);font-weight:600}
 /* global back button (top of each page) */
 .page-back{display:inline-flex;align-items:center;gap:5px;margin-bottom:12px;padding:7px 13px;border:1px solid var(--line);background:var(--surface);border-radius:9px;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;font-family:inherit}
 .page-back:hover{border-color:var(--primary);color:var(--primary)}

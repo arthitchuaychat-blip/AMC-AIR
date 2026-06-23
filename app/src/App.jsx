@@ -22,6 +22,7 @@ import BOQ from "./components/BOQ";
 import Quotation from "./components/Quotation";
 import Profit from "./components/Profit";
 import CashFlow from "./components/CashFlow";
+import Expenses from "./components/Expenses";
 import BillingNotes from "./components/BillingNotes";
 import JobOrders from "./components/JobOrders";
 import Schedule from "./components/Schedule";
@@ -51,6 +52,7 @@ const NAV = {
   billing: { th: "ใบวางบิล", en: "Billing Notes", icon: "clipboard" },
   profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
   cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "trend" },
+  expenses: { th: "เบิกจ่าย", en: "Expenses", icon: "withdraw" },
   joborders: { th: "ใบงาน", en: "Job Orders", icon: "clipboard" },
   schedule: { th: "ปฏิทินงาน", en: "Schedule", icon: "calendar" },
   movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "withdraw" },
@@ -61,7 +63,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-23·แชต: เปลี่ยนชื่อปุ่มเป็น สร้างใบงาน-v159";
+const BUILD = "2026-06-23·ระบบเบิกจ่าย: ขอเบิก/อนุมัติ/จ่าย+แนบหลักฐาน · 3 บัญชี+โอน+รายงาน · เข้าต้นทุนงาน-v160";
 
 function SetupNotice() {
   return (
@@ -312,6 +314,7 @@ export default function App() {
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
         {view === "profit" && <Profit />}
         {view === "cashflow" && <CashFlow />}
+        {view === "expenses" && <Expenses role={role} me={profile} />}
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
           surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}

@@ -1450,6 +1450,95 @@ export async function uploadTaskFile(file) {
   if (error) throw error;
   return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
+
+// ---------- EXPENSES & ACCOUNTS (เบิกจ่าย + กระเป๋าเงิน) ----------
+export async function listAccounts() {
+  const [a, e] = await Promise.all([
+    supabase.from("accounts").select("*").order("sort"),
+    supabase.from("account_entries").select("account_id,direction,amount"),
+  ]);
+  if (a.error) throw a.error;
+  const bal = {}; (e.data || []).forEach((x) => { bal[x.account_id] = (bal[x.account_id] || 0) + (x.direction === "in" ? 1 : -1) * (Number(x.amount) || 0); });
+  return (a.data || []).map((ac) => ({ ...ac, balance: Math.round(((Number(ac.opening_balance) || 0) + (bal[ac.id] || 0)) * 100) / 100 }));
+}
+export async function listAccountEntries({ accountId, from, to } = {}) {
+  let q = supabase.from("account_entries").select("*").order("entry_date", { ascending: false }).order("created_at", { ascending: false });
+  if (accountId) q = q.eq("account_id", accountId);
+  if (from) q = q.gte("entry_date", from);
+  if (to) q = q.lte("entry_date", to);
+  const { data, error } = await q.limit(2000);
+  if (error) throw error; return data || [];
+}
+export async function transferFunds({ fromId, toId, amount, note }) {
+  const uid = await _uid(); const amt = Number(amount) || 0;
+  if (!fromId || !toId || fromId === toId) throw new Error("เลือกบัญชีต้นทาง/ปลายทางให้ถูกต้อง");
+  if (amt <= 0) throw new Error("จำนวนเงินต้องมากกว่า 0");
+  const day = new Date().toISOString().slice(0, 10);
+  const tref = Math.random().toString(36).slice(2, 10);
+  const { error } = await supabase.from("account_entries").insert([
+    { account_id: fromId, direction: "out", amount: amt, kind: "transfer", ref_type: "transfer", ref_id: tref, note: note || "โอนระหว่างบัญชี", entry_date: day, created_by: uid },
+    { account_id: toId, direction: "in", amount: amt, kind: "transfer", ref_type: "transfer", ref_id: tref, note: note || "โอนระหว่างบัญชี", entry_date: day, created_by: uid },
+  ]);
+  if (error) throw error;
+}
+export async function uploadExpenseFile(file) {
+  const ext = (file.name?.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `expenses/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "application/octet-stream" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
+export async function submitExpense(e) {
+  const uid = await _uid();
+  const { error } = await supabase.from("expense_requests").insert({
+    requester: uid, job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0,
+    note: e.note?.trim() || null, attachments: e.attachments || [], created_by: uid,
+  });
+  if (error) throw error;
+  const me = await getProfile();
+  notify(await _usersByRole(["admin", "finance", "exec"]), { category: "hr", title: `🧾 ${me?.name || "พนักงาน"} ขอเบิกค่าใช้จ่าย ${Number(e.amount) || 0} บาท`, body: e.title || "", url: "expenses", ref_type: "expense" });
+}
+export async function listMyExpenses() {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("expense_requests").select("*").eq("requester", uid).order("created_at", { ascending: false });
+  if (error) throw error; return data || [];
+}
+export async function listExpenses(status) {
+  let q = supabase.from("expense_requests").select("*").order("created_at", { ascending: false });
+  if (status) q = q.eq("status", status);
+  const [ex, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,email")]);
+  if (ex.error) throw ex.error;
+  const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
+  return (ex.data || []).map((x) => ({ ...x, requesterName: nm[x.requester] || "—", approverName: x.approver ? (nm[x.approver] || "—") : null }));
+}
+export async function decideExpense(id, status, note) {
+  const uid = await _uid();
+  const { error } = await supabase.from("expense_requests").update({ status, approver: uid, decided_at: new Date().toISOString(), decide_note: note || null }).eq("id", id);
+  if (error) throw error;
+  const { data: ex } = await supabase.from("expense_requests").select("requester,title").eq("id", id).maybeSingle();
+  const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
+  if (ex) notify([ex.requester], { category: "hr", title: `🧾 คำขอเบิก "${ex.title}" : ${lbl}`, body: note || "", url: "expenses", ref_type: "expense" });
+}
+export async function payExpense(id, { accountId, proof, payDate }) {
+  const uid = await _uid();
+  const { data: ex, error: e0 } = await supabase.from("expense_requests").select("*").eq("id", id).single();
+  if (e0) throw e0;
+  if (ex.status === "paid") throw new Error("จ่ายเงินไปแล้ว");
+  const day = payDate || new Date().toISOString().slice(0, 10);
+  const { error } = await supabase.from("expense_requests").update({ status: "paid", paid_from: accountId || null, paid_at: new Date().toISOString(), payment_proof: proof || [] }).eq("id", id);
+  if (error) throw error;
+  const noteTxt = `เบิกจ่าย: ${ex.title}${ex.job_no ? " · งาน " + ex.job_no : ""}`;
+  if (accountId) await supabase.from("account_entries").insert({ account_id: accountId, direction: "out", amount: Number(ex.amount) || 0, kind: "expense", ref_type: "expense", ref_id: id, note: noteTxt, entry_date: day, created_by: uid });
+  // mirror into the Cash Flow ledger (money out, actual)
+  try { await supabase.from("cash_entries").insert({ direction: "out", status: "actual", entry_date: day, amount: Number(ex.amount) || 0, note: noteTxt, source_type: "expense", source_ref: id, created_by: uid }); } catch (_) {}
+  notify([ex.requester], { category: "hr", title: `💸 จ่ายเงินเบิก "${ex.title}" แล้ว ${Number(ex.amount) || 0} บาท`, body: "แนบหลักฐานการจ่ายเรียบร้อย", url: "expenses", ref_type: "expense" });
+}
+// approved/paid expense cost rolled up per job → adds to job cost in Profit
+export async function jobExpenseCost() {
+  const { data } = await supabase.from("expense_requests").select("job_no,amount,status").not("job_no", "is", null).in("status", ["approved", "paid"]);
+  const m = {}; (data || []).forEach((x) => { if (x.job_no) m[x.job_no] = (m[x.job_no] || 0) + (Number(x.amount) || 0); });
+  return m;
+}
 export async function updateProfile(id, fields) {
   const payload = { role: fields.role, name: fields.name || null, team: fields.role === "tech" ? (fields.team || null) : null };
   const { error } = await supabase.from("profiles").update(payload).eq("id", id);
