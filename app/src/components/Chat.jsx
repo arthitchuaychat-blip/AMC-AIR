@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, unsendLineMessage, unsendFbMessage, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -57,6 +57,8 @@ async function dlFile(url, name) {
   } catch { window.open(url, "_blank", "noopener"); }
 }
 
+const UNSEND_MS = 10 * 60 * 1000; // ยกเลิกข้อความได้ภายใน 10 นาที
+
 export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey, focus, onFocusConsumed }) {
   const canSend = can(role, "chat", "edit");
   const [contacts, setContacts] = React.useState([]);
@@ -107,6 +109,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const chMarkRead = (id) => (isFb ? markFbRead(id) : markLineRead(id));
   const chSendText = (id, t) => (isFb ? sendFbMessage(id, t) : sendLineMessage(id, t));
   const chSendImage = (id, url) => (isFb ? sendFbImage(id, url) : sendLineImage(id, url));
+  const chUnsend = (id) => (isFb ? unsendFbMessage(id) : unsendLineMessage(id));
   const chLink = (id, cid) => (isFb ? linkFbContact(id, cid) : linkLineContact(id, cid));
   const selRef = React.useRef(null);
   const endRef = React.useRef(null);
@@ -363,13 +366,20 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   const coworker = out && m.sent_by && m.sent_by !== myId;
                   const cwColor = coworker ? (staffColor[m.sent_by] || "#0891b2") : null;
                   const senderName = m.sent_by ? (staffMap[m.sent_by] || "ทีมงาน") : "ส่งจากแอป";
+                  const canUnsend = canSend && out && !m.deleted && (Date.now() - new Date(m.created_at).getTime() < UNSEND_MS);
+                  async function unsend() {
+                    if (!await confirmDialog("ยกเลิกข้อความนี้?\n\nหมายเหตุ: ข้อความที่ส่งไปแล้วจะถูกลบออกจากกระดานแชตในระบบ แต่ลูกค้าอาจเห็นข้อความใน LINE/Facebook ไปแล้ว (แพลตฟอร์มไม่รองรับการเรียกคืน)")) return;
+                    try { await chUnsend(m.id); setMsgs(await chListMessages(sel)); } catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e?.message || e), true); }
+                  }
                   return (
                     <React.Fragment key={m.id}>
                       {daySep && <div className="chat-daysep">{fmtDay(m.created_at)}</div>}
                       <div className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "") + (m.type === "sticker" && m.image_url ? " sticker" : "")}
                         style={coworker ? { background: cwColor, borderColor: cwColor } : undefined}>
                         {coworker && <span className="chat-sender">{senderName}</span>}
-                        {m.type === "sticker" && m.image_url ? (
+                        {m.deleted ? (
+                          <span className="chat-unsent">🚫 ยกเลิกข้อความแล้ว</span>
+                        ) : m.type === "sticker" && m.image_url ? (
                           <img className="chat-sticker" src={m.image_url} alt="สติกเกอร์" loading="lazy" />
                         ) : m.image_url ? (
                           <span className="chat-media">
@@ -388,7 +398,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                             </span>
                           </span>
                         ) : <span>{linkify(m.text)}</span>}
-                        <span className="chat-bubble-time">{fmtTime(m.created_at)}{out ? " · " + senderName : ""}</span>
+                        <span className="chat-bubble-time">{fmtTime(m.created_at)}{out ? " · " + senderName : ""}
+                          {canUnsend && <button className="chat-unsend-btn" onClick={unsend} title="ยกเลิกข้อความ (ภายใน 10 นาที)">ยกเลิก</button>}</span>
                       </div>
                     </React.Fragment>
                   );
