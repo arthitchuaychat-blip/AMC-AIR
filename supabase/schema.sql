@@ -472,10 +472,9 @@ create policy jv_lead_update on job_visits for update to authenticated using (my
 alter table job_logs enable row level security;
 -- ทุกบทบาทที่ล็อกอินดูความเคลื่อนไหวได้
 create policy jl_read on job_logs for select to authenticated using (true);
--- โพสต์ได้: ธุรการ/เซล/ผู้บริหาร/บัญชี/หัวหน้าช่าง หรือ ช่างที่เป็นเจ้าของทีมในใบงานนั้น
+-- โพสต์ลง timeline ได้: พนักงานทุกคนที่ล็อกอิน (เป็น log แบบเพิ่มอย่างเดียว ทุกคนอ่านได้อยู่แล้ว)
 create policy jl_insert on job_logs for insert to authenticated with check (
-  my_role() in ('admin','sales','exec','finance','lead_tech')
-  or (my_role() = 'tech' and exists (select 1 from job_orders j where j.job_no = job_logs.job_no and j.assigned_team = my_team()))
+  my_role() in ('admin','sales','exec','finance','stock','lead_tech','tech')
 );
 
 -- ข้อมูลบริษัท: อ่านได้ทุกคน · แก้ไขธุรการ/ผู้บริหาร/บัญชี
