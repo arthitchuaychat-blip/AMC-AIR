@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, createLinkedJob, listProfiles } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, createLinkedJob, listProfiles } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -200,11 +200,14 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     catch (e) { flash("สร้างไม่สำเร็จ: " + (e.message || e), true); }
   }
   // office sets ONE รอบ (visit) status — siblings untouched; modal/list refresh in place
-  async function doVisitStatus(jo, v, status) {
+  async function doVisitStatus(jo, v, status, jobOverride) {
     setApproveCtx(null);
     try {
       await updateVisitStatus(v.id, jo.job_no, status, me);
-      flash(status === "done" ? "อนุมัติ · ปิดงานรอบนี้แล้ว ✓" : "ส่งรอบนี้ไปนัดหมายเพิ่มแล้ว");
+      // some outcomes approve the round (done) but route the whole job to a different stage (e.g. รอทำใบเสนอราคา)
+      if (jobOverride) await updateJobStatus(jo.job_no, jobOverride, me);
+      flash(jobOverride === "quote_pending" ? "อนุมัติรอบนี้ · ส่งไปรอทำใบเสนอราคา ✓"
+        : status === "done" ? "อนุมัติ · ปิดงานรอบนี้แล้ว ✓" : "ส่งรอบนี้ไปนัดหมายเพิ่มแล้ว");
       const fresh = await listJobOrders(); setList(fresh);
       setViewing((cur) => cur ? (fresh.find((x) => x.job_no === jo.job_no) || null) : cur);
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
@@ -576,6 +579,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               <div className="confirm-msg">{jo.job_no} · {v.teamName || "ทีม"}<br />🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}<br /><br />งานรอบนี้…?</div>
               <div className="confirm-acts" style={{ flexDirection: "column" }}>
                 <button className="btn-primary ok" style={{ width: "100%" }} onClick={() => doVisitStatus(jo, v, "done")}>✅ เสร็จสิ้นแล้ว · ปิดงาน</button>
+                <button className="btn-primary" style={{ width: "100%", background: "#0891b2" }} onClick={() => doVisitStatus(jo, v, "done", "quote_pending")}>📝 ไปรอทำใบเสนอราคา</button>
                 <button className="btn-primary" style={{ width: "100%", background: "#ea580c" }} onClick={() => doVisitStatus(jo, v, "reschedule")}>📅 ต้องนัดหมายเพิ่ม</button>
                 <button className="btn-ghost" style={{ width: "100%" }} onClick={() => setApproveCtx(null)}>ยกเลิก</button>
               </div>
