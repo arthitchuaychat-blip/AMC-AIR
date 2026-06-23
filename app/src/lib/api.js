@@ -1598,6 +1598,20 @@ export async function uploadDocFile(blob, ext, contentType) {
 // ===================== HR (attendance / leave / holidays) =====================
 const _today = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 
+// staff signature image → public URL (stored on the profile, optionally printed on documents)
+export async function uploadSignature(blob) {
+  const uid = await _uid();
+  const path = `signatures/${uid}-${Date.now()}.png`;
+  const { error } = await supabase.storage.from("photos").upload(path, blob, { upsert: true, contentType: "image/png" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
+export async function saveMySignature(url) {
+  const uid = await _uid();
+  const { error } = await supabase.from("profiles").update({ signature_url: url || null }).eq("id", uid);
+  if (error) throw error;
+}
+
 export async function uploadAttendancePhoto(blob) {
   const path = `attendance/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`;
   const { error } = await supabase.storage.from("photos").upload(path, blob, { upsert: true, contentType: "image/jpeg" });

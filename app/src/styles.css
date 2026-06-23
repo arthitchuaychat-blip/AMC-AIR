@@ -1306,7 +1306,15 @@ select.inp{cursor:pointer}
 .doc-terms-title{font-weight:800;font-size:11px;margin-bottom:4px;color:#1f74e0;text-transform:uppercase;letter-spacing:.4px}
 .doc-terms-body{font-size:11.5px;white-space:pre-line;line-height:1.55;color:#334155}
 .doc-signs{display:flex;justify-content:space-around;gap:18px;margin-top:auto;padding-top:30px}
-.doc-sign{text-align:center;flex:1}
+/* signature pad (Attendance → my signature) */
+.sigpad{display:flex;flex-direction:column;gap:10px}
+.sig-saved{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink-3)}
+.sig-saved img{height:44px;max-width:200px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff;padding:2px}
+.sig-canvas{width:100%;max-width:420px;height:160px;border:1.5px dashed var(--line-2);border-radius:12px;background:#fff;cursor:crosshair}
+.sig-actions{display:flex;gap:8px;flex-wrap:wrap}
+.sig-toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
+.doc-sign{text-align:center;flex:1;position:relative}
+.doc-sign-img{display:block;height:44px;max-width:80%;object-fit:contain;margin:0 auto -8px;position:relative;z-index:1}
 .doc-sign-line{border-top:1.5px dotted #94a3b8;margin:0 12px 6px}
 .doc-sign-label{font-size:12px;font-weight:700;color:#0f1729}
 .doc-sign-date{font-size:11px;color:#64748b;margin-top:3px}

@@ -1,5 +1,5 @@
 import React from "react";
-import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance } from "../lib/api";
+import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance, uploadSignature, saveMySignature } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { useLang, LEAVE_MY, LV_STATUS_MY } from "../lib/i18n";
@@ -162,6 +162,13 @@ export default function Attendance({ me }) {
         </div>
       </div>
 
+      {/* my signature for documents */}
+      <div className="card">
+        <div className="sec-head"><div><div className="sec-title">{L("ลายเซ็นของฉัน (สำหรับเอกสาร)", "ကျွန်ုပ်၏ လက်မှတ်")}</div>
+          <div className="sec-sub">{L("เซ็นไว้ครั้งเดียว · เปิดสวิตช์เพื่อใส่ลายเซ็นในเอกสารที่คุณออก", "တစ်ကြိမ်လက်မှတ်ထိုး · စာရွက်စာတမ်းတွင် ထည့်ရန် ဖွင့်ပါ")}</div></div></div>
+        <SignaturePad me={me} flash={flash} L={L} />
+      </div>
+
       {/* recent attendance */}
       <div className="card">
         <div className="sec-head"><div><div className="sec-title">{L("ประวัติเข้างาน 30 วันล่าสุด", "နောက်ဆုံး ၃၀ ရက် အလုပ်တက်မှတ်တမ်း")}</div></div></div>
@@ -178,6 +185,58 @@ export default function Attendance({ me }) {
       </div>
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
+    </div>
+  );
+}
+
+function SignaturePad({ me, flash, L }) {
+  const ref = React.useRef(null);
+  const drawing = React.useRef(false);
+  const [busy, setBusy] = React.useState(false);
+  const [savedUrl, setSavedUrl] = React.useState(me?.signature_url || null);
+  const [on, setOn] = React.useState(() => { try { return localStorage.getItem("amc_sign_on") === "1"; } catch { return false; } });
+
+  React.useEffect(() => {
+    const c = ref.current; if (!c) return;
+    const ctx = c.getContext("2d"); ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#0f1729";
+    const pos = (e) => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) }; };
+    const down = (e) => { e.preventDefault(); drawing.current = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); c.setPointerCapture?.(e.pointerId); };
+    const move = (e) => { if (!drawing.current) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
+    const up = () => { drawing.current = false; };
+    c.addEventListener("pointerdown", down); c.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+    return () => { c.removeEventListener("pointerdown", down); c.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+  }, []);
+
+  const clear = () => { const c = ref.current; c.getContext("2d").clearRect(0, 0, c.width, c.height); };
+  async function save() {
+    setBusy(true);
+    try {
+      const blob = await new Promise((res) => ref.current.toBlob(res, "image/png"));
+      const url = await uploadSignature(blob);
+      await saveMySignature(url); setSavedUrl(url);
+      try { localStorage.setItem("amc_sign_url", url); localStorage.setItem("amc_sign_name", me?.name || ""); } catch (_) {}
+      flash(L("บันทึกลายเซ็นแล้ว ✓", "လက်မှတ် သိမ်းပြီး ✓"));
+    } catch (e) { flash((e.message || e), true); }
+    setBusy(false);
+  }
+  async function remove() {
+    setBusy(true);
+    try { await saveMySignature(null); setSavedUrl(null); try { localStorage.removeItem("amc_sign_url"); } catch (_) {} clear(); flash(L("ลบลายเซ็นแล้ว", "လက်မှတ် ဖျက်ပြီး")); }
+    catch (e) { flash((e.message || e), true); }
+    setBusy(false);
+  }
+  const toggle = (v) => { setOn(v); try { v ? localStorage.setItem("amc_sign_on", "1") : localStorage.removeItem("amc_sign_on"); } catch (_) {} };
+
+  return (
+    <div className="sigpad">
+      {savedUrl && <div className="sig-saved"><span className="sig-saved-l">{L("ลายเซ็นปัจจุบัน", "လက်ရှိလက်မှတ်")}:</span><img src={savedUrl} alt="" /></div>}
+      <canvas ref={ref} width={600} height={180} className="sig-canvas" style={{ touchAction: "none" }} />
+      <div className="sig-actions">
+        <button className="btn-ghost sm" disabled={busy} onClick={clear}>{L("ล้าง", "ရှင်း")}</button>
+        <button className="btn-primary sm" disabled={busy} onClick={save}>{busy ? "…" : L("บันทึกลายเซ็น", "လက်မှတ် သိမ်း")}</button>
+        {savedUrl && <button className="btn-ghost sm danger" disabled={busy} onClick={remove}>{L("ลบลายเซ็น", "ဖျက်")}</button>}
+      </div>
+      <label className="sig-toggle"><input type="checkbox" checked={on} onChange={(e) => toggle(e.target.checked)} /> {L("ใส่ลายเซ็นในเอกสารที่ฉันออก (เปิด/ปิดได้)", "ကျွန်ုပ်ထုတ်သော စာရွက်တွင် လက်မှတ်ထည့်ရန်")}</label>
     </div>
   );
 }

@@ -61,7 +61,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-22·ลูกค้า: เพิ่มช่องอีเมล (ฟอร์ม+รายละเอียด+แชต)-v148";
+const BUILD = "2026-06-22·เอกสาร: ลายเซ็นเจ้าหน้าที่ (เซ็นที่หน้าเข้างาน + สวิตช์ใส่/ไม่ใส่)-v149";
 
 function SetupNotice() {
   return (
@@ -170,6 +170,14 @@ export default function App() {
   // register the service worker + (re)subscribe to push if already permitted
   React.useEffect(() => { registerSW().catch(() => {}); }, []);
   React.useEffect(() => { if (session) autoResubscribe(); }, [session]);
+  // keep the signature (for printed docs) in localStorage so DocSlip can pick it up on any print
+  React.useEffect(() => {
+    if (!profile) return;
+    try {
+      if (profile.signature_url) localStorage.setItem("amc_sign_url", profile.signature_url); else localStorage.removeItem("amc_sign_url");
+      localStorage.setItem("amc_sign_name", profile.name || profile.email || "");
+    } catch (_) {}
+  }, [profile]);
 
   // app-icon badge (installed PWA): total unread across LINE + team chat
   React.useEffect(() => {

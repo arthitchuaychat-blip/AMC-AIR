@@ -19,8 +19,19 @@ const ColGroup = () => (
   <colgroup>{COL_W.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>
 );
 
+// the issuing officer's signature is opt-in per device: set + toggled on the Attendance page,
+// remembered in localStorage so every printed DocSlip picks it up automatically when enabled.
+function officerSign() {
+  try {
+    if (typeof localStorage === "undefined" || localStorage.getItem("amc_sign_on") !== "1") return null;
+    const url = localStorage.getItem("amc_sign_url");
+    return url ? { url, name: localStorage.getItem("amc_sign_name") || "" } : null;
+  } catch { return null; }
+}
+
 export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, projectTitle, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], children, totals }) {
   const co = company || {};
+  const sign = officerSign();
   return (
     <div className="print-area">
       <div className="doc">
@@ -93,8 +104,9 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
         <div className="doc-signs">
           {(signLabels.length ? signLabels : ["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]).map((s, i) => (
             <div className="doc-sign" key={i}>
+              {i === 0 && sign && <img className="doc-sign-img" src={sign.url} alt="" />}
               <div className="doc-sign-line" />
-              <div className="doc-sign-label">{s}</div>
+              <div className="doc-sign-label">{s}{i === 0 && sign && sign.name ? ` · ${sign.name}` : ""}</div>
               <div className="doc-sign-date">วันที่ ......./......./.......</div>
             </div>
           ))}
