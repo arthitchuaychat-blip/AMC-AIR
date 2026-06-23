@@ -15,7 +15,7 @@ function Photos({ photos, onOpen }) {
   return (
     <div className="tl-photos">
       {photos.map((u, i) => isImageUrl(u)
-        ? <button type="button" className="tl-photo" key={i} onClick={() => onOpen(imgs, imgs.indexOf(u))}><img src={u} alt="" /></button>
+        ? <button type="button" className="tl-photo" key={i} onClick={() => onOpen(imgs, imgs.indexOf(u))}><img src={u} alt="" loading="lazy" decoding="async" /></button>
         : <AttachThumb key={i} url={u} />)}
     </div>
   );

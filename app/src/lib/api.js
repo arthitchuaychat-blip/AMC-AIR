@@ -173,8 +173,29 @@ export async function updateMaterialCost(code, cost) {
   if (error) throw error;
 }
 
+// Shrink a photo before upload so timelines/galleries don't load multi-MB originals
+// (cameras produce 2–4 MB shots; many of them at once break the browser → "broken image").
+// Re-encodes images to JPEG at <= maxDim px. Non-images (pdf/doc) and undecodable
+// formats (e.g. some HEIC) pass through untouched.
+async function downscaleImage(file, maxDim = 1600, quality = 0.82) {
+  try {
+    if (!file.type || !file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
+    const bmp = await createImageBitmap(file).catch(() => null);
+    if (!bmp) return file;            // can't decode (HEIC on some browsers) → keep original
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    if (scale >= 1 && file.size < 600 * 1024) { bmp.close(); return file; }  // already small enough
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+    canvas.getContext("2d").drawImage(bmp, 0, 0, w, h); bmp.close();
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
+    if (!blob || blob.size >= file.size) return file;   // no win → keep original
+    return new File([blob], (file.name || "photo").replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch (_) { return file; }
+}
+
 // upload a product photo to Supabase Storage (bucket "photos") -> returns public URL
 export async function uploadMaterialPhoto(file, code) {
+  file = await downscaleImage(file);
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
   const path = `materials/${(code || "m").replace(/[^A-Za-z0-9_-]/g, "")}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
@@ -1460,6 +1481,7 @@ export async function deleteTaskComment(id) {
   if (error) throw error;
 }
 export async function uploadTaskFile(file) {
+  file = await downscaleImage(file);
   const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
   const path = `tasks/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "application/octet-stream" });
@@ -1498,6 +1520,7 @@ export async function transferFunds({ fromId, toId, amount, note }) {
   if (error) throw error;
 }
 export async function uploadExpenseFile(file) {
+  file = await downscaleImage(file);
   const ext = (file.name?.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
   const path = `expenses/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "application/octet-stream" });
@@ -1699,6 +1722,7 @@ export const sendLineSticker = (to, packageId, stickerId) => callLineSend(to, { 
 
 // upload an image to send through the chat → public URL (used by LINE image messages)
 export async function uploadChatImage(file) {
+  file = await downscaleImage(file);
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
   const path = `chat/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
