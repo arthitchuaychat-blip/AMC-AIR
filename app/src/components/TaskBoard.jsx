@@ -14,7 +14,7 @@ const PRIO = { low: { th: "ต่ำ", c: "#64748b" }, normal: { th: "ปกต�
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }) : "";
 const fmtDT = (d) => d ? new Date(d).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
-export default function TaskBoard({ role, me, prefillCustomer, onPrefillConsumed, onGoChat }) {
+export default function TaskBoard({ role, me, prefill, onPrefillConsumed, onGoChat }) {
   const myId = me?.id;
   const [tasks, setTasks] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
@@ -35,12 +35,12 @@ export default function TaskBoard({ role, me, prefillCustomer, onPrefillConsumed
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-  // open the create form prefilled with a customer (จาก "สร้างงานติดตาม" ในแชต)
+  // open the create form prefilled from chat ("สร้างงานติดตาม") — with the linked customer + a title hint
   React.useEffect(() => {
-    if (!prefillCustomer) return;
-    setEditTask({ title: "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: String(prefillCustomer) });
+    if (!prefill) return;
+    setEditTask({ title: prefill.name ? `ติดตามลูกค้า: ${prefill.name}` : "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: prefill.customerId || "" });
     onPrefillConsumed && onPrefillConsumed();
-  }, [prefillCustomer]);
+  }, [prefill]);
 
   const canManage = (t) => myId === t.assigner || role === "admin" || role === "exec";
   const canStatus = (t) => canManage(t) || myId === t.assignee;

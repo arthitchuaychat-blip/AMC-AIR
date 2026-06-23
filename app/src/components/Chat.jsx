@@ -352,6 +352,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   <div className="chat-thread-name">{selContact.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</div>
                   <div className="chat-thread-sub">{selContact.customerName ? `🔗 ${selContact.customerName}` : "ยังไม่เชื่อมลูกค้า"}</div>
                 </div>
+                {canSend && onCreateTask && <button className="chat-info-toggle" onClick={() => onCreateTask(selContact.customer_id || null, selContact.customerName || selContact.display_name)} title="สร้างงานในกระดานสั่งงาน">✅</button>}
                 <button className="chat-info-toggle" onClick={() => setShowInfo((s) => !s)} title="ข้อมูลลูกค้า"><UIcon name="building" size={18} /></button>
               </div>
 
@@ -498,7 +499,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   {canSend && <div className="ci-actions">
                     <button className="btn-primary sm" onClick={() => editCustomer(cust)}><UIcon name="edit" size={13} color="#fff" /> แก้ไขข้อมูล</button>
                     <button className="btn-ghost sm" onClick={() => onCreateSurvey && onCreateSurvey(cust.id)}>📋 สร้างใบงาน</button>
-                    <button className="btn-ghost sm" onClick={() => onCreateTask && onCreateTask(cust.id)}>✅ สร้างงานติดตาม</button>
+                    <button className="btn-ghost sm" onClick={() => onCreateTask && onCreateTask(cust.id, cust.name)}>✅ สร้างงานติดตาม</button>
                     <button className="btn-ghost sm" onClick={() => onCreateBoq && onCreateBoq(cust.id)}>📋 สร้าง BOQ</button>
                     <button className="btn-ghost sm" onClick={() => onGoCustomers && onGoCustomers(cust.name)}>เปิดหน้าลูกค้า</button>
                     <button className="btn-ghost sm" onClick={() => onLink(null)}>ยกเลิกการเชื่อม</button>

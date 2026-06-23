@@ -63,7 +63,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-23·กระดานสั่งงาน: ผูกลูกค้า + สร้างงานติดตามจากแชต + เปิดแชตจากการ์ดงาน-v162";
+const BUILD = "2026-06-23·แชต: ปุ่มสร้างงาน(กระดานสั่งงาน)บนหัวแชต ใช้ได้ทุกแชต-v163";
 
 function SetupNotice() {
   return (
@@ -107,7 +107,7 @@ export default function App() {
   const [invoiceFromQuote, setInvoiceFromQuote] = React.useState(null);
   const [receiptFromInvoice, setReceiptFromInvoice] = React.useState(null);
   const [chatFocus, setChatFocus] = React.useState(null); // open the chat thread of this customer id (from a doc's "แชตลูกค้า")
-  const [taskPrefillCust, setTaskPrefillCust] = React.useState(null); // open Task Board create-form for this customer (จากแชต "สร้างงานติดตาม")
+  const [taskPrefill, setTaskPrefill] = React.useState(null); // {customerId,name} → open Task Board create-form (จากแชต)
   const [chatUnread, setChatUnread] = React.useState(0); // LINE chats waiting to be answered → sidebar badge
   const [teamUnread, setTeamUnread] = React.useState(0); // unread team-chat messages → sidebar badge
 
@@ -296,9 +296,9 @@ export default function App() {
           focus={chatFocus} onFocusConsumed={() => setChatFocus(null)}
           onCreateBoq={(cid) => { setBoqNewCust(String(cid)); go("boq"); }}
           onCreateSurvey={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }}
-          onCreateTask={(cid) => { setTaskPrefillCust(String(cid)); go("tasks"); }} />}
+          onCreateTask={(cid, name) => { setTaskPrefill({ customerId: cid ? String(cid) : null, name: name || null }); go("tasks"); }} />}
         {view === "teamchat" && <TeamChat />}
-        {view === "tasks" && <TaskBoard role={role} me={profile} prefillCustomer={taskPrefillCust} onPrefillConsumed={() => setTaskPrefillCust(null)} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
+        {view === "tasks" && <TaskBoard role={role} me={profile} prefill={taskPrefill} onPrefillConsumed={() => setTaskPrefill(null)} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
           newForCustomer={boqNewCust} onNewConsumed={() => setBoqNewCust(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
