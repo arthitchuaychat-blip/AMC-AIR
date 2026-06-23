@@ -92,6 +92,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [infoDocs, setInfoDocs] = React.useState([]);
   const [loadingInfoDocs, setLoadingInfoDocs] = React.useState(false);
   const [infoDocF, setInfoDocF] = React.useState("all");
+  const [infoSiteF, setInfoSiteF] = React.useState("all");
   const [showInfo, setShowInfo] = React.useState(false); // mobile info-panel toggle
   const [custForm, setCustForm] = React.useState(null);  // { initial, link } → opens the customer form modal
   const [staff, setStaff] = React.useState([]);
@@ -462,8 +463,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         {selContact && (() => {
           const cust = custs.find((c) => String(c.id) === String(selContact.customer_id));
           const phone = cust?.contacts?.[0]?.phone;
-          const shownDocs = infoDocs.filter((e) => infoDocF === "all" || e.type === infoDocF);
+          const shownDocs = infoDocs.filter((e) => (infoDocF === "all" || e.type === infoDocF) && (infoSiteF === "all" || e.site_id === infoSiteF));
           const dcount = (t) => infoDocs.filter((e) => e.type === t).length;
+          const sites = cust?.sites || [];
+          const scountBySite = (siteId) => infoDocs.filter((e) => e.site_id === siteId).length;
           return (
             <div className={"chat-info" + (showInfo ? " open" : "")}>
               <div className="ci-head"><span>ข้อมูลลูกค้า</span>
@@ -512,6 +515,19 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                         style={infoDocF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}{v !== "all" && dcount(v) ? ` (${dcount(v)})` : ""}</button>
                     ))}
                   </div>
+                  {sites.length > 0 && (
+                    <div className="cd-docfilter">
+                      <button className={"cat-chip" + (infoSiteF === "all" ? " on" : "")} onClick={() => setInfoSiteF("all")}
+                        style={infoSiteF === "all" ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>ทุกไซต์งาน</button>
+                      {sites.map((s) => {
+                        const cnt = scountBySite(s.id);
+                        return (
+                          <button key={s.id} className={"cat-chip" + (infoSiteF === s.id ? " on" : "")} onClick={() => setInfoSiteF(s.id)}
+                            style={infoSiteF === s.id ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>{s.site_name || "ไซต์"}{cnt > 0 ? ` (${cnt})` : ""}</button>
+                        );
+                      })}
+                    </div>
+                  )}
                   {loadingInfoDocs && <div className="cd-empty">กำลังโหลด…</div>}
                   {!loadingInfoDocs && shownDocs.length === 0 && <div className="cd-empty">— ไม่มีรายการ —</div>}
                   <div className="cd-timeline">
