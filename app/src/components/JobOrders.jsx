@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, createLinkedJob } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, createLinkedJob, listProfiles } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -29,6 +29,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
+  const [staff, setStaff] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
@@ -45,7 +46,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
 
   async function load() {
     setLoading(true);
-    try { const [j, c, t, q, dl] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks()]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); }
+    try { const [j, c, t, q, dl, ps] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => [])]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -392,14 +393,32 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
         ))}
       </div>
 
-      {(() => { const jobTeamIds = new Set(list.map((j) => j.assigned_team).filter(Boolean)); const teamOpts = teams.filter((t) => jobTeamIds.has(t.id)); if (!teamOpts.length) return null; return (
+      {(() => {
+        const jobTeamIds = new Set(list.map((j) => j.assigned_team).filter(Boolean));
+        const teamOpts = teams.filter((t) => jobTeamIds.has(t.id));
+        // ชื่อช่าง: one tech per team — pick the team's member (lead first), labelled by person name
+        const seen = new Set();
+        const techOpts = staff
+          .filter((p) => p.team && jobTeamIds.has(p.team) && (p.role === "tech" || p.role === "lead_tech") && p.name)
+          .sort((a, b) => (a.role === "lead_tech" ? -1 : 1) - (b.role === "lead_tech" ? -1 : 1) || (a.name || "").localeCompare(b.name || ""))
+          .filter((p) => (seen.has(p.team) ? false : (seen.add(p.team), true)));
+        if (!teamOpts.length && !techOpts.length) return null;
+        return (
         <div className="cat-filter">
+          {techOpts.length > 0 && (
+            <Combo className="inp jo-tech-filter" value={teamF} onChange={(e) => setTeamF(e.target.value)} title="กรองตามชื่อช่าง">
+              <option value="all">👷 ช่างทุกคน</option>
+              {techOpts.map((p) => <option key={p.id} value={p.team}>{p.name}</option>)}
+            </Combo>
+          )}
+          {teamOpts.length > 0 && <>
           <button className={"cat-chip" + (teamF === "all" ? " on" : "")} onClick={() => setTeamF("all")}
             style={teamF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกทีม</button>
           {teamOpts.map((t) => (
             <button key={t.id} className={"cat-chip" + (teamF === t.id ? " on" : "")} onClick={() => setTeamF(t.id)}
               style={teamF === t.id ? { background: t.color, color: "#fff", borderColor: t.color } : {}}>{(t.name || t.id).replace("Team ", "")}</button>
           ))}
+          </>}
         </div>
       ); })()}
 

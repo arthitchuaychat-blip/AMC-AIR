@@ -1097,6 +1097,7 @@ select.inp{cursor:pointer}
 .jo-datefilter{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px 8px}
 .jo-datefilter .inp{border:none;padding:4px 4px;font-size:12.5px;width:128px;background:transparent}
 .jo-datefilter .jo-date-dash{color:var(--ink-3)}
+.jo-tech-filter{width:auto;min-width:140px;max-width:200px;flex:0 0 auto;font-size:12.5px;padding:5px 10px}
 .hr-row-click{cursor:pointer}.hr-row-click:hover{background:var(--surface-2)}
 .hr-row-go{font-size:11px;color:var(--primary);font-weight:600;opacity:.7}
 .hr-detail-sum{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
