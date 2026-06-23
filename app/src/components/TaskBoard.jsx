@@ -1,5 +1,5 @@
 import React from "react";
-import { listTasks, saveTask, setTaskStatus, deleteTask, listTaskComments, addTaskComment, deleteTaskComment, uploadTaskFile, listProfiles } from "../lib/api";
+import { listTasks, saveTask, setTaskStatus, deleteTask, listTaskComments, addTaskComment, deleteTaskComment, uploadTaskFile, listProfiles, listCustomers } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import AttachThumb from "./AttachThumb";
 import { UIcon } from "../icons";
@@ -14,10 +14,11 @@ const PRIO = { low: { th: "ต่ำ", c: "#64748b" }, normal: { th: "ปกต�
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }) : "";
 const fmtDT = (d) => d ? new Date(d).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
-export default function TaskBoard({ role, me }) {
+export default function TaskBoard({ role, me, prefillCustomer, onPrefillConsumed, onGoChat }) {
   const myId = me?.id;
   const [tasks, setTasks] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
+  const [custs, setCusts] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [scope, setScope] = React.useState("all");      // all | assigned (ที่ฉันสั่ง) | received (มอบให้ฉัน)
   const [personF, setPersonF] = React.useState("all");  // filter by a specific staff member
@@ -29,11 +30,17 @@ export default function TaskBoard({ role, me }) {
 
   async function load() {
     setLoading(true);
-    try { const [t, s] = await Promise.all([listTasks(), listProfiles()]); setTasks(t); setStaff(s); }
+    try { const [t, s, c] = await Promise.all([listTasks(), listProfiles(), listCustomers()]); setTasks(t); setStaff(s); setCusts(c); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  // open the create form prefilled with a customer (จาก "สร้างงานติดตาม" ในแชต)
+  React.useEffect(() => {
+    if (!prefillCustomer) return;
+    setEditTask({ title: "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: String(prefillCustomer) });
+    onPrefillConsumed && onPrefillConsumed();
+  }, [prefillCustomer]);
 
   const canManage = (t) => myId === t.assigner || role === "admin" || role === "exec";
   const canStatus = (t) => canManage(t) || myId === t.assignee;
@@ -53,7 +60,7 @@ export default function TaskBoard({ role, me }) {
       <div className="adm-head">
         <div><h1 className="page-title">กระดานสั่งงาน <span className="page-title-en">Task Board</span></h1>
           <p className="page-sub">สั่งงาน · มอบหมาย · แนบไฟล์/รูป · คอมเมนต์ · ติดตามสถานะ</p></div>
-        <button className="btn-primary" onClick={() => setEditTask({ title: "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [] })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สั่งงานใหม่</button>
+        <button className="btn-primary" onClick={() => setEditTask({ title: "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: "" })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สั่งงานใหม่</button>
       </div>
 
       <div className="cat-filter">
@@ -95,6 +102,7 @@ export default function TaskBoard({ role, me }) {
                         <span>👤 {t.assigneeName}</span>
                         {t.due_date && <span className="tb-due">📅 {fmtDate(t.due_date)}</span>}
                       </div>
+                      {t.customerName && <div className="tb-card-cust" onClick={(e) => { e.stopPropagation(); onGoChat && onGoChat(t.customer_id); }} role="button" title="เปิดแชตลูกค้า">🏢 {t.customerName} <span className="tb-card-chat">💬 แชต</span></div>}
                       <div className="tb-card-foot">
                         {(t.attachments?.length || 0) > 0 && <span>📎 {t.attachments.length}</span>}
                         {t.commentCount > 0 && <span>💬 {t.commentCount}</span>}
@@ -109,9 +117,9 @@ export default function TaskBoard({ role, me }) {
         </div>
       )}
 
-      {editTask && <TaskEditor task={editTask} staff={staff} onClose={() => setEditTask(null)} onSaved={() => { setEditTask(null); load(); }} flash={flash} />}
-      {detail && <TaskDetail task={detail} me={me} canManage={canManage(detail)} canStatus={canStatus(detail)} staff={staff}
-        onClose={() => setDetailId(null)} onMove={move} onEdit={(t) => { setDetailId(null); setEditTask({ id: t.id, title: t.title, detail: t.detail || "", assignee: t.assignee || "", priority: t.priority, due_date: t.due_date || "", attachments: t.attachments || [], status: t.status }); }}
+      {editTask && <TaskEditor task={editTask} staff={staff} custs={custs} onClose={() => setEditTask(null)} onSaved={() => { setEditTask(null); load(); }} flash={flash} />}
+      {detail && <TaskDetail task={detail} me={me} canManage={canManage(detail)} canStatus={canStatus(detail)} staff={staff} onGoChat={onGoChat}
+        onClose={() => setDetailId(null)} onMove={move} onEdit={(t) => { setDetailId(null); setEditTask({ id: t.id, title: t.title, detail: t.detail || "", assignee: t.assignee || "", priority: t.priority, due_date: t.due_date || "", attachments: t.attachments || [], status: t.status, customer_id: t.customer_id ? String(t.customer_id) : "" }); }}
         onDelete={del} onChanged={load} flash={flash} />}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
@@ -145,7 +153,7 @@ function AttachRow({ files, onChange, flash }) {
   );
 }
 
-function TaskEditor({ task, staff, onClose, onSaved, flash }) {
+function TaskEditor({ task, staff, custs = [], onClose, onSaved, flash }) {
   const [f, setF] = React.useState(task);
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -175,6 +183,11 @@ function TaskEditor({ task, staff, onClose, onSaved, flash }) {
                 <option value="low">ต่ำ</option><option value="normal">ปกติ</option><option value="high">ด่วน</option>
               </select></label>
           </div>
+          <label className="fld"><span>ลูกค้าที่เกี่ยวข้อง (ไม่บังคับ · ใช้ติดตามลูกค้า)</span>
+            <select className="inp" value={f.customer_id || ""} onChange={(e) => set("customer_id", e.target.value)}>
+              <option value="">— ไม่ผูกกับลูกค้า —</option>
+              {custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select></label>
           <label className="fld"><span>กำหนดเสร็จ (ไม่บังคับ)</span><input className="inp" type="date" value={f.due_date} onChange={(e) => set("due_date", e.target.value)} /></label>
           <div className="fld"><span>ไฟล์/รูปแนบ</span><AttachRow files={f.attachments} onChange={(a) => set("attachments", a)} flash={flash} /></div>
         </div>
@@ -185,7 +198,7 @@ function TaskEditor({ task, staff, onClose, onSaved, flash }) {
   );
 }
 
-function TaskDetail({ task, me, canManage, canStatus, onClose, onMove, onEdit, onDelete, onChanged, flash }) {
+function TaskDetail({ task, me, canManage, canStatus, onGoChat, onClose, onMove, onEdit, onDelete, onChanged, flash }) {
   const [comments, setComments] = React.useState(null);
   const [body, setBody] = React.useState("");
   const [atts, setAtts] = React.useState([]);
@@ -211,6 +224,7 @@ function TaskDetail({ task, me, canManage, canStatus, onClose, onMove, onEdit, o
             <div><span>ผู้รับมอบหมาย</span><b>{task.assigneeName}</b></div>
             <div><span>ความสำคัญ</span><b style={{ color: PRIO[task.priority]?.c }}>{PRIO[task.priority]?.th}</b></div>
             {task.due_date && <div><span>กำหนดเสร็จ</span><b>{fmtDate(task.due_date)}</b></div>}
+            {task.customerName && <div><span>ลูกค้า</span><b>🏢 {task.customerName} {onGoChat && <button className="tb-chat-link" onClick={() => onGoChat(task.customer_id)}>💬 เปิดแชต</button>}</b></div>}
           </div>
           {task.detail && <div className="tb-detail-body">{task.detail}</div>}
           {(task.attachments?.length || 0) > 0 && <div className="tb-attach-grid" style={{ marginBottom: 10 }}>{task.attachments.map((u, i) => <div className="tb-att" key={i}><AttachThumb url={u} /></div>)}</div>}

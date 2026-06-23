@@ -1385,22 +1385,24 @@ export async function markAllNotificationsRead() {
 
 // ---------- TASK BOARD (กระดานสั่งงาน) ----------
 export async function listTasks() {
-  const [t, profs, cc] = await Promise.all([
+  const [t, profs, cc, cu] = await Promise.all([
     supabase.from("tasks").select("*").order("created_at", { ascending: false }),
     supabase.from("profiles").select("id,name,email"),
     supabase.from("task_comments").select("task_id"),
+    supabase.from("customers").select("id,name"),
   ]);
   if (t.error) throw t.error;
   const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
+  const cnm = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const cnt = {}; (cc.data || []).forEach((c) => { cnt[c.task_id] = (cnt[c.task_id] || 0) + 1; });
-  return (t.data || []).map((x) => ({ ...x, assignerName: nm[x.assigner] || "—", assigneeName: nm[x.assignee] || "—", commentCount: cnt[x.id] || 0 }));
+  return (t.data || []).map((x) => ({ ...x, assignerName: nm[x.assigner] || "—", assigneeName: nm[x.assignee] || "—", customerName: x.customer_id ? (cnm[x.customer_id] || null) : null, commentCount: cnt[x.id] || 0 }));
 }
 export async function saveTask(t) {
   const uid = await _uid();
   const row = {
     title: t.title?.trim(), detail: t.detail?.trim() || null,
     assignee: t.assignee || null, priority: t.priority || "normal",
-    status: t.status || "todo", due_date: t.due_date || null,
+    status: t.status || "todo", due_date: t.due_date || null, customer_id: t.customer_id || null,
     attachments: t.attachments || [], updated_at: new Date().toISOString(),
   };
   if (t.id) { const { error } = await supabase.from("tasks").update(row).eq("id", t.id); if (error) throw error;

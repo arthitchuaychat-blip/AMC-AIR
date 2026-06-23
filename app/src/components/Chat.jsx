@@ -57,7 +57,7 @@ async function dlFile(url, name) {
   } catch { window.open(url, "_blank", "noopener"); }
 }
 
-export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey, focus, onFocusConsumed }) {
+export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey, onCreateTask, focus, onFocusConsumed }) {
   const canSend = can(role, "chat", "edit");
   const [contacts, setContacts] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -498,6 +498,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   {canSend && <div className="ci-actions">
                     <button className="btn-primary sm" onClick={() => editCustomer(cust)}><UIcon name="edit" size={13} color="#fff" /> แก้ไขข้อมูล</button>
                     <button className="btn-ghost sm" onClick={() => onCreateSurvey && onCreateSurvey(cust.id)}>📋 สร้างใบงาน</button>
+                    <button className="btn-ghost sm" onClick={() => onCreateTask && onCreateTask(cust.id)}>✅ สร้างงานติดตาม</button>
                     <button className="btn-ghost sm" onClick={() => onCreateBoq && onCreateBoq(cust.id)}>📋 สร้าง BOQ</button>
                     <button className="btn-ghost sm" onClick={() => onGoCustomers && onGoCustomers(cust.name)}>เปิดหน้าลูกค้า</button>
                     <button className="btn-ghost sm" onClick={() => onLink(null)}>ยกเลิกการเชื่อม</button>
