@@ -2073,21 +2073,6 @@ export async function sendChatFile(roomId, fileUrl, fileName) {
   _firePush(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`); _notifyChatRoom(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`);
 }
 
-// unsend a team-chat message (soft-delete → tombstone). RLS allows only the sender.
-export async function unsendChatMessage(id) {
-  const { error } = await supabase.from("chat_messages").update({ deleted: true, text: null, image_url: null, file_url: null }).eq("id", id);
-  if (error) throw error;
-}
-// unsend an outbound customer message — removes it from OUR board only (cannot recall from the customer's device)
-export async function unsendLineMessage(id) {
-  const { error } = await supabase.from("line_messages").update({ deleted: true, text: null, image_url: null, file_url: null }).eq("id", id);
-  if (error) throw error;
-}
-export async function unsendFbMessage(id) {
-  const { error } = await supabase.from("fb_messages").update({ deleted: true, text: null, image_url: null, file_url: null }).eq("id", id);
-  if (error) throw error;
-}
-
 // find-or-create a 1:1 DM room — done in a SECURITY DEFINER RPC so it isn't blocked by insert RLS
 export async function createDmRoom(otherId) {
   const { data, error } = await supabase.rpc("chat_start_dm", { p_other: otherId });

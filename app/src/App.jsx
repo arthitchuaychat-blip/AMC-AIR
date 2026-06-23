@@ -61,7 +61,7 @@ const NAV = {
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-23·แชต: ยกเลิกข้อความที่ส่งได้ภายใน 10 นาที (แชตทีม + แชตลูกค้า)-v153";
+const BUILD = "2026-06-23·ถอดฟีเจอร์ยกเลิกข้อความออก (กลับสู่สถานะก่อนหน้า)-v154";
 
 function SetupNotice() {
   return (

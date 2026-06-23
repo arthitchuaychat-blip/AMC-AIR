@@ -1,10 +1,7 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
-import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendChatFile, unsendChatMessage, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember } from "../lib/api";
-import { confirmDialog } from "./ConfirmDialog";
+import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember } from "../lib/api";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
-
-const UNSEND_MS = 10 * 60 * 1000; // ยกเลิกข้อความได้ภายใน 10 นาที
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
 
@@ -152,21 +149,13 @@ export default function TeamChat() {
               <div className="tc-msgs">
                 {msgs.map((m) => {
                   const out = m.sender === me?.id;
-                  const canUnsend = out && !m.deleted && (Date.now() - new Date(m.created_at).getTime() < UNSEND_MS);
-                  async function unsend() {
-                    if (!await confirmDialog("ยกเลิกข้อความนี้? (ลบให้ทุกคนในห้องเห็น)")) return;
-                    try { await unsendChatMessage(m.id); await loadMsgs(sel); } catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e?.message || e)); }
-                  }
                   return (
                     <div className={"chat-bubble " + (out ? "out" : "in")} key={m.id}>
                       {!out && <span className="chat-sender">{staffName[m.sender] || "ทีมงาน"}</span>}
-                      {m.deleted
-                        ? <span className="chat-unsent">🚫 ยกเลิกข้อความแล้ว</span>
-                        : m.image_url ? <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a>
+                      {m.image_url ? <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a>
                         : m.file_url ? <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || "เปิดไฟล์"}</a>
                         : <span>{m.text}</span>}
-                      <span className="chat-bubble-time">{new Date(m.created_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                        {canUnsend && <button className="chat-unsend-btn" onClick={unsend} title="ยกเลิกข้อความ (ภายใน 10 นาที)">ยกเลิก</button>}</span>
+                      <span className="chat-bubble-time">{new Date(m.created_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                   );
                 })}
