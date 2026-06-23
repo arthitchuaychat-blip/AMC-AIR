@@ -806,17 +806,19 @@ export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, n
 // toggle a receipt's paid status (and sync the linked invoice)
 // ---------- BILLING NOTES (ใบวางบิล) ----------
 export async function listBillingNotes() {
-  const [bn, iv, cu, si, ct, rc] = await Promise.all([
+  const [bn, iv, cu, si, ct, rc, qt] = await Promise.all([
     supabase.from("billing_notes").select("*").order("created_at", { ascending: false }),
     supabase.from("invoices").select("invoice_no,total,wht_amt,installment,pct,status,issue_date,quote_no"),
     supabase.from("customers").select("id,name,address,tax_id,type"),
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("receipts").select("invoice_no,status"),
+    supabase.from("quotations").select("quote_no,vat"),
   ]);
   if (bn.error) throw bn.error;
   const receiptedInv = new Set((rc.data || []).filter((r) => r.status !== "cancelled").map((r) => r.invoice_no));
-  const invByNo = Object.fromEntries((iv.data || []).map((x) => [x.invoice_no, { ...x, hasReceipt: receiptedInv.has(x.invoice_no) }]));
+  const quoteVat = Object.fromEntries((qt.data || []).map((q) => [q.quote_no, !!q.vat]));   // VAT status per quote
+  const invByNo = Object.fromEntries((iv.data || []).map((x) => [x.invoice_no, { ...x, vat: !!quoteVat[x.quote_no], hasReceipt: receiptedInv.has(x.invoice_no) }]));
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
@@ -827,9 +829,10 @@ export async function listBillingNotes() {
     const invoices = (b.invoice_nos || []).map((no) => invByNo[no]).filter(Boolean);
     const total = invoices.reduce((a, x) => a + (Number(x.total) || 0), 0);
     const wht = invoices.reduce((a, x) => a + (Number(x.wht_amt) || 0), 0);   // หัก ณ ที่จ่าย รวม (นิติบุคคล)
+    const vat = invoices.some((x) => x.vat);   // ใบวางบิลถือเป็น VAT ถ้ามีใบแจ้งหนี้ VAT อยู่ → เลือกหัวกระดาษ/บัญชีให้ถูก
     const s = b.site_id ? sm[b.site_id] : null; const ct0 = cc[b.customer_id];
     return { ...b, customerName: cn[b.customer_id] || null, customerCode: b.customer_id || null, customerTaxId: cx[b.customer_id] || null,
-      customerType: ctype[b.customer_id] || null,
+      customerType: ctype[b.customer_id] || null, vat,
       customerAddr: ca[b.customer_id] || null, siteAddress: s?.address || null, mapUrl: (s && s.map_url) || _gmap(s?.address || ca[b.customer_id]),
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       invoices, total, wht, net: Math.round((total - wht) * 100) / 100, missing: (b.invoice_nos || []).length - invoices.length };

@@ -170,7 +170,9 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
 
       {/* off-screen print area */}
       {printB && (() => {
-        const co = companies.novat && Object.keys(companies.novat).length ? companies.novat : (companies.vat || {});
+        // VAT billing note → VAT letterhead + bank; else No-VAT (fall back to whichever profile exists)
+        const has = (c) => c && Object.keys(c).length;
+        const co = printB.vat ? (has(companies.vat) ? companies.vat : companies.novat || {}) : (has(companies.novat) ? companies.novat : companies.vat || {});
         return (
           <DocSlip company={co} titleTh="ใบวางบิล / ใบแจ้งหนี้รวม" titleEn="BILLING NOTE" docNo={printB.billing_no}
             metaRows={[{ label: "วันที่", value: printB.issue_date }, { label: "จำนวนใบแจ้งหนี้", value: String(printB.invoices.length) }]}
