@@ -38,6 +38,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const [printQ, setPrintQ] = React.useState(null);
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
+  const [docF, setDocF] = React.useState("all"); // all | no_invoice | no_job
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   const [search, setSearch] = React.useState("");
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
@@ -326,11 +327,18 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
+      <div className="cat-filter" style={{ marginTop: -4 }}>
+        {[["all", "ทุกใบ"], ["no_invoice", "ยังไม่สร้างใบแจ้งหนี้"], ["no_job", "ยังไม่สร้างใบงาน"]].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (docF === v ? " on" : "")} onClick={() => setDocF(v)}
+            style={docF === v ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>{l}</button>
+        ))}
+      </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
         const fl = list.filter((q) => (statusF === "all" || q.status === statusF)
           && (vatF === "all" || (vatF === "vat" ? !!q.vat : !q.vat))
+          && (docF === "all" || (docF === "no_invoice" ? !q.hasInvoice : !q.hasJob))
           && inDateRange(q.issue_date, dateR)
           && (matchText(search, q.quote_no, q.customerName, q.contactName, q.title, q.boq_no) || matchPhone(search, q.contactPhone)));
         return (<>
