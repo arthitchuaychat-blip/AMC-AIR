@@ -13,7 +13,8 @@ import { ATTACH_ACCEPT, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
-const STATUS_OPTS = JOB_STATUSES.map(([v, l]) => [v, l]);
+// visit-level status options exclude quote_pending (a job-level-only stage)
+const STATUS_OPTS = JOB_STATUSES.filter(([v]) => v !== "quote_pending").map(([v, l]) => [v, l]);
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
@@ -177,8 +178,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     const end_date = primary?.end_date || null;
     const slot = primary?.slot || null;
     const tn = ed.assigned_team ? (teams.find((t) => t.id === ed.assigned_team)?.name?.replace("Team ", "") || ed.assigned_team) : null;
-    // overall job status is derived from the visits' own statuses
-    const status = deriveJobStatus(visitRows);
+    // overall job status is derived from the visits' own statuses;
+    // with no scheduled รอบ yet, keep the chosen pre-work stage (รอทำใบเสนอราคา / รอจ่ายงาน)
+    const status = visitRows.length ? deriveJobStatus(visitRows) : (ed.status === "quote_pending" ? "quote_pending" : "pending");
     try {
       await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows }, me);
       flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
@@ -315,9 +317,23 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
             })}
             <button className="btn-ghost sm" onClick={addVisit}><UIcon name="plus" size={13} /> เพิ่มรอบเข้างาน</button>
           </div>
-          <div className="fld"><span>สถานะงาน (ภาพรวม · คำนวณจากรอบ)</span>
-            {(() => { const s = deriveJobStatus((ed.visits || []).filter((v) => v.date)); const d = STATUS[s] || STATUS.pending; return <div><span className={"job-badge " + d.cls}>{d.th}</span></div>; })()}
-          </div>
+          {(() => {
+            const dated = (ed.visits || []).filter((v) => v.date);
+            if (dated.length) {
+              const s = deriveJobStatus(dated); const d = STATUS[s] || STATUS.pending;
+              return <div className="fld"><span>สถานะงาน (ภาพรวม · คำนวณจากรอบ)</span><div><span className={"job-badge " + d.cls}>{d.th}</span></div></div>;
+            }
+            // no รอบ scheduled yet → pick the pre-work stage manually
+            const cur = ed.status === "quote_pending" ? "quote_pending" : "pending";
+            return (
+              <div className="fld"><span>สถานะงาน (ยังไม่กำหนดรอบ — เลือกขั้นเริ่มต้น)</span>
+                <Combo className="inp" value={cur} onChange={(e) => setF("status", e.target.value)}>
+                  <option value="pending">รอจ่ายงาน</option>
+                  <option value="quote_pending">รอทำใบเสนอราคา</option>
+                </Combo>
+              </div>
+            );
+          })()}
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>

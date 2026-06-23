@@ -84,7 +84,7 @@ create table if not exists job_orders (
   scheduled_at  timestamptz,
   end_date      date,                       -- วันสิ้นสุด (งานหลายวัน) · ว่าง = งานวันเดียว
   slot          text check (slot is null or slot in ('morning','afternoon','full','custom')),
-  status        text not null default 'pending' check (status in ('pending','scheduled','in_progress','awaiting_approval','reschedule','done','cancelled')),
+  status        text not null default 'pending' check (status in ('quote_pending','pending','scheduled','in_progress','awaiting_approval','reschedule','done','cancelled')),
   completion_note text,
   photos        text[] default '{}',
   created_at    timestamptz not null default now(),

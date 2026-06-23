@@ -26,7 +26,9 @@ export const JOB_TYPES = [
 export const jobTypeDef = (t) => JOB_TYPES.find((x) => x[0] === t) || JOB_TYPES[1];
 
 // shared job/visit statuses — [value, label, badge-class, color]
+// note: "quote_pending" is a job-level-only stage (no quote/schedule yet); it is never a visit status.
 export const JOB_STATUSES = [
+  ["quote_pending", "รอทำใบเสนอราคา", "b-cyan", "#0891b2"],
   ["pending", "รอจ่ายงาน", "b-grey", "#7c899c"],
   ["scheduled", "นัดแล้ว", "b-blue", "#2563eb"],
   ["in_progress", "กำลังทำงาน", "b-amber", "#ea8a04"],

@@ -760,6 +760,7 @@ select.inp{cursor:pointer}
 .job-badge.b-grey{background:linear-gradient(135deg,#94a3b8,#7c899c)}
 .job-badge.b-purple{background:linear-gradient(135deg,#8b5cf6,#7c3aed)}
 .job-badge.b-orange{background:linear-gradient(135deg,#fb923c,#ea580c)}
+.job-badge.b-cyan{background:linear-gradient(135deg,#22b8cf,#0891b2)}
 /* legacy open/closed kept vibrant for untouched badges */
 .job-badge.open{background:linear-gradient(135deg,#3b82f6,#2563eb)}
 .job-badge.closed{background:linear-gradient(135deg,#16a34a,#12894a)}
