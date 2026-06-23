@@ -1160,6 +1160,34 @@ select.inp{cursor:pointer}
 .ar-cust-total{margin-left:auto;font-size:16px;font-weight:900}
 .ar-cust-actions{display:flex;gap:6px;padding:0 14px 10px;flex-wrap:wrap}
 .ar-cust-invs{border-top:1px solid var(--line-2);background:var(--surface-2)}
+/* customer follow-up (ติดตามลูกค้า · ขายซ้ำ) */
+.fu-cad{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-3)}
+.fu-kpi{cursor:pointer;border:1px solid transparent;transition:border-color .15s,box-shadow .15s;text-align:center;font-family:inherit}
+.fu-kpi:hover{border-color:#fca5a5}
+.fu-kpi.on{border-color:#dc2626;box-shadow:0 0 0 2px #fee2e2}
+.fu-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.fu-type-chips{display:flex;gap:6px;flex-wrap:wrap}
+.fu-buckets{display:flex;flex-direction:column;gap:12px}
+.fu-bucket{padding:0;overflow:hidden}
+.fu-bucket-head{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface-2);border-bottom:1px solid var(--line-2)}
+.fu-bucket-label{font-size:13.5px;font-weight:800}
+.fu-bucket-cnt{font-size:12px;color:var(--ink-3)}
+.fu-row{padding:9px 14px;border-bottom:1px solid var(--line-2)}
+.fu-row:last-child{border-bottom:none}
+.fu-row-main{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.fu-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.fu-name{font-size:14px;font-weight:800;color:var(--ink)}
+.fu-due{font-size:11px;font-weight:800;color:#991b1b;background:#fee2e2;border-radius:6px;padding:2px 8px}
+.fu-times{font-size:11.5px;color:var(--ink-3)}
+.fu-ago{font-size:13px;font-weight:800;margin-left:auto}
+.fu-row-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px}
+.fu-last{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.fu-type{font-size:11px;font-weight:700;color:#fff;border-radius:6px;padding:2px 8px;white-space:nowrap}
+.fu-type.sm{font-size:10.5px;padding:1px 7px}
+.fu-acts{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.fu-acts .btn-ghost,.fu-acts .btn-primary{padding:3px 10px;font-size:11.5px}
+.fu-history{margin-top:9px;padding:9px 11px;background:var(--surface-2);border-radius:9px;display:flex;flex-direction:column;gap:5px}
+.fu-hist-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
 .tc-notify{font-size:12.5px;font-weight:700;border-radius:9px;padding:6px 11px;border:1px solid var(--line)}
 .tc-notify.on{color:#0a6b3d;background:#dcf5e8;border-color:#b7e6cb}
 .tc-notify.off{color:#9a3412;background:#ffedd5;border-color:#fed7aa}
