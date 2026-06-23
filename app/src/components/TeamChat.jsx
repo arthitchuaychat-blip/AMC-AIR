@@ -4,14 +4,43 @@ import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendCh
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
+import { JOB_STATUSES } from "../lib/schedule";
 
-// header button to turn on LINE-style push notifications for this device
+// gradient per room kind
+const ROOM_BG = {
+  company: "linear-gradient(135deg,#667eea,#764ba2)",
+  dm:      "linear-gradient(135deg,#0ea5e9,#0284c7)",
+  group:   "linear-gradient(135deg,#10b981,#059669)",
+  project: "linear-gradient(135deg,#f59e0b,#d97706)",
+};
+const KIND_ICON  = { company: "🏢", dm: "👤", group: "👥", project: "🧰" };
+const KIND_LABEL = { company: "บริษัท", dm: "ส่วนตัว", group: "กลุ่ม", project: "งาน" };
+const OFFICE     = ["admin", "exec", "finance", "sales"];
+
+// deterministic avatar color per user-id
+const AV_COLORS = ["#0ea5e9","#10b981","#f59e0b","#8b5cf6","#ef4444","#ec4899","#14b8a6","#f97316"];
+function avColor(id) {
+  let h = 0;
+  for (let i = 0; i < (id || "").length; i++) h = (h * 31 + (id || "").charCodeAt(i)) & 0x7fffffff;
+  return AV_COLORS[h % AV_COLORS.length];
+}
+
+function jobStatusLabel(v) { return JOB_STATUSES.find(([s]) => s === v)?.[1] || v; }
+function jobStatusColor(v) { return JOB_STATUSES.find(([s]) => s === v)?.[3] || "#888"; }
+
+// [JOBCARD|job_no|customer|status|title]
+function parseJobCard(text) {
+  const m = text?.match(/^\[JOBCARD\|([^|]+)\|([^|]*)\|([^|]*)\|([^\]]*)\]$/);
+  if (!m) return null;
+  return { job_no: m[1], customer: m[2], status: m[3], title: m[4] };
+}
+
 function NotifyButton() {
   const [perm, setPerm] = React.useState(notifyPermission());
   const [busy, setBusy] = React.useState(false);
   if (!pushSupported()) return null;
-  if (perm === "denied") return <span className="tc-notify off" title="เปิดสิทธิ์แจ้งเตือนได้ในตั้งค่าเบราว์เซอร์">🔕 แจ้งเตือนถูกปิด</span>;
-  if (perm === "granted") return <span className="tc-notify on">🔔 แจ้งเตือนเปิดอยู่</span>;
+  if (perm === "denied") return <span className="tc-notify off" title="เปิดสิทธิ์ในตั้งค่าเบราว์เซอร์">🔕 ปิดแจ้งเตือน</span>;
+  if (perm === "granted") return <span className="tc-notify on">🔔 เปิดอยู่</span>;
   return (
     <button className="btn-primary sm" disabled={busy} onClick={async () => {
       setBusy(true);
@@ -22,30 +51,37 @@ function NotifyButton() {
   );
 }
 
-const KIND_ICON = { company: "🏢", dm: "👤", group: "👥", project: "🧰" };
-const OFFICE = ["admin", "exec", "finance", "sales"]; // back-office: may manage group members
+const TYPE_TABS = [
+  { k: "all",     label: "ทุกห้อง" },
+  { k: "company", label: "🏢 บริษัท" },
+  { k: "dm",      label: "👤 ส่วนตัว" },
+  { k: "group",   label: "👥 กลุ่ม" },
+  { k: "project", label: "🧰 งาน" },
+];
 
-export default function TeamChat({ focus, onFocusConsumed }) {
-  const [me, setMe] = React.useState(null);
-  const [rooms, setRooms] = React.useState([]);
-  const [staff, setStaff] = React.useState([]);
-  const [sel, setSel] = React.useState(null);
-  const [msgs, setMsgs] = React.useState([]);
-  const [text, setText] = React.useState("");
+export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
+  const [me, setMe]         = React.useState(null);
+  const [rooms, setRooms]   = React.useState([]);
+  const [staff, setStaff]   = React.useState([]);
+  const [sel, setSel]       = React.useState(null);
+  const [msgs, setMsgs]     = React.useState([]);
+  const [text, setText]     = React.useState("");
   const [sending, setSending] = React.useState(false);
-  const [q, setQ] = React.useState("");
-  const [modal, setModal] = React.useState(null); // "dm" | "group"
-  const [jobs, setJobs] = React.useState([]);
-  const [toast, setToast] = React.useState(null);
-  const endRef = React.useRef(null);
-  const selRef = React.useRef(null);
+  const [q, setQ]           = React.useState("");
+  const [kindF, setKindF]   = React.useState("all");
+  const [modal, setModal]   = React.useState(null); // "dm"|"group"|"members"|"joblink"
+  const [jobs, setJobs]     = React.useState([]);
+  const [toast, setToast]   = React.useState(null);
+  const endRef  = React.useRef(null);
+  const selRef  = React.useRef(null);
   selRef.current = sel;
 
-  const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
+  const flash     = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
   const staffName = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
 
-  async function loadRooms() { try { setRooms(await listChatRooms()); } catch (e) { /* ignore */ } }
+  async function loadRooms() { try { setRooms(await listChatRooms()); } catch { } }
   async function loadMsgs(roomId) { try { setMsgs(await listChatMessages(roomId)); } catch { setMsgs([]); } }
+  async function ensureJobs() { if (!jobs.length) { try { setJobs(await listJobOrders()); } catch { } } }
 
   React.useEffect(() => {
     (async () => {
@@ -53,7 +89,6 @@ export default function TeamChat({ focus, onFocusConsumed }) {
       setMe(p); setStaff(s);
     })();
     loadRooms();
-    // realtime: any new message → refresh room list; if it's the open room, append + mark read
     const ch = supabase.channel("team-chat")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => {
         const m = payload.new;
@@ -66,21 +101,18 @@ export default function TeamChat({ focus, onFocusConsumed }) {
     return () => { supabase.removeChannel(ch); };
   }, []);
 
-  // open a specific room (from a notification)
   React.useEffect(() => { if (focus == null) return; setSel(Number(focus)); onFocusConsumed && onFocusConsumed(); }, [focus]);
-
   React.useEffect(() => {
     if (!sel) return;
     loadMsgs(sel);
     markChatRead(sel).then(loadRooms).catch(() => {});
   }, [sel]);
-
   React.useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [msgs]);
 
   async function send() {
     const t = text.trim(); if (!t || !sel || sending) return;
     setText(""); setSending(true);
-    try { await sendChatMessage(sel, t); await loadMsgs(sel); } catch (e) { flash("ส่งไม่สำเร็จ"); setText(t); }
+    try { await sendChatMessage(sel, t); await loadMsgs(sel); } catch { flash("ส่งไม่สำเร็จ"); setText(t); }
     setSending(false);
   }
   async function onImage(e) {
@@ -95,39 +127,86 @@ export default function TeamChat({ focus, onFocusConsumed }) {
     try { const url = await uploadChatImage(f); await sendChatFile(sel, url, f.name); await loadMsgs(sel); } catch (err) { flash("ส่งไฟล์ไม่สำเร็จ: " + (err?.message || err)); }
     setSending(false);
   }
+  async function sendJobCard(j) {
+    if (!sel) return;
+    const safe = (s) => (s || "").replace(/[|[\]]/g, "");
+    const msg = `[JOBCARD|${safe(j.job_no)}|${safe(j.customerName)}|${safe(j.status)}|${safe(j.title)}]`;
+    setModal(null); setSending(true);
+    try { await sendChatMessage(sel, msg); await loadMsgs(sel); } catch { flash("ส่งลิงก์งานไม่สำเร็จ"); }
+    setSending(false);
+  }
   async function openDm(otherId) {
-    try { const id = await createDmRoom(otherId); setModal(null); await loadRooms(); setSel(id); } catch (e) { flash("เปิดแชตไม่สำเร็จ: " + (e?.message || e)); }
+    try { const id = await createDmRoom(otherId); setModal(null); await loadRooms(); setSel(id); }
+    catch (e) { flash("เปิดแชตไม่สำเร็จ: " + (e?.message || e)); }
   }
 
   const selRoom = rooms.find((r) => r.id === sel);
-  const shown = rooms.filter((r) => matchText(q, r.title, r.lastText));
+  const kindCounts = React.useMemo(() => {
+    const c = {};
+    rooms.forEach((r) => { c[r.kind] = (c[r.kind] || 0) + 1; });
+    return c;
+  }, [rooms]);
+  const shown = rooms.filter((r) =>
+    matchText(q, r.title, r.lastText) && (kindF === "all" || r.kind === kindF)
+  );
+
+  const accentColor = selRoom
+    ? { company: "#764ba2", dm: "#0284c7", group: "#059669", project: "#d97706" }[selRoom.kind] || "#059669"
+    : "#059669";
 
   return (
     <div className="adm tc-wrap">
       <div className="adm-head">
-        <div><h1 className="page-title">แชตทีม <span className="page-title-en">Team Chat</span></h1>
-          <p className="page-sub">คุยกันภายในองค์กร · ห้องรวม · ทักตัวต่อตัว · กลุ่ม · ห้องงาน</p></div>
+        <div>
+          <h1 className="page-title">แชตทีม <span className="page-title-en">Team Chat</span></h1>
+          <p className="page-sub">คุยกันภายในองค์กร · ห้องรวม · ทักตัวต่อตัว · กลุ่ม · ห้องงาน</p>
+        </div>
         <div className="cat-head-actions"><NotifyButton /></div>
       </div>
 
       <div className="tc-board">
-        {/* rooms */}
+        {/* ── sidebar ── */}
         <div className="tc-rooms">
           <div className="tc-rooms-top">
-            <div className="cat-search" style={{ flex: 1 }}><UIcon name="search" size={16} color="var(--ink-3)" />
-              <input placeholder="ค้นหาห้อง" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+            <div className="cat-search" style={{ flex: 1 }}>
+              <UIcon name="search" size={16} color="var(--ink-3)" />
+              <input placeholder="ค้นหาห้อง" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
           </div>
+
+          {/* type filter tabs */}
+          <div className="tc-type-tabs">
+            {TYPE_TABS.filter((t) => t.k === "all" || kindCounts[t.k]).map((t) => (
+              <button key={t.k} className={"tc-type-tab" + (kindF === t.k ? " on" : "")} onClick={() => setKindF(t.k)}>
+                {t.label}
+                {t.k !== "all" && kindCounts[t.k]
+                  ? <span className="tc-type-cnt">{kindCounts[t.k]}</span> : null}
+              </button>
+            ))}
+          </div>
+
           <div className="tc-rooms-acts">
-            <button className="btn-ghost sm" onClick={() => setModal("dm")}><UIcon name="plus" size={13} /> ทักตัวต่อตัว</button>
-            <button className="btn-ghost sm" onClick={() => { setModal("group"); if (!jobs.length) listJobOrders().then(setJobs).catch(() => {}); }}><UIcon name="plus" size={13} /> สร้างกลุ่ม</button>
+            <button className="btn-ghost sm" onClick={() => setModal("dm")}>
+              <UIcon name="plus" size={13} /> ทักตัวต่อตัว
+            </button>
+            <button className="btn-ghost sm" onClick={() => { setModal("group"); ensureJobs(); }}>
+              <UIcon name="plus" size={13} /> สร้างกลุ่ม
+            </button>
           </div>
+
           <div className="tc-room-list">
             {shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ยังไม่มีห้องแชต</div>}
             {shown.map((r) => (
               <button key={r.id} className={"tc-room" + (sel === r.id ? " on" : "")} onClick={() => setSel(r.id)}>
-                <span className="tc-room-ic">{KIND_ICON[r.kind] || "💬"}</span>
+                <span className="tc-room-ic" style={{ background: ROOM_BG[r.kind] || ROOM_BG.group }}>
+                  {KIND_ICON[r.kind] || "💬"}
+                </span>
                 <span className="tc-room-mid">
-                  <span className="tc-room-title">{r.title}{r.kind !== "dm" && r.memberCount ? <span className="tc-room-cnt"> · {r.memberCount}</span> : null}</span>
+                  <span className="tc-room-title">
+                    {r.title}
+                    {r.kind !== "dm" && r.memberCount
+                      ? <span className="tc-room-cnt"> · {r.memberCount} คน</span> : null}
+                  </span>
                   <span className="tc-room-last">{r.lastText || "—"}</span>
                 </span>
                 {r.unread > 0 && <span className="chat-unread">{r.unread}</span>}
@@ -136,39 +215,110 @@ export default function TeamChat({ focus, onFocusConsumed }) {
           </div>
         </div>
 
-        {/* messages */}
+        {/* ── main chat area ── */}
         <div className="tc-main">
           {!selRoom ? (
-            <div className="tc-empty"><UIcon name="chat" size={40} color="var(--ink-3)" /><p>เลือกห้องแชตเพื่อเริ่มคุย</p></div>
+            <div className="tc-empty">
+              <div style={{ fontSize: 52, lineHeight: 1 }}>💬</div>
+              <p style={{ fontWeight: 800, fontSize: 16 }}>เลือกห้องแชตเพื่อเริ่มคุย</p>
+              <p style={{ fontSize: 12.5, color: "var(--ink-3)", textAlign: "center", lineHeight: 1.7 }}>
+                ทักตัวต่อตัว · สร้างกลุ่มทีมช่าง<br />หรือเลือกห้องบริษัทด้านซ้าย
+              </p>
+            </div>
           ) : (
             <>
-              <div className="tc-main-head">
-                <span className="tc-room-ic">{KIND_ICON[selRoom.kind]}</span>
-                <div style={{ flex: 1 }}><div className="tc-main-title">{selRoom.title}</div>
-                  <div className="tc-main-sub">{selRoom.kind === "company" ? "ทุกคนในองค์กร" : selRoom.kind === "dm" ? "แชตส่วนตัว" : (selRoom.memberNames || []).concat(me?.name ? [me.name] : []).join(", ")}{selRoom.ref_no ? ` · งาน ${selRoom.ref_no}` : ""}</div></div>
+              <div className="tc-main-head" style={{ borderTop: `3px solid ${accentColor}` }}>
+                <span className="tc-room-ic" style={{ background: ROOM_BG[selRoom.kind] || ROOM_BG.group, width: 42, height: 42, fontSize: 21 }}>
+                  {KIND_ICON[selRoom.kind]}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="tc-main-title">{selRoom.title}</div>
+                  <div className="tc-main-sub">
+                    {selRoom.kind === "company" ? "ทุกคนในองค์กร"
+                      : selRoom.kind === "dm" ? "แชตส่วนตัว"
+                      : (selRoom.memberNames || []).concat(me?.name ? [me.name] : []).join(", ")}
+                    {selRoom.ref_no ? ` · งาน ${selRoom.ref_no}` : ""}
+                  </div>
+                </div>
                 {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") &&
-                  <button className="btn-ghost sm" onClick={() => setModal("members")}><UIcon name="user" size={14} /> จัดการสมาชิก</button>}
+                  <button className="btn-ghost sm" onClick={() => setModal("members")}>
+                    <UIcon name="user" size={14} /> สมาชิก
+                  </button>}
               </div>
+
               <div className="tc-msgs">
                 {msgs.map((m) => {
                   const out = m.sender === me?.id;
+                  const jc  = parseJobCard(m.text);
                   return (
-                    <div className={"chat-bubble " + (out ? "out" : "in")} key={m.id}>
-                      {!out && <span className="chat-sender">{staffName[m.sender] || "ทีมงาน"}</span>}
-                      {m.image_url ? <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a>
-                        : m.file_url ? <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || "เปิดไฟล์"}</a>
-                        : <span>{m.text}</span>}
-                      <span className="chat-bubble-time">{new Date(m.created_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                    <div className={"tc-msg-row" + (out ? " out" : "")} key={m.id}>
+                      {!out && (
+                        <span className="tc-msg-av" style={{ background: avColor(m.sender) }}>
+                          {(staffName[m.sender] || "T")[0].toUpperCase()}
+                        </span>
+                      )}
+                      <div className={"chat-bubble " + (out ? "out" : "in")} style={jc ? { maxWidth: 280, padding: 0, background: "none", boxShadow: "none" } : {}}>
+                        {!out && !jc && (
+                          <span className="chat-sender" style={{ color: avColor(m.sender) }}>
+                            {staffName[m.sender] || "ทีมงาน"}
+                          </span>
+                        )}
+                        {jc ? (
+                          <div className={"tc-job-card" + (out ? " out" : "")}>
+                            <div className="tc-job-card-tag">📋 ลิงก์ใบงาน</div>
+                            <div className="tc-job-card-no">{jc.job_no}</div>
+                            <div className="tc-job-card-cust">{jc.customer || "—"}</div>
+                            {jc.title && <div className="tc-job-card-title">{jc.title}</div>}
+                            <div className="tc-job-card-foot">
+                              <span style={{ background: jobStatusColor(jc.status), color: "#fff", fontSize: 10.5, fontWeight: 700, borderRadius: 6, padding: "2px 8px" }}>
+                                {jobStatusLabel(jc.status)}
+                              </span>
+                              {onJobClick && (
+                                <button className="tc-job-card-btn" onClick={() => onJobClick(jc.job_no)}>
+                                  เปิดดูงาน →
+                                </button>
+                              )}
+                            </div>
+                            <span className="chat-bubble-time" style={{ padding: "0 0 2px" }}>
+                              {new Date(m.created_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                        ) : m.image_url ? (
+                          <a href={m.image_url} target="_blank" rel="noreferrer">
+                            <img className="chat-img" src={m.image_url} alt="" />
+                          </a>
+                        ) : m.file_url ? (
+                          <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || "เปิดไฟล์"}</a>
+                        ) : (
+                          <span>{m.text}</span>
+                        )}
+                        {!jc && (
+                          <span className="chat-bubble-time">
+                            {new Date(m.created_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
                 <div ref={endRef} />
               </div>
+
               <div className="chat-compose">
-                <label className={"chat-tool" + (sending ? " disabled" : "")}>📷<input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} /></label>
-                <label className={"chat-tool" + (sending ? " disabled" : "")}>📎<input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} /></label>
-                <textarea className="inp" rows={3} value={text} placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัด)"}
-                  onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
+                <label className={"chat-tool" + (sending ? " disabled" : "")} title="ส่งรูป">
+                  📷<input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
+                </label>
+                <label className={"chat-tool" + (sending ? " disabled" : "")} title="ส่งไฟล์">
+                  📎<input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} />
+                </label>
+                <button className={"chat-tool" + (!sel || sending ? " disabled" : "")} title="ส่งลิงก์ใบงาน"
+                  onClick={() => { if (sel && !sending) { ensureJobs(); setModal("joblink"); } }}>
+                  🔗
+                </button>
+                <textarea className="inp" rows={3} value={text}
+                  placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัด)"}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
                 <button className="btn-primary" disabled={!text.trim() || sending} onClick={send}>ส่ง</button>
               </div>
             </>
@@ -176,29 +326,38 @@ export default function TeamChat({ focus, onFocusConsumed }) {
         </div>
       </div>
 
-      {modal === "dm" && <DmModal staff={staff.filter((s) => s.id !== me?.id)} onPick={openDm} onClose={() => setModal(null)} />}
-      {modal === "group" && <GroupModal staff={staff.filter((s) => s.id !== me?.id)} jobs={jobs}
-        onCreate={async (payload) => { try { const id = await createChatRoom(payload); setModal(null); await loadRooms(); setSel(id); } catch (e) { flash("สร้างกลุ่มไม่สำเร็จ: " + (e?.message || e)); } }}
-        onClose={() => setModal(null)} />}
+      {modal === "dm"      && <DmModal staff={staff.filter((s) => s.id !== me?.id)} onPick={openDm} onClose={() => setModal(null)} />}
+      {modal === "group"   && <GroupModal staff={staff.filter((s) => s.id !== me?.id)} jobs={jobs}
+        onCreate={async (payload) => {
+          try { const id = await createChatRoom(payload); setModal(null); await loadRooms(); setSel(id); }
+          catch (e) { flash("สร้างกลุ่มไม่สำเร็จ: " + (e?.message || e)); }
+        }} onClose={() => setModal(null)} />}
       {modal === "members" && selRoom && <MembersModal room={selRoom} staff={staff} onClose={() => setModal(null)} onChanged={loadRooms} flash={flash} />}
+      {modal === "joblink" && <JobPickerModal jobs={jobs} onPick={sendJobCard} onClose={() => setModal(null)} />}
       {toast && <div className="tc-toast">{toast}</div>}
     </div>
   );
 }
 
+/* ─── DM Modal ─── */
 function DmModal({ staff, onPick, onClose }) {
   const [q, setQ] = React.useState("");
   const list = staff.filter((s) => matchText(q, s.name, s.email));
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
-        <div className="modal-head"><div className="modal-title">ทักตัวต่อตัว</div><button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button></div>
+        <div className="modal-head">
+          <div className="modal-title">👤 ทักตัวต่อตัว</div>
+          <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
+        </div>
         <div className="modal-body">
           <input className="inp" placeholder="ค้นหาชื่อพนักงาน" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 10 }} />
           <div className="tc-picklist">
             {list.map((s) => (
               <button key={s.id} className="tc-pickrow" onClick={() => onPick(s.id)}>
-                <span className="tc-av">{(s.name || "?")[0]}</span><span>{s.name}</span>
+                <span className="tc-av" style={{ background: avColor(s.id) }}>{(s.name || "?")[0]}</span>
+                <span style={{ flex: 1 }}>{s.name}</span>
+                <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{s.role}</span>
               </button>
             ))}
           </div>
@@ -208,38 +367,88 @@ function DmModal({ staff, onPick, onClose }) {
   );
 }
 
+/* ─── Group/Tech-team Modal ─── */
 function GroupModal({ staff, jobs, onCreate, onClose }) {
-  const [name, setName] = React.useState("");
-  const [sel, setSel] = React.useState({});
+  const [name, setName]   = React.useState("");
+  const [sel, setSel]     = React.useState({});
   const [jobNo, setJobNo] = React.useState("");
-  const [q, setQ] = React.useState("");
-  const list = staff.filter((s) => matchText(q, s.name, s.email));
-  const ids = Object.keys(sel).filter((k) => sel[k]);
-  const job = jobs.find((j) => j.job_no === jobNo);
+  const [q, setQ]         = React.useState("");
+  const [techOnly, setTechOnly] = React.useState(false);
+
+  const techRoles = ["lead_tech", "tech"];
+  const listBase  = techOnly ? staff.filter((s) => techRoles.includes(s.role)) : staff;
+  const list      = listBase.filter((s) => matchText(q, s.name, s.email));
+  const ids       = Object.keys(sel).filter((k) => sel[k]);
+  const job       = jobs.find((j) => j.job_no === jobNo);
+
+  function applyTechPreset() {
+    setTechOnly(true);
+    const preset = {};
+    staff.filter((s) => techRoles.includes(s.role)).forEach((s) => { preset[s.id] = true; });
+    setSel(preset);
+    if (!name) setName("ทีมช่าง");
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
-        <div className="modal-head"><div className="modal-title">สร้างกลุ่ม / ห้องงาน</div><button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button></div>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
+        <div className="modal-head">
+          <div className="modal-title">👥 สร้างกลุ่ม / ห้องงาน</div>
+          <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
+        </div>
         <div className="modal-body">
-          <label className="fld"><span>ชื่อกลุ่ม</span><input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="เช่น ทีมหน้างาน ABC" /></label>
-          <label className="fld" style={{ marginTop: 8 }}><span>ผูกกับใบงาน (ไม่บังคับ → กลายเป็นห้องงาน)</span>
+          {/* quick preset */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <button className="btn-ghost sm" onClick={applyPreset("group")}
+              style={{ background: "linear-gradient(135deg,#10b981,#059669)", color: "#fff", border: "none" }}>
+              👥 กลุ่มทั่วไป
+            </button>
+            <button className="btn-ghost sm" onClick={applyTechPreset}
+              style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "#fff", border: "none" }}>
+              🔧 ทีมช่างทั้งหมด
+            </button>
+          </div>
+
+          <label className="fld">
+            <span>ชื่อกลุ่ม</span>
+            <input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="เช่น ทีมหน้างาน A หรือ ทีมช่าง B" />
+          </label>
+
+          <label className="fld" style={{ marginTop: 8 }}>
+            <span>ผูกกับใบงาน (ไม่บังคับ → กลายเป็นห้องงาน 🧰)</span>
             <select className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)}>
               <option value="">— ไม่ผูก —</option>
-              {jobs.slice(0, 200).map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.customerName || "-"}{j.title ? ` · ${j.title}` : ""}</option>)}
+              {jobs.slice(0, 200).map((j) => (
+                <option key={j.job_no} value={j.job_no}>
+                  {j.job_no} · {j.customerName || "-"}{j.title ? ` · ${j.title}` : ""}
+                </option>
+              ))}
             </select>
           </label>
-          <div className="fld" style={{ marginTop: 8 }}><span>สมาชิก ({ids.length})</span>
+
+          <div className="fld" style={{ marginTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <span>สมาชิก ({ids.length} คน)</span>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--ink-3)", marginLeft: "auto", cursor: "pointer" }}>
+                <input type="checkbox" checked={techOnly} onChange={(e) => setTechOnly(e.target.checked)} />
+                แสดงเฉพาะช่าง
+              </label>
+            </div>
             <input className="inp" placeholder="ค้นหาพนักงาน" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 6 }} />
             <div className="tc-picklist">
               {list.map((s) => (
                 <label key={s.id} className="tc-checkrow">
                   <input type="checkbox" checked={!!sel[s.id]} onChange={(e) => setSel((c) => ({ ...c, [s.id]: e.target.checked }))} />
-                  <span className="tc-av">{(s.name || "?")[0]}</span><span>{s.name}</span>
+                  <span className="tc-av" style={{ background: avColor(s.id) }}>{(s.name || "?")[0]}</span>
+                  <span style={{ flex: 1 }}>{s.name}</span>
+                  <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{s.role}</span>
                 </label>
               ))}
             </div>
           </div>
-          <button className="btn-primary" style={{ width: "100%", marginTop: 10 }} disabled={!name.trim() && !job}
+
+          <button className="btn-primary" style={{ width: "100%", marginTop: 12 }}
+            disabled={!name.trim() && !job}
             onClick={() => onCreate({ name: name || (job ? `งาน ${job.job_no}` : "กลุ่ม"), memberIds: ids, refType: job ? "job" : null, refNo: job ? job.job_no : null })}>
             <UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> สร้างห้อง
           </button>
@@ -247,52 +456,106 @@ function GroupModal({ staff, jobs, onCreate, onClose }) {
       </div>
     </div>
   );
+
+  function applyPreset(kind) {
+    return () => { setTechOnly(false); setSel({}); if (kind === "group" && !name) setName(""); };
+  }
 }
 
-// back-office: add/remove members of a group or project room
+/* ─── Members Modal ─── */
 function MembersModal({ room, staff, onClose, onChanged, flash }) {
-  const [memberIds, setMemberIds] = React.useState(null); // null = loading
-  const [q, setQ] = React.useState("");
+  const [memberIds, setMemberIds] = React.useState(null);
+  const [q, setQ]     = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const nameById = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s])), [staff]);
-  async function load() { try { setMemberIds(await listRoomMembers(room.id)); } catch (e) { flash("โหลดสมาชิกไม่สำเร็จ: " + (e?.message || e)); setMemberIds([]); } }
+  async function load() { try { setMemberIds(await listRoomMembers(room.id)); } catch (e) { flash("โหลดสมาชิกไม่สำเร็จ"); setMemberIds([]); } }
   React.useEffect(() => { load(); }, [room.id]);
   const set = new Set(memberIds || []);
-  const add = async (uid) => { setBusy(true); try { await addChatMember(room.id, uid); await load(); onChanged && onChanged(); } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e?.message || e)); } setBusy(false); };
+  const add    = async (uid) => { setBusy(true); try { await addChatMember(room.id, uid); await load(); onChanged && onChanged(); } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e?.message || e)); } setBusy(false); };
   const remove = async (uid) => { setBusy(true); try { await removeChatMember(room.id, uid); await load(); onChanged && onChanged(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e?.message || e)); } setBusy(false); };
   const others = staff.filter((s) => !set.has(s.id) && matchText(q, s.name, s.email));
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
-        <div className="modal-head"><div className="modal-title">จัดการสมาชิก · {room.title}</div><button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button></div>
+        <div className="modal-head">
+          <div className="modal-title">👤 สมาชิก · {room.title}</div>
+          <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
+        </div>
         <div className="modal-body">
-          {memberIds === null ? <div className="empty">กำลังโหลด…</div> : <>
-            <div className="fld"><span>สมาชิกในห้อง ({memberIds.length})</span>
-              <div className="tc-picklist">
-                {memberIds.length === 0 && <div className="empty sm">ยังไม่มีสมาชิก</div>}
-                {memberIds.map((uid) => (
-                  <div key={uid} className="tc-checkrow">
-                    <span className="tc-av">{(nameById[uid]?.name || "?")[0]}</span>
-                    <span style={{ flex: 1 }}>{nameById[uid]?.name || uid}</span>
-                    <button className="btn-ghost sm danger" disabled={busy} onClick={() => remove(uid)}>นำออก</button>
-                  </div>
-                ))}
+          {memberIds === null ? <div className="empty">กำลังโหลด…</div> : (
+            <>
+              <div className="fld">
+                <span>ในห้องนี้ ({memberIds.length} คน)</span>
+                <div className="tc-picklist" style={{ marginTop: 6 }}>
+                  {memberIds.length === 0 && <div className="empty sm">ยังไม่มีสมาชิก</div>}
+                  {memberIds.map((uid) => (
+                    <div key={uid} className="tc-checkrow">
+                      <span className="tc-av" style={{ background: avColor(uid) }}>{(nameById[uid]?.name || "?")[0]}</span>
+                      <span style={{ flex: 1 }}>{nameById[uid]?.name || uid}</span>
+                      <button className="btn-ghost sm danger" disabled={busy} onClick={() => remove(uid)}>นำออก</button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="fld" style={{ marginTop: 10 }}><span>เพิ่มสมาชิก (พนักงาน/ช่าง)</span>
-              <input className="inp" placeholder="ค้นหาชื่อ" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 6 }} />
-              <div className="tc-picklist">
-                {others.length === 0 && <div className="empty sm">ไม่พบ</div>}
-                {others.map((s) => (
-                  <div key={s.id} className="tc-checkrow">
-                    <span className="tc-av">{(s.name || "?")[0]}</span>
-                    <span style={{ flex: 1 }}>{s.name}</span>
-                    <button className="btn-ghost sm" disabled={busy} onClick={() => add(s.id)}>＋ เพิ่ม</button>
-                  </div>
-                ))}
+              <div className="fld" style={{ marginTop: 10 }}>
+                <span>เพิ่มสมาชิก</span>
+                <input className="inp" placeholder="ค้นหาชื่อ" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 6, marginTop: 4 }} />
+                <div className="tc-picklist">
+                  {others.length === 0 && <div className="empty sm">ไม่พบ</div>}
+                  {others.map((s) => (
+                    <div key={s.id} className="tc-checkrow">
+                      <span className="tc-av" style={{ background: avColor(s.id) }}>{(s.name || "?")[0]}</span>
+                      <span style={{ flex: 1 }}>{s.name}</span>
+                      <button className="btn-ghost sm" disabled={busy} onClick={() => add(s.id)}>＋ เพิ่ม</button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          </>}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Job Picker Modal (send job link) ─── */
+function JobPickerModal({ jobs, onPick, onClose }) {
+  const [q, setQ] = React.useState("");
+  const list = jobs.filter((j) => matchText(q, j.job_no, j.customerName, j.title)).slice(0, 60);
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 500 }}>
+        <div className="modal-head">
+          <div className="modal-title">🔗 ส่งลิงก์ใบงาน</div>
+          <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
+        </div>
+        <div className="modal-body">
+          <input className="inp" placeholder="ค้นหาเลขใบงาน หรือชื่อลูกค้า…" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 8 }} />
+          <div className="tc-picklist">
+            {list.length === 0 && <div className="empty sm">ไม่พบใบงาน</div>}
+            {list.map((j) => (
+              <button key={j.job_no} className="tc-pickrow" onClick={() => onPick(j)}>
+                <span style={{
+                  background: "linear-gradient(135deg,#f59e0b,#d97706)",
+                  borderRadius: 7, padding: "3px 9px", color: "#fff",
+                  fontSize: 11.5, fontWeight: 700, flex: "none",
+                }}>
+                  {j.job_no}
+                </span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ fontWeight: 700 }}>{j.customerName || "—"}</span>
+                  {j.title ? <span style={{ color: "var(--ink-3)", fontSize: 12 }}> · {j.title}</span> : null}
+                </span>
+                <span style={{
+                  background: jobStatusColor(j.status), color: "#fff",
+                  fontSize: 10.5, fontWeight: 700, borderRadius: 6, padding: "2px 8px", flex: "none",
+                }}>
+                  {jobStatusLabel(j.status)}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
