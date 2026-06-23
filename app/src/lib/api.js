@@ -463,6 +463,7 @@ export async function listBoqs() {
       customerAddr: custAddr[bo.customer_id] || null, customerTaxId: custTax[bo.customer_id] || null,
       siteName: s?.site_name || null, siteAddress: s?.address || null, createdByName: cb[bo.created_by] || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || custAddr[bo.customer_id]),
+      mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       quoteNo: quoteByBoq[bo.boq_no]?.no || null, hasQuote: !!quoteByBoq[bo.boq_no], quoteApproved: !!quoteByBoq[bo.boq_no]?.approved,
       items, total: items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_cost), 0) };
@@ -625,7 +626,9 @@ export async function listQuotations() {
     const ct0 = firstContact[qo.customer_id];
     return { ...qo, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
       customerTaxId: custTax[qo.customer_id] || null, customerType: custType[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
-      siteAddress, address, map_url, createdByName: cb[qo.created_by] || null, contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
+      siteAddress, address, map_url, createdByName: cb[qo.created_by] || null,
+      mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
+      contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       jobNo: jobByQuote[qo.quote_no]?.job_no || null, hasJob: !!jobByQuote[qo.quote_no], jobScheduledAt: jobByQuote[qo.quote_no]?.scheduled_at || null,
       hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,
       items, subtotal, discount, afterDisc, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
@@ -706,9 +709,10 @@ export async function listInvoices() {
     return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
       title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
-      customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null,
+      customerAddr: ca[x.customer_id] || null, siteName: s?.site_name || null, siteAddress: s?.address || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
       createdByName: cb[x.created_by] || null,
+      mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null, hasReceipt: receiptedInv.has(x.invoice_no) };
   });
 }
@@ -779,8 +783,9 @@ export async function listReceipts() {
     return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,
       title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
       customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
-      customerAddr: ca[x.customer_id] || null, siteAddress: s?.address || null, createdByName: cb[x.created_by] || null,
+      customerAddr: ca[x.customer_id] || null, siteName: s?.site_name || null, siteAddress: s?.address || null, createdByName: cb[x.created_by] || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
+      mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null };
   });
 }
@@ -833,7 +838,8 @@ export async function listBillingNotes() {
     const s = b.site_id ? sm[b.site_id] : null; const ct0 = cc[b.customer_id];
     return { ...b, customerName: cn[b.customer_id] || null, customerCode: b.customer_id || null, customerTaxId: cx[b.customer_id] || null,
       customerType: ctype[b.customer_id] || null, vat,
-      customerAddr: ca[b.customer_id] || null, siteAddress: s?.address || null, mapUrl: (s && s.map_url) || _gmap(s?.address || ca[b.customer_id]),
+      customerAddr: ca[b.customer_id] || null, siteName: s?.site_name || null, siteAddress: s?.address || null, mapUrl: (s && s.map_url) || _gmap(s?.address || ca[b.customer_id]),
+      mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       invoices, total, wht, net: Math.round((total - wht) * 100) / 100, missing: (b.invoice_nos || []).length - invoices.length };
   });
@@ -884,6 +890,9 @@ function _resolveJo(jo, custName, custAddr, siteMap, teamName, custContact) {
     contact_phone: jo.contact_phone || (s && s.phone) || (cc && cc.phone) || null,
     customerAddr: custAddr ? (custAddr[jo.customer_id] || null) : null,
     customerName: custName ? (custName[jo.customer_id] || null) : null,
+    mainContactName: (cc && cc.name) || null, mainContactPhone: (cc && cc.phone) || null,
+    siteName: (s && s.site_name) || null, siteAddress: (s && s.address) || null,
+    siteContactName: (s && s.contact_name) || null, siteContactPhone: (s && s.phone) || null,
     teamName: teamName ? (teamName[jo.assigned_team] || jo.assigned_team) : jo.assigned_team };
 }
 // first contact per customer (live fallback for the snapshot contact on the job order)
@@ -894,7 +903,7 @@ export async function listJobOrders() {
     supabase.from("job_orders").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address"),
     supabase.from("teams").select("id,name"),
-    supabase.from("customer_sites").select("id,address,map_url,contact_name,phone"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat,created_by"),
     supabase.from("quotation_items").select("quote_no,name,unit,qty,unit_price,kind"),
@@ -955,7 +964,7 @@ export async function listCustomerDocs(customerId) {
 export async function listTeamJobOrders(team) {
   const [j, si, cu, ct] = await Promise.all([
     supabase.from("job_orders").select("*").eq("assigned_team", team).order("scheduled_at", { ascending: true }),
-    supabase.from("customer_sites").select("id,address,map_url,contact_name,phone"),
+    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customers").select("id,name,address"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
   ]);

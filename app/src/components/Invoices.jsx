@@ -340,7 +340,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         <DocSlip company={co} titleTh="ใบแจ้งหนี้" titleEn="INVOICE" docNo={printI.invoice_no}
           metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, { label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }]}
           projectTitle={printI.title}
-          customer={{ name: printI.customerName, code: custCode(printI.customerCode), taxId: printI.customerTaxId, address: printI.siteAddress || printI.customerAddr, contactName: printI.contactName, contactPhone: printI.contactPhone, mapUrl: printI.mapUrl }}
+          customer={{ name: printI.customerName, code: custCode(printI.customerCode), taxId: printI.customerTaxId, address: printI.customerAddr, contactName: printI.mainContactName, contactPhone: printI.mainContactPhone, siteName: printI.siteName, siteAddress: printI.siteAddress, siteContactName: printI.siteContactName, siteContactPhone: printI.siteContactPhone, mapUrl: printI.mapUrl }}
           terms={printI.note || co.default_terms} termsPayment={printI.terms_payment} termsFreebies={printI.terms_freebies} termsWarranty={printI.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]} signUrl={printI.sign_url} signName={printI.sign_name}
           totals={<div className="doc-totals">
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(q?.subtotal || 0)}</b></div>

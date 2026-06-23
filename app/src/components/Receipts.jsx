@@ -266,7 +266,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
         <DocSlip company={co} titleTh={baseTitle} titleEn={isVat ? "RECEIPT / TAX INVOICE" : "RECEIPT"} docNo={printR.receipt_no}
           metaRows={[{ label: "วันที่", value: printR.issue_date }, { label: "อ้างอิงใบแจ้งหนี้", value: printR.invoice_no }, { label: "อ้างอิงใบเสนอ", value: printR.quote_no }, { label: "อ้างอิง BOQ", value: printR.boq_no }, { label: "อ้างอิงใบงาน", value: printR.job_no }]}
           projectTitle={printR.title}
-          customer={{ name: printR.customerName, code: custCode(printR.customerCode), taxId: printR.customerTaxId, address: printR.siteAddress || printR.customerAddr, contactName: printR.contactName, contactPhone: printR.contactPhone, mapUrl: printR.mapUrl }}
+          customer={{ name: printR.customerName, code: custCode(printR.customerCode), taxId: printR.customerTaxId, address: printR.customerAddr, contactName: printR.mainContactName, contactPhone: printR.mainContactPhone, siteName: printR.siteName, siteAddress: printR.siteAddress, siteContactName: printR.siteContactName, siteContactPhone: printR.siteContactPhone, mapUrl: printR.mapUrl }}
           terms={printR.note} termsPayment={printR.terms_payment} termsFreebies={printR.terms_freebies} termsWarranty={printR.terms_warranty} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]} signUrl={printR.sign_url} signName={printR.sign_name}
           paymentInfo={paid ? `ได้รับชำระเงินแล้ว · วันที่ ${printR.issue_date || "-"} · โดย ${printR.payment_method || "-"} · จำนวน ${fmtBaht(printR.net)}` : null}
           totals={<div className="doc-totals">

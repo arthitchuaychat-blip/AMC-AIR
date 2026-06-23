@@ -382,7 +382,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         <DocSlip company={co} titleTh="ใบเสนอราคา" titleEn="QUOTATION" docNo={printQ.quote_no}
           metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }, { label: "อ้างอิง BOQ", value: printQ.boq_no }]}
           projectTitle={printQ.title}
-          customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, address: printQ.siteAddress || printQ.customerAddr, contactName: printQ.contactName, contactPhone: printQ.contactPhone, mapUrl: printQ.map_url }}
+          customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, address: printQ.customerAddr, contactName: printQ.mainContactName, contactPhone: printQ.mainContactPhone, siteName: printQ.siteName, siteAddress: printQ.siteAddress, siteContactName: printQ.siteContactName, siteContactPhone: printQ.siteContactPhone, mapUrl: printQ.map_url }}
           terms={printQ.note || co.default_terms} termsPayment={printQ.terms_payment} termsFreebies={printQ.terms_freebies} termsWarranty={printQ.terms_warranty} bank={co.bank_info}
           signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]} signUrl={printQ.sign_url} signName={printQ.sign_name}
           totals={<div className="doc-totals">
