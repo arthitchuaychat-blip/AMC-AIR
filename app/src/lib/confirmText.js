@@ -6,6 +6,13 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "2-dig
 
 // jo = job order object จาก listJobOrders() (มี confirmItems, quoteGrand, scheduled_at, slot, customerName ฯลฯ)
 export function buildOrderConfirm(jo) {
+  // หน้างาน = ข้อมูลไซต์จริงเท่านั้น (ไม่ดึงที่อยู่หลักมาแทน) — ถ้าไม่มี ก็เว้นว่าง/ไม่แสดง
+  const siteLines = [];
+  if (jo.siteName) siteLines.push(`สถานที่ให้บริการ (หน้างาน) : ${jo.siteName}`);
+  if (jo.siteAddress) siteLines.push(`ที่อยู่หน้างาน : ${jo.siteAddress}`);
+  if (jo.siteContactName || jo.siteContactPhone) siteLines.push(`ผู้ติดต่อหน้างาน : ${jo.siteContactName || ""}${jo.siteContactPhone ? ` (${jo.siteContactPhone})` : ""}`);
+  if (jo.siteAddress && jo.map_url) siteLines.push(`หมุดโลเคชั่น : ${jo.map_url}`);
+
   const lines = [
     `วันที่สั่งซื้อ : ${fmtDate(jo.created_at)}`,
     `วันเวลานัดหมายบริการ : ${jo.scheduled_at ? scheduleLabel(jo) : "-"}`,
@@ -14,11 +21,7 @@ export function buildOrderConfirm(jo) {
     `ชื่อลูกค้า : ${jo.customerName || "-"}`,
     `ที่อยู่หลัก : ${jo.customerAddr || "-"}`,
     `เบอร์โทรหลัก : ${jo.mainContactPhone || "-"}`,
-    "--",
-    `สถานที่ให้บริการ (หน้างาน)${jo.siteName ? ` : ${jo.siteName}` : ""}`,
-    `ที่อยู่หน้างาน : ${jo.address || "-"}`,
-    `ผู้ติดต่อหน้างาน : ${jo.contact_name || "-"}${jo.contact_phone ? ` (${jo.contact_phone})` : ""}`,
-    `หมุดโลเคชั่น : ${jo.map_url || "-"}`,
+    ...(siteLines.length ? ["--", ...siteLines] : []),
     "--",
     "รายการสินค้าและบริการ :",
     (jo.quote_no
