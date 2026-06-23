@@ -9,7 +9,7 @@ const KINDS = [{ v: "material", l: "วัสดุ" }, { v: "ac", l: "เคร
 
 // Add OR edit a catalog item (material / ac / service). `initial` null => add mode.
 export default function MaterialModal({ initial, categories, brands = [], btus = [], acTypes = [], defaultKind = "material", onSaved, onClose, onSave }) {
-  const isNew = !initial;
+  const isNew = !initial || !!initial._dup;   // _dup = สร้างสำเนา → ถือเป็นรายการใหม่ (รหัสใหม่)
   const [f, setF] = React.useState(() => ({
     code: initial?.code || "",
     name_th: initial?.name_th || initial?.th || "",

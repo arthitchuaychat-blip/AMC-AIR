@@ -117,6 +117,7 @@ export default function Catalog({ role }) {
   const EditDel = ({ m }) => canEdit && (
     <div className="cat-card-actions" onClick={(e) => e.stopPropagation()}>
       <button className="btn-ghost sm" onClick={() => setEditing(m)}><UIcon name="edit" size={14} /> แก้ไข</button>
+      <button className="btn-ghost sm" onClick={() => setEditing({ ...m, code: (m.code || "") + "-2", stock: 0, _dup: true })}><UIcon name="clipboard" size={14} /> สร้างสำเนา</button>
       <button className="btn-ghost sm danger" onClick={() => remove(m)}><UIcon name="trash" size={14} /> ลบ</button>
     </div>
   );
