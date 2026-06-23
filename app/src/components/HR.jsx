@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, markAdvancesPaid, getPositions, savePositions } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, markAdvancesPaid, getPositions, savePositions, uploadSignature } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -605,6 +605,34 @@ function PayRow({ p, onSave }) {
   );
 }
 
+// upload / replace / remove a staff member's document signature (admin)
+function SigRow({ p, onSaved, flash }) {
+  const inp = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  async function onFile(e) {
+    const f = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    setBusy(true);
+    try { const url = await uploadSignature(f); await updateHrProfile(p.id, { signature_url: url }); flash(`อัปโหลดลายเซ็น ${p.name || p.email} แล้ว ✓`); onSaved(); }
+    catch (err) { flash("ไม่สำเร็จ: " + (err.message || err), true); }
+    setBusy(false);
+  }
+  async function remove() {
+    if (!await confirmDialog(`ลบลายเซ็นของ ${p.name || p.email}?`)) return;
+    try { await updateHrProfile(p.id, { signature_url: null }); flash("ลบลายเซ็นแล้ว"); onSaved(); }
+    catch (err) { flash("ลบไม่สำเร็จ: " + (err.message || err), true); }
+  }
+  return (
+    <div className="hr-staff-row">
+      <div className="hr-name"><b>{p.name || p.email}</b></div>
+      {p.signature_url ? <img src={p.signature_url} alt="" className="hr-sig-thumb" /> : <span className="jo-dim">— ยังไม่มีลายเซ็น —</span>}
+      <input ref={inp} type="file" accept="image/*" hidden onChange={onFile} />
+      <button className="btn-ghost sm" disabled={busy} onClick={() => inp.current?.click()}><UIcon name="plus" size={13} /> {busy ? "…" : (p.signature_url ? "เปลี่ยน" : "อัปโหลด")}</button>
+      {p.signature_url && <button className="btn-ghost sm danger" onClick={remove}><UIcon name="trash" size={13} /></button>}
+    </div>
+  );
+}
+
 function StaffTab({ staff, settings, holidays, positions, onReload, flash }) {
   const [s, setS] = React.useState(settings);
   const [nh, setNh] = React.useState({ day: "", name: "" });
@@ -675,6 +703,13 @@ function StaffTab({ staff, settings, holidays, positions, onReload, flash }) {
 
       {/* shared suggestions for the per-staff ตำแหน่ง field */}
       <datalist id="hr-positions">{posList.map((p) => <option key={p} value={p} />)}</datalist>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="sec-head"><div><div className="sec-title">ลายเซ็นพนักงาน</div><div className="sec-sub">อัปโหลดลายเซ็นให้แต่ละคน · ใช้บนเอกสาร (เจ้าตัวเปิด/ปิดเองที่หน้าเข้างาน) · แนะนำไฟล์ PNG พื้นหลังโปร่ง</div></div></div>
+        <div className="set-list">
+          {staff.map((p) => <SigRow key={p.id} p={p} onSaved={onReload} flash={flash} />)}
+        </div>
+      </div>
 
       <div className="damage-layout">
         <div className="card">

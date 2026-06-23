@@ -1598,11 +1598,14 @@ export async function uploadDocFile(blob, ext, contentType) {
 // ===================== HR (attendance / leave / holidays) =====================
 const _today = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 
-// staff signature image → public URL (stored on the profile, optionally printed on documents)
-export async function uploadSignature(blob) {
+// staff signature image → public URL (stored on the profile, optionally printed on documents).
+// accepts a canvas Blob (png) OR an uploaded image File (keeps its type/extension).
+export async function uploadSignature(file) {
   const uid = await _uid();
-  const path = `signatures/${uid}-${Date.now()}.png`;
-  const { error } = await supabase.storage.from("photos").upload(path, blob, { upsert: true, contentType: "image/png" });
+  const ct = file.type || "image/png";
+  const ext = (file.name ? file.name.split(".").pop() : (ct.split("/")[1] || "png")).toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+  const path = `signatures/${uid}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: ct });
   if (error) throw error;
   return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
@@ -1774,7 +1777,7 @@ export async function saveLeaveQuota(userId, year, q) {
 export async function listHrStaff() {
   // HR covers permanent staff only — subcontractor-team members are excluded (managed on the ช่างซัพ page)
   const [pr, tm] = await Promise.all([
-    supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date").order("name"),
+    supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url").order("name"),
     supabase.from("teams").select("id,type"),
   ]);
   if (pr.error) throw pr.error;
