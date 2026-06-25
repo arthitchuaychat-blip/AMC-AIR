@@ -2012,7 +2012,7 @@ export async function saveLeaveQuota(userId, year, q) {
 export async function listHrStaff() {
   // HR covers permanent staff only — subcontractor-team members are excluded (managed on the ช่างซัพ page)
   const [pr, tm] = await Promise.all([
-    supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url").order("name"),
+    supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso").order("name"),
     supabase.from("teams").select("id,type"),
   ]);
   if (pr.error) throw pr.error;
