@@ -239,7 +239,8 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
       await updateVisitStatus(v.id, jo.job_no, status, me);
       // some outcomes approve the round (done) but route the whole job to a different stage (e.g. รอทำใบเสนอราคา)
       if (jobOverride) await updateJobStatus(jo.job_no, jobOverride, me);
-      if (shouldLock) await lockJob(jo.job_no);
+      if (shouldLock === true) await lockJob(jo.job_no);
+      else if (shouldLock === false) await unlockJob(jo.job_no).catch(() => {});
       flash(shouldLock ? "อนุมัติ · ปิดงานแล้ว (ล็อก) ✓"
         : jobOverride === "quote_pending" ? "อนุมัติรอบนี้ · ส่งไปรอทำใบเสนอราคา ✓"
         : status === "done" ? "อนุมัติ · ปิดงานรอบนี้แล้ว ✓" : "ส่งรอบนี้ไปนัดหมายเพิ่มแล้ว");
@@ -663,7 +664,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               <div className="confirm-acts" style={{ flexDirection: "column" }}>
                 <button className="btn-primary ok" style={{ width: "100%" }} onClick={() => doVisitStatus(jo, v, "done", null, true)}>✅ เสร็จ ปิดงาน</button>
                 <button className="btn-primary" style={{ width: "100%", background: "#0891b2" }} onClick={() => doVisitStatus(jo, v, "reschedule", null, true)}>📅 เสร็จ รอนัดหมายเพิ่ม</button>
-                <button className="btn-primary" style={{ width: "100%", background: "#ea580c" }} onClick={() => doVisitStatus(jo, v, "done", "quote_pending")}>📝 เสร็จ รอทำใบเสนอราคา</button>
+                <button className="btn-primary" style={{ width: "100%", background: "#ea580c" }} onClick={() => doVisitStatus(jo, v, "done", "quote_pending", false)}>📝 เสร็จ รอทำใบเสนอราคา</button>
                 <button className="btn-ghost" style={{ width: "100%" }} onClick={() => setApproveCtx(null)}>ยกเลิก</button>
               </div>
             </div>
