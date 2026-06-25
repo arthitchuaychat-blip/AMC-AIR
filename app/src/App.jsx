@@ -67,11 +67,24 @@ const NAV = {
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
 
+// sidebar sections — group the (long) menu into collapsible categories so it's not overwhelming.
+// any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
+const NAV_GROUPS = [
+  { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
+  { key: "crm", label: "ลูกค้า & ขาย", ids: ["customers", "followup", "chat"] },
+  { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
+  { key: "finance", label: "การเงิน", ids: ["receivables", "tax", "profit", "cashflow", "expenses"] },
+  { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "schedule", "subcontract"] },
+  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "jobs", "po"] },
+  { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "hr"] },
+  { key: "system", label: "ระบบ", ids: ["settings"] },
+];
+
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-24·ใบงาน: แม่แบบงาน (ล้างแอร์/ติดตั้ง) ใช้ซ้ำ-บันทึกเป็นแม่แบบ (มิ 070)-v179";
+const BUILD = "2026-06-24·เมนู: จัดกลุ่มหมวดหมู่ + ย่อ/ขยายได้ (ลดความรก)-v180";
 
 function SetupNotice() {
   return (
@@ -121,6 +134,14 @@ export default function App() {
   const [chatUnread, setChatUnread] = React.useState(0); // LINE chats waiting to be answered → sidebar badge
   const [teamUnread, setTeamUnread] = React.useState(0); // unread team-chat messages → sidebar badge
   const [notifCounts, setNotifCounts] = React.useState({}); // unread notifications per category → per-menu badges
+  const [navCollapsed, setNavCollapsed] = React.useState(() => { // collapsed sidebar groups (remembered)
+    try { return new Set(JSON.parse(localStorage.getItem("amc_nav_collapsed") || "[]")); } catch { return new Set(); }
+  });
+  const toggleNavGroup = (key) => setNavCollapsed((s) => {
+    const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key);
+    try { localStorage.setItem("amc_nav_collapsed", JSON.stringify([...n])); } catch { /* ignore */ }
+    return n;
+  });
 
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
@@ -291,21 +312,46 @@ export default function App() {
               <button className={lang === "my" ? "on" : ""} onClick={() => setLang("my")}>မြန်မာ</button>
             </span>
           </div>
-          {navIds(role).map((id) => {
-            const n = NAV[id];
-            const primary = lang === "my" ? (NAV_MY[id] || n.th) : n.th;
-            const secondary = lang === "my" ? n.th : n.en;
-            return (
-              <button key={id} className={"nav-item" + (view === id ? " on" : "")} onClick={() => go(id)}>
-                <UIcon name={n.icon} size={18} strokeWidth={1.9} />
-                <span className="nav-th">{primary}</span>
-                <span className="nav-en">{secondary}</span>
-                {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
-                {id === "teamchat" && teamUnread > 0 && <span className="nav-badge" title={`${teamUnread} ข้อความใหม่`}>{teamUnread > 99 ? "99+" : teamUnread}</span>}
-                {!NAV_BADGE_SKIP[id] && (notifCounts[id] || 0) > 0 && <span className="nav-badge" title="กิจกรรมใหม่ที่ยังไม่ได้อ่าน">{notifCounts[id] > 99 ? "99+" : notifCounts[id]}</span>}
-              </button>
-            );
-          })}
+          {(() => {
+            const badgeFor = (id) => id === "chat" ? chatUnread : id === "teamchat" ? teamUnread : (NAV_BADGE_SKIP[id] ? 0 : (notifCounts[id] || 0));
+            const renderItem = (id) => {
+              const n = NAV[id];
+              const primary = lang === "my" ? (NAV_MY[id] || n.th) : n.th;
+              const secondary = lang === "my" ? n.th : n.en;
+              return (
+                <button key={id} className={"nav-item" + (view === id ? " on" : "")} onClick={() => go(id)}>
+                  <UIcon name={n.icon} size={18} strokeWidth={1.9} />
+                  <span className="nav-th">{primary}</span>
+                  <span className="nav-en">{secondary}</span>
+                  {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
+                  {id === "teamchat" && teamUnread > 0 && <span className="nav-badge" title={`${teamUnread} ข้อความใหม่`}>{teamUnread > 99 ? "99+" : teamUnread}</span>}
+                  {!NAV_BADGE_SKIP[id] && (notifCounts[id] || 0) > 0 && <span className="nav-badge" title="กิจกรรมใหม่ที่ยังไม่ได้อ่าน">{notifCounts[id] > 99 ? "99+" : notifCounts[id]}</span>}
+                </button>
+              );
+            };
+            const allowed = navIds(role);
+            const allowedSet = new Set(allowed);
+            const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.ids.filter((id) => allowedSet.has(id)) }));
+            const used = new Set(groups.flatMap((g) => g.items));
+            const leftover = allowed.filter((id) => !used.has(id));
+            if (leftover.length) groups.push({ key: "other", label: "อื่นๆ", items: leftover });
+            return groups.filter((g) => g.items.length).map((g) => {
+              const activeHere = g.items.includes(view);
+              const isCollapsed = navCollapsed.has(g.key) && !activeHere; // the active group always stays open
+              const groupBadge = g.items.reduce((a, id) => a + badgeFor(id), 0);
+              return (
+                <div className="nav-group" key={g.key}>
+                  <button className="nav-grouphead" onClick={() => toggleNavGroup(g.key)}>
+                    <span>{g.label}</span>
+                    <span className="nav-grouphead-sp" />
+                    {isCollapsed && groupBadge > 0 && <span className="nav-badge sm">{groupBadge > 99 ? "99+" : groupBadge}</span>}
+                    <UIcon name="chevR" size={12} style={{ transform: isCollapsed ? "none" : "rotate(90deg)", opacity: 0.5 }} />
+                  </button>
+                  {!isCollapsed && g.items.map(renderItem)}
+                </div>
+              );
+            });
+          })()}
         </nav>
 
         <div className="side-foot">
