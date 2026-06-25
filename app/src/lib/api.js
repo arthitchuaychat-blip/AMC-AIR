@@ -840,6 +840,7 @@ export async function saveReceipt(r) {
   }, { onConflict: "receipt_no" });
   if (error) throw error;
   if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no);
+  syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
 }
 // update per-line WHT selection + rate + recomputed amounts on a receipt
 export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, net) {
@@ -908,6 +909,7 @@ export async function setReceiptStatus(receipt_no, status, invoice_no, reason) {
   if (error) throw error;
   if (invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", invoice_no);
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "receipt", target_no: receipt_no, reason });
+  syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
 }
 export async function saveReceiptFlowAccount(receipt_no, faId, faNo) {
   const { error } = await supabase.from("receipts").update({ flowaccount_id: faId ? String(faId) : null, flowaccount_no: faNo || null, flowaccount_at: new Date().toISOString() }).eq("receipt_no", receipt_no);
@@ -919,6 +921,7 @@ export async function deleteReceipt(receipt_no, invoice_no, reason) {
   if (error) throw error;
   if (invoice_no) await supabase.from("invoices").update({ status: "unpaid" }).eq("invoice_no", invoice_no);
   await logAudit({ action: "delete", target_type: "receipt", target_no: receipt_no, reason, snapshot: snap });
+  syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
 }
 
 // ---------- JOB ORDERS (ใบงาน) ----------
