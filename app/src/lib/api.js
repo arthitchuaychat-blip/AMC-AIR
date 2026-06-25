@@ -1092,6 +1092,16 @@ export async function updateJobStatus(job_no, status, author) {
   notify(await _jobWatchers(job_no), { category: "job", title: `📋 งาน ${job_no} → ${_JOB_ST_TH[status] || status}`, url: "joborders", ref_type: "job", ref_no: job_no });
 }
 
+export async function lockJob(job_no) {
+  const { error } = await supabase.from("job_orders").update({ locked: true }).eq("job_no", job_no);
+  if (error) throw error;
+}
+
+export async function unlockJob(job_no) {
+  const { error } = await supabase.from("job_orders").update({ locked: false }).eq("job_no", job_no);
+  if (error) throw error;
+}
+
 // office quick action: move every visit of a job whose status is in fromStatuses → toStatus,
 // then recompute the job's overall status (server-side RPC so RLS on job_orders doesn't block it).
 export async function setJobVisitsStatus(jobNo, fromStatuses, toStatus, author) {

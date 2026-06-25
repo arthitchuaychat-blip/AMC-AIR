@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -24,6 +24,7 @@ const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id
 export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
+  const canEditJob = (jo) => canEdit && (!jo.locked || role === "admin");
   const [openTl, setOpenTl] = React.useState(null);
   const [upBrief, setUpBrief] = React.useState(false);
   const [list, setList] = React.useState([]);
@@ -232,14 +233,24 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
     catch (e) { flash("สร้างไม่สำเร็จ: " + (e.message || e), true); }
   }
   // office sets ONE รอบ (visit) status — siblings untouched; modal/list refresh in place
-  async function doVisitStatus(jo, v, status, jobOverride) {
+  async function doVisitStatus(jo, v, status, jobOverride, shouldLock) {
     setApproveCtx(null);
     try {
       await updateVisitStatus(v.id, jo.job_no, status, me);
       // some outcomes approve the round (done) but route the whole job to a different stage (e.g. รอทำใบเสนอราคา)
       if (jobOverride) await updateJobStatus(jo.job_no, jobOverride, me);
-      flash(jobOverride === "quote_pending" ? "อนุมัติรอบนี้ · ส่งไปรอทำใบเสนอราคา ✓"
+      if (shouldLock) await lockJob(jo.job_no);
+      flash(shouldLock ? "อนุมัติ · ปิดงานแล้ว (ล็อก) ✓"
+        : jobOverride === "quote_pending" ? "อนุมัติรอบนี้ · ส่งไปรอทำใบเสนอราคา ✓"
         : status === "done" ? "อนุมัติ · ปิดงานรอบนี้แล้ว ✓" : "ส่งรอบนี้ไปนัดหมายเพิ่มแล้ว");
+      const fresh = await listJobOrders(); setList(fresh);
+      setViewing((cur) => cur ? (fresh.find((x) => x.job_no === jo.job_no) || null) : cur);
+    } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function doUnlock(jo) {
+    try {
+      await unlockJob(jo.job_no);
+      flash(`${jo.job_no} · ปลดล็อกแล้ว ✓`);
       const fresh = await listJobOrders(); setList(fresh);
       setViewing((cur) => cur ? (fresh.find((x) => x.job_no === jo.job_no) || null) : cur);
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
@@ -519,7 +530,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               <div className="job-card-head" style={{ cursor: "pointer" }} onClick={() => setViewing(jo)} title="กดดูรายละเอียด">
                 <div className="job-card-id"><span className="job-no">{jo.job_no}</span>
                   {(() => { const td = jobTypeDef(jo.job_type); return <span className="job-type-chip" style={{ background: td[3] }}>{td[2]} {td[1]}</span>; })()}
-                  <span className={"job-badge " + st.cls}>{st.th}</span></div>
+                  <span className={"job-badge " + st.cls}>{st.th}</span>{jo.locked && <span className="job-badge" style={{ background: "#64748b", color: "#fff" }}>🔒 ล็อก</span>}</div>
                 <div className="job-card-meta">
                   <div className="jcm-title">{jo.title || "งานติดตั้ง/บริการ"}</div>
                   <div className="jcm-when">🗓 ทีม {jo.teamName || "ยังไม่มอบ"}{jo.scheduled_at ? ` · ${scheduleLabel(jo)}` : " · ยังไม่กำหนดวัน"}{jo.visits && jo.visits.length > 1 ? ` · 🔁 ${jo.visits.length} รอบ` : ""}</div>
@@ -543,17 +554,17 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                   {sibs.map((s) => <button key={s.job_no} className={"job-group-chip" + (s.job_no === jo.job_no ? " cur" : "")} onClick={() => setViewing(s)}>{s.job_no}</button>)}
                 </div>
               ) : null; })()}
-              {canEdit && jo.status === "awaiting_approval" && (
+              {canEditJob(jo) && jo.status === "awaiting_approval" && (
                 <div className="job-lines"><div className="job-actions">
                   <button className="btn-primary sm ok" onClick={() => setViewing(jo)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> ตรวจ & อนุมัติรายรอบ</button>
                 </div></div>
               )}
-              {canEdit && jo.status === "reschedule" && (
+              {canEditJob(jo) && jo.status === "reschedule" && (
                 <div className="job-lines"><div className="job-actions">
                   <button className="btn-primary sm" onClick={() => startReschedule(jo)}><UIcon name="calendar" size={14} color="#fff" /> ตั้งวันนัดหมายเพิ่ม</button>
                 </div></div>
               )}
-              {canEdit && jo.status === "quote_pending" && jo.quote_no && (
+              {canEditJob(jo) && jo.status === "quote_pending" && jo.quote_no && (
                 <div className="job-lines"><div className="job-actions">
                   <button className="btn-primary sm ok" onClick={() => markQuoteDone(jo)} style={{ background: "#16a34a" }}>
                     <UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> ใบเสนอราคาเสร็จแล้ว → ปิดงาน
@@ -565,9 +576,10 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                 <button className="btn-ghost sm" onClick={() => setOpenTl(openTl === jo.job_no ? null : jo.job_no)}>
                   <UIcon name="clipboard" size={14} /> {openTl === jo.job_no ? "ซ่อนความเคลื่อนไหว" : "ความเคลื่อนไหว"}
                 </button>
-                {canEdit && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
-                {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
-                {canEdit && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancelJob(jo)}>ยกเลิก</button>}
+                {canEditJob(jo) && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
+                {canEditJob(jo) && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancelJob(jo)}>ยกเลิก</button>}
+                {jo.locked && role === "admin" && <button className="btn-ghost sm" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
                 {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(jo)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div></div>
               {openTl === jo.job_no && <JobTimeline jobNo={jo.job_no} groupNo={groupKey(jo)} linked={!!jo.group_no} canPost={canEdit} author={me} flash={flash} />}
@@ -604,12 +616,12 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
                     <div className="cd-site" key={v.id || i} style={{ borderLeft: `3px solid ${col}`, background: col + "18", paddingLeft: 9, borderRadius: 8 }}>
                       <div className="cd-site-top"><span>📍 รอบ {i + 1} · {v.teamName || "ยังไม่มอบทีม"}</span><span className={"job-badge " + vst.cls}>{vst.th}</span></div>
                       <div className="cd-site-addr">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}</div>
-                      {canEdit && v.status === "awaiting_approval" && (
+                      {canEditJob(jo) && v.status === "awaiting_approval" && (
                         <div className="myjob-visit-acts" style={{ marginTop: 7 }}>
                           <button className="btn-primary sm ok" onClick={() => setApproveCtx({ jo, v })}>✓ อนุมัติรอบนี้</button>
                         </div>
                       )}
-                      {canEdit && v.status === "reschedule" && (
+                      {canEditJob(jo) && v.status === "reschedule" && (
                         <div className="myjob-visit-acts" style={{ marginTop: 7 }}>
                           <button className="btn-primary sm" onClick={() => { setViewing(null); startReschedule(jo, i); }}>📅 ตั้งวันนัดหมายเพิ่ม</button>
                         </div>
@@ -631,8 +643,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               </div>
               <div className="modal-foot">
                 {canDelete && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const j = jo; setViewing(null); del(j); }}><UIcon name="trash" size={15} /> ลบ</button>}
-                {canEdit && <button className="btn-ghost" onClick={() => addLinked(jo)}><UIcon name="plus" size={15} /> ใบงานเชื่อม</button>}
-                {canEdit && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
+                {jo.locked && role === "admin" && <button className="btn-ghost" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
+                {canEditJob(jo) && <button className="btn-ghost" onClick={() => addLinked(jo)}><UIcon name="plus" size={15} /> ใบงานเชื่อม</button>}
+                {canEditJob(jo) && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
               </div>
             </div>
           </div>
@@ -648,9 +661,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               <div className="confirm-title">อนุมัติรอบนี้</div>
               <div className="confirm-msg">{jo.job_no} · {v.teamName || "ทีม"}<br />🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}<br /><br />งานรอบนี้…?</div>
               <div className="confirm-acts" style={{ flexDirection: "column" }}>
-                <button className="btn-primary ok" style={{ width: "100%" }} onClick={() => doVisitStatus(jo, v, "done")}>✅ เสร็จสิ้นแล้ว · ปิดงาน</button>
-                <button className="btn-primary" style={{ width: "100%", background: "#0891b2" }} onClick={() => doVisitStatus(jo, v, "done", "quote_pending")}>📝 ไปรอทำใบเสนอราคา</button>
-                <button className="btn-primary" style={{ width: "100%", background: "#ea580c" }} onClick={() => doVisitStatus(jo, v, "reschedule")}>📅 ต้องนัดหมายเพิ่ม</button>
+                <button className="btn-primary ok" style={{ width: "100%" }} onClick={() => doVisitStatus(jo, v, "done", null, true)}>✅ เสร็จ ปิดงาน</button>
+                <button className="btn-primary" style={{ width: "100%", background: "#0891b2" }} onClick={() => doVisitStatus(jo, v, "reschedule")}>📅 เสร็จ รอนัดหมายเพิ่ม</button>
+                <button className="btn-primary" style={{ width: "100%", background: "#ea580c" }} onClick={() => doVisitStatus(jo, v, "done", "quote_pending")}>📝 เสร็จ รอทำใบเสนอราคา</button>
                 <button className="btn-ghost" style={{ width: "100%" }} onClick={() => setApproveCtx(null)}>ยกเลิก</button>
               </div>
             </div>
