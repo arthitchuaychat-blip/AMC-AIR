@@ -13,8 +13,7 @@ import { ATTACH_ACCEPT, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
-// visit-level status options exclude quote_pending (a job-level-only stage)
-const STATUS_OPTS = JOB_STATUSES.filter(([v]) => v !== "quote_pending").map(([v, l]) => [v, l]);
+const STATUS_OPTS = JOB_STATUSES.filter(([v]) => v !== "cancelled").map(([v, l]) => [v, l]);
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `JOB-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
