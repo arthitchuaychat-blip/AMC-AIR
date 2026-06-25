@@ -234,6 +234,24 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 .logo-cell img{max-width:100%;max-height:100%;object-fit:contain;filter:grayscale(1);opacity:.72;transition:.2s}
 .logo-cell:hover img{filter:none;opacity:1}
 .logo-cell span{font-size:13px;font-weight:700;color:var(--ink-2);text-align:center}
+/* press / news card */
+.press-card{display:flex;gap:0;max-width:920px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);transition:.2s;color:inherit}
+.press-card:hover{box-shadow:var(--shadow);transform:translateY(-3px)}
+.press-img{flex:0 0 44%;max-width:44%}
+.press-img img{width:100%;height:100%;object-fit:cover;display:block}
+.press-body{padding:clamp(18px,3vw,30px);display:flex;flex-direction:column;justify-content:center;gap:9px}
+.press-src{font-size:12.5px;font-weight:700;color:var(--primary)}
+.press-body h3{font-size:clamp(16px,2vw,21px);font-weight:800;line-height:1.4;color:var(--ink)}
+.press-body p{font-size:14px;color:var(--ink-2)}
+.press-link{font-size:14px;font-weight:800;color:var(--primary);margin-top:4px}
+@media(max-width:700px){.press-card{flex-direction:column}.press-img{max-width:100%;flex:none;aspect-ratio:4/3}}
+/* articles / tips cards */
+.art-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:900px;margin:0 auto}
+.art-card{border-radius:14px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow-sm);background:#fff;transition:.2s}
+.art-card:hover{box-shadow:var(--shadow);transform:translateY(-3px)}
+.art-card img{width:100%;height:auto;display:block}
+@media(max-width:700px){.art-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.art-grid{grid-template-columns:1fr}}
 /* floating call/LINE buttons */
 .fab{position:fixed;right:18px;bottom:18px;z-index:80;display:flex;flex-direction:column;gap:12px}
 .fab a{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.25);transition:.2s;position:relative}
@@ -369,13 +387,16 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 
 <section class="sec" id="portfolio">
   <div class="wrap">
-    <div class="sec-head center"><span class="eyebrow">ผลงานของเรา</span><h2 class="title">งานที่เราภูมิใจ</h2></div>
+    <div class="sec-head center"><span class="eyebrow">ผลงานของเรา</span><h2 class="title">งานที่เราภูมิใจ</h2>
+      <p class="lead">ตัวอย่างงานติดตั้งจริงจากทีมช่าง AMC AIR</p></div>
     <div class="port-grid">
-      <div class="port"><div class="cap"><b>ติดตั้งแอร์สำนักงาน</b><span>อาคารพาณิชย์ · 12 เครื่อง</span></div></div>
-      <div class="port"><div class="cap"><b>ล้างแอร์คอนโด</b><span>โครงการที่พักอาศัย · รายปี</span></div></div>
-      <div class="port"><div class="cap"><b>ระบบแอร์ร้านอาหาร</b><span>ติดตั้ง + ดูแลต่อเนื่อง</span></div></div>
+      <div class="port"><img src="portfolio/p1.jpg" alt="ติดตั้งแอร์ Grand Bangkok Boulevard" loading="lazy"><div class="cap"><b>Grand Bangkok Boulevard</b><span>ติดตั้งแอร์ · บ้านจัดสรร</span></div></div>
+      <div class="port"><img src="portfolio/p2.jpg" alt="ติดตั้งแอร์ Grand Bangkok Boulevard" loading="lazy"><div class="cap"><b>Grand Bangkok Boulevard</b><span>ติดตั้งแอร์ · บ้านจัดสรร</span></div></div>
+      <div class="port"><img src="portfolio/p3.jpg" alt="ติดตั้งแอร์ Grand Bangkok Boulevard" loading="lazy"><div class="cap"><b>Grand Bangkok Boulevard</b><span>ติดตั้งแอร์ · บ้านจัดสรร</span></div></div>
+      <div class="port"><img src="portfolio/p4.jpg" alt="ติดตั้งแอร์ เซนโทร ราชพฤกษ์-แจ้งวัฒนะ" loading="lazy"><div class="cap"><b>เซนโทร ราชพฤกษ์–แจ้งวัฒนะ</b><span>ติดตั้งแอร์ · บ้านจัดสรร</span></div></div>
+      <div class="port"><img src="portfolio/p5.jpg" alt="ติดตั้งแอร์ เซนโทร ราชพฤกษ์-แจ้งวัฒนะ" loading="lazy"><div class="cap"><b>เซนโทร ราชพฤกษ์–แจ้งวัฒนะ</b><span>ติดตั้งแอร์ · บ้านจัดสรร</span></div></div>
+      <div class="port"><img src="portfolio/p6.jpg" alt="งานติดตั้งแอร์บ้าน" loading="lazy"><div class="cap"><b>งานติดตั้งแอร์บ้าน</b><span>ติดตั้ง + เก็บงานเรียบร้อย</span></div></div>
     </div>
-    <p class="center lead" style="margin-top:18px;font-size:13.5px">* เปลี่ยนเป็นรูปงานจริงได้ภายหลัง (ดึงจากระบบหลังบ้าน)</p>
   </div>
 </section>
 
@@ -390,7 +411,22 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
   </div>
 </section>
 
-<section class="sec" id="clients">
+<section class="sec" id="press">
+  <div class="wrap">
+    <div class="sec-head center"><span class="eyebrow">ข่าว & สื่อ</span><h2 class="title">AMC AIR ในสื่อ</h2></div>
+    <a class="press-card" href="https://naewna.com/lady/864481" target="_blank" rel="noreferrer">
+      <div class="press-img"><img src="news/news1.jpg" alt="ForeToday GROWTH LAB — อาทิตย์ ช่วยชาติ" loading="lazy" /></div>
+      <div class="press-body">
+        <span class="press-src">📰 หนังสือพิมพ์แนวหน้า · 24 ก.ค. 2568</span>
+        <h3>‘ForeToday’ ผู้นำการตลาดดิจิทัลสำหรับ SMEs คว้ารางวัลใหญ่จาก ‘Google Thailand’</h3>
+        <p>คุณอาทิตย์ ช่วยชาติ กรรมการผู้จัดการ ร่วมเวที ForeToday GROWTH LAB — ขับเคลื่อนธุรกิจ SMEs ด้วย AI</p>
+        <span class="press-link">อ่านข่าวฉบับเต็ม →</span>
+      </div>
+    </a>
+  </div>
+</section>
+
+<section class="sec soft" id="clients">
   <div class="wrap">
     <div class="sec-head center"><span class="eyebrow">ลูกค้าของเรา</span><h2 class="title">องค์กรที่ไว้วางใจเรา</h2>
       <p class="lead">หน่วยงานราชการ โรงพยาบาล และองค์กรชั้นนำ เลือกใช้บริการ AMC AIR</p></div>
@@ -398,7 +434,7 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
   </div>
 </section>
 
-<section class="sec soft" id="areas">
+<section class="sec" id="areas">
   <div class="wrap">
     <div class="sec-head center"><span class="eyebrow">พื้นที่ให้บริการ</span><h2 class="title">เราไปถึงคุณ</h2></div>
     <div class="areas" id="areaList"></div>
@@ -414,6 +450,18 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
       <div class="faq-item"><button class="faq-q">รับประกันงานอย่างไร?<span class="pl">+</span></button><div class="faq-a"><div>งานติดตั้งและซ่อมรับประกันทุกชิ้น อะไหล่เป็นของแท้ หากมีปัญหาจากการติดตั้ง/ซ่อม เรากลับไปแก้ไขให้</div></div></div>
       <div class="faq-item"><button class="faq-q">ออกใบกำกับภาษีได้ไหม?<span class="pl">+</span></button><div class="faq-a"><div>ได้ครับ ออกใบเสร็จ/ใบกำกับภาษีถูกต้องตามระบบ เหมาะกับทั้งลูกค้าบุคคลและนิติบุคคล</div></div></div>
       <div class="faq-item"><button class="faq-q">สั่งซื้อผ่านเว็บแล้วต้องจ่ายเงินเลยไหม?<span class="pl">+</span></button><div class="faq-a"><div>ยังไม่ต้องจ่ายผ่านเว็บ — เมื่อส่งคำสั่งซื้อ/ขอใบเสนอราคา ทีมงานจะติดต่อกลับเพื่อยืนยันรายการ ราคา ค่าติดตั้ง และนัดหมายก่อนเสมอ</div></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec soft" id="articles">
+  <div class="wrap">
+    <div class="sec-head center"><span class="eyebrow">สาระน่ารู้</span><h2 class="title">บทความเรื่องแอร์</h2>
+      <p class="lead">เกร็ดความรู้ดูแลแอร์ ใช้แอร์ให้เย็นสบาย ประหยัดไฟ</p></div>
+    <div class="art-grid">
+      <div class="art-card"><img src="articles/a1.jpg" alt="ใช้แอร์ให้เย็นสบาย ประหยัดไฟ" loading="lazy" /></div>
+      <div class="art-card"><img src="articles/a2.jpg" alt="สาระน่ารู้เรื่องแอร์" loading="lazy" /></div>
+      <div class="art-card"><img src="articles/a3.jpg" alt="สาระน่ารู้เรื่องแอร์" loading="lazy" /></div>
     </div>
   </div>
 </section>
