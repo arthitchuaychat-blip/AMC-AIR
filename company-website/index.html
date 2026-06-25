@@ -16,7 +16,8 @@
   window.AMC_CONFIG = {
     SUPABASE_URL: "",   // ← วาง URL ที่นี่
     SUPABASE_ANON: "",  // ← วาง anon key ที่นี่
-    PHONE: "02-000-0000",
+    PHONE: "02-000-0000",   // เบอร์หลัก
+    PHONE2: "",             // เบอร์ที่ 2 (ไม่บังคับ — เว้นว่างถ้าไม่มี)
     LINE: "https://line.me/R/ti/p/@amcair",
   };
 </script>
@@ -382,7 +383,8 @@ addEventListener("scroll", () => $("#header").classList.toggle("scrolled", scrol
 $("#burger").onclick = () => $("#menu").classList.toggle("open");
 $("#menu").querySelectorAll("a").forEach((a) => a.onclick = () => $("#menu").classList.remove("open"));
 $("#yr").textContent = new Date().getFullYear() + 543;
-if (C.PHONE) { $("#cPhone").textContent = "โทร " + C.PHONE; }
+const phones = [C.PHONE, C.PHONE2].filter(Boolean);
+if (phones.length) { $("#cPhone").innerHTML = "โทร " + phones.map((p) => `<a href="tel:${p.replace(/[^0-9+]/g, "")}" style="color:inherit">${p}</a>`).join(" , "); }
 if (C.LINE) { $("#cLine").href = C.LINE; $("#cLineBtn").href = C.LINE; }
 
 function toast(msg, bad) { const t = $("#toast"); t.textContent = msg; t.className = "toast on" + (bad ? " bad" : ""); setTimeout(() => t.className = "toast", 3200); }
