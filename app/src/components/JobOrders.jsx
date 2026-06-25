@@ -219,6 +219,10 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   }
   async function del(jo) { if (!await confirmDialog(`ลบถาวรใบงาน ${jo.job_no}? (กู้คืนไม่ได้)`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
   async function cancelJob(jo) { if (!await confirmDialog(`ยกเลิกใบงาน ${jo.job_no}? (เก็บประวัติไว้)`)) return; try { await setJobStatus(jo.job_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function markQuoteDone(jo) {
+    try { await updateJobStatus(jo.job_no, "done", me); flash(`${jo.job_no} · ทำใบเสนอราคาเสร็จแล้ว ✓`); await load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
   // linked job orders (A/B/C) sharing a group — for assigning extra teams, with a shared timeline
   const groupKey = (j) => j.group_no || j.job_no;
   const siblingsOf = (j) => list.filter((x) => groupKey(x) === groupKey(j)).sort((a, b) => a.job_no.localeCompare(b.job_no));
@@ -547,6 +551,13 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               {canEdit && jo.status === "reschedule" && (
                 <div className="job-lines"><div className="job-actions">
                   <button className="btn-primary sm" onClick={() => startReschedule(jo)}><UIcon name="calendar" size={14} color="#fff" /> ตั้งวันนัดหมายเพิ่ม</button>
+                </div></div>
+              )}
+              {canEdit && jo.status === "quote_pending" && jo.quote_no && (
+                <div className="job-lines"><div className="job-actions">
+                  <button className="btn-primary sm ok" onClick={() => markQuoteDone(jo)} style={{ background: "#16a34a" }}>
+                    <UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> ใบเสนอราคาเสร็จแล้ว → ปิดงาน
+                  </button>
                 </div></div>
               )}
               <div className="job-lines"><div className="job-actions">
