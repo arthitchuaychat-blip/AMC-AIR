@@ -589,18 +589,36 @@ function PayRow({ p, onSave }) {
   const [otRate, setOtRate] = React.useState(p.ot_rate ?? 0);
   const [sso, setSso] = React.useState(!!p.sso);
   React.useEffect(() => { setPayType(p.pay_type || "monthly"); setBasePay(p.base_pay ?? 0); setOtRate(p.ot_rate ?? 0); setSso(!!p.sso); }, [p.pay_type, p.base_pay, p.ot_rate, p.sso]);
-  const saveNum = (field, val, prev) => { const v = Number(val) || 0; if (v !== (Number(prev) || 0)) onSave(field, v); };
+  // Thai law: OT rate = salary ÷ 30 ÷ 8 × 1.5
+  const calcAutoOt = (bp) => Math.round((Number(bp) / 30 / 8) * 1.5 * 100) / 100;
+  const saveBase = (val) => {
+    const v = Number(val) || 0;
+    const fields = {};
+    if (v !== (Number(p.base_pay) || 0)) fields.base_pay = v;
+    if (v > 0 && (Number(p.ot_rate) || 0) === 0) {
+      const auto = calcAutoOt(v);
+      fields.ot_rate = auto;
+      setOtRate(auto);
+    }
+    if (Object.keys(fields).length) onSave(fields);
+  };
+  const applyAutoOt = () => {
+    const v = calcAutoOt(basePay);
+    setOtRate(v);
+    onSave({ ot_rate: v });
+  };
   return (
     <div className="hr-pay-row">
       <div className="hr-name"><b>{p.name || p.email}</b></div>
-      <select className="inp" style={{ width: 110 }} value={payType} onChange={(e) => { setPayType(e.target.value); onSave("pay_type", e.target.value); }}>
+      <select className="inp" style={{ width: 110 }} value={payType} onChange={(e) => { setPayType(e.target.value); onSave({ pay_type: e.target.value }); }}>
         <option value="monthly">รายเดือน</option><option value="daily">รายวัน</option>
       </select>
       <span className="inp inp-unit" style={{ width: 130 }} title={payType === "daily" ? "ค่าแรงต่อวัน" : "เงินเดือนต่อเดือน"}><span className="unit-pre">฿</span>
-        <input type="number" min="0" value={basePay} onChange={(e) => setBasePay(e.target.value)} onBlur={(e) => saveNum("base_pay", e.target.value, p.base_pay)} /></span>
-      <span className="inp inp-unit" style={{ width: 130 }} title="เรต OT ต่อชั่วโมง"><span className="unit-pre">OT ฿</span>
-        <input type="number" min="0" value={otRate} onChange={(e) => setOtRate(e.target.value)} onBlur={(e) => saveNum("ot_rate", e.target.value, p.ot_rate)} /><span className="unit-suf">/ชม.</span></span>
-      <label className="hr-sso"><input type="checkbox" checked={sso} onChange={(e) => { setSso(e.target.checked); onSave("sso", e.target.checked); }} /> ประกันสังคม</label>
+        <input type="number" min="0" value={basePay} onChange={(e) => setBasePay(e.target.value)} onBlur={(e) => saveBase(e.target.value)} /></span>
+      <span className="inp inp-unit" style={{ width: 140 }} title="เรต OT วันทำงานปกติ (× 1.5)"><span className="unit-pre">OT ฿</span>
+        <input type="number" min="0" value={otRate} onChange={(e) => setOtRate(e.target.value)} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (Number(p.ot_rate) || 0)) onSave({ ot_rate: v }); }} /><span className="unit-suf">/ชม.</span></span>
+      <button className="btn-ghost sm" type="button" title={`คำนวณ: ${basePay}÷30÷8×1.5 = ${calcAutoOt(basePay)} บ./ชม.`} onClick={applyAutoOt} style={{ fontSize: 11, padding: "2px 6px" }}>÷30÷8×1.5</button>
+      <label className="hr-sso"><input type="checkbox" checked={sso} onChange={(e) => { setSso(e.target.checked); onSave({ sso: e.target.checked }); }} /> ประกันสังคม</label>
     </div>
   );
 }
@@ -657,8 +675,8 @@ function StaffTab({ staff, settings, holidays, positions, onReload, flash }) {
     try { await saveHrSettings(s); flash("บันทึกเวลาทำงานแล้ว ✓"); onReload(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e) + " (รัน 041_hr.sql + 039 แล้วหรือยัง?)", true); }
   }
-  async function setPattern(p, field, val) {
-    try { await updateHrProfile(p.id, { [field]: val }); onReload(); }
+  async function setPattern(p, fields) {
+    try { await updateHrProfile(p.id, fields); onReload(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function addHoliday() { if (!nh.day) return; try { await saveHoliday(nh.day, nh.name || "วันหยุด"); setNh({ day: "", name: "" }); onReload(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
@@ -684,7 +702,7 @@ function StaffTab({ staff, settings, holidays, positions, onReload, flash }) {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="sec-head"><div><div className="sec-title">ค่าจ้าง / เงินเดือน (ต่อคน)</div><div className="sec-sub">ตั้งฐานเงินเดือน (รายเดือน/รายวัน) · เรต OT ต่อชั่วโมง · ประกันสังคม 5% (เพดาน 17,500 = สูงสุด 875)</div></div></div>
         <div className="set-list">
-          {staff.map((p) => <PayRow key={p.id} p={p} onSave={(field, val) => setPattern(p, field, val)} />)}
+          {staff.map((p) => <PayRow key={p.id} p={p} onSave={(fields) => setPattern(p, fields)} />)}
         </div>
       </div>
 
