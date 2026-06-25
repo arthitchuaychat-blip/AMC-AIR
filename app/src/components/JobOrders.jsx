@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, createLinkedJob, listProfiles } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
@@ -43,14 +43,42 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   const [approveCtx, setApproveCtx] = React.useState(null); // { jo, v } → approval choice popup
   const [q, setQ] = React.useState("");
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
+  const [templates, setTemplates] = React.useState([]);
+  const [tplPick, setTplPick] = React.useState(false); // template picker modal open
 
   async function load() {
     setLoading(true);
-    try { const [j, c, t, q, dl, ps] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => [])]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); }
+    try { const [j, c, t, q, dl, ps, tpl] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => []), listJobTemplates().catch(() => [])]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); setTemplates(tpl || []); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+
+  // ---------- job templates (แม่แบบงาน) ----------
+  async function reloadTemplates() { try { setTemplates(await listJobTemplates()); } catch { /* ignore */ } }
+  function applyTemplate(t) {
+    setEd((e) => ({
+      ...e,
+      job_type: t.job_type || e.job_type,
+      title: e.title?.trim() ? e.title : (t.title || ""),
+      details: e.details?.trim() ? `${e.details}\n${t.details || ""}`.trim() : (t.details || ""),
+    }));
+    setTplPick(false);
+    flash(`ใช้แม่แบบ "${t.name}" แล้ว`);
+  }
+  async function saveAsTemplate() {
+    if (!ed) return;
+    if (!ed.details?.trim() && !ed.title?.trim()) return flash("ใส่ชื่องาน/รายละเอียดก่อนบันทึกเป็นแม่แบบ", true);
+    const name = await confirmDialog({ title: "บันทึกเป็นแม่แบบ", message: "ตั้งชื่อแม่แบบ (ดึงประเภทงาน/ชื่องาน/รายละเอียดปัจจุบันไปเก็บไว้ใช้ซ้ำ)", confirmText: "บันทึก", danger: false, prompt: { label: "ชื่อแม่แบบ", placeholder: "เช่น ล้างแอร์ 24000 BTU" } });
+    if (name === false || !String(name).trim()) return;
+    try { await saveJobTemplate({ name: String(name).trim(), job_type: ed.job_type, title: ed.title, details: ed.details }); await reloadTemplates(); flash("บันทึกแม่แบบแล้ว ✓"); }
+    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e) + " (รัน 070_job_templates.sql แล้วหรือยัง?)", true); }
+  }
+  async function removeTemplate(t) {
+    if (!await confirmDialog(`ลบแม่แบบ "${t.name}"?`)) return;
+    try { await deleteJobTemplate(t.id); await reloadTemplates(); flash("ลบแม่แบบแล้ว"); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+  }
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   // open focused on a specific job order (from the dashboard report link)
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setTeamF("all"); setTypeF("all"); setDateFrom(""); setDateTo(""); setQ(focus); setOpenTl(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
@@ -237,6 +265,12 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
           <p className="page-sub">ข้อมูลงาน · มอบหมายทีมช่าง · นัดวัน-เวลา</p></div></div>
         <div className="jo-edit-layout">
         <div className="card" style={{ maxWidth: 800, flex: "1 1 540px" }}>
+          {canEdit && (
+            <div className="jo-tpl-bar">
+              <button type="button" className="btn-ghost sm" onClick={() => setTplPick(true)}>📋 ใช้แม่แบบ{templates.length ? ` (${templates.length})` : ""}</button>
+              <button type="button" className="btn-ghost sm" onClick={saveAsTemplate}>💾 บันทึกเป็นแม่แบบ</button>
+            </div>
+          )}
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบงาน</span><input className="inp" value={ed.job_no} onChange={(e) => setF("job_no", e.target.value)} /></label>
             <label className="fld"><span>ประเภทงาน</span>
@@ -346,6 +380,31 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
         </div>
         <TeamSchedulePanel teamId={ed.assigned_team} team={teams.find((t) => t.id === ed.assigned_team)} jobs={list} edVisits={ed.visits} excludeJobNo={ed.job_no} onPick={pickSlot} />
         </div>
+        {tplPick && (
+          <div className="modal-overlay" onClick={() => setTplPick(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
+              <div className="modal-head"><div className="modal-title">📋 เลือกแม่แบบงาน</div><button className="drawer-close" onClick={() => setTplPick(false)}><UIcon name="x" size={20} /></button></div>
+              <div className="modal-body">
+                {templates.length === 0 ? <div className="empty sm">ยังไม่มีแม่แบบ — กรอกงานแล้วกด “บันทึกเป็นแม่แบบ” เพื่อสร้างอันแรก</div> : (
+                  <div className="tpl-list">
+                    {templates.map((t) => { const td = jobTypeDef(t.job_type); return (
+                      <div key={t.id} className="tpl-row">
+                        <button type="button" className="tpl-pick" onClick={() => applyTemplate(t)}>
+                          <span className="tpl-type" style={{ background: td[3] }}>{td[2]} {td[1]}</span>
+                          <span className="tpl-mid">
+                            <span className="tpl-name">{t.name}</span>
+                            {(t.title || t.details) && <span className="tpl-detail">{(t.details || t.title || "").replace(/\n/g, " · ").slice(0, 80)}</span>}
+                          </span>
+                        </button>
+                        {canEdit && <button type="button" className="btn-ghost sm danger" onClick={() => removeTemplate(t)}>ลบ</button>}
+                      </div>
+                    ); })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {toast && <Toast t={toast} />}
       </div>
     );

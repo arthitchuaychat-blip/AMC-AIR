@@ -1110,6 +1110,24 @@ export async function updateVisitStatus(visitId, jobNo, status, author) {
   return data;
 }
 
+// ---------- job order templates (มิ migration 070) ----------
+export async function listJobTemplates() {
+  const { data, error } = await supabase.from("job_order_templates").select("*").order("name");
+  if (error) throw error;
+  return data || [];
+}
+export async function saveJobTemplate(t) {
+  const uid = await _uid();
+  const { error } = await supabase.from("job_order_templates").insert({
+    name: t.name, job_type: t.job_type || "maintenance", title: t.title || null, details: t.details || null, created_by: uid,
+  });
+  if (error) throw error;
+}
+export async function deleteJobTemplate(id) {
+  const { error } = await supabase.from("job_order_templates").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteJobOrder(job_no, reason) {
   const [{ data: head }, { data: visits }] = await Promise.all([
     supabase.from("job_orders").select("*").eq("job_no", job_no).maybeSingle(),

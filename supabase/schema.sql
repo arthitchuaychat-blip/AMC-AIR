@@ -589,6 +589,23 @@ create table if not exists chat_messages (
 );
 -- (RLS policies + chat_is_member() helper + seed company room: see migration 037_team_chat.sql)
 
+-- job order templates (มิ migration 070) — reusable job patterns (ล้างแอร์/ติดตั้ง) to cut re-typing
+create table if not exists job_order_templates (
+  id          bigint generated always as identity primary key,
+  name        text not null,
+  job_type    text not null default 'maintenance',
+  title       text,
+  details     text,
+  created_by  uuid references auth.users(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+alter table job_order_templates enable row level security;
+drop policy if exists jot_read on job_order_templates;
+create policy jot_read on job_order_templates for select to authenticated using (true);
+drop policy if exists jot_write on job_order_templates;
+create policy jot_write on job_order_templates for all to authenticated
+  using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
+
 -- audit trail (มิ migration 067) — who deleted/cancelled which financial doc, when, why (+ snapshot)
 create table if not exists audit_logs (
   id          bigserial primary key,

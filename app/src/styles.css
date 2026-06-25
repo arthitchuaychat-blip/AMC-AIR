@@ -1098,6 +1098,16 @@ select.inp{cursor:pointer}
 .jo-datefilter .inp{border:none;padding:4px 4px;font-size:12.5px;width:128px;background:transparent}
 .jo-datefilter .jo-date-dash{color:var(--ink-3)}
 .jo-tech-filter{width:auto;min-width:140px;max-width:200px;flex:0 0 auto;font-size:12.5px;padding:5px 10px}
+/* job templates (แม่แบบงาน) */
+.jo-tpl-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px dashed var(--line-2)}
+.tpl-list{display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto}
+.tpl-row{display:flex;align-items:center;gap:8px}
+.tpl-pick{flex:1;display:flex;align-items:center;gap:10px;text-align:left;background:var(--surface-2);border:1px solid var(--line-2);border-radius:10px;padding:9px 11px;cursor:pointer;font-family:inherit;min-width:0}
+.tpl-pick:hover{border-color:var(--primary);background:#eef4fb}
+.tpl-type{flex:none;font-size:11px;font-weight:700;color:#fff;border-radius:6px;padding:3px 9px;white-space:nowrap}
+.tpl-mid{display:flex;flex-direction:column;gap:1px;min-width:0}
+.tpl-name{font-size:13.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tpl-detail{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hr-row-click{cursor:pointer}.hr-row-click:hover{background:var(--surface-2)}
 .hr-row-go{font-size:11px;color:var(--primary);font-weight:600;opacity:.7}
 .hr-detail-sum{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
