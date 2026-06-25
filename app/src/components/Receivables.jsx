@@ -1,6 +1,6 @@
 import React from "react";
 import { listInvoices } from "../lib/api";
-import { fmtBaht, round2 } from "../lib/format";
+import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
 import ChatCustomerLink from "./ChatCustomerLink";
 
@@ -91,6 +91,13 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
     return Object.values(m).sort((a, b) => b.total - a.total);
   }, [shown]);
 
+  function exportCsv() {
+    if (!shown.length) return flash("ไม่มีข้อมูลให้ส่งออก", true);
+    const headers = ["ลูกค้า", "เลขใบแจ้งหนี้", "ยอดค้างรับ(สุทธิ)", "วันครบกำหนด", "สถานะอายุหนี้", "เกินกำหนด(วัน)", "เบอร์โทร"];
+    const rows = shown.map((r) => [r.customerName, r.invoice_no, r.owed, r.due_date || "", BUCKET[r.bucket].label, r.days > 0 ? r.days : 0, r.phone || ""]);
+    downloadCsv(`เงินค้างรับ-${today}`, headers, rows);
+  }
+
   function InvoiceRow({ r, showBucket }) {
     const b = BUCKET[r.bucket];
     return (
@@ -126,6 +133,7 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
             <button className={"seg-btn" + (view === "aging" ? " on" : "")} onClick={() => setView("aging")}>ตามอายุหนี้</button>
             <button className={"seg-btn" + (view === "customer" ? " on" : "")} onClick={() => setView("customer")}>ตามลูกค้า</button>
           </div>
+          <button className="btn-ghost sm" onClick={exportCsv}>⬇ Export</button>
           <button className="btn-ghost sm" onClick={load}>🔄 รีเฟรช</button>
         </div>
       </div>

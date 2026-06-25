@@ -46,6 +46,19 @@ export const fmtDocDate = (s) => {
 // round to 2 decimals (money) — avoids accumulating rounding leftovers
 export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
+// download an array-of-rows as a CSV file. Leading BOM (﻿) so Excel opens Thai as UTF-8.
+// headers: string[]; rows: (string|number)[][]
+export function downloadCsv(filename, headers, rows) {
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const body = [headers, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + body], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = /\.csv$/i.test(filename) ? filename : filename + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // attachments — tell images apart from other files (pdf/doc/…) by URL extension
 export const isImageUrl = (u) => /\.(jpe?g|png|gif|webp|heic|heif|bmp|svg|avif)(\?|#|$)/i.test(u || "");
 export const fileExt = (u) => ((String(u || "").split(/[?#]/)[0].split(".").pop()) || "ไฟล์").toUpperCase().slice(0, 5);
