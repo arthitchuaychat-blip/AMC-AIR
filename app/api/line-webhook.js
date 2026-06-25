@@ -184,6 +184,25 @@ export default async function handler(req, res) {
         SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
       });
     }
+    if (params.get("autoreply") === "1") {
+      const cfg = await getAutoReplyCfg();
+      const th = new Date(Date.now() + 7 * 3600 * 1000);
+      return res.status(200).json({
+        hasConfig: !!cfg,
+        enabled: cfg ? !!cfg.enabled : null,
+        welcome_enabled: cfg ? !!cfg.welcome_enabled : null,
+        afterhours_enabled: cfg ? !!cfg.afterhours_enabled : null,
+        afterhours_text_len: (cfg?.afterhours_text || "").length,
+        open_days: cfg?.open_days ?? null,
+        open_time: cfg?.open_time ?? null,
+        close_time: cfg?.close_time ?? null,
+        cooldown_min: cfg?.cooldown_min ?? null,
+        thai_time: th.toISOString().slice(11, 16),
+        thai_day: th.getUTCDay(),
+        isOpenNow: cfg ? isOpenNow(cfg) : null,
+        wouldSendAfterHours: cfg ? (!!cfg.enabled && !!cfg.afterhours_enabled && (cfg.afterhours_text || "").trim().length > 0 && !isOpenNow(cfg)) : null,
+      });
+    }
     if (params.get("dbcheck") === "1") {
       const out = {};
       for (const t of ["line_contacts", "line_messages"]) {
