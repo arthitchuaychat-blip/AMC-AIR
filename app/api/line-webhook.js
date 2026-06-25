@@ -79,15 +79,16 @@ async function getAutoReplyCfg() {
     return (r.ok ? (await r.json())[0]?.value : null) || null;
   } catch { return null; }
 }
-// reply via the event's replyToken (free, doesn't use push quota). returns true if LINE accepted it.
+// reply via the event's replyToken (free, doesn't use push quota). returns {ok, status, body}.
 async function lineReply(replyToken, text) {
   try {
     const r = await tfetch("https://api.line.me/v2/bot/message/reply", {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN()}` },
       body: JSON.stringify({ replyToken, messages: [{ type: "text", text }] }),
     });
-    return r.ok;
-  } catch (_) { return false; }
+    const body = await r.text();
+    return { ok: r.ok, status: r.status, body };
+  } catch (e) { return { ok: false, status: 0, body: String(e?.message || e) }; }
 }
 // push fallback (used when the free reply fails, e.g. token expired)
 async function linePush(to, text) {
@@ -96,15 +97,19 @@ async function linePush(to, text) {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN()}` },
       body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
     });
-    return r.ok;
-  } catch (_) { return false; }
+    const body = await r.text();
+    return { ok: r.ok, status: r.status, body };
+  } catch (e) { return { ok: false, status: 0, body: String(e?.message || e) }; }
 }
 // send a reply (try free reply token, fall back to push) — only record/stamp cooldown if it actually sent
 async function sendAuto(replyToken, convId, text) {
-  let ok = await lineReply(replyToken, text);
-  if (!ok) ok = await linePush(convId, text);
-  if (ok) await recordAutoReply(convId, text);   // don't set cooldown on a failed send (was blocking retries)
-  return ok;
+  const replyRes = await lineReply(replyToken, text);
+  if (replyRes.ok) { await recordAutoReply(convId, text); return true; }
+  const pushRes = await linePush(convId, text);
+  if (pushRes.ok) { await recordAutoReply(convId, text); return true; }
+  // log failure so ?arsend probe can surface it
+  console.error("autoReply failed — reply:", replyRes.status, replyRes.body, "| push:", pushRes.status, pushRes.body);
+  return false;
 }
 // is "now" within business hours? (computed in Thai time, UTC+7)
 function isOpenNow(cfg) {
@@ -199,6 +204,16 @@ export default async function handler(req, res) {
         SUPABASE_URL: !!process.env.SUPABASE_URL,
         SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
       });
+    }
+    // ?arsend=<lineUserId> — actually tries to push the after-hours text to that user and shows LINE's response
+    if (params.get("arsend")) {
+      const uid = params.get("arsend");
+      const cfg = await getAutoReplyCfg();
+      const text = (cfg?.afterhours_text || "").trim() || "(ไม่มีข้อความนอกเวลา)";
+      const pushRes = await linePush(uid, text);
+      const r2 = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(uid)}&select=last_autoreply_at`, { headers: sbH() });
+      const contact = r2.ok ? (await r2.json())[0] : null;
+      return res.status(200).json({ uid, pushOk: pushRes.ok, pushStatus: pushRes.status, pushBody: pushRes.body, textLen: text.length, tokenSet: !!TOKEN(), last_autoreply_at: contact?.last_autoreply_at });
     }
     if (params.get("autoreply") === "1") {
       const cfg = await getAutoReplyCfg();
