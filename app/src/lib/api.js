@@ -1743,7 +1743,7 @@ async function callLineSend(to, payload) {
   }
   return res.json();
 }
-export const sendLineMessage = (to, text) => callLineSend(to, { text });
+export const sendLineMessage = (to, text, opts) => callLineSend(to, { text, ...(opts || {}) });
 export const sendLineImage = (to, imageUrl) => callLineSend(to, { imageUrl });
 export const sendLineFile = (to, fileUrl, fileName) => callLineSend(to, { fileUrl, fileName });
 export const sendLineSticker = (to, packageId, stickerId) => callLineSend(to, { packageId, stickerId });

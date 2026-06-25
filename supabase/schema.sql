@@ -516,10 +516,13 @@ create table if not exists line_messages (
   file_url        text,
   file_name       text,
   line_message_id text,
+  quoted_message_id text,   -- this message replies to (quotes) the message with this line_message_id (มิ 069)
+  quote_token     text,     -- this message's own LINE quote token (used to quote-reply it) (มิ 069)
   sent_by         uuid references auth.users(id),
   created_at      timestamptz not null default now()
 );
 create index if not exists idx_line_msg_user on line_messages(line_user_id, created_at);
+create index if not exists idx_line_msg_lineid on line_messages(line_message_id);
 create or replace function line_bump_unread(p_uid text, p_msg text)
 returns void language sql security definer set search_path = public as $$
   update line_contacts set unread = unread + 1, last_message = p_msg, last_message_at = now()

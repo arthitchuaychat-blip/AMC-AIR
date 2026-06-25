@@ -166,6 +166,8 @@ export default async function handler(req, res) {
       if (ev.type === "message") {
         const m = ev.message;
         const row = { line_user_id: convId, direction: "in", type: m.type, line_message_id: m.id };
+        if (m.quotedMessageId) row.quoted_message_id = m.quotedMessageId; // customer replied to a specific message
+        if (m.quoteToken) row.quote_token = m.quoteToken;                 // lets us quote-reply this message later
         if (m.type === "text") row.text = m.text;
         else if (m.type === "image") { row.image_url = await saveImage(m.id); row.text = "[รูปภาพ]"; }
         else if (m.type === "sticker") { row.image_url = m.stickerId ? `https://stickershop.line-scdn.net/stickershop/v1/sticker/${m.stickerId}/android/sticker.png` : null; row.text = "[สติกเกอร์]"; }

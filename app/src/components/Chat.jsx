@@ -47,6 +47,15 @@ function linkify(text) {
   return String(text).split(/(https?:\/\/[^\s]+)/g).map((p, i) =>
     /^https?:\/\//.test(p) ? <a key={i} href={p} target="_blank" rel="noreferrer" className="chat-link">{p}</a> : p);
 }
+// short one-line preview of a message (for quote boxes + reply bar)
+function msgSnippet(m) {
+  if (!m) return "";
+  if (m.type === "sticker") return "[สติกเกอร์]";
+  if (m.type === "image" || m.image_url) return "[รูปภาพ]";
+  if (m.type === "file" || m.file_url) return m.file_name ? `[ไฟล์] ${m.file_name}` : "[ไฟล์]";
+  const t = (m.text || "").replace(/\s+/g, " ").trim();
+  return t.length > 80 ? t.slice(0, 80) + "…" : t;
+}
 // best-effort download (falls back to opening in a new tab if blocked by CORS)
 async function dlFile(url, name) {
   try {
@@ -100,6 +109,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [stageF, setStageF] = React.useState("all");     // list filter by stage
   const [mineOnly, setMineOnly] = React.useState(false); // list filter: assigned to me
   const [myQr, setMyQr] = React.useState(false);         // show Burmese quick-reply chips
+  const [replyTo, setReplyTo] = React.useState(null);    // message being replied-to (quote)
   const [channel, setChannel] = React.useState("line"); // "line" | "fb" — unified inbox switch
   const isFb = channel === "fb";
   // channel-aware data calls (FB returns the same shape, psid aliased to line_user_id)
@@ -215,7 +225,11 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function send() {
     const t = text.trim(); if (!t || !sel || sending) return;
     setSending(true);
-    try { await chSendText(sel, t); setText(""); if (isFb) setMsgs(await chListMessages(sel)); }   // LINE appends via realtime; FB refresh
+    try {
+      if (isFb) { await sendFbMessage(sel, t); setMsgs(await chListMessages(sel)); }            // FB: no quote-reply; refresh
+      else { await sendLineMessage(sel, t, replyTo ? { quoteToken: replyTo.quote_token, quotedMessageId: replyTo.line_message_id } : undefined); } // LINE appends via realtime
+      setText(""); setReplyTo(null);
+    }
     catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setSending(false);
   }
@@ -292,6 +306,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function delQr(id) { if (!await confirmDialog("ลบข้อความนี้?")) return; try { await deleteQuickReply(id); await loadQr(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
   const selContact = contacts.find((c) => c.line_user_id === sel);
+  // resolve a quoted message by its LINE id (to render the referenced message inside a reply)
+  const byLineId = React.useMemo(() => { const m = {}; msgs.forEach((x) => { if (x.line_message_id) m[x.line_message_id] = x; }); return m; }, [msgs]);
   const shown = contacts.filter((c) =>
     (stageF === "all" || (c.stage || "new") === stageF)
     && (!mineOnly || c.assigned_to === myId)
@@ -372,6 +388,17 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       <div className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "") + (m.type === "sticker" && m.image_url ? " sticker" : "")}
                         style={coworker ? { background: cwColor, borderColor: cwColor } : undefined}>
                         {coworker && <span className="chat-sender">{senderName}</span>}
+                        {m.quoted_message_id && (() => {
+                          const orig = byLineId[m.quoted_message_id];
+                          return (
+                            <div className="chat-quote">
+                              <span className="chat-quote-who">{orig ? (orig.direction === "out" ? "ทีมงาน" : (selContact?.display_name || "ลูกค้า")) : "ข้อความที่อ้างอิง"}</span>
+                              <span className="chat-quote-text">{orig ? msgSnippet(orig) : "(ข้อความเก่า)"}</span>
+                            </div>
+                          );
+                        })()}
+                        {canSend && !isFb && m.line_message_id &&
+                          <button type="button" className="chat-reply-btn" title="ตอบกลับข้อความนี้" onClick={() => setReplyTo(m)}>↩</button>}
                         {m.type === "sticker" && m.image_url ? (
                           <img className="chat-sticker" src={m.image_url} alt="สติกเกอร์" loading="lazy" />
                         ) : m.image_url ? (
@@ -447,8 +474,18 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       </div>
                     </div>
                   )}
+                  {replyTo && (
+                    <div className="chat-reply-bar">
+                      <span className="chat-reply-icon">↩</span>
+                      <div className="chat-reply-info">
+                        <b>ตอบกลับ {replyTo.direction === "out" ? "ข้อความของทีม" : (selContact?.display_name || "ลูกค้า")}</b>
+                        <span>{msgSnippet(replyTo)}</span>
+                      </div>
+                      <button className="chat-reply-cancel" title="ยกเลิกการตอบกลับ" onClick={() => setReplyTo(null)}>✕</button>
+                    </div>
+                  )}
                   <div className="chat-compose">
-                    <textarea className="inp chat-input" rows={4} value={text} placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)"}
+                    <textarea className="inp chat-input" rows={4} value={text} placeholder={sending ? "กำลังส่ง…" : (replyTo ? "พิมพ์คำตอบ…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)")}
                       onChange={(e) => setText(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
                     <button className="btn-primary" disabled={sending || !text.trim()} onClick={send}>{sending ? "…" : "ส่ง"}</button>

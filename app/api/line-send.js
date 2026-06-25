@@ -26,33 +26,41 @@ export default async function handler(req, res) {
   const prof = (pr.ok ? await pr.json() : [])[0];
   if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
 
-  const { to, text, imageUrl, fileUrl, fileName, packageId, stickerId } = await readJson(req);
+  const { to, text, imageUrl, fileUrl, fileName, packageId, stickerId, quoteToken, quotedMessageId } = await readJson(req);
   if (!to || (!text?.trim() && !imageUrl && !fileUrl && !stickerId)) return res.status(400).json({ error: "missing to/text" });
 
   // LINE bots can't push a raw file → send the file as a clickable link in a text message
   const fname = fileName || "ไฟล์เอกสาร";
   const stickerImg = stickerId ? `https://stickershop.line-scdn.net/stickershop/v1/sticker/${stickerId}/android/sticker.png` : null;
+  // quoteToken makes the reply appear as a quote on the customer's LINE (text messages only)
+  const qt = quoteToken ? { quoteToken: String(quoteToken) } : {};
   const messages = stickerId
-    ? [{ type: "sticker", packageId: String(packageId), stickerId: String(stickerId) }]
+    ? [{ type: "sticker", packageId: String(packageId), stickerId: String(stickerId), ...qt }]
     : imageUrl
       ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }]
       : fileUrl
-        ? [{ type: "text", text: `📄 ${fname}\n${fileUrl}` }]
-        : [{ type: "text", text }];
+        ? [{ type: "text", text: `📄 ${fname}\n${fileUrl}`, ...qt }]
+        : [{ type: "text", text, ...qt }];
   const r = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
     body: JSON.stringify({ to, messages }),
   });
   if (!r.ok) return res.status(502).json({ error: "line: " + (await r.text().catch(() => r.status)) });
+  // capture the sent message's LINE id + its own quote token (so it can be quoted/replied later)
+  const sent = await r.json().catch(() => ({}));
+  const sentMsg = (sent.sentMessages || [])[0] || {};
 
+  const base = { line_user_id: to, direction: "out", sent_by: user.id,
+    line_message_id: sentMsg.id || null, quote_token: sentMsg.quoteToken || null,
+    quoted_message_id: quotedMessageId || null };
   const row = stickerId
-    ? { line_user_id: to, direction: "out", type: "sticker", image_url: stickerImg, text: "[สติกเกอร์]", sent_by: user.id }
+    ? { ...base, type: "sticker", image_url: stickerImg, text: "[สติกเกอร์]" }
     : imageUrl
-      ? { line_user_id: to, direction: "out", type: "image", image_url: imageUrl, text: "[รูปภาพ]", sent_by: user.id }
+      ? { ...base, type: "image", image_url: imageUrl, text: "[รูปภาพ]" }
       : fileUrl
-        ? { line_user_id: to, direction: "out", type: "file", file_url: fileUrl, file_name: fname, text: `[ไฟล์] ${fname}`, sent_by: user.id }
-        : { line_user_id: to, direction: "out", type: "text", text, sent_by: user.id };
+        ? { ...base, type: "file", file_url: fileUrl, file_name: fname, text: `[ไฟล์] ${fname}` }
+        : { ...base, type: "text", text };
   const last = stickerId ? "[สติกเกอร์]" : imageUrl ? "[รูปภาพ]" : fileUrl ? `[ไฟล์] ${fname}` : text;
   await fetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
   await fetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(to)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ last_message: last, last_message_at: new Date().toISOString(), unread: 0 }) });
