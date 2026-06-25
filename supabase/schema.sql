@@ -590,6 +590,19 @@ create table if not exists chat_messages (
 );
 -- (RLS policies + chat_is_member() helper + seed company room: see migration 037_team_chat.sql)
 
+-- website client logos (มิ migration 072) — "ลูกค้าของเรา" managed individually from the back office
+create table if not exists web_clients (
+  id bigint generated always as identity primary key,
+  name text not null, logo_url text, sort int not null default 0,
+  active boolean not null default true, created_at timestamptz not null default now()
+);
+alter table web_clients enable row level security;
+grant select on web_clients to anon;
+drop policy if exists wc_read on web_clients;
+create policy wc_read on web_clients for select to anon, authenticated using (active = true or my_role() in ('admin','sales','exec','finance'));
+drop policy if exists wc_write on web_clients;
+create policy wc_write on web_clients for all to authenticated using (my_role() in ('admin','sales','exec')) with check (my_role() in ('admin','sales','exec'));
+
 -- public website (มิ migration 071) — catalog (safe view) + order requests wired to the back office
 create or replace view web_products as
   select code, name_th, name_en, kind, brand, btu, ac_type, unit, sale_price, description, photo_url

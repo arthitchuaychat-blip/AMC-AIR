@@ -1222,6 +1222,20 @@ select.inp{cursor:pointer}
 .wo-acts{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:11px}
 .wo-st-btn{font-size:11.5px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--ink-2);border-radius:8px;padding:4px 10px;cursor:pointer}
 .wo-st-btn:hover{border-color:var(--primary)}
+/* web client logos manager */
+.wc-add{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.wc-add .inp{flex:1;min-width:160px}
+.wc-drop{flex:none;width:90px;height:64px;border:1.5px dashed var(--line);border-radius:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--surface-2);overflow:hidden;font-size:12px;color:var(--ink-3);text-align:center;padding:6px}
+.wc-drop:hover{border-color:var(--primary)}
+.wc-drop img{max-width:100%;max-height:100%;object-fit:contain}
+.wc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.wc-cell{border:1px solid var(--line-2);border-radius:12px;background:#fff;padding:12px;display:flex;flex-direction:column;align-items:center;gap:7px}
+.wc-cell.off{opacity:.45}
+.wc-logo{width:100%;height:70px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:8px;overflow:hidden}
+.wc-logo img{max-width:90%;max-height:80%;object-fit:contain}
+.wc-logo span{font-size:12px;font-weight:700;color:var(--ink-3);text-align:center;padding:4px}
+.wc-name{font-size:12.5px;font-weight:600;color:var(--ink);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.wc-acts{display:flex;gap:6px}
 .tc-notify{font-size:12.5px;font-weight:700;border-radius:9px;padding:6px 11px;border:1px solid var(--line)}
 .tc-notify.on{color:#0a6b3d;background:#dcf5e8;border-color:#b7e6cb}
 .tc-notify.off{color:#9a3412;background:#ffedd5;border-color:#fed7aa}

@@ -229,6 +229,11 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 /* clients logo wall */
 .clients-wrap{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:clamp(14px,3vw,28px);box-shadow:var(--shadow-sm);max-width:1000px;margin:0 auto}
 .clients-wrap img{width:100%;height:auto;border-radius:10px;display:block}
+.logo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px}
+.logo-cell{aspect-ratio:3/2;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px}
+.logo-cell img{max-width:100%;max-height:100%;object-fit:contain;filter:grayscale(1);opacity:.72;transition:.2s}
+.logo-cell:hover img{filter:none;opacity:1}
+.logo-cell span{font-size:13px;font-weight:700;color:var(--ink-2);text-align:center}
 /* floating call/LINE buttons */
 .fab{position:fixed;right:18px;bottom:18px;z-index:80;display:flex;flex-direction:column;gap:12px}
 .fab a{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.25);transition:.2s;position:relative}
@@ -389,7 +394,7 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
   <div class="wrap">
     <div class="sec-head center"><span class="eyebrow">ลูกค้าของเรา</span><h2 class="title">องค์กรที่ไว้วางใจเรา</h2>
       <p class="lead">หน่วยงานราชการ โรงพยาบาล และองค์กรชั้นนำ เลือกใช้บริการ AMC AIR</p></div>
-    <div class="clients-wrap"><img src="clients/our-clients.png" alt="ลูกค้าของ AMC AIR — หน่วยงานและองค์กรชั้นนำ" loading="lazy" /></div>
+    <div class="clients-wrap" id="clientsWrap"><img src="clients/our-clients.png" alt="ลูกค้าของ AMC AIR — หน่วยงานและองค์กรชั้นนำ" loading="lazy" /></div>
   </div>
 </section>
 
@@ -617,8 +622,21 @@ async function submitLead(e) {
   return false;
 }
 
+// ---------- clients (individual logos from back office; falls back to the composite image) ----------
+async function loadClients() {
+  if (!hasSb) return; // keep the composite fallback image
+  try {
+    const { data, error } = await sb.from("web_clients").select("name,logo_url").eq("active", true).order("sort");
+    if (error) throw error;
+    if (data && data.length) {
+      $("#clientsWrap").innerHTML = `<div class="logo-grid">${data.map((c) => `<div class="logo-cell" title="${(c.name || "").replace(/"/g, "&quot;")}">${c.logo_url ? `<img src="${c.logo_url}" alt="${(c.name || "").replace(/"/g, "&quot;")}" loading="lazy">` : `<span>${c.name || ""}</span>`}</div>`).join("")}</div>`;
+    }
+  } catch (e) { /* keep fallback */ }
+}
+
 renderCart();
 loadProducts();
+loadClients();
 </script>
 </body>
 </html>

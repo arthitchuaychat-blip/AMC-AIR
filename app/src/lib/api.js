@@ -1140,6 +1140,29 @@ export async function setWebOrderStatus(id, status) {
   const { error } = await supabase.from("web_orders").update({ status }).eq("id", id);
   if (error) throw error;
 }
+// ---------- website client logos (มิ migration 072) ----------
+export async function listWebClients() {
+  const { data, error } = await supabase.from("web_clients").select("*").order("sort").order("id");
+  if (error) throw error;
+  return data || [];
+}
+export async function saveWebClient(c) {
+  const row = { name: c.name, logo_url: c.logo_url || null, sort: Number(c.sort) || 0, active: c.active !== false };
+  if (c.id) { const { error } = await supabase.from("web_clients").update(row).eq("id", c.id); if (error) throw error; }
+  else { const { error } = await supabase.from("web_clients").insert(row); if (error) throw error; }
+}
+export async function deleteWebClient(id) {
+  const { error } = await supabase.from("web_clients").delete().eq("id", id);
+  if (error) throw error;
+}
+// upload a logo as-is (NO downscale → keeps PNG transparency) to the public photos bucket
+export async function uploadWebLogo(file) {
+  const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `web-clients/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "image/png" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
 
 export async function deleteJobOrder(job_no, reason) {
   const [{ data: head }, { data: visits }] = await Promise.all([
