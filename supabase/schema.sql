@@ -379,9 +379,9 @@ create policy cat_read  on categories for select to authenticated using (true);
 create policy team_read on teams      for select to authenticated using (true);
 create policy mat_read  on materials  for select to authenticated using (true);
 
--- แก้ไขวัสดุ: เฉพาะธุรการ (admin)
+-- แก้ไขวัสดุ/สินค้า: ธุรการ/ผู้บริหาร/บัญชี/ธุรการวัสดุ/ฝ่ายขาย (มิ migration 068 เพิ่ม sales)
 create policy mat_write on materials for all to authenticated
-  using (my_role() in ('admin','exec','finance','stock')) with check (my_role() in ('admin','exec','finance','stock'));
+  using (my_role() in ('admin','exec','finance','stock','sales')) with check (my_role() in ('admin','exec','finance','stock','sales'));
 
 -- โปรไฟล์: อ่านได้ทุกคน · แก้ของตัวเอง · ผู้บริหาร/ธุรการจัดการผู้ใช้ได้ทั้งหมด
 create policy prof_read on profiles for select to authenticated
