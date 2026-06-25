@@ -99,11 +99,12 @@ async function linePush(to, text) {
     return r.ok;
   } catch (_) { return false; }
 }
-// send a reply (try free reply token, fall back to push) then record it
+// send a reply (try free reply token, fall back to push) — only record/stamp cooldown if it actually sent
 async function sendAuto(replyToken, convId, text) {
-  const ok = await lineReply(replyToken, text);
-  if (!ok) await linePush(convId, text);
-  await recordAutoReply(convId, text);
+  let ok = await lineReply(replyToken, text);
+  if (!ok) ok = await linePush(convId, text);
+  if (ok) await recordAutoReply(convId, text);   // don't set cooldown on a failed send (was blocking retries)
+  return ok;
 }
 // is "now" within business hours? (computed in Thai time, UTC+7)
 function isOpenNow(cfg) {
