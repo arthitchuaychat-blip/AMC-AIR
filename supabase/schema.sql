@@ -505,6 +505,7 @@ create table if not exists line_contacts (
   unread          int not null default 0,
   stage           text default 'new',                       -- CRM phase: new/talking/interested/followup/won/closed/lost
   assigned_to     uuid references auth.users(id) on delete set null,  -- staff responsible
+  last_autoreply_at timestamptz,                            -- last auto-reply sent (cooldown) (มิ 073)
   created_at      timestamptz not null default now()
 );
 create table if not exists line_messages (

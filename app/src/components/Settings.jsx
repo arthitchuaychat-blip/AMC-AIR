@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -422,6 +422,70 @@ function AuditCard({ flash }) {
   );
 }
 
+// LINE auto-reply: welcome new contacts + after-hours message (rule-based, no AI)
+const AR_DEFAULT = {
+  enabled: false,
+  welcome_enabled: true,
+  welcome_text: "สวัสดีครับ 🙏 ขอบคุณที่ติดต่อ AMC AIR\nสนใจบริการ ติดตั้ง / ล้าง / ซ่อมแอร์ แจ้งรายละเอียดหรือฝากเบอร์ไว้ได้เลย เดี๋ยวทีมงานติดต่อกลับโดยเร็วครับ",
+  afterhours_enabled: true,
+  afterhours_text: "ขณะนี้อยู่นอกเวลาทำการครับ 🙏 ทีมงานจะตอบกลับในเวลาทำการ (จ–ส 8:00–18:00)\nหากเร่งด่วนโทร 099-262-9090 ได้เลยครับ",
+  open_days: [1, 2, 3, 4, 5, 6],
+  open_time: "08:00",
+  close_time: "18:00",
+  cooldown_min: 120,
+};
+const DOW = [["อา", 0], ["จ", 1], ["อ", 2], ["พ", 3], ["พฤ", 4], ["ศ", 5], ["ส", 6]];
+
+function AutoReplyCard({ flash }) {
+  const [c, setC] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+  React.useEffect(() => { getAutoReply().then((v) => setC({ ...AR_DEFAULT, ...(v || {}) })).catch(() => setC({ ...AR_DEFAULT })); }, []);
+  const set = (k, v) => setC((s) => ({ ...s, [k]: v }));
+  const toggleDay = (d) => setC((s) => { const days = s.open_days.includes(d) ? s.open_days.filter((x) => x !== d) : [...s.open_days, d].sort(); return { ...s, open_days: days }; });
+  async function save() {
+    setSaving(true);
+    try { await saveAutoReply(c); flash("บันทึกการตอบอัตโนมัติแล้ว ✓"); }
+    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e) + " (รัน 073_line_autoreply.sql แล้วหรือยัง?)", true); }
+    setSaving(false);
+  }
+  if (!c) return null;
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="sec-head">
+        <div><div className="sec-title">ตอบแชต LINE อัตโนมัติ</div>
+          <div className="sec-sub">ทักทายลูกค้าที่ทักครั้งแรก + ตอบนอกเวลาทำการ (ไม่ใช้ AI · ไม่มีค่าใช้จ่าย)</div></div>
+        <label className="ar-switch"><input type="checkbox" checked={!!c.enabled} onChange={(e) => set("enabled", e.target.checked)} /> เปิดใช้งาน</label>
+      </div>
+      <div style={{ opacity: c.enabled ? 1 : 0.5, pointerEvents: c.enabled ? "auto" : "none" }}>
+        <div className="fld" style={{ marginBottom: 12 }}>
+          <label className="ar-row"><input type="checkbox" checked={!!c.welcome_enabled} onChange={(e) => set("welcome_enabled", e.target.checked)} /> <b>ข้อความทักทาย</b> (เมื่อลูกค้าทักครั้งแรก)</label>
+          <textarea className="inp" rows={3} value={c.welcome_text} onChange={(e) => set("welcome_text", e.target.value)} />
+        </div>
+        <div className="fld">
+          <label className="ar-row"><input type="checkbox" checked={!!c.afterhours_enabled} onChange={(e) => set("afterhours_enabled", e.target.checked)} /> <b>ข้อความนอกเวลาทำการ</b></label>
+          <textarea className="inp" rows={3} value={c.afterhours_text} onChange={(e) => set("afterhours_text", e.target.value)} />
+        </div>
+        <div className="ar-hours">
+          <span>วันทำการ:</span>
+          {DOW.map(([l, d]) => <button key={d} type="button" className={"ar-day" + (c.open_days.includes(d) ? " on" : "")} onClick={() => toggleDay(d)}>{l}</button>)}
+        </div>
+        <div className="ar-hours">
+          <span>เวลา:</span>
+          <input className="inp" type="time" value={c.open_time} onChange={(e) => set("open_time", e.target.value)} style={{ width: "auto" }} />
+          <span>ถึง</span>
+          <input className="inp" type="time" value={c.close_time} onChange={(e) => set("close_time", e.target.value)} style={{ width: "auto" }} />
+          <span style={{ marginLeft: 12 }}>ตอบนอกเวลาซ้ำได้ทุก</span>
+          <input className="inp" type="number" min="0" value={c.cooldown_min} onChange={(e) => set("cooldown_min", Number(e.target.value) || 0)} style={{ width: 70 }} />
+          <span>นาที</span>
+        </div>
+      </div>
+      <div style={{ marginTop: 14 }}>
+        <button className="btn-primary sm" disabled={saving} onClick={save}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> บันทึก</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings({ role }) {
   const [teams, setTeams] = React.useState([]);
   const [profiles, setProfiles] = React.useState([]);
@@ -510,6 +574,7 @@ export default function Settings({ role }) {
         {can(role, "settings", "edit") && <PermissionsCard flash={flash} />}
         {can(role, "settings", "edit") && <AuditCard flash={flash} />}
         {can(role, "settings", "edit") && <NotifyCard flash={flash} />}
+        {can(role, "settings", "edit") && <AutoReplyCard flash={flash} />}
         {can(role, "settings", "edit") && <ChatGroupsCard flash={flash} />}
         {can(role, "settings", "edit") && <FlowAccountCard />}
         <div className="damage-layout" style={{ marginBottom: 16 }}>

@@ -48,11 +48,12 @@ async function resolveName(src) {
 const isPlaceholder = (n) => !n || n === "LINE User" || n === "👥 กลุ่ม LINE" || n === "👥 แชตกลุ่ม";
 
 // create the contact if new; if it already exists but still has a placeholder name, refresh it
+// returns true if this contact was newly created (i.e. their first-ever message)
 async function ensureContact(convId, src) {
   const r = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=display_name`, { headers: sbH() });
   const arr = r.ok ? await r.json() : [];
   const exists = Array.isArray(arr) && arr.length;
-  if (exists && !isPlaceholder(arr[0].display_name)) return; // already has a real name → no LINE API call needed
+  if (exists && !isPlaceholder(arr[0].display_name)) return false; // already has a real name → no LINE API call needed
   const { name, pic, fallback } = await resolveName(src);
   if (exists) {
     if (name) {
@@ -62,12 +63,67 @@ async function ensureContact(convId, src) {
         method: "PATCH", headers: sbH(), body: JSON.stringify(patch),
       });
     }
-    return;
+    return false;
   }
   await tfetch(`${SB()}/rest/v1/line_contacts`, {
     method: "POST", headers: { ...sbH(), Prefer: "resolution=ignore-duplicates" },
     body: JSON.stringify({ line_user_id: convId, display_name: name || fallback, picture_url: pic }),
   });
+  return true;
+}
+
+// ---------- auto-reply (welcome / after-hours) — rule-based, no AI ----------
+async function getAutoReplyCfg() {
+  try {
+    const r = await tfetch(`${SB()}/rest/v1/app_config?key=eq.autoreply&select=value`, { headers: sbH() });
+    return (r.ok ? (await r.json())[0]?.value : null) || null;
+  } catch { return null; }
+}
+// reply via the event's replyToken (free, doesn't use push quota)
+async function lineReply(replyToken, text) {
+  try {
+    await tfetch("https://api.line.me/v2/bot/message/reply", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN()}` },
+      body: JSON.stringify({ replyToken, messages: [{ type: "text", text }] }),
+    });
+  } catch (_) { /* ignore */ }
+}
+// is "now" within business hours? (computed in Thai time, UTC+7)
+function isOpenNow(cfg) {
+  const th = new Date(Date.now() + 7 * 3600 * 1000);
+  const day = th.getUTCDay(); // 0=Sun … 6=Sat
+  const mins = th.getUTCHours() * 60 + th.getUTCMinutes();
+  const days = Array.isArray(cfg.open_days) && cfg.open_days.length ? cfg.open_days : [1, 2, 3, 4, 5, 6];
+  if (!days.includes(day)) return false;
+  const toMin = (s) => { const p = String(s || "").split(":"); return (Number(p[0]) || 0) * 60 + (Number(p[1]) || 0); };
+  return mins >= toMin(cfg.open_time || "08:00") && mins < toMin(cfg.close_time || "18:00");
+}
+// store the auto-reply as an outbound message + stamp last_autoreply_at (for cooldown)
+async function recordAutoReply(convId, text) {
+  await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ line_user_id: convId, direction: "out", type: "text", text, sent_by: null }) });
+  await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ last_autoreply_at: new Date().toISOString() }) });
+}
+async function autoReply(replyToken, convId, isNew, isUser) {
+  try {
+    if (!replyToken || !isUser) return;        // only 1-on-1 user chats
+    const cfg = await getAutoReplyCfg();
+    if (!cfg || !cfg.enabled) return;
+    // 1) welcome a brand-new contact (their first message)
+    if (isNew && cfg.welcome_enabled && (cfg.welcome_text || "").trim()) {
+      await lineReply(replyToken, cfg.welcome_text);
+      await recordAutoReply(convId, cfg.welcome_text);
+      return;                                   // don't also send after-hours on the first message
+    }
+    // 2) after-hours auto-reply (with cooldown so we don't reply to every message)
+    if (cfg.afterhours_enabled && (cfg.afterhours_text || "").trim() && !isOpenNow(cfg)) {
+      const cd = Number(cfg.cooldown_min) || 120;
+      const r = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=last_autoreply_at`, { headers: sbH() });
+      const last = r.ok ? (await r.json())[0]?.last_autoreply_at : null;
+      if (last && (Date.now() - new Date(last).getTime()) < cd * 60000) return; // too soon since last auto-reply
+      await lineReply(replyToken, cfg.afterhours_text);
+      await recordAutoReply(convId, cfg.afterhours_text);
+    }
+  } catch (_) { /* never break the webhook */ }
 }
 
 // download a LINE message's binary content and store it in the photos bucket; returns the public URL
@@ -162,7 +218,7 @@ export default async function handler(req, res) {
       const src = ev.source || {};
       const convId = convOf(src);
       if (!convId) continue;
-      await ensureContact(convId, src);
+      const isNewContact = await ensureContact(convId, src);
       if (ev.type === "message") {
         const m = ev.message;
         const row = { line_user_id: convId, direction: "in", type: m.type, line_message_id: m.id };
@@ -179,6 +235,7 @@ export default async function handler(req, res) {
         await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
         await tfetch(`${SB()}/rest/v1/rpc/line_bump_unread`, { method: "POST", headers: sbH(), body: JSON.stringify({ p_uid: convId, p_msg: row.text || "[ข้อความ]" }) });
         await notifyCustomerChat("💬 ข้อความใหม่จากลูกค้า (LINE)", row.text || "[ข้อความ]", convId);
+        await autoReply(ev.replyToken, convId, isNewContact, src.type === "user");
       }
     }
   } catch (e) {

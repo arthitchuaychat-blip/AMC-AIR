@@ -1444,6 +1444,16 @@ export async function getNotifySettings() {
   if (error) throw error;
   return (data?.value && typeof data.value === "object") ? data.value : null;
 }
+// LINE auto-reply config (welcome + after-hours), stored in app_config. null if unset.
+export async function getAutoReply() {
+  const { data, error } = await supabase.from("app_config").select("value").eq("key", "autoreply").maybeSingle();
+  if (error) throw error;
+  return (data?.value && typeof data.value === "object") ? data.value : null;
+}
+export async function saveAutoReply(cfg) {
+  const { error } = await supabase.from("app_config").upsert({ key: "autoreply", value: cfg || {} }, { onConflict: "key" });
+  if (error) throw error;
+}
 export async function saveNotifySettings(cfg) {
   _notifyCfg = cfg || {};
   const { error } = await supabase.from("app_config").upsert({ key: "notify_settings", value: cfg || {} }, { onConflict: "key" });
