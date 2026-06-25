@@ -29,6 +29,7 @@ function enrich(m, catMap) {
     btu: m.btu || null,
     ac_type: m.ac_type || null,
     tracked: m.tracked !== false,
+    webPublished: m.web_published === true,
     minStock: Number(m.min_stock),
     stock: Number(m.current_stock ?? m.init_stock ?? 0),
   };
@@ -161,6 +162,7 @@ export async function saveMaterial(row, isNew) {
     description: row.description?.trim() || null,
     photo_url: row.photo_url || null,
     min_stock: Number(row.min_stock) || 0,
+    web_published: !!row.web_published,
   };
   if (isNew) payload.init_stock = Number(row.init_stock) || 0;
   const { error } = await supabase.from("materials").upsert(payload, { onConflict: "code" });
@@ -1125,6 +1127,17 @@ export async function saveJobTemplate(t) {
 }
 export async function deleteJobTemplate(id) {
   const { error } = await supabase.from("job_order_templates").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------- website orders (มิ migration 071) ----------
+export async function listWebOrders() {
+  const { data, error } = await supabase.from("web_orders").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+export async function setWebOrderStatus(id, status) {
+  const { error } = await supabase.from("web_orders").update({ status }).eq("id", id);
   if (error) throw error;
 }
 

@@ -36,12 +36,14 @@ import Receipts from "./components/Receipts";
 import Receivables from "./components/Receivables";
 import TaxReport from "./components/TaxReport";
 import CustomerFollowup from "./components/CustomerFollowup";
+import WebOrders from "./components/WebOrders";
 
 const NAV = {
   myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
   followup: { th: "ติดตามลูกค้า", en: "Follow-up", icon: "user" },
+  weborders: { th: "คำสั่งซื้อจากเว็บ", en: "Web Orders", icon: "purchase" },
   chat: { th: "แชต LINE", en: "Chat", icon: "chat" },
   teamchat: { th: "แชตทีม", en: "Team Chat", icon: "chat" },
   tasks: { th: "กระดานสั่งงาน", en: "Task Board", icon: "clipboard" },
@@ -71,7 +73,7 @@ const NAV = {
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
 const NAV_GROUPS = [
   { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
-  { key: "crm", label: "ลูกค้า & ขาย", ids: ["customers", "followup", "chat"] },
+  { key: "crm", label: "ลูกค้า & ขาย", ids: ["customers", "followup", "weborders", "chat"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "schedule", "subcontract"] },
@@ -84,7 +86,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-24·เมนู: จัดกลุ่มหมวดหมู่ + ย่อ/ขยายได้ (ลดความรก)-v180";
+const BUILD = "2026-06-24·เว็บไซต์: หน้าร้าน+สินค้า+ตะกร้า → คำสั่งซื้อเข้าหลังบ้าน (มิ 071)-v181";
 
 function SetupNotice() {
   return (
@@ -405,6 +407,7 @@ export default function App() {
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
         {view === "receivables" && <Receivables role={role} onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "tax" && <TaxReport role={role} />}
+        {view === "weborders" && <WebOrders role={role} />}
         {view === "profit" && <Profit />}
         {view === "cashflow" && <CashFlow />}
         {view === "expenses" && <Expenses role={role} me={profile} />}

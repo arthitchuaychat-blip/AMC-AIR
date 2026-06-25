@@ -23,6 +23,7 @@ export const MODULES = [
   { id: "dashboard", label: "แดชบอร์ด", editable: false },
   { id: "customers", label: "ลูกค้า", editable: true },
   { id: "followup", label: "ติดตามลูกค้า (ขายซ้ำ)", editable: false },
+  { id: "weborders", label: "คำสั่งซื้อจากเว็บ", editable: false },
   { id: "chat", label: "แชต LINE (ลูกค้า)", editable: true },
   { id: "teamchat", label: "แชตทีม (ภายใน)", editable: false },
   { id: "tasks", label: "กระดานสั่งงาน", editable: true },
@@ -53,13 +54,13 @@ const E = "edit", V = "view", N = "none";
 
 // DEFAULT_PERMS[role][module] — see the matrix shared with the user. ธุรการ is the most powerful.
 export const DEFAULT_PERMS = {
-  admin:     { dashboard: V, customers: E, followup: V, chat: E, teamchat: E, tasks: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, billing: E, receivables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, schedule: E, catalog: E, movements: E, jobs: E, subcontract: E, po: E, settings: E },
-  exec:      { dashboard: V, customers: E, followup: V, chat: E, teamchat: E, tasks: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, billing: E, receivables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, schedule: E, catalog: V, movements: V, jobs: V, subcontract: E, po: V, settings: E },
-  finance:   { dashboard: V, customers: E, followup: N, chat: E, teamchat: E, tasks: E, attendance: E, hr: N, boq: V, quote: V, invoice: E, receipt: E, billing: E, receivables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: V, schedule: V, catalog: V, movements: N, jobs: V, subcontract: E, po: E, settings: N },
-  sales:     { dashboard: V, customers: E, followup: V, chat: E, teamchat: E, tasks: E, attendance: E, hr: N, boq: E, quote: E, invoice: E, receipt: E, billing: E, receivables: V, tax: N, profit: V, cashflow: N, expenses: E, myjobs: N, joborders: E, schedule: E, catalog: E, movements: N, jobs: N, subcontract: E, po: N, settings: N },
-  stock:     { dashboard: N, customers: N, followup: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: N, schedule: N, catalog: E, movements: E, jobs: E, subcontract: N, po: E, settings: N },
-  lead_tech: { dashboard: N, customers: N, followup: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: V, schedule: V, catalog: V, movements: E, jobs: V, subcontract: N, po: N, settings: N },
-  tech:      { dashboard: N, customers: N, followup: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: N, schedule: V, catalog: N, movements: E, jobs: N, subcontract: N, po: N, settings: N },
+  admin:     { dashboard: V, customers: E, followup: V, weborders: V, chat: E, teamchat: E, tasks: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, billing: E, receivables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, schedule: E, catalog: E, movements: E, jobs: E, subcontract: E, po: E, settings: E },
+  exec:      { dashboard: V, customers: E, followup: V, weborders: V, chat: E, teamchat: E, tasks: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, billing: E, receivables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, schedule: E, catalog: V, movements: V, jobs: V, subcontract: E, po: V, settings: E },
+  finance:   { dashboard: V, customers: E, followup: N, weborders: V, chat: E, teamchat: E, tasks: E, attendance: E, hr: N, boq: V, quote: V, invoice: E, receipt: E, billing: E, receivables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: V, schedule: V, catalog: V, movements: N, jobs: V, subcontract: E, po: E, settings: N },
+  sales:     { dashboard: V, customers: E, followup: V, weborders: V, chat: E, teamchat: E, tasks: E, attendance: E, hr: N, boq: E, quote: E, invoice: E, receipt: E, billing: E, receivables: V, tax: N, profit: V, cashflow: N, expenses: E, myjobs: N, joborders: E, schedule: E, catalog: E, movements: N, jobs: N, subcontract: E, po: N, settings: N },
+  stock:     { dashboard: N, customers: N, followup: N, weborders: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: N, schedule: N, catalog: E, movements: E, jobs: E, subcontract: N, po: E, settings: N },
+  lead_tech: { dashboard: N, customers: N, followup: N, weborders: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: V, schedule: V, catalog: V, movements: E, jobs: V, subcontract: N, po: N, settings: N },
+  tech:      { dashboard: N, customers: N, followup: N, weborders: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: N, schedule: V, catalog: N, movements: E, jobs: N, subcontract: N, po: N, settings: N },
 };
 
 const RANK = { none: 0, view: 1, edit: 2 };

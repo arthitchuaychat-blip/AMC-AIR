@@ -36,6 +36,7 @@ create table if not exists materials (
   init_stock  numeric not null default 0,   -- ยอดคงเหลือ ณ วันเริ่มใช้ระบบ
   photo_url   text,
   active      boolean not null default true,
+  web_published boolean default false,         -- show on the public website (มิ 071)
   created_at  timestamptz not null default now()
 );
 
@@ -588,6 +589,37 @@ create table if not exists chat_messages (
   text text, image_url text, file_url text, file_name text, created_at timestamptz not null default now()
 );
 -- (RLS policies + chat_is_member() helper + seed company room: see migration 037_team_chat.sql)
+
+-- public website (มิ migration 071) — catalog (safe view) + order requests wired to the back office
+create or replace view web_products as
+  select code, name_th, name_en, kind, brand, btu, ac_type, unit, sale_price, description, photo_url
+  from materials where web_published = true and coalesce(active, true) = true;
+grant select on web_products to anon, authenticated;
+create table if not exists web_orders (
+  id bigint generated always as identity primary key,
+  name text not null, phone text not null, email text, address text, note text,
+  items jsonb not null default '[]', total numeric not null default 0,
+  status text not null default 'new' check (status in ('new','contacted','quoted','done','cancelled')),
+  customer_id bigint references customers(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table web_orders enable row level security;
+grant insert on web_orders to anon;
+drop policy if exists web_orders_insert on web_orders;
+create policy web_orders_insert on web_orders for insert to anon, authenticated with check (true);
+drop policy if exists web_orders_read on web_orders;
+create policy web_orders_read on web_orders for select to authenticated using (my_role() in ('admin','sales','exec','finance'));
+drop policy if exists web_orders_update on web_orders;
+create policy web_orders_update on web_orders for update to authenticated using (my_role() in ('admin','sales','exec','finance')) with check (my_role() in ('admin','sales','exec','finance'));
+create or replace function notify_web_order() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into notifications (user_id, category, title, body, url, ref_type, ref_no)
+  select id, 'web_order', '🛒 คำสั่งซื้อใหม่จากเว็บไซต์', coalesce(new.name,'')||' · '||coalesce(new.phone,''), 'weborders', 'weborder', new.id::text
+  from profiles where role in ('admin','sales','exec');
+  return new;
+end $$;
+drop trigger if exists trg_web_order on web_orders;
+create trigger trg_web_order after insert on web_orders for each row execute function notify_web_order();
 
 -- job order templates (มิ migration 070) — reusable job patterns (ล้างแอร์/ติดตั้ง) to cut re-typing
 create table if not exists job_order_templates (

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AMC AIR · จำหน่าย–ติดตั้ง–ล้างแอร์ ครบวงจร</title>
+<meta name="description" content="AMC AIR จำหน่ายและติดตั้งเครื่องปรับอากาศ ล้างแอร์ ซ่อมแอร์ ครบวงจร ทีมช่างมืออาชีพ รับประกันงานติดตั้ง ดูแลตั้งแต่เลือกเครื่องถึงหลังการขาย" />
+
+<!-- ============================================================
+     ⚙️ ตั้งค่าเชื่อมระบบหลังบ้าน (ใส่ค่าเดียวกับในแอป app/.env)
+     - SUPABASE_URL  = VITE_SUPABASE_URL
+     - SUPABASE_ANON = VITE_SUPABASE_ANON_KEY  (คีย์นี้เปิดเผยได้ ปลอดภัย — ป้องกันด้วย RLS)
+     ถ้ายังไม่ใส่ เว็บจะแสดงสินค้าตัวอย่างและปิดการส่งคำสั่งซื้อ
+============================================================ -->
+<script>
+  window.AMC_CONFIG = {
+    SUPABASE_URL: "",   // ← วาง URL ที่นี่
+    SUPABASE_ANON: "",  // ← วาง anon key ที่นี่
+    PHONE: "02-000-0000",
+    LINE: "https://line.me/R/ti/p/@amcair",
+  };
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+<style>
+:root{
+  --primary:#0ea5e9; --primary-dark:#0369a1; --accent:#06b6d4;
+  --bg:#ffffff; --bg-soft:#f1f6fb; --surface:#ffffff;
+  --ink:#0f1729; --ink-2:#475569; --ink-3:#94a3b8; --line:#e4e9f0;
+  --radius:18px; --shadow-sm:0 2px 10px rgba(15,23,41,.06);
+  --shadow:0 12px 36px rgba(15,23,41,.10); --shadow-lg:0 24px 60px rgba(14,165,233,.20);
+  --maxw:1180px; --font:'IBM Plex Sans Thai','Noto Sans Thai',system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+.wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 22px}
+section{position:relative}
+.eyebrow{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--primary);background:color-mix(in srgb,var(--primary) 11%,white);padding:6px 14px;border-radius:99px;margin-bottom:16px}
+h2.title{font-size:clamp(26px,4vw,40px);font-weight:800;line-height:1.2;letter-spacing:-.01em}
+.lead{color:var(--ink-2);font-size:clamp(15px,1.6vw,18px);max-width:640px}
+.center{text-align:center}.center .lead{margin-inline:auto}
+.btn{display:inline-flex;align-items:center;gap:9px;font-weight:700;font-size:15px;padding:13px 24px;border-radius:13px;transition:.2s;cursor:pointer;border:none;white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:0 10px 26px rgba(14,165,233,.32)}
+.btn-primary:hover{background:var(--primary-dark);transform:translateY(-2px)}
+.btn-ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary)}
+.btn-line{background:#06c755;color:#fff}.btn-line:hover{filter:brightness(.94)}
+.btn-sm{padding:9px 15px;font-size:13.5px;border-radius:10px}
+/* header */
+header{position:fixed;inset:0 0 auto 0;z-index:50;transition:.3s}
+header .bar{display:flex;align-items:center;justify-content:space-between;height:72px}
+header.scrolled{background:rgba(255,255,255,.88);backdrop-filter:blur(14px);box-shadow:var(--shadow-sm)}
+.logo{display:flex;align-items:center;gap:11px;font-weight:800;font-size:19px}
+.logo .mark{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 6px 16px rgba(14,165,233,.35)}
+.logo .mark svg{width:24px;height:24px}
+.logo b span{color:var(--primary)}
+nav.menu{display:flex;align-items:center;gap:6px}
+nav.menu a{font-weight:600;font-size:15px;color:var(--ink-2);padding:9px 14px;border-radius:10px}
+nav.menu a:hover{color:var(--primary);background:var(--bg-soft)}
+.header-cta{display:flex;align-items:center;gap:10px}
+.cart-btn{position:relative;width:46px;height:46px;border-radius:12px;border:1.5px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cart-btn:hover{border-color:var(--primary)}
+.cart-btn svg{width:22px;height:22px;color:var(--ink-2)}
+.cart-count{position:absolute;top:-7px;right:-7px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
+.cart-count.on{display:flex}
+.burger{display:none;width:46px;height:46px;border-radius:12px;border:1.5px solid var(--line);background:#fff;align-items:center;justify-content:center;cursor:pointer}
+.burger svg{width:24px;height:24px}
+/* hero */
+.hero{padding:128px 0 80px;background:radial-gradient(1100px 520px at 80% -8%,rgba(14,165,233,.14),transparent 60%),radial-gradient(900px 500px at -5% 25%,rgba(6,182,212,.10),transparent 55%),var(--bg)}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:54px;align-items:center}
+.hero h1{font-size:clamp(32px,5.2vw,54px);font-weight:800;line-height:1.1;letter-spacing:-.02em}
+.hero h1 .hl{color:var(--primary)}
+.hero p.sub{margin:22px 0 30px;font-size:clamp(16px,1.8vw,19px);color:var(--ink-2);max-width:540px}
+.hero-actions{display:flex;gap:13px;flex-wrap:wrap}
+.hero-trust{display:flex;gap:30px;margin-top:36px;flex-wrap:wrap}
+.hero-trust .t b{font-size:28px;font-weight:800;display:block;line-height:1}
+.hero-trust .t span{font-size:13.5px;color:var(--ink-3)}
+.hero-art{position:relative;aspect-ratio:1/1;border-radius:26px;background:linear-gradient(150deg,#e6f6ff,#e8fbff);box-shadow:var(--shadow-lg);display:flex;align-items:center;justify-content:center}
+.hero-art .glyph{width:46%;height:46%;color:var(--primary);opacity:.92}
+.hero-art .badge{position:absolute;background:#fff;border-radius:15px;box-shadow:var(--shadow);padding:13px 16px;display:flex;align-items:center;gap:11px;font-weight:700;font-size:14px}
+.hero-art .badge .ic{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff}
+.hero-art .b1{top:24px;left:24px}.hero-art .b1 .ic{background:#16a34a}
+.hero-art .b2{bottom:24px;right:24px}.hero-art .b2 .ic{background:var(--accent)}
+.hero-art .badge small{display:block;font-weight:500;font-size:11.5px;color:var(--ink-3)}
+/* strip */
+.strip{padding:26px 0;border-block:1px solid var(--line);background:var(--bg-soft)}
+.strip .row{display:flex;align-items:center;justify-content:space-around;gap:20px;flex-wrap:wrap}
+.strip .row .it{display:flex;align-items:center;gap:9px;font-weight:700;color:var(--ink-2);font-size:14.5px}
+.strip .it svg{width:22px;height:22px;color:var(--primary)}
+/* sections */
+.sec{padding:84px 0}
+.sec.soft{background:var(--bg-soft)}
+.sec-head{margin-bottom:42px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:26px;box-shadow:var(--shadow-sm);transition:.2s}
+.card:hover{box-shadow:var(--shadow);transform:translateY(-3px)}
+.svc .ic{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;margin-bottom:16px}
+.svc h3{font-size:20px;font-weight:800;margin-bottom:8px}
+.svc p{color:var(--ink-2);font-size:14.5px}
+.svc ul{margin-top:12px;list-style:none;display:flex;flex-direction:column;gap:6px}
+.svc li{font-size:13.5px;color:var(--ink-2);display:flex;gap:8px;align-items:center}
+.svc li::before{content:"✓";color:var(--primary);font-weight:800}
+/* products */
+.prod-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.prod{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:.2s}
+.prod:hover{box-shadow:var(--shadow);transform:translateY(-3px)}
+.prod .ph{aspect-ratio:4/3;background:var(--bg-soft);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.prod .ph img{width:100%;height:100%;object-fit:cover}
+.prod .ph .noimg{color:var(--ink-3);font-size:34px}
+.prod .body{padding:14px;display:flex;flex-direction:column;gap:5px;flex:1}
+.prod .tag{font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase}
+.prod .nm{font-weight:700;font-size:14.5px;line-height:1.35;flex:1}
+.prod .pr{font-size:18px;font-weight:800;color:var(--ink)}
+.prod .pr small{font-size:12px;font-weight:600;color:var(--ink-3)}
+.prod .add{margin-top:6px;width:100%;justify-content:center}
+.prod-empty{grid-column:1/-1;text-align:center;color:var(--ink-3);padding:50px;font-size:15px}
+/* portfolio */
+.port-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.port{position:relative;border-radius:16px;overflow:hidden;aspect-ratio:4/3;box-shadow:var(--shadow-sm);background:linear-gradient(135deg,#e6f6ff,#eef6ff)}
+.port img{width:100%;height:100%;object-fit:cover}
+.port .cap{position:absolute;inset:auto 0 0 0;padding:26px 16px 14px;background:linear-gradient(transparent,rgba(2,20,40,.78));color:#fff}
+.port .cap b{font-size:15px;font-weight:800;display:block}
+.port .cap span{font-size:12.5px;opacity:.85}
+/* reviews */
+.rev-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.rev{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:var(--shadow-sm)}
+.rev .stars{color:#f59e0b;font-size:16px;letter-spacing:2px;margin-bottom:10px}
+.rev p{color:var(--ink-2);font-size:14.5px;margin-bottom:14px}
+.rev .who{display:flex;align-items:center;gap:11px}
+.rev .av{width:42px;height:42px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800}
+.rev .who b{font-size:14px}.rev .who span{font-size:12.5px;color:var(--ink-3)}
+/* contact */
+.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start}
+.contact-info .row{display:flex;gap:14px;margin-bottom:20px;align-items:flex-start}
+.contact-info .ic{width:46px;height:46px;border-radius:12px;background:var(--bg-soft);display:flex;align-items:center;justify-content:center;color:var(--primary);flex:none}
+.contact-info .ic svg{width:22px;height:22px}
+.contact-info b{display:block;font-size:15px}.contact-info span{color:var(--ink-2);font-size:14px}
+.form{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:26px;box-shadow:var(--shadow-sm)}
+.form label{display:block;font-size:13px;font-weight:600;margin-bottom:5px;margin-top:13px;color:var(--ink-2)}
+.form label:first-child{margin-top:0}
+.form input,.form textarea{width:100%;border:1.5px solid var(--line);border-radius:11px;padding:11px 13px;font-family:inherit;font-size:14.5px;transition:.15s}
+.form input:focus,.form textarea:focus{outline:none;border-color:var(--primary)}
+.form .btn{width:100%;justify-content:center;margin-top:18px}
+/* footer */
+footer{background:#0b1220;color:#cbd5e1;padding:48px 0 28px}
+footer .top{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap;margin-bottom:28px}
+footer .logo{color:#fff}
+footer .fcol h4{color:#fff;font-size:14px;margin-bottom:12px}
+footer .fcol a{display:block;color:#94a3b8;font-size:13.5px;padding:3px 0}
+footer .fcol a:hover{color:#fff}
+footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;color:#64748b;text-align:center}
+/* cart drawer */
+.drawer-mask{position:fixed;inset:0;background:rgba(2,16,33,.5);z-index:90;opacity:0;pointer-events:none;transition:.25s}
+.drawer-mask.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,92vw);background:#fff;z-index:100;transform:translateX(100%);transition:.28s;display:flex;flex-direction:column;box-shadow:-10px 0 40px rgba(0,0,0,.2)}
+.drawer.on{transform:none}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--line)}
+.drawer-head b{font-size:17px;font-weight:800}
+.drawer-x{width:36px;height:36px;border:none;background:var(--bg-soft);border-radius:10px;cursor:pointer;font-size:18px}
+.drawer-body{flex:1;overflow-y:auto;padding:16px 20px}
+.ci{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.ci .ph{width:56px;height:56px;border-radius:10px;background:var(--bg-soft);flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ci .ph img{width:100%;height:100%;object-fit:cover}
+.ci .mid{flex:1;min-width:0}
+.ci .nm{font-weight:700;font-size:13.5px}
+.ci .pr{color:var(--ink-3);font-size:12.5px}
+.ci .qty{display:flex;align-items:center;gap:8px;margin-top:5px}
+.ci .qty button{width:26px;height:26px;border:1px solid var(--line);background:#fff;border-radius:7px;cursor:pointer;font-weight:700}
+.ci .rm{border:none;background:none;color:#ef4444;cursor:pointer;font-size:12.5px;align-self:flex-start}
+.cart-empty{text-align:center;color:var(--ink-3);padding:50px 0}
+.drawer-foot{border-top:1px solid var(--line);padding:16px 20px}
+.cart-total{display:flex;justify-content:space-between;font-weight:800;font-size:17px;margin-bottom:12px}
+.cart-note{font-size:12px;color:var(--ink-3);margin-bottom:12px}
+/* order form fields in drawer */
+.of label{display:block;font-size:12.5px;font-weight:600;margin:10px 0 4px;color:var(--ink-2)}
+.of input,.of textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px}
+.of input:focus,.of textarea:focus{outline:none;border-color:var(--primary)}
+/* toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0b1220;color:#fff;padding:13px 22px;border-radius:12px;font-weight:600;font-size:14px;z-index:200;box-shadow:var(--shadow);opacity:0;transition:.25s;max-width:92vw;text-align:center}
+.toast.on{opacity:1}
+.toast.bad{background:#dc2626}
+/* responsive */
+@media(max-width:900px){
+  .hero-grid,.contact-grid{grid-template-columns:1fr}.hero-art{display:none}
+  .grid3,.port-grid,.rev-grid{grid-template-columns:1fr 1fr}
+  .prod-grid{grid-template-columns:1fr 1fr}
+  nav.menu{display:none}.burger{display:flex}
+  nav.menu.open{display:flex;position:absolute;top:72px;left:0;right:0;flex-direction:column;background:#fff;padding:14px;box-shadow:var(--shadow);gap:2px}
+  nav.menu.open a{padding:12px 14px}
+}
+@media(max-width:560px){.grid3,.port-grid,.rev-grid,.prod-grid{grid-template-columns:1fr}.sec{padding:60px 0}}
+</style>
+</head>
+<body>
+<a id="top"></a>
+
+<header id="header">
+  <div class="wrap bar">
+    <a href="#top" class="logo">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h18M3 12h18M3 16h12"/><circle cx="19" cy="16" r="2"/></svg></span>
+      <b>AMC<span> AIR</span></b>
+    </a>
+    <nav class="menu" id="menu">
+      <a href="#services">บริการ</a>
+      <a href="#products">สินค้า</a>
+      <a href="#portfolio">ผลงาน</a>
+      <a href="#reviews">รีวิว</a>
+      <a href="#contact">ติดต่อ</a>
+    </nav>
+    <div class="header-cta">
+      <button class="cart-btn" id="cartBtn" aria-label="ตะกร้า">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>
+        <span class="cart-count" id="cartCount">0</span>
+      </button>
+      <a href="#contact" class="btn btn-primary btn-sm">ขอใบเสนอราคา</a>
+      <button class="burger" id="burger" aria-label="เมนู"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">จำหน่าย · ติดตั้ง · ล้างแอร์ · ซ่อม</span>
+      <h1>แอร์เย็นทุกวัน<br>ดูแลโดยทีมช่าง<span class="hl">มืออาชีพ</span></h1>
+      <p class="sub">AMC AIR ดูแลครบวงจร ตั้งแต่เลือกเครื่อง ติดตั้ง ล้างทำความสะอาด ไปจนถึงซ่อมบำรุง — ตรงเวลา ราคายุติธรรม รับประกันงานทุกชิ้น</p>
+      <div class="hero-actions">
+        <a href="#products" class="btn btn-primary">เลือกซื้อแอร์</a>
+        <a href="#contact" class="btn btn-ghost">ขอใบเสนอราคาฟรี</a>
+      </div>
+      <div class="hero-trust">
+        <div class="t"><b>15+</b><span>ปีประสบการณ์</span></div>
+        <div class="t"><b>5,000+</b><span>งานที่ส่งมอบ</span></div>
+        <div class="t"><b>98%</b><span>ลูกค้ากลับมาใช้ซ้ำ</span></div>
+      </div>
+    </div>
+    <div class="hero-art">
+      <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="9" rx="2"/><path d="M6 13v3M10 13v4M14 13v3M18 13v4"/></svg>
+      <div class="badge b1"><span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>งานเสร็จตรงเวลา<small>ส่งมอบ 100%</small></div>
+      <div class="badge b2"><span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.6 5.7 21l2.3-7.2-6-4.4h7.6z"/></svg></span>รับประกันงาน<small>ทุกการติดตั้ง</small></div>
+    </div>
+  </div>
+</section>
+
+<section class="strip">
+  <div class="wrap row">
+    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> ทีมช่างมีใบรับรอง</div>
+    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.6 5.7 21l2.3-7.2-6-4.4h7.6z"/></svg> รับประกันงานติดตั้ง</div>
+    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> นัดหมายรวดเร็ว</div>
+    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg> ใบกำกับภาษีถูกต้อง</div>
+  </div>
+</section>
+
+<section class="sec" id="services">
+  <div class="wrap">
+    <div class="sec-head center">
+      <span class="eyebrow">บริการของเรา</span>
+      <h2 class="title">ครบทุกเรื่องแอร์ จบที่เดียว</h2>
+      <p class="lead">ตั้งแต่ติดตั้งเครื่องใหม่ ดูแลรักษา ไปจนถึงซ่อมแก้ไข ด้วยทีมช่างผู้ชำนาญ</p>
+    </div>
+    <div class="grid3">
+      <div class="card svc"><div class="ic" style="background:#16a34a"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6.4 6.4 2 2 6.4-6.4a4 4 0 0 0 5.4-5.4l-2.3 2.3-1.7-.3-.3-1.7z"/></svg></div>
+        <h3>ติดตั้งแอร์</h3><p>ติดตั้งเครื่องปรับอากาศบ้าน/สำนักงาน เดินท่อเรียบร้อย ทดสอบก่อนส่งมอบ</p>
+        <ul><li>สำรวจหน้างานฟรี</li><li>ทีมช่างมืออาชีพ</li><li>รับประกันงานติดตั้ง</li></ul></div>
+      <div class="card svc"><div class="ic" style="background:#0ea5e9"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></div>
+        <h3>ล้างแอร์ / บำรุงรักษา</h3><p>ล้างทำความสะอาดแผงคอยล์ เติมน้ำยา ตรวจเช็กระบบ ให้แอร์เย็นเต็มประสิทธิภาพ</p>
+        <ul><li>ล้างถึงแผงคอยล์</li><li>แนะนำรอบล้างทุก 6 เดือน</li><li>มีบริการสัญญารายปี</li></ul></div>
+      <div class="card svc"><div class="ic" style="background:#f59e0b"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6.4 6.4 2 2 6.4-6.4a4 4 0 0 0 5.4-5.4l-2.3 2.3-1.7-.3-.3-1.7z"/></svg></div>
+        <h3>ซ่อม / แก้ไข</h3><p>แอร์ไม่เย็น มีน้ำหยด เสียงดัง วินิจฉัยและซ่อมโดยช่างผู้ชำนาญ พร้อมอะไหล่แท้</p>
+        <ul><li>ประเมินอาการก่อนซ่อม</li><li>อะไหล่แท้</li><li>รับประกันงานซ่อม</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec soft" id="products">
+  <div class="wrap">
+    <div class="sec-head center">
+      <span class="eyebrow">สินค้าของเรา</span>
+      <h2 class="title">แอร์ & อะไหล่ คุณภาพ</h2>
+      <p class="lead">เลือกรุ่นที่ต้องการ ใส่ตะกร้า แล้วส่งคำขอ — ทีมงานจะติดต่อยืนยันราคาและนัดติดตั้ง</p>
+    </div>
+    <div class="prod-grid" id="prodGrid">
+      <div class="prod-empty">กำลังโหลดสินค้า…</div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="portfolio">
+  <div class="wrap">
+    <div class="sec-head center"><span class="eyebrow">ผลงานของเรา</span><h2 class="title">งานที่เราภูมิใจ</h2></div>
+    <div class="port-grid">
+      <div class="port"><div class="cap"><b>ติดตั้งแอร์สำนักงาน</b><span>อาคารพาณิชย์ · 12 เครื่อง</span></div></div>
+      <div class="port"><div class="cap"><b>ล้างแอร์คอนโด</b><span>โครงการที่พักอาศัย · รายปี</span></div></div>
+      <div class="port"><div class="cap"><b>ระบบแอร์ร้านอาหาร</b><span>ติดตั้ง + ดูแลต่อเนื่อง</span></div></div>
+    </div>
+    <p class="center lead" style="margin-top:18px;font-size:13.5px">* เปลี่ยนเป็นรูปงานจริงได้ภายหลัง (ดึงจากระบบหลังบ้าน)</p>
+  </div>
+</section>
+
+<section class="sec soft" id="reviews">
+  <div class="wrap">
+    <div class="sec-head center"><span class="eyebrow">เสียงจากลูกค้า</span><h2 class="title">ลูกค้าพูดถึงเรา</h2></div>
+    <div class="rev-grid">
+      <div class="rev"><div class="stars">★★★★★</div><p>“ติดตั้งเร็ว เก็บงานเรียบร้อย ช่างสุภาพมาก แอร์เย็นฉ่ำเลยค่ะ”</p><div class="who"><span class="av">ก</span><div><b>คุณกนกวรรณ</b><span>ลูกค้าบ้านพักอาศัย</span></div></div></div>
+      <div class="rev"><div class="stars">★★★★★</div><p>“ใช้บริการล้างแอร์ประจำทุก 6 เดือน ตรงเวลา ราคายุติธรรม แนะนำเลย”</p><div class="who"><span class="av">ส</span><div><b>คุณสมชาย</b><span>เจ้าของร้านอาหาร</span></div></div></div>
+      <div class="rev"><div class="stars">★★★★★</div><p>“ดูแลแอร์ทั้งออฟฟิศ 20 กว่าเครื่อง มีระบบติดตามงานชัดเจน ประทับใจ”</p><div class="who"><span class="av">ณ</span><div><b>คุณณัฐพล</b><span>ผู้จัดการอาคาร</span></div></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="contact">
+  <div class="wrap">
+    <div class="sec-head center"><span class="eyebrow">ติดต่อเรา</span><h2 class="title">ขอใบเสนอราคา / นัดหมาย</h2></div>
+    <div class="contact-grid">
+      <div class="contact-info">
+        <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></div><div><b id="cPhone">โทร 02-000-0000</b><span>จันทร์–เสาร์ 8:00–18:00</span></div></div>
+        <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4L3 21l1.1-9A8.4 8.4 0 1 1 21 11.5z"/></svg></div><div><b>LINE Official</b><span><a id="cLine" href="#" style="color:#06c755;font-weight:700">@amcair</a></span></div></div>
+        <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div><div><b>พื้นที่ให้บริการ</b><span>กรุงเทพฯ และปริมณฑล</span></div></div>
+        <a id="cLineBtn" href="#" class="btn btn-line" style="margin-top:8px">แชตผ่าน LINE</a>
+      </div>
+      <form class="form" id="leadForm" onsubmit="return submitLead(event)">
+        <label>ชื่อ-สกุล *</label><input name="name" required placeholder="ชื่อของคุณ" />
+        <label>เบอร์โทร *</label><input name="phone" required placeholder="0xx-xxx-xxxx" />
+        <label>ที่อยู่ / พื้นที่หน้างาน</label><input name="address" placeholder="เขต/อำเภอ จังหวัด" />
+        <label>รายละเอียดที่ต้องการ</label><textarea name="note" rows="3" placeholder="เช่น ติดตั้งแอร์ 2 เครื่อง / ล้างแอร์ 5 ตัว / แอร์ไม่เย็น"></textarea>
+        <button class="btn btn-primary" type="submit">ส่งคำขอ</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="top">
+      <div style="max-width:300px">
+        <a href="#top" class="logo"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h18M3 12h18M3 16h12"/><circle cx="19" cy="16" r="2"/></svg></span><b>AMC<span> AIR</span></b></a>
+        <p style="margin-top:12px;font-size:13.5px;color:#94a3b8">จำหน่าย ติดตั้ง ล้าง ซ่อมแอร์ครบวงจร โดยทีมช่างมืออาชีพ</p>
+      </div>
+      <div class="fcol"><h4>บริการ</h4><a href="#services">ติดตั้งแอร์</a><a href="#services">ล้างแอร์</a><a href="#services">ซ่อมแอร์</a></div>
+      <div class="fcol"><h4>บริษัท</h4><a href="#products">สินค้า</a><a href="#portfolio">ผลงาน</a><a href="#reviews">รีวิว</a><a href="#contact">ติดต่อ</a></div>
+    </div>
+    <div class="copy">© <span id="yr"></span> AMC AIR · สงวนลิขสิทธิ์</div>
+  </div>
+</footer>
+
+<!-- cart drawer -->
+<div class="drawer-mask" id="mask"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head"><b>ตะกร้า / ขอใบเสนอราคา</b><button class="drawer-x" id="drawerX">✕</button></div>
+  <div class="drawer-body" id="cartBody"></div>
+  <div class="drawer-foot" id="cartFoot" style="display:none">
+    <div class="cart-total"><span>รวมโดยประมาณ</span><span id="cartTotal">฿0</span></div>
+    <div class="cart-note">* ราคาเป็นการประมาณการ ทีมงานจะติดต่อยืนยันราคาจริง ค่าติดตั้ง และนัดหมาย</div>
+    <form class="of" id="orderForm" onsubmit="return submitOrder(event)">
+      <label>ชื่อ-สกุล *</label><input name="name" required placeholder="ชื่อของคุณ" />
+      <label>เบอร์โทร *</label><input name="phone" required placeholder="0xx-xxx-xxxx" />
+      <label>ที่อยู่จัดส่ง/ติดตั้ง</label><input name="address" placeholder="ที่อยู่" />
+      <label>หมายเหตุ</label><textarea name="note" rows="2" placeholder="รายละเอียดเพิ่มเติม"></textarea>
+      <button class="btn btn-primary" type="submit" style="width:100%;margin-top:14px;justify-content:center">ส่งคำสั่งซื้อ</button>
+    </form>
+  </div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const C = window.AMC_CONFIG || {};
+const hasSb = !!(C.SUPABASE_URL && C.SUPABASE_ANON && window.supabase);
+const sb = hasSb ? window.supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON) : null;
+const baht = (n) => "฿" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const $ = (s) => document.querySelector(s);
+
+// header scroll + mobile menu + year + contact links
+addEventListener("scroll", () => $("#header").classList.toggle("scrolled", scrollY > 10));
+$("#burger").onclick = () => $("#menu").classList.toggle("open");
+$("#menu").querySelectorAll("a").forEach((a) => a.onclick = () => $("#menu").classList.remove("open"));
+$("#yr").textContent = new Date().getFullYear() + 543;
+if (C.PHONE) { $("#cPhone").textContent = "โทร " + C.PHONE; }
+if (C.LINE) { $("#cLine").href = C.LINE; $("#cLineBtn").href = C.LINE; }
+
+function toast(msg, bad) { const t = $("#toast"); t.textContent = msg; t.className = "toast on" + (bad ? " bad" : ""); setTimeout(() => t.className = "toast", 3200); }
+
+// ---------- cart (localStorage) ----------
+let cart = (() => { try { return JSON.parse(localStorage.getItem("amc_cart") || "[]"); } catch { return []; } })();
+const saveCart = () => localStorage.setItem("amc_cart", JSON.stringify(cart));
+function addToCart(p) {
+  const ex = cart.find((x) => x.code === p.code);
+  if (ex) ex.qty++; else cart.push({ code: p.code, name: p.name, price: p.price, photo: p.photo, qty: 1 });
+  saveCart(); renderCart(); openDrawer(); toast("เพิ่มลงตะกร้าแล้ว");
+}
+function setQty(code, d) { const it = cart.find((x) => x.code === code); if (!it) return; it.qty += d; if (it.qty <= 0) cart = cart.filter((x) => x.code !== code); saveCart(); renderCart(); }
+function rmItem(code) { cart = cart.filter((x) => x.code !== code); saveCart(); renderCart(); }
+const cartTotal = () => cart.reduce((a, x) => a + (Number(x.price) || 0) * x.qty, 0);
+function renderCart() {
+  const n = cart.reduce((a, x) => a + x.qty, 0);
+  const cc = $("#cartCount"); cc.textContent = n; cc.classList.toggle("on", n > 0);
+  const body = $("#cartBody"), foot = $("#cartFoot");
+  if (!cart.length) { body.innerHTML = '<div class="cart-empty">ยังไม่มีสินค้าในตะกร้า<br><br>เลือกสินค้าจากหน้าเว็บ หรือกรอกฟอร์มขอใบเสนอราคาด้านล่างได้เลย</div>'; foot.style.display = "none"; return; }
+  body.innerHTML = cart.map((x) => `
+    <div class="ci">
+      <div class="ph">${x.photo ? `<img src="${x.photo}" alt="">` : "❄️"}</div>
+      <div class="mid">
+        <div class="nm">${x.name}</div>
+        <div class="pr">${x.price ? baht(x.price) : "สอบถามราคา"}</div>
+        <div class="qty"><button onclick="setQty('${x.code}',-1)">−</button><b>${x.qty}</b><button onclick="setQty('${x.code}',1)">+</button></div>
+      </div>
+      <button class="rm" onclick="rmItem('${x.code}')">ลบ</button>
+    </div>`).join("");
+  $("#cartTotal").textContent = baht(cartTotal());
+  foot.style.display = "block";
+}
+const openDrawer = () => { $("#drawer").classList.add("on"); $("#mask").classList.add("on"); };
+const closeDrawer = () => { $("#drawer").classList.remove("on"); $("#mask").classList.remove("on"); };
+$("#cartBtn").onclick = openDrawer; $("#drawerX").onclick = closeDrawer; $("#mask").onclick = closeDrawer;
+
+// ---------- products (live from Supabase) ----------
+const SAMPLE = [
+  { code: "demo1", name: "แอร์ติดผนัง 12,000 BTU (ตัวอย่าง)", price: 15900, tag: "แอร์", photo: "" },
+  { code: "demo2", name: "แอร์ติดผนัง 18,000 BTU (ตัวอย่าง)", price: 21900, tag: "แอร์", photo: "" },
+  { code: "demo3", name: "บริการล้างแอร์ (ตัวอย่าง)", price: 600, tag: "บริการ", photo: "" },
+  { code: "demo4", name: "รีโมทแอร์ (ตัวอย่าง)", price: 350, tag: "อะไหล่", photo: "" },
+];
+const KIND_TH = { ac: "แอร์", material: "อะไหล่/วัสดุ", service: "บริการ" };
+function prodCard(p) {
+  return `<div class="prod">
+    <div class="ph">${p.photo ? `<img src="${p.photo}" alt="${p.name}">` : '<span class="noimg">❄️</span>'}</div>
+    <div class="body">
+      <span class="tag">${p.tag || ""}</span>
+      <div class="nm">${p.name}</div>
+      <div class="pr">${p.price ? baht(p.price) : "สอบถามราคา"} ${p.price ? "<small>/หน่วย</small>" : ""}</div>
+      <button class="btn btn-primary btn-sm add" onclick='addToCart(${JSON.stringify({ code: p.code, name: p.name, price: p.price, photo: p.photo }).replace(/'/g, "&#39;")})'>+ เพิ่มลงตะกร้า</button>
+    </div>
+  </div>`;
+}
+async function loadProducts() {
+  const grid = $("#prodGrid");
+  if (!hasSb) { grid.innerHTML = SAMPLE.map(prodCard).join("") + '<div class="prod-empty">* ตัวอย่างสินค้า — ตั้งค่า Supabase ในไฟล์เพื่อดึงสินค้าจริงจากคลัง</div>'; return; }
+  try {
+    const { data, error } = await sb.from("web_products").select("*").limit(60);
+    if (error) throw error;
+    if (!data || !data.length) { grid.innerHTML = '<div class="prod-empty">ยังไม่มีสินค้าที่เผยแพร่ — ติ๊ก “ขึ้นเว็บ” ที่สินค้าในระบบหลังบ้าน</div>'; return; }
+    grid.innerHTML = data.map((r) => prodCard({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, tag: KIND_TH[r.kind] || "" })).join("");
+  } catch (e) { grid.innerHTML = '<div class="prod-empty">โหลดสินค้าไม่สำเร็จ ลองใหม่ภายหลัง</div>'; }
+}
+
+// ---------- submit order (from cart) ----------
+async function submitOrder(e) {
+  e.preventDefault();
+  if (!cart.length) { toast("ตะกร้าว่าง", true); return false; }
+  const f = e.target;
+  const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), note: f.note.value.trim(),
+    items: cart.map((x) => ({ code: x.code, name: x.name, qty: x.qty, price: x.price })), total: cartTotal() };
+  if (!hasSb) { toast("เว็บยังไม่ได้เชื่อมระบบ — โทร " + (C.PHONE || "") + " ได้เลย", true); return false; }
+  const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "กำลังส่ง…";
+  try {
+    const { error } = await sb.from("web_orders").insert(payload);
+    if (error) throw error;
+    cart = []; saveCart(); renderCart(); f.reset(); closeDrawer();
+    toast("ส่งคำสั่งซื้อแล้ว ✓ ทีมงานจะติดต่อกลับโดยเร็ว");
+  } catch (err) { toast("ส่งไม่สำเร็จ ลองใหม่หรือโทรหาเรา", true); }
+  btn.disabled = false; btn.textContent = "ส่งคำสั่งซื้อ";
+  return false;
+}
+// ---------- submit lead (contact form, no items) ----------
+async function submitLead(e) {
+  e.preventDefault();
+  const f = e.target;
+  const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), note: f.note.value.trim(), items: [], total: 0 };
+  if (!hasSb) { toast("เว็บยังไม่ได้เชื่อมระบบ — โทร " + (C.PHONE || "") + " ได้เลย", true); return false; }
+  const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "กำลังส่ง…";
+  try {
+    const { error } = await sb.from("web_orders").insert(payload);
+    if (error) throw error;
+    f.reset(); toast("ส่งคำขอแล้ว ✓ ทีมงานจะติดต่อกลับโดยเร็ว");
+  } catch (err) { toast("ส่งไม่สำเร็จ ลองใหม่หรือโทรหาเรา", true); }
+  btn.disabled = false; btn.textContent = "ส่งคำขอ";
+  return false;
+}
+
+renderCart();
+loadProducts();
+</script>
+</body>
+</html>

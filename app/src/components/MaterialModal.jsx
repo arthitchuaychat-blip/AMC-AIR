@@ -27,6 +27,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     photo_url: initial?.photoUrl ?? initial?.photo_url ?? "",
     min_stock: initial?.minStock ?? initial?.min_stock ?? "",
     init_stock: initial?.stock ?? initial?.init_stock ?? "",
+    web_published: initial?.webPublished ?? initial?.web_published ?? false,
   }));
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -163,6 +164,14 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
           {!isNew && !isService && f.tracked && (
             <p className="page-sub" style={{ marginTop: 4 }}>* ยอดคงเหลือปรับผ่านเบิก/คืน/ซื้อ/ตัดเสียเท่านั้น (คำนวณอัตโนมัติ)</p>
           )}
+
+          {/* show on the public website */}
+          <label className="fld" style={{ marginTop: 6 }}><span>แสดงบนเว็บไซต์ (ขายออนไลน์)</span>
+            <button type="button" className={"vat-toggle" + (f.web_published ? " on" : "")} onClick={() => setF((s) => ({ ...s, web_published: !s.web_published }))}>
+              {f.web_published ? "🌐 แสดงบนเว็บ (ลูกค้าเห็น + สั่งซื้อได้)" : "ไม่แสดงบนเว็บ"}
+            </button>
+          </label>
+
           {err && <div className="login-err" style={{ marginTop: 10 }}>{err}</div>}
         </div>
         <div className="modal-foot">
