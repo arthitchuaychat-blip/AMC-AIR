@@ -28,6 +28,19 @@ function avColor(id) {
 function jobStatusLabel(v) { return JOB_STATUSES.find(([s]) => s === v)?.[1] || v; }
 function jobStatusColor(v) { return JOB_STATUSES.find(([s]) => s === v)?.[3] || "#888"; }
 
+// extract nickname: "สมชาย ใจดี (ชาย)" → "ชาย",  "ADMIN งานขาย" → "ADMIN"
+function nickOf(name) {
+  const m = (name || "").match(/\(([^)]+)\)/);
+  if (m) return m[1];
+  return (name || "").split(/\s+/)[0] || name || "";
+}
+// highlight @nick patterns in a message
+function renderMentions(text) {
+  if (!text || !text.includes("@")) return text;
+  const parts = text.split(/(@\S+)/);
+  return parts.map((p, i) => p.startsWith("@") && p.length > 1 ? <span key={i} className="chat-mention">{p}</span> : p);
+}
+
 // [JOBCARD|job_no|customer|status|title]
 function parseJobCard(text) {
   const m = text?.match(/^\[JOBCARD\|([^|]+)\|([^|]*)\|([^|]*)\|([^\]]*)\]$/);
@@ -72,12 +85,50 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   const [modal, setModal]   = React.useState(null); // "dm"|"group"|"members"|"joblink"
   const [jobs, setJobs]     = React.useState([]);
   const [toast, setToast]   = React.useState(null);
+  const [mentionQ, setMentionQ]         = React.useState(null); // null = closed
+  const [mentionAnchor, setMentionAnchor] = React.useState(0);
   const endRef  = React.useRef(null);
   const selRef  = React.useRef(null);
+  const taRef   = React.useRef(null);
   selRef.current = sel;
 
   const flash     = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
   const staffName = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
+
+  // members eligible for @mention in current room
+  const mentionMembers = React.useMemo(() => {
+    if (mentionQ === null || !sel) return [];
+    const room = rooms.find((r) => r.id === sel);
+    const roomIds = new Set(room?.memberIds || []);
+    const q = mentionQ.toLowerCase();
+    return staff
+      .filter((s) => s.id !== me?.id && (room?.kind === "company" || roomIds.has(s.id)))
+      .filter((s) => !q || s.name.toLowerCase().includes(q) || nickOf(s.name).toLowerCase().startsWith(q))
+      .slice(0, 8);
+  }, [mentionQ, sel, rooms, staff, me]);
+
+  function pickMention(member) {
+    const nick = nickOf(member.name);
+    const before = text.slice(0, mentionAnchor);
+    const after  = text.slice(mentionAnchor + 1 + (mentionQ || "").length);
+    const newText = before + "@" + nick + " " + after;
+    setText(newText);
+    setMentionQ(null);
+    setTimeout(() => {
+      if (taRef.current) {
+        const pos = before.length + nick.length + 2;
+        taRef.current.focus();
+        taRef.current.setSelectionRange(pos, pos);
+      }
+    }, 0);
+  }
+
+  function extractMentionIds(txt) {
+    const matches = (txt.match(/@(\S+)/g) || []).map((m) => m.slice(1).toLowerCase());
+    return staff
+      .filter((s) => matches.includes(nickOf(s.name).toLowerCase()) || matches.includes(s.name.toLowerCase()))
+      .map((s) => s.id);
+  }
 
   async function loadRooms() { try { setRooms(await listChatRooms()); } catch { } }
   async function loadMsgs(roomId) { try { setMsgs(await listChatMessages(roomId)); } catch { setMsgs([]); } }
@@ -111,8 +162,9 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
 
   async function send() {
     const t = text.trim(); if (!t || !sel || sending) return;
-    setText(""); setSending(true);
-    try { await sendChatMessage(sel, t); await loadMsgs(sel); } catch { flash("ส่งไม่สำเร็จ"); setText(t); }
+    const ids = extractMentionIds(t);
+    setText(""); setMentionQ(null); setSending(true);
+    try { await sendChatMessage(sel, t, ids); await loadMsgs(sel); } catch { flash("ส่งไม่สำเร็จ"); setText(t); }
     setSending(false);
   }
   async function onImage(e) {
@@ -290,7 +342,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                         ) : m.file_url ? (
                           <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || "เปิดไฟล์"}</a>
                         ) : (
-                          <span>{m.text}</span>
+                          <span>{renderMentions(m.text)}</span>
                         )}
                         {!jc && (
                           <span className="chat-bubble-time">
@@ -304,6 +356,17 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                 <div ref={endRef} />
               </div>
 
+              {mentionQ !== null && mentionMembers.length > 0 && (
+                <div className="mention-drop">
+                  {mentionMembers.map((s) => (
+                    <button key={s.id} className="mention-item" onMouseDown={(e) => { e.preventDefault(); pickMention(s); }}>
+                      <span className="tc-av" style={{ background: avColor(s.id), width: 24, height: 24, fontSize: 11 }}>{(s.name || "?")[0]}</span>
+                      <span className="mention-name">{s.name}</span>
+                      <span className="mention-nick">@{nickOf(s.name)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="chat-compose">
                 <label className={"chat-tool" + (sending ? " disabled" : "")} title="ส่งรูป">
                   📷<input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
@@ -315,10 +378,20 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                   onClick={() => { if (sel && !sending) { ensureJobs(); setModal("joblink"); } }}>
                   🔗
                 </button>
-                <textarea className="inp" rows={3} value={text}
-                  placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัด)"}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
+                <textarea ref={taRef} className="inp" rows={3} value={text}
+                  placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · @ แท็กสมาชิก)"}
+                  onChange={(e) => {
+                    const val = e.target.value; setText(val);
+                    const pos = e.target.selectionStart;
+                    const before = val.slice(0, pos);
+                    const m = before.match(/@(\S*)$/);
+                    if (m) { setMentionQ(m[1]); setMentionAnchor(pos - m[0].length); }
+                    else setMentionQ(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") { setMentionQ(null); return; }
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (mentionQ !== null && mentionMembers.length) { pickMention(mentionMembers[0]); } else { send(); } }
+                  }} />
                 <button className="btn-primary" disabled={!text.trim() || sending} onClick={send}>ส่ง</button>
               </div>
             </>

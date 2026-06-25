@@ -2288,7 +2288,7 @@ export async function listChatRooms() {
     if (!title && r.kind === "company") title = "ทั้งบริษัท";
     if (!title && (r.kind === "group" || r.kind === "project")) title = others.slice(0, 3).join(", ") || "กลุ่ม";
     const lm = last[r.id];
-    return { ...r, title, memberNames: others, memberCount: mem.length,
+    return { ...r, title, memberNames: others, memberIds: mem.map((m) => m.user_id), memberCount: mem.length,
       lastText: lm ? (lm.text || (lm.image_url ? "[รูปภาพ]" : lm.file_url ? `[ไฟล์] ${lm.file_name || ""}` : "")) : "", lastAt: lm ? lm.created_at : r.created_at, unread: unread[r.id] || 0 };
   }).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
 }
@@ -2327,11 +2327,18 @@ async function _notifyChatRoom(roomId, body) {
     notify((mem || []).map((m) => m.user_id), { category: "team_chat", title: `แชตทีม · ${me?.name || "ทีมงาน"}`, body, url: "teamchat", ref_type: "room", ref_no: String(roomId), push: false });
   } catch (_) {}
 }
-export async function sendChatMessage(roomId, text) {
+export async function sendChatMessage(roomId, text, mentionIds = []) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, text: text.trim() });
   if (error) throw error;
   _firePush(roomId, text.trim()); _notifyChatRoom(roomId, text.trim());
+  if (mentionIds.length) {
+    const me = await getProfile();
+    notify(mentionIds.filter((id) => id !== uid), {
+      category: "team_chat", title: `📣 ${me?.name || "ทีมงาน"} แท็กคุณ`,
+      body: text.trim().slice(0, 120), url: "teamchat", ref_type: "room", ref_no: String(roomId), push: false,
+    });
+  }
 }
 export async function sendChatImage(roomId, imageUrl) {
   const uid = await _uid();
