@@ -79,14 +79,31 @@ async function getAutoReplyCfg() {
     return (r.ok ? (await r.json())[0]?.value : null) || null;
   } catch { return null; }
 }
-// reply via the event's replyToken (free, doesn't use push quota)
+// reply via the event's replyToken (free, doesn't use push quota). returns true if LINE accepted it.
 async function lineReply(replyToken, text) {
   try {
-    await tfetch("https://api.line.me/v2/bot/message/reply", {
+    const r = await tfetch("https://api.line.me/v2/bot/message/reply", {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN()}` },
       body: JSON.stringify({ replyToken, messages: [{ type: "text", text }] }),
     });
-  } catch (_) { /* ignore */ }
+    return r.ok;
+  } catch (_) { return false; }
+}
+// push fallback (used when the free reply fails, e.g. token expired)
+async function linePush(to, text) {
+  try {
+    const r = await tfetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN()}` },
+      body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
+    });
+    return r.ok;
+  } catch (_) { return false; }
+}
+// send a reply (try free reply token, fall back to push) then record it
+async function sendAuto(replyToken, convId, text) {
+  const ok = await lineReply(replyToken, text);
+  if (!ok) await linePush(convId, text);
+  await recordAutoReply(convId, text);
 }
 // is "now" within business hours? (computed in Thai time, UTC+7)
 function isOpenNow(cfg) {
@@ -110,8 +127,7 @@ async function autoReply(replyToken, convId, isNew, isUser) {
     if (!cfg || !cfg.enabled) return;
     // 1) welcome a brand-new contact (their first message)
     if (isNew && cfg.welcome_enabled && (cfg.welcome_text || "").trim()) {
-      await lineReply(replyToken, cfg.welcome_text);
-      await recordAutoReply(convId, cfg.welcome_text);
+      await sendAuto(replyToken, convId, cfg.welcome_text);
       return;                                   // don't also send after-hours on the first message
     }
     // 2) after-hours auto-reply (with cooldown so we don't reply to every message)
@@ -120,8 +136,7 @@ async function autoReply(replyToken, convId, isNew, isUser) {
       const r = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=last_autoreply_at`, { headers: sbH() });
       const last = r.ok ? (await r.json())[0]?.last_autoreply_at : null;
       if (last && (Date.now() - new Date(last).getTime()) < cd * 60000) return; // too soon since last auto-reply
-      await lineReply(replyToken, cfg.afterhours_text);
-      await recordAutoReply(convId, cfg.afterhours_text);
+      await sendAuto(replyToken, convId, cfg.afterhours_text);
     }
   } catch (_) { /* never break the webhook */ }
 }
