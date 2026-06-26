@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, markAdvancesPaid, getPositions, savePositions, uploadSignature } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, getPositions, savePositions, uploadSignature } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -40,7 +40,7 @@ export default function HR({ role }) {
 
       {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "leaves" && <LeavesTab staff={staff} holSet={holSet} canManage={canManage} flash={flash} />}
-      {tab === "advances" && <AdvancesTab flash={flash} />}
+      {tab === "advances" && <AdvancesTab canManage={canManage} flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
@@ -227,9 +227,10 @@ function LeaveEditModal({ leave, staff, holSet, onClose, onSaved, flash }) {
 }
 
 // ---------- CASH ADVANCES (เบิกเงินล่วงหน้า) ----------
-function AdvancesTab({ flash }) {
+function AdvancesTab({ canManage, flash }) {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [edit, setEdit] = React.useState(null); // advance being edited
   async function load() { try { setList(await listAdvances()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
   React.useEffect(() => { load(); }, []);
   async function decide(a, status) {
@@ -237,6 +238,11 @@ function AdvancesTab({ flash }) {
     if (!await confirmDialog(`${lbl}คำขอเบิก ${fmtBaht(a.amount)} ของ ${a.name}?`)) return;
     try { await decideAdvance(a.id, status); flash(lbl + "แล้ว"); load(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function del(a) {
+    if (!await confirmDialog(`ลบคำขอเบิก ${fmtBaht(a.amount)} ของ ${a.name}?`)) return;
+    try { await deleteAdvance(a.id); flash("ลบคำขอแล้ว"); load(); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
   const B = { pending: { t: "รออนุมัติ", c: "b-amber" }, approved: { t: "อนุมัติ · รอหัก", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", c: "b-red" }, paid: { t: "หักแล้ว", c: "b-green" } };
   if (loading) return <div className="empty">กำลังโหลด…</div>;
@@ -259,11 +265,46 @@ function AdvancesTab({ flash }) {
               {a.status !== "paid" && a.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
               {a.status !== "paid" && a.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
               {a.status !== "paid" && a.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
+              {canManage && a.status !== "paid" && <button className="btn-ghost sm" title="แก้ไขคำขอ" onClick={() => setEdit(a)}><UIcon name="edit" size={13} /></button>}
+              {canManage && a.status !== "paid" && <button className="btn-ghost sm danger" title="ลบคำขอ" onClick={() => del(a)}><UIcon name="trash" size={13} /></button>}
             </div>
           </div>
         ); })}
       </div>
       <p className="page-sub" style={{ marginTop: 8 }}>* ยอดที่ “อนุมัติ” แล้วจะถูกหักอัตโนมัติในรอบเงินเดือนถัดไป แล้วเปลี่ยนเป็น “หักแล้ว” เมื่อกดทำจ่ายทั้งรอบ</p>
+      {edit && <AdvanceEditModal adv={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
+    </div>
+  );
+}
+
+// HR/admin edit a cash-advance request (amount / date / reason)
+function AdvanceEditModal({ adv, onClose, onSaved, flash }) {
+  const [amount, setAmount] = React.useState(adv.amount);
+  const [date, setDate] = React.useState(adv.request_date);
+  const [reason, setReason] = React.useState(adv.reason || "");
+  const [busy, setBusy] = React.useState(false);
+  async function save() {
+    if (!(Number(amount) > 0)) { flash("จำนวนเงินไม่ถูกต้อง", true); return; }
+    setBusy(true);
+    try { await updateAdvance(adv.id, { amount, request_date: date, reason }); flash("บันทึกคำขอแล้ว ✓"); onSaved(); }
+    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 400 }}>
+        <div className="modal-head"><div className="modal-title">แก้ไขคำขอเบิก · {adv.name}</div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="fld-row">
+            <label className="fld"><span>จำนวนเงิน (บาท)</span><input className="inp" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
+            <label className="fld"><span>วันที่ขอ</span><input className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          </div>
+          <label className="fld" style={{ marginTop: 8 }}><span>เหตุผล</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy} onClick={save}>บันทึก</button></div>
+      </div>
     </div>
   );
 }

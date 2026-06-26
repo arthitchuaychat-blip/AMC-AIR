@@ -2086,6 +2086,17 @@ export async function markAdvancesPaid(period, ids) {
   const { error } = await supabase.from("hr_advances").update({ status: "paid", period }).in("id", ids);
   if (error) throw error;
 }
+// HR/admin edit a cash-advance request (amount / request_date / reason)
+export async function updateAdvance(id, fields) {
+  const patch = { amount: Number(fields.amount) || 0, request_date: fields.request_date, reason: fields.reason || null };
+  const { error } = await supabase.from("hr_advances").update(patch).eq("id", id);
+  if (error) throw error;
+}
+// HR/admin delete a cash-advance request
+export async function deleteAdvance(id) {
+  const { error } = await supabase.from("hr_advances").delete().eq("id", id);
+  if (error) throw error;
+}
 
 // per-person leave quota (per year). Falls back to hr_settings defaults in the UI when no row.
 export async function getLeaveQuotas(year) {
