@@ -84,6 +84,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
   const [busy, setBusy] = React.useState(null);
   const [teamF, setTeamF] = React.useState("all");
   const [statusF, setStatusF] = React.useState("all");
+  const [jobPreview, setJobPreview] = React.useState(null);
   const STATUS = { done: { t: "เสร็จ", c: "b-green" }, in_progress: { t: "กำลังทำ", c: "b-amber" }, scheduled: { t: "นัดแล้ว", c: "b-blue" }, pending: { t: "รอจ่ายงาน", c: "b-grey" }, awaiting_approval: { t: "รออนุมัติ", c: "b-purple" }, reschedule: { t: "นัดเพิ่ม", c: "b-orange" } };
   // only show team / status options that actually appear in the current job list
   const teamOpts = (subTeams || []).filter((t) => jobs.some((j) => j.assigned_team === t.id));
@@ -129,7 +130,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
           return (
             <div className="sub-job-row" key={j.job_no}>
               <div className="sub-job-main">
-                <div>{j.scheduled_at && <span className="jo-dim" style={{ fontSize: 11, marginRight: 5 }}>{fmtDate(j.scheduled_at)}</span>}<button type="button" className="sub-job-link" onClick={() => onOpenDoc && onOpenDoc("job", j.job_no)} title="เปิดใบงาน · ดูความเคลื่อนไหว">{j.job_no}</button> <span className={"job-badge " + st.c}>{st.t}</span>
+                <div>{j.scheduled_at && <span className="jo-dim" style={{ fontSize: 11, marginRight: 5 }}>{fmtDate(j.scheduled_at)}</span>}<button type="button" className="sub-job-link" onClick={() => setJobPreview(j)} title="ดูรายละเอียดงาน">{j.job_no}</button> <span className={"job-badge " + st.c}>{st.t}</span>
                   {q?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}
                   {j.is_claim && <span className="vat-badge vat-off">เคลม</span>}</div>
                 <div className="jo-dim">{j.customerName || "-"} · ทีม {teamById[j.assigned_team]?.name || j.assigned_team} · {j.title || "งาน"}</div>
@@ -149,6 +150,37 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
         })}
       </div>
       {edit && <LaborEditor job={edit} quote={quoteBy[edit.quote_no]} rate={teamById[edit.assigned_team]?.payout_rate ?? 80} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onReload(); }} flash={flash} />}
+      {jobPreview && (() => {
+        const jp = jobPreview; const st2 = { done: { t: "เสร็จ", c: "b-green" }, in_progress: { t: "กำลังทำ", c: "b-amber" }, scheduled: { t: "นัดแล้ว", c: "b-blue" }, pending: { t: "รอจ่ายงาน", c: "b-grey" }, awaiting_approval: { t: "รออนุมัติ", c: "b-purple" }, reschedule: { t: "นัดเพิ่ม", c: "b-orange" }, cancelled: { t: "ยกเลิก", c: "b-red" } };
+        const jst = st2[jp.status] || { t: jp.status, c: "b-grey" }; const team = teamById[jp.assigned_team];
+        return (
+          <div className="confirm-overlay" onMouseDown={() => setJobPreview(null)}>
+            <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 480, textAlign: "left", padding: "20px 22px", gap: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{jp.job_no}</span>
+                  <span className={"job-badge " + jst.c}>{jst.t}</span>
+                </div>
+                <button className="btn-ghost sm" onClick={() => setJobPreview(null)} style={{ padding: "2px 10px" }}>✕</button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 13.5 }}>
+                {jp.title && <div><b>{jp.title}</b></div>}
+                <div>🏢 <b>{jp.customerName || "-"}</b>{jp.customerAddr ? <span className="jo-dim"> · {jp.customerAddr}</span> : null}</div>
+                {(jp.contact_name || jp.contact_phone) && <div>👤 {jp.contact_name || ""}{jp.contact_phone && <> · <a href={`tel:${jp.contact_phone}`} style={{ color: "var(--blue)" }}>📞 {jp.contact_phone}</a></>}</div>}
+                {jp.address && <div>📍 {jp.address}{jp.map_url && <> · <a href={jp.map_url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)" }}>แผนที่</a></>}</div>}
+                <div>🗓 {jp.scheduled_at ? fmtDate(jp.scheduled_at) : "ยังไม่กำหนดวัน"}{jp.end_date && jp.end_date !== jp.scheduled_at ? ` – ${fmtDate(jp.end_date)}` : ""}</div>
+                <div>👷 ทีม {team?.name || jp.assigned_team || "-"}</div>
+                {jp.details && <div style={{ background: "var(--surface-2)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap" }}>{jp.details}</div>}
+                {jp.sales_note && <div className="jo-dim" style={{ whiteSpace: "pre-wrap" }}>📌 บรีฟ: {jp.sales_note}</div>}
+              </div>
+              <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn-ghost sm" onClick={() => { setJobPreview(null); onOpenDoc && onOpenDoc("job", jp.job_no); }}>เปิดหน้าใบงาน →</button>
+                <button className="btn-ghost sm" onClick={() => setJobPreview(null)}>ปิด</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
