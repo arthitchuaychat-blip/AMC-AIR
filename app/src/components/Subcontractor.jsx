@@ -408,7 +408,7 @@ function PayoutSlip({ payout, team, jobByNo = {}, onClose, flash }) {
     const paidAll = round2(Number(j.labor_paid_amt) || (thisRound || 0));   // cumulative incl. this round
     const remAfter = round2(Math.max(0, full - paidAll));
     return { ...l, customerName: l.customerName || j.customerName || null, phone: j.contact_phone || null, address: j.address || null,
-      title: j.title || null, full, thisRound, remAfter, partial: thisRound != null && (remAfter > 0.01 || thisRound < full - 0.01) };
+      title: j.title || null, scheduled_at: j.scheduled_at || null, full, thisRound, remAfter, partial: thisRound != null && (remAfter > 0.01 || thisRound < full - 0.01) };
   });
   const totalRemaining = round2(lines.reduce((a, l) => a + (l.remAfter || 0), 0));
   const anyPartial = lines.some((l) => l.partial);
@@ -480,7 +480,7 @@ function PayoutSlip({ payout, team, jobByNo = {}, onClose, flash }) {
                     <span className="ps-job-no">{l.job_no}{l.vat ? <span className="ps-wht-tag">หัก ณ ที่จ่าย 3%</span> : <span className="ps-nowht-tag">ไม่หัก ณ ที่จ่าย</span>}</span>
                     <b className="ps-job-amt">{l.thisRound == null ? "-" : fmtBaht(l.thisRound)}</b>
                   </div>
-                  <div className="ps-job-sub">{l.customerName || "-"}{l.title ? ` · ${l.title}` : ""}</div>
+                  <div className="ps-job-sub">{l.scheduled_at && <span style={{ marginRight: 6 }}>{fmtDate(l.scheduled_at)}</span>}{l.customerName || "-"}{l.title ? ` · ${l.title}` : ""}</div>
                   {(l.phone || l.address) && <div className="ps-job-sub">{l.phone ? `📞 ${l.phone}` : ""}{l.phone && l.address ? " · " : ""}{l.address ? `📍 ${l.address}` : ""}</div>}
                   {l.partial && <div className="ps-job-split">จ่ายงวดนี้ {fmtBaht(l.thisRound)} · คงเหลือค้างจ่าย {fmtBaht(l.remAfter)} (ค่าแรงเต็ม {fmtBaht(l.full)})</div>}
                 </div>
