@@ -78,7 +78,7 @@ const NAV_GROUPS = [
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["customers", "followup", "weborders", "chat"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "tax", "profit", "cashflow", "expenses"] },
-  { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "schedule", "subcontract"] },
+  { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "jobs", "po"] },
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "hr"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
@@ -88,7 +88,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-26·ใบส่งมอบงาน: กรอกร่าง(ก่อน)→กลับมากรอกต่อ(หลัง) v200";
+const BUILD = "2026-06-26·ย้ายใบส่งมอบงานเข้ากลุ่มงานช่าง/หน้างาน v201";
 
 function SetupNotice() {
   return (
