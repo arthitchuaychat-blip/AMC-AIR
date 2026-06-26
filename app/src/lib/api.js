@@ -1115,6 +1115,65 @@ export async function unlockJob(job_no) {
   if (error) throw error;
 }
 
+// ===================== ใบส่งมอบงาน · job handovers =====================
+const HANDOVER_COLS = "id,job_no,customer_id,customer_name,contact_name,contact_phone,address,doc_ref,doc_date,work_types,detail,fix_note,forms,tech_sign_url,tech_name,cust_sign_url,cust_name,status,created_by,created_at,updated_at";
+
+// list handovers (optionally for one job), newest first, with the creator's name attached
+export async function listHandovers(jobNo) {
+  let q = supabase.from("job_handovers").select(HANDOVER_COLS).order("created_at", { ascending: false });
+  if (jobNo) q = q.eq("job_no", jobNo);
+  const { data, error } = await q;
+  if (error) throw error;
+  const rows = data || [];
+  const ids = [...new Set(rows.map((r) => r.created_by).filter(Boolean))];
+  let names = {};
+  if (ids.length) {
+    const { data: ps } = await supabase.from("profiles").select("id,name,email").in("id", ids);
+    names = Object.fromEntries((ps || []).map((p) => [p.id, p.name || p.email]));
+  }
+  return rows.map((r) => ({ ...r, creatorName: names[r.created_by] || "" }));
+}
+
+export async function getHandover(id) {
+  const { data, error } = await supabase.from("job_handovers").select(HANDOVER_COLS).eq("id", id).single();
+  if (error) throw error;
+  return data;
+}
+
+// insert (no id) or update (id present); returns the saved row
+export async function saveHandover(h) {
+  const fields = {
+    job_no: h.job_no || null, customer_id: h.customer_id || null, customer_name: h.customer_name || null,
+    contact_name: h.contact_name || null, contact_phone: h.contact_phone || null, address: h.address || null,
+    doc_ref: h.doc_ref || null, doc_date: h.doc_date || null, work_types: h.work_types || [],
+    detail: h.detail || null, fix_note: h.fix_note || null, forms: h.forms || [],
+    tech_sign_url: h.tech_sign_url || null, tech_name: h.tech_name || null,
+    cust_sign_url: h.cust_sign_url || null, cust_name: h.cust_name || null,
+    status: h.status || "draft", updated_at: new Date().toISOString(),
+  };
+  if (h.id) {
+    const { data, error } = await supabase.from("job_handovers").update(fields).eq("id", h.id).select(HANDOVER_COLS).single();
+    if (error) throw error;
+    return data;
+  }
+  fields.created_by = await _uid();
+  const { data, error } = await supabase.from("job_handovers").insert(fields).select(HANDOVER_COLS).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteHandover(id) {
+  const { error } = await supabase.from("job_handovers").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// draw-on-screen signature (a PNG data URL) → public URL in storage (reuses the staff-signature uploader)
+export async function uploadSignatureDataUrl(dataUrl) {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return uploadSignature(blob);
+}
+
 // office quick action: move every visit of a job whose status is in fromStatuses → toStatus,
 // then recompute the job's overall status (server-side RPC so RLS on job_orders doesn't block it).
 export async function setJobVisitsStatus(jobNo, fromStatuses, toStatus, author) {

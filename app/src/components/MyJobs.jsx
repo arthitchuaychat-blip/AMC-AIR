@@ -13,7 +13,7 @@ const TABS = [["todo", "ต้องทำ (วันนี้)"], ["upcoming", 
 // สถานะที่ช่างดูได้อย่างเดียว — แก้ไข/โพสต์/เบิกวัสดุไม่ได้
 const TECH_READONLY = ["reschedule", "done", "cancelled"];
 
-export default function MyJobs({ role, team, me, onWithdraw }) {
+export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
   const allTeams = role === "lead_tech"; // หัวหน้าช่างเห็นงานทุกทีม
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -175,6 +175,7 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                     );
                   })}
                   {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
+                  {jo.status === "in_progress" && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 ใบส่งมอบงาน</button>}
                 </div>
               ) : (
                 <div className="myjob-actions">
@@ -187,6 +188,7 @@ export default function MyJobs({ role, team, me, onWithdraw }) {
                   {jo.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศนัดหมายเพิ่ม</span>}
                   {jo.status === "done" && <span className="myjob-await">🔒 อนุมัติแล้ว · ปิดงาน</span>}
                   {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
+                  {jo.status === "in_progress" && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 ใบส่งมอบงาน</button>}
                 </div>
               )}
               {jo.status === "in_progress" && expanded[jo.job_no] && <div className="myjob-hint">เข้าหน้างานได้หลายครั้ง · เบิกวัสดุเพิ่มได้ไม่จำกัด · แนบรูป/คอมเมนต์ลงไทม์ไลน์ด้านล่าง</div>}

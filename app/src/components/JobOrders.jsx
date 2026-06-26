@@ -1,11 +1,9 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate, getCompanies } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
-import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
-import JobHandover from "./JobHandover";
 import JobTimeline from "./JobTimeline";
 import DocChips from "./DocChips";
 import ChatCustomerLink from "./ChatCustomerLink";
@@ -23,7 +21,7 @@ const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/s
 const blankVisit = () => ({ date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
 const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", internal_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
 
-export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
+export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onHandover, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   const canEditJob = (jo) => canEdit && (!jo.locked || role === "admin");
@@ -48,16 +46,10 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
   const [templates, setTemplates] = React.useState([]);
   const [tplPick, setTplPick] = React.useState(false); // template picker modal open
-  const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
-  const [printHO, setPrintHO] = React.useState(null); // job being rendered for the handover sheet
-  const printWin = React.useRef(null);
-  // after the hidden handover sheet renders, copy it into the print popup and fire print
-  React.useEffect(() => { if (!printHO) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintHO(null); }, 140); return () => clearTimeout(t); }, [printHO]);
-  function printHandover(jo) { printWin.current = openPrintWindow(); setPrintHO(jo); }
 
   async function load() {
     setLoading(true);
-    try { const [j, c, t, q, dl, ps, tpl, co] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => []), listJobTemplates().catch(() => []), getCompanies().catch(() => null)]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); setTemplates(tpl || []); if (co) setCompanies(co); }
+    try { const [j, c, t, q, dl, ps, tpl] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => []), listJobTemplates().catch(() => [])]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); setTemplates(tpl || []); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -652,7 +644,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
               </div>
               <div className="modal-foot">
                 {canDelete && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const j = jo; setViewing(null); del(j); }}><UIcon name="trash" size={15} /> ลบ</button>}
-                <button className="btn-ghost" onClick={() => printHandover(jo)}><UIcon name="catalog" size={15} /> ใบส่งมอบงาน</button>
+                {onHandover && <button className="btn-ghost" onClick={() => { const j = jo; setViewing(null); onHandover(j); }}><UIcon name="catalog" size={15} /> ใบส่งมอบงาน</button>}
                 {jo.locked && role === "admin" && <button className="btn-ghost" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
                 {canEditJob(jo) && <button className="btn-ghost" onClick={() => addLinked(jo)}><UIcon name="plus" size={15} /> ใบงานเชื่อม</button>}
                 {canEditJob(jo) && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
@@ -680,9 +672,6 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
           </div>
         );
       })()}
-
-      {/* hidden handover sheet — rendered only while printing, copied into the print popup */}
-      {printHO && <JobHandover job={printHO} company={companies.vat?.name ? companies.vat : (companies.novat || {})} />}
 
       {toast && <Toast t={toast} />}
     </div>

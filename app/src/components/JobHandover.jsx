@@ -1,83 +1,71 @@
 import React from "react";
 import { custCode, fmtDocDate } from "../lib/format";
+import { PERF_ROWS, PM_ROWS, WORK_TYPES, AC_TYPES } from "../lib/handover";
 
-// A4 service-handover sheet (ใบส่งมอบงาน) printed/PDF'd from a job order.
-// Header + customer + work-type are pre-filled from the job; the measurement table and PM
-// checklist print blank for the technician to fill in by hand on-site.
+// Printed/PDF A4 sheet of a SAVED handover (filled in by the technician). Renders the header, the
+// ticked work-types, every sub-form (perf measurement / PM checklist) with the recorded values, and
+// both signatures. Multiple forms flow onto extra A4 pages via native print pagination.
 
-// การวัดประสิทธิภาพ — [label, kind] · kind: "ck" = ปกติ/ไม่ปกติ, or a unit string written by hand
-const PERF = [
-  ["มอเตอร์พัดลมคอยล์เย็น (FCU)", "ck"],
-  ["สัญญาณไฟหน้าเครื่องคอยล์เย็น", "ck"],
-  ["มอเตอร์บานสวิง บน-ล่าง", "ck"],
-  ["มอเตอร์บานสวิง ซ้าย-ขวา", "ck"],
-  ["แรงลมหน้าคอยล์เย็น (FCU)", "Km/h"],
-  ["อุณหภูมิลมส่งคอยล์เย็น (FCU)", "°C"],
-  ["อุณหภูมิลมกลับคอยล์เย็น (FCU)", "°C"],
-  ["มอเตอร์พัดลมคอยล์ร้อน (CDU)", "ck"],
-  ["อุณหภูมิลมส่งคอยล์ร้อน (CDU)", "°C"],
-  ["อุณหภูมิลมกลับคอยล์ร้อน (CDU)", "°C"],
-  ["กระแสไฟฟ้า", "A"],
-  ["แรงดันไฟฟ้า", "V"],
-  ["แรงดันน้ำยาด้านดูด", "PSI"],
-  ["การทำงานของคอมเพรสเซอร์", "ck"],
-];
+const ckText = (v) => (v === "ok" ? "ปกติ" : v === "bad" ? "ไม่ปกติ" : "");
+const Tick = ({ on }) => <i className={"ho-cb-box" + (on ? " on" : "")} />;
 
-// การดำเนินการงาน งานล้าง/PM — ได้ทำ/ไม่ได้ทำ
-const PM = [
-  "ถอดอุปกรณ์แยกชิ้นส่วน (FCU) ล้างทำความสะอาด",
-  "ถอดแผ่นกรองอากาศ FILTER ล้างทำความสะอาด",
-  "ถอด BLOWER ล้างทำความสะอาด",
-  "อัดฉีดท่อน้ำทิ้งไล่เมือกตะกรัน",
-  "ล้างทำความสะอาดฟินคอยล์เย็น (EVAP COIL INDOOR UNIT)",
-  "ล้างทำความสะอาดฟินคอยล์ร้อน (CONDENSER COIL OUTDOOR UNIT)",
-  "เช็ครั่วเซอร์วิสวาล์ว",
-  "วัดแรงดันน้ำยา (สารทำความเย็น)",
-  "ตรวจสอบมอเตอร์พัดลมคอยล์เย็น",
-  "ตรวจสอบมอเตอร์พัดลมคอยล์ร้อน",
-  "ตรวจสอบแรงดันไฟ และ กระแสไฟ",
-  "ตรวจสอบวงจรควบคุมอุณหภูมิ รีโมท และสวิตช์เบรกเกอร์เปิดปิด",
-  "ตรวจสอบการทำงานของคอมเพรสเซอร์",
-  "ตรวจสอบประสิทธิภาพโดยรวมเครื่องปรับอากาศ",
-  "เช็คความแน่น นอต สกรู",
-];
+function MachineLine({ m = {} }) {
+  const parts = [
+    m.code && `รหัส ${m.code}`, m.type, m.brand && `ยี่ห้อ ${m.brand}`, m.model && `รุ่น ${m.model}`,
+    m.btu && `${m.btu} BTU`, m.building && `อาคาร ${m.building}`, m.floor && `ชั้น ${m.floor}`, m.room && `ห้อง ${m.room}`,
+  ].filter(Boolean);
+  return <div className="ho-mline">{parts.length ? parts.join("  ·  ") : "— ไม่ระบุข้อมูลเครื่อง —"}</div>;
+}
 
-// job_type → which ประเภทงาน box is ticked
-const workTicks = (t) => ({
-  install: t === "install",
-  maintenance: t === "maintenance",
-  move: false,
-  repair: t === "repair",
-  surveyInstall: t === "survey",
-  surveyRepair: false,
-  other: t === "other",
-});
-
-const Box = ({ on }) => <i className={"ho-cb-box" + (on ? " on" : "")} />;
-const Radio = () => <span className="ho-radio" />;
-
-// a labelled write-in field: label then a dotted underline holding the (optional) pre-filled value
-function F({ label, value, grow }) {
+function PerfForm({ f }) {
   return (
-    <div className={"ho-f" + (grow ? " grow" : "")}>
-      <span className="ho-f-l">{label}</span>
-      <span className="ho-f-v">{value || ""}</span>
-    </div>
+    <table className="ho-tbl">
+      <thead>
+        <tr><th className="n">ลำดับ</th><th>รายละเอียด</th><th className="rec" colSpan={2}>บันทึกผล</th></tr>
+        <tr className="ho-tbl-sub"><th /><th /><th>ก่อน</th><th>หลัง</th></tr>
+      </thead>
+      <tbody>
+        {PERF_ROWS.map(([label, kind], i) => {
+          const v = (f.rows && f.rows[i]) || { b: "", a: "" };
+          const cell = (side) => kind === "ck"
+            ? <td className="ck">{v[side] ? <b className={v[side] === "bad" ? "ho-bad" : "ho-ok"}>{ckText(v[side])}</b> : ""}</td>
+            : <td className="u">{v[side] ? `${v[side]} ${kind}` : ""}</td>;
+          return <tr key={i}><td className="n">{i + 1}</td><td className="lbl">{label}</td>{cell("b")}{cell("a")}</tr>;
+        })}
+      </tbody>
+    </table>
   );
 }
 
-export default function JobHandover({ job = {}, company = {} }) {
+function PmForm({ f }) {
+  return (
+    <table className="ho-tbl">
+      <thead>
+        <tr><th className="n">ลำดับ</th><th>รายละเอียด</th><th className="rec" colSpan={2}>บันทึกผล</th></tr>
+        <tr className="ho-tbl-sub"><th /><th /><th>ได้ทำ</th><th>ไม่ได้ทำ</th></tr>
+      </thead>
+      <tbody>
+        {PM_ROWS.map((label, i) => {
+          const v = f.rows && f.rows[i];
+          return <tr key={i}><td className="n">{i + 1}</td><td className="lbl">{label}</td>
+            <td className="ck">{v === "done" ? <b className="ho-ok">✓</b> : ""}</td>
+            <td className="ck">{v === "not" ? <b className="ho-bad">✕</b> : ""}</td></tr>;
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+export default function JobHandover({ handover = {}, company = {} }) {
   const co = company || {};
-  const w = workTicks(job.job_type);
-  // schedule date: first visit's date, else the job's scheduled_at
-  const schedAt = (job.visits && job.visits.length && job.visits[0].scheduled_at) || job.scheduled_at;
-  const dateStr = schedAt ? fmtDocDate(schedAt) : "";
-  const phone = job.contact_phone || "";
+  const h = handover || {};
+  const works = h.work_types || [];
+  const forms = h.forms || [];
 
   return (
     <div className="print-area">
       <div className="ho">
-        {/* ── letterhead ───────────────────────────────────────────── */}
+        {/* ── letterhead ── */}
         <div className="ho-head">
           <div className="ho-titlebox">
             <div className="ho-orig">ต้นฉบับ สำหรับลูกค้า</div>
@@ -93,132 +81,69 @@ export default function JobHandover({ job = {}, company = {} }) {
             </div>
           </div>
           <div className="ho-meta">
-            <F label="เลขที่งาน JOB NO" value={job.job_no} />
-            <F label="วันที่" value={dateStr} />
-            <F label="เอกสารอ้างอิง" value={job.quote_no} />
+            <div className="ho-f"><span className="ho-f-l">เลขที่งาน JOB NO</span><span className="ho-f-v">{h.job_no || ""}</span></div>
+            <div className="ho-f"><span className="ho-f-l">วันที่</span><span className="ho-f-v">{h.doc_date ? fmtDocDate(h.doc_date) : ""}</span></div>
+            <div className="ho-f"><span className="ho-f-l">เอกสารอ้างอิง</span><span className="ho-f-v">{h.doc_ref || ""}</span></div>
           </div>
         </div>
 
-        {/* ── two-column body ──────────────────────────────────────── */}
+        {/* ── customer + work types ── */}
         <div className="ho-body">
-          {/* LEFT */}
           <div className="ho-col">
             <section className="ho-sec">
               <div className="ho-sec-h">ผู้รับบริการ</div>
               <div className="ho-sec-b">
-                <F label="รหัสลูกค้า" value={job.customer_id ? custCode(job.customer_id) : ""} />
-                <F label="บริษัท / ชื่อ-สกุล" value={job.customerName} />
-                <F label="ผู้ติดต่อ" value={job.contact_name} />
-                <F label="เบอร์โทร" value={phone} />
-                <F label="ที่อยู่" value={job.address} />
-                <div className="ho-blank-line" />
-              </div>
-            </section>
-
-            <section className="ho-sec">
-              <div className="ho-sec-h">สินค้า / บริการ</div>
-              <div className="ho-sec-b ho-svc">
-                <div className="ho-svc-col">
-                  <div className="ho-svc-cap">ประเภทงาน</div>
-                  <label className="ho-cb"><Box on={w.install} />ติดตั้ง</label>
-                  <label className="ho-cb"><Box on={w.maintenance} />ล้าง</label>
-                  <label className="ho-cb"><Box on={w.move} />ย้าย</label>
-                  <label className="ho-cb"><Box on={w.repair} />ซ่อม</label>
-                  <label className="ho-cb"><Box on={w.surveyInstall} />สำรวจงานติดตั้ง</label>
-                  <label className="ho-cb"><Box on={w.surveyRepair} />สำรวจงานซ่อม</label>
-                  <label className="ho-cb"><Box on={w.other} />อื่น ๆ</label>
-                </div>
-                <div className="ho-svc-col">
-                  <div className="ho-svc-cap">ประเภทเครื่องปรับอากาศ</div>
-                  <label className="ho-cb"><Box />ติดผนัง</label>
-                  <label className="ho-cb"><Box />แขวน</label>
-                  <label className="ho-cb"><Box />ฝังฝ้า</label>
-                  <label className="ho-cb"><Box />เปลือย</label>
-                  <F label="รหัสประจำเครื่อง" />
-                  <F label="อาคาร" />
-                  <F label="ชั้น" />
-                  <F label="ห้อง" />
-                  <F label="ยี่ห้อ" />
-                  <F label="รุ่น" />
-                  <F label="ขนาด (BTU)" />
-                </div>
-              </div>
-            </section>
-
-            <section className="ho-sec">
-              <div className="ho-sec-h">รายละเอียดสินค้า / บริการ / อาการเสีย / การสำรวจหน้างาน</div>
-              <div className="ho-sec-b">
-                {job.details ? <div className="ho-details">{job.details}</div> : null}
-                <div className="ho-blank-line" /><div className="ho-blank-line" />
-                <div className="ho-blank-line" /><div className="ho-blank-line" />
-              </div>
-            </section>
-
-            <section className="ho-sec">
-              <div className="ho-sec-h">การแก้ไข / หมายเหตุอื่น ๆ</div>
-              <div className="ho-sec-b">
-                <div className="ho-blank-line" /><div className="ho-blank-line" /><div className="ho-blank-line" />
+                {h.customer_id ? <div className="ho-f"><span className="ho-f-l">รหัสลูกค้า</span><span className="ho-f-v">{custCode(h.customer_id)}</span></div> : null}
+                <div className="ho-f"><span className="ho-f-l">บริษัท / ชื่อ-สกุล</span><span className="ho-f-v">{h.customer_name || ""}</span></div>
+                <div className="ho-f"><span className="ho-f-l">ผู้ติดต่อ</span><span className="ho-f-v">{h.contact_name || ""}</span></div>
+                <div className="ho-f"><span className="ho-f-l">เบอร์โทร</span><span className="ho-f-v">{h.contact_phone || ""}</span></div>
+                <div className="ho-f"><span className="ho-f-l">ที่อยู่</span><span className="ho-f-v">{h.address || ""}</span></div>
               </div>
             </section>
           </div>
-
-          {/* RIGHT */}
           <div className="ho-col">
             <section className="ho-sec">
-              <div className="ho-sec-h">การวัดประสิทธิภาพ</div>
-              <table className="ho-tbl">
-                <thead>
-                  <tr><th className="n">ลำดับ</th><th>รายละเอียด</th><th className="rec" colSpan={2}>บันทึกผล</th></tr>
-                  <tr className="ho-tbl-sub"><th /><th /><th>ก่อน</th><th>หลัง</th></tr>
-                </thead>
-                <tbody>
-                  {PERF.map(([label, kind], i) => (
-                    <tr key={i}>
-                      <td className="n">{i + 1}</td>
-                      <td className="lbl">{label}</td>
-                      {kind === "ck"
-                        ? <><td className="ck"><Radio />ปกติ <Radio />ไม่ปกติ</td><td className="ck"><Radio />ปกติ <Radio />ไม่ปกติ</td></>
-                        : <><td className="u">{kind}</td><td className="u">{kind}</td></>}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="ho-note-line"><span>หมายเหตุ</span></div>
-            </section>
-
-            <section className="ho-sec">
-              <div className="ho-sec-h">การดำเนินการงาน · งานล้าง / PM</div>
-              <table className="ho-tbl">
-                <thead>
-                  <tr><th className="n">ลำดับ</th><th>รายละเอียด</th><th className="rec" colSpan={2}>บันทึกผล</th></tr>
-                  <tr className="ho-tbl-sub"><th /><th /><th>ได้ทำ</th><th>ไม่ได้ทำ</th></tr>
-                </thead>
-                <tbody>
-                  {PM.map((label, i) => (
-                    <tr key={i}>
-                      <td className="n">{i + 1}</td>
-                      <td className="lbl">{label}</td>
-                      <td className="ck"><Radio /></td>
-                      <td className="ck"><Radio /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="ho-sec-h">ประเภทงาน</div>
+              <div className="ho-sec-b ho-worktypes">
+                {WORK_TYPES.map(([v, l]) => <label className="ho-cb" key={v}><Tick on={works.includes(v)} />{l}</label>)}
+              </div>
             </section>
           </div>
         </div>
 
-        {/* ── signatures ───────────────────────────────────────────── */}
+        {h.detail ? (
+          <section className="ho-sec ho-sec-block">
+            <div className="ho-sec-h">รายละเอียด / อาการเสีย / การสำรวจหน้างาน</div>
+            <div className="ho-sec-b"><div className="ho-details">{h.detail}</div></div>
+          </section>
+        ) : null}
+
+        {/* ── each sub-form ── */}
+        {forms.map((f, i) => (
+          <section className="ho-sec ho-sec-block ho-form-print" key={i}>
+            <div className="ho-sec-h">{f.kind === "pm" ? "การดำเนินการงาน · งานล้าง / PM" : "การวัดประสิทธิภาพ"} · เครื่องที่ {i + 1}</div>
+            <div className="ho-form-machine"><MachineLine m={f.machine} /></div>
+            {f.kind === "pm" ? <PmForm f={f} /> : <PerfForm f={f} />}
+            {f.note ? <div className="ho-form-note">หมายเหตุ: {f.note}</div> : null}
+          </section>
+        ))}
+
+        {h.fix_note ? (
+          <section className="ho-sec ho-sec-block">
+            <div className="ho-sec-h">การแก้ไข / หมายเหตุอื่น ๆ</div>
+            <div className="ho-sec-b"><div className="ho-details">{h.fix_note}</div></div>
+          </section>
+        ) : null}
+
+        {/* ── signatures ── */}
         <div className="ho-signs">
           <div className="ho-sign">
-            <div className="ho-sign-line" />
-            <div className="ho-sign-lbl">ลงชื่อ ......................................... ผู้รับบริการ</div>
-            <div className="ho-sign-paren">( ......................................... )</div>
+            {h.cust_sign_url ? <img className="ho-sign-img" src={h.cust_sign_url} alt="" /> : <div className="ho-sign-blank" />}
+            <div className="ho-sign-lbl">ผู้รับบริการ{h.cust_name ? ` · ${h.cust_name}` : ""}</div>
           </div>
           <div className="ho-sign">
-            <div className="ho-sign-line" />
-            <div className="ho-sign-lbl">ลงชื่อ ......................................... ช่างผู้ให้บริการ</div>
-            <div className="ho-sign-paren">( ......................................... )</div>
+            {h.tech_sign_url ? <img className="ho-sign-img" src={h.tech_sign_url} alt="" /> : <div className="ho-sign-blank" />}
+            <div className="ho-sign-lbl">ช่างผู้ให้บริการ{h.tech_name ? ` · ${h.tech_name}` : ""}</div>
           </div>
         </div>
         <div className="ho-ack">ผู้รับบริการได้รับทราบ และยอมรับการดำเนินการดังกล่าวตามเอกสารข้างต้น</div>

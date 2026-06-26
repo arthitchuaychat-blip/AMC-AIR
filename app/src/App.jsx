@@ -25,6 +25,7 @@ import CashFlow from "./components/CashFlow";
 import Expenses from "./components/Expenses";
 import BillingNotes from "./components/BillingNotes";
 import JobOrders from "./components/JobOrders";
+import Handover from "./components/Handover";
 import Schedule from "./components/Schedule";
 import Chat from "./components/Chat";
 import TeamChat from "./components/TeamChat";
@@ -62,6 +63,7 @@ const NAV = {
   cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "trend" },
   expenses: { th: "เบิกจ่าย", en: "Expenses", icon: "withdraw" },
   joborders: { th: "ใบงาน", en: "Job Orders", icon: "clipboard" },
+  handover: { th: "ใบส่งมอบงาน", en: "Handover", icon: "catalog" },
   schedule: { th: "ปฏิทินงาน", en: "Schedule", icon: "calendar" },
   movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "withdraw" },
   jobs: { th: "วัสดุที่ใช้ในงาน", en: "Jobs & Cost", icon: "box" },
@@ -86,7 +88,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-26·ใบส่งมอบงาน พิมพ์/PDF จากใบงาน (v198)";
+const BUILD = "2026-06-26·ใบส่งมอบงาน: ช่างกรอกในแอป (หลายแบบฟอร์ม+เซ็นบนจอ) v199";
 
 function SetupNotice() {
   return (
@@ -120,6 +122,8 @@ export default function App() {
   const [withdrawCtx, setWithdrawCtx] = React.useState(null);
   const [quoteFocus, setQuoteFocus] = React.useState(null);
   const [jobFocus, setJobFocus] = React.useState(null);
+  const [hoStartJob, setHoStartJob] = React.useState(null);   // open a NEW handover for this job
+  const [hoFocusJob, setHoFocusJob] = React.useState(null);   // filter the handover list to this job_no
   const [jobSurveyCust, setJobSurveyCust] = React.useState(null); // open a new survey job for this customer id
   const [custFocus, setCustFocus] = React.useState(null);
   const [boqFocus, setBoqFocus] = React.useState(null);
@@ -412,10 +416,11 @@ export default function App() {
         {view === "cashflow" && <CashFlow />}
         {view === "expenses" && <Expenses role={role} me={profile} />}
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
-          surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)}
+          surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
+        {view === "handover" && <Handover role={role} me={profile?.name || profile?.email} startJob={hoStartJob} onStartConsumed={() => setHoStartJob(null)} focusJob={hoFocusJob} onFocusConsumed={() => setHoFocusJob(null)} />}
         {view === "schedule" && <Schedule role={role} team={profile?.team} me={profile?.name || profile?.email} onOpenJob={(jn) => { if (can(role, "joborders")) { setJobFocus(jn); go("joborders"); } else { go("myjobs"); } }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}
-        {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} />}
+        {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}
