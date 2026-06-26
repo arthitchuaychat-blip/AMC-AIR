@@ -388,6 +388,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       <div className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "") + (m.type === "sticker" && m.image_url ? " sticker" : "")}
                         style={coworker ? { background: cwColor, borderColor: cwColor } : undefined}>
                         {coworker && <span className="chat-sender">{senderName}</span>}
+                        {!out && m.sender_name && <span className="chat-sender" style={{ color: "#0891b2" }}>{m.sender_name}</span>}
                         {m.quoted_message_id && (() => {
                           const orig = byLineId[m.quoted_message_id];
                           return (

@@ -282,6 +282,14 @@ export default async function handler(req, res) {
         else if (m.type === "audio") { row.file_url = await saveContent(m.id, "m4a", "audio/m4a"); row.file_name = "เสียง.m4a"; row.text = "[เสียง]"; }
         else if (m.type === "location") { const q = (m.latitude != null && m.longitude != null) ? `${m.latitude},${m.longitude}` : encodeURIComponent(m.address || ""); row.file_url = `https://www.google.com/maps/search/?api=1&query=${q}`; row.text = `📍 ${m.title || m.address || "ตำแหน่งที่ตั้ง"}`; }
         else { row.text = `[${m.type}]`; }
+        // for group/room messages, capture the individual sender's display name
+        if (src.type === "group" && src.userId) {
+          const member = await lineGet(`group/${src.groupId}/member/${src.userId}`);
+          if (member?.displayName) { row.sender_id = src.userId; row.sender_name = member.displayName; }
+        } else if (src.type === "room" && src.userId) {
+          const member = await lineGet(`room/${src.roomId}/member/${src.userId}`);
+          if (member?.displayName) { row.sender_id = src.userId; row.sender_name = member.displayName; }
+        }
         await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
         await tfetch(`${SB()}/rest/v1/rpc/line_bump_unread`, { method: "POST", headers: sbH(), body: JSON.stringify({ p_uid: convId, p_msg: row.text || "[ข้อความ]" }) });
         await notifyCustomerChat("💬 ข้อความใหม่จากลูกค้า (LINE)", row.text || "[ข้อความ]", convId);
