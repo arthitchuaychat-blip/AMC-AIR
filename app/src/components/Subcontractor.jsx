@@ -172,6 +172,27 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
                 <div>👷 ทีม {team?.name || jp.assigned_team || "-"}</div>
                 {jp.details && <div style={{ background: "var(--surface-2)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap" }}>{jp.details}</div>}
                 {jp.sales_note && <div className="jo-dim" style={{ whiteSpace: "pre-wrap" }}>📌 บรีฟ: {jp.sales_note}</div>}
+                {(() => { const items = quoteBy[jp.quote_no]?.items; if (!items?.length) return null; return (
+                  <div style={{ marginTop: 4 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: "var(--ink-2)", marginBottom: 4 }}>รายการสินค้า</div>
+                    <table style={{ width: "100%", fontSize: 12.5, borderCollapse: "collapse" }}>
+                      <thead><tr style={{ borderBottom: "1px solid var(--line)", color: "var(--ink-2)" }}>
+                        <th style={{ textAlign: "left", padding: "3px 4px", fontWeight: 500 }}>รายการ</th>
+                        <th style={{ textAlign: "right", padding: "3px 4px", fontWeight: 500 }}>จำนวน</th>
+                        <th style={{ textAlign: "right", padding: "3px 4px", fontWeight: 500 }}>ราคา/หน่วย</th>
+                        <th style={{ textAlign: "right", padding: "3px 4px", fontWeight: 500 }}>รวม</th>
+                      </tr></thead>
+                      <tbody>{items.map((it, i) => { const qty = Number(it.qty) || 0; const price = Number(it.unit_price) || 0; return (
+                        <tr key={i} style={{ borderBottom: "1px solid var(--line)" }}>
+                          <td style={{ padding: "4px 4px" }}>{it.name}{it.description ? <div className="jo-dim" style={{ fontSize: 11 }}>{it.description}</div> : null}</td>
+                          <td style={{ textAlign: "right", padding: "4px 4px", whiteSpace: "nowrap" }}>{qty} {it.unit || ""}</td>
+                          <td style={{ textAlign: "right", padding: "4px 4px", whiteSpace: "nowrap" }}>{fmtBaht(price)}</td>
+                          <td style={{ textAlign: "right", padding: "4px 4px", whiteSpace: "nowrap", fontWeight: 600 }}>{fmtBaht(qty * price)}</td>
+                        </tr>); })}
+                      </tbody>
+                    </table>
+                  </div>
+                ); })()}
               </div>
               <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
                 <button className="btn-ghost sm" onClick={() => { setJobPreview(null); onOpenDoc && onOpenDoc("job", jp.job_no); }}>เปิดหน้าใบงาน →</button>
