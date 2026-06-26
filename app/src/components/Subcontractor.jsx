@@ -384,6 +384,7 @@ function PayTeam({ team, list, quoteBy, flash, onCreated }) {
   const [pct, setPct] = React.useState(100);
   const [amt, setAmt] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [jobPreview, setJobPreview] = React.useState(null);
 
   const chosen = list.filter((j) => sel[j.job_no]);
   const sumRem = round2(chosen.reduce((a, j) => a + remaining(j), 0));
@@ -421,7 +422,7 @@ function PayTeam({ team, list, quoteBy, flash, onCreated }) {
         return (
           <label className="sub-pay-job" key={j.job_no}>
             <input type="checkbox" checked={!!sel[j.job_no]} onChange={(e) => setSel((s) => ({ ...s, [j.job_no]: e.target.checked }))} />
-            <span className="sub-pay-no">{j.scheduled_at && <span className="jo-dim" style={{ fontSize: 11, marginRight: 5 }}>{fmtDate(j.scheduled_at)}</span>}{j.job_no} {quoteBy[j.quote_no]?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}</span>
+            <span className="sub-pay-no">{j.scheduled_at && <span className="jo-dim" style={{ fontSize: 11, marginRight: 5 }}>{fmtDate(j.scheduled_at)}</span>}<button type="button" className="sub-job-link" onClick={(e) => { e.preventDefault(); setJobPreview(j); }}>{j.job_no}</button> {quoteBy[j.quote_no]?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}</span>
             <span className="jo-dim" style={{ flex: 1 }}>{j.customerName || "-"}</span>
             <b>{fmtBaht(rem)}{partial ? <span className="jo-dim" style={{ fontWeight: 400 }}> / {fmtBaht(j.labor_total)}</span> : ""}</b>
           </label>
@@ -441,6 +442,57 @@ function PayTeam({ team, list, quoteBy, flash, onCreated }) {
             <button className="btn-primary sm" disabled={busy || gross <= 0} onClick={create}>สร้างใบรอจ่าย</button></div>
         </div>
       )}
+      {jobPreview && (() => {
+        const jp = jobPreview; const ST = { done: { t: "เสร็จ", c: "b-green" }, in_progress: { t: "กำลังทำ", c: "b-amber" }, scheduled: { t: "นัดแล้ว", c: "b-blue" }, pending: { t: "รอจ่ายงาน", c: "b-grey" }, awaiting_approval: { t: "รออนุมัติ", c: "b-purple" }, reschedule: { t: "นัดเพิ่ม", c: "b-orange" }, cancelled: { t: "ยกเลิก", c: "b-red" } };
+        const jst = ST[jp.status] || { t: jp.status, c: "b-grey" };
+        return (
+          <div className="confirm-overlay" onMouseDown={() => setJobPreview(null)}>
+            <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 480, textAlign: "left", padding: "20px 22px", gap: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{jp.job_no}</span>
+                  <span className={"job-badge " + jst.c}>{jst.t}</span>
+                </div>
+                <button className="btn-ghost sm" onClick={() => setJobPreview(null)} style={{ padding: "2px 10px" }}>✕</button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 13.5 }}>
+                {jp.title && <div><b>{jp.title}</b></div>}
+                <div>🏢 <b>{jp.customerName || "-"}</b>{jp.customerAddr ? <span className="jo-dim"> · {jp.customerAddr}</span> : null}</div>
+                {(jp.contact_name || jp.contact_phone) && <div>👤 {jp.contact_name || ""}{jp.contact_phone && <> · <a href={`tel:${jp.contact_phone}`} style={{ color: "var(--blue)" }}>📞 {jp.contact_phone}</a></>}</div>}
+                {jp.address && <div>📍 {jp.address}{jp.map_url && <> · <a href={jp.map_url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)" }}>แผนที่</a></>}</div>}
+                <div>🗓 {jp.scheduled_at ? fmtDate(jp.scheduled_at) : "ยังไม่กำหนดวัน"}{jp.end_date && jp.end_date !== jp.scheduled_at ? ` – ${fmtDate(jp.end_date)}` : ""}</div>
+                <div>👷 ทีม {team.name}</div>
+                {jp.details && <div style={{ background: "var(--surface-2)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap" }}>{jp.details}</div>}
+                {jp.sales_note && <div className="jo-dim" style={{ whiteSpace: "pre-wrap" }}>📌 บรีฟ: {jp.sales_note}</div>}
+                {(() => { const items = quoteBy[jp.quote_no]?.items; if (!items?.length) return null; return (
+                  <div style={{ marginTop: 4 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: "var(--ink-2)", marginBottom: 4 }}>รายการสินค้า</div>
+                    <table style={{ width: "100%", fontSize: 12.5, borderCollapse: "collapse" }}>
+                      <thead><tr style={{ borderBottom: "1px solid var(--line)", color: "var(--ink-2)" }}>
+                        <th style={{ textAlign: "left", padding: "3px 4px", fontWeight: 500 }}>รายการ</th>
+                        <th style={{ textAlign: "right", padding: "3px 4px", fontWeight: 500 }}>จำนวน</th>
+                        <th style={{ textAlign: "right", padding: "3px 4px", fontWeight: 500 }}>ราคา/หน่วย</th>
+                        <th style={{ textAlign: "right", padding: "3px 4px", fontWeight: 500 }}>รวม</th>
+                      </tr></thead>
+                      <tbody>{items.map((it, i) => { const qty = Number(it.qty) || 0; const price = Number(it.unit_price) || 0; return (
+                        <tr key={i} style={{ borderBottom: "1px solid var(--line)" }}>
+                          <td style={{ padding: "4px 4px" }}>{it.name}{it.description ? <div className="jo-dim" style={{ fontSize: 11 }}>{it.description}</div> : null}</td>
+                          <td style={{ textAlign: "right", padding: "4px 4px", whiteSpace: "nowrap" }}>{qty} {it.unit || ""}</td>
+                          <td style={{ textAlign: "right", padding: "4px 4px", whiteSpace: "nowrap" }}>{fmtBaht(price)}</td>
+                          <td style={{ textAlign: "right", padding: "4px 4px", whiteSpace: "nowrap", fontWeight: 600 }}>{fmtBaht(qty * price)}</td>
+                        </tr>); })}
+                      </tbody>
+                    </table>
+                  </div>
+                ); })()}
+              </div>
+              <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn-ghost sm" onClick={() => setJobPreview(null)}>ปิด</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
