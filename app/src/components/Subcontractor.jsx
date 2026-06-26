@@ -129,7 +129,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
           return (
             <div className="sub-job-row" key={j.job_no}>
               <div className="sub-job-main">
-                <div><button type="button" className="sub-job-link" onClick={() => onOpenDoc && onOpenDoc("job", j.job_no)} title="เปิดใบงาน · ดูความเคลื่อนไหว">{j.job_no}</button> <span className={"job-badge " + st.c}>{st.t}</span>
+                <div>{j.scheduled_at && <span className="jo-dim" style={{ fontSize: 11, marginRight: 5 }}>{fmtDate(j.scheduled_at)}</span>}<button type="button" className="sub-job-link" onClick={() => onOpenDoc && onOpenDoc("job", j.job_no)} title="เปิดใบงาน · ดูความเคลื่อนไหว">{j.job_no}</button> <span className={"job-badge " + st.c}>{st.t}</span>
                   {q?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}
                   {j.is_claim && <span className="vat-badge vat-off">เคลม</span>}</div>
                 <div className="jo-dim">{j.customerName || "-"} · ทีม {teamById[j.assigned_team]?.name || j.assigned_team} · {j.title || "งาน"}</div>
@@ -368,7 +368,7 @@ function PayTeam({ team, list, quoteBy, flash, onCreated }) {
         return (
           <label className="sub-pay-job" key={j.job_no}>
             <input type="checkbox" checked={!!sel[j.job_no]} onChange={(e) => setSel((s) => ({ ...s, [j.job_no]: e.target.checked }))} />
-            <span className="sub-pay-no">{j.job_no} {quoteBy[j.quote_no]?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}</span>
+            <span className="sub-pay-no">{j.scheduled_at && <span className="jo-dim" style={{ fontSize: 11, marginRight: 5 }}>{fmtDate(j.scheduled_at)}</span>}{j.job_no} {quoteBy[j.quote_no]?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}</span>
             <span className="jo-dim" style={{ flex: 1 }}>{j.customerName || "-"}</span>
             <b>{fmtBaht(rem)}{partial ? <span className="jo-dim" style={{ fontWeight: 400 }}> / {fmtBaht(j.labor_total)}</span> : ""}</b>
           </label>
