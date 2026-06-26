@@ -8,6 +8,17 @@ const STATUS_TH = { pending: "รอเริ่มงาน", scheduled: "น�
 const STATUS_ACTION = { pending: "🕒 รอจ่ายงาน", scheduled: "📌 นัดหมายแล้ว", in_progress: "🔧 เริ่ม/กำลังทำงาน", awaiting_approval: "📤 ส่งอนุมัติ", reschedule: "📅 ส่งไปนัดหมายเพิ่ม", done: "✅ อนุมัติงานเสร็จ", cancelled: "❌ ยกเลิกงาน" };
 const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."; };
 
+// single image thumbnail with error fallback (falls back to a download chip if the image can't render)
+function ImgThumb({ url, onClick }) {
+  const [broken, setBroken] = React.useState(false);
+  if (broken) return <AttachThumb url={url} />;
+  return (
+    <button type="button" className="tl-photo" onClick={onClick}>
+      <img src={url} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />
+    </button>
+  );
+}
+
 // photos of one entry → image cells (open the lightbox) + file chips. onOpen(images, index)
 function Photos({ photos, onOpen }) {
   if (!photos?.length) return null;
@@ -15,7 +26,7 @@ function Photos({ photos, onOpen }) {
   return (
     <div className="tl-photos">
       {photos.map((u, i) => isImageUrl(u)
-        ? <button type="button" className="tl-photo" key={i} onClick={() => onOpen(imgs, imgs.indexOf(u))}><img src={u} alt="" loading="lazy" decoding="async" /></button>
+        ? <ImgThumb key={i} url={u} onClick={() => onOpen(imgs, imgs.indexOf(u))} />
         : <AttachThumb key={i} url={u} />)}
     </div>
   );
