@@ -35,11 +35,18 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
   }
   React.useEffect(() => { load(); }, []);
 
-  // arriving from "งานของฉัน" / ใบงาน with a job to start a new handover for
+  // arriving from "งานของฉัน" / ใบงาน → continue this job's existing draft (กรอกต่อหลังทำเสร็จ),
+  // otherwise start a fresh handover for it.
   React.useEffect(() => {
     if (!startJob) return;
-    setEditing(blankHandover(startJob));
-    onStartConsumed && onStartConsumed();
+    let cancelled = false;
+    (async () => {
+      let open = null;
+      try { const ex = await listHandovers(startJob.job_no); open = (ex || []).find((x) => x.status === "draft"); } catch { /* ignore */ }
+      if (!cancelled) { setEditing(open || blankHandover(startJob)); if (open) flash("เปิดร่างเดิมของงานนี้ — กรอกค่า ‘หลัง’ ต่อได้เลย"); }
+      onStartConsumed && onStartConsumed();
+    })();
+    return () => { cancelled = true; };
   }, [startJob]);
   // arriving focused on a job → filter the list to it
   React.useEffect(() => { if (focusJob) { setSearch(focusJob); onFocusConsumed && onFocusConsumed(); } }, [focusJob]);

@@ -40,11 +40,12 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal he" onClick={(e) => e.stopPropagation()} style={{ width: 720, maxWidth: "97vw" }}>
         <div className="modal-head">
-          <div className="modal-title">ใบส่งมอบงาน {h.job_no ? <span>· ผูกกับ {h.job_no}</span> : <span>· ไม่ผูกใบงาน</span>}</div>
+          <div className="modal-title">ใบส่งมอบงาน {h.id && h.status === "draft" ? <span>· ฉบับร่าง (กรอกต่อ)</span> : h.job_no ? <span>· ผูกกับ {h.job_no}</span> : <span>· ไม่ผูกใบงาน</span>}</div>
           <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
         </div>
 
         <div className="modal-body he-body">
+          <div className="he-hint">📋 <b>ก่อนเริ่มงาน:</b> กรอกค่าช่อง “ก่อน” แล้วกด <b>บันทึกร่าง</b> · <b>ทำเสร็จแล้ว:</b> กลับเข้ามากรอกช่อง “หลัง” + เช็คลิสต์ แล้วกด <b>บันทึก &amp; ส่ง</b></div>
           {/* ── ผู้รับบริการ ── */}
           <div className="he-sec-t">ผู้รับบริการ</div>
           <div className="he-grid2">
