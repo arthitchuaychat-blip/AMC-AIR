@@ -2064,3 +2064,58 @@ select.inp{cursor:pointer}
 .ci-crm{display:flex;flex-direction:column;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:11px 12px;margin-bottom:14px}
 .ci-crm .ci-field span{font-size:11.5px;font-weight:700;color:var(--ink-2);margin-bottom:4px}
 .ci-crm .inp{font-size:13px;padding:7px 9px}
+
+/* ---------- ใบส่งมอบงาน · job handover sheet (A4 print/PDF) ---------- */
+.ho,.ho *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box }
+.ho{ font-family:var(--appfont); color:#0f1729; width:100%; font-size:9px; line-height:1.3 }
+.ho-green{ color:#16a34a }
+/* letterhead */
+.ho-head{ display:flex; gap:10px; align-items:flex-start; padding-bottom:7px; margin-bottom:7px; border-bottom:2px solid #16a34a }
+.ho-titlebox{ flex:none; width:118px }
+.ho-orig{ display:inline-block; font-size:8.5px; font-weight:700; color:#15803d; background:#dcfce7; border:1px solid #86efac; border-radius:6px; padding:1px 7px; margin-bottom:4px }
+.ho-title{ font-size:21px; font-weight:800; color:#16a34a; line-height:1.04 }
+.ho-co{ flex:1; display:flex; gap:8px; align-items:flex-start }
+.ho-logo{ width:38px; height:38px; object-fit:contain; flex:none; border-radius:7px }
+.ho-co-name{ font-size:11px; font-weight:800; color:#0f1729; line-height:1.15 }
+.ho-co-line{ font-size:8px; color:#475569; line-height:1.35; margin-top:1px }
+.ho-meta{ flex:none; width:178px; display:flex; flex-direction:column; gap:3px }
+/* write-in field: label + dotted value line */
+.ho-f{ display:flex; align-items:flex-end; gap:4px; font-size:8.5px }
+.ho-f-l{ flex:none; color:#334155; white-space:nowrap }
+.ho-f-v{ flex:1; min-height:11px; border-bottom:1px dotted #94a3b8; font-weight:700; color:#0f1729; padding:0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.ho-f.grow .ho-f-v{ white-space:normal }
+.ho-blank-line{ height:13px; border-bottom:1px dotted #cbd5e1 }
+/* body columns */
+.ho-body{ display:flex; gap:9px; align-items:stretch }
+.ho-col{ flex:1; display:flex; flex-direction:column; gap:7px; min-width:0 }
+/* a titled box */
+.ho-sec{ border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; break-inside:avoid }
+.ho-sec-h{ font-size:9.5px; font-weight:800; color:#0f1729; background:#eafaf0; border-bottom:1px solid #cbd5e1; padding:3px 8px }
+.ho-sec-b{ padding:6px 8px; display:flex; flex-direction:column; gap:4px }
+.ho-details{ font-size:8.5px; white-space:pre-wrap; color:#0f1729 }
+/* service: two checkbox columns */
+.ho-svc{ flex-direction:row; gap:12px }
+.ho-svc-col{ flex:1; display:flex; flex-direction:column; gap:4px; min-width:0 }
+.ho-svc-cap{ font-size:8.5px; font-weight:800; color:#16a34a }
+.ho-cb{ display:flex; align-items:center; gap:5px; font-size:8.5px; color:#0f1729 }
+.ho-cb-box{ width:11px; height:11px; flex:none; border:1.2px solid #64748b; border-radius:2px; position:relative }
+.ho-cb-box.on{ background:#16a34a; border-color:#16a34a }
+.ho-cb-box.on::after{ content:"✓"; position:absolute; inset:0; color:#fff; font-size:9px; font-weight:900; line-height:10px; text-align:center }
+/* measurement / PM tables */
+.ho-tbl{ width:100%; border-collapse:collapse; table-layout:fixed }
+.ho-tbl th,.ho-tbl td{ border:1px solid #cbd5e1; padding:2px 4px; font-size:8px; vertical-align:middle }
+.ho-tbl thead th{ background:#bbf7d0; font-weight:800; color:#0f1729; text-align:center }
+.ho-tbl-sub th{ background:#dcfce7 }
+.ho-tbl .n{ width:22px; text-align:center; color:#334155 }
+.ho-tbl .rec{ width:128px }
+.ho-tbl td.lbl{ font-size:8px; line-height:1.15 }
+.ho-tbl td.ck,.ho-tbl td.u{ width:64px; text-align:center; white-space:nowrap; color:#334155; padding-left:2px; padding-right:2px }
+.ho-tbl td.u{ font-weight:700; color:#0f172940 }
+.ho-radio{ display:inline-block; width:7px; height:7px; border:1px solid #64748b; border-radius:50%; vertical-align:middle; margin-right:1px }
+.ho-note-line{ font-size:8.5px; color:#334155; padding:3px 1px 0; border-bottom:1px dotted #cbd5e1; min-height:15px }
+/* signatures */
+.ho-signs{ display:flex; gap:40px; justify-content:center; margin-top:18px; text-align:center }
+.ho-sign{ flex:1; max-width:280px }
+.ho-sign-lbl{ font-size:9px; color:#0f1729 }
+.ho-sign-paren{ font-size:9px; color:#334155; margin-top:5px }
+.ho-ack{ text-align:center; font-size:8.5px; color:#475569; margin-top:9px }
