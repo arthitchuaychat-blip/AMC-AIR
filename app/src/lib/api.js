@@ -2245,7 +2245,7 @@ export async function setOpeningBalance(amount) {
 // seed/refresh ledger lines from documents (idempotent; never overwrites user-edited rows)
 export async function syncCashEntriesFromDocs() {
   const _d = (ts) => (ts ? String(ts).slice(0, 10) : null);
-  const [inv, rec, pay, po, poItems, cust, team, existing] = await Promise.all([
+  const [inv, rec, pay, po, poItems, cust, team, existing, salaryProfiles] = await Promise.all([
     supabase.from("invoices").select("invoice_no,due_date,issue_date,total,wht_amt,status,customer_id"),
     supabase.from("receipts").select("receipt_no,issue_date,net,total,status,customer_id"),
     supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at"),
@@ -2254,6 +2254,7 @@ export async function syncCashEntriesFromDocs() {
     supabase.from("customers").select("id,name"),
     supabase.from("teams").select("id,name"),
     supabase.from("cash_entries").select("id,source_type,source_ref,edited").neq("source_type", "manual"),
+    supabase.from("profiles").select("id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0),
   ]);
   const cn = Object.fromEntries((cust.data || []).map((c) => [c.id, c.name]));
   const tn = Object.fromEntries((team.data || []).map((t) => [t.id, (t.name || "").replace("Team ", "")]));
@@ -2265,6 +2266,16 @@ export async function syncCashEntriesFromDocs() {
   (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entry_date: x.issue_date, amount: Number(x.net || x.total) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
   (pay.data || []).forEach((x) => { const paid = x.status === "paid"; desired.push({ source_type: "payout", source_ref: String(x.id), direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: Number(x.net) || 0, note: `จ่ายช่างซัพ${tn[x.team] ? " " + tn[x.team] : ""}` }); });
   (po.data || []).forEach((x) => { if (x.status === "cancelled") return; const got = x.status === "received"; desired.push({ source_type: "po", source_ref: x.po_no, direction: "out", status: got ? "actual" : "projected", entry_date: got ? _d(x.received_at) : _d(x.created_at), amount: poTotal[x.po_no] || 0, note: `ใบสั่งซื้อ ${x.po_no}${x.supplier ? " · " + x.supplier : ""}` }); });
+  const salaryList = salaryProfiles.data || [];
+  const totalSalary = salaryList.reduce((s, p) => s + (Number(p.base_pay) || 0), 0);
+  if (totalSalary > 0) {
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const yy = d.getFullYear(), mm = String(d.getMonth() + 1).padStart(2, "0");
+      desired.push({ source_type: "salary", source_ref: `salary-${yy}-${mm}`, direction: "out", status: "projected", entry_date: `${yy}-${mm}-01`, amount: totalSalary, note: `เงินเดือนพนักงาน ${salaryList.length} คน` });
+    }
+  }
 
   const exMap = {}; (existing.data || []).forEach((e) => { exMap[`${e.source_type}:${e.source_ref}`] = e; });
   const uid = await _uid();

@@ -86,7 +86,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-26·ภาพ HEIC: แปลงแสดงในแอปได้เลย ไม่ต้องดาวน์โหลด (v196)";
+const BUILD = "2026-06-26·เงินเดือน sync กระแสเงินสดอัตโนมัติ (v197)";
 
 function SetupNotice() {
   return (
