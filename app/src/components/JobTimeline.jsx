@@ -8,13 +8,34 @@ const STATUS_TH = { pending: "รอเริ่มงาน", scheduled: "น�
 const STATUS_ACTION = { pending: "🕒 รอจ่ายงาน", scheduled: "📌 นัดหมายแล้ว", in_progress: "🔧 เริ่ม/กำลังทำงาน", awaiting_approval: "📤 ส่งอนุมัติ", reschedule: "📅 ส่งไปนัดหมายเพิ่ม", done: "✅ อนุมัติงานเสร็จ", cancelled: "❌ ยกเลิกงาน" };
 const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."; };
 
-// single image thumbnail with error fallback (falls back to a download chip if the image can't render)
+// single image thumbnail: tries to display directly, if it fails fetches as blob + converts HEIC
+async function blobifyUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("fetch failed");
+  let blob = await res.blob();
+  if (blob.type === "image/heic" || blob.type === "image/heif" || /\.(heic|heif)$/i.test(url)) {
+    const heic2any = (await import("heic2any")).default;
+    const out = await heic2any({ blob, toType: "image/jpeg", quality: 0.85 });
+    blob = Array.isArray(out) ? out[0] : out;
+  }
+  return URL.createObjectURL(blob);
+}
+
 function ImgThumb({ url, onClick }) {
-  const [broken, setBroken] = React.useState(false);
-  if (broken) return <AttachThumb url={url} />;
+  const [src, setSrc] = React.useState(url);
+  const [state, setState] = React.useState("idle");
+
+  async function handleError() {
+    if (state !== "idle") return;
+    setState("loading");
+    try { setSrc(await blobifyUrl(url)); setState("idle"); }
+    catch { setState("failed"); }
+  }
+
+  if (state === "failed") return <AttachThumb url={url} />;
   return (
     <button type="button" className="tl-photo" onClick={onClick}>
-      <img src={url} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />
+      <img src={src} alt="" loading="lazy" decoding="async" onError={handleError} />
     </button>
   );
 }

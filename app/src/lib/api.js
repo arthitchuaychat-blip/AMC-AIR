@@ -178,12 +178,25 @@ export async function updateMaterialCost(code, cost) {
 // Shrink a photo before upload so timelines/galleries don't load multi-MB originals
 // (cameras produce 2–4 MB shots; many of them at once break the browser → "broken image").
 // Re-encodes images to JPEG at <= maxDim px. Non-images (pdf/doc) and undecodable
-// formats (e.g. some HEIC) pass through untouched.
+// convert HEIC/HEIF → JPEG so all browsers can display the result
+async function convertIfHeic(file) {
+  const isHeic = file.type === "image/heic" || file.type === "image/heif" || /\.(heic|heif)$/i.test(file.name || "");
+  if (!isHeic) return file;
+  try {
+    const heic2any = (await import("heic2any")).default;
+    const blob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+    const out = Array.isArray(blob) ? blob[0] : blob;
+    return new File([out], (file.name || "photo").replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+  } catch { return file; }
+}
+
+// resize large images before upload; unsupported formats pass through untouched.
 async function downscaleImage(file, maxDim = 1600, quality = 0.82) {
+  file = await convertIfHeic(file);  // HEIC → JPEG first so createImageBitmap can decode it
   try {
     if (!file.type || !file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
     const bmp = await createImageBitmap(file).catch(() => null);
-    if (!bmp) return file;            // can't decode (HEIC on some browsers) → keep original
+    if (!bmp) return file;            // can't decode → keep original
     const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
     if (scale >= 1 && file.size < 600 * 1024) { bmp.close(); return file; }  // already small enough
     const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
