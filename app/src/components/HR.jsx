@@ -1,8 +1,8 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, markAdvancesPaid, getPositions, savePositions, uploadSignature } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, markAdvancesPaid, getPositions, savePositions, uploadSignature } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
-import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -13,6 +13,7 @@ const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "shor
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
 export default function HR({ role }) {
+  const canManage = role === "admin" || role === "exec"; // แก้ไข/ลบ ให้เฉพาะ HR (ธุรการ) + ผู้บริหาร
   const [tab, setTab] = React.useState("today");
   const [settings, setSettings] = React.useState(DEFAULT_HR_SETTINGS);
   const [staff, setStaff] = React.useState([]);
@@ -37,8 +38,8 @@ export default function HR({ role }) {
           style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
       </div>
 
-      {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
-      {tab === "leaves" && <LeavesTab flash={flash} />}
+      {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
+      {tab === "leaves" && <LeavesTab staff={staff} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "advances" && <AdvancesTab flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
@@ -51,7 +52,7 @@ export default function HR({ role }) {
 }
 
 // ---------- TODAY ----------
-function TodayTab({ staff, settings, holSet, flash }) {
+function TodayTab({ staff, settings, holSet, canManage, flash }) {
   const [att, setAtt] = React.useState([]);
   const [onLeave, setOnLeave] = React.useState({});
   const [loading, setLoading] = React.useState(true);
@@ -66,6 +67,11 @@ function TodayTab({ staff, settings, holSet, flash }) {
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  async function delAtt(p) {
+    if (!await confirmDialog(`ลบเวลาเข้า-ออกของ ${p.name || p.email} วันนี้?\n(กลับเป็น “ยังไม่เข้า”)`)) return;
+    try { await deleteAttendance(p.id, day); flash("ลบเวลาแล้ว"); load(); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+  }
   const attBy = Object.fromEntries(att.map((a) => [a.user_id, a]));
   const rows = staff.map((p) => {
     const a = attBy[p.id], s = a ? dayStat(a, settings) : null;
@@ -93,7 +99,8 @@ function TodayTab({ staff, settings, holSet, flash }) {
               <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otMin > 0 && <span className="att-tag ot sm">OT {fmtMin(s.otMin)}</span>}</span>
             </div>
             <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]) : b.t}</span>
-            <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>
+            {canManage && <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>}
+            {canManage && a && <button className="btn-ghost sm danger" title="ลบเวลาเข้า-ออก" onClick={() => delAtt(p)}><UIcon name="trash" size={13} /></button>}
           </div>
         ); })}
       </div>
@@ -135,9 +142,10 @@ function AttEditModal({ day, row, onClose, onSaved, flash }) {
 }
 
 // ---------- LEAVES ----------
-function LeavesTab({ flash }) {
+function LeavesTab({ staff, holSet, canManage, flash }) {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [edit, setEdit] = React.useState(null); // leave being edited
   async function load() { try { setList(await listLeaves()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
   React.useEffect(() => { load(); }, []);
   async function decide(l, status) {
@@ -145,6 +153,11 @@ function LeavesTab({ flash }) {
     if (!await confirmDialog(`${lbl}ใบลาของ ${l.name}?`)) return;
     try { await decideLeave(l.id, status); flash(lbl + "แล้ว"); load(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function del(l) {
+    if (!await confirmDialog(`ลบใบลาของ ${l.name}?\n${leaveLabel(l.type)} · ${thDate(l.start_date)}`)) return;
+    try { await deleteLeave(l.id); flash("ลบใบลาแล้ว"); load(); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
   const B = { pending: { t: "รออนุมัติ", c: "b-amber" }, approved: { t: "อนุมัติ", c: "b-green" }, rejected: { t: "ไม่อนุมัติ", c: "b-red" } };
   if (loading) return <div className="empty">กำลังโหลด…</div>;
@@ -164,9 +177,50 @@ function LeavesTab({ flash }) {
               {l.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(l, "approved")}>อนุมัติ</button>}
               {l.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(l, "rejected")}>ไม่อนุมัติ</button>}
               {l.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(l, "pending")}>คืนรออนุมัติ</button>}
+              {canManage && <button className="btn-ghost sm" title="แก้ไขใบลา" onClick={() => setEdit(l)}><UIcon name="edit" size={13} /></button>}
+              {canManage && <button className="btn-ghost sm danger" title="ลบใบลา" onClick={() => del(l)}><UIcon name="trash" size={13} /></button>}
             </div>
           </div>
         ); })}
+      </div>
+      {edit && <LeaveEditModal leave={edit} staff={staff} holSet={holSet} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
+    </div>
+  );
+}
+
+// HR/admin edit a leave request (type / dates / reason; days recomputed from the person's work pattern)
+function LeaveEditModal({ leave, staff, holSet, onClose, onSaved, flash }) {
+  const [type, setType] = React.useState(leave.type);
+  const [start, setStart] = React.useState(leave.start_date);
+  const [end, setEnd] = React.useState(leave.end_date);
+  const [reason, setReason] = React.useState(leave.reason || "");
+  const [busy, setBusy] = React.useState(false);
+  const person = staff.find((p) => p.id === leave.user_id);
+  const days = (start && end && end >= start) ? leaveDays(start, end, person?.work_pattern || "mon_sat", person?.sat_group, holSet) : 1;
+  async function save() {
+    if (!start || !end || end < start) { flash("ช่วงวันที่ไม่ถูกต้อง", true); return; }
+    setBusy(true);
+    try { await updateLeave(leave.id, { type, start_date: start, end_date: end, days, reason }); flash("บันทึกใบลาแล้ว ✓"); onSaved(); }
+    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
+        <div className="modal-head"><div className="modal-title">แก้ไขใบลา · {leave.name}</div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <label className="fld"><span>ประเภทการลา</span>
+            <select className="inp" value={type} onChange={(e) => setType(e.target.value)}>{LEAVE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
+          <div className="fld-row" style={{ marginTop: 8 }}>
+            <label className="fld"><span>วันเริ่ม</span><input className="inp" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+            <label className="fld"><span>วันสิ้นสุด</span><input className="inp" type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+          </div>
+          <label className="fld" style={{ marginTop: 8 }}><span>เหตุผล</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+          <p className="page-sub" style={{ marginTop: 6 }}>รวม <b>{days}</b> วันทำงาน (คำนวณจากกะของพนักงาน · ไม่นับวันหยุด)</p>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy} onClick={save}>บันทึก</button></div>
       </div>
     </div>
   );

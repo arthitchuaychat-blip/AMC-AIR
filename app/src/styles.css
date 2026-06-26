@@ -909,8 +909,10 @@ select.inp{cursor:pointer}
 .hr-today-row,.hr-leave-row,.hr-staff-row,.hr-hol-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--surface-2);font-size:13px}
 .hr-today-row .hr-name,.hr-staff-row .hr-name{flex:1;display:flex;flex-direction:column;line-height:1.3}
 .hr-times{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink-2);min-width:150px}
+/* compact icon action buttons (แก้ไข/ลบ) on the today row — don't stretch like a full-width button */
+.hr-today-row .btn-ghost.sm{flex:none;padding:7px 9px}
 .hr-leave-row{justify-content:space-between}
-.hr-leave-act{display:flex;align-items:center;gap:7px;flex:none}
+.hr-leave-act{display:flex;align-items:center;gap:7px;flex:none;flex-wrap:wrap;justify-content:flex-end}
 .hr-hol-row{justify-content:space-between}
 .hr-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:560px}
 .hr-table th{font-size:11.5px;font-weight:700;color:var(--ink-3);padding:7px 8px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}

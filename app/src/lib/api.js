@@ -2034,6 +2034,17 @@ export async function decideLeave(id, status, note) {
   const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
   if (lv) notify([lv.user_id], { category: "hr", title: `📝 ใบลาของคุณ: ${lbl}`, body: note || "", url: "attendance", ref_type: "leave" });
 }
+// HR/admin edit a leave request (type/dates/days/reason)
+export async function updateLeave(id, fields) {
+  const patch = { type: fields.type, start_date: fields.start_date, end_date: fields.end_date, days: Number(fields.days) || 1, reason: fields.reason || null };
+  const { error } = await supabase.from("hr_leaves").update(patch).eq("id", id);
+  if (error) throw error;
+}
+// HR/admin delete a leave request
+export async function deleteLeave(id) {
+  const { error } = await supabase.from("hr_leaves").delete().eq("id", id);
+  if (error) throw error;
+}
 
 // ---------- CASH ADVANCES (เบิกเงินล่วงหน้า) ----------
 export async function submitAdvance({ amount, reason }) {
@@ -2114,6 +2125,11 @@ export async function adminSaveAttendance(userId, workDate, checkInAt, checkOutA
   const { error } = await supabase.from("hr_attendance").upsert(
     { user_id: userId, work_date: workDate, check_in_at: checkInAt || null, check_out_at: checkOutAt || null },
     { onConflict: "user_id,work_date" });
+  if (error) throw error;
+}
+// HR/admin delete a day's attendance record (clears it back to "ยังไม่เข้า")
+export async function deleteAttendance(userId, workDate) {
+  const { error } = await supabase.from("hr_attendance").delete().eq("user_id", userId).eq("work_date", workDate);
   if (error) throw error;
 }
 
