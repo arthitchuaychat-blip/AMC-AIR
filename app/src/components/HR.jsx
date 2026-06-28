@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, getPositions, savePositions, uploadSignature } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -8,7 +8,6 @@ import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 
 const TABS = [["today", "วันนี้"], ["leaves", "อนุมัติลา"], ["advances", "เบิกล่วงหน้า"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
-const DEFAULT_POSITIONS = ["ธุรการ", "บัญชี/การเงิน", "ฝ่ายขาย", "การตลาด", "กราฟิก", "แม่บ้าน", "สโตร์/คลัง", "ช่าง", "หัวหน้าช่าง"];
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
@@ -18,13 +17,12 @@ export default function HR({ role }) {
   const [settings, setSettings] = React.useState(DEFAULT_HR_SETTINGS);
   const [staff, setStaff] = React.useState([]);
   const [holidays, setHolidays] = React.useState([]);
-  const [positions, setPositions] = React.useState(DEFAULT_POSITIONS);
   const [toast, setToast] = React.useState(null);
   const holSet = React.useMemo(() => new Set(holidays.map((h) => h.day)), [holidays]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   async function loadBase() {
-    try { const [s, st, hol, pos] = await Promise.all([getHrSettings(), listHrStaff(), listHolidays(), getPositions()]); setSettings(s || DEFAULT_HR_SETTINGS); setStaff(st); setHolidays(hol); setPositions(pos && pos.length ? pos : DEFAULT_POSITIONS); }
+    try { const [s, st, hol] = await Promise.all([getHrSettings(), listHrStaff(), listHolidays()]); setSettings(s || DEFAULT_HR_SETTINGS); setStaff(st); setHolidays(hol); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
   }
   React.useEffect(() => { loadBase(); }, []);
@@ -44,7 +42,7 @@ export default function HR({ role }) {
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
-      {tab === "staff" && <StaffTab staff={staff} settings={settings} holidays={holidays} positions={positions} onReload={loadBase} flash={flash} />}
+      {tab === "staff" && <StaffTab staff={staff} settings={settings} holidays={holidays} onReload={loadBase} flash={flash} />}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
@@ -773,31 +771,21 @@ function SigRow({ p, onSaved, flash }) {
   );
 }
 
-function StaffTab({ staff, settings, holidays, positions, onReload, flash }) {
+function StaffTab({ staff, settings, holidays, onReload, flash }) {
   const [s, setS] = React.useState(settings);
   const [nh, setNh] = React.useState({ day: "", name: "" });
-  const [newPos, setNewPos] = React.useState("");
   React.useEffect(() => { setS(settings); }, [settings]);
 
-  const posList = positions && positions.length ? positions : DEFAULT_POSITIONS;
-  async function addPosition() {
-    const p = newPos.trim(); if (!p) return;
-    if (posList.includes(p)) { setNewPos(""); return; }
-    try { await savePositions([...posList, p]); setNewPos(""); flash("เพิ่มตำแหน่งแล้ว ✓"); onReload(); }
-    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
-  }
-  async function delPosition(p) {
-    const used = staff.some((x) => x.department === p);
-    if (used && !await confirmDialog(`ลบตำแหน่ง "${p}"? มีพนักงานใช้ตำแหน่งนี้อยู่ (ข้อมูลพนักงานเดิมจะยังคงไว้)`)) return;
-    try { await savePositions(posList.filter((x) => x !== p)); flash("ลบตำแหน่งแล้ว"); onReload(); }
-    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
-  }
+  // ตำแหน่งงาน = ตำแหน่งจากเมนูตั้งค่า (สิทธิ์ตามตำแหน่ง) ที่พนักงานประจำถืออยู่จริง — นับจำนวนคนต่อตำแหน่ง
+  const posCount = staff.reduce((m, p) => { const k = p.department || "ไม่ระบุ"; m[k] = (m[k] || 0) + 1; return m; }, {});
+  const posList = Object.keys(posCount).sort((a, b) => posCount[b] - posCount[a]);
 
   async function saveSettings() {
     try { await saveHrSettings(s); flash("บันทึกเวลาทำงานแล้ว ✓"); onReload(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e) + " (รัน 041_hr.sql + 039 แล้วหรือยัง?)", true); }
   }
-  async function setPattern(p, fields) {
+  async function setPattern(p, keyOrFields, val) {
+    const fields = typeof keyOrFields === "string" ? { [keyOrFields]: val } : keyOrFields; // accepts (p, {…}) or (p, key, val)
     try { await updateHrProfile(p.id, fields); onReload(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
@@ -829,20 +817,14 @@ function StaffTab({ staff, settings, holidays, positions, onReload, flash }) {
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="sec-head"><div><div className="sec-title">ตำแหน่งงาน</div><div className="sec-sub">เพิ่ม/ลบ ตำแหน่ง แล้วเลือกให้พนักงานในช่อง “ตำแหน่ง” ด้านล่าง</div></div></div>
-        <div className="set-add">
-          <input className="inp" placeholder="เพิ่มตำแหน่งใหม่ เช่น กราฟิก / แม่บ้าน" value={newPos} onChange={(e) => setNewPos(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addPosition()} />
-          <button className="btn-primary" onClick={addPosition}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม</button>
-        </div>
+        <div className="sec-head"><div><div className="sec-title">ตำแหน่งงาน</div><div className="sec-sub">ตำแหน่งอ้างอิงจากบทบาทในเมนูตั้งค่า · กำหนดตำแหน่งให้พนักงานที่ ตั้งค่า → ผู้ใช้งาน (แสดงเฉพาะพนักงานประจำ)</div></div></div>
         <div className="pos-chips">
+          {posList.length === 0 && <span className="jo-dim">ยังไม่มีพนักงานประจำ</span>}
           {posList.map((p) => (
-            <span className="pos-chip" key={p}>{p}<button className="pos-chip-x" title="ลบตำแหน่ง" onClick={() => delPosition(p)}><UIcon name="x" size={12} /></button></span>
+            <span className="pos-chip" key={p}>{p} <b style={{ opacity: .6 }}>· {posCount[p]}</b></span>
           ))}
         </div>
       </div>
-
-      {/* shared suggestions for the per-staff ตำแหน่ง field */}
-      <datalist id="hr-positions">{posList.map((p) => <option key={p} value={p} />)}</datalist>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="sec-head"><div><div className="sec-title">ลายเซ็นพนักงาน</div><div className="sec-sub">อัปโหลดลายเซ็นให้แต่ละคน · ใช้บนเอกสาร (เจ้าตัวเปิด/ปิดเองที่หน้าเข้างาน) · แนะนำไฟล์ PNG พื้นหลังโปร่ง</div></div></div>
@@ -857,8 +839,7 @@ function StaffTab({ staff, settings, holidays, positions, onReload, flash }) {
           <div className="set-list">
             {staff.map((p) => (
               <div className="hr-staff-row" key={p.id}>
-                <div className="hr-name"><b>{p.name || p.email}</b></div>
-                <input className="inp" style={{ width: 130 }} list="hr-positions" placeholder="ตำแหน่ง" defaultValue={p.department || ""} onBlur={(e) => e.target.value !== (p.department || "") && setPattern(p, "department", e.target.value)} />
+                <div className="hr-name"><b>{p.name || p.email}</b><span className="jo-dim">{p.department || "—"}</span></div>
                 <select className="inp" style={{ width: 150 }} value={p.work_pattern || "mon_sat"} onChange={(e) => setPattern(p, "work_pattern", e.target.value)}>
                   {WORK_PATTERNS.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}
                 </select>

@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { deriveJobStatus } from "./schedule";
+import { ROLE_LABEL } from "./permissions";
+
+// HR position = the role assigned in Settings (single source of truth), falling back to any legacy free-text department
+const posLabel = (p) => (p && (ROLE_LABEL[p.role] || p.department)) || "";
 
 const _url = import.meta.env.VITE_SUPABASE_URL;
 const _anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -2083,11 +2087,11 @@ export async function listMyAttendance(fromDay) {
 export async function listAttendance(fromDay, toDay) {
   const [att, profs] = await Promise.all([
     supabase.from("hr_attendance").select("*").gte("work_date", fromDay).lte("work_date", toDay).order("work_date", { ascending: false }),
-    supabase.from("profiles").select("id,name,department,work_pattern,sat_group"),
+    supabase.from("profiles").select("id,name,role,department,work_pattern,sat_group"),
   ]);
   if (att.error) throw att.error;
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
-  return (att.data || []).map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: pm[a.user_id]?.department || "", work_pattern: pm[a.user_id]?.work_pattern, sat_group: pm[a.user_id]?.sat_group }));
+  return (att.data || []).map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]), work_pattern: pm[a.user_id]?.work_pattern, sat_group: pm[a.user_id]?.sat_group }));
 }
 
 export async function submitLeave({ type, start_date, end_date, days, reason }) {
@@ -2105,10 +2109,10 @@ export async function listMyLeaves() {
 export async function listLeaves(status) {
   let q = supabase.from("hr_leaves").select("*").order("created_at", { ascending: false });
   if (status) q = q.eq("status", status);
-  const [lv, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,department")]);
+  const [lv, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,role,department")]);
   if (lv.error) throw lv.error;
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
-  return (lv.data || []).map((l) => ({ ...l, name: pm[l.user_id]?.name || "-", department: pm[l.user_id]?.department || "" }));
+  return (lv.data || []).map((l) => ({ ...l, name: pm[l.user_id]?.name || "-", department: posLabel(pm[l.user_id]) }));
 }
 export async function decideLeave(id, status, note) {
   const uid = await _uid();
@@ -2151,10 +2155,10 @@ export async function cancelMyAdvance(id) {
 export async function listAdvances(status) {
   let q = supabase.from("hr_advances").select("*").order("created_at", { ascending: false });
   if (status) q = q.eq("status", status);
-  const [av, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,department")]);
+  const [av, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,role,department")]);
   if (av.error) throw av.error;
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
-  return (av.data || []).map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: pm[a.user_id]?.department || "" }));
+  return (av.data || []).map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]) }));
 }
 export async function decideAdvance(id, status, note) {
   const uid = await _uid();
@@ -2208,7 +2212,8 @@ export async function listHrStaff() {
   ]);
   if (pr.error) throw pr.error;
   const subIds = new Set((tm.data || []).filter((t) => t.type === "sub").map((t) => t.id));
-  return (pr.data || []).filter((p) => !subIds.has(p.team));
+  // permanent staff only (drop subcontractor-team members); position label follows the Settings role
+  return (pr.data || []).filter((p) => !subIds.has(p.team)).map((p) => ({ ...p, department: posLabel(p) }));
 }
 export async function updateHrProfile(id, fields) {
   const { error } = await supabase.from("profiles").update(fields).eq("id", id);
