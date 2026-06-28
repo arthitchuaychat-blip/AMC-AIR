@@ -12,7 +12,7 @@ const TABS = [
   { kind: "portfolio", chip: "📸 อัลบั้มผลงาน", label: "อัลบั้มผลงาน", imageLabel: "รูปผลงาน", aspect: "4/3", folder: "web-portfolio", imageRequired: true,
     hint: "เพิ่มรูปผลงานได้ไม่จำกัด · โชว์ที่หน้าแรก (สุ่มหมุน) + หน้าผลงาน + แกลเลอรี",
     fields: [{ key: "title", ph: "คำบรรยายผลงาน (เช่น ติดตั้งแอร์ คอนโด)" }], primary: "title", primaryFallback: "(ผลงาน)" },
-  { kind: "clients", chip: "🏢 โลโก้ลูกค้า", label: "โลโก้ลูกค้า", imageLabel: "โลโก้", aspect: "1/1", folder: "web-clients", imageRequired: false,
+  { kind: "clients", chip: "🏢 โลโก้ลูกค้า", label: "โลโก้ลูกค้า", imageLabel: "โลโก้", aspect: "1/1", folder: "web-clients", imageRequired: false, imageKey: "logo_url",
     hint: "อัปโหลดโลโก้ (PNG พื้นโปร่งใสสวยสุด) + ชื่อ → โชว์ในหมวด “องค์กรที่ไว้วางใจเรา”",
     fields: [{ key: "name", ph: "ชื่อลูกค้า/องค์กร", required: true }], primary: "name" },
   { kind: "articles", chip: "📝 บทความ", label: "บทความเรื่องแอร์", imageLabel: "รูปบทความ", aspect: "16/9", folder: "web-articles", imageRequired: false,
@@ -75,7 +75,7 @@ function WebItemManager({ cfg, flash }) {
     if (cfg.imageRequired && !img) return flash("อัปโหลดรูปก่อน", true);
     for (const f of cfg.fields) if (f.required && !(vals[f.key] || "").trim()) return flash(`กรอก "${f.ph}" ก่อน`, true);
     setBusy(true);
-    const row = { image_url: img || null, sort: (list?.length || 0) + 1 };
+    const row = { [cfg.imageKey || "image_url"]: img || null, sort: (list?.length || 0) + 1 };
     cfg.fields.forEach((f) => { row[f.key] = (vals[f.key] || "").trim() || null; });
     try { await saveWebItem(cfg.kind, row); setImg(""); setVals({}); await load(); flash("เพิ่มแล้ว ✓"); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
@@ -126,7 +126,7 @@ function WebItemManager({ cfg, flash }) {
             {list.map((b, i) => (
               <div key={b.id} className={"wb-row" + (b.active ? "" : " off")}>
                 <span className="wb-no">{i + 1}</span>
-                <div className="wb-thumb" style={{ aspectRatio: cfg.aspect, width: cfg.aspect === "1/1" ? 64 : 130 }}>{b.image_url ? <img src={b.image_url} alt="" /> : <span className="jo-dim" style={{ fontSize: 11, display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>ไม่มีรูป</span>}</div>
+                <div className="wb-thumb" style={{ aspectRatio: cfg.aspect, width: cfg.aspect === "1/1" ? 64 : 130 }}>{b[cfg.imageKey || "image_url"] ? <img src={b[cfg.imageKey || "image_url"]} alt="" /> : <span className="jo-dim" style={{ fontSize: 11, display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>ไม่มีรูป</span>}</div>
                 <div className="wb-cap">{b[cfg.primary] || <span className="jo-dim">{cfg.primaryFallback || "—"}</span>}
                   {b.excerpt ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.excerpt}</div> : null}
                   {b.source ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.source}</div> : null}</div>
