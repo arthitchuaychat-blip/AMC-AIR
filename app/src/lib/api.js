@@ -1281,7 +1281,7 @@ export async function uploadWebBanner(file) {
 
 // ---------- generic website content manager (เมนู "จัดการเว็บไซต์") ----------
 // one helper set drives all 5 content types (ปก/ผลงาน/โลโก้/บทความ/ข่าว) — table whitelist only
-const WEB_KINDS = { banners: "web_banners", portfolio: "web_portfolio", clients: "web_clients", articles: "web_articles", press: "web_press" };
+const WEB_KINDS = { banners: "web_banners", portfolio: "web_portfolio", clients: "web_clients", articles: "web_articles", press: "web_press", ads: "web_ads" };
 export async function listWebItems(kind) {
   const t = WEB_KINDS[kind]; if (!t) throw new Error("unknown web kind");
   const { data, error } = await supabase.from(t).select("*").order("sort").order("id");

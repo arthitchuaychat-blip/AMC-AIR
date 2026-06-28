@@ -19,8 +19,11 @@ const TABS = [
     hint: "หัวข้อ + คำโปรย + รูป → โชว์ในหมวด “บทความ” · ใส่ลิงก์อ่านต่อได้",
     fields: [{ key: "title", ph: "หัวข้อบทความ", required: true }, { key: "excerpt", ph: "คำโปรย (สรุปสั้น ๆ)" }, { key: "link_url", ph: "ลิงก์อ่านต่อ (ถ้ามี)" }], primary: "title" },
   { kind: "press", chip: "📰 ข่าวในสื่อ", label: "ข่าวในสื่อต่าง ๆ", imageLabel: "รูปข่าว", aspect: "16/9", folder: "web-press", imageRequired: false,
-    hint: "ชื่อสื่อ + หัวข้อข่าว + รูป → โชว์ในหมวด “ในสื่อ” · ใส่ลิงก์ข่าวได้",
+    hint: "ชื่อสื่อ + หัวข้อข่าว + รูป → โชว์ในหมวด “ในสื่อ” + ภาพข่าวล่าสุดในแถบซ้าย · ใส่ลิงก์ข่าวได้",
     fields: [{ key: "source", ph: "ชื่อสื่อ (เช่น ไทยรัฐ, ช่อง 7)" }, { key: "title", ph: "หัวข้อข่าว", required: true }, { key: "link_url", ph: "ลิงก์ข่าว" }], primary: "title" },
+  { kind: "ads", chip: "📢 โฆษณาแถบข้าง", label: "ภาพโฆษณา (แถบข้างเว็บ)", imageLabel: "ภาพโฆษณา", aspect: "4/3", folder: "web-ads", imageRequired: true,
+    hint: "ภาพโฆษณาที่เรียงในแถบซ้ายของเว็บ (ใต้ตัวกรองค้นหา) · ใส่ลิงก์กดได้ · เรียงลำดับด้วย ◀▶",
+    fields: [{ key: "title", ph: "ชื่อ/คำบรรยาย (ไม่ใส่ก็ได้)" }, { key: "link_url", ph: "ลิงก์ (ถ้ามี)" }], primary: "title", primaryFallback: "(โฆษณา)" },
 ];
 
 export default function WebManage({ role }) {

@@ -319,6 +319,34 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 .hero-values{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .hero-values span{font-size:14px;font-weight:700;color:var(--primary-dark);background:color-mix(in srgb,var(--primary) 11%,white);border:1px solid color-mix(in srgb,var(--primary) 24%,white);padding:6px 14px;border-radius:99px}
 
+/* two-column page: left rail (filter + news + ads) · right main content */
+.page{display:grid;grid-template-columns:208px minmax(0,1fr);grid-template-rows:auto 1fr;gap:14px 22px;align-items:start;padding-top:88px;padding-bottom:0}
+.side-filter{grid-column:1;grid-row:1;position:sticky;top:88px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow-sm)}
+.maincol{grid-column:2;grid-row:1 / span 2;min-width:0}
+.side-rail{grid-column:1;grid-row:2;display:flex;flex-direction:column;gap:12px}
+.side-filter-h{font-size:12.5px;font-weight:800;color:var(--ink-2)}
+.side-filter select{width:100%;appearance:none;-webkit-appearance:none;background:#fff;border:1.5px solid var(--line);color:var(--ink);font-family:inherit;font-size:13.5px;font-weight:600;padding:10px 28px 10px 11px;border-radius:10px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+.side-filter select:hover{border-color:var(--primary)}
+.side-go{width:100%;margin-top:4px;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:11px;font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer}
+.side-go:hover{background:var(--primary-dark)}
+.side-news,.side-ad{display:block;border-radius:12px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow-sm);position:relative}
+.side-news img,.side-ad img{width:100%;display:block}
+.side-news .lbl{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(2,20,40,.82));color:#fff;font-size:11.5px;font-weight:700;line-height:1.3;padding:20px 10px 8px}
+.side-news .tag{position:absolute;top:8px;left:8px;background:var(--primary);color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:6px}
+.side-ads{display:flex;flex-direction:column;gap:12px}
+.page .hero-slider{margin-top:0;border-radius:16px}
+.page .hero{padding-top:14px}
+.page-products{padding-top:96px;padding-bottom:64px;min-height:62vh}
+.pp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:22px}
+@media(max-width:860px){
+  .page{grid-template-columns:1fr;grid-template-rows:none;padding-top:78px;gap:16px}
+  .side-filter{position:static;order:1;grid-column:1;grid-row:auto}
+  .maincol{grid-column:1;grid-row:auto;order:2}
+  .side-rail{order:3;grid-column:1;grid-row:auto;flex-direction:row;flex-wrap:wrap}
+  .side-ads{flex-direction:row;flex-wrap:wrap}
+  .side-ad,.side-news{flex:1;min-width:150px}
+}
+
 /* hero banner slideshow (ภาพปกจากหลังบ้าน · สลับทุก 2 วิ) */
 .hero-slider{position:relative;width:100%;margin-top:72px;overflow:hidden;background:#020a18}
 .hs-track{display:flex;transition:transform .55s ease}
@@ -360,26 +388,6 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
       <a href="#contact">ติดต่อ</a>
     </nav>
     <div class="header-cta">
-      <div class="hfilter">
-        <select id="fltModel" aria-label="เลือกรุ่นแอร์">
-          <option value="">รุ่นแอร์ทั้งหมด</option>
-          <option value="Daikin">Daikin</option>
-          <option value="Mitsubishi">Mitsubishi</option>
-          <option value="LG">LG</option>
-          <option value="Samsung">Samsung</option>
-          <option value="Carrier">Carrier</option>
-          <option value="Haier">Haier</option>
-          <option value="Panasonic">Panasonic</option>
-          <option value="TCL">TCL</option>
-        </select>
-        <select id="fltService" aria-label="เลือกบริการ">
-          <option value="">บริการ</option>
-          <option value="ติดตั้ง">ติดตั้งแอร์</option>
-          <option value="ล้าง">ล้างแอร์</option>
-          <option value="ซ่อม">ซ่อม/แก้ไข</option>
-          <option value="ย้าย">ย้ายแอร์</option>
-        </select>
-      </div>
       <button class="cart-btn" id="cartBtn" aria-label="ตะกร้า">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>
         <span class="cart-count" id="cartCount">0</span>
@@ -389,6 +397,35 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
     </div>
   </div>
 </header>
+
+<div class="page wrap" id="pageHome">
+  <div class="side-filter">
+      <div class="side-filter-h">ค้นหารุ่นแอร์</div>
+      <select id="fltModel" aria-label="เลือกรุ่นแอร์">
+        <option value="">รุ่นแอร์ทั้งหมด</option>
+        <option value="Daikin">Daikin</option><option value="Mitsubishi">Mitsubishi</option>
+        <option value="LG">LG</option><option value="Samsung">Samsung</option>
+        <option value="Carrier">Carrier</option><option value="Haier">Haier</option>
+        <option value="Panasonic">Panasonic</option><option value="TCL">TCL</option>
+      </select>
+      <select id="fltType" aria-label="ประเภทแอร์">
+        <option value="">ทุกประเภท</option>
+        <option value="ติดผนัง">ติดผนัง</option><option value="แขวน">แขวน</option>
+        <option value="ฝังฝ้า">ฝังฝ้า (4 ทิศ)</option><option value="ตู้ตั้ง">ตู้ตั้ง</option>
+      </select>
+      <div class="side-filter-h" style="margin-top:4px">ค้นหาบริการ</div>
+      <select id="fltService" aria-label="เลือกบริการ">
+        <option value="">บริการทั้งหมด</option>
+        <option value="ติดตั้ง">ติดตั้งแอร์</option><option value="ล้าง">ล้างแอร์</option>
+        <option value="ซ่อม">ซ่อม/แก้ไข</option><option value="ย้าย">ย้ายแอร์</option>
+      </select>
+      <button class="side-go" id="fltGo">ดูสินค้า / บริการ →</button>
+    </div>
+    <div class="side-rail">
+      <a class="side-news" id="sideNews" target="_blank" rel="noreferrer" style="display:none"></a>
+      <div class="side-ads" id="sideAds"></div>
+    </div>
+  <main class="maincol">
 
 <section class="hero-slider" id="heroSlider" style="display:none">
   <div class="hs-track" id="hsTrack"></div>
@@ -444,31 +481,6 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
       <div class="card svc"><div class="ic" style="background:#f59e0b"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6.4 6.4 2 2 6.4-6.4a4 4 0 0 0 5.4-5.4l-2.3 2.3-1.7-.3-.3-1.7z"/></svg></div>
         <h3>ซ่อม / แก้ไข</h3><p>แอร์ไม่เย็น มีน้ำหยด เสียงดัง วินิจฉัยและซ่อมโดยช่างผู้ชำนาญ พร้อมอะไหล่แท้</p>
         <ul><li>ประเมินอาการก่อนซ่อม</li><li>อะไหล่แท้</li><li>รับประกันงานซ่อม</li></ul></div>
-    </div>
-  </div>
-</section>
-
-<section class="sec soft" id="products">
-  <div class="wrap">
-    <div class="sec-head center">
-      <span class="eyebrow">สินค้าของเรา</span>
-      <h2 class="title">แอร์ & อะไหล่ คุณภาพ</h2>
-      <p class="lead">เลือกรุ่นที่ต้องการ ใส่ตะกร้า แล้วส่งคำขอ — ทีมงานจะติดต่อยืนยันราคาและนัดติดตั้ง</p>
-    </div>
-    <div class="prod-tools">
-      <div class="prod-tabs" id="prodTabs">
-        <button class="prod-tab on" data-k="all">ทั้งหมด</button>
-        <button class="prod-tab" data-k="ac">❄️ แอร์</button>
-        <button class="prod-tab" data-k="material">🔩 อะไหล่/วัสดุ</button>
-        <button class="prod-tab" data-k="service">🛠️ บริการ</button>
-      </div>
-      <div class="prod-search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input id="prodSearch" placeholder="ค้นหาสินค้า…" />
-      </div>
-    </div>
-    <div class="prod-grid" id="prodGrid">
-      <div class="prod-empty">กำลังโหลดสินค้า…</div>
     </div>
   </div>
 </section>
@@ -573,6 +585,29 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
       </form>
     </div>
   </div>
+</section>
+  </main>
+</div>
+
+<section class="page-products wrap" id="pageProducts" style="display:none">
+  <div class="pp-head">
+    <div><span class="eyebrow">สินค้าของเรา</span><h2 class="title">สินค้า & บริการ</h2>
+      <p class="lead">เลือกรุ่นที่ต้องการ ใส่ตะกร้า แล้วส่งคำขอ — ทีมงานจะติดต่อยืนยันราคาและนัดติดตั้ง</p></div>
+    <a href="#" class="btn btn-ghost btn-sm" id="ppHome">← กลับหน้าแรก</a>
+  </div>
+  <div class="prod-tools">
+    <div class="prod-tabs" id="prodTabs">
+      <button class="prod-tab on" data-k="all">ทั้งหมด</button>
+      <button class="prod-tab" data-k="ac">❄️ แอร์</button>
+      <button class="prod-tab" data-k="material">🔩 อะไหล่/วัสดุ</button>
+      <button class="prod-tab" data-k="service">🛠️ บริการ</button>
+    </div>
+    <div class="prod-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+      <input id="prodSearch" placeholder="ค้นหาสินค้า…" />
+    </div>
+  </div>
+  <div class="prod-grid" id="prodGrid"><div class="prod-empty">กำลังโหลดสินค้า…</div></div>
 </section>
 
 <footer>
@@ -827,18 +862,50 @@ async function loadPress() {
   } catch (e) {}
 }
 
-// ---------- แถบกรอง รุ่นแอร์ / บริการ → ค้นหาสินค้า + เลื่อนไปหน้าสินค้า ----------
+// ---------- แถบกรอง (แถบซ้าย) → เด้งไปหน้าสินค้า/บริการ พร้อมกรอง ----------
 function setProdTab(k) { const t = $("#prodTabs"); if (t) t.querySelectorAll(".prod-tab").forEach((x) => x.classList.toggle("on", x.dataset.k === k)); }
 function applyHeaderFilter() {
-  const model = $("#fltModel") ? $("#fltModel").value : "", svc = $("#fltService") ? $("#fltService").value : "";
-  prodQuery = [model, svc].filter(Boolean).join(" ");
+  const model = $("#fltModel") ? $("#fltModel").value : "", type = $("#fltType") ? $("#fltType").value : "", svc = $("#fltService") ? $("#fltService").value : "";
+  prodQuery = [model, type, svc].filter(Boolean).join(" ");
   if ($("#prodSearch")) $("#prodSearch").value = prodQuery;
-  if (svc) { prodFilter = "service"; setProdTab("service"); } else { prodFilter = "all"; setProdTab("all"); }
+  if (svc) { prodFilter = "service"; setProdTab("service"); } else if (model || type) { prodFilter = "ac"; setProdTab("ac"); } else { prodFilter = "all"; setProdTab("all"); }
   renderProducts();
-  if ($("#products")) $("#products").scrollIntoView({ behavior: "smooth" });
+  location.hash = "products";
 }
+if ($("#fltGo")) $("#fltGo").onclick = applyHeaderFilter;
 if ($("#fltModel")) $("#fltModel").onchange = applyHeaderFilter;
+if ($("#fltType")) $("#fltType").onchange = applyHeaderFilter;
 if ($("#fltService")) $("#fltService").onchange = applyHeaderFilter;
+
+// ---------- หน้าเพจ: หน้าแรก ↔ หน้าสินค้า/บริการ (hash router · รองรับหน้ารายละเอียดสินค้าในอนาคต) ----------
+function route() {
+  const h = decodeURIComponent((location.hash || "").replace(/^#/, ""));
+  const onProducts = (h === "products" || h === "สินค้า" || h === "บริการ");
+  const home = $("#pageHome"), prod = $("#pageProducts");
+  if (prod) prod.style.display = onProducts ? "block" : "none";
+  if (home) home.style.display = onProducts ? "none" : "";
+  if (onProducts) window.scrollTo(0, 0);
+  else if (h) { const el = document.getElementById(h); if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 40); }
+}
+addEventListener("hashchange", route);
+if ($("#ppHome")) $("#ppHome").onclick = (e) => { e.preventDefault(); location.hash = ""; };
+
+// ---------- แถบซ้าย: ภาพข่าวล่าสุด (web_press) + ภาพโฆษณา (web_ads) ----------
+async function loadSidebar() {
+  if (!hasSb) return;
+  try {
+    const { data } = await sb.from("web_ads").select("*").eq("active", true).order("sort").order("id");
+    if (data && data.length && $("#sideAds")) $("#sideAds").innerHTML = data.filter((a) => a.image_url).map((a) => {
+      const img = `<img src="${a.image_url}" alt="${(a.title || '').replace(/"/g, '&quot;')}" loading="lazy">`;
+      return a.link_url ? `<a class="side-ad" href="${a.link_url}" target="_blank" rel="noreferrer">${img}</a>` : `<div class="side-ad">${img}</div>`;
+    }).join("");
+  } catch (e) {}
+  try {
+    const { data } = await sb.from("web_press").select("*").eq("active", true).order("sort").order("id").limit(1);
+    const n = data && data[0];
+    if (n && n.image_url && $("#sideNews")) { const a = $("#sideNews"); a.style.display = "block"; a.href = n.link_url || "#press"; a.innerHTML = `<span class="tag">ข่าว</span><img src="${n.image_url}" alt="" loading="lazy"><span class="lbl">${(n.title || '').replace(/</g, '&lt;')}</span>`; }
+  } catch (e) {}
+}
 
 // ---------- ภาพปก Hero · สไลด์โชว์ทุก 2 วินาที (จาก web_banners หลังบ้าน หรือ C.BANNERS) ----------
 async function loadBanners() {
@@ -874,6 +941,8 @@ loadBanners();
 loadPortfolio();
 loadArticles();
 loadPress();
+loadSidebar();
+route();
 </script>
 </body>
 </html>
