@@ -795,6 +795,11 @@ select.inp{cursor:pointer}
 .job-card-cost{text-align:right;flex:none}
 .job-card-cost span{display:block;font-size:10px;color:var(--ink-3)}
 .job-card-cost b{font-size:18px;font-weight:700;letter-spacing:-.3px}
+/* ใบงาน: on phones the wide job-no+chips row was starving the schedule column → stack the head */
+@media(max-width:760px){
+  .jo-card-head{flex-direction:column;align-items:stretch;gap:9px}
+  .jo-card-head .job-card-id{flex-wrap:wrap}
+}
 .job-lines{padding:0 18px 16px;border-top:1px solid var(--line-2)}
 .job-lrow{display:grid;grid-template-columns:1.6fr 60px 60px 60px 90px 90px;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
 .job-lrow.job-lrow-h{font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.3px;padding-top:12px}
