@@ -1,5 +1,5 @@
 import React from "react";
-import { listWebOrders, setWebOrderStatus, listWebClients, saveWebClient, deleteWebClient, uploadWebLogo } from "../lib/api";
+import { listWebOrders, setWebOrderStatus, listWebClients, saveWebClient, deleteWebClient, uploadWebLogo, listWebBanners, saveWebBanner, deleteWebBanner, uploadWebBanner } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -45,13 +45,14 @@ export default function WebOrders({ role }) {
         <div className="cat-head-actions" style={{ gap: 8 }}>
           <div className="seg">
             <button className={"seg-btn" + (tab === "orders" ? " on" : "")} onClick={() => setTab("orders")}>📥 คำสั่งซื้อ</button>
+            <button className={"seg-btn" + (tab === "banners" ? " on" : "")} onClick={() => setTab("banners")}>🖼️ แบนเนอร์/ปก</button>
             <button className={"seg-btn" + (tab === "clients" ? " on" : "")} onClick={() => setTab("clients")}>🏢 โลโก้ลูกค้า</button>
           </div>
           {tab === "orders" && <button className="btn-ghost sm" onClick={load}>🔄 รีเฟรช</button>}
         </div>
       </div>
 
-      {tab === "clients" ? <ClientsManager flash={flash} /> : <>
+      {tab === "banners" ? <BannersManager flash={flash} /> : tab === "clients" ? <ClientsManager flash={flash} /> : <>
 
       <div className="cat-filter" style={{ marginBottom: 14, display: "flex", gap: 6, flexWrap: "wrap" }}>
         <button className={"cat-chip" + (statusF === "all" ? " on" : "")} onClick={() => setStatusF("all")}>ทั้งหมด ({rows?.length || 0})</button>
@@ -107,6 +108,89 @@ export default function WebOrders({ role }) {
       </>}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
+    </div>
+  );
+}
+
+// ---------- จัดการภาพปก/แบนเนอร์ Hero บนเว็บ (สไลด์โชว์) ----------
+function BannersManager({ flash }) {
+  const [list, setList] = React.useState(null);
+  const [img, setImg] = React.useState("");
+  const [caption, setCaption] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+
+  async function load() {
+    try { setList(await listWebBanners()); }
+    catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e) + " (รัน 078_web_banners.sql แล้วหรือยัง?)", true); setList([]); }
+  }
+  React.useEffect(() => { load(); }, []);
+
+  async function onImg(e) {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
+    setUploading(true);
+    try { setImg(await uploadWebBanner(f)); } catch (err) { flash("อัปโหลดไม่สำเร็จ: " + (err.message || err), true); }
+    setUploading(false);
+  }
+  async function add() {
+    if (!img) return flash("อัปโหลดภาพปกก่อน", true);
+    setBusy(true);
+    try { await saveWebBanner({ image_url: img, caption, sort: (list?.length || 0) + 1 }); setImg(""); setCaption(""); await load(); flash("เพิ่มภาพปกแล้ว ✓"); }
+    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  async function remove(b) {
+    if (!await confirmDialog("ลบภาพปกนี้ออกจากเว็บ?")) return;
+    try { await deleteWebBanner(b.id); await load(); flash("ลบแล้ว"); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function toggleActive(b) {
+    try { await saveWebBanner({ ...b, active: !b.active }); await load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function move(b, dir) {
+    if (!list) return;
+    const i = list.findIndex((x) => x.id === b.id), j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    const a = list[i], c = list[j];
+    try { await saveWebBanner({ ...a, sort: c.sort }); await saveWebBanner({ ...c, sort: a.sort }); await load(); }
+    catch (e) { flash("ย้ายลำดับไม่สำเร็จ: " + (e.message || e), true); }
+  }
+
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="sec-head"><div><div className="sec-title">เพิ่มภาพปก (Hero Banner)</div>
+          <div className="sec-sub">อัปโหลดภาพแนวนอน (แนะนำ 1920×720px, JPG/PNG) → โชว์เป็นสไลด์โชว์ด้านบนสุดของเว็บ สลับทุก 2 วินาที · ลากลำดับด้วยปุ่ม ◀▶</div></div></div>
+        <div className="wc-add">
+          <label className="wc-drop" style={{ width: 130, aspectRatio: "16/9" }}>
+            {img ? <img src={img} alt="" style={{ objectFit: "cover" }} /> : <span>{uploading ? "กำลังอัปโหลด…" : "+ ภาพปก"}</span>}
+            <input type="file" accept="image/*" hidden disabled={uploading} onChange={onImg} />
+          </label>
+          <input className="inp" placeholder="ข้อความบนภาพ (ไม่ใส่ก็ได้)" value={caption} onChange={(e) => setCaption(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") add(); }} />
+          <button className="btn-primary" disabled={busy || uploading} onClick={add}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม</button>
+        </div>
+      </div>
+
+      {list === null ? <div className="empty">กำลังโหลด…</div>
+        : list.length === 0 ? <div className="empty" style={{ padding: 40 }}>ยังไม่มีภาพปก — อัปโหลดด้านบน · ระหว่างนี้เว็บจะใช้หน้าปกดีไซน์เดิมไปก่อน</div>
+        : (
+          <div className="wb-list">
+            {list.map((b, i) => (
+              <div key={b.id} className={"wb-row" + (b.active ? "" : " off")}>
+                <span className="wb-no">{i + 1}</span>
+                <div className="wb-thumb">{b.image_url ? <img src={b.image_url} alt="" /> : null}</div>
+                <div className="wb-cap">{b.caption || <span className="jo-dim">(ไม่มีข้อความ)</span>}</div>
+                <div className="wb-acts">
+                  <button className="btn-ghost xs" onClick={() => move(b, -1)} disabled={i === 0} title="เลื่อนขึ้น">◀</button>
+                  <button className="btn-ghost xs" onClick={() => move(b, 1)} disabled={i === list.length - 1} title="เลื่อนลง">▶</button>
+                  <button className="btn-ghost xs" onClick={() => toggleActive(b)}>{b.active ? "ซ่อน" : "แสดง"}</button>
+                  <button className="btn-ghost xs danger" onClick={() => remove(b)}>ลบ</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
     </div>
   );
 }

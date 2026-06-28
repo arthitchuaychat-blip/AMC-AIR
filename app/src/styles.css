@@ -1244,6 +1244,16 @@ select.inp{cursor:pointer}
 .wc-logo span{font-size:12px;font-weight:700;color:var(--ink-3);text-align:center;padding:4px}
 .wc-name{font-size:12.5px;font-weight:600;color:var(--ink);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .wc-acts{display:flex;gap:6px}
+/* hero banner manager rows */
+.wb-list{display:flex;flex-direction:column;gap:10px}
+.wb-row{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px}
+.wb-row.off{opacity:.45}
+.wb-no{flex:none;width:24px;height:24px;border-radius:50%;background:var(--surface-2);color:var(--ink-2);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.wb-thumb{flex:none;width:140px;aspect-ratio:16/7;border-radius:9px;overflow:hidden;background:var(--surface-2)}
+.wb-thumb img{width:100%;height:100%;object-fit:cover}
+.wb-cap{flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--ink)}
+.wb-acts{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:560px){.wb-thumb{width:90px}.wb-cap{display:none}}
 .tc-notify{font-size:12.5px;font-weight:700;border-radius:9px;padding:6px 11px;border:1px solid var(--line)}
 .tc-notify.on{color:#0a6b3d;background:#dcf5e8;border-color:#b7e6cb}
 .tc-notify.off{color:#9a3412;background:#ffedd5;border-color:#fed7aa}

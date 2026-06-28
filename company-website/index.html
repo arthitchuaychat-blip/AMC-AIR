@@ -42,6 +42,15 @@
     // โปรโมชั่น (เว้น "" ถ้าไม่มี — แบนเนอร์จะไม่ขึ้น)
     PROMO: "🎉 จองล้างแอร์วันนี้ รับส่วนลดพิเศษ + ตรวจเช็กน้ำยาฟรี",
 
+    // ---- ภาพปก/แบนเนอร์ Hero · สไลด์โชว์ทุก 2 วินาที ----
+    // ทีมกราฟิกจัดการจากหลังบ้านได้: ร้านค้าออนไลน์ → แบนเนอร์/ปก (เก็บใน web_banners)
+    // ด้านล่างนี้เป็นภาพ "ตัวอย่าง" ไว้ก่อน — แทนที่ด้วยภาพปกจริง (แนวนอน ~1920×720) ได้เลย
+    BANNERS: [
+      { image_url: "portfolio/p1.jpg", caption: "วางใจ AMC AIR · ช่างมืออาชีพ ใส่ใจทุกรายละเอียด" },
+      { image_url: "portfolio/p4.jpg", caption: "ติดตั้ง · ล้าง · ซ่อม ครบวงจร" },
+      { image_url: "portfolio/p6.jpg", caption: "รับประกันงานทุกชิ้น" },
+    ],
+
     // ---- อัลบั้มผลงาน · เพิ่มได้ไม่จำกัด (รูปสุ่มขึ้นโชว์ที่หน้าแรก + ดูทั้งหมดได้) ----
     // ใส่ไฟล์รูปไว้ในโฟลเดอร์ portfolio/ แล้วเพิ่มบรรทัดในนี้ได้เลย
     PORTFOLIO: [
@@ -336,6 +345,20 @@ footer{background:#020a18;border-top:1px solid var(--line)}
 .hero-values{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .hero-values span{font-size:14px;font-weight:700;color:#7dd3fc;background:rgba(34,211,238,.10);border:1px solid rgba(34,211,238,.22);padding:6px 14px;border-radius:99px}
 
+/* hero banner slideshow (ภาพปกจากหลังบ้าน · สลับทุก 2 วิ) */
+.hero-slider{position:relative;width:100%;margin-top:72px;overflow:hidden;background:#020a18}
+.hs-track{display:flex;transition:transform .55s ease}
+.hs-slide{flex:0 0 100%;position:relative}
+.hs-slide img{width:100%;height:clamp(300px,42vw,580px);object-fit:cover;display:block}
+.hs-cap{position:absolute;left:0;right:0;bottom:0;padding:48px 6vw 30px;background:linear-gradient(transparent,rgba(2,8,20,.72));color:#fff;font-size:clamp(17px,2.6vw,28px);font-weight:800;line-height:1.3}
+.hs-arrow{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;border:none;background:rgba(2,8,20,.42);color:#fff;font-size:26px;cursor:pointer;z-index:5;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.hs-arrow:hover{background:rgba(2,8,20,.78)}
+.hs-prev{left:16px}.hs-next{right:16px}
+.hs-dots{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:5}
+.hs-dot{width:9px;height:9px;border-radius:50%;border:none;background:rgba(255,255,255,.5);cursor:pointer;padding:0;transition:.2s}
+.hs-dot.on{background:#fff;width:24px;border-radius:5px}
+@media(max-width:560px){.hs-arrow{width:38px;height:38px;font-size:22px}}
+
 /* full portfolio gallery modal */
 .gal-mask{position:fixed;inset:0;background:rgba(2,8,20,.88);backdrop-filter:blur(6px);z-index:120;display:none;padding:5vh 4vw;overflow:auto}
 .gal-mask.on{display:block}
@@ -392,6 +415,13 @@ footer{background:#020a18;border-top:1px solid var(--line)}
     </div>
   </div>
 </header>
+
+<section class="hero-slider" id="heroSlider" style="display:none">
+  <div class="hs-track" id="hsTrack"></div>
+  <button class="hs-arrow hs-prev" id="hsPrev" aria-label="ก่อนหน้า">‹</button>
+  <button class="hs-arrow hs-next" id="hsNext" aria-label="ถัดไป">›</button>
+  <div class="hs-dots" id="hsDots"></div>
+</section>
 
 <section class="hero">
   <div class="wrap hero-grid">
@@ -804,9 +834,37 @@ function applyHeaderFilter() {
 if ($("#fltModel")) $("#fltModel").onchange = applyHeaderFilter;
 if ($("#fltService")) $("#fltService").onchange = applyHeaderFilter;
 
+// ---------- ภาพปก Hero · สไลด์โชว์ทุก 2 วินาที (จาก web_banners หลังบ้าน หรือ C.BANNERS) ----------
+async function loadBanners() {
+  let banners = [];
+  if (hasSb) { try { const { data } = await sb.from("web_banners").select("*").eq("active", true).order("sort").order("id"); banners = data || []; } catch (e) {} }
+  if (!banners.length && Array.isArray(C.BANNERS)) banners = C.BANNERS.map((b) => typeof b === "string" ? { image_url: b } : b);
+  banners = banners.filter((b) => b && b.image_url);
+  if (!banners.length) return; // ไม่มีภาพปก → ใช้ hero ดีไซน์เดิม
+  const esc = (s) => String(s || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  const track = $("#hsTrack"), dots = $("#hsDots");
+  track.innerHTML = banners.map((b) => {
+    const inner = `<img src="${b.image_url}" alt="${esc(b.caption)}" loading="eager">${b.caption ? `<div class="hs-cap">${esc(b.caption)}</div>` : ""}`;
+    return `<div class="hs-slide">${b.link_url ? `<a href="${b.link_url}">${inner}</a>` : inner}</div>`;
+  }).join("");
+  dots.innerHTML = banners.map((_, i) => `<button class="hs-dot${i === 0 ? " on" : ""}" data-i="${i}" aria-label="สไลด์ ${i + 1}"></button>`).join("");
+  $("#heroSlider").style.display = "block";
+  const hero = $(".hero"); if (hero) hero.style.display = "none"; // ใช้สไลด์ปกแทน hero เดิม
+  const n = banners.length; let idx = 0, timer = null;
+  const dotEls = dots.querySelectorAll(".hs-dot");
+  const go = (i) => { idx = (i + n) % n; track.style.transform = `translateX(-${idx * 100}%)`; dotEls.forEach((d, k) => d.classList.toggle("on", k === idx)); };
+  const start = () => { if (n > 1) timer = setInterval(() => go(idx + 1), 2000); };
+  const reset = () => { clearInterval(timer); start(); };
+  $("#hsPrev").onclick = () => { go(idx - 1); reset(); };
+  $("#hsNext").onclick = () => { go(idx + 1); reset(); };
+  dotEls.forEach((d) => d.onclick = () => { go(+d.dataset.i); reset(); });
+  start();
+}
+
 renderCart();
 loadProducts();
 loadClients();
+loadBanners();
 </script>
 </body>
 </html>

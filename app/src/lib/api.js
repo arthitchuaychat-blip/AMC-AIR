@@ -1249,6 +1249,30 @@ export async function uploadWebLogo(file) {
   return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
 
+// ---------- web hero banners (ภาพปก/สไลด์โชว์ บนเว็บ) ----------
+export async function listWebBanners() {
+  const { data, error } = await supabase.from("web_banners").select("*").order("sort").order("id");
+  if (error) throw error;
+  return data || [];
+}
+export async function saveWebBanner(b) {
+  const row = { image_url: b.image_url || null, caption: b.caption?.trim() || null, link_url: b.link_url?.trim() || null, sort: Number(b.sort) || 0, active: b.active !== false };
+  if (b.id) { const { error } = await supabase.from("web_banners").update(row).eq("id", b.id); if (error) throw error; }
+  else { const { error } = await supabase.from("web_banners").insert(row); if (error) throw error; }
+}
+export async function deleteWebBanner(id) {
+  const { error } = await supabase.from("web_banners").delete().eq("id", id);
+  if (error) throw error;
+}
+// upload a full-size hero banner image as-is (keep resolution) to the public photos bucket
+export async function uploadWebBanner(file) {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `web-banners/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
+
 export async function deleteJobOrder(job_no, reason) {
   const [{ data: head }, { data: visits }] = await Promise.all([
     supabase.from("job_orders").select("*").eq("job_no", job_no).maybeSingle(),
