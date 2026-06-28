@@ -12,17 +12,18 @@ export function payPeriod(ym) {
 
 // attendance/leave stats for one person over [from,to]
 export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, settings) {
-  let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, absent = 0, workdays = 0, leaveDays = 0;
+  let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveDays = 0;
   for (let d = hrParseYmd(from); d <= hrParseYmd(to); d.setDate(d.getDate() + 1)) {
     const k = hrYmd(d);
     if (leaveDaySet[emp.id]?.[k]) { leaveDays++; continue; }
     if (!isWorkday(k, emp.work_pattern || "mon_sat", emp.sat_group, holSet)) continue;
     workdays++;
     const a = attByUserDay[emp.id]?.[k];
-    if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } otMin += s.otMin; }
+    // OT rounded per-day (½-hour blocks) then summed — so sub-30-min days never accumulate
+    if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } otMin += s.otMin; otHours += s.otHours; }
     else absent++;
   }
-  return { present, lateCnt, lateMin, otMin, absent, workdays, leaveDays };
+  return { present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveDays };
 }
 
 const r0 = (n) => Math.round(Number(n) || 0);
@@ -33,7 +34,8 @@ export function computePayslip(emp, st, opt = {}) {
   const hourly = monthly ? basePay / 30 / 8 : basePay / 8;
   const daily = monthly ? basePay / 30 : basePay;
   const base = monthly ? basePay : r0((st.present || 0) * daily);   // daily wage → paid per day present
-  const otHours = (st.otMin || 0) / 60;
+  // OT credited in ½-hour blocks (rounded down per day) — periodStats provides the pre-rounded sum
+  const otHours = st.otHours != null ? Number(st.otHours) || 0 : (st.otMin || 0) / 60;
   const otPay = r0(otHours * (Number(emp.ot_rate) || 0));
   const overLeave = Number(st.overLeave) || 0;
   const dLate = opt.deductLate === false ? 0 : r0((st.lateMin || 0) / 60 * hourly);

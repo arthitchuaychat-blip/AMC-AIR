@@ -51,6 +51,10 @@ export function isWorkday(dateStr, pattern, satGroup, holidaySet) {
   return false;
 }
 
+// OT is credited in half-hour blocks, rounded DOWN (per day):
+//   < 30 นาที → 0 · 30–59 → 0.5 ชม. · 60–89 → 1 ชม. · 90–119 → 1.5 ชม. …
+export const otCreditHours = (min) => Math.floor((Number(min) || 0) / 30) * 0.5;
+
 // derive the day's status + late/ot minutes from an attendance row + settings
 export function dayStat(att, settings = DEFAULT_HR_SETTINGS) {
   const start = minutesOf(settings.start || "08:00"), end = minutesOf(settings.end || "17:00");
@@ -61,7 +65,8 @@ export function dayStat(att, settings = DEFAULT_HR_SETTINGS) {
   const otMin = co == null ? 0 : Math.max(0, co - end);
   const earlyMin = co == null ? 0 : Math.max(0, end - co);
   const isLate = ci != null && ci - start > grace;
-  return { checkedIn: ci != null, checkedOut: co != null, lateMin, otMin, earlyMin, isLate };
+  // otHours = the PAID OT for the day (rounded down to the nearest ½ hour)
+  return { checkedIn: ci != null, checkedOut: co != null, lateMin, otMin, otHours: otCreditHours(otMin), earlyMin, isLate };
 }
 
 export const fmtMin = (m) => { m = Math.round(Number(m) || 0); const h = Math.floor(m / 60), mm = m % 60; return h ? `${h} ชม. ${mm} น.` : `${mm} น.`; };

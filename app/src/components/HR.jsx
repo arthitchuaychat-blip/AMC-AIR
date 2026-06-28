@@ -96,7 +96,7 @@ function TodayTab({ staff, settings, holSet, canManage, flash }) {
             <div className="hr-name"><b>{p.name || p.email}</b><span className="jo-dim">{p.department || "-"}</span></div>
             <div className="hr-times">
               <span>เข้า <b>{fmtTime(a?.check_in_at)}</b>{s?.isLate && <span className="att-tag late sm">+{fmtMin(s.lateMin)}</span>}</span>
-              <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otMin > 0 && <span className="att-tag ot sm">OT {fmtMin(s.otMin)}</span>}</span>
+              <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otHours > 0 && <span className="att-tag ot sm">OT {s.otHours} ชม.</span>}</span>
             </div>
             <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]) : b.t}</span>
             {canManage && <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>}
@@ -327,7 +327,7 @@ function ReportTab({ staff, settings, holSet, flash }) {
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
       const leaveDaySet = {}; leaves.forEach((l) => { for (let d = hrParseYmd(l.start_date); d <= hrParseYmd(l.end_date); d.setDate(d.getDate() + 1)) { const k = hrYmd(d); if (k >= from && k <= calcTo) (leaveDaySet[l.user_id] = leaveDaySet[l.user_id] || {})[k] = l.type; } });
       const result = staff.map((p) => {
-        let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, absent = 0, workdays = 0, leaveCnt = 0;
+        let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveCnt = 0;
         for (let d = hrParseYmd(from); d <= hrParseYmd(calcTo); d.setDate(d.getDate() + 1)) {
           const k = hrYmd(d);
           const onLeave = leaveDaySet[p.id]?.[k];
@@ -335,10 +335,10 @@ function ReportTab({ staff, settings, holSet, flash }) {
           if (!isWorkday(k, p.work_pattern || "mon_sat", p.sat_group, holSet)) continue;
           workdays++;
           const a = attByUserDay[p.id]?.[k];
-          if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } otMin += s.otMin; }
+          if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } otMin += s.otMin; otHours += s.otHours; }
           else absent++;
         }
-        return { p, present, lateCnt, lateMin, otMin, absent, workdays, leaveCnt };
+        return { p, present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveCnt };
       });
       result.sort((a, b) => b.absent - a.absent || b.lateCnt - a.lateCnt); // worst first (for review)
       setRows(result); setRaw({ attByUserDay, leaveDaySet, from, calcTo });
@@ -349,8 +349,8 @@ function ReportTab({ staff, settings, holSet, flash }) {
 
   function exportCsv() {
     if (!rows) return;
-    const head = ["ชื่อ", "แผนก", "วันทำงาน", "มา", "ขาด", "ลา", "สาย(ครั้ง)", "สายรวม(นาที)", "OT(นาที)"];
-    const lines = rows.map((r) => [r.p.name, r.p.department || "", r.workdays, r.present, r.absent, r.leaveCnt, r.lateCnt, Math.round(r.lateMin), Math.round(r.otMin)]);
+    const head = ["ชื่อ", "แผนก", "วันทำงาน", "มา", "ขาด", "ลา", "สาย(ครั้ง)", "สายรวม(นาที)", "OT(ชม.)"];
+    const lines = rows.map((r) => [r.p.name, r.p.department || "", r.workdays, r.present, r.absent, r.leaveCnt, r.lateCnt, Math.round(r.lateMin), r.otHours || 0]);
     const csv = "﻿" + [head, ...lines].map((a) => a.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = `hr-${ym}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -399,7 +399,7 @@ function ReportTab({ staff, settings, holSet, flash }) {
                   <td>{r.leaveCnt}</td>
                   <td className={r.lateCnt ? "hr-warn" : ""}>{r.lateCnt}</td>
                   <td>{fmtMin(r.lateMin)}</td>
-                  <td>{fmtMin(r.otMin)}</td>
+                  <td>{r.otHours ? r.otHours.toFixed(1) + " ชม." : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -428,7 +428,7 @@ function PersonDetail({ row, days, onClose }) {
           <div className="hr-detail-sum">
             <span className="hr-ok">มา {row.present}</span><span className="hr-bad">ขาด {row.absent}</span>
             <span>ลา {row.leaveCnt}</span><span className="hr-warn">สาย {row.lateCnt}</span>
-            <span>OT {fmtMin(row.otMin)}</span>
+            <span>OT {(row.otHours || 0).toFixed(1)} ชม.</span>
           </div>
           <div className="set-list">
             {days.length === 0 && <div className="empty sm">ไม่มีข้อมูลในเดือนนี้</div>}
@@ -439,7 +439,7 @@ function PersonDetail({ row, days, onClose }) {
                   {d.kind === "leave" ? leaveLabel(d.leaveType)
                     : d.a?.check_in_at ? <>เข้า <b>{fmtTime(d.a.check_in_at)}</b> · ออก <b>{fmtTime(d.a.check_out_at)}</b>
                       {d.s?.isLate && <span className="att-tag late sm">สาย {fmtMin(d.s.lateMin)}</span>}
-                      {d.s?.otMin > 0 && <span className="att-tag ot sm">OT {fmtMin(d.s.otMin)}</span>}</>
+                      {d.s?.otHours > 0 && <span className="att-tag ot sm">OT {d.s.otHours} ชม.</span>}</>
                     : "—"}
                 </span>
                 <span className={"job-badge " + b.c}>{d.kind === "leave" ? leaveLabel(d.leaveType) : b.t}</span>
@@ -475,7 +475,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
         const onTime = st.workdays ? Math.round((st.present - st.lateCnt) / st.workdays * 100) : null;
         const m = jm[p.team] || { done: 0, ratingSum: 0, ratingN: 0, claims: 0, resched: 0 };
         const avgRating = m.ratingN ? (m.ratingSum / m.ratingN) : null;
-        const otHours = (st.otMin || 0) / 60;
+        const otHours = st.otHours || 0;
         let score = 0, wsum = 0;
         if (onTime != null) { score += onTime * 0.5; wsum += 0.5; }
         if (st.workdays) { score += (st.present / st.workdays * 100) * 0.2; wsum += 0.2; }
@@ -695,7 +695,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
               <tr className="ps-net"><td>เงินได้สุทธิ</td><td className="r">{fmtBaht(c.net)}</td></tr>
             </tbody>
           </table>
-          <div className="ps-att">สถิติงวดนี้: มา {r.st.present} · ขาด {r.st.absent} · ลา {r.st.leaveDays} · สาย {r.st.lateCnt} ครั้ง · OT {(r.st.otMin / 60).toFixed(1)} ชม.</div>
+          <div className="ps-att">สถิติงวดนี้: มา {r.st.present} · ขาด {r.st.absent} · ลา {r.st.leaveDays} · สาย {r.st.lateCnt} ครั้ง · OT {(r.st.otHours || 0).toFixed(1)} ชม.</div>
           <div className="ps-sign"><div>ลงชื่อ ........................ ผู้จ่ายเงิน</div><div>ลงชื่อ ........................ ผู้รับเงิน</div></div>
         </div>
       ); })()}
