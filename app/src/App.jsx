@@ -76,13 +76,13 @@ const NAV = {
 // sidebar sections — group the (long) menu into collapsible categories so it's not overwhelming.
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
 const NAV_GROUPS = [
-  { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
-  { key: "crm", label: "ลูกค้า & ขาย", ids: ["customers", "followup", "weborders", "website", "chat"] },
+  { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "hr"] },
+  { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "customers", "followup", "weborders", "website"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "jobs", "po"] },
-  { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "hr"] },
+  { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
 ];
 
@@ -90,7 +90,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-28·ตำแหน่งงาน HR อ้างอิงตำแหน่งจากตั้งค่า (เฉพาะพนักงานประจำ) v215";
+const BUILD = "2026-06-28·จัดลำดับเมนู: ทีม&บุคคลขึ้นบนสุด · แดชบอร์ดลงล่างก่อนตั้งค่า · แชตไลน์นำกลุ่มลูกค้า v216";
 
 function SetupNotice() {
   return (
