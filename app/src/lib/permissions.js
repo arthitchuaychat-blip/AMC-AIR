@@ -12,10 +12,10 @@
 // Team-scoping (ช่างเห็นเฉพาะทีมตัวเอง, หัวหน้าช่างเห็นทุกทีม) stays in the components — that is job
 // logic, not a togglable permission.
 
-export const ROLES = ["admin", "exec", "finance", "sales", "stock", "lead_tech", "tech"];
+export const ROLES = ["admin", "exec", "finance", "hr", "sales", "graphic", "stock", "lead_tech", "tech", "maid"];
 export const ROLE_LABEL = {
-  admin: "ธุรการ", exec: "ผู้บริหาร", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย",
-  stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง",
+  admin: "ธุรการ", exec: "ผู้บริหาร", finance: "บัญชี/การเงิน", hr: "ฝ่ายบุคคล (HR)", sales: "ฝ่ายขาย",
+  graphic: "กราฟิก", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง", maid: "แม่บ้าน",
 };
 
 // master sidebar order + which modules support an "edit" level (vs view-only)
@@ -63,6 +63,9 @@ export const DEFAULT_PERMS = {
   stock:     { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: N, handover: N, schedule: N, catalog: E, movements: E, jobs: E, subcontract: N, po: E, settings: N },
   lead_tech: { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: V, handover: E, schedule: V, catalog: V, movements: E, jobs: V, subcontract: N, po: N, settings: N },
   tech:      { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: N, handover: E, schedule: V, catalog: N, movements: E, jobs: N, subcontract: N, po: N, settings: N },
+  hr:        { dashboard: V, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: E, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: N, handover: N, schedule: N, catalog: N, movements: N, jobs: N, subcontract: N, po: N, settings: N },
+  graphic:   { dashboard: N, customers: N, followup: N, weborders: V, website: E, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: N, handover: N, schedule: N, catalog: V, movements: N, jobs: N, subcontract: N, po: N, settings: N },
+  maid:      { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: N, handover: N, schedule: N, catalog: N, movements: N, jobs: N, subcontract: N, po: N, settings: N },
 };
 
 const RANK = { none: 0, view: 1, edit: 2 };

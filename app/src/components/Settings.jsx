@@ -152,7 +152,8 @@ function CompanyCard({ kind, title, sub, flash }) {
   );
 }
 
-const ROLES = [{ v: "tech", l: "ช่าง" }, { v: "lead_tech", l: "หัวหน้าช่าง" }, { v: "sales", l: "ฝ่ายขาย" }, { v: "stock", l: "ธุรการวัสดุ" }, { v: "admin", l: "ฝ่ายธุรการ" }, { v: "finance", l: "บัญชี/การเงิน" }, { v: "exec", l: "ผู้บริหาร" }];
+// single source of truth = lib/permissions.js (new roles show up here automatically)
+const ROLES = PERM_ROLES.map((v) => ({ v, l: PERM_ROLE_LABEL[v] || v }));
 const roleLabel = (v) => (ROLES.find((r) => r.v === v) || {}).l || v;
 
 function TeamRow({ team, onChanged, flash }) {

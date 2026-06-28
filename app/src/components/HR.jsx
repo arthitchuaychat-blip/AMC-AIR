@@ -600,8 +600,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         // settle the advances deducted this run so they aren't deducted again next month
         const ids = payable.flatMap((r) => advIdsByUser[r.p.id] || []);
         await markAdvancesPaid(ym, ids);
-        // link to Cash Flow: projected outflow on the month's pay date (วันสิ้นเดือน)
-        await upsertPayrollCashEntry(ym, runNet, payDate, payable.length);
+        // link to Cash Flow: projected outflow on the month's pay date (วันสิ้นเดือน) — best-effort
+        // (ฝ่ายบุคคล/hr อาจไม่มีสิทธิ์เขียนกระแสเงินสด → ปล่อยให้บัญชีซิงค์ทีหลังได้ ไม่บล็อกการจ่าย)
+        await upsertPayrollCashEntry(ym, runNet, payDate, payable.length).catch(() => {});
       }
       flash(markPaid ? "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓ (เข้ากระแสเงินสดแล้ว)" : "บันทึกรอบเงินเดือนแล้ว ✓"); await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
@@ -615,7 +616,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     try {
       await setPayslipPaid(ym, false);
       await unsettleAdvances(ym);
-      await removePayrollCashEntry(ym);
+      await removePayrollCashEntry(ym).catch(() => {});   // best-effort (hr อาจไม่มีสิทธิ์กระแสเงินสด)
       flash("ยกเลิกการจ่ายแล้ว — แก้ไขข้อมูลแล้วกด “ทำจ่ายทั้งรอบ” ใหม่ได้"); await load();
     } catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
