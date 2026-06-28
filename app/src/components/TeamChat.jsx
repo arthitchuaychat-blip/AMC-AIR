@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
-import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember } from "../lib/api";
+import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar } from "../lib/api";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
@@ -23,6 +23,31 @@ function avColor(id) {
   let h = 0;
   for (let i = 0; i < (id || "").length; i++) h = (h * 31 + (id || "").charCodeAt(i)) & 0x7fffffff;
   return AV_COLORS[h % AV_COLORS.length];
+}
+
+// avatar: photo if set, else a coloured initial. cls picks the base style (tc-av / tc-msg-av / tc-room-ic)
+function Avatar({ url, name, id, size, cls = "tc-av" }) {
+  if (url) return (
+    <span className={cls + " tc-av-img"} style={size ? { width: size, height: size } : undefined}>
+      <img src={url} alt="" />
+    </span>
+  );
+  return (
+    <span className={cls} style={{ ...(size ? { width: size, height: size, fontSize: Math.round(size * 0.42) } : {}), background: avColor(id) }}>
+      {(name || "?")[0]?.toUpperCase()}
+    </span>
+  );
+}
+// room icon: room photo if set, else the kind emoji on its gradient
+function RoomIcon({ room, size = 44 }) {
+  if (room.avatar_url) return (
+    <span className="tc-room-ic tc-av-img" style={{ width: size, height: size }}><img src={room.avatar_url} alt="" /></span>
+  );
+  return (
+    <span className="tc-room-ic" style={{ background: ROOM_BG[room.kind] || ROOM_BG.group, width: size, height: size, fontSize: Math.round(size * 0.48) }}>
+      {KIND_ICON[room.kind] || "💬"}
+    </span>
+  );
 }
 
 function jobStatusLabel(v) { return JOB_STATUSES.find(([s]) => s === v)?.[1] || v; }
@@ -94,6 +119,19 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
 
   const flash     = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
   const staffName = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
+  const staffById = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s])), [staff]);
+
+  async function reloadMe() { try { const [p, s] = await Promise.all([getProfile(), listStaff()]); setMe(p); setStaff(s); } catch { /* ignore */ } }
+  async function onMyAvatar(e) {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
+    try { const url = await uploadAvatar(f); await setMyAvatar(url); await reloadMe(); loadRooms(); flash("เปลี่ยนรูปโปรไฟล์แล้ว ✓"); }
+    catch (err) { flash("เปลี่ยนรูปไม่สำเร็จ: " + (err?.message || err)); }
+  }
+  async function onRoomAvatar(e) {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel) return;
+    try { const url = await uploadAvatar(f); await setRoomAvatar(sel, url); await loadRooms(); flash("เปลี่ยนรูปกลุ่มแล้ว ✓"); }
+    catch (err) { flash("เปลี่ยนรูปกลุ่มไม่สำเร็จ: " + (err?.message || err)); }
+  }
 
   // members eligible for @mention in current room
   const mentionMembers = React.useMemo(() => {
@@ -213,7 +251,14 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           <h1 className="page-title">แชตทีม <span className="page-title-en">Team Chat</span></h1>
           <p className="page-sub">คุยกันภายในองค์กร · ห้องรวม · ทักตัวต่อตัว · กลุ่ม · ห้องงาน</p>
         </div>
-        <div className="cat-head-actions"><NotifyButton /></div>
+        <div className="cat-head-actions">
+          <label className="tc-myav" title="เปลี่ยนรูปโปรไฟล์ของฉัน">
+            <Avatar url={me?.avatar_url} name={me?.name} id={me?.id} size={36} />
+            <span className="tc-myav-cam">📷</span>
+            <input type="file" accept="image/*" hidden onChange={onMyAvatar} />
+          </label>
+          <NotifyButton />
+        </div>
       </div>
 
       <div className="tc-board">
@@ -250,9 +295,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
             {shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ยังไม่มีห้องแชต</div>}
             {shown.map((r) => (
               <button key={r.id} className={"tc-room" + (sel === r.id ? " on" : "")} onClick={() => setSel(r.id)}>
-                <span className="tc-room-ic" style={{ background: ROOM_BG[r.kind] || ROOM_BG.group }}>
-                  {KIND_ICON[r.kind] || "💬"}
-                </span>
+                <RoomIcon room={r} size={40} />
                 <span className="tc-room-mid">
                   <span className="tc-room-title">
                     {r.title}
@@ -280,9 +323,13 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           ) : (
             <>
               <div className="tc-main-head" style={{ borderTop: `3px solid ${accentColor}` }}>
-                <span className="tc-room-ic" style={{ background: ROOM_BG[selRoom.kind] || ROOM_BG.group, width: 42, height: 42, fontSize: 21 }}>
-                  {KIND_ICON[selRoom.kind]}
-                </span>
+                {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") ? (
+                  <label className="tc-roomav-edit" title="เปลี่ยนรูปกลุ่ม">
+                    <RoomIcon room={selRoom} size={42} />
+                    <span className="tc-myav-cam">📷</span>
+                    <input type="file" accept="image/*" hidden onChange={onRoomAvatar} />
+                  </label>
+                ) : <RoomIcon room={selRoom} size={42} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="tc-main-title">{selRoom.title}</div>
                   <div className="tc-main-sub">
@@ -305,9 +352,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                   return (
                     <div className={"tc-msg-row" + (out ? " out" : "")} key={m.id}>
                       {!out && (
-                        <span className="tc-msg-av" style={{ background: avColor(m.sender) }}>
-                          {(staffName[m.sender] || "T")[0].toUpperCase()}
-                        </span>
+                        <Avatar url={staffById[m.sender]?.avatar_url} name={staffName[m.sender] || "T"} id={m.sender} cls="tc-msg-av" />
                       )}
                       <div className={"chat-bubble " + (out ? "out" : "in")} style={jc ? { maxWidth: 280, padding: 0, background: "none", boxShadow: "none" } : {}}>
                         {!out && !jc && (
@@ -360,7 +405,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                 <div className="mention-drop">
                   {mentionMembers.map((s) => (
                     <button key={s.id} className="mention-item" onMouseDown={(e) => { e.preventDefault(); pickMention(s); }}>
-                      <span className="tc-av" style={{ background: avColor(s.id), width: 24, height: 24, fontSize: 11 }}>{(s.name || "?")[0]}</span>
+                      <Avatar url={s.avatar_url} name={s.name} id={s.id} size={24} />
                       <span className="mention-name">{s.name}</span>
                       <span className="mention-nick">@{nickOf(s.name)}</span>
                     </button>
@@ -428,7 +473,7 @@ function DmModal({ staff, onPick, onClose }) {
           <div className="tc-picklist">
             {list.map((s) => (
               <button key={s.id} className="tc-pickrow" onClick={() => onPick(s.id)}>
-                <span className="tc-av" style={{ background: avColor(s.id) }}>{(s.name || "?")[0]}</span>
+                <Avatar url={s.avatar_url} name={s.name} id={s.id} />
                 <span style={{ flex: 1 }}>{s.name}</span>
                 <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{s.role}</span>
               </button>
@@ -512,7 +557,7 @@ function GroupModal({ staff, jobs, onCreate, onClose }) {
               {list.map((s) => (
                 <label key={s.id} className="tc-checkrow">
                   <input type="checkbox" checked={!!sel[s.id]} onChange={(e) => setSel((c) => ({ ...c, [s.id]: e.target.checked }))} />
-                  <span className="tc-av" style={{ background: avColor(s.id) }}>{(s.name || "?")[0]}</span>
+                  <Avatar url={s.avatar_url} name={s.name} id={s.id} />
                   <span style={{ flex: 1 }}>{s.name}</span>
                   <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{s.role}</span>
                 </label>
@@ -563,7 +608,7 @@ function MembersModal({ room, staff, onClose, onChanged, flash }) {
                   {memberIds.length === 0 && <div className="empty sm">ยังไม่มีสมาชิก</div>}
                   {memberIds.map((uid) => (
                     <div key={uid} className="tc-checkrow">
-                      <span className="tc-av" style={{ background: avColor(uid) }}>{(nameById[uid]?.name || "?")[0]}</span>
+                      <Avatar url={nameById[uid]?.avatar_url} name={nameById[uid]?.name} id={uid} />
                       <span style={{ flex: 1 }}>{nameById[uid]?.name || uid}</span>
                       <button className="btn-ghost sm danger" disabled={busy} onClick={() => remove(uid)}>นำออก</button>
                     </div>
@@ -577,7 +622,7 @@ function MembersModal({ room, staff, onClose, onChanged, flash }) {
                   {others.length === 0 && <div className="empty sm">ไม่พบ</div>}
                   {others.map((s) => (
                     <div key={s.id} className="tc-checkrow">
-                      <span className="tc-av" style={{ background: avColor(s.id) }}>{(s.name || "?")[0]}</span>
+                      <Avatar url={s.avatar_url} name={s.name} id={s.id} />
                       <span style={{ flex: 1 }}>{s.name}</span>
                       <button className="btn-ghost sm" disabled={busy} onClick={() => add(s.id)}>＋ เพิ่ม</button>
                     </div>

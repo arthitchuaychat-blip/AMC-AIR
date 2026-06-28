@@ -1960,9 +1960,27 @@ export async function setLineOwner(uid, userId) {
 }
 // staff list (for owner dropdown + showing who replied)
 export async function listStaff() {
-  const { data, error } = await supabase.from("profiles").select("id,name,email,role").order("name");
+  const { data, error } = await supabase.from("profiles").select("id,name,email,role,avatar_url").order("name");
   if (error) throw error;
   return (data || []).map((p) => ({ ...p, name: p.name || p.email }));
+}
+
+// avatars (chat profile pictures) — own profile + group/room
+export async function uploadAvatar(file) {
+  file = await downscaleImage(file);
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `avatars/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
+export async function setMyAvatar(url) {
+  const { error } = await supabase.rpc("set_my_avatar", { p_url: url || "" });
+  if (error) throw error;
+}
+export async function setRoomAvatar(roomId, url) {
+  const { error } = await supabase.rpc("set_room_avatar", { p_room: roomId, p_url: url || "" });
+  if (error) throw error;
 }
 
 // send a reply via the serverless function (LINE push). payload = { text } or { imageUrl }.
@@ -2492,10 +2510,11 @@ export async function listChatRooms() {
   const [rooms, members, staff] = await Promise.all([
     supabase.from("chat_rooms").select("*"),
     supabase.from("chat_members").select("room_id,user_id,last_read_at"),
-    supabase.from("profiles").select("id,name,email"),
+    supabase.from("profiles").select("id,name,email,avatar_url"),
   ]);
   if (rooms.error) throw rooms.error;
   const nameById = Object.fromEntries((staff.data || []).map((p) => [p.id, p.name || p.email]));
+  const avById = Object.fromEntries((staff.data || []).map((p) => [p.id, p.avatar_url]));
   const memByRoom = {}; (members.data || []).forEach((m) => { (memByRoom[m.room_id] = memByRoom[m.room_id] || []).push(m); });
   const myRead = {}; (members.data || []).forEach((m) => { if (m.user_id === uid) myRead[m.room_id] = m.last_read_at; });
   const ids = (rooms.data || []).map((r) => r.id);
@@ -2512,13 +2531,16 @@ export async function listChatRooms() {
   });
   return (rooms.data || []).map((r) => {
     const mem = memByRoom[r.id] || [];
-    const others = mem.filter((m) => m.user_id !== uid).map((m) => nameById[m.user_id]).filter(Boolean);
+    const otherIds = mem.filter((m) => m.user_id !== uid).map((m) => m.user_id);
+    const others = otherIds.map((id) => nameById[id]).filter(Boolean);
     let title = r.name;
     if (r.kind === "dm") title = others[0] || "ส่วนตัว";
     if (!title && r.kind === "company") title = "ทั้งบริษัท";
     if (!title && (r.kind === "group" || r.kind === "project")) title = others.slice(0, 3).join(", ") || "กลุ่ม";
+    // DM shows the other person's avatar; group/room shows its own avatar
+    const avatar_url = r.kind === "dm" ? (avById[otherIds[0]] || null) : (r.avatar_url || null);
     const lm = last[r.id];
-    return { ...r, title, memberNames: others, memberIds: mem.map((m) => m.user_id), memberCount: mem.length,
+    return { ...r, title, avatar_url, memberNames: others, memberIds: mem.map((m) => m.user_id), memberCount: mem.length,
       lastText: lm ? (lm.text || (lm.image_url ? "[รูปภาพ]" : lm.file_url ? `[ไฟล์] ${lm.file_name || ""}` : "")) : "", lastAt: lm ? lm.created_at : r.created_at, unread: unread[r.id] || 0 };
   }).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
 }
