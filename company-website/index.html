@@ -320,10 +320,11 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 .hero-values span{font-size:14px;font-weight:700;color:var(--primary-dark);background:color-mix(in srgb,var(--primary) 11%,white);border:1px solid color-mix(in srgb,var(--primary) 24%,white);padding:6px 14px;border-radius:99px}
 
 /* two-column page: left rail (filter + news + ads) · right main content */
-.page{display:grid;grid-template-columns:208px minmax(0,1fr);grid-template-rows:auto 1fr;gap:14px 22px;align-items:start;padding-top:88px;padding-bottom:0}
-.side-filter{grid-column:1;grid-row:1;position:sticky;top:88px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow-sm)}
-.maincol{grid-column:2;grid-row:1 / span 2;min-width:0}
-.side-rail{grid-column:1;grid-row:2;display:flex;flex-direction:column;gap:12px}
+.page{display:grid;grid-template-columns:208px minmax(0,1fr);gap:22px;align-items:start;padding-top:88px}
+.side{grid-column:1;position:sticky;top:88px;align-self:start;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 100px);overflow-y:auto;overflow-x:hidden}
+.side-filter{flex:none;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow-sm)}
+.maincol{grid-column:2;min-width:0}
+.side-rail{display:flex;flex-direction:column;gap:12px}
 .side-filter-h{font-size:12.5px;font-weight:800;color:var(--ink-2)}
 .side-filter select{width:100%;appearance:none;-webkit-appearance:none;background:#fff;border:1.5px solid var(--line);color:var(--ink);font-family:inherit;font-size:13.5px;font-weight:600;padding:10px 28px 10px 11px;border-radius:10px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
 .side-filter select:hover{border-color:var(--primary)}
@@ -343,10 +344,11 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 .pp-filters select:hover{border-color:var(--primary)}
 @media(max-width:560px){.pp-filters select{flex:1;min-width:calc(50% - 5px)}}
 @media(max-width:860px){
-  .page{grid-template-columns:1fr;grid-template-rows:none;padding-top:78px;gap:16px}
-  .side-filter{position:static;order:1;grid-column:1;grid-row:auto}
-  .maincol{grid-column:1;grid-row:auto;order:2}
-  .side-rail{order:3;grid-column:1;grid-row:auto;flex-direction:row;flex-wrap:wrap}
+  .page{display:flex;flex-direction:column;padding-top:78px;gap:16px}
+  .side{display:contents}
+  .side-filter{order:1}
+  .maincol{order:2}
+  .side-rail{order:3;flex-direction:row;flex-wrap:wrap}
   .side-ads{flex-direction:row;flex-wrap:wrap}
   .side-ad,.side-news{flex:1;min-width:150px}
 }
@@ -403,6 +405,7 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 </header>
 
 <div class="page wrap" id="pageHome">
+  <div class="side">
   <div class="side-filter">
       <div class="side-filter-h">ค้นหารุ่นแอร์</div>
       <select id="fltModel" aria-label="เลือกรุ่นแอร์">
@@ -436,6 +439,7 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
       <a class="side-news" id="sideNews" target="_blank" rel="noreferrer" style="display:none"></a>
       <div class="side-ads" id="sideAds"></div>
     </div>
+  </div>
   <main class="maincol">
 
 <section class="hero-slider" id="heroSlider" style="display:none">
