@@ -923,6 +923,14 @@ if ($("#fltGo")) $("#fltGo").onclick = () => applyFilters(["#fltModel", "#fltTyp
 ["#ppModel", "#ppType", "#ppBtu", "#ppService"].forEach((id) => { if ($(id)) $(id).onchange = () => applyFilters(["#ppModel", "#ppType", "#ppBtu", "#ppService"], false); });
 
 // ---------- หน้าเพจ: หน้าแรก ↔ หน้าสินค้า/บริการ (hash router · รองรับหน้ารายละเอียดสินค้าในอนาคต) ----------
+// ล้างตัวกรองทั้งหมด (ใช้ตอนกลับหน้าแรก — ไม่ให้ประวัติค้นหาค้าง)
+function resetFilters() {
+  prodBrand = prodBtu = prodType = ""; prodQuery = ""; prodFilter = "all";
+  ["#fltModel", "#fltType", "#fltBtu", "#fltService", "#ppModel", "#ppType", "#ppBtu", "#ppService"].forEach((id) => { if ($(id)) $(id).value = ""; });
+  if ($("#prodSearch")) $("#prodSearch").value = "";
+  setProdTab("all"); renderProducts();
+}
+let wasProducts = false;
 function route() {
   const h = decodeURIComponent((location.hash || "").replace(/^#/, ""));
   const onProducts = (h === "products" || h === "สินค้า" || h === "บริการ");
@@ -930,7 +938,11 @@ function route() {
   if (prod) prod.style.display = onProducts ? "block" : "none";
   if (home) home.style.display = onProducts ? "none" : "";
   if (onProducts) window.scrollTo(0, 0);
-  else if (h) { const el = document.getElementById(h); if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 40); }
+  else {
+    if (wasProducts) resetFilters();   // กลับจากหน้าสินค้า → ล้างตัวกรองหน้าหลัก
+    if (h) { const el = document.getElementById(h); if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 40); }
+  }
+  wasProducts = onProducts;
 }
 addEventListener("hashchange", route);
 if ($("#ppHome")) $("#ppHome").onclick = (e) => { e.preventDefault(); location.hash = ""; };
