@@ -442,6 +442,7 @@ select.inp{cursor:pointer}
 .nb-btn:hover{background:var(--surface-2)}
 .nb-badge{position:absolute;top:-2px;right:-3px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#dc2626;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1}
 .nb-pop{position:absolute;top:calc(100% + 8px);right:0;width:340px;max-width:90vw;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);z-index:250;overflow:hidden}
+.brand-bell .nb-pop{left:0;right:auto}  /* sidebar bell sits at far left → open rightward into content so text isn't clipped off-screen */
 .nb-head{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--line-2);font-size:14px}
 .nb-readall{border:none;background:none;color:var(--primary);font-size:12px;font-weight:700;cursor:pointer}
 .nb-list{max-height:60vh;overflow-y:auto}
@@ -623,7 +624,7 @@ select.inp{cursor:pointer}
 
 /* responsive */
 @media(max-width:1180px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.dash-grid{grid-template-columns:repeat(2,1fr)}.span-2{grid-column:span 2}.po-layout,.damage-layout{grid-template-columns:1fr}}
-@media(max-width:760px){.sidebar{display:none}.kpi-grid,.dash-grid{grid-template-columns:1fr}.span-2{grid-column:span 1}}
+@media(max-width:760px){.sidebar{display:none}.kpi-grid,.dash-grid{grid-template-columns:1fr}.span-2{grid-column:span 1}.brand-bell .nb-pop{left:auto;right:0}}
 
 /* ---------- additions for the real app (auth, catalog actions) ---------- */
 .login-stage{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(circle at 50% 0%,#eef1f7,#e3e7f0)}
