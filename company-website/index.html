@@ -338,6 +338,10 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 .page .hero{padding-top:14px}
 .page-products{padding-top:96px;padding-bottom:64px;min-height:62vh}
 .pp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:22px}
+.pp-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.pp-filters select{appearance:none;-webkit-appearance:none;background:#fff;border:1.5px solid var(--line);color:var(--ink);font-family:inherit;font-size:14px;font-weight:600;padding:11px 32px 11px 14px;border-radius:11px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;min-width:160px}
+.pp-filters select:hover{border-color:var(--primary)}
+@media(max-width:560px){.pp-filters select{flex:1;min-width:calc(50% - 5px)}}
 @media(max-width:860px){
   .page{grid-template-columns:1fr;grid-template-rows:none;padding-top:78px;gap:16px}
   .side-filter{position:static;order:1;grid-column:1;grid-row:auto}
@@ -602,6 +606,16 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
       <p class="lead">เลือกรุ่นที่ต้องการ ใส่ตะกร้า แล้วส่งคำขอ — ทีมงานจะติดต่อยืนยันราคาและนัดติดตั้ง</p></div>
     <a href="#" class="btn btn-ghost btn-sm" id="ppHome">← กลับหน้าแรก</a>
   </div>
+  <div class="pp-filters">
+    <select id="ppModel" aria-label="ยี่ห้อ"><option value="">รุ่นแอร์ทั้งหมด</option></select>
+    <select id="ppType" aria-label="ประเภทแอร์"><option value="">ทุกประเภท</option></select>
+    <select id="ppBtu" aria-label="ขนาด BTU"><option value="">ทุกขนาด BTU</option></select>
+    <select id="ppService" aria-label="บริการ">
+      <option value="">บริการทั้งหมด</option>
+      <option value="ติดตั้ง">ติดตั้งแอร์</option><option value="ล้าง">ล้างแอร์</option>
+      <option value="ซ่อม">ซ่อม/แก้ไข</option><option value="ย้าย">ย้ายแอร์</option>
+    </select>
+  </div>
   <div class="prod-tools">
     <div class="prod-tabs" id="prodTabs">
       <button class="prod-tab on" data-k="all">ทั้งหมด</button>
@@ -737,10 +751,10 @@ function fillFilters() {
   const acs = allProducts.filter((p) => p.kind === "ac");
   const uniq = (k) => [...new Set(acs.map((p) => p[k]).filter((v) => v != null && v !== ""))];
   const brands = uniq("brand").sort(), btus = uniq("btu").sort((a, b) => a - b), types = uniq("ac_type").sort();
-  const set = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };
-  if (brands.length) set("#fltModel", `<option value="">รุ่นแอร์ทั้งหมด</option>` + brands.map((b) => `<option value="${b}">${b}</option>`).join(""));
-  if (btus.length) set("#fltBtu", `<option value="">ทุกขนาด BTU</option>` + btus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join(""));
-  if (types.length) set("#fltType", `<option value="">ทุกประเภท</option>` + types.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join(""));
+  const fill = (ids, html) => ids.forEach((id) => { const el = $(id); if (el) el.innerHTML = html; });
+  if (brands.length) fill(["#fltModel", "#ppModel"], `<option value="">รุ่นแอร์ทั้งหมด</option>` + brands.map((b) => `<option value="${b}">${b}</option>`).join(""));
+  if (btus.length) fill(["#fltBtu", "#ppBtu"], `<option value="">ทุกขนาด BTU</option>` + btus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join(""));
+  if (types.length) fill(["#fltType", "#ppType"], `<option value="">ทุกประเภท</option>` + types.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join(""));
 }
 let allProducts = [], prodFilter = "all", prodQuery = "", prodBrand = "", prodBtu = "", prodType = "", prodNote = "";
 function prodCard(p) {
@@ -779,8 +793,8 @@ async function loadProducts() {
 $("#prodTabs").querySelectorAll(".prod-tab").forEach((t) => t.onclick = () => {
   $("#prodTabs").querySelectorAll(".prod-tab").forEach((x) => x.classList.remove("on"));
   t.classList.add("on"); prodFilter = t.dataset.k;
-  prodBrand = prodBtu = prodType = "";   // เลือกแท็บเอง = ล้างตัวกรองแถบข้าง
-  ["#fltModel", "#fltType", "#fltBtu", "#fltService"].forEach((id) => { if ($(id)) $(id).value = ""; });
+  prodBrand = prodBtu = prodType = "";   // เลือกแท็บเอง = ล้างตัวกรอง
+  ["#fltModel", "#fltType", "#fltBtu", "#fltService", "#ppModel", "#ppType", "#ppBtu", "#ppService"].forEach((id) => { if ($(id)) $(id).value = ""; });
   renderProducts();
 });
 $("#prodSearch").oninput = (e) => { prodQuery = e.target.value; renderProducts(); };
@@ -890,22 +904,23 @@ async function loadPress() {
 
 // ---------- แถบกรอง (แถบซ้าย) → เด้งไปหน้าสินค้า/บริการ พร้อมกรอง ----------
 function setProdTab(k) { const t = $("#prodTabs"); if (t) t.querySelectorAll(".prod-tab").forEach((x) => x.classList.toggle("on", x.dataset.k === k)); }
-function applyHeaderFilter() {
-  const svc = $("#fltService") ? $("#fltService").value : "";
-  if (svc) { prodFilter = "service"; prodBrand = prodBtu = prodType = ""; prodQuery = svc; setProdTab("service"); }
-  else {
-    prodBrand = $("#fltModel") ? $("#fltModel").value : "";
-    prodType = $("#fltType") ? $("#fltType").value : "";
-    prodBtu = $("#fltBtu") ? $("#fltBtu").value : "";
-    prodQuery = "";
-    prodFilter = (prodBrand || prodType || prodBtu) ? "ac" : "all"; setProdTab(prodFilter);
-  }
+// อ่านตัวกรองจากกลุ่ม g → ตั้งสถานะ → ซิงค์ทั้ง 2 กลุ่ม (แถบซ้าย flt* + หน้าสินค้า pp*) → แสดงผล
+function applyFilters(g, navigate) {
+  const v = (i) => ($(g[i]) ? $(g[i]).value : "");
+  const brand = v(0), type = v(1), btu = v(2), svc = v(3);
+  if (svc) { prodFilter = "service"; prodBrand = prodBtu = prodType = ""; prodQuery = svc; }
+  else { prodBrand = brand; prodType = type; prodBtu = btu; prodQuery = ""; prodFilter = (brand || type || btu) ? "ac" : "all"; }
+  setProdTab(prodFilter);
   if ($("#prodSearch")) $("#prodSearch").value = prodQuery;
+  [["#fltModel", "#ppModel", prodBrand], ["#fltType", "#ppType", prodType], ["#fltBtu", "#ppBtu", String(prodBtu || "")], ["#fltService", "#ppService", svc]]
+    .forEach(([a, b, val]) => { if ($(a)) $(a).value = val; if ($(b)) $(b).value = val; });
   renderProducts();
-  location.hash = "products";
+  if (navigate) location.hash = "products";
 }
-if ($("#fltGo")) $("#fltGo").onclick = applyHeaderFilter;
-["#fltModel", "#fltType", "#fltBtu", "#fltService"].forEach((id) => { if ($(id)) $(id).onchange = applyHeaderFilter; });
+// หน้าหลัก: เลือกตัวกรอง (ไม่เด้ง) → กดปุ่ม "ดูสินค้า/บริการ" ถึงเด้งไปหน้าสินค้า
+if ($("#fltGo")) $("#fltGo").onclick = () => applyFilters(["#fltModel", "#fltType", "#fltBtu", "#fltService"], true);
+// หน้าสินค้า: เลือกตัวกรองแล้วกรองทันที (อยู่หน้าสินค้าอยู่แล้ว)
+["#ppModel", "#ppType", "#ppBtu", "#ppService"].forEach((id) => { if ($(id)) $(id).onchange = () => applyFilters(["#ppModel", "#ppType", "#ppBtu", "#ppService"], false); });
 
 // ---------- หน้าเพจ: หน้าแรก ↔ หน้าสินค้า/บริการ (hash router · รองรับหน้ารายละเอียดสินค้าในอนาคต) ----------
 function route() {
