@@ -1273,6 +1273,33 @@ export async function uploadWebBanner(file) {
   return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
 
+// ---------- generic website content manager (เมนู "จัดการเว็บไซต์") ----------
+// one helper set drives all 5 content types (ปก/ผลงาน/โลโก้/บทความ/ข่าว) — table whitelist only
+const WEB_KINDS = { banners: "web_banners", portfolio: "web_portfolio", clients: "web_clients", articles: "web_articles", press: "web_press" };
+export async function listWebItems(kind) {
+  const t = WEB_KINDS[kind]; if (!t) throw new Error("unknown web kind");
+  const { data, error } = await supabase.from(t).select("*").order("sort").order("id");
+  if (error) throw error; return data || [];
+}
+export async function saveWebItem(kind, row) {
+  const t = WEB_KINDS[kind]; if (!t) throw new Error("unknown web kind");
+  const r = { ...row }; delete r.created_at;
+  if (r.id) { const id = r.id; delete r.id; const { error } = await supabase.from(t).update(r).eq("id", id); if (error) throw error; }
+  else { delete r.id; const { error } = await supabase.from(t).insert(r); if (error) throw error; }
+}
+export async function deleteWebItem(kind, id) {
+  const t = WEB_KINDS[kind]; if (!t) throw new Error("unknown web kind");
+  const { error } = await supabase.from(t).delete().eq("id", id); if (error) throw error;
+}
+// upload any website image as-is (keeps resolution/transparency) to the public photos bucket
+export async function uploadWebImage(file, folder) {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `${(folder || "web").replace(/[^a-z0-9-]/g, "")}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
+
 export async function deleteJobOrder(job_no, reason) {
   const [{ data: head }, { data: visits }] = await Promise.all([
     supabase.from("job_orders").select("*").eq("job_no", job_no).maybeSingle(),

@@ -526,15 +526,17 @@ footer{background:#020a18;border-top:1px solid var(--line)}
 <section class="sec" id="press">
   <div class="wrap">
     <div class="sec-head center"><span class="eyebrow">ข่าว & สื่อ</span><h2 class="title">AMC AIR ในสื่อ</h2></div>
-    <a class="press-card" href="https://naewna.com/lady/864481" target="_blank" rel="noreferrer">
-      <div class="press-img"><img src="news/news1.jpg" alt="ForeToday GROWTH LAB — อาทิตย์ ช่วยชาติ" loading="lazy" /></div>
-      <div class="press-body">
-        <span class="press-src">📰 หนังสือพิมพ์แนวหน้า · 24 ก.ค. 2568</span>
-        <h3>‘ForeToday’ ผู้นำการตลาดดิจิทัลสำหรับ SMEs คว้ารางวัลใหญ่จาก ‘Google Thailand’</h3>
-        <p>คุณอาทิตย์ ช่วยชาติ กรรมการผู้จัดการ ร่วมเวที ForeToday GROWTH LAB — ขับเคลื่อนธุรกิจ SMEs ด้วย AI</p>
-        <span class="press-link">อ่านข่าวฉบับเต็ม →</span>
-      </div>
-    </a>
+    <div id="pressWrap">
+      <a class="press-card" href="https://naewna.com/lady/864481" target="_blank" rel="noreferrer">
+        <div class="press-img"><img src="news/news1.jpg" alt="ForeToday GROWTH LAB — อาทิตย์ ช่วยชาติ" loading="lazy" /></div>
+        <div class="press-body">
+          <span class="press-src">📰 หนังสือพิมพ์แนวหน้า · 24 ก.ค. 2568</span>
+          <h3>‘ForeToday’ ผู้นำการตลาดดิจิทัลสำหรับ SMEs คว้ารางวัลใหญ่จาก ‘Google Thailand’</h3>
+          <p>คุณอาทิตย์ ช่วยชาติ กรรมการผู้จัดการ ร่วมเวที ForeToday GROWTH LAB — ขับเคลื่อนธุรกิจ SMEs ด้วย AI</p>
+          <span class="press-link">อ่านข่าวฉบับเต็ม →</span>
+        </div>
+      </a>
+    </div>
   </div>
 </section>
 
@@ -570,7 +572,7 @@ footer{background:#020a18;border-top:1px solid var(--line)}
   <div class="wrap">
     <div class="sec-head center"><span class="eyebrow">สาระน่ารู้</span><h2 class="title">บทความเรื่องแอร์</h2>
       <p class="lead">เกร็ดความรู้ดูแลแอร์ ใช้แอร์ให้เย็นสบาย ประหยัดไฟ</p></div>
-    <div class="art-grid">
+    <div class="art-grid" id="artGrid">
       <div class="art-card"><img src="articles/a1.jpg" alt="ใช้แอร์ให้เย็นสบาย ประหยัดไฟ" loading="lazy" /></div>
       <div class="art-card"><img src="articles/a2.jpg" alt="สาระน่ารู้เรื่องแอร์" loading="lazy" /></div>
       <div class="art-card"><img src="articles/a3.jpg" alt="สาระน่ารู้เรื่องแอร์" loading="lazy" /></div>
@@ -797,17 +799,15 @@ async function loadClients() {
 // ---------- hero จุดเด่น (ซื่อสัตย์ · จริงใจ · งานไว · ราคาดี) ----------
 if (Array.isArray(C.VALUES)) $("#heroValues").innerHTML = C.VALUES.map((v) => `<span>${v}</span>`).join("");
 
-// ---------- ผลงาน: สุ่มหมุนที่หน้าแรก + กริดทั้งหมด + แกลเลอรี (เพิ่มรูปไม่จำกัดใน C.PORTFOLIO) ----------
-const PF = Array.isArray(C.PORTFOLIO) ? C.PORTFOLIO.slice() : [];
+// ---------- ผลงาน: ดึงจาก web_portfolio (หลังบ้าน) หรือ C.PORTFOLIO · สุ่มหมุน + กริด + แกลเลอรี ----------
+let PF = [], pfPool = [], pfTimer = null;
 const shuffle = (a) => { const x = a.slice(); for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
 const portCard = (p) => `<div class="port"><img src="${p.img}" alt="${p.title || ''}" loading="lazy"><div class="cap"><b>${p.title || 'ผลงาน'}</b></div></div>`;
-if ($("#portGrid")) $("#portGrid").innerHTML = PF.map(portCard).join("");
 function openGal() { $("#galGrid").innerHTML = PF.map(portCard).join(""); $("#galMask").classList.add("on"); }
 function closeGal() { $("#galMask").classList.remove("on"); }
 if ($("#heroPfAll")) $("#heroPfAll").onclick = openGal;
 if ($("#galX")) $("#galX").onclick = closeGal;
 if ($("#galMask")) $("#galMask").onclick = (e) => { if (e.target.id === "galMask") closeGal(); };
-let pfPool = [];
 function renderHeroPf() {
   const host = $("#heroPf"); if (!host || !PF.length) return;
   if (pfPool.length < 3) pfPool = shuffle(PF);
@@ -818,8 +818,40 @@ function renderHeroPf() {
     host.style.transition = "opacity .4s"; host.style.opacity = 1;
   }, 220);
 }
-renderHeroPf();
-if (PF.length > 3) setInterval(renderHeroPf, 4200);
+async function loadPortfolio() {
+  let items = [];
+  if (hasSb) { try { const { data } = await sb.from("web_portfolio").select("*").eq("active", true).order("sort").order("id"); items = (data || []).map((x) => ({ img: x.image_url, title: x.title })); } catch (e) {} }
+  if (!items.length && Array.isArray(C.PORTFOLIO)) items = C.PORTFOLIO;
+  PF = items.filter((p) => p && p.img);
+  if ($("#portGrid") && PF.length) $("#portGrid").innerHTML = PF.map(portCard).join("");
+  pfPool = []; renderHeroPf();
+  if (pfTimer) clearInterval(pfTimer);
+  if (PF.length > 3) pfTimer = setInterval(renderHeroPf, 4200);
+}
+
+// ---------- บทความ + ข่าวในสื่อ (ดึงจากหลังบ้าน ถ้ามี ไม่งั้นใช้เนื้อหาเดิม) ----------
+async function loadArticles() {
+  if (!hasSb) return;
+  try {
+    const { data } = await sb.from("web_articles").select("*").eq("active", true).order("sort").order("id");
+    if (!data || !data.length) return;
+    $("#artGrid").innerHTML = data.map((a) => {
+      const inner = `${a.image_url ? `<img src="${a.image_url}" alt="${(a.title || '').replace(/"/g, '&quot;')}" loading="lazy">` : ""}${a.title || a.excerpt ? `<div style="padding:14px"><b style="font-size:15px">${a.title || ''}</b>${a.excerpt ? `<div style="font-size:13.5px;color:var(--ink-2);margin-top:5px">${a.excerpt}</div>` : ""}</div>` : ""}`;
+      return `<div class="art-card">${a.link_url ? `<a href="${a.link_url}" target="_blank" rel="noreferrer">${inner}</a>` : inner}</div>`;
+    }).join("");
+  } catch (e) {}
+}
+async function loadPress() {
+  if (!hasSb) return;
+  try {
+    const { data } = await sb.from("web_press").select("*").eq("active", true).order("sort").order("id");
+    if (!data || !data.length) return;
+    $("#pressWrap").innerHTML = data.map((p) => {
+      const inner = `<div class="press-img">${p.image_url ? `<img src="${p.image_url}" alt="${(p.title || '').replace(/"/g, '&quot;')}" loading="lazy">` : ""}</div><div class="press-body">${p.source ? `<span class="press-src">📰 ${p.source}</span>` : ""}<h3>${p.title || ''}</h3>${p.link_url ? `<span class="press-link">อ่านข่าวฉบับเต็ม →</span>` : ""}</div>`;
+      return p.link_url ? `<a class="press-card" href="${p.link_url}" target="_blank" rel="noreferrer">${inner}</a>` : `<div class="press-card">${inner}</div>`;
+    }).join("");
+  } catch (e) {}
+}
 
 // ---------- แถบกรอง รุ่นแอร์ / บริการ → ค้นหาสินค้า + เลื่อนไปหน้าสินค้า ----------
 function setProdTab(k) { const t = $("#prodTabs"); if (t) t.querySelectorAll(".prod-tab").forEach((x) => x.classList.toggle("on", x.dataset.k === k)); }
@@ -865,6 +897,9 @@ renderCart();
 loadProducts();
 loadClients();
 loadBanners();
+loadPortfolio();
+loadArticles();
+loadPress();
 </script>
 </body>
 </html>
