@@ -21,8 +21,10 @@ const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/s
 const blankVisit = () => ({ date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
 const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", internal_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
 
-export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onHandover, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
+export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onHandover, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
+  // ช่าง/หัวหน้าช่าง เห็นเฉพาะงานของทีมตัวเอง (งานตัวเอง) — ทีมหลังบ้านเห็นทุกงาน
+  const fieldOnly = role === "tech" || role === "lead_tech";
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   const canEditJob = (jo) => canEdit && (!jo.locked || role === "admin");
   const [openTl, setOpenTl] = React.useState(null);
@@ -427,10 +429,12 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
   }
 
   // ---------- LIST ----------
+  // field techs see only their own team's jobs (no team → nothing)
+  const baseList = fieldOnly ? list.filter((j) => j.assigned_team && j.assigned_team === myTeam) : list;
   return (
     <div className="adm">
       <div className="adm-head">
-        <div><h1 className="page-title">ใบงาน <span className="page-title-en">Job Orders</span></h1><p className="page-sub">{list.length} ใบ · มอบหมาย & จัดคิวงานช่าง</p></div>
+        <div><h1 className="page-title">ใบงาน <span className="page-title-en">Job Orders</span></h1><p className="page-sub">{baseList.length} ใบ · มอบหมาย & จัดคิวงานช่าง</p></div>
         <div className="cat-head-actions">
           <div className="jo-datefilter">
             <UIcon name="calendar" size={15} color="var(--ink-3)" />
@@ -450,9 +454,9 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
 
       <div className="cat-filter">
         <button className={"cat-chip" + (statusF === "all" ? " on" : "")} onClick={() => setStatusF("all")}
-          style={statusF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทั้งหมด ({list.length})</button>
+          style={statusF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทั้งหมด ({baseList.length})</button>
         {JOB_STATUSES.map(([v, l, , col]) => {
-          const n = list.filter((j) => j.status === v).length;
+          const n = baseList.filter((j) => j.status === v).length;
           const on = statusF === v;
           return (
             <button key={v} className={"cat-chip" + (on ? " on" : "")} onClick={() => setStatusF(v)}
@@ -472,31 +476,18 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
       </div>
 
       {(() => {
-        const jobTeamIds = new Set(list.map((j) => j.assigned_team).filter(Boolean));
+        if (fieldOnly) return null; // ช่างเห็นเฉพาะทีมตัวเองอยู่แล้ว ไม่ต้องมีตัวกรองทีม
+        const jobTeamIds = new Set(baseList.map((j) => j.assigned_team).filter(Boolean));
         const teamOpts = teams.filter((t) => jobTeamIds.has(t.id));
-        // ชื่อช่าง: one tech per team — pick the team's member (lead first), labelled by person name
-        const seen = new Set();
-        const techOpts = staff
-          .filter((p) => p.team && jobTeamIds.has(p.team) && (p.role === "tech" || p.role === "lead_tech") && p.name)
-          .sort((a, b) => (a.role === "lead_tech" ? -1 : 1) - (b.role === "lead_tech" ? -1 : 1) || (a.name || "").localeCompare(b.name || ""))
-          .filter((p) => (seen.has(p.team) ? false : (seen.add(p.team), true)));
-        if (!teamOpts.length && !techOpts.length) return null;
+        if (!teamOpts.length) return null;
         return (
         <div className="cat-filter">
-          {techOpts.length > 0 && (
-            <Combo className="inp jo-tech-filter" value={teamF} onChange={(e) => setTeamF(e.target.value)} title="กรองตามชื่อช่าง">
-              <option value="all">👷 ช่างทุกคน</option>
-              {techOpts.map((p) => <option key={p.id} value={p.team}>{p.name}</option>)}
-            </Combo>
-          )}
-          {teamOpts.length > 0 && <>
           <button className={"cat-chip" + (teamF === "all" ? " on" : "")} onClick={() => setTeamF("all")}
             style={teamF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกทีม</button>
           {teamOpts.map((t) => (
             <button key={t.id} className={"cat-chip" + (teamF === t.id ? " on" : "")} onClick={() => setTeamF(t.id)}
               style={teamF === t.id ? { background: t.color, color: "#fff", borderColor: t.color } : {}}>{(t.name || t.id).replace("Team ", "")}</button>
           ))}
-          </>}
         </div>
       ); })()}
 
@@ -515,7 +506,7 @@ export default function JobOrders({ role, me, focus, onFocusConsumed, prefill, o
           return ds.some((d) => (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo));
         };
         const jobAt = (jo) => { const t = jo.scheduled_at ? new Date(jo.scheduled_at).getTime() : NaN; return Number.isNaN(t) ? Infinity : t; };
-        const fl = list.filter((jo) => (statusF === "all" || jo.status === statusF)
+        const fl = baseList.filter((jo) => (statusF === "all" || jo.status === statusF)
           && (typeF === "all" || (jo.job_type || "install") === typeF)
           && (teamF === "all" || jo.assigned_team === teamF)
           && inDateRange(jo)

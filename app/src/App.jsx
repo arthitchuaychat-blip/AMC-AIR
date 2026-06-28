@@ -90,7 +90,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-28·แชตทีม: รูปโปรไฟล์ของคน + รูปกลุ่ม/ห้องงาน (อัปโหลดเปลี่ยนได้) v217";
+const BUILD = "2026-06-28·ใบงาน: เอาตัวกรองช่างออก + ช่างเห็นเฉพาะงานทีมตัวเอง v218";
 
 function SetupNotice() {
   return (
@@ -418,7 +418,7 @@ export default function App() {
         {view === "profit" && <Profit />}
         {view === "cashflow" && <CashFlow />}
         {view === "expenses" && <Expenses role={role} me={profile} />}
-        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
+        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} myTeam={profile?.team} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
           surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "handover" && <Handover role={role} me={profile?.name || profile?.email} startJob={hoStartJob} onStartConsumed={() => setHoStartJob(null)} focusJob={hoFocusJob} onFocusConsumed={() => setHoFocusJob(null)} />}
