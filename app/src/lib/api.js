@@ -2168,6 +2168,27 @@ export async function setPayslipPaid(period, paid) {
   const { error } = await supabase.from("payslips").update(patch).eq("period", period);
   if (error) throw error;
 }
+// link a paid payroll run to Cash Flow as a projected outflow on the month's pay date (วันสิ้นเดือน).
+// Reuses the salary source_ref so it overrides that month's auto-estimate; edited=true stops the
+// estimate sync from reverting it.
+export async function upsertPayrollCashEntry(ym, amount, payDate, headcount) {
+  const ref = `salary-${ym}`;
+  const fields = { direction: "out", status: "projected", entry_date: payDate, amount: Number(amount) || 0,
+    note: `เงินเดือนพนักงาน ${headcount} คน · รอบ ${ym}`, edited: true, updated_at: new Date().toISOString() };
+  const { data: ex } = await supabase.from("cash_entries").select("id").eq("source_type", "salary").eq("source_ref", ref);
+  if (ex && ex.length) { const { error } = await supabase.from("cash_entries").update(fields).eq("source_type", "salary").eq("source_ref", ref); if (error) throw error; }
+  else { const uid = await _uid(); const { error } = await supabase.from("cash_entries").insert({ ...fields, source_type: "salary", source_ref: ref, created_by: uid }); if (error) throw error; }
+}
+// undo the cash-flow link when a payroll run is cancelled (the auto-estimate takes over again)
+export async function removePayrollCashEntry(ym) {
+  const { error } = await supabase.from("cash_entries").delete().eq("source_type", "salary").eq("source_ref", `salary-${ym}`);
+  if (error) throw error;
+}
+// revert advances settled in this pay period back to "approved" (so a re-run deducts them again)
+export async function unsettleAdvances(period) {
+  const { error } = await supabase.from("hr_advances").update({ status: "approved", period: null }).eq("period", period).eq("status", "paid");
+  if (error) throw error;
+}
 
 // the LINE contact linked to a customer (so documents can be sent to them) — null if not linked
 export async function lineContactByCustomer(customerId) {

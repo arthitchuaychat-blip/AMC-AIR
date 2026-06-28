@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, getPositions, savePositions, uploadSignature } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, getPositions, savePositions, uploadSignature } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -587,8 +587,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   async function saveRun(markPaid) {
     setBusy(true);
     try {
+      let runNet = 0;
       for (const r of payable) {
-        const c = calcOf(r);
+        const c = calcOf(r); runNet += c.net;
         await savePayslip({ period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
           base: c.base, ot_pay: c.otPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
           late_min: r.st.lateMin, ot_min: r.st.otMin, d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
@@ -599,9 +600,24 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         // settle the advances deducted this run so they aren't deducted again next month
         const ids = payable.flatMap((r) => advIdsByUser[r.p.id] || []);
         await markAdvancesPaid(ym, ids);
+        // link to Cash Flow: projected outflow on the month's pay date (วันสิ้นเดือน)
+        await upsertPayrollCashEntry(ym, runNet, payDate, payable.length);
       }
-      flash(markPaid ? "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓" : "บันทึกรอบเงินเดือนแล้ว ✓"); await load();
+      flash(markPaid ? "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓ (เข้ากระแสเงินสดแล้ว)" : "บันทึกรอบเงินเดือนแล้ว ✓"); await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+
+  // cancel a paid run → revert slips to draft, un-settle the advances, remove the cash-flow line; redo anytime
+  async function cancelPay() {
+    if (!await confirmDialog(`ยกเลิกการจ่ายเงินเดือนรอบ ${ym}?\n• สลิปกลับเป็นฉบับร่าง (แก้ไข/คำนวณใหม่ได้)\n• ยอดเบิกล่วงหน้าที่หักไป คืนสภาพ\n• ลบรายการในกระแสเงินสด`)) return;
+    setBusy(true);
+    try {
+      await setPayslipPaid(ym, false);
+      await unsettleAdvances(ym);
+      await removePayrollCashEntry(ym);
+      flash("ยกเลิกการจ่ายแล้ว — แก้ไขข้อมูลแล้วกด “ทำจ่ายทั้งรอบ” ใหม่ได้"); await load();
+    } catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
 
@@ -612,8 +628,17 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           <div className="sec-sub">รอบตัดวันที่ 25 — {from} ถึง {to} · จ่ายวันสิ้นเดือน (วันที่ {lastDay}) {paidStatus === "paid" ? "· ✅ จ่ายแล้ว" : ""}</div></div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} />
-          <button className="btn-ghost sm" disabled={busy || !payable.length} onClick={() => saveRun(false)}>บันทึกรอบ</button>
-          <button className="btn-primary sm ok" disabled={busy || !payable.length} onClick={() => saveRun(true)}>ทำจ่ายทั้งรอบ</button>
+          {paidStatus === "paid" ? (
+            <>
+              <span className="job-badge b-green">✅ จ่ายแล้ว · เข้ากระแสเงินสด</span>
+              <button className="btn-ghost sm danger" disabled={busy} onClick={cancelPay}>ยกเลิกจ่าย</button>
+            </>
+          ) : (
+            <>
+              <button className="btn-ghost sm" disabled={busy || !payable.length} onClick={() => saveRun(false)}>บันทึกรอบ</button>
+              <button className="btn-primary sm ok" disabled={busy || !payable.length} onClick={() => saveRun(true)}>ทำจ่ายทั้งรอบ</button>
+            </>
+          )}
         </div>
       </div>
       {loading ? <div className="empty">กำลังคำนวณ…</div> : payable.length === 0 ? <div className="empty">ยังไม่มีพนักงานที่ตั้งฐานเงินเดือน — ไปตั้งที่แท็บ “กะ & ตั้งค่า”</div> : (
@@ -643,6 +668,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         </div>
       )}
       <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (เพดานฐาน 17,500 = สูงสุด 875) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ”</p>
+      {paidStatus === "paid" && <p className="page-sub" style={{ marginTop: 6, color: "var(--down)", fontWeight: 600 }}>🔒 รอบนี้จ่ายแล้ว — ตัวเลขในตารางอัปเดตตามข้อมูลล่าสุดเสมอ แต่สลิปที่บันทึก + รายการกระแสเงินสด ถูกล็อกไว้ ณ ตอนจ่าย · ถ้าแก้เวลาเข้างาน/ลา/เบิกล่วงหน้า แล้วต้องการให้มีผลกับสลิปและกระแสเงินสด ให้กด “ยกเลิกจ่าย” แล้ว “ทำจ่ายทั้งรอบ” ใหม่</p>}
 
       {printSlip && (() => { const r = printSlip.row, c = printSlip.calc, p = r.p; return (
         <div className="print-area payslip-print">
