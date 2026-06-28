@@ -1855,13 +1855,35 @@ export const adminDeleteUser = (userId) => callAdminUser({ action: "delete", use
 
 // ---------- LINE OA chat ----------
 export async function listLineContacts() {
-  const [c, cu] = await Promise.all([
+  const [c, cu, links] = await Promise.all([
     supabase.from("line_contacts").select("*").order("last_message_at", { ascending: false, nullsFirst: false }),
     supabase.from("customers").select("id,name"),
+    supabase.from("line_contact_customers").select("line_user_id,customer_id"),  // many-to-many (mig 081)
   ]);
   if (c.error) throw c.error;
   const cn = Object.fromEntries((cu.data || []).map((x) => [x.id, x.name]));
-  return (c.data || []).map((r) => ({ ...r, customerName: r.customer_id ? cn[r.customer_id] : null }));
+  const byUid = {}; (links.data || []).forEach((l) => { (byUid[l.line_user_id] = byUid[l.line_user_id] || []).push(l.customer_id); });
+  return (c.data || []).map((r) => {
+    let ids = byUid[r.line_user_id] || [];
+    if (r.customer_id && !ids.some((x) => String(x) === String(r.customer_id))) ids = [r.customer_id, ...ids]; // active not yet in join (legacy)
+    return { ...r, customerName: r.customer_id ? cn[r.customer_id] : null, custIds: ids };
+  });
+}
+// link an ADDITIONAL customer to a LINE chat + make it the active one (drives the info panel)
+export async function addLineCustomer(uid, customerId) {
+  if (!customerId) return;
+  await supabase.from("line_contact_customers").upsert({ line_user_id: uid, customer_id: customerId }, { onConflict: "line_user_id,customer_id" });
+  const { error } = await supabase.from("line_contacts").update({ customer_id: customerId }).eq("line_user_id", uid);
+  if (error) throw error;
+}
+// unlink one customer; if it was the active one, fall back to another linked customer (or none)
+export async function removeLineCustomer(uid, customerId) {
+  await supabase.from("line_contact_customers").delete().eq("line_user_id", uid).eq("customer_id", customerId);
+  const { data: c } = await supabase.from("line_contacts").select("customer_id").eq("line_user_id", uid).maybeSingle();
+  if (c && String(c.customer_id) === String(customerId)) {
+    const { data: rest } = await supabase.from("line_contact_customers").select("customer_id").eq("line_user_id", uid).limit(1);
+    await supabase.from("line_contacts").update({ customer_id: rest && rest[0] ? rest[0].customer_id : null }).eq("line_user_id", uid);
+  }
 }
 
 export async function listLineMessages(uid) {

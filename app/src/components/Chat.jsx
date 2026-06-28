@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -234,8 +234,27 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     setSending(false);
   }
   async function onLink(cid) {
-    try { await chLink(sel, cid); await loadContacts(); flash(cid ? "เชื่อมลูกค้าแล้ว ✓" : "ยกเลิกการเชื่อมแล้ว"); }
-    catch (e) { flash("เชื่อมไม่สำเร็จ: " + (e.message || e), true); }
+    try {
+      if (isFb) await chLink(sel, cid);                          // FB: single customer
+      else if (cid) await addLineCustomer(sel, cid);             // LINE: link + make active
+      else await removeLineCustomer(sel, linkedCustId);          // LINE: unlink the active one
+      await loadContacts(); flash(cid ? "เชื่อมลูกค้าแล้ว ✓" : "ยกเลิกการเชื่อมแล้ว");
+    } catch (e) { flash("เชื่อมไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // LINE: one chat can link several customers (e.g. personal + company)
+  async function addCust(cid) {
+    if (!cid) return;
+    try { await addLineCustomer(sel, cid); await loadContacts(); flash("เพิ่มลูกค้าแล้ว ✓"); }
+    catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function switchCust(cid) {
+    try { await chLink(sel, cid); await loadContacts(); }
+    catch (e) { flash("สลับไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function removeCust(cid) {
+    if (!await confirmDialog("เอาลูกค้ารายนี้ออกจากแชตนี้?")) return;
+    try { await removeLineCustomer(sel, cid); await loadContacts(); flash("เอาออกแล้ว"); }
+    catch (e) { flash("เอาออกไม่สำเร็จ: " + (e.message || e), true); }
   }
 
   // send an image: upload to storage → push the public URL to LINE
@@ -530,6 +549,27 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   </label>
                 </div>
                 {cust ? (<>
+                  {!isFb && (selContact.custIds || []).length > 0 && (
+                    <div className="ci-custlinks">
+                      {(selContact.custIds || []).map((id) => {
+                        const c2 = custs.find((x) => String(x.id) === String(id)); if (!c2) return null;
+                        const active = String(id) === String(selContact.customer_id);
+                        return (
+                          <span key={id} className={"ci-custchip" + (active ? " on" : "")} title={active ? "กำลังดูรายนี้" : "คลิกเพื่อสลับมาดูรายนี้"}
+                            onClick={() => !active && switchCust(id)}>
+                            {c2.name}
+                            {canSend && <button className="ci-custchip-x" onClick={(e) => { e.stopPropagation(); removeCust(id); }} aria-label="เอาออก">×</button>}
+                          </span>
+                        );
+                      })}
+                      {canSend && (
+                        <Combo className="inp ci-custadd" value="" onChange={(e) => e.target.value && addCust(e.target.value)}>
+                          <option value="">+ เพิ่มลูกค้า</option>
+                          {custs.filter((c) => !(selContact.custIds || []).some((id) => String(id) === String(c.id))).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </Combo>
+                      )}
+                    </div>
+                  )}
                   <div className="ci-cust-name">{cust.name}</div>
                   <div className="ci-cust-sub"><b className="cust-code">{custCode(cust.id)}</b>
                     <span className={"job-badge " + (cust.vat ? "b-blue" : "b-grey")}>{cust.vat ? "VAT" : "ไม่ VAT"}</span></div>
