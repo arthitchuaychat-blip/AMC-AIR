@@ -223,11 +223,16 @@ export async function deactivateMaterial(code) {
   const { error } = await supabase.from("materials").update({ active: false }).eq("code", code);
   if (error) throw error;
 }
-// bulk show/hide items on the public website (materials.web_published) for many codes at once
+// bulk show/hide items on the public website (materials.web_published) for many codes at once.
+// chunked: a single .in() with hundreds of codes overflows the request URL → "Bad Request".
 export async function setMaterialsWebPublished(codes, published) {
   if (!codes || !codes.length) return;
-  const { error } = await supabase.from("materials").update({ web_published: !!published }).in("code", codes);
-  if (error) throw error;
+  const CHUNK = 100;
+  for (let i = 0; i < codes.length; i += CHUNK) {
+    const slice = codes.slice(i, i + CHUNK);
+    const { error } = await supabase.from("materials").update({ web_published: !!published }).in("code", slice);
+    if (error) throw error;
+  }
 }
 
 // bulk import (upsert by code) — admin only via RLS
