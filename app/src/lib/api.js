@@ -223,6 +223,12 @@ export async function deactivateMaterial(code) {
   const { error } = await supabase.from("materials").update({ active: false }).eq("code", code);
   if (error) throw error;
 }
+// bulk show/hide items on the public website (materials.web_published) for many codes at once
+export async function setMaterialsWebPublished(codes, published) {
+  if (!codes || !codes.length) return;
+  const { error } = await supabase.from("materials").update({ web_published: !!published }).in("code", codes);
+  if (error) throw error;
+}
 
 // bulk import (upsert by code) — admin only via RLS
 export async function bulkUpsertMaterials(rows) {

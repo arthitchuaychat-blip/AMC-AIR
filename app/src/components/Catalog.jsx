@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listMaterialsLite, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus } from "../lib/api";
+import { listMaterials, listMaterialsLite, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus, setMaterialsWebPublished } from "../lib/api";
 import { fmtBaht2, fmtNum, eqi, matchText, norm } from "../lib/format";
 import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
@@ -31,7 +31,11 @@ export default function Catalog({ role }) {
   const [viewMode, setViewMode] = React.useState("grid");
   const [importing, setImporting] = React.useState(false);
   const [toast, setToast] = React.useState(null);
+  const [sel, setSel] = React.useState(() => new Set()); // selected codes for bulk web show/hide
+  const [pubBusy, setPubBusy] = React.useState(false);
   const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 3200); };
+  const toggleSel = (code) => setSel((s) => { const n = new Set(s); n.has(code) ? n.delete(code) : n.add(code); return n; });
+  const clearSel = () => setSel(new Set());
 
   async function load() {
     setLoading(true); setErr(null);
@@ -85,6 +89,22 @@ export default function Catalog({ role }) {
   const [limit, setLimit] = React.useState(PAGE);
   React.useEffect(() => { setLimit(PAGE); }, [kind, cat, brand, btu, acType, q]);
   const capped = React.useMemo(() => list.slice(0, limit), [list, limit]);
+
+  // bulk show/hide the selected items on the public website
+  const allVisibleSelected = capped.length > 0 && capped.every((m) => sel.has(m.code));
+  function toggleSelectAll() { setSel((s) => { if (capped.every((m) => s.has(m.code))) { const n = new Set(s); capped.forEach((m) => n.delete(m.code)); return n; } const n = new Set(s); capped.forEach((m) => n.add(m.code)); return n; }); }
+  async function bulkPublish(published) {
+    const codes = [...sel]; if (!codes.length) return;
+    setPubBusy(true);
+    try {
+      await setMaterialsWebPublished(codes, published);
+      const cs = new Set(codes);
+      setMats((cur) => cur.map((m) => (cs.has(m.code) ? { ...m, webPublished: published } : m)));
+      clearSel();
+      flash(`${published ? "🌐 แสดงบนเว็บแล้ว" : "ซ่อนจากเว็บแล้ว"} ${codes.length} รายการ ✓`);
+    } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e)); }
+    setPubBusy(false);
+  }
 
   async function remove(m) {
     if (!await confirmDialog(`ลบ "${m.th}" ออกจากคลัง? (ประวัติยังเก็บไว้)`)) return;
@@ -183,18 +203,23 @@ export default function Catalog({ role }) {
       {!loading && !err && list.length > limit && (
         <div className="page-sub" style={{ margin: "2px 2px 12px" }}>แสดง {fmtNum(capped.length)} จาก {fmtNum(list.length)} รายการ · พิมพ์ค้นหาหรือเลือกตัวกรองเพื่อให้แคบลง</div>
       )}
+      {!loading && !err && canEdit && capped.length > 0 && (
+        <label className="cat-selectall"><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} /> เลือกทั้งหมดที่แสดง ({fmtNum(capped.length)}) <span className="cat-selectall-hint">— ติ๊กเพื่อโชว์/ไม่โชว์บนเว็บไซต์</span></label>
+      )}
 
       {viewMode === "grid" && (
         <div className="cat-grid">
           {capped.map((m) => {
             const low = m.tracked && m.stock < m.minStock;
             return (
-              <div className={"cat-card clickable" + (low ? " low" : "")} key={m.code} onClick={() => setOpenMat(m)}>
+              <div className={"cat-card clickable" + (low ? " low" : "") + (sel.has(m.code) ? " selected" : "")} key={m.code} onClick={() => setOpenMat(m)}>
+                {canEdit && <label className="cat-check card" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={sel.has(m.code)} onChange={() => toggleSel(m.code)} /></label>}
                 <div className="cat-card-top">
                   <MaterialThumb mat={m} size={54} radius={14} />
                   <div className="cat-card-id">
                     <span className="code-chip">{m.code}</span>
                     {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>}
+                    {m.webPublished && <span className="web-badge" title="แสดงบนเว็บไซต์">🌐</span>}
                     {low && <span className="badge-warn sm">ต่ำกว่าขั้นต่ำ</span>}
                   </div>
                 </div>
@@ -221,10 +246,11 @@ export default function Catalog({ role }) {
           {capped.map((m) => {
             const low = m.tracked && m.stock < m.minStock;
             return (
-              <div className={"cat-lrow" + (low ? " low" : "")} key={m.code} onClick={() => setOpenMat(m)}>
+              <div className={"cat-lrow" + (low ? " low" : "") + (sel.has(m.code) ? " selected" : "")} key={m.code} onClick={() => setOpenMat(m)}>
+                {canEdit && <label className="cat-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={sel.has(m.code)} onChange={() => toggleSel(m.code)} /></label>}
                 <MaterialThumb mat={m} size={40} radius={11} />
                 <div className="cat-lrow-main">
-                  <div className="cat-lrow-name">{m.th} {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>} {low && <span className="badge-warn sm">ต่ำ</span>}</div>
+                  <div className="cat-lrow-name">{m.th} {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>} {m.webPublished && <span className="web-badge" title="แสดงบนเว็บไซต์">🌐 บนเว็บ</span>} {low && <span className="badge-warn sm">ต่ำ</span>}</div>
                   <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
                   {m.description && <div className="cat-lrow-desc">{m.description}</div>}
                 </div>
@@ -252,6 +278,14 @@ export default function Catalog({ role }) {
       )}
       {toast && (
         <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", background: "#16a34a", color: "#fff", fontSize: 13.5, fontWeight: 600, padding: "12px 22px", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 300, maxWidth: "90%", textAlign: "center" }}>{toast}</div>
+      )}
+      {sel.size > 0 && (
+        <div className="cat-bulkbar">
+          <span className="cat-bulkbar-n">เลือก <b>{fmtNum(sel.size)}</b> รายการ</span>
+          <button className="btn-primary sm" disabled={pubBusy} onClick={() => bulkPublish(true)}>🌐 โชว์บนเว็บ</button>
+          <button className="btn-ghost sm" disabled={pubBusy} onClick={() => bulkPublish(false)}>🚫 ไม่โชว์บนเว็บ</button>
+          <button className="cat-bulkbar-x" onClick={clearSel} title="ล้างที่เลือก">ล้าง</button>
+        </div>
       )}
       {openMat && <MaterialDrawer mat={openMat} onClose={() => setOpenMat(null)} />}
       {editing !== undefined && (
