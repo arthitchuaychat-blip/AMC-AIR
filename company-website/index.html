@@ -413,6 +413,13 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
         <option value="ติดผนัง">ติดผนัง</option><option value="แขวน">แขวน</option>
         <option value="ฝังฝ้า">ฝังฝ้า (4 ทิศ)</option><option value="ตู้ตั้ง">ตู้ตั้ง</option>
       </select>
+      <select id="fltBtu" aria-label="ขนาด BTU">
+        <option value="">ทุกขนาด BTU</option>
+        <option value="9000">9,000 BTU</option><option value="12000">12,000 BTU</option>
+        <option value="18000">18,000 BTU</option><option value="24000">24,000 BTU</option>
+        <option value="30000">30,000 BTU</option><option value="36000">36,000 BTU</option>
+        <option value="48000">48,000 BTU</option><option value="60000">60,000 BTU</option>
+      </select>
       <div class="side-filter-h" style="margin-top:4px">ค้นหาบริการ</div>
       <select id="fltService" aria-label="เลือกบริการ">
         <option value="">บริการทั้งหมด</option>
@@ -724,7 +731,18 @@ const SAMPLE = [
   { code: "demo4", name: "รีโมทแอร์ (ตัวอย่าง)", price: 350, kind: "material", tag: "อะไหล่", photo: "" },
 ];
 const KIND_TH = { ac: "แอร์", material: "อะไหล่/วัสดุ", service: "บริการ" };
-let allProducts = [], prodFilter = "all", prodQuery = "", prodNote = "";
+const TYPE_TH = { "Wall type": "ติดผนัง", "Ceiling type": "แขวนใต้ฝ้า", "Cassette 4 way type": "ฝังฝ้า 4 ทิศ", "Cassette 1 way type": "ฝังฝ้า 1 ทิศ", "Duct Type": "ต่อท่อลม", "Floor Standing": "ตู้ตั้ง" };
+// build the sidebar filter dropdowns from the real published AC products (so every option matches data)
+function fillFilters() {
+  const acs = allProducts.filter((p) => p.kind === "ac");
+  const uniq = (k) => [...new Set(acs.map((p) => p[k]).filter((v) => v != null && v !== ""))];
+  const brands = uniq("brand").sort(), btus = uniq("btu").sort((a, b) => a - b), types = uniq("ac_type").sort();
+  const set = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };
+  if (brands.length) set("#fltModel", `<option value="">รุ่นแอร์ทั้งหมด</option>` + brands.map((b) => `<option value="${b}">${b}</option>`).join(""));
+  if (btus.length) set("#fltBtu", `<option value="">ทุกขนาด BTU</option>` + btus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join(""));
+  if (types.length) set("#fltType", `<option value="">ทุกประเภท</option>` + types.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join(""));
+}
+let allProducts = [], prodFilter = "all", prodQuery = "", prodBrand = "", prodBtu = "", prodType = "", prodNote = "";
 function prodCard(p) {
   return `<div class="prod">
     <div class="ph">${p.photo ? `<img src="${p.photo}" alt="${p.name}">` : '<span class="noimg">❄️</span>'}</div>
@@ -739,23 +757,31 @@ function prodCard(p) {
 function renderProducts() {
   const grid = $("#prodGrid");
   const q = prodQuery.trim().toLowerCase();
-  const list = allProducts.filter((p) => (prodFilter === "all" || p.kind === prodFilter) && (!q || (p.name || "").toLowerCase().includes(q)));
+  const list = allProducts.filter((p) =>
+    (prodFilter === "all" || p.kind === prodFilter)
+    && (!prodBrand || String(p.brand || "").toLowerCase() === prodBrand.toLowerCase())
+    && (!prodType || String(p.ac_type || "") === prodType)
+    && (!prodBtu || String(p.btu || "") === String(prodBtu))
+    && (!q || (p.name || "").toLowerCase().includes(q)));
   if (!list.length) { grid.innerHTML = `<div class="prod-empty">${allProducts.length ? "ไม่พบสินค้าที่ค้นหา" : (prodNote || "ยังไม่มีสินค้า")}</div>`; return; }
   grid.innerHTML = list.map(prodCard).join("") + (prodNote ? `<div class="prod-empty">${prodNote}</div>` : "");
 }
 async function loadProducts() {
   if (!hasSb) { allProducts = SAMPLE.slice(); prodNote = "* ตัวอย่างสินค้า — ตั้งค่า Supabase ในไฟล์เพื่อดึงสินค้าจริงจากคลัง"; renderProducts(); return; }
   try {
-    const { data, error } = await sb.from("web_products").select("*").limit(200);
+    const { data, error } = await sb.from("web_products").select("*").limit(1000);
     if (error) throw error;
-    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, tag: KIND_TH[r.kind] || "" }));
+    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, tag: KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, ac_type: r.ac_type }));
     prodNote = allProducts.length ? "" : "ยังไม่มีสินค้าที่เผยแพร่ — ติ๊ก “ขึ้นเว็บ” ที่สินค้าในระบบหลังบ้าน";
-    renderProducts();
+    fillFilters(); renderProducts();
   } catch (e) { $("#prodGrid").innerHTML = '<div class="prod-empty">โหลดสินค้าไม่สำเร็จ ลองใหม่ภายหลัง</div>'; }
 }
 $("#prodTabs").querySelectorAll(".prod-tab").forEach((t) => t.onclick = () => {
   $("#prodTabs").querySelectorAll(".prod-tab").forEach((x) => x.classList.remove("on"));
-  t.classList.add("on"); prodFilter = t.dataset.k; renderProducts();
+  t.classList.add("on"); prodFilter = t.dataset.k;
+  prodBrand = prodBtu = prodType = "";   // เลือกแท็บเอง = ล้างตัวกรองแถบข้าง
+  ["#fltModel", "#fltType", "#fltBtu", "#fltService"].forEach((id) => { if ($(id)) $(id).value = ""; });
+  renderProducts();
 });
 $("#prodSearch").oninput = (e) => { prodQuery = e.target.value; renderProducts(); };
 
@@ -865,17 +891,21 @@ async function loadPress() {
 // ---------- แถบกรอง (แถบซ้าย) → เด้งไปหน้าสินค้า/บริการ พร้อมกรอง ----------
 function setProdTab(k) { const t = $("#prodTabs"); if (t) t.querySelectorAll(".prod-tab").forEach((x) => x.classList.toggle("on", x.dataset.k === k)); }
 function applyHeaderFilter() {
-  const model = $("#fltModel") ? $("#fltModel").value : "", type = $("#fltType") ? $("#fltType").value : "", svc = $("#fltService") ? $("#fltService").value : "";
-  prodQuery = [model, type, svc].filter(Boolean).join(" ");
+  const svc = $("#fltService") ? $("#fltService").value : "";
+  if (svc) { prodFilter = "service"; prodBrand = prodBtu = prodType = ""; prodQuery = svc; setProdTab("service"); }
+  else {
+    prodBrand = $("#fltModel") ? $("#fltModel").value : "";
+    prodType = $("#fltType") ? $("#fltType").value : "";
+    prodBtu = $("#fltBtu") ? $("#fltBtu").value : "";
+    prodQuery = "";
+    prodFilter = (prodBrand || prodType || prodBtu) ? "ac" : "all"; setProdTab(prodFilter);
+  }
   if ($("#prodSearch")) $("#prodSearch").value = prodQuery;
-  if (svc) { prodFilter = "service"; setProdTab("service"); } else if (model || type) { prodFilter = "ac"; setProdTab("ac"); } else { prodFilter = "all"; setProdTab("all"); }
   renderProducts();
   location.hash = "products";
 }
 if ($("#fltGo")) $("#fltGo").onclick = applyHeaderFilter;
-if ($("#fltModel")) $("#fltModel").onchange = applyHeaderFilter;
-if ($("#fltType")) $("#fltType").onchange = applyHeaderFilter;
-if ($("#fltService")) $("#fltService").onchange = applyHeaderFilter;
+["#fltModel", "#fltType", "#fltBtu", "#fltService"].forEach((id) => { if ($(id)) $(id).onchange = applyHeaderFilter; });
 
 // ---------- หน้าเพจ: หน้าแรก ↔ หน้าสินค้า/บริการ (hash router · รองรับหน้ารายละเอียดสินค้าในอนาคต) ----------
 function route() {
