@@ -23,6 +23,20 @@ function getGPS() {
   });
 }
 
+// LINE / Facebook / IG in-app browsers (and bare Android WebViews) often block the camera file-input,
+// so the เช็คอิน button "does nothing". Detect them so we can tell the user to open in a real browser.
+function inAppBrowser() {
+  const ua = navigator.userAgent || "";
+  const m = /Line\//i.test(ua) ? "LINE"
+    : /FBAN|FBAV|FB_IAB/i.test(ua) ? "Facebook"
+    : /Instagram/i.test(ua) ? "Instagram"
+    : /Messenger/i.test(ua) ? "Messenger"
+    : /MicroMessenger/i.test(ua) ? "WeChat"
+    : /TikTok|musical_ly/i.test(ua) ? "TikTok"
+    : /; wv\)/i.test(ua) ? "in-app" : null;
+  return m;
+}
+
 export default function Attendance({ me }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);          // Thai default, Burmese when toggled
@@ -41,6 +55,8 @@ export default function Attendance({ me }) {
 
   const pattern = me?.work_pattern || "mon_sat";
   const satGroup = me?.sat_group || null;
+  const inApp = React.useMemo(() => inAppBrowser(), []);
+  async function copyLink() { try { await navigator.clipboard.writeText(location.href); flash("คัดลอกลิงก์แล้ว — ไปวางในแอป Chrome/Safari"); } catch { flash("คัดลอกไม่สำเร็จ — พิมพ์ที่อยู่เว็บในเบราว์เซอร์เอง", true); } }
 
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   async function load() {
@@ -97,6 +113,14 @@ export default function Attendance({ me }) {
                 {st?.checkedOut && st.otMin > 0 && <span className="att-tag ot">OT {fmtMin(st.otMin)}</span>}
                 {st?.checkedOut && st.earlyMin > 0 && <span className="att-tag late">{L("ออกก่อน", "စောထွက်")} {fmtMin(st.earlyMin)}</span>}</div>
             </div>
+            {inApp && !(today?.check_in_at && today?.check_out_at) && (
+              <div className="att-inapp">
+                ⚠️ {L(`คุณกำลังเปิดในแอป ${inApp === "in-app" ? "" : inApp} ซึ่งมักถ่ายรูปเช็คอินไม่ได้ (กดปุ่มแล้วไม่มีอะไรเกิดขึ้น)`,
+                       `${inApp === "in-app" ? "App အတွင်း" : inApp} ဘရောက်ဇာတွင် ကင်မရာ အလုပ်မလုပ်တတ်ပါ`)}
+                <br />{L("วิธีแก้: เปิดด้วย Chrome หรือ Safari หรือ “เพิ่มลงหน้าจอโฮม” แล้วเปิดจากไอคอน", "Chrome / Safari ဖြင့်ဖွင့်ပါ")}
+                <button className="btn-ghost sm" style={{ marginTop: 6 }} onClick={copyLink}>📋 {L("คัดลอกลิงก์", "Link ကူးရန်")}</button>
+              </div>
+            )}
             <div className="att-actions">
               {!today?.check_in_at && <button className="btn-primary att-big" disabled={busy} onClick={() => trigger("in")}>📸 {L("เช็คอินเข้างาน", "အလုပ်ဝင်ချိန် မှတ်တမ်းတင်")}</button>}
               {today?.check_in_at && !today?.check_out_at && <button className="btn-primary att-big ok" disabled={busy} onClick={() => trigger("out")}>📸 {L("เช็คเอาท์ออกงาน", "အလုပ်ဆင်းချိန် မှတ်တမ်းတင်")}</button>}
