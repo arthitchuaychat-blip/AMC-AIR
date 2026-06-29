@@ -26,6 +26,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenDoc, focus, onFocusConsumed, onGoChat }) {
   const canEdit = can(role, "receipt", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
+  // ส่งใบกำกับภาษีเข้า FlowAccount — ต้องตรงกับ allowlist ฝั่งเซิร์ฟเวอร์ (api/flowaccount-doc.js)
+  const canSendFlow = ["admin", "exec", "finance", "sales", "hr"].includes(role);
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -246,7 +248,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
               {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintR(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-              {canEdit && recVat(x) && x.status !== "cancelled" && <button className={"btn-ghost sm" + (x.flowaccount_no ? " fa-sent" : "")} disabled={faBusy === x.receipt_no} title={x.flowaccount_no ? `ส่งแล้ว เลขที่ ${x.flowaccount_no} · กดเพื่อส่งซ้ำ` : "ส่งใบกำกับภาษีเข้า FlowAccount"} onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : x.flowaccount_no ? "✓ FlowAccount" : "↗ FlowAccount"}</button>}
+              {canSendFlow && recVat(x) && x.status !== "cancelled" && <button className={"btn-ghost sm" + (x.flowaccount_no ? " fa-sent" : "")} disabled={faBusy === x.receipt_no} title={x.flowaccount_no ? `ส่งแล้ว เลขที่ ${x.flowaccount_no} · กดเพื่อส่งซ้ำ` : "ส่งใบกำกับภาษีเข้า FlowAccount"} onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : x.flowaccount_no ? "✓ FlowAccount" : "↗ FlowAccount"}</button>}
               {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
               {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
             </div></div>

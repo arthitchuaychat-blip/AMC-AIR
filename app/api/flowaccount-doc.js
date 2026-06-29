@@ -4,7 +4,7 @@
 // Env: FLOWACCOUNT_CLIENT_ID, FLOWACCOUNT_CLIENT_SECRET, FLOWACCOUNT_ENV (sandbox="test", prod="v1")
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
-const OFFICE = ["admin", "exec", "finance"];
+const OFFICE = ["admin", "exec", "finance", "sales", "hr"];
 const DOC_PATH = { "tax-invoice": "tax-invoices", "receipt": "receipts", "invoice": "invoices", "quotation": "quotations" };
 
 async function readJson(req) {

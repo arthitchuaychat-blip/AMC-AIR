@@ -940,8 +940,13 @@ export async function setReceiptStatus(receipt_no, status, invoice_no, reason) {
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
 }
 export async function saveReceiptFlowAccount(receipt_no, faId, faNo) {
-  const { error } = await supabase.from("receipts").update({ flowaccount_id: faId ? String(faId) : null, flowaccount_no: faNo || null, flowaccount_at: new Date().toISOString() }).eq("receipt_no", receipt_no);
-  if (error) throw error;
+  // RPC stamps only the flowaccount_* columns, gated to the FlowAccount-allowed roles (so hr/sales can
+  // mark a receipt as sent without broad write access to receipts). Falls back to a direct update if
+  // migration 084 hasn't been run yet (works for admin/sales/exec/finance via rc_write).
+  const { error } = await supabase.rpc("set_receipt_flowaccount", { p_receipt_no: receipt_no, p_fa_id: faId ? String(faId) : null, p_fa_no: faNo || null });
+  if (!error) return;
+  const { error: e2 } = await supabase.from("receipts").update({ flowaccount_id: faId ? String(faId) : null, flowaccount_no: faNo || null, flowaccount_at: new Date().toISOString() }).eq("receipt_no", receipt_no);
+  if (e2) throw e2;
 }
 export async function deleteReceipt(receipt_no, invoice_no, reason) {
   const { data: snap } = await supabase.from("receipts").select("*").eq("receipt_no", receipt_no).maybeSingle();
