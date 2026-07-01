@@ -2498,15 +2498,25 @@ export async function syncCashEntriesFromDocs() {
 
   const exMap = {}; (existing.data || []).forEach((e) => { exMap[`${e.source_type}:${e.source_ref}`] = e; });
   const uid = await _uid();
+  const desiredKeys = new Set();
   const toInsert = []; let updated = 0;
   for (const d of desired) {
     if (!d.entry_date || !(d.amount > 0)) continue;
+    desiredKeys.add(`${d.source_type}:${d.source_ref}`);
     const ex = exMap[`${d.source_type}:${d.source_ref}`];
     if (!ex) toInsert.push({ ...d, created_by: uid });
     else if (!ex.edited) { await supabase.from("cash_entries").update({ direction: d.direction, status: d.status, entry_date: d.entry_date, amount: d.amount, note: d.note, updated_at: new Date().toISOString() }).eq("id", ex.id); updated++; }
   }
   if (toInsert.length) { const { error } = await supabase.from("cash_entries").insert(toInsert); if (error) throw error; }
-  return { added: toInsert.length, updated };
+  // remove stale doc-sourced lines — e.g. an invoice's "คาดว่าจะรับ" line once it's paid (money then shows as its
+  // receipt's "ได้รับจริง") or cancelled. Only touch the source types this sync manages; keep user-edited + manual/opening/expense.
+  const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary"]);
+  const staleIds = (existing.data || []).filter((e) => MANAGED.has(e.source_type) && !e.edited && !desiredKeys.has(`${e.source_type}:${e.source_ref}`)).map((e) => e.id);
+  for (let i = 0; i < staleIds.length; i += 100) {
+    const { error } = await supabase.from("cash_entries").delete().in("id", staleIds.slice(i, i + 100));
+    if (error) throw error;
+  }
+  return { added: toInsert.length, updated, removed: staleIds.length };
 }
 
 // rooms visible to me (company + ones I'm a member of) with title, last message, unread count

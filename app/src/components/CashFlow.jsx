@@ -29,13 +29,14 @@ export default function CashFlow() {
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
 
-  async function load() {
-    setLoading(true);
+  async function load(silent) {
+    if (!silent) setLoading(true);
     try { const [e, ob] = await Promise.all([listCashEntries(), getOpeningBalance()]); setEntries(e); setOpening(ob); setOpeningInput(String(ob || 0)); }
     catch (err) { flash("โหลดไม่สำเร็จ: " + (err.message || err), true); }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
-  React.useEffect(() => { load(); }, []);
+  // auto-sync from documents on open: ใบแจ้งหนี้ → คาดว่าจะรับ, ใบเสร็จ → ได้รับจริง (ตามวันที่รับ) โดยไม่ต้องกดซิงค์
+  React.useEffect(() => { (async () => { await load(); try { await syncCashEntriesFromDocs(); await load(true); } catch { /* keep showing existing */ } })(); }, []);
 
   const sgn = (e) => (e.direction === "in" ? 1 : -1);
   const ents = React.useMemo(() => entries.filter((e) => e.source_type !== "opening"), [entries]);
@@ -49,7 +50,7 @@ export default function CashFlow() {
   }
   async function sync() {
     setBusy(true);
-    try { const r = await syncCashEntriesFromDocs(); flash(`ซิงค์จากเอกสารแล้ว ✓ เพิ่ม ${r.added} · อัปเดต ${r.updated}`); await load(); }
+    try { const r = await syncCashEntriesFromDocs(); flash(`ซิงค์จากเอกสารแล้ว ✓ เพิ่ม ${r.added} · อัปเดต ${r.updated}${r.removed ? ` · ลบ ${r.removed}` : ""}`); await load(); }
     catch (e) { flash("ซิงค์ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
