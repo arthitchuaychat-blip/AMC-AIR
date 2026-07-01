@@ -917,6 +917,22 @@ select.inp{cursor:pointer}
 .att-tag.ok{background:#dcf5e8;color:#0a6b3d}.att-tag.late{background:#ffedd5;color:#9a3412}.att-tag.ot{background:#e6efff;color:#1d4ed8}
 .att-tag.sm{font-size:10px;padding:0 5px;margin-left:4px}
 .att-inapp{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:13px;font-weight:600;line-height:1.55;border-radius:12px;padding:11px 13px;margin-bottom:12px}
+/* ---------- stock count (นับสต๊อก) ---------- */
+.sc-summary{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px}
+.sc-summary>div{min-width:100px}
+.sc-summary b{font-size:19px;font-weight:800;letter-spacing:-.3px}
+.sc-table{width:100%;border-collapse:collapse;font-size:13.5px}
+.sc-table th,.sc-table td{padding:10px 14px;border-bottom:1px solid var(--line-2);text-align:left;white-space:nowrap}
+.sc-table th{font-size:12px;font-weight:700;color:var(--ink-3);background:var(--surface-2);position:sticky;top:0}
+.sc-table td.num,.sc-table th.num{text-align:right;font-variant-numeric:tabular-nums}
+.sc-table td.mono{font-family:ui-monospace,monospace;color:var(--ink-2);font-size:12.5px}
+.sc-table tr.sc-diffrow{background:color-mix(in srgb,#f59e0b 7%,transparent)}
+.sc-inp{width:92px;text-align:right;padding:6px 9px;font-variant-numeric:tabular-nums}
+.sc-over{color:#16a34a;font-weight:800}
+.sc-short{color:#dc2626;font-weight:800}
+.sc-catgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:260px;overflow-y:auto;margin-top:6px}
+.sc-catrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;cursor:pointer}
+.sc-catrow:hover{background:var(--surface-2)}
 .att-actions{margin-bottom:8px}
 .att-big{width:100%;font-size:16px;padding:14px;border-radius:13px}
 .att-done{text-align:center;font-weight:700;color:#0a6b3d;padding:12px;background:#dcf5e8;border-radius:13px}

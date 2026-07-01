@@ -310,6 +310,108 @@ export async function recordTransactions(rows) {
   if (error) throw error;
 }
 
+// ---------- STOCK COUNT (นับสต๊อก) ----------
+const _round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+// list all count sessions with a per-session summary (counted / over / short)
+export async function listStockCounts() {
+  const [scRes, itemRes, profRes] = await Promise.all([
+    supabase.from("stock_counts").select("*").order("created_at", { ascending: false }),
+    supabase.from("stock_count_items").select("count_id,counted_qty,diff"),
+    supabase.from("profiles").select("id,name,email"),
+  ]);
+  if (scRes.error) throw scRes.error;
+  const nameById = Object.fromEntries((profRes.data || []).map((p) => [p.id, p.name || p.email]));
+  const byCount = {};
+  (itemRes.data || []).forEach((it) => { (byCount[it.count_id] = byCount[it.count_id] || []).push(it); });
+  return (scRes.data || []).map((s) => {
+    const its = byCount[s.id] || [];
+    return { ...s, totalItems: its.length,
+      countedItems: its.filter((x) => x.counted_qty != null).length,
+      over: its.filter((x) => (Number(x.diff) || 0) > 0).length,
+      short: its.filter((x) => (Number(x.diff) || 0) < 0).length,
+      countedByName: nameById[s.counted_by] || null, appliedByName: nameById[s.applied_by] || null };
+  });
+}
+// create a new draft count over the given material codes (partial count = pick a category/subset)
+export async function createStockCount({ note, codes }) {
+  const uid = await _uid();
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  const count_no = `SC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  const { data: sc, error } = await supabase.from("stock_counts").insert({ count_no, note: note?.trim() || null, counted_by: uid }).select("id,count_no").single();
+  if (error) throw error;
+  const uniq = [...new Set((codes || []).filter(Boolean))];
+  const costMap = {};
+  for (let i = 0; i < uniq.length; i += 500) {
+    const { data: mm } = await supabase.from("materials").select("code,cost").in("code", uniq.slice(i, i + 500));
+    (mm || []).forEach((m) => { costMap[m.code] = Number(m.cost) || 0; });
+  }
+  const rows = uniq.map((code) => ({ count_id: sc.id, material_code: code, unit_cost: costMap[code] || 0 }));
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error: e2 } = await supabase.from("stock_count_items").insert(rows.slice(i, i + 500));
+    if (e2) throw e2;
+  }
+  return sc.id;
+}
+export async function getStockCount(id) {
+  const { data, error } = await supabase.from("stock_counts").select("*").eq("id", id).single();
+  if (error) throw error; return data;
+}
+export async function getStockCountItems(id) {
+  const { data, error } = await supabase.from("stock_count_items").select("*").eq("count_id", id);
+  if (error) throw error; return data || [];
+}
+// save typed "counted" quantities on a draft (null = not counted yet)
+export async function saveStockCountCounts(id, counts) {
+  const rows = Object.entries(counts || {}).map(([code, qty]) => ({
+    count_id: id, material_code: code,
+    counted_qty: (qty === "" || qty == null) ? null : Number(qty),
+  }));
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await supabase.from("stock_count_items").upsert(rows.slice(i, i + 500), { onConflict: "count_id,material_code" });
+    if (error) throw error;
+  }
+  await supabase.from("stock_counts").update({ updated_at: new Date().toISOString() }).eq("id", id);
+}
+// apply: for each counted item, snapshot system qty + record an adjust movement for the difference, then lock the round
+export async function applyStockCount(id) {
+  const uid = await _uid();
+  const { data: sc, error: e0 } = await supabase.from("stock_counts").select("id,count_no,status").eq("id", id).single();
+  if (e0) throw e0;
+  if (sc.status === "applied") throw new Error("รอบนี้อัพเดทสต๊อกไปแล้ว");
+  const { data: items, error: e1 } = await supabase.from("stock_count_items").select("id,material_code,counted_qty,unit_cost").eq("count_id", id);
+  if (e1) throw e1;
+  const counted = (items || []).filter((it) => it.counted_qty != null);
+  if (!counted.length) throw new Error("ยังไม่มีรายการที่นับ — กรอกยอดนับก่อน");
+  const codes = counted.map((it) => it.material_code);
+  const sysMap = {};
+  for (let i = 0; i < codes.length; i += 300) {
+    const { data: ms } = await supabase.from("material_stock").select("code,current_stock,cost").in("code", codes.slice(i, i + 300));
+    (ms || []).forEach((m) => { sysMap[m.code] = m; });
+  }
+  const now = new Date().toISOString(), day = now.slice(0, 10);
+  const txns = []; let adjusted = 0;
+  for (const it of counted) {
+    const sys = Number(sysMap[it.material_code]?.current_stock) || 0;
+    const cnt = Number(it.counted_qty) || 0;
+    const diff = _round2(cnt - sys);
+    const uc = Number(it.unit_cost) || Number(sysMap[it.material_code]?.cost) || 0;
+    await supabase.from("stock_count_items").update({ system_qty: sys, diff }).eq("id", it.id);
+    if (diff !== 0) {
+      txns.push({ txn_date: day, type: diff > 0 ? "adjust_in" : "adjust_out", material_code: it.material_code,
+        qty: Math.abs(diff), unit_cost: uc, ref_no: sc.count_no, reason: `ปรับยอดจากการนับสต๊อก ${sc.count_no}`, recorded_by: uid });
+      adjusted++;
+    }
+  }
+  if (txns.length) { const { error: e2 } = await supabase.from("transactions").insert(txns); if (e2) throw e2; }
+  const { error: e3 } = await supabase.from("stock_counts").update({ status: "applied", applied_by: uid, applied_at: now, updated_at: now }).eq("id", id);
+  if (e3) throw e3;
+  return { adjusted, counted: counted.length };
+}
+export async function deleteStockCount(id) {
+  const { error } = await supabase.from("stock_counts").delete().eq("id", id); // cascades items
+  if (error) throw error;
+}
+
 // aggregate all job_no'd movements + the jobs (status) table
 async function _jobAggregate() {
   const [txnRes, jobRes] = await Promise.all([

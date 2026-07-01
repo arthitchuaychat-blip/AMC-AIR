@@ -13,6 +13,7 @@ import Login from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
 import Catalog from "./components/Catalog";
 import Movements from "./components/Movements";
+import StockCount from "./components/StockCount";
 import Dashboard from "./components/Dashboard";
 import Settings from "./components/Settings";
 import Jobs from "./components/Jobs";
@@ -68,6 +69,7 @@ const NAV = {
   handover: { th: "ใบส่งมอบงาน", en: "Handover", icon: "catalog" },
   schedule: { th: "ปฏิทินงาน", en: "Schedule", icon: "calendar" },
   movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "withdraw" },
+  stockcount: { th: "นับสต๊อก", en: "Stock Count", icon: "catalog" },
   jobs: { th: "วัสดุที่ใช้ในงาน", en: "Jobs & Cost", icon: "box" },
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
@@ -81,7 +83,7 @@ const NAV_GROUPS = [
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
-  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "jobs", "po"] },
+  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "po"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
 ];
@@ -90,7 +92,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-06-29·ใบงาน: ฝ่ายขาย/ผู้บริหาร แก้ไข-ปลดล็อกงานที่ล็อกได้ (เดิมเฉพาะธุรการ) v226";
+const BUILD = "2026-06-29·เพิ่มเมนูนับสต๊อก: เทียบยอดระบบ/นับได้ + ปรับยอด + ประวัติ v227";
 
 function SetupNotice() {
   return (
@@ -425,6 +427,7 @@ export default function App() {
         {view === "schedule" && <Schedule role={role} team={profile?.team} me={profile?.name || profile?.email} onOpenJob={(jn) => { if (can(role, "joborders")) { setJobFocus(jn); go("joborders"); } else { go("myjobs"); } }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}
         {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
+        {view === "stockcount" && <StockCount role={role} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price })) }); go("movements"); }} />}
         {view === "jobs" && <Jobs role={role} />}

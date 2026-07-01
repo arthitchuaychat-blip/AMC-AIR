@@ -14,7 +14,11 @@ const TYPES = [
   { id: "purchase", th: "ซื้อเข้า", icon: "purchase", color: "#7c3aed", dir: +1 },
   { id: "damage",   th: "ตัดเสีย", icon: "damage",   color: "#dc2626", dir: -1 },
 ];
-const TYPE_BY = Object.fromEntries(TYPES.map((t) => [t.id, t]));
+// display-only rows (recorded by นับสต๊อก, not a manual movement tab) so history renders + doesn't crash on TYPE_BY[type]
+const TYPE_BY = Object.fromEntries([...TYPES,
+  { id: "adjust_in",  th: "ปรับยอด (เพิ่ม)", icon: "purchase", color: "#0891b2", dir: +1 },
+  { id: "adjust_out", th: "ปรับยอด (ลด)",    icon: "damage",   color: "#ea580c", dir: -1 },
+].map((t) => [t.id, t]));
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
 
 export default function Movements({ role, myTeam, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
