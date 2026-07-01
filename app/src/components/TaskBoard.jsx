@@ -1,6 +1,7 @@
 import React from "react";
 import { listTasks, saveTask, setTaskStatus, deleteTask, listTaskComments, addTaskComment, deleteTaskComment, uploadTaskFile, listProfiles, listCustomers } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
+import Combo from "./Combo";
 import AttachThumb from "./AttachThumb";
 import { UIcon } from "../icons";
 import { ATTACH_ACCEPT } from "../lib/format";
@@ -186,10 +187,10 @@ function TaskEditor({ task, staff, custs = [], onClose, onSaved, flash }) {
               </select></label>
           </div>
           <label className="fld"><span>ลูกค้าที่เกี่ยวข้อง (ไม่บังคับ · ใช้ติดตามลูกค้า)</span>
-            <select className="inp" value={f.customer_id || ""} onChange={(e) => set("customer_id", e.target.value)}>
+            <Combo className="inp" value={f.customer_id || ""} onChange={(e) => set("customer_id", e.target.value)} placeholder="— ไม่ผูกกับลูกค้า —">
               <option value="">— ไม่ผูกกับลูกค้า —</option>
               {custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select></label>
+            </Combo></label>
           <label className="fld"><span>กำหนดเสร็จ (ไม่บังคับ)</span><input className="inp" type="date" value={f.due_date} onChange={(e) => set("due_date", e.target.value)} /></label>
           <div className="fld"><span>ไฟล์/รูปแนบ</span><AttachRow files={f.attachments} onChange={(a) => set("attachments", a)} flash={flash} /></div>
         </div>
