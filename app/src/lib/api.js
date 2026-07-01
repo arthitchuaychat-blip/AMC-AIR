@@ -402,16 +402,19 @@ export async function savePurchaseOrder(po, items) {
     const e3 = (await supabase.from("po_items").insert(items.map((it) => ({ po_no: po.po_no, material_code: it.code, qty: Number(it.qty), price: Number(it.price) || 0 })))).error;
     if (e3) throw e3;
   }
+  syncCashEntriesFromDocs().catch(() => {}); // new/edited PO → "คาดว่าจะจ่าย" in cash flow
 }
 
 export async function deletePurchaseOrder(po_no) {
   const { error } = await supabase.from("purchase_orders").delete().eq("po_no", po_no);
   if (error) throw error;
+  syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
 }
 
 export async function markPoReceived(po_no) {
   const { error } = await supabase.from("purchase_orders").update({ status: "received", received_at: new Date().toISOString() }).eq("po_no", po_no);
   if (error) throw error;
+  syncCashEntriesFromDocs().catch(() => {}); // received → move to "จ่ายจริง" in cash flow
 }
 
 // ---------- CRM: customers (+ contacts + sites) ----------
@@ -797,6 +800,7 @@ export async function saveInvoice(inv) {
     note: inv.note?.trim() || null, internal_note: inv.internal_note?.trim() || null, ..._termCols(inv), ..._signCols(inv), status: inv.status || "unpaid", created_by: user?.id || null,
   }, { onConflict: "invoice_no" });
   if (error) throw error;
+  syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background (unpaid invoice → "คาดว่าจะรับ")
 }
 // update per-line WHT selection (items) + rate + recomputed amount on an invoice
 export async function setInvoiceWht(invoice_no, items, wht_rate, wht_amt) {
@@ -813,6 +817,7 @@ export async function setInvoiceStatus(invoice_no, status, reason) {
   const { error } = await supabase.from("invoices").update({ status }).eq("invoice_no", invoice_no);
   if (error) throw error;
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "invoice", target_no: invoice_no, reason });
+  syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background (cancel removes the "คาดว่าจะรับ" line)
 }
 export async function deleteInvoice(invoice_no, reason) {
   // chain safety: block if a receipt was issued from this invoice
@@ -823,6 +828,7 @@ export async function deleteInvoice(invoice_no, reason) {
   const { error } = await supabase.from("invoices").delete().eq("invoice_no", invoice_no);
   if (error) throw error;
   await logAudit({ action: "delete", target_type: "invoice", target_no: invoice_no, reason, snapshot: snap });
+  syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
 }
 
 // ---------- RECEIPTS (ใบเสร็จรับเงิน) ----------
@@ -1470,11 +1476,13 @@ export async function createSubPayout({ team, lines, whtRate, note }) {
     const done = paid >= (Number(j.labor_total) || 0) - 0.01;
     await supabase.from("job_orders").update({ labor_paid_amt: paid, labor_paid: done, payout_id: data.id }).eq("job_no", l.job_no);
   }
+  syncCashEntriesFromDocs().catch(() => {}); // new payout → "คาดว่าจะจ่าย" in cash flow
   return data.id;
 }
 export async function paySubPayout(id, method) {
   const { error } = await supabase.from("sub_payouts").update({ status: "paid", paid_at: new Date().toISOString(), method: method || null }).eq("id", id);
   if (error) throw error;
+  syncCashEntriesFromDocs().catch(() => {}); // paid → move to "จ่ายจริง" in cash flow
 }
 // cancel an unpaid payout → give the allocated amounts back so the jobs return to "รอจ่าย"
 export async function cancelSubPayout(id) {
@@ -1499,6 +1507,7 @@ export async function cancelSubPayout(id) {
   }
   const { error: delErr } = await supabase.from("sub_payouts").delete().eq("id", id);
   if (delErr) throw delErr;
+  syncCashEntriesFromDocs().catch(() => {}); // removed payout → update its cash-flow line
 }
 // edit an existing payout's per-job amounts (accounting correction; works on paid ones too).
 // recomputes gross/wht/net and adjusts each job's cumulative labor_paid_amt by the delta.
@@ -1552,6 +1561,7 @@ export async function deleteSubPayout(id) {
   }
   const { error: delErr } = await supabase.from("sub_payouts").delete().eq("id", id);
   if (delErr) throw delErr;
+  syncCashEntriesFromDocs().catch(() => {}); // removed payout → update its cash-flow line
 }
 export async function deleteTeam(id) {
   const { error } = await supabase.from("teams").delete().eq("id", id);
