@@ -26,7 +26,9 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   // ช่าง/หัวหน้าช่าง เห็นเฉพาะงานของทีมตัวเอง (งานตัวเอง) — ทีมหลังบ้านเห็นทุกงาน
   const fieldOnly = role === "tech" || role === "lead_tech";
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
-  const canEditJob = (jo) => canEdit && (!jo.locked || role === "admin");
+  // งานที่ถูกล็อก (อนุมัติ/ปิดงานแล้ว) แก้ไข/ปลดล็อกได้เฉพาะทีมออฟฟิศที่ดูแลใบงาน (ธุรการ/ผู้บริหาร/ฝ่ายขาย)
+  const canOverrideLock = role === "admin" || role === "exec" || role === "sales";
+  const canEditJob = (jo) => canEdit && (!jo.locked || canOverrideLock);
   const [openTl, setOpenTl] = React.useState(null);
   const [upBrief, setUpBrief] = React.useState(false);
   const [list, setList] = React.useState([]);
@@ -571,7 +573,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 {canEditJob(jo) && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
                 {canEditJob(jo) && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancelJob(jo)}>ยกเลิก</button>}
-                {jo.locked && role === "admin" && <button className="btn-ghost sm" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
+                {jo.locked && canOverrideLock && <button className="btn-ghost sm" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
                 {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(jo)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div></div>
               {openTl === jo.job_no && <JobTimeline jobNo={jo.job_no} groupNo={groupKey(jo)} linked={!!jo.group_no} canPost={canEdit} author={me} flash={flash} />}
@@ -636,7 +638,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
               <div className="modal-foot">
                 {canDelete && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const j = jo; setViewing(null); del(j); }}><UIcon name="trash" size={15} /> ลบ</button>}
                 {onHandover && <button className="btn-ghost" onClick={() => { const j = jo; setViewing(null); onHandover(j); }}><UIcon name="catalog" size={15} /> ใบส่งมอบงาน</button>}
-                {jo.locked && role === "admin" && <button className="btn-ghost" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
+                {jo.locked && canOverrideLock && <button className="btn-ghost" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
                 {canEditJob(jo) && <button className="btn-ghost" onClick={() => addLinked(jo)}><UIcon name="plus" size={15} /> ใบงานเชื่อม</button>}
                 {canEditJob(jo) && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
               </div>
