@@ -2,11 +2,12 @@
 -- รันใน Supabase → SQL Editor (ครั้งเดียว)
 
 -- (1) เพิ่มชนิดรายการเคลื่อนไหว adjust_in / adjust_out (ปรับยอดจากการนับสต๊อก) เข้า check constraint
+-- ลบ check constraint เดิมที่คุม transactions.type (Postgres เก็บเป็น "type = ANY (ARRAY[...])" จึง match แค่ '%type%')
 do $$ declare cn text;
 begin
   for cn in select conname from pg_constraint
             where conrelid = 'public.transactions'::regclass and contype = 'c'
-              and pg_get_constraintdef(oid) ilike '%type%in%' loop
+              and pg_get_constraintdef(oid) ilike '%type%' loop
     execute format('alter table transactions drop constraint %I', cn);
   end loop;
   alter table transactions add constraint transactions_type_check
