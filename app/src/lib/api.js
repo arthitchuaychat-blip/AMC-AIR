@@ -1902,6 +1902,42 @@ export async function listAccountEntries({ accountId, from, to } = {}) {
   const { data, error } = await q.limit(2000);
   if (error) throw error; return data || [];
 }
+// manual bank-account movement (ฝาก/ถอน/ค่าธรรมเนียม/ดอกเบี้ย) — เพื่อให้ยอดในระบบตรง statement, กระทบแบงค์ได้
+export async function addAccountEntry({ accountId, direction, amount, note, entry_date, kind }) {
+  const uid = await _uid();
+  if (!accountId) throw new Error("เลือกบัญชี");
+  const amt = Number(amount) || 0;
+  if (amt <= 0) throw new Error("จำนวนเงินต้องมากกว่า 0");
+  if (direction !== "in" && direction !== "out") throw new Error("เลือกเงินเข้า/ออก");
+  const { error } = await supabase.from("account_entries").insert({
+    account_id: accountId, direction, amount: amt, kind: kind || "manual",
+    note: note?.trim() || (direction === "in" ? "เงินเข้า/ฝาก" : "เงินออก/ถอน"),
+    entry_date: entry_date || new Date().toISOString().slice(0, 10), created_by: uid,
+  });
+  if (error) throw error;
+}
+export async function updateAccountEntry(id, { amount, note, entry_date, direction } = {}) {
+  const patch = {};
+  if (amount != null) patch.amount = Number(amount) || 0;
+  if (note !== undefined) patch.note = note?.trim() || null;
+  if (entry_date) patch.entry_date = entry_date;
+  if (direction) patch.direction = direction;
+  const { error } = await supabase.from("account_entries").update(patch).eq("id", id);
+  if (error) throw error;
+}
+export async function deleteAccountEntry(id) {
+  const { error } = await supabase.from("account_entries").delete().eq("id", id);
+  if (error) throw error;
+}
+// mark one or many ledger lines as reconciled with the bank statement (needs migration 089)
+export async function setEntriesReconciled(ids, reconciled) {
+  const list = Array.isArray(ids) ? ids : [ids];
+  if (!list.length) return;
+  const { error } = await supabase.from("account_entries")
+    .update({ reconciled: !!reconciled, reconciled_at: reconciled ? new Date().toISOString() : null })
+    .in("id", list);
+  if (error) throw error;
+}
 export async function transferFunds({ fromId, toId, amount, note }) {
   const uid = await _uid(); const amt = Number(amount) || 0;
   if (!fromId || !toId || fromId === toId) throw new Error("เลือกบัญชีต้นทาง/ปลายทางให้ถูกต้อง");

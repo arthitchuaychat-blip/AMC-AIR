@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, addAccountEntry, deleteAccountEntry, setEntriesReconciled, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import AttachThumb from "./AttachThumb";
 import { fmtBaht, ATTACH_ACCEPT } from "../lib/format";
@@ -34,7 +34,7 @@ function AttachRow({ files, onChange, flash, label }) {
 
 export default function Expenses({ role, me }) {
   const office = OFFICE.includes(role);
-  const TABS = [["mine", "ขอเบิกของฉัน"], ...(office ? [["approve", "อนุมัติ / จ่าย"], ["accounts", "บัญชี & โอนเงิน"], ["report", "รายงานบัญชี"]] : [])];
+  const TABS = [["mine", "ขอเบิกของฉัน"], ...(office ? [["approve", "อนุมัติ / จ่าย"], ["accounts", "บัญชี & โอนเงิน"], ["report", "เดินบัญชี & กระทบแบงค์"]] : [])];
   const [tab, setTab] = React.useState("mine");
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
@@ -245,40 +245,159 @@ function AccountsTab({ flash }) {
   );
 }
 
+const KIND_TAG = { transfer: "🔁 โอน", expense: "🧾 เบิกจ่าย", opening: "⚑ ยอดยกมา", adjust: "⚙ ปรับปรุง", manual: "✍️ บันทึกเอง" };
+const recErr = (e) => /reconciled|column|PGRST204/i.test(e?.message || "") ? "ยังไม่ได้รัน migration 089 (กระทบแบงค์) ใน Supabase ก่อน" : "ไม่สำเร็จ: " + (e?.message || e);
+
 function ReportTab({ flash }) {
   const [accounts, setAccounts] = React.useState([]);
-  const [accountId, setAccountId] = React.useState("all");
-  const [rows, setRows] = React.useState([]);
-  const accName = React.useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a.name])), [accounts]);
-  async function load() {
-    try { const [a, e] = await Promise.all([listAccounts(), listAccountEntries(accountId === "all" ? {} : { accountId })]); setAccounts(a); setRows(e); }
-    catch (err) { flash("โหลดไม่สำเร็จ: " + (err.message || err), true); }
+  const [accountId, setAccountId] = React.useState("");     // set to first bank account after load
+  const [rows, setRows] = React.useState(null);
+  const [onlyUnrec, setOnlyUnrec] = React.useState(false);
+  const [stmt, setStmt] = React.useState("");
+  const [addOpen, setAddOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const accById = React.useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts]);
+
+  async function loadAccounts() {
+    try { const a = await listAccounts(); setAccounts(a); if (!accountId) setAccountId((a.find((x) => x.kind === "bank") || a[0])?.id || "all"); }
+    catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
   }
-  React.useEffect(() => { load(); }, [accountId]);
-  const totIn = rows.filter((r) => r.direction === "in").reduce((a, r) => a + Number(r.amount || 0), 0);
-  const totOut = rows.filter((r) => r.direction === "out").reduce((a, r) => a + Number(r.amount || 0), 0);
+  async function loadRows() {
+    if (!accountId) return;
+    try { setRows(await listAccountEntries(accountId !== "all" ? { accountId } : {})); }
+    catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setRows([]); }
+  }
+  React.useEffect(() => { loadAccounts(); }, []);
+  React.useEffect(() => { loadRows(); }, [accountId]);
+  const refresh = () => { loadAccounts(); loadRows(); };
+
+  const single = !!accountId && accountId !== "all";
+  const acc = single ? accById[accountId] : null;
+  const list = rows || [];
+  const sign = (r) => (r.direction === "in" ? 1 : -1) * (Number(r.amount) || 0);
+  const opening = single ? Number(acc?.opening_balance) || 0 : 0;
+  const systemBal = single ? (acc?.balance ?? 0) : list.reduce((a, r) => a + sign(r), 0);
+  const reconciledBal = opening + list.filter((r) => r.reconciled).reduce((a, r) => a + sign(r), 0);
+  const unrec = list.filter((r) => !r.reconciled);
+  const stmtNum = stmt.trim() === "" ? null : Number(stmt);
+  const diff = stmtNum == null || !single ? null : Math.round((stmtNum - reconciledBal) * 100) / 100;
+  const shown = list.filter((r) => !onlyUnrec || !r.reconciled);
+
+  async function toggleRec(r) {
+    setBusy(true);
+    try { await setEntriesReconciled([r.id], !r.reconciled); setRows((rs) => rs.map((x) => x.id === r.id ? { ...x, reconciled: !r.reconciled } : x)); }
+    catch (e) { flash(recErr(e), true); }
+    setBusy(false);
+  }
+  async function reconcileAllShown() {
+    const ids = shown.filter((r) => !r.reconciled).map((r) => r.id);
+    if (!ids.length) return flash("ไม่มีรายการที่ยังไม่กระทบในหน้านี้");
+    if (!await confirmDialog(`ทำเครื่องหมาย "กระทบแล้ว" ให้ ${ids.length} รายการที่แสดง?`)) return;
+    setBusy(true);
+    try { await setEntriesReconciled(ids, true); setRows((rs) => rs.map((x) => ids.includes(x.id) ? { ...x, reconciled: true } : x)); flash(`กระทบ ${ids.length} รายการแล้ว ✓`); }
+    catch (e) { flash(recErr(e), true); }
+    setBusy(false);
+  }
+  async function del(r) {
+    if (!await confirmDialog(`ลบรายการ "${r.note || "-"}" (${fmtBaht(r.amount)}) ?`)) return;
+    try { await deleteAccountEntry(r.id); flash("ลบแล้ว"); refresh(); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+  }
+
   return (
     <div className="card">
-      <div className="sec-head"><div><div className="sec-title">รายงานเงินเข้า–ออก</div><div className="sec-sub">เงินเข้า {fmtBaht(totIn)} · เงินออก {fmtBaht(totOut)} · สุทธิ {fmtBaht(totIn - totOut)}</div></div>
-        <select className="inp" style={{ width: "auto" }} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-          <option value="all">ทุกบัญชี</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select></div>
+      <div className="sec-head"><div><div className="sec-title">เดินบัญชี & กระทบแบงค์</div>
+        <div className="sec-sub">บันทึกเงินเข้า/ออกของบัญชีธนาคาร แล้วติ๊ก ✓ รายการที่ตรงกับ statement เพื่อกระทบยอด</div></div>
+        <button className="btn-primary" onClick={() => setAddOpen(true)}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มรายการ (ฝาก/ถอน)</button></div>
+
+      <div className="cat-filter" style={{ marginTop: 4 }}>
+        {[["all", "ทุกบัญชี"], ...accounts.map((a) => [a.id, (a.kind === "cash" ? "💵 " : "🏦 ") + a.name])].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (accountId === v ? " on" : "")} onClick={() => setAccountId(v)} style={accountId === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
+      </div>
+
+      {single && (
+        <div className="exp-accounts" style={{ marginTop: 6 }}>
+          <div className="exp-acc"><div className="exp-acc-name">ยอดตามระบบ</div><div className="exp-acc-bal">{fmtBaht(systemBal)}</div></div>
+          <div className="exp-acc"><div className="exp-acc-name">✓ กระทบแล้ว</div><div className="exp-acc-bal" style={{ color: "var(--up)" }}>{fmtBaht(reconciledBal)}</div></div>
+          <div className="exp-acc"><div className="exp-acc-name">⧗ ยังไม่กระทบ</div><div className="exp-acc-bal" style={{ color: unrec.length ? "var(--down)" : "var(--ink-3)" }}>{fmtBaht(systemBal - reconciledBal)}</div><div className="jo-dim" style={{ marginTop: 2 }}>{unrec.length} รายการ</div></div>
+          <div className="exp-acc">
+            <div className="exp-acc-name">ยอดตาม statement ธนาคาร</div>
+            <span className="inp inp-unit" style={{ marginTop: 6 }}><span className="unit-pre">฿</span><input type="number" step="0.01" value={stmt} onChange={(e) => setStmt(e.target.value)} placeholder="กรอกยอดจากธนาคาร" /></span>
+            {diff != null && <div className="jo-dim" style={{ marginTop: 6, fontWeight: 700, color: diff === 0 ? "var(--up)" : "var(--down)" }}>{diff === 0 ? "✓ ตรงกับยอดที่กระทบแล้ว" : `ผลต่าง ${fmtBaht(diff)}`}</div>}
+          </div>
+        </div>
+      )}
+
+      <div className="cat-filter" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <label className="jo-dim" style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input type="checkbox" checked={onlyUnrec} onChange={(e) => setOnlyUnrec(e.target.checked)} /> แสดงเฉพาะที่ยังไม่กระทบ
+        </label>
+        <button className="btn-ghost sm" disabled={busy || !shown.some((r) => !r.reconciled)} onClick={reconcileAllShown}>✓ กระทบทั้งหมดที่แสดง</button>
+      </div>
+
       <div style={{ overflowX: "auto" }}>
         <table className="hr-table">
-          <thead><tr><th style={{ textAlign: "left" }}>วันที่</th><th style={{ textAlign: "left" }}>บัญชี</th><th style={{ textAlign: "left" }}>รายการ</th><th>เข้า</th><th>ออก</th></tr></thead>
+          <thead><tr><th style={{ width: 44 }}>กระทบ</th><th style={{ textAlign: "left" }}>วันที่</th>{!single && <th style={{ textAlign: "left" }}>บัญชี</th>}<th style={{ textAlign: "left" }}>รายการ</th><th>เข้า</th><th>ออก</th><th style={{ width: 44 }}></th></tr></thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={5} className="empty sm">ไม่มีรายการ</td></tr>}
-            {rows.map((r) => (
-              <tr key={r.id}>
+            {rows === null && <tr><td colSpan={single ? 6 : 7} className="empty sm">กำลังโหลด…</td></tr>}
+            {rows && shown.length === 0 && <tr><td colSpan={single ? 6 : 7} className="empty sm">ไม่มีรายการ</td></tr>}
+            {shown.map((r) => (
+              <tr key={r.id} style={r.reconciled ? { background: "var(--surface-2)" } : {}}>
+                <td style={{ textAlign: "center" }}><input type="checkbox" checked={!!r.reconciled} disabled={busy} onChange={() => toggleRec(r)} title="กระทบกับ statement แล้ว" /></td>
                 <td style={{ textAlign: "left" }}>{fmtD(r.entry_date)}</td>
-                <td style={{ textAlign: "left" }}>{accName[r.account_id] || "-"}</td>
-                <td style={{ textAlign: "left" }}>{r.kind === "transfer" ? "🔁 " : ""}{r.note || "-"}</td>
+                {!single && <td style={{ textAlign: "left" }}>{accById[r.account_id]?.name || "-"}</td>}
+                <td style={{ textAlign: "left" }}>{r.note || "-"}<span className="jo-dim" style={{ marginLeft: 6 }}>{KIND_TAG[r.kind] || ""}</span></td>
                 <td className="hr-ok">{r.direction === "in" ? fmtBaht(r.amount) : "—"}</td>
                 <td className="hr-bad">{r.direction === "out" ? fmtBaht(r.amount) : "—"}</td>
+                <td style={{ textAlign: "center" }}>{r.kind === "manual" && <button className="btn-ghost sm" title="ลบ" onClick={() => del(r)} style={{ padding: "2px 6px" }}><UIcon name="x" size={13} /></button>}</td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+      <p className="page-sub" style={{ marginTop: 10 }}>* ยอดกระทบแล้ว = ยอดยกมา + รายการที่ติ๊ก ✓ · เมื่อกระทบครบตาม statement ผลต่างควรเป็น ฿0 · รายการที่ระบบสร้างเอง (เบิกจ่าย/โอน) ลบไม่ได้ ลบได้เฉพาะรายการที่บันทึกเอง</p>
+
+      {addOpen && <AddEntryModal accounts={accounts} defaultAccountId={single ? accountId : ""} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); refresh(); }} flash={flash} />}
+    </div>
+  );
+}
+
+function AddEntryModal({ accounts, defaultAccountId, onClose, onSaved, flash }) {
+  const [f, setF] = React.useState({ accountId: defaultAccountId || accounts[0]?.id || "", direction: "in", amount: "", note: "", entry_date: today() });
+  const [busy, setBusy] = React.useState(false);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  async function save() {
+    if (!f.accountId) return flash("เลือกบัญชี", true);
+    if (!(Number(f.amount) > 0)) return flash("ใส่จำนวนเงิน", true);
+    setBusy(true);
+    try { await addAccountEntry(f); flash("บันทึกรายการเดินบัญชีแล้ว ✓"); onSaved(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
+        <div className="modal-head"><div className="modal-title">เพิ่มรายการเดินบัญชี</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <label className="fld"><span>บัญชี</span>
+            <select className="inp" value={f.accountId} onChange={(e) => set("accountId", e.target.value)}>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{(a.kind === "cash" ? "💵 " : "🏦 ") + a.name}</option>)}
+            </select></label>
+          <label className="fld"><span>ประเภท</span>
+            <div className="cat-filter" style={{ margin: 0 }}>
+              {[["in", "💰 เงินเข้า / ฝาก"], ["out", "💸 เงินออก / ถอน-ค่าธรรมเนียม"]].map(([v, l]) => (
+                <button type="button" key={v} className={"cat-chip" + (f.direction === v ? " on" : "")} onClick={() => set("direction", v)} style={f.direction === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+              ))}
+            </div></label>
+          <div className="fld-row">
+            <label className="fld"><span>วันที่</span><input type="date" className="inp" value={f.entry_date} onChange={(e) => set("entry_date", e.target.value)} /></label>
+            <label className="fld"><span>จำนวนเงิน</span><span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={f.amount} autoFocus onChange={(e) => set("amount", e.target.value)} /></span></label>
+          </div>
+          <label className="fld"><span>รายการ/หมายเหตุ</span><input className="inp" value={f.note} onChange={(e) => set("note", e.target.value)} placeholder="เช่น รับเงินลูกค้า / ดอกเบี้ย / ค่าธรรมเนียมธนาคาร" /></label>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy} onClick={save}>บันทึก</button></div>
       </div>
     </div>
   );
