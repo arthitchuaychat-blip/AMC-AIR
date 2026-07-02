@@ -1566,6 +1566,7 @@ export async function saveTeam(t) {
 export async function saveJobLabor(jobNo, lines, total) {
   const { error } = await supabase.from("job_orders").update({ labor_lines: lines, labor_total: Number(total) || 0 }).eq("job_no", jobNo);
   if (error) throw error;
+  syncCashEntriesFromDocs().catch(() => {}); // แก้ยอดค่าแรง → อัปเดต "ค่าแรงรอจ่าย" ในกระแสเงินสด
 }
 // office review of a sub job (rating 1-5 + claim flag)
 export async function saveJobReview(jobNo, rating, isClaim) {
@@ -1580,6 +1581,7 @@ export async function confirmJobLabor(jobNo, confirmed) {
     : { labor_confirmed: false, labor_confirmed_at: null, labor_confirmed_by: null };
   const { error } = await supabase.from("job_orders").update(patch).eq("job_no", jobNo);
   if (error) throw error;
+  syncCashEntriesFromDocs().catch(() => {}); // ยืนยัน/ยกเลิกค่าแรง → คาดว่าจะจ่าย (labor_owed) เด้งเข้า/ออกกระแสเงินสด
 }
 export async function listSubPayouts() {
   const { data, error } = await supabase.from("sub_payouts").select("*").order("created_at", { ascending: false });
@@ -2614,7 +2616,7 @@ export async function setOpeningBalance(amount) {
 // seed/refresh ledger lines from documents (idempotent; never overwrites user-edited rows)
 export async function syncCashEntriesFromDocs() {
   const _d = (ts) => (ts ? String(ts).slice(0, 10) : null);
-  const [inv, rec, pay, po, poItems, cust, team, existing, salaryProfiles] = await Promise.all([
+  const [inv, rec, pay, po, poItems, cust, team, existing, salaryProfiles, laborJobs] = await Promise.all([
     supabase.from("invoices").select("invoice_no,due_date,issue_date,total,wht_amt,status,customer_id"),
     supabase.from("receipts").select("receipt_no,issue_date,net,total,status,customer_id"),
     supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at"),
@@ -2624,6 +2626,8 @@ export async function syncCashEntriesFromDocs() {
     supabase.from("teams").select("id,name"),
     supabase.from("cash_entries").select("id,source_type,source_ref,edited").neq("source_type", "manual"),
     supabase.from("profiles").select("id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0),
+    // confirmed subcontractor labor not yet fully covered by a payout = "ค่าแรงรอจ่าย"
+    supabase.from("job_orders").select("job_no,assigned_team,labor_total,labor_paid_amt,labor_confirmed_at,scheduled_at,created_at").eq("labor_confirmed", true).gt("labor_total", 0),
   ]);
   const cn = Object.fromEntries((cust.data || []).map((c) => [c.id, c.name]));
   const tn = Object.fromEntries((team.data || []).map((t) => [t.id, (t.name || "").replace("Team ", "")]));
@@ -2635,6 +2639,14 @@ export async function syncCashEntriesFromDocs() {
   (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entry_date: x.issue_date, amount: Number(x.net || x.total) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
   (pay.data || []).forEach((x) => { const paid = x.status === "paid"; desired.push({ source_type: "payout", source_ref: String(x.id), direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: Number(x.net) || 0, note: `จ่ายช่างซัพ${tn[x.team] ? " " + tn[x.team] : ""}` }); });
   (po.data || []).forEach((x) => { if (x.status === "cancelled") return; const got = x.status === "received"; desired.push({ source_type: "po", source_ref: x.po_no, direction: "out", status: got ? "actual" : "projected", entry_date: got ? _d(x.received_at) : _d(x.created_at), amount: poTotal[x.po_no] || 0, note: `ใบสั่งซื้อ ${x.po_no}${x.supplier ? " · " + x.supplier : ""}` }); });
+  // ค่าแรงช่างซัพที่ยืนยันแล้ว แต่ยังเหลือค้างจ่าย (ยังไม่ตั้งเบิก) → คาดว่าจะจ่าย · พอตั้งเบิกแล้ว remaining=0 รายการนี้หายเอง ไปโผล่เป็น payout แทน
+  (laborJobs.data || []).forEach((j) => {
+    const remaining = Math.round(((Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0)) * 100) / 100;
+    if (remaining <= 0.01) return;
+    desired.push({ source_type: "labor_owed", source_ref: j.job_no, direction: "out", status: "projected",
+      entry_date: _d(j.labor_confirmed_at || j.scheduled_at || j.created_at),
+      amount: remaining, note: `ค่าแรงช่างซัพรอจ่าย · ${j.job_no}${tn[j.assigned_team] ? " · " + tn[j.assigned_team] : ""}` });
+  });
   const salaryList = salaryProfiles.data || [];
   const totalSalary = salaryList.reduce((s, p) => s + (Number(p.base_pay) || 0), 0);
   if (totalSalary > 0) {
@@ -2660,7 +2672,7 @@ export async function syncCashEntriesFromDocs() {
   if (toInsert.length) { const { error } = await supabase.from("cash_entries").insert(toInsert); if (error) throw error; }
   // remove stale doc-sourced lines — e.g. an invoice's "คาดว่าจะรับ" line once it's paid (money then shows as its
   // receipt's "ได้รับจริง") or cancelled. Only touch the source types this sync manages; keep user-edited + manual/opening/expense.
-  const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary"]);
+  const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary", "labor_owed"]);
   const staleIds = (existing.data || []).filter((e) => MANAGED.has(e.source_type) && !e.edited && !desiredKeys.has(`${e.source_type}:${e.source_ref}`)).map((e) => e.id);
   for (let i = 0; i < staleIds.length; i += 100) {
     const { error } = await supabase.from("cash_entries").delete().in("id", staleIds.slice(i, i + 100));

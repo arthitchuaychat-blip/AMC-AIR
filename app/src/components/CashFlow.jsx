@@ -13,7 +13,7 @@ const thShort = (s) => new Date(s + "T00:00:00").toLocaleDateString("th-TH", { d
 const thMonthKey = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("th-TH", { month: "long", year: "numeric" });
 const weekStartYmd = (s) => { const d = new Date(s + "T00:00:00"); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return ymd(d); };
 const weekEndYmd = (startYmd) => { const d = new Date(startYmd + "T00:00:00"); d.setDate(d.getDate() + 6); return ymd(d); };
-const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย" };
+const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", labor_owed: "ค่าแรงช่างซัพ (รอเบิก)", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย" };
 const GRAINS = [["day", "รายวัน"], ["week", "สัปดาห์"], ["month", "เดือน"], ["year", "ปี"]];
 
 export default function CashFlow() {
