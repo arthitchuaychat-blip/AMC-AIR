@@ -210,13 +210,18 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
   const fresh = buildLines(quote?.items, rate);
   const saved = job.labor_lines || [];
   const init = fresh.map((l, i) => (saved[i] && saved[i].labor != null ? { ...l, labor: Number(saved[i].labor) || 0 } : l));
-  const [lines, setLines] = React.useState(init);
+  // restore any manually-added lines saved beyond the quote items (jobs with no ใบเสนอราคา rely on these)
+  const extra = saved.slice(fresh.length).map((s) => ({ code: s.code || null, name: s.name || "", qty: s.qty ?? "", unit: s.unit || "", price: Number(s.price) || 0, sale: Number(s.sale) || 0, labor: Number(s.labor) || 0, manual: true }));
+  const [lines, setLines] = React.useState([...init, ...extra]);
   const [rating, setRating] = React.useState(job.rating || 0);
   const [claim, setClaim] = React.useState(!!job.is_claim);
   const [busy, setBusy] = React.useState(false);
   const total = sumLabor(lines);
   const setLabor = (i, v) => setLines((ls) => ls.map((l, j) => j === i ? { ...l, labor: Number(v) || 0 } : l));
-  const resetDefault = () => setLines(buildLines(quote?.items, rate));
+  const setName = (i, v) => setLines((ls) => ls.map((l, j) => j === i ? { ...l, name: v } : l));
+  const addLine = () => setLines((ls) => [...ls, { code: null, name: "", qty: "", unit: "", price: 0, sale: 0, labor: 0, manual: true }]);
+  const delLine = (i) => setLines((ls) => ls.filter((_, j) => j !== i));
+  const resetDefault = () => setLines((ls) => [...buildLines(quote?.items, rate), ...ls.filter((l) => l.manual)]); // keep manual lines
   async function save(confirmAfter) {
     setBusy(true);
     try {
@@ -238,15 +243,24 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
           <div className="sub-lab-head"><span>รายการ</span><span>จำนวน</span><span>ราคา/หน่วย</span><span>ราคาขาย</span><span>ค่าแรง</span></div>
           {lines.map((l, i) => (
             <div className="sub-lab-row" key={i}>
-              <span className="sub-lab-name">{l.name}</span>
-              <span className="sub-lab-qty">{l.qty} {l.unit}</span>
-              <span className="sub-lab-unit">{fmtBaht(l.price)}</span>
-              <span className="sub-lab-sale">{fmtBaht(l.sale)}</span>
+              {l.manual
+                ? <span className="sub-lab-name" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                    <input className="inp" style={{ flex: 1, padding: "4px 8px" }} placeholder="ชื่อรายการค่าแรง เช่น ล้างแอร์ 2 เครื่อง" value={l.name} onChange={(e) => setName(i, e.target.value)} />
+                    <button className="line-x" title="ลบบรรทัด" onClick={() => delLine(i)}><UIcon name="x" size={13} /></button>
+                  </span>
+                : <span className="sub-lab-name">{l.name}</span>}
+              <span className="sub-lab-qty">{l.manual ? "" : `${l.qty} ${l.unit}`}</span>
+              <span className="sub-lab-unit">{l.manual ? "" : fmtBaht(l.price)}</span>
+              <span className="sub-lab-sale">{l.manual ? "" : fmtBaht(l.sale)}</span>
               <span className="inp inp-unit sub-lab-inp"><span className="unit-pre">฿</span><input type="number" min="0" value={l.labor} onChange={(e) => setLabor(i, e.target.value)} /></span>
             </div>
           ))}
+          {lines.length === 0 && <div className="empty sm" style={{ padding: "14px 4px" }}>งานนี้ไม่มีรายการจากใบเสนอราคา — กด “＋ เพิ่มบรรทัดค่าแรง” เพื่อกรอกค่าแรงเอง</div>}
           <div className="sub-lab-total"><span>รวมค่าแรงเหมา</span><b>{fmtBaht(total)}</b></div>
-          <button className="btn-ghost sm" style={{ marginTop: 6 }} onClick={resetDefault}>รีเซ็ตเป็น {rate}% ของราคาขาย</button>
+          <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+            <button className="btn-ghost sm" onClick={addLine}><UIcon name="plus" size={13} /> เพิ่มบรรทัดค่าแรง</button>
+            {quote?.items?.length > 0 && <button className="btn-ghost sm" onClick={resetDefault}>รีเซ็ตเป็น {rate}% ของราคาขาย</button>}
+          </div>
           <div className="sub-review">
             <div className="fld"><span>คะแนนงาน (1–5)</span>
               <div className="sub-stars">{[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" className={"sub-star" + (n <= rating ? " on" : "")} onClick={() => setRating(n === rating ? 0 : n)}>★</button>)}</div></div>
