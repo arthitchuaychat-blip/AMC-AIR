@@ -2110,7 +2110,12 @@ export async function setLineOwner(uid, userId) {
 }
 // staff list (for owner dropdown + showing who replied)
 export async function listStaff() {
-  const { data, error } = await supabase.from("profiles").select("id,name,email,role,avatar_url").order("name");
+  let { data, error } = await supabase.from("profiles").select("id,name,email,role,avatar_url").order("name");
+  // avatar_url comes from migration 083 — if it's not run yet, don't let the whole staff list fail
+  // (that empties staffMap and makes every chat reply show "ทีมงาน" instead of the sender's name)
+  if (error && /avatar_url/i.test(error.message || "")) {
+    ({ data, error } = await supabase.from("profiles").select("id,name,email,role").order("name"));
+  }
   if (error) throw error;
   return (data || []).map((p) => ({ ...p, name: p.name || p.email }));
 }
@@ -2667,12 +2672,13 @@ export async function syncCashEntriesFromDocs() {
 // rooms visible to me (company + ones I'm a member of) with title, last message, unread count
 export async function listChatRooms() {
   const uid = await _uid();
-  const [rooms, members, staff] = await Promise.all([
+  let [rooms, members, staff] = await Promise.all([
     supabase.from("chat_rooms").select("*"),
     supabase.from("chat_members").select("room_id,user_id,last_read_at"),
     supabase.from("profiles").select("id,name,email,avatar_url"),
   ]);
   if (rooms.error) throw rooms.error;
+  if (staff.error && /avatar_url/i.test(staff.error.message || "")) staff = await supabase.from("profiles").select("id,name,email"); // migration 083 not run yet
   const nameById = Object.fromEntries((staff.data || []).map((p) => [p.id, p.name || p.email]));
   const avById = Object.fromEntries((staff.data || []).map((p) => [p.id, p.avatar_url]));
   const memByRoom = {}; (members.data || []).forEach((m) => { (memByRoom[m.room_id] = memByRoom[m.room_id] || []).push(m); });
