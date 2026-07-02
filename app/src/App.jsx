@@ -92,7 +92,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-02·ภาษาพม่า: เลือกได้เฉพาะทีมช่าง · เลือกไทยไม่โชว์พม่า · แปลงานของฉันครบขึ้น v235";
+const BUILD = "2026-07-02·เปิดเมนูในแท็บใหม่ได้ (URL ต่อเมนู) · ลิงก์งานในแชตเปิดแท็บใหม่ ทำหลายเมนูพร้อมกัน v236";
 
 function SetupNotice() {
   return (
@@ -115,7 +115,7 @@ export default function App() {
   const [profile, setProfile] = React.useState(null);
   const [teams, setTeams] = React.useState([]); // to tell if the logged-in user is on a subcontractor team
   const [permsV, setPermsV] = React.useState(0); // bumps when role permissions (re)load → re-render nav
-  const [view, setView] = React.useState(null);
+  const [view, setView] = React.useState(() => { try { return (window.location.hash || "").replace(/^#/, "").split("/")[0] || null; } catch { return null; } });
   const [navHist, setNavHist] = React.useState([]); // stack of previous views → ปุ่มย้อนกลับ
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [lang, setLang] = React.useState(() => { try { return localStorage.getItem("amc_lang") || "th"; } catch { return "th"; } });
@@ -257,6 +257,24 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  // deep-link: read the view + optional focus (#view/record) from the URL hash on first load,
+  // so a menu opened in a NEW TAB lands on the right screen (and focuses the linked record)
+  React.useEffect(() => {
+    const h = (window.location.hash || "").replace(/^#/, "");
+    if (!h.includes("/")) return;
+    const [v, ...rest] = h.split("/");
+    const focus = decodeURIComponent(rest.join("/"));
+    if (!focus) return;
+    if (v === "joborders") setJobFocus(focus);
+    else if (v === "quote") setQuoteFocus(focus);
+    else if (v === "boq") setBoqFocus(focus);
+    else if (v === "invoice") setInvoiceFocus(focus);
+    else if (v === "chat") setChatFocus(focus);
+  }, []);
+  // keep the URL hash in sync with the current view (replaceState → doesn't disturb the Back scheme above),
+  // so refreshing or "open link in new tab" lands on the same menu
+  React.useEffect(() => { if (view) { try { window.history.replaceState(null, "", "#" + view); } catch (_) {} } }, [view]);
+
   if (!hasConfig) return <SetupNotice />;
   if (!ready) return <div className="login-stage"><div className="page-sub">กำลังโหลด…</div></div>;
   if (!session) return <Login />;
@@ -277,6 +295,10 @@ export default function App() {
   }
   function goBack() {
     setNavHist((h) => { if (!h.length) return h; setView(h[h.length - 1]); setMenuOpen(false); return h.slice(0, -1); });
+  }
+  // open a menu (optionally focused on a record) in a NEW browser tab — for working on 2 menus at once
+  function openInNewTab(v, focus) {
+    try { window.open("#" + v + (focus ? "/" + encodeURIComponent(focus) : ""), "_blank"); } catch (_) {}
   }
   // unified cross-document navigation (used by the "เชื่อมโยง" chips on every doc)
   function openDoc(type, no) {
@@ -334,14 +356,16 @@ export default function App() {
               const primary = effLang === "my" ? (NAV_MY[id] || n.th) : n.th;
               const secondary = effLang === "my" ? n.th : n.en;
               return (
-                <button key={id} className={"nav-item" + (view === id ? " on" : "")} onClick={() => go(id)}>
+                // real link → can Ctrl/กลางคลิก/คลิกขวา "เปิดในแท็บใหม่" ได้ · คลิกปกติยังเป็น SPA แท็บเดิม
+                <a key={id} href={"#" + id} style={{ textDecoration: "none" }} className={"nav-item" + (view === id ? " on" : "")}
+                  onClick={(e) => { if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); go(id); }}>
                   <UIcon name={n.icon} size={18} strokeWidth={1.9} />
                   <span className="nav-th">{primary}</span>
                   <span className="nav-en">{secondary}</span>
                   {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
                   {id === "teamchat" && teamUnread > 0 && <span className="nav-badge" title={`${teamUnread} ข้อความใหม่`}>{teamUnread > 99 ? "99+" : teamUnread}</span>}
                   {!NAV_BADGE_SKIP[id] && (notifCounts[id] || 0) > 0 && <span className="nav-badge" title="กิจกรรมใหม่ที่ยังไม่ได้อ่าน">{notifCounts[id] > 99 ? "99+" : notifCounts[id]}</span>}
-                </button>
+                </a>
               );
             };
             const allowed = navIds(role);
@@ -401,7 +425,7 @@ export default function App() {
           onCreateBoq={(cid) => { setBoqNewCust(String(cid)); go("boq"); }}
           onCreateSurvey={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }}
           onCreateTask={(cid, name) => { setTaskPrefill({ customerId: cid ? String(cid) : null, name: name || null }); go("tasks"); }} />}
-        {view === "teamchat" && <TeamChat focus={teamFocus} onFocusConsumed={() => setTeamFocus(null)} onJobClick={(jn) => { setJobFocus(jn); go("joborders"); }} />}
+        {view === "teamchat" && <TeamChat focus={teamFocus} onFocusConsumed={() => setTeamFocus(null)} onJobClick={(jn) => openInNewTab("joborders", jn)} />}
         {view === "tasks" && <TaskBoard role={role} me={profile} prefill={taskPrefill} onPrefillConsumed={() => setTaskPrefill(null)} focus={taskFocus} onFocusConsumed={() => setTaskFocus(null)} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
           newForCustomer={boqNewCust} onNewConsumed={() => setBoqNewCust(null)}
