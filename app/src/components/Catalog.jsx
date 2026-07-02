@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listMaterialsLite, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus, setMaterialsWebPublished } from "../lib/api";
+import { listMaterials, listMaterialsLite, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus, saveBrand, saveBtu, setMaterialsWebPublished } from "../lib/api";
 import { fmtBaht2, fmtNum, eqi, matchText, norm } from "../lib/format";
 import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
@@ -64,6 +64,15 @@ export default function Catalog({ role }) {
   const acMats = React.useMemo(() => mats.filter((m) => m.kind === "ac"), [mats]);
   const brandOpts = React.useMemo(() => dedupe(acMats.map((m) => m.brand)).sort((a, b) => a.localeCompare(b, "th")), [acMats]);
   const acTypes = React.useMemo(() => dedupe(acMats.map((m) => m.ac_type)).sort((a, b) => a.localeCompare(b, "th")), [acMats]);
+
+  // save the item + register any NEW brand/BTU so it persists in the dropdown & filters next time
+  async function handleSaveMaterial(row, isNew) {
+    await saveMaterial(row, isNew);
+    if (row.kind === "ac") {
+      if (row.brand?.trim()) { try { await saveBrand(row.brand.trim()); } catch { /* dup — ignore */ } }
+      if (row.btu) { try { await saveBtu(Number(row.btu)); } catch { /* dup — ignore */ } }
+    }
+  }
   const btuOpts = React.useMemo(() => [...new Set(acMats.map((m) => m.btu).filter(Boolean).map(Number))].sort((a, b) => a - b), [acMats]);
   // One shared collator (th) — far faster than calling String.localeCompare per comparison.
   const collator = React.useMemo(() => new Intl.Collator("th"), []);
@@ -292,7 +301,7 @@ export default function Catalog({ role }) {
       {editing !== undefined && (
         <MaterialModal initial={editing} categories={cats} brands={brands} btus={btus} acTypes={acTypes}
           defaultKind={kind === "all" ? "material" : kind}
-          onSave={saveMaterial}
+          onSave={handleSaveMaterial}
           onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setBtu("all"); setAcType("all"); flash(`บันทึกสำเร็จ ✓ — อยู่ในแท็บ "${KINDS.find((k) => k.v === savedKind)?.l || savedKind}"`); } load(); }}
           onClose={() => setEditing(undefined)} />
       )}

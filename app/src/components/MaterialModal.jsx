@@ -87,7 +87,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
             )}
             {isAc && (
               <label className="fld"><span>ยี่ห้อ · Brand</span>
-                <input className="inp" list="brand-list" value={f.brand} onChange={set("brand")} placeholder="เลือก/พิมพ์ยี่ห้อ" />
+                <input className="inp" list="brand-list" value={f.brand} onChange={set("brand")} placeholder="เลือก หรือพิมพ์ยี่ห้อใหม่ได้เลย" />
                 <datalist id="brand-list">{brands.map((b) => <option key={b} value={b} />)}</datalist>
               </label>
             )}
