@@ -48,7 +48,7 @@ const num = (v) => { const n = parseFloat(String(v ?? "").replace(/,/g, "").repl
 // BTU: keep digits only → "18000 BTU" → 18000 · "12,000" → 12000 · "" → null
 const numBtu = (v) => { const d = String(v ?? "").replace(/[^\d]/g, ""); return d ? Number(d) : null; };
 
-export default function BulkImportModal({ categories, onDone, onClose }) {
+export default function BulkImportModal({ categories, existingCodes, onDone, onClose }) {
   const [text, setText] = React.useState("");
   const [parsed, setParsed] = React.useState(null); // {rows, errors, counts}
   const [busy, setBusy] = React.useState(false);
@@ -143,13 +143,13 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
         matRows.forEach((r) => { if (!r.category && r._catRaw && newMap[r._catRaw]) r.category = newMap[r._catRaw]; });
       }
       // upsert materials (strip the helper field)
-      await bulkUpsertMaterials(parsed.rows.map(({ _catRaw, ...r }) => r));
+      const res = await bulkUpsertMaterials(parsed.rows.map(({ _catRaw, ...r }) => r));
       // register any new brands / BTUs from imported AC rows (so they show in filters)
       const brands = [...new Set(parsed.rows.filter((r) => r.kind === "ac" && r.brand).map((r) => r.brand))];
       const btus = [...new Set(parsed.rows.filter((r) => r.kind === "ac" && r.btu).map((r) => r.btu))];
       for (const b of brands) { try { await saveBrand(b); } catch { /* ignore dup */ } }
       for (const b of btus) { try { await saveBtu(b); } catch { /* ignore dup */ } }
-      onDone(parsed.rows.length);
+      onDone(res || { inserted: 0, updated: parsed.rows.length });
     } catch (e) { setMsg("นำเข้าไม่สำเร็จ: " + (e.message || e)); setBusy(false); }
   }
 
@@ -181,14 +181,20 @@ export default function BulkImportModal({ categories, onDone, onClose }) {
           </div>
           <textarea className="inp bulk-ta" value={text} onChange={(e) => { setText(e.target.value); setParsed(null); }}
             placeholder={SAMPLE_ROWS.join("\n")} rows={9} />
-          {parsed && (
-            <div className="bulk-preview">
-              ✅ พร้อมนำเข้า <b>{parsed.rows.length}</b> รายการ
-              {(parsed.counts.ac > 0 || parsed.counts.material > 0 || parsed.counts.service > 0) &&
-                <span style={{ color: "var(--ink-3)" }}> · แอร์ {parsed.counts.ac} · วัสดุ {parsed.counts.material} · บริการ {parsed.counts.service}</span>}
-              {parsed.errors.length > 0 && <span style={{ color: "var(--down)" }}> · ข้าม {parsed.errors.length} แถว (รหัส/ชื่อไม่ครบ)</span>}
-            </div>
-          )}
+          {parsed && (() => {
+            const upd = existingCodes ? parsed.rows.filter((r) => existingCodes.has(r.code)).length : null;
+            const neu = upd == null ? null : parsed.rows.length - upd;
+            return (
+              <div className="bulk-preview">
+                ✅ พร้อมนำเข้า <b>{parsed.rows.length}</b> รายการ
+                {upd != null && <span style={{ color: "var(--ink-2)" }}> · <b style={{ color: "#0891b2" }}>อัพเดททับ {upd}</b> · เพิ่มใหม่ {neu}</span>}
+                {(parsed.counts.ac > 0 || parsed.counts.material > 0 || parsed.counts.service > 0) &&
+                  <span style={{ color: "var(--ink-3)" }}> · แอร์ {parsed.counts.ac} · วัสดุ {parsed.counts.material} · บริการ {parsed.counts.service}</span>}
+                {parsed.errors.length > 0 && <span style={{ color: "var(--down)" }}> · ข้าม {parsed.errors.length} แถว (รหัส/ชื่อไม่ครบ)</span>}
+                {upd > 0 && <div style={{ marginTop: 4, fontSize: 12, color: "var(--ink-3)" }}>รายการที่รหัสตรงกับของเดิม จะอัพเดทชื่อ/ราคา/รายละเอียดทับ · สต๊อกคงเหลือไม่ถูกแตะ</div>}
+              </div>
+            );
+          })()}
           {msg && <div className="login-err" style={{ marginTop: 8 }}>{msg}</div>}
         </div>
         <div className="modal-foot">

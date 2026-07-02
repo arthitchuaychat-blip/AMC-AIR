@@ -273,8 +273,8 @@ export default function Catalog({ role }) {
       )}
 
       {importing && (
-        <BulkImportModal categories={cats} onClose={() => setImporting(false)}
-          onDone={(n) => { setImporting(false); alert(`นำเข้า ${n} รายการสำเร็จ`); load(); }} />
+        <BulkImportModal categories={cats} existingCodes={new Set(mats.map((m) => m.code))} onClose={() => setImporting(false)}
+          onDone={(res) => { setImporting(false); const r = res || {}; alert(`นำเข้าสำเร็จ ✓  อัพเดททับ ${r.updated || 0} · เพิ่มใหม่ ${r.inserted || 0} รายการ`); load(); }} />
       )}
       {toast && (
         <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", background: "#16a34a", color: "#fff", fontSize: 13.5, fontWeight: 600, padding: "12px 22px", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 300, maxWidth: "90%", textAlign: "center" }}>{toast}</div>

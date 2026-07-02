@@ -239,10 +239,24 @@ export async function setMaterialsWebPublished(codes, published) {
   }
 }
 
-// bulk import (upsert by code) — admin only via RLS
+// bulk import (upsert by code) — admin only via RLS.
+// Round-trip safe: on a RE-import, existing codes UPDATE name/price/details but KEEP their
+// stock (init_stock is dropped from the update — current_stock = init_stock + movements, so
+// writing back the exported on-hand would double-count). Only genuinely new codes get init_stock.
 export async function bulkUpsertMaterials(rows) {
-  const { error } = await supabase.from("materials").upsert(rows, { onConflict: "code" });
-  if (error) throw error;
+  if (!rows || !rows.length) return { inserted: 0, updated: 0 };
+  const codes = [...new Set(rows.map((r) => r.code).filter(Boolean))];
+  const existing = new Set();
+  for (let i = 0; i < codes.length; i += 300) {
+    const { data, error } = await supabase.from("materials").select("code").in("code", codes.slice(i, i + 300));
+    if (error) throw error;
+    (data || []).forEach((m) => existing.add(m.code));
+  }
+  const inserts = rows.filter((r) => !existing.has(r.code));
+  const updates = rows.filter((r) => existing.has(r.code)).map(({ init_stock, ...r }) => r); // keep existing stock
+  for (let i = 0; i < inserts.length; i += 500) { const { error } = await supabase.from("materials").upsert(inserts.slice(i, i + 500), { onConflict: "code" }); if (error) throw error; }
+  for (let i = 0; i < updates.length; i += 500) { const { error } = await supabase.from("materials").upsert(updates.slice(i, i + 500), { onConflict: "code" }); if (error) throw error; }
+  return { inserted: inserts.length, updated: updates.length };
 }
 
 // DANGER: clear all transactions + jobs (resets stock to init). admin only.
