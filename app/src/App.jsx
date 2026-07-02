@@ -92,7 +92,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-02·เปิดเมนูในแท็บใหม่ได้ (URL ต่อเมนู) · ลิงก์งานในแชตเปิดแท็บใหม่ ทำหลายเมนูพร้อมกัน v236";
+const BUILD = "2026-07-02·ลิงก์เอกสาร (เชื่อมโยง/ในแชต) เปิดแท็บใหม่แล้ว ไม่เด้งทับหน้าเดิม v237";
 
 function SetupNotice() {
   return (
@@ -269,6 +269,7 @@ export default function App() {
     else if (v === "quote") setQuoteFocus(focus);
     else if (v === "boq") setBoqFocus(focus);
     else if (v === "invoice") setInvoiceFocus(focus);
+    else if (v === "receipt") setReceiptFocus(focus);
     else if (v === "chat") setChatFocus(focus);
   }, []);
   // keep the URL hash in sync with the current view (replaceState → doesn't disturb the Back scheme above),
@@ -300,13 +301,11 @@ export default function App() {
   function openInNewTab(v, focus) {
     try { window.open("#" + v + (focus ? "/" + encodeURIComponent(focus) : ""), "_blank"); } catch (_) {}
   }
-  // unified cross-document navigation (used by the "เชื่อมโยง" chips on every doc)
+  // unified cross-document navigation (เชื่อมโยง chips + doc history in chat) → open in a NEW TAB
+  // so you don't lose the page you're on; the new tab reads #view/no and focuses that record
   function openDoc(type, no) {
-    if (type === "boq") { setBoqFocus(no); go("boq"); }
-    else if (type === "quote") { setQuoteFocus(no); go("quote"); }
-    else if (type === "job") { setJobFocus(no); go("joborders"); }
-    else if (type === "invoice") { setInvoiceFocus(no); go("invoice"); }
-    else if (type === "receipt") { setReceiptFocus(no); go("receipt"); }
+    const v = { boq: "boq", quote: "quote", job: "joborders", invoice: "invoice", receipt: "receipt" }[type];
+    if (v) openInNewTab(v, no);
   }
 
   // click a notification → jump straight to the exact record it refers to
