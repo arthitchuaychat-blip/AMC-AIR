@@ -76,18 +76,18 @@ function TodayTab({ staff, settings, holSet, canManage, flash }) {
     const work = isWorkday(day, p.work_pattern || "mon_sat", p.sat_group, holSet);
     let status = "off";
     if (onLeave[p.id]) status = "leave";
-    else if (a?.check_in_at) status = s.isLate ? "late" : "in";
+    else if (a?.check_in_at) status = a?.check_out_at ? "out" : (s.isLate ? "late" : "in");
     else if (work) status = "absent";
     return { p, a, s, status };
   });
-  const order = { in: 0, late: 1, absent: 2, leave: 3, off: 4 };
+  const order = { in: 0, late: 1, out: 2, absent: 3, leave: 4, off: 5 };
   rows.sort((x, y) => order[x.status] - order[y.status] || (x.p.name || "").localeCompare(y.p.name || "", "th"));
-  const ST = { in: { t: "เข้างานแล้ว", c: "b-green" }, late: { t: "มาสาย", c: "b-amber" }, absent: { t: "ยังไม่เข้า/ขาด", c: "b-red" }, leave: { t: "ลา", c: "b-blue" }, off: { t: "วันหยุด", c: "b-grey" } };
+  const ST = { in: { t: "เข้างานแล้ว", c: "b-green" }, late: { t: "มาสาย", c: "b-amber" }, out: { t: "ออกงานแล้ว", c: "b-cyan" }, absent: { t: "ยังไม่เข้า/ขาด", c: "b-red" }, leave: { t: "ลา", c: "b-blue" }, off: { t: "วันหยุด", c: "b-grey" } };
   if (loading) return <div className="empty">กำลังโหลด…</div>;
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">{thDate(day)}</div>
-        <div className="sec-sub">เข้าแล้ว {rows.filter((r) => r.status === "in" || r.status === "late").length} · ยังไม่เข้า {rows.filter((r) => r.status === "absent").length} · ลา {rows.filter((r) => r.status === "leave").length}</div></div></div>
+        <div className="sec-sub">เข้าแล้ว {rows.filter((r) => r.status === "in" || r.status === "late" || r.status === "out").length} · ออกแล้ว {rows.filter((r) => r.status === "out").length} · ยังไม่เข้า {rows.filter((r) => r.status === "absent").length} · ลา {rows.filter((r) => r.status === "leave").length}</div></div></div>
       <div className="set-list">
         {rows.map(({ p, a, s, status }) => { const b = ST[status]; return (
           <div className="hr-today-row" key={p.id}>
