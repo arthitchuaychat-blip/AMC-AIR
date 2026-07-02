@@ -92,7 +92,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-02·แก้ชื่อคนตอบขึ้น 'ทีมงาน' — listStaff ล้มเพราะ avatar_url (มิ 083 ยังไม่รัน) v234";
+const BUILD = "2026-07-02·ภาษาพม่า: เลือกได้เฉพาะทีมช่าง · เลือกไทยไม่โชว์พม่า · แปลงานของฉันครบขึ้น v235";
 
 function SetupNotice() {
   return (
@@ -262,6 +262,9 @@ export default function App() {
   if (!session) return <Login />;
 
   const role = profile?.role || "tech";
+  // เฉพาะทีมช่าง (ช่าง/หัวหน้าช่าง) เท่านั้นที่เลือกภาษาพม่าได้ · ฝั่งหลังบ้านเป็นไทยเสมอ
+  const canBurmese = role === "tech" || role === "lead_tech";
+  const effLang = canBurmese ? lang : "th";
 
   function go(id) {
     if (view && view !== id) { setNavHist((h) => [...h, view]); window.history.pushState(null, ""); }
@@ -295,7 +298,7 @@ export default function App() {
   }
 
   return (
-    <LangContext.Provider value={lang}>
+    <LangContext.Provider value={effLang}>
     <div className="app">
       {/* mobile top bar */}
       <div className="topbar">
@@ -316,18 +319,20 @@ export default function App() {
         </div>
 
         <nav className="nav">
-          <div className="nav-label">เมนู
-            <span className="lang-toggle">
-              <button className={lang === "th" ? "on" : ""} onClick={() => setLang("th")}>ไทย</button>
-              <button className={lang === "my" ? "on" : ""} onClick={() => setLang("my")}>မြန်မာ</button>
-            </span>
+          <div className="nav-label">{effLang === "my" ? "မီနူး" : "เมนู"}
+            {canBurmese && (
+              <span className="lang-toggle">
+                <button className={lang === "th" ? "on" : ""} onClick={() => setLang("th")}>ไทย</button>
+                <button className={lang === "my" ? "on" : ""} onClick={() => setLang("my")}>မြန်မာ</button>
+              </span>
+            )}
           </div>
           {(() => {
             const badgeFor = (id) => id === "chat" ? chatUnread : id === "teamchat" ? teamUnread : (NAV_BADGE_SKIP[id] ? 0 : (notifCounts[id] || 0));
             const renderItem = (id) => {
               const n = NAV[id];
-              const primary = lang === "my" ? (NAV_MY[id] || n.th) : n.th;
-              const secondary = lang === "my" ? n.th : n.en;
+              const primary = effLang === "my" ? (NAV_MY[id] || n.th) : n.th;
+              const secondary = effLang === "my" ? n.th : n.en;
               return (
                 <button key={id} className={"nav-item" + (view === id ? " on" : "")} onClick={() => go(id)}>
                   <UIcon name={n.icon} size={18} strokeWidth={1.9} />

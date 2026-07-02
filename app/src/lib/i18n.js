@@ -10,6 +10,18 @@ export const useLang = () => React.useContext(LangContext);
 // pick a string by the active language (Thai is the default/fallback)
 export const tr = (lang, th, my) => (lang === "my" ? (my || th) : th);
 
+// job statuses (keys match JOB_STATUSES in lib/schedule.js)
+export const JOB_STATUS_MY = {
+  quote_pending: "စျေးနှုန်း စောင့်", pending: "အလုပ် စောင့်", scheduled: "ချိန်းဆိုပြီး",
+  in_progress: "လုပ်ဆောင်နေဆဲ", awaiting_approval: "အတည်ပြုရန် စောင့်", reschedule: "ချိန်းဆိုမှု ထပ်တောင်း",
+  done: "ပြီးဆုံး", cancelled: "ပယ်ဖျက်ပြီး",
+};
+// งานของฉัน tab keys
+export const MYJOB_TAB_MY = {
+  todo: "ဒီနေ့ လုပ်ရန်", upcoming: "လာမည့် အလုပ်များ", doing: "လုပ်ဆောင်နေဆဲ", awaiting: "အတည်ပြုရန် စောင့်",
+  reschedule: "ချိန်းဆိုမှု ထပ်တောင်း", done: "ပြီးဆုံးပြီး", cancelled: "ပယ်ဖျက်ပြီး",
+};
+
 // leave types + statuses (data-driven labels)
 export const LEAVE_MY = { vacation: "အနားယူခွင့်", personal: "ကိုယ်ရေးကိစ္စခွင့်", sick: "ဖျားနာခွင့်" };
 export const LV_STATUS_MY = { pending: "အတည်ပြုရန် စောင့်ဆိုင်း", approved: "အတည်ပြုပြီး", rejected: "ပယ်ချ" };

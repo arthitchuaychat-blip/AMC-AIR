@@ -5,7 +5,7 @@ import { UIcon } from "../icons";
 import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel, JOB_STATUSES, ymd } from "../lib/schedule";
 import JobTimeline from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
-import { buildJobBriefMy } from "../lib/i18n";
+import { buildJobBriefMy, useLang, JOB_STATUS_MY, MYJOB_TAB_MY } from "../lib/i18n";
 
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
 // ช่างเห็นทุกสถานะ (รวม "นัดหมายเพิ่ม") แต่ดูได้อย่างเดียวในสถานะ read-only ด้านล่าง
@@ -14,6 +14,9 @@ const TABS = [["todo", "ต้องทำ (วันนี้)"], ["upcoming", 
 const TECH_READONLY = ["reschedule", "done", "cancelled"];
 
 export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
+  const lang = useLang(); // "my" เฉพาะช่างที่เลือกภาษาพม่า (ฝั่งหลังบ้าน = "th" เสมอ)
+  const t = (th, my) => (lang === "my" ? my : th);
+  const stLbl = (s) => (lang === "my" ? (JOB_STATUS_MY[s] || STATUS[s]?.th) : STATUS[s]?.th); // สถานะงาน (แปลตามภาษา)
   const allTeams = role === "lead_tech"; // หัวหน้าช่างเห็นงานทุกทีม
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -74,25 +77,25 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
   const shown = byStatus[tab] || byStatus.todo;
 
   if (!allTeams && !team) {
-    return <div className="adm"><div className="adm-head"><div><h1 className="page-title">งานของฉัน</h1></div></div>
+    return <div className="adm"><div className="adm-head"><div><h1 className="page-title">{t("งานของฉัน", "ကျွန်ုပ်၏ အလုပ်များ")}</h1></div></div>
       <div className="empty">บัญชีนี้ยังไม่ได้สังกัดทีมช่าง — ติดต่อฝ่ายธุรการให้กำหนดทีมให้ครับ</div></div>;
   }
 
   return (
     <div className="adm">
       <div className="adm-head">
-        <div><h1 className="page-title">{allTeams ? "งานทุกทีม" : "งานของฉัน"} <span className="page-title-en">{allTeams ? "All Jobs · หัวหน้าช่าง" : `My Jobs · ${team}`}</span></h1>
+        <div><h1 className="page-title">{allTeams ? t("งานทุกทีม", "အဖွဲ့အားလုံး၏ အလုပ်") : t("งานของฉัน", "ကျွန်ုပ်၏ အလုပ်များ")} <span className="page-title-en">{allTeams ? "All Jobs · หัวหน้าช่าง" : `My Jobs · ${team}`}</span></h1>
           <p className="page-sub">{byStatus.todo.length} ต้องทำวันนี้ · {byStatus.upcoming.length} กำลังจะมาถึง · {byStatus.doing.length} กำลังทำ · {byStatus.awaiting.length} รออนุมัติ</p></div>
         <div className="cat-filter" style={{ margin: 0 }}>
           {TABS.map(([v, l]) => (
             <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
-              style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({byStatus[v].length})</button>
+              style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{lang === "my" ? (MYJOB_TAB_MY[v] || l) : l} ({byStatus[v].length})</button>
           ))}
         </div>
       </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && shown.length === 0 && <div className="empty">{tab === "todo" ? "ไม่มีงานต้องทำวันนี้ 🎉" : tab === "upcoming" ? "ยังไม่มีงานที่กำลังจะมาถึง" : `ไม่มีงานสถานะ "${(TABS.find(([v]) => v === tab) || [])[1] || ""}"`}</div>}
+      {!loading && shown.length === 0 && <div className="empty">{tab === "todo" ? t("ไม่มีงานต้องทำวันนี้ 🎉", "ဒီနေ့ လုပ်စရာ မရှိပါ 🎉") : tab === "upcoming" ? t("ยังไม่มีงานที่กำลังจะมาถึง", "လာမည့် အလုပ် မရှိသေးပါ") : t("ไม่มีงานในสถานะนี้", "ဒီအခြေအနေတွင် အလုပ်မရှိပါ")}</div>}
 
       <div className="job-cards">
         {shown.map((jo) => {
@@ -111,14 +114,14 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
             <div className={"card myjob" + (jo.status === "done" ? " closed" : "")} key={jo.job_no}>
               <div className="myjob-head">
                 <div>
-                  <div className="myjob-no">{jo.job_no} <span className={"job-badge " + st.cls}>{st.th}</span>{visitTeam ? <span className="myjob-team">ทีม {visitTeam}</span> : null}{myVisits.length > 1 ? <span className="myjob-team">🔁 {myVisits.length} รอบ</span> : null}</div>
+                  <div className="myjob-no">{jo.job_no} <span className={"job-badge " + st.cls}>{stLbl(jo.status)}</span>{visitTeam ? <span className="myjob-team">{t("ทีม", "အဖွဲ့")} {visitTeam}</span> : null}{myVisits.length > 1 ? <span className="myjob-team">🔁 {myVisits.length} {t("รอบ", "အကြိမ်")}</span> : null}</div>
                   {jo.customerName && <div className="myjob-cust">🏢 {jo.customerName}</div>}
                   {jo.customerAddr && jo.customerAddr !== jo.address && <div className="myjob-custaddr">{jo.customerAddr}</div>}
-                  <div className="myjob-title">{jo.title || "งานติดตั้ง/บริการ"}</div>
+                  <div className="myjob-title">{jo.title || t("งานติดตั้ง/บริการ", "တပ်ဆင်/ဝန်ဆောင်မှု အလုပ်")}</div>
                 </div>
                 {dt && <div className="myjob-when">
                   {days.length > 1 ? `${thDayMon(dt)} – ${thDayMon(parseYmd(days[days.length - 1]))}` : dt.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}
-                  <br /><b>{slotTxt}</b>{days.length > 1 && <span className="myjob-when-multi">{days.length} วัน</span>}
+                  <br /><b>{slotTxt}</b>{days.length > 1 && <span className="myjob-when-multi">{days.length} {t("วัน", "ရက်")}</span>}
                 </div>}
               </div>
 
@@ -126,12 +129,12 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
                 {jo.contact_phone && <a href={`tel:${jo.contact_phone}`} className="myjob-call">📞 {jo.contact_phone}</a>}</div>}
               {!jo.contact_name && jo.contact_phone && <div className="myjob-row"><span>📞</span> <a href={`tel:${jo.contact_phone}`} className="myjob-call">{jo.contact_phone}</a></div>}
               {jo.address && <div className="myjob-row"><span>📍</span> <span style={{ flex: 1 }}>{jo.address}</span>
-                {jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm">แผนที่</a>}</div>}
+                {jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm">{t("แผนที่", "မြေပုံ")}</a>}</div>}
               {jo.details && <div className={"myjob-details" + (expanded[jo.job_no] ? "" : " clamp")}>{jo.details}</div>}
 
               {expanded[jo.job_no] && (jo.sales_note || (jo.sales_photos && jo.sales_photos.length > 0)) && (
                 <div className="myjob-brief">
-                  <div className="myjob-brief-title">📋 บรีฟจากฝ่ายขาย</div>
+                  <div className="myjob-brief-title">📋 {t("บรีฟจากฝ่ายขาย", "အရောင်းအဖွဲ့မှ အကြောင်းကြားချက်")}</div>
                   {jo.sales_note && <div className="myjob-brief-note">{jo.sales_note}</div>}
                   {jo.sales_photos && jo.sales_photos.length > 0 && (
                     <div className="tl-photos">{jo.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>
@@ -139,7 +142,7 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
                 </div>
               )}
 
-              {expanded[jo.job_no] && (
+              {expanded[jo.job_no] && lang === "my" && (
                 <div className="myjob-brief">
                   <div className="myjob-brief-title">🇲🇲 ใบงาน (ภาษาพม่า)
                     <button className="btn-ghost sm" style={{ marginLeft: "auto" }} onClick={() => { navigator.clipboard?.writeText(buildJobBriefMy(jo, scheduleLabel({ scheduled_at: sv.scheduled_at, end_date: sv.end_date, slot: sv.slot }))).then(() => flash("ကူးယူပြီးပါပြီ (คัดลอกแล้ว)")).catch(() => {}); }}><UIcon name="clipboard" size={13} /> ကူးယူ</button>
@@ -155,46 +158,46 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
                     const vst = STATUS[v.status] || STATUS.scheduled;
                     return (
                       <div className="myjob-visit" key={v.id}>
-                        <div className="myjob-visit-info">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}{allTeams && v.teamName ? ` · ทีม ${v.teamName}` : ""} <span className={"job-badge " + vst.cls}>{vst.th}</span></div>
+                        <div className="myjob-visit-info">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}{allTeams && v.teamName ? ` · ${t("ทีม", "အဖွဲ့")} ${v.teamName}` : ""} <span className={"job-badge " + vst.cls}>{stLbl(v.status)}</span></div>
                         <div className="myjob-visit-acts">
                           {/* read-only when the whole job is นัดหมายเพิ่ม/เสร็จ/ยกเลิก — show status text only */}
-                          {!TECH_READONLY.includes(jo.status) && (v.status === "pending" || v.status === "scheduled") && <button className="btn-primary sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>เริ่มทำรอบนี้</button>}
+                          {!TECH_READONLY.includes(jo.status) && (v.status === "pending" || v.status === "scheduled") && <button className="btn-primary sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>{t("เริ่มทำรอบนี้", "ဒီအကြိမ် စတင်")}</button>}
                           {!TECH_READONLY.includes(jo.status) && v.status === "in_progress" && <>
-                            <button className="btn-primary sm ok" onClick={() => setVStatus(jo.job_no, v, "awaiting_approval")}>ส่งอนุมัติ ✓</button>
-                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "reschedule")}>ขอนัดหมายเพิ่ม</button>
+                            <button className="btn-primary sm ok" onClick={() => setVStatus(jo.job_no, v, "awaiting_approval")}>{t("ส่งอนุมัติ ✓", "အတည်ပြုရန် ပို့ ✓")}</button>
+                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "reschedule")}>{t("ขอนัดหมายเพิ่ม", "ချိန်းဆိုမှု ထပ်တောင်း")}</button>
                           </>}
                           {!TECH_READONLY.includes(jo.status) && v.status === "awaiting_approval" && <>
-                            <span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span>
-                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>แก้ไข/ทำต่อ</button>
+                            <span className="myjob-await">⏳ {t("รอออฟฟิศอนุมัติ", "ရုံးခန်း အတည်ပြုရန် စောင့်")}</span>
+                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>{t("แก้ไข/ทำต่อ", "ပြင်ဆင်/ဆက်လုပ်")}</button>
                           </>}
-                          {(TECH_READONLY.includes(jo.status) && v.status === "awaiting_approval") && <span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span>}
-                          {v.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศนัดหมายเพิ่ม</span>}
-                          {v.status === "done" && <span className="myjob-await">🔒 อนุมัติแล้ว · ปิดงาน</span>}
+                          {(TECH_READONLY.includes(jo.status) && v.status === "awaiting_approval") && <span className="myjob-await">⏳ {t("รอออฟฟิศอนุมัติ", "ရုံးခန်း အတည်ပြုရန် စောင့်")}</span>}
+                          {v.status === "reschedule" && <span className="myjob-await">📅 {t("รอออฟฟิศนัดหมายเพิ่ม", "ရုံးခန်း ချိန်းဆိုပေးရန် စောင့်")}</span>}
+                          {v.status === "done" && <span className="myjob-await">🔒 {t("อนุมัติแล้ว · ปิดงาน", "အတည်ပြုပြီး · အလုပ်ပိတ်")}</span>}
                         </div>
                       </div>
                     );
                   })}
-                  {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
-                  {jo.status === "in_progress" && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 ใบส่งมอบงาน</button>}
+                  {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> {t("เบิกวัสดุงานนี้", "ဒီအလုပ်အတွက် ပစ္စည်းထုတ်")}</button>}
+                  {jo.status === "in_progress" && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 {t("ใบส่งมอบงาน", "အလုပ်လွှဲပြောင်း စာရွက်")}</button>}
                 </div>
               ) : (
                 <div className="myjob-actions">
-                  {(jo.status === "pending" || jo.status === "scheduled") && <button className="btn-primary" onClick={() => setStatus(jo, "in_progress")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> รับงาน / เริ่มทำ</button>}
+                  {(jo.status === "pending" || jo.status === "scheduled") && <button className="btn-primary" onClick={() => setStatus(jo, "in_progress")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> {t("รับงาน / เริ่มทำ", "အလုပ်လက်ခံ / စတင်")}</button>}
                   {jo.status === "in_progress" && <>
-                    <button className="btn-primary ok" onClick={() => setStatus(jo, "awaiting_approval")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> ส่งอนุมัติ</button>
-                    <button className="btn-ghost" onClick={() => setStatus(jo, "reschedule")}>ขอนัดหมายเพิ่ม</button>
+                    <button className="btn-primary ok" onClick={() => setStatus(jo, "awaiting_approval")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> {t("ส่งอนุมัติ", "အတည်ပြုရန် ပို့")}</button>
+                    <button className="btn-ghost" onClick={() => setStatus(jo, "reschedule")}>{t("ขอนัดหมายเพิ่ม", "ချိန်းဆိုမှု ထပ်တောင်း")}</button>
                   </>}
-                  {jo.status === "awaiting_approval" && <><span className="myjob-await">⏳ รอออฟฟิศอนุมัติ</span><button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}>แก้ไข/ทำต่อ</button></>}
-                  {jo.status === "reschedule" && <span className="myjob-await">📅 รอออฟฟิศนัดหมายเพิ่ม</span>}
-                  {jo.status === "done" && <span className="myjob-await">🔒 อนุมัติแล้ว · ปิดงาน</span>}
-                  {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> เบิกวัสดุงานนี้</button>}
-                  {jo.status === "in_progress" && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 ใบส่งมอบงาน</button>}
+                  {jo.status === "awaiting_approval" && <><span className="myjob-await">⏳ {t("รอออฟฟิศอนุมัติ", "ရုံးခန်း အတည်ပြုရန် စောင့်")}</span><button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}>{t("แก้ไข/ทำต่อ", "ပြင်ဆင်/ဆက်လုပ်")}</button></>}
+                  {jo.status === "reschedule" && <span className="myjob-await">📅 {t("รอออฟฟิศนัดหมายเพิ่ม", "ရုံးခန်း ချိန်းဆိုပေးရန် စောင့်")}</span>}
+                  {jo.status === "done" && <span className="myjob-await">🔒 {t("อนุมัติแล้ว · ปิดงาน", "အတည်ပြုပြီး · အလုပ်ပိတ်")}</span>}
+                  {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> {t("เบิกวัสดุงานนี้", "ဒီအလုပ်အတွက် ပစ္စည်းထုတ်")}</button>}
+                  {jo.status === "in_progress" && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 {t("ใบส่งมอบงาน", "အလုပ်လွှဲပြောင်း စာရွက်")}</button>}
                 </div>
               )}
-              {jo.status === "in_progress" && expanded[jo.job_no] && <div className="myjob-hint">เข้าหน้างานได้หลายครั้ง · เบิกวัสดุเพิ่มได้ไม่จำกัด · แนบรูป/คอมเมนต์ลงไทม์ไลน์ด้านล่าง</div>}
+              {jo.status === "in_progress" && expanded[jo.job_no] && <div className="myjob-hint">{t("เข้าหน้างานได้หลายครั้ง · เบิกวัสดุเพิ่มได้ไม่จำกัด · แนบรูป/คอมเมนต์ลงไทม์ไลน์ด้านล่าง", "လုပ်ငန်းခွင်သို့ အကြိမ်များစွာ ဝင်နိုင် · ပစ္စည်း ထပ်ထုတ်နိုင် · ဓာတ်ပုံ/မှတ်ချက် တင်ပါ")}</div>}
 
               <button className="myjob-expand" onClick={() => toggle(jo.job_no)}>
-                {expanded[jo.job_no] ? "▴ ย่อ" : "▾ ดูรายละเอียด & ความเคลื่อนไหว"}
+                {expanded[jo.job_no] ? t("▴ ย่อ", "▴ ချုံ့") : t("▾ ดูรายละเอียด & ความเคลื่อนไหว", "▾ အသေးစိတ် & လှုပ်ရှားမှု")}
               </button>
               {expanded[jo.job_no] && jo.status !== "cancelled" && <JobTimeline jobNo={jo.job_no} groupNo={jo.group_no || jo.job_no} linked={!!jo.group_no} canPost={!TECH_READONLY.includes(jo.status)} author={me} flash={flash} />}
             </div>
