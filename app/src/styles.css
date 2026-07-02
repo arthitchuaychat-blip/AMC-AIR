@@ -1543,6 +1543,26 @@ select.inp{cursor:pointer}
 .sr-links{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .sr-nojob{font-size:11px;color:var(--ink-3);align-self:center}
 @media(max-width:640px){.sr-detail-body .pf-row{grid-template-columns:1.3fr 1fr 1.4fr}.sr-detail-body .pf-row span:nth-child(3),.sr-detail-body .pf-row span:nth-child(4){display:none}}
+/* กำไรต่องาน — per-job P&L table */
+.pjob-row{display:grid;grid-template-columns:1.9fr 1fr 1fr 1fr 1fr 52px;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:13px}
+.pjob-row.pjob-head{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.3px;background:var(--surface-2)}
+.pjob-row .r{text-align:right;font-variant-numeric:tabular-nums}
+.pjob-row.pjob-click{cursor:pointer;transition:background .14s}
+.pjob-row.pjob-click:hover{background:var(--surface-2)}
+@media(max-width:760px){.pjob-row{grid-template-columns:1.5fr 1fr 1fr 50px}.pjob-row span:nth-child(3),.pjob-row span:nth-child(4){display:none}}
+/* กำไรต่องาน — detail waterfall */
+.pjob-detail{width:520px;max-width:94vw}
+.pjob-wf{padding:8px 22px 20px}
+.pjob-wf-sub{font-size:12px;color:var(--ink-3)}
+.pjob-wf-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;font-size:14px;border-bottom:1px dashed var(--line-2)}
+.pjob-wf-row .lbl{color:var(--ink-2)}
+.pjob-wf-row .val{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.pjob-wf-row.sub{padding:6px 0 6px 16px;font-size:13px;border-bottom:none}
+.pjob-wf-row.sub .lbl{color:var(--ink-3)}
+.pjob-wf-row.mid{font-weight:700}
+.pjob-wf-row.mid .lbl{color:var(--ink)}
+.pjob-wf-row.total{border-top:2px solid var(--line);border-bottom:none;margin-top:8px;padding-top:13px;font-size:17px;font-weight:800}
+.pjob-wf-row.total .lbl{color:var(--ink)}
 /* job timeline */
 .tl{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
 .tl-title{font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:10px}
