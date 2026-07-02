@@ -116,7 +116,7 @@ export default function Catalog({ role }) {
   function exportCsv() {
     const KIND_TH = { ac: "แอร์", material: "วัสดุ", service: "บริการ" };
     const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const header = "ชนิด,รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด/ยี่ห้อ,BTU,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด,ประเภทแอร์";
+    const header = "ชนิด,รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด/ยี่ห้อ,BTU,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด,ประเภทแอร์,ประมาณค่าไฟ/ปี,คุณสมบัติสินค้า";
     const rows = mats.map((m) => [
       KIND_TH[m.kind] || "วัสดุ", m.code, m.th, m.en,
       m.kind === "ac" ? (m.brand || "") : (m.kind === "material" ? (m.catName || "") : ""),
@@ -124,6 +124,7 @@ export default function Catalog({ role }) {
       m.unit || "", m.cost ?? "", m.minStock ?? "",
       m.tracked ? (m.stock ?? "") : "", m.salePrice ?? "",
       m.description || "", m.kind === "ac" ? (m.ac_type || "") : "",
+      m.power_cost_year ?? "", m.features || "",
     ].map(esc).join(","));
     const csv = "﻿" + [header, ...rows].join("\r\n"); // BOM so Excel reads Thai correctly
     const a = document.createElement("a");

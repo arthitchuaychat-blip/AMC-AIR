@@ -6,11 +6,11 @@ import { UIcon } from "../icons";
 // ชนิด · รหัส · ชื่อไทย · ชื่ออังกฤษ · หมวด/ยี่ห้อ · BTU · หน่วย · ต้นทุน · ขั้นต่ำ · คงเหลือ · ราคาขาย · รายละเอียด
 //   ชนิด = แอร์/วัสดุ/บริการ (ac/material/service)
 //   คอลัมน์ "หมวด/ยี่ห้อ" = หมวด(วัสดุ) หรือ ยี่ห้อ(แอร์) · BTU ใช้เฉพาะแอร์
-const HEADER = "ชนิด,รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด/ยี่ห้อ,BTU,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด,ประเภทแอร์";
+const HEADER = "ชนิด,รหัส,ชื่อไทย,ชื่ออังกฤษ,หมวด/ยี่ห้อ,BTU,หน่วย,ต้นทุน,ขั้นต่ำ,คงเหลือ,ราคาขาย,รายละเอียด,ประเภทแอร์,ประมาณค่าไฟ/ปี,คุณสมบัติสินค้า";
 const SAMPLE_ROWS = [
-  "แอร์,DKN12,แอร์ Daikin 12000 BTU,Daikin 12000,Daikin,12000,เครื่อง,11000,2,0,15900,อินเวอร์เตอร์ เบอร์ 5,Wall Type",
-  "วัสดุ,COPP6,ท่อทองแดง 6 หุน,Copper Pipe,pipe,,เมตร,180,40,0,260,เกรด A,",
-  "บริการ,SVCINST,ค่าติดตั้งแอร์,Install,,,งาน,0,0,0,1500,ติดตั้งมาตรฐานต่อชุด,",
+  "แอร์,DKN12,แอร์ Daikin 12000 BTU,Daikin 12000,Daikin,12000,เครื่อง,11000,2,0,15900,อินเวอร์เตอร์ เบอร์ 5,Wall Type,3500,ประหยัดไฟเบอร์ 5 · Inverter · ฟอกอากาศ PM2.5",
+  "วัสดุ,COPP6,ท่อทองแดง 6 หุน,Copper Pipe,pipe,,เมตร,180,40,0,260,เกรด A,,,",
+  "บริการ,SVCINST,ค่าติดตั้งแอร์,Install,,,งาน,0,0,0,1500,ติดตั้งมาตรฐานต่อชุด,,,",
 ];
 const TEMPLATE = [HEADER, ...SAMPLE_ROWS].join("\n");
 
@@ -93,11 +93,11 @@ export default function BulkImportModal({ categories, existingCodes, onDone, onC
       if (i === 0 && (c0 === "ชนิด" || c0 === "kind" || c0 === "รหัส" || c0 === "code")) return; // header
 
       const kindFromCol = detectKind(cells[0]);
-      let kind, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price, description, ac_type;
+      let kind, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price, description, ac_type, power_cost_year, features;
       if (kindFromCol) {
-        // new format: kind in column 1 · ...,ราคาขาย(10),รายละเอียด(11),ประเภทแอร์(12)
+        // new format: kind col 1 · …ราคาขาย(10),รายละเอียด(11),ประเภทแอร์(12),ประมาณค่าไฟ/ปี(13),คุณสมบัติสินค้า(14)
         kind = kindFromCol;
-        [, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price, description, ac_type] = cells;
+        [, code, name_th, name_en, catBrand, btu, unit, cost, min_stock, init_stock, sale_price, description, ac_type, power_cost_year, features] = cells;
       } else {
         // backward-compatible: old material-only format (no kind column)
         kind = "material";
@@ -121,6 +121,8 @@ export default function BulkImportModal({ categories, existingCodes, onDone, onC
         min_stock: isService ? 0 : num(min_stock),
         init_stock: isService ? 0 : num(init_stock),
         description: description?.trim() || null,
+        power_cost_year: (power_cost_year != null && String(power_cost_year).trim() !== "") ? num(power_cost_year) : null,
+        features: (features || "").trim() || null,
       });
       counts[kind] = (counts[kind] || 0) + 1;
     });

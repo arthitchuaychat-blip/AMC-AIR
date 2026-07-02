@@ -138,7 +138,7 @@ export async function listMaterialsLite() {
   const all = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase.from("materials")
-      .select("code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock")
+      .select("code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features")
       .eq("active", true).range(from, from + PAGE - 1);
     if (error) throw error;
     all.push(...(data || []));
@@ -166,6 +166,8 @@ export async function saveMaterial(row, isNew) {
     description: row.description?.trim() || null,
     photo_url: row.photo_url || null,
     min_stock: Number(row.min_stock) || 0,
+    power_cost_year: (row.power_cost_year === "" || row.power_cost_year == null) ? null : Number(row.power_cost_year),
+    features: row.features?.trim() || null,
     web_published: !!row.web_published,
   };
   if (isNew) payload.init_stock = Number(row.init_stock) || 0;

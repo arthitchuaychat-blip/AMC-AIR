@@ -27,6 +27,8 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     photo_url: initial?.photoUrl ?? initial?.photo_url ?? "",
     min_stock: initial?.minStock ?? initial?.min_stock ?? "",
     init_stock: initial?.stock ?? initial?.init_stock ?? "",
+    power_cost_year: initial?.power_cost_year ?? initial?.powerCostYear ?? "",
+    features: initial?.features ?? "",
     web_published: initial?.webPublished ?? initial?.web_published ?? false,
   }));
   const [busy, setBusy] = React.useState(false);
@@ -110,9 +112,18 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
               </label>
             </div>
           )}
+          {isAc && (
+            <label className="fld"><span>⚡ ประมาณค่าไฟ/ปี (บาท) · แสดงบนเว็บ</span>
+              <input className="inp" type="number" value={f.power_cost_year} onChange={set("power_cost_year")} placeholder="เช่น 3500 (ค่าไฟทั้งปีโดยประมาณ)" />
+            </label>
+          )}
 
           <label className="fld"><span>รายละเอียด</span>
             <textarea className="inp" value={f.description} onChange={set("description")} placeholder="คำอธิบาย / สเปก / หมายเหตุ (ไม่บังคับ)" rows={2} style={{ resize: "vertical" }} />
+          </label>
+          <label className="fld"><span>📋 คุณสมบัติสินค้า · แสดงบนเว็บ (ใส่ได้ยาว · ขึ้นบรรทัดใหม่ได้)</span>
+            <textarea className="inp" value={f.features} onChange={set("features")} rows={5} style={{ resize: "vertical" }}
+              placeholder={"จุดเด่น/สเปกสินค้า เช่น\n• ประหยัดไฟ เบอร์ 5\n• ระบบ Inverter\n• ฟอกอากาศ PM2.5\n• รับประกันคอมเพรสเซอร์ 10 ปี"} />
           </label>
           <label className="fld"><span>รูปสินค้า</span>
             <div className="photo-field">

@@ -161,6 +161,8 @@ nav.menu a:hover{color:var(--primary);background:var(--bg-soft)}
 .prod .nm{font-weight:700;font-size:14.5px;line-height:1.35;flex:1}
 .prod .pr{font-size:18px;font-weight:800;color:var(--ink)}
 .prod .pr small{font-size:12px;font-weight:600;color:var(--ink-3)}
+.prod .pcost{font-size:12.5px;font-weight:700;color:#0a7d2c}
+.prod .feats{font-size:12px;color:var(--ink-2);line-height:1.55;white-space:normal}
 .prod .add{margin-top:6px;width:100%;justify-content:center}
 .prod-empty{grid-column:1/-1;text-align:center;color:var(--ink-3);padding:50px;font-size:15px}
 /* portfolio */
@@ -768,6 +770,8 @@ function prodCard(p) {
       <span class="tag">${p.tag || ""}</span>
       <div class="nm">${p.name}</div>
       <div class="pr">${p.price ? baht(p.price) : "สอบถามราคา"} ${p.price ? "<small>/หน่วย</small>" : ""}</div>
+      ${p.powerCostYear ? `<div class="pcost">⚡ ค่าไฟประมาณ ${baht(p.powerCostYear)}/ปี</div>` : ""}
+      ${p.features ? `<div class="feats">${String(p.features).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>` : ""}
       <button class="btn btn-primary btn-sm add" onclick='addToCart(${JSON.stringify({ code: p.code, name: p.name, price: p.price, photo: p.photo }).replace(/'/g, "&#39;")})'>+ เพิ่มลงตะกร้า</button>
     </div>
   </div>`;
@@ -789,7 +793,7 @@ async function loadProducts() {
   try {
     const { data, error } = await sb.from("web_products").select("*").limit(1000);
     if (error) throw error;
-    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, tag: KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, ac_type: r.ac_type }));
+    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, tag: KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, ac_type: r.ac_type, powerCostYear: r.power_cost_year, features: r.features }));
     prodNote = allProducts.length ? "" : "ยังไม่มีสินค้าที่เผยแพร่ — ติ๊ก “ขึ้นเว็บ” ที่สินค้าในระบบหลังบ้าน";
     fillFilters(); renderProducts();
   } catch (e) { $("#prodGrid").innerHTML = '<div class="prod-empty">โหลดสินค้าไม่สำเร็จ ลองใหม่ภายหลัง</div>'; }
