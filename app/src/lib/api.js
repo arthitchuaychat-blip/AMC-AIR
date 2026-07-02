@@ -171,7 +171,13 @@ export async function saveMaterial(row, isNew) {
     web_published: !!row.web_published,
   };
   if (isNew) payload.init_stock = Number(row.init_stock) || 0;
-  const { error } = await supabase.from("materials").upsert(payload, { onConflict: "code" });
+  let { error } = await supabase.from("materials").upsert(payload, { onConflict: "code" });
+  // graceful fallback: if migration 087 (power_cost_year/features) hasn't been run yet, the schema
+  // cache rejects those columns and blocks EVERY save — retry without them so the catalog still works
+  if (error && /power_cost_year|features/i.test(error.message || "")) {
+    delete payload.power_cost_year; delete payload.features;
+    ({ error } = await supabase.from("materials").upsert(payload, { onConflict: "code" }));
+  }
   if (error) throw error;
 }
 
@@ -256,8 +262,19 @@ export async function bulkUpsertMaterials(rows) {
   }
   const inserts = rows.filter((r) => !existing.has(r.code));
   const updates = rows.filter((r) => existing.has(r.code)).map(({ init_stock, ...r }) => r); // keep existing stock
-  for (let i = 0; i < inserts.length; i += 500) { const { error } = await supabase.from("materials").upsert(inserts.slice(i, i + 500), { onConflict: "code" }); if (error) throw error; }
-  for (let i = 0; i < updates.length; i += 500) { const { error } = await supabase.from("materials").upsert(updates.slice(i, i + 500), { onConflict: "code" }); if (error) throw error; }
+  // fallback if migration 087 not run yet — strip power_cost_year/features so import still works
+  const stripNew = (r) => { const { power_cost_year, features, ...rest } = r; return rest; };
+  async function upsertChunked(list) {
+    for (let i = 0; i < list.length; i += 500) {
+      let { error } = await supabase.from("materials").upsert(list.slice(i, i + 500), { onConflict: "code" });
+      if (error && /power_cost_year|features/i.test(error.message || "")) {
+        ({ error } = await supabase.from("materials").upsert(list.slice(i, i + 500).map(stripNew), { onConflict: "code" }));
+      }
+      if (error) throw error;
+    }
+  }
+  await upsertChunked(inserts);
+  await upsertChunked(updates);
   return { inserted: inserts.length, updated: updates.length };
 }
 
