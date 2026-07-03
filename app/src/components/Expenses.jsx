@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import AttachThumb from "./AttachThumb";
 import { fmtBaht, ATTACH_ACCEPT } from "../lib/format";
@@ -28,6 +28,37 @@ function AttachRow({ files, onChange, flash, label }) {
       </div>
       <input ref={inp} type="file" accept={ATTACH_ACCEPT} multiple hidden onChange={pick} />
       <button type="button" className="btn-ghost sm" disabled={busy} onClick={() => inp.current?.click()}><UIcon name="plus" size={13} /> {busy ? "กำลังอัปโหลด…" : (label || "แนบบิล/หลักฐาน")}</button>
+    </div>
+  );
+}
+
+// เลือกหมวดค่าใช้จ่าย + สร้างหมวดใหม่ได้ทันที (self-contained: โหลด/รีโหลดรายการหมวดเอง)
+function CategoryPicker({ value, onChange, flash }) {
+  const [cats, setCats] = React.useState([]);
+  const [adding, setAdding] = React.useState(false);
+  const [name, setName] = React.useState("");
+  const load = () => listExpenseCategories().then(setCats).catch(() => {});
+  React.useEffect(() => { load(); }, []);
+  async function add() {
+    const nm = name.trim(); if (!nm) return;
+    try { await addExpenseCategory(nm); await load(); onChange(nm); setAdding(false); setName(""); }
+    catch (e) { flash && flash("เพิ่มหมวดไม่สำเร็จ (รัน migration 094 หรือยัง?): " + (e.message || e), true); }
+  }
+  if (adding) return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <input className="inp" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อหมวดใหม่ เช่น ค่าขนส่ง" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
+      <button type="button" className="btn-primary sm" onClick={add}>เพิ่ม</button>
+      <button type="button" className="btn-ghost sm" onClick={() => { setAdding(false); setName(""); }}>ยกเลิก</button>
+    </div>
+  );
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <select className="inp" value={value || ""} onChange={(e) => onChange(e.target.value)}>
+        <option value="">— ไม่ระบุหมวด —</option>
+        {value && !cats.includes(value) && <option value={value}>{value}</option>}
+        {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <button type="button" className="btn-ghost sm" title="สร้างหมวดใหม่" onClick={() => setAdding(true)}><UIcon name="plus" size={14} /> หมวดใหม่</button>
     </div>
   );
 }
@@ -118,14 +149,14 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
           <label className="fld"><span>รายการ/เรื่องที่เบิก</span><input className="inp" value={form.title} autoFocus onChange={(e) => set("title", e.target.value)} placeholder="เช่น ค่าน้ำมัน / ค่าทางด่วน / ซื้อของหน้างาน" /></label>
           <div className="fld-row">
             <label className="fld"><span>จำนวนเงิน (บาท)</span><span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)} /></span></label>
-            <label className="fld"><span>หมวด (ไม่บังคับ)</span><input className="inp" value={form.category} onChange={(e) => set("category", e.target.value)} placeholder="เช่น เดินทาง / วัสดุ / รับรอง" /></label>
+            <label className="fld"><span>หมวดค่าใช้จ่าย</span><CategoryPicker value={form.category} onChange={(v) => set("category", v)} flash={flash} /></label>
           </div>
           <label className="fld"><span>เบิกจากใบงาน (ถ้ามี — จะรวมเป็นต้นทุนงาน)</span>
             <select className="inp" value={form.job_no} onChange={(e) => set("job_no", e.target.value)}>
               <option value="">— ไม่ผูกกับงาน (ค่าใช้จ่ายทั่วไป) —</option>
               {jobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.customerName || j.title || "งาน"}</option>)}
             </select></label>
-          <label className="fld"><span>หมายเหตุ</span><input className="inp" value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
+          <label className="fld"><span>รายละเอียดเพิ่มเติม</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="อธิบายรายละเอียดค่าใช้จ่าย (ไม่บังคับ)" /></label>
           <div className="fld"><span>แนบบิล/หลักฐาน</span><AttachRow files={form.attachments} onChange={(a) => set("attachments", a)} flash={flash} /></div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={() => setForm(null)}>ยกเลิก</button>
@@ -491,7 +522,7 @@ function ReportTab({ flash }) {
                 <td style={{ textAlign: "center" }}><input type="checkbox" checked={!!r.reconciled} disabled={busy} onChange={() => toggleRec(r)} title="กระทบกับ statement แล้ว" /></td>
                 <td style={{ textAlign: "left" }}>{fmtD(r.entry_date)}</td>
                 {!single && <td style={{ textAlign: "left" }}>{accById[r.account_id]?.name || "-"}</td>}
-                <td style={{ textAlign: "left" }}>{r.note || "-"}<span className="jo-dim" style={{ marginLeft: 6 }}>{KIND_TAG[r.kind] || ""}</span></td>
+                <td style={{ textAlign: "left" }}>{r.note || "-"}{r.category && <span className="jo-dim" style={{ marginLeft: 6, background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, padding: "1px 6px" }}>{r.category}</span>}<span className="jo-dim" style={{ marginLeft: 6 }}>{KIND_TAG[r.kind] || ""}</span></td>
                 <td className="hr-ok">{r.direction === "in" ? fmtBaht(r.amount) : "—"}</td>
                 <td className="hr-bad">{r.direction === "out" ? fmtBaht(r.amount) : "—"}</td>
                 <td style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{runBal[r.id] != null ? fmtBaht(runBal[r.id]) : "—"}</td>
@@ -509,7 +540,7 @@ function ReportTab({ flash }) {
 }
 
 function AddEntryModal({ accounts, defaultAccountId, onClose, onSaved, flash }) {
-  const [f, setF] = React.useState({ accountId: defaultAccountId || accounts[0]?.id || "", direction: "in", amount: "", note: "", entry_date: today() });
+  const [f, setF] = React.useState({ accountId: defaultAccountId || accounts[0]?.id || "", direction: "in", amount: "", note: "", category: "", entry_date: today() });
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   async function save() {
@@ -539,7 +570,8 @@ function AddEntryModal({ accounts, defaultAccountId, onClose, onSaved, flash }) 
             <label className="fld"><span>วันที่</span><input type="date" className="inp" value={f.entry_date} onChange={(e) => set("entry_date", e.target.value)} /></label>
             <label className="fld"><span>จำนวนเงิน</span><span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={f.amount} autoFocus onChange={(e) => set("amount", e.target.value)} /></span></label>
           </div>
-          <label className="fld"><span>รายการ/หมายเหตุ</span><input className="inp" value={f.note} onChange={(e) => set("note", e.target.value)} placeholder="เช่น รับเงินลูกค้า / ดอกเบี้ย / ค่าธรรมเนียมธนาคาร" /></label>
+          <label className="fld"><span>หมวดค่าใช้จ่าย</span><CategoryPicker value={f.category} onChange={(v) => set("category", v)} flash={flash} /></label>
+          <label className="fld"><span>รายการ / รายละเอียดเพิ่มเติม</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={f.note} onChange={(e) => set("note", e.target.value)} placeholder="เช่น รับเงินลูกค้า / ดอกเบี้ย / ค่าธรรมเนียมธนาคาร" /></label>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
           <button className="btn-primary" disabled={busy} onClick={save}>บันทึก</button></div>

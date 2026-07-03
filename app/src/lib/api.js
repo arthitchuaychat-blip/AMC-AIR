@@ -1964,18 +1964,34 @@ export async function listAccountEntries({ accountId, from, to } = {}) {
   const { data, error } = await q.limit(2000);
   if (error) throw error; return data || [];
 }
+// expense categories (หมวดค่าใช้จ่าย) — for expense requests + manual ledger lines, drives future analysis
+export async function listExpenseCategories() {
+  const { data, error } = await supabase.from("expense_categories").select("name,sort,active").order("sort").order("name");
+  if (error) throw error;
+  return (data || []).filter((c) => c.active !== false).map((c) => c.name);
+}
+export async function addExpenseCategory(name) {
+  const nm = (name || "").trim(); if (!nm) throw new Error("ใส่ชื่อหมวด");
+  const uid = await _uid();
+  const { error } = await supabase.from("expense_categories").insert({ name: nm, created_by: uid });
+  if (error && !/duplicate|unique/i.test(error.message || "")) throw error; // already exists → just use it
+  return nm;
+}
 // manual bank-account movement (ฝาก/ถอน/ค่าธรรมเนียม/ดอกเบี้ย) — เพื่อให้ยอดในระบบตรง statement, กระทบแบงค์ได้
-export async function addAccountEntry({ accountId, direction, amount, note, entry_date, kind }) {
+export async function addAccountEntry({ accountId, direction, amount, note, entry_date, kind, category }) {
   const uid = await _uid();
   if (!accountId) throw new Error("เลือกบัญชี");
   const amt = Number(amount) || 0;
   if (amt <= 0) throw new Error("จำนวนเงินต้องมากกว่า 0");
   if (direction !== "in" && direction !== "out") throw new Error("เลือกเงินเข้า/ออก");
-  const { error } = await supabase.from("account_entries").insert({
+  const payload = {
     account_id: accountId, direction, amount: amt, kind: kind || "manual",
     note: note?.trim() || (direction === "in" ? "เงินเข้า/ฝาก" : "เงินออก/ถอน"),
     entry_date: entry_date || new Date().toISOString().slice(0, 10), created_by: uid,
-  });
+  };
+  if (category) payload.category = category;
+  let { error } = await supabase.from("account_entries").insert(payload);
+  if (error && /category|column|PGRST204/i.test(error.message || "") && payload.category !== undefined) { delete payload.category; ({ error } = await supabase.from("account_entries").insert(payload)); }
   if (error) throw error;
 }
 export async function updateAccountEntry(id, { amount, note, entry_date, direction } = {}) {
@@ -2140,7 +2156,13 @@ export async function payExpense(id, { accountId, proof, payDate }) {
   const { error } = await supabase.from("expense_requests").update({ status: "paid", paid_from: accountId || null, paid_at: new Date().toISOString(), payment_proof: proof || [] }).eq("id", id);
   if (error) throw error;
   const noteTxt = `เบิกจ่าย: ${ex.title}${ex.job_no ? " · งาน " + ex.job_no : ""}`;
-  if (accountId) await supabase.from("account_entries").insert({ account_id: accountId, direction: "out", amount: Number(ex.amount) || 0, kind: "expense", ref_type: "expense", ref_id: id, note: noteTxt, entry_date: day, created_by: uid });
+  if (accountId) {
+    const aePayload = { account_id: accountId, direction: "out", amount: Number(ex.amount) || 0, kind: "expense", ref_type: "expense", ref_id: id, note: noteTxt, entry_date: day, created_by: uid };
+    if (ex.category) aePayload.category = ex.category;   // carry the expense's category into the ledger for analysis
+    let aeErr = (await supabase.from("account_entries").insert(aePayload)).error;
+    if (aeErr && /category|column|PGRST204/i.test(aeErr.message || "") && aePayload.category !== undefined) { delete aePayload.category; aeErr = (await supabase.from("account_entries").insert(aePayload)).error; }
+    if (aeErr) throw aeErr;
+  }
   // mirror into the Cash Flow ledger (money out, actual)
   try { await supabase.from("cash_entries").insert({ direction: "out", status: "actual", entry_date: day, amount: Number(ex.amount) || 0, note: noteTxt, source_type: "expense", source_ref: id, created_by: uid }); } catch (_) {}
   notify([ex.requester], { category: "hr", title: `💸 จ่ายเงินเบิก "${ex.title}" แล้ว ${Number(ex.amount) || 0} บาท`, body: "แนบหลักฐานการจ่ายเรียบร้อย", url: "expenses", ref_type: "expense" });
