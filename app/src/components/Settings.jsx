@@ -19,6 +19,11 @@ function PermissionsCard({ flash }) {
     const nxt = (editable ? NEXT : NEXT2)[cur] ?? "none";
     return { ...p, [role]: { ...p[role], [mod]: nxt } };
   });
+  // reset just ONE role's column to its shipped default (doesn't touch other roles' customizations)
+  async function resetRole(role) {
+    if (!await confirmDialog(`รีเซ็ตสิทธิ์ของ "${PERM_ROLE_LABEL[role]}" กลับเป็นค่าเริ่มต้นของระบบ?\n(ตำแหน่งอื่นไม่เปลี่ยน · อย่าลืมกด "บันทึก")`)) return;
+    setP((p) => ({ ...p, [role]: { ...DEFAULT_PERMS[role] } }));
+  }
   async function save() {
     setSaving(true);
     try { await saveRolePermissions(perms); setPerms(mergePerms(perms)); flash("บันทึกสิทธิ์แล้ว ✓ — รีเฟรชหน้าเพื่อให้เมนูอัปเดตครบทุกคน"); }
@@ -37,7 +42,11 @@ function PermissionsCard({ flash }) {
       </div>
       <div style={{ overflowX: "auto" }}>
         <table className="perm-table">
-          <thead><tr><th style={{ textAlign: "left" }}>เมนู / ฟีเจอร์</th>{PERM_ROLES.map((r) => <th key={r}>{PERM_ROLE_LABEL[r]}</th>)}</tr></thead>
+          <thead><tr><th style={{ textAlign: "left" }}>เมนู / ฟีเจอร์</th>{PERM_ROLES.map((r) => (
+            <th key={r}><div>{PERM_ROLE_LABEL[r]}</div>
+              <button type="button" title={`รีเซ็ต ${PERM_ROLE_LABEL[r]} เป็นค่าเริ่มต้น`} onClick={() => resetRole(r)}
+                style={{ marginTop: 3, fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, padding: "1px 6px", cursor: "pointer" }}>↺ รีเซ็ต</button></th>
+          ))}</tr></thead>
           <tbody>
             {PERM_MODULES.map((m) => (
               <tr key={m.id}>
