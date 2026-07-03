@@ -26,10 +26,14 @@ export default function ItemBrowser({ mats, onAdd, matTargets }) {
   const reset = () => { setBrand("all"); setAcType("all"); setBtu("all"); setCat("all"); };
   const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const list = mats.filter((m) => {
+    // มีคำค้น → ค้นข้ามทุกชนิด (ไม่ยึดแท็บ/ตัวกรอง) เพื่อให้เจอเสมอ · ไม่มีคำค้น → กรองตามแท็บ+ตัวกรอง
+    if (terms.length) {
+      const h = `${m.th || ""} ${m.en || ""} ${m.code || ""} ${m.brand || ""} ${m.ac_type || ""} ${m.btu || ""} ${m.catName || ""}`.toLowerCase();
+      return terms.every((t) => h.includes(t));
+    }
     if (m.kind !== kind) return false;
     if (kind === "ac") { if (brand !== "all" && m.brand !== brand) return false; if (acType !== "all" && m.ac_type !== acType) return false; if (btu !== "all" && String(m.btu) !== String(btu)) return false; }
     if (kind === "material" && cat !== "all" && m.cat !== cat) return false;
-    if (terms.length) { const h = `${m.th || ""} ${m.en || ""} ${m.code || ""} ${m.brand || ""} ${m.ac_type || ""} ${m.btu || ""}`.toLowerCase(); if (!terms.every((t) => h.includes(t))) return false; }
     return true;
   });
   const shown = list.slice(0, 80);
