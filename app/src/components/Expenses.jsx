@@ -209,12 +209,14 @@ function PayModal({ x, onClose, onPaid, flash }) {
   const [accounts, setAccounts] = React.useState([]);
   const [accountId, setAccountId] = React.useState("");
   const [proof, setProof] = React.useState([]);
+  const [payDate, setPayDate] = React.useState(today());
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => { listAccounts().then((a) => { setAccounts(a); setAccountId(a[0]?.id || ""); }).catch(() => {}); }, []);
   async function pay() {
     if (!accountId) return flash("เลือกบัญชีที่จ่าย", true);
+    if (!payDate) return flash("เลือกวันที่จ่าย", true);
     setBusy(true);
-    try { await payExpense(x.id, { accountId, proof, payDate: today() }); flash("จ่ายเงินแล้ว + แจ้งผู้ขอเบิก ✓"); onPaid(); }
+    try { await payExpense(x.id, { accountId, proof, payDate }); flash("จ่ายเงินแล้ว + แจ้งผู้ขอเบิก ✓"); onPaid(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -224,10 +226,13 @@ function PayModal({ x, onClose, onPaid, flash }) {
         <div className="modal-head"><div className="modal-title">จ่ายเงินเบิก · {fmtBaht(x.amount)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
           <div className="jo-dim" style={{ marginBottom: 10 }}>{x.title}{x.job_no ? ` · งาน ${x.job_no}` : ""} · ผู้ขอเบิก {x.requesterName}</div>
-          <label className="fld"><span>จ่ายจากบัญชี</span>
-            <select className="inp" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} (คงเหลือ {fmtBaht(a.balance)})</option>)}
-            </select></label>
+          <div className="fld-row">
+            <label className="fld"><span>จ่ายจากบัญชี</span>
+              <select className="inp" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} (คงเหลือ {fmtBaht(a.balance)})</option>)}
+              </select></label>
+            <label className="fld"><span>วันที่จ่าย</span><input type="date" className="inp" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
+          </div>
           <div className="fld"><span>แนบหลักฐานการจ่าย (สลิปโอน ฯลฯ)</span><AttachRow files={proof} onChange={setProof} flash={flash} label="แนบสลิป/หลักฐาน" /></div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
