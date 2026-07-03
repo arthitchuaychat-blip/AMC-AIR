@@ -330,7 +330,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const shown = contacts.filter((c) =>
     (stageF === "all" || (c.stage || "new") === stageF)
     && (!mineOnly || c.assigned_to === myId)
-    && (matchText(q, c.display_name, c.customerName, c.last_message) || matchPhone(q, c.phone)));
+    && (matchText(q, c.display_name, c.customerName, c.last_message) || matchPhone(q, c.phone)))
+    // ห้องที่ยังไม่อ่านลอยขึ้นบนสุดเสมอ · ที่เหลือเรียงตามข้อความล่าสุด
+    .sort((a, b) => {
+      const au = (a.unread || 0) > 0 ? 1 : 0, bu = (b.unread || 0) > 0 ? 1 : 0;
+      if (au !== bu) return bu - au;
+      return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
+    });
 
   return (
     <div className="adm">
