@@ -2011,6 +2011,33 @@ export async function transferFunds({ fromId, toId, amount, note }) {
   ]);
   if (error) throw error;
 }
+// list transfers (paired out/in rows) collapsed into one record each — for the edit/delete history
+export async function listTransfers() {
+  const { data, error } = await supabase.from("account_entries").select("*").eq("ref_type", "transfer").order("entry_date", { ascending: false }).order("created_at", { ascending: false }).limit(500);
+  if (error) throw error;
+  const byRef = {};
+  (data || []).forEach((r) => {
+    const t = byRef[r.ref_id] || (byRef[r.ref_id] = { ref_id: r.ref_id, amount: Number(r.amount) || 0, note: r.note || "", entry_date: r.entry_date, created_at: r.created_at, fromId: null, toId: null });
+    if (r.direction === "out") t.fromId = r.account_id; else t.toId = r.account_id;
+  });
+  return Object.values(byRef).filter((t) => t.fromId && t.toId).sort((a, b) => (b.entry_date || "").localeCompare(a.entry_date || "") || (b.created_at || "").localeCompare(a.created_at || ""));
+}
+// fix a mis-recorded transfer: update both legs (accounts/amount/note/date) by ref_id
+export async function updateTransfer(ref_id, { fromId, toId, amount, note, entry_date }) {
+  const amt = Number(amount) || 0;
+  if (!fromId || !toId || fromId === toId) throw new Error("เลือกบัญชีต้นทาง/ปลายทางให้ถูกต้อง");
+  if (amt <= 0) throw new Error("จำนวนเงินต้องมากกว่า 0");
+  const common = { amount: amt, note: note || "โอนระหว่างบัญชี" };
+  if (entry_date) common.entry_date = entry_date;
+  const e1 = (await supabase.from("account_entries").update({ ...common, account_id: fromId }).eq("ref_id", ref_id).eq("ref_type", "transfer").eq("direction", "out")).error;
+  if (e1) throw e1;
+  const e2 = (await supabase.from("account_entries").update({ ...common, account_id: toId }).eq("ref_id", ref_id).eq("ref_type", "transfer").eq("direction", "in")).error;
+  if (e2) throw e2;
+}
+export async function deleteTransfer(ref_id) {
+  const { error } = await supabase.from("account_entries").delete().eq("ref_id", ref_id).eq("ref_type", "transfer");
+  if (error) throw error;
+}
 export async function uploadExpenseFile(file) {
   file = await downscaleImage(file);
   const ext = (file.name?.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");

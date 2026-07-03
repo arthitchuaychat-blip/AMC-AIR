@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import AttachThumb from "./AttachThumb";
 import { fmtBaht, ATTACH_ACCEPT } from "../lib/format";
@@ -208,8 +208,16 @@ function PayModal({ x, onClose, onPaid, flash }) {
 function AccountsTab({ flash }) {
   const [accounts, setAccounts] = React.useState([]);
   const [t, setT] = React.useState({ fromId: "", toId: "", amount: "", note: "" });
+  const [transfers, setTransfers] = React.useState(null);
+  const [edit, setEdit] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
-  async function load() { try { const a = await listAccounts(); setAccounts(a); setT((s) => ({ ...s, fromId: s.fromId || a[0]?.id || "", toId: s.toId || a[1]?.id || "" })); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } }
+  const accName = React.useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a.name])), [accounts]);
+  async function load() {
+    try {
+      const [a, tr] = await Promise.all([listAccounts(), listTransfers().catch(() => [])]);
+      setAccounts(a); setTransfers(tr); setT((s) => ({ ...s, fromId: s.fromId || a[0]?.id || "", toId: s.toId || a[1]?.id || "" }));
+    } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
+  }
   React.useEffect(() => { load(); }, []);
   async function transfer() {
     if (!(Number(t.amount) > 0)) return flash("ใส่จำนวนเงิน", true);
@@ -218,6 +226,11 @@ function AccountsTab({ flash }) {
     try { await transferFunds(t); flash("โอนเงินแล้ว ✓"); setT((s) => ({ ...s, amount: "", note: "" })); load(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
+  }
+  async function delTransfer(tr) {
+    if (!await confirmDialog(`ลบรายการโอน ${fmtBaht(tr.amount)} (${accName[tr.fromId] || "?"} → ${accName[tr.toId] || "?"}) ?`)) return;
+    try { await deleteTransfer(tr.ref_id); flash("ลบรายการโอนแล้ว"); load(); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
   return (
     <>
@@ -241,7 +254,70 @@ function AccountsTab({ flash }) {
         </div>
         <button className="btn-primary" disabled={busy} onClick={transfer}><UIcon name="trend" size={15} color="#fff" /> โอนเงิน</button>
       </div>
+
+      <div className="card">
+        <div className="sec-head"><div><div className="sec-title">ประวัติการโอน</div><div className="sec-sub">แก้ไข/ลบได้ เผื่อบันทึกผิด (มีผลกับยอดทั้ง 2 บัญชีทันที)</div></div></div>
+        {transfers === null && <div className="empty sm">กำลังโหลด…</div>}
+        {transfers && transfers.length === 0 && <div className="empty sm">ยังไม่มีรายการโอน</div>}
+        {transfers && transfers.length > 0 && (
+          <div style={{ overflowX: "auto" }}>
+            <table className="hr-table">
+              <thead><tr><th style={{ textAlign: "left" }}>วันที่</th><th style={{ textAlign: "left" }}>จาก → ไป</th><th style={{ textAlign: "left" }}>หมายเหตุ</th><th>จำนวน</th><th style={{ width: 90 }}></th></tr></thead>
+              <tbody>
+                {transfers.map((tr) => (
+                  <tr key={tr.ref_id}>
+                    <td style={{ textAlign: "left" }}>{fmtD(tr.entry_date)}</td>
+                    <td style={{ textAlign: "left" }}>{accName[tr.fromId] || "?"} <span style={{ color: "var(--ink-3)" }}>→</span> {accName[tr.toId] || "?"}</td>
+                    <td style={{ textAlign: "left", color: "var(--ink-3)" }}>{tr.note || "-"}</td>
+                    <td style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{fmtBaht(tr.amount)}</td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <button className="btn-ghost sm" title="แก้ไข" onClick={() => setEdit({ ...tr, amount: String(tr.amount) })} style={{ padding: "2px 7px" }}><UIcon name="edit" size={13} /></button>
+                      <button className="btn-ghost sm" title="ลบ" onClick={() => delTransfer(tr)} style={{ padding: "2px 7px", marginLeft: 4 }}><UIcon name="x" size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {edit && <TransferEditModal tr={edit} accounts={accounts} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
     </>
+  );
+}
+
+function TransferEditModal({ tr, accounts, onClose, onSaved, flash }) {
+  const [f, setF] = React.useState({ fromId: tr.fromId, toId: tr.toId, amount: tr.amount, note: tr.note || "", entry_date: tr.entry_date || today() });
+  const [busy, setBusy] = React.useState(false);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  async function save() {
+    if (f.fromId === f.toId) return flash("บัญชีต้นทาง/ปลายทางต้องต่างกัน", true);
+    if (!(Number(f.amount) > 0)) return flash("ใส่จำนวนเงิน", true);
+    setBusy(true);
+    try { await updateTransfer(tr.ref_id, f); flash("แก้ไขรายการโอนแล้ว ✓"); onSaved(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
+        <div className="modal-head"><div className="modal-title">แก้ไขรายการโอน</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="fld-row">
+            <label className="fld"><span>จากบัญชี</span><select className="inp" value={f.fromId} onChange={(e) => set("fromId", e.target.value)}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+            <label className="fld"><span>ไปบัญชี</span><select className="inp" value={f.toId} onChange={(e) => set("toId", e.target.value)}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+          </div>
+          <div className="fld-row">
+            <label className="fld"><span>วันที่</span><input type="date" className="inp" value={f.entry_date} onChange={(e) => set("entry_date", e.target.value)} /></label>
+            <label className="fld"><span>จำนวนเงิน</span><span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={f.amount} onChange={(e) => set("amount", e.target.value)} /></span></label>
+          </div>
+          <label className="fld"><span>หมายเหตุ</span><input className="inp" value={f.note} onChange={(e) => set("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy} onClick={save}>บันทึกการแก้ไข</button></div>
+      </div>
+    </div>
   );
 }
 
