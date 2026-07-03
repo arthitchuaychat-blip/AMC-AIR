@@ -7,6 +7,16 @@ import { uploadMaterialPhoto } from "../lib/api";
 
 const KINDS = [{ v: "material", l: "วัสดุ" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }];
 
+// ราคาขายแนะนำจากต้นทุน (กำไรคิดเป็น % ของราคาขาย · แก้ทับได้เสมอ)
+// วัสดุ: กำไร 70% → ขาย = ทุน ÷ 0.30 · แอร์: กำไร 5% → ขาย = ทุน ÷ 0.95 (ปัดบาทเต็ม) · บริการ: ไม่คำนวณ
+const MARGIN = { material: 0.70, ac: 0.05 };
+function suggestSale(kind, cost) {
+  const c = Number(cost) || 0;
+  if (c <= 0 || MARGIN[kind] == null) return null;
+  const sale = c / (1 - MARGIN[kind]);
+  return kind === "ac" ? Math.round(sale) : Math.round(sale * 100) / 100;
+}
+
 // Add OR edit a catalog item (material / ac / service). `initial` null => add mode.
 export default function MaterialModal({ initial, categories, brands = [], btus = [], acTypes = [], defaultKind = "material", onSaved, onClose, onSave }) {
   const isNew = !initial || !!initial._dup;   // _dup = สร้างสำเนา → ถือเป็นรายการใหม่ (รหัสใหม่)
@@ -36,7 +46,19 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const [err, setErr] = React.useState(null);
+  // ราคาขายอัตโนมัติ: รายการใหม่ → พิมพ์ต้นทุนแล้วเติมราคาขายให้ (จนกว่าจะแก้ราคาขายเอง)
+  // รายการเดิม → ไม่ทับราคาที่ตั้งไว้ ใช้ปุ่ม ↻ คำนวณใหม่แทน
+  const [spTouched, setSpTouched] = React.useState(!isNew);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const setCost = (e) => {
+    const v = e.target.value;
+    setF((s) => {
+      const sug = !spTouched ? suggestSale(s.kind, v) : null;
+      return { ...s, cost: v, ...(sug != null ? { sale_price: sug } : {}) };
+    });
+  };
+  const setSale = (e) => { setSpTouched(true); setF((s) => ({ ...s, sale_price: e.target.value })); };
+  const applySuggest = () => { const sug = suggestSale(f.kind, f.cost); if (sug != null) { setSpTouched(true); setF((s) => ({ ...s, sale_price: sug })); } };
   const setKind = (kind) => setF((s) => ({ ...s, kind, tracked: kind === "service" ? false : s.tracked }));
   const valid = f.code && f.name_th;
   const isAc = f.kind === "ac", isService = f.kind === "service", isMat = f.kind === "material";
@@ -147,12 +169,13 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
               </Combo>
             </label>
             <label className="fld"><span>ต้นทุน/หน่วย</span>
-              <input className="inp" type="number" value={f.cost} onChange={set("cost")} placeholder="0.00" />
+              <input className="inp" type="number" value={f.cost} onChange={setCost} placeholder="0.00" />
             </label>
-            <label className="fld"><span>ราคาขาย/หน่วย</span>
-              <input className="inp" type="number" value={f.sale_price} onChange={set("sale_price")} placeholder="0.00" />
+            <label className="fld"><span>ราคาขาย/หน่วย {MARGIN[f.kind] != null && <button type="button" className="sp-suggest" onClick={applySuggest} title={`คำนวณจากต้นทุน · กำไร ${MARGIN[f.kind] * 100}% ของราคาขาย`}>↻ กำไร {MARGIN[f.kind] * 100}%</button>}</span>
+              <input className="inp" type="number" value={f.sale_price} onChange={setSale} placeholder="0.00" />
             </label>
           </div>
+          {MARGIN[f.kind] != null && <p className="page-sub" style={{ margin: "-4px 0 8px" }}>💡 ราคาขายคำนวณอัตโนมัติจากต้นทุน ({f.kind === "ac" ? "แอร์: กำไร 5%" : "วัสดุ: กำไร 70%"} ของราคาขาย) — พิมพ์ทับเองได้</p>}
 
           {/* purchase unit (ซื้อคนละหน่วยกับขาย เช่น ขายเป็นเมตร ซื้อเป็นม้วน) — วัสดุที่นับสต๊อกเท่านั้น */}
           {isMat && (

@@ -1543,6 +1543,9 @@ select.inp{cursor:pointer}
 .sr-links{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .sr-nojob{font-size:11px;color:var(--ink-3);align-self:center}
 @media(max-width:640px){.sr-detail-body .pf-row{grid-template-columns:1.3fr 1fr 1.4fr}.sr-detail-body .pf-row span:nth-child(3),.sr-detail-body .pf-row span:nth-child(4){display:none}}
+/* sale-price suggest button (คำนวณราคาขายจากต้นทุนตาม % กำไร) */
+.sp-suggest{margin-left:6px;font-size:10.5px;font-weight:700;color:#1d4ed8;background:#e6efff;border:1px solid #c7dbff;border-radius:7px;padding:1px 7px;cursor:pointer}
+.sp-suggest:hover{background:#d8e7ff}
 /* catalog sub-stat — บรรทัดย่อยใต้ค่าในคอลัมน์ (คงเหลือทุกหน่วย · ทุนคงเหลือ · /หน่วย) */
 .cat-substat{display:block;font-size:10.5px;font-weight:500;color:var(--ink-3);margin-top:1px;white-space:nowrap}
 /* unit picker — เลือกหน่วยนับของสินค้า 2 หน่วย (เมตร/ม้วน) ในช่องจำนวน */
