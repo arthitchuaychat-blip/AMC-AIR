@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterials, listSuppliers } from "../lib/api";
+import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterialsLite, listSuppliers } from "../lib/api";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -58,7 +58,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
 
   async function load() {
     setLoading(true);
-    try { const [p, m] = await Promise.all([listPurchaseOrders(), listMaterials()]); setPos(p); setMats(m); }
+    try { const [p, m] = await Promise.all([listPurchaseOrders(), listMaterialsLite()]); setPos(p); setMats(m); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
