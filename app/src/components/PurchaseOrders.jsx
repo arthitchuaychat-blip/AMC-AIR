@@ -8,6 +8,7 @@ import { MaterialThumb, UIcon } from "../icons";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
+import UnitPick, { unitFactor } from "./UnitPick";
 
 const STATUS = { open: { th: "รอรับของ", cls: "b-amber" }, received: { th: "รับแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
 const PO_FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open", label: "รอรับของ" }, { id: "received", label: "รับแล้ว" }, { id: "cancelled", label: "ยกเลิก" }];
@@ -98,6 +99,12 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + add }; return { ...e, items }; }
     return { ...e, items: [...e.items, { code: m.code, qty: add, price: unitPrice, unit: m.purchaseUnit || m.unit || null }] };
   });
+  // เปลี่ยนหน่วยนับของบรรทัด (เมตร ↔ ม้วน) → แปลงราคา/หน่วยตามสัดส่วน (ราคา/หน่วยหลักคงเดิม)
+  const changeLineUnit = (code, m, nu) => setEditing((e) => ({ ...e, items: e.items.map((x) => {
+    if (x.code !== code) return x;
+    const ratio = unitFactor(m, nu) / unitFactor(m, lineUnit(x, m));
+    return { ...x, unit: nu, price: R2((Number(x.price) || 0) * ratio) };
+  }) }));
   // switch VAT/price mode — keep each line's NET price constant across the switch
   function setVatMode(mode) {
     setEditing((e) => {
@@ -182,7 +189,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                     <div className="line-sub">{conv ? `1 ${m.purchaseUnit} = ${fmtNum(m.purchaseQty)} ${m.unit} · ราคา/${m.purchaseUnit}` : m?.unit}</div></div>
                   <div className="inp inp-unit po-edit-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.price} onChange={(e) => setItem(it.code, "price", Number(e.target.value) || 0)} /></div>
                   {editIncl && <div className="inp inp-unit po-edit-in" style={{ opacity: 0.7 }} title="ราคาก่อน VAT (คำนวณให้)"><span className="unit-pre">฿</span><input type="number" value={R2(netUnit(it))} disabled /></div>}
-                  <div className="inp inp-unit po-edit-in"><input type="number" min="1" value={it.qty} onChange={(e) => setItem(it.code, "qty", Math.max(1, Number(e.target.value) || 1))} /><span className="unit-suf">{u}</span></div>
+                  <div className="inp inp-unit po-edit-in"><input type="number" min="1" value={it.qty} onChange={(e) => setItem(it.code, "qty", Math.max(1, Number(e.target.value) || 1))} /><UnitPick m={m} value={u} onChange={(nu) => changeLineUnit(it.code, m, nu)} /></div>
                   <span className="po-edit-val">{fmtBaht((Number(it.qty) || 0) * (Number(it.price) || 0))}</span>
                   <button className="line-x" onClick={() => removeItem(it.code)}><UIcon name="x" size={14} /></button>
                 </div>

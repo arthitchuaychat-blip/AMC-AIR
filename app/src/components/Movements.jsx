@@ -7,6 +7,9 @@ import { can } from "../lib/permissions";
 import { scheduleLabel } from "../lib/schedule";
 import { MaterialThumb, UIcon } from "../icons";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
+import UnitPick, { isDualUnit, unitFactor } from "./UnitPick";
+
+const R2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 const TYPES = [
   { id: "withdraw", th: "เบิกออก", icon: "withdraw", color: "#2563eb", dir: -1 },
@@ -56,6 +59,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [qtyModal, setQtyModal] = React.useState(null); // material being added (food-menu style)
   const [modalQty, setModalQty] = React.useState(1);
   const [modalPrice, setModalPrice] = React.useState("");
+  const [modalUnit, setModalUnit] = React.useState("");  // หน่วยนับที่เลือก (สินค้า 2 หน่วย เช่น เมตร/ม้วน)
   const [receivePo, setReceivePo] = React.useState(null);
   // picker filters (เหมือนหน้า BOQ): ชนิด + หมวดวัสดุ
   const [mvKind, setMvKind] = React.useState("all"); // all | ac | material
@@ -127,7 +131,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
       const m = matMap[p.code];
       const f = (p.unit && m?.purchaseUnit && p.unit === m.purchaseUnit && Number(m.purchaseQty) > 1) ? Number(m.purchaseQty) : 1;
       const price = p.price ?? m?.cost ?? 0;
-      return { code: p.code, qty: (Number(p.qty) || 1) * f, price: Math.round(((Number(price) || 0) / f) * 100) / 100 };
+      return { code: p.code, qty: (Number(p.qty) || 1) * f, price: Math.round(((Number(price) || 0) / f) * 100) / 100, unit: m?.unit || null };
     }));
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
@@ -142,57 +146,77 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); }
 
   // ----- cart helpers -----
+  // สินค้า 2 หน่วย: บรรทัดถือ l.unit (เมตร/ม้วน) · สต๊อก/ต้นทุนคิดเป็นหน่วยหลักเสมอ (แปลงด้วย unitFactor)
+  const lineUnit = (l, m) => l.unit || m?.unit || "";
   const linesView = lines.map((l) => {
     const m = matMap[l.code];
-    const unit = type === "purchase" ? (l.price ?? m?.cost ?? 0) : (m?.cost || 0);
-    return { ...l, m, unit, value: unit * l.qty };
+    const f = unitFactor(m, lineUnit(l, m));
+    const baseQty = l.qty * f;                                             // จำนวนในหน่วยหลัก
+    const unit = type === "purchase" ? (l.price ?? R2((m?.cost || 0) * f)) : (m?.cost || 0);
+    const value = type === "purchase" ? unit * l.qty : unit * baseQty;     // ซื้อ: ราคา/หน่วยที่เลือก · อื่น ๆ: ต้นทุน/หน่วยหลัก
+    return { ...l, m, f, baseQty, unit, value };
   });
   const cartTotal = linesView.reduce((a, x) => a + x.value, 0);
   function addLine() {
     if (!pickCode || pickQty < 1) return;
     const price = type === "purchase" ? (Number(pickPrice) || 0) : undefined;
-    setLines((ls) => {
-      const i = ls.findIndex((l) => l.code === pickCode);
-      if (i >= 0) { const c = [...ls]; c[i] = { ...c[i], qty: c[i].qty + Number(pickQty), price }; return c; }
-      return [...ls, { code: pickCode, qty: Number(pickQty), price }];
-    });
+    addItem(pickCode, Number(pickQty), price, matMap[pickCode]?.unit);
     setPickQty(1);
   }
-  // add/merge a line directly (used by the visual picker modal)
-  function addItem(code, qty, price) {
+  // add/merge a line directly (merge เฉพาะรหัส+หน่วยเดียวกัน)
+  function addItem(code, qty, price, unit) {
     const q = Number(qty) || 0;
     if (!code || q < 1) return;
+    const u = unit || matMap[code]?.unit || null;
     setLines((ls) => {
-      const i = ls.findIndex((l) => l.code === code);
+      const i = ls.findIndex((l) => l.code === code && lineUnit(l, matMap[code]) === u);
       if (i >= 0) { const c = [...ls]; c[i] = { ...c[i], qty: c[i].qty + q, price }; return c; }
-      return [...ls, { code, qty: q, price }];
+      return [...ls, { code, qty: q, price, unit: u }];
     });
   }
-  function openQty(m) { setQtyModal(m); setModalQty(1); setModalPrice(String(m.cost ?? 0)); }
+  function openQty(m) {
+    const u = type === "purchase" && isDualUnit(m) ? m.purchaseUnit : m.unit;  // ซื้อ default หน่วยซื้อ (ม้วน) · เบิก/คืน default หน่วยหลัก
+    setQtyModal(m); setModalQty(1); setModalUnit(u);
+    setModalPrice(String(R2((m.cost ?? 0) * unitFactor(m, u))));
+  }
+  function changeModalUnit(u) {
+    if (!qtyModal) return;
+    const ratio = unitFactor(qtyModal, u) / unitFactor(qtyModal, modalUnit);
+    setModalUnit(u);
+    if (type === "purchase") setModalPrice((p) => String(R2((Number(p) || 0) * ratio)));  // คงราคา/หน่วยหลักเดิม
+  }
   function addFromModal() {
     if (!qtyModal) return;
-    addItem(qtyModal.code, modalQty, type === "purchase" ? (Number(modalPrice) || 0) : undefined);
+    addItem(qtyModal.code, modalQty, type === "purchase" ? (Number(modalPrice) || 0) : undefined, modalUnit);
     setQtyModal(null);
   }
-  const removeLine = (code) => setLines((ls) => ls.filter((l) => l.code !== code));
+  const removeLine = (l) => setLines((ls) => ls.filter((x) => !(x.code === l.code && x.unit === l.unit)));
   const cartValid = lines.length > 0 && (type === "purchase" || type === "damage" || team);
 
   async function submitCart() {
     if (!cartValid || busy) return;
     setBusy(true);
     try {
-      await recordTransactions(lines.map((l) => ({
+      // แปลงทุกบรรทัดเข้าหน่วยหลักก่อนบันทึก (สต๊อก/ต้นทุนเก็บเป็นหน่วยหลักเสมอ เช่น 2 ม้วน → 30 เมตร · ราคา/ม้วน ÷15)
+      const norm = lines.map((l) => {
+        const m = matMap[l.code];
+        const f = unitFactor(m, lineUnit(l, m));
+        return { code: l.code, qty: l.qty * f, unitCost: type === "purchase" ? R2((Number(l.price) || 0) / f) : (m?.cost || 0) };
+      });
+      await recordTransactions(norm.map((l) => ({
         type, job_no: jobNo, team: type === "damage" ? null : team,
         material_code: l.code, qty: l.qty,
-        unit_cost: type === "purchase" ? (Number(l.price) || 0) : matMap[l.code].cost, reason,
+        unit_cost: l.unitCost, reason,
       })));
-      // weighted moving average: recompute each purchased material's unit cost
+      // weighted moving average: recompute each purchased material's unit cost (ทั้งคู่เป็นหน่วยหลักแล้ว)
+      // รวมยอดต่อรหัสก่อน เผื่อสินค้าเดียวกันมี 2 บรรทัดคนละหน่วย (เช่น 1 ม้วน + 5 เมตร)
       if (type === "purchase") {
-        for (const l of lines) {
-          const m = matMap[l.code]; if (!m) continue;
-          const onQty = m.stock, onVal = m.stock * m.cost, pq = l.qty, pp = Number(l.price) || 0;
-          const denom = onQty + pq;
-          if (denom > 0) await updateMaterialCost(l.code, Math.round(((onVal + pq * pp) / denom) * 100) / 100);
+        const byCode = {};
+        norm.forEach((l) => { const b = byCode[l.code] || (byCode[l.code] = { qty: 0, val: 0 }); b.qty += l.qty; b.val += l.qty * l.unitCost; });
+        for (const [code, b] of Object.entries(byCode)) {
+          const m = matMap[code]; if (!m) continue;
+          const denom = m.stock + b.qty;
+          if (denom > 0) await updateMaterialCost(code, Math.round(((m.stock * m.cost + b.val) / denom) * 100) / 100);
         }
         if (receivePo) { await markPoReceived(receivePo); setReceivePo(null); }
       }
@@ -416,11 +440,12 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
               {linesView.length > 0 && (
                 <div className="line-list">
                   {linesView.map((l) => (
-                    <div className="line-row" key={l.code}>
+                    <div className="line-row" key={l.code + "|" + (l.unit || "")}>
                       <MaterialThumb mat={l.m} size={32} radius={8} />
-                      <div className="line-info"><div className="line-name">{l.m?.th}</div><div className="line-sub">{l.qty} {l.m?.unit}{type === "purchase" ? ` × ${fmtBaht(l.unit)}` : ""} · {fmtBaht(l.value)}</div></div>
-                      <span className="line-dir" style={{ color: T.color }}>{T.dir > 0 ? "+" : "−"}{l.qty}</span>
-                      <button className="line-x" onClick={() => removeLine(l.code)}><UIcon name="x" size={14} /></button>
+                      <div className="line-info"><div className="line-name">{l.m?.th}</div>
+                        <div className="line-sub">{l.qty} {lineUnit(l, l.m)}{l.f > 1 ? ` (= ${fmtNum(l.baseQty)} ${l.m?.unit})` : ""}{type === "purchase" ? ` × ${fmtBaht(l.unit)}` : ""} · {fmtBaht(l.value)}</div></div>
+                      <span className="line-dir" style={{ color: T.color }}>{T.dir > 0 ? "+" : "−"}{l.qty} {l.f > 1 ? lineUnit(l, l.m) : ""}</span>
+                      <button className="line-x" onClick={() => removeLine(l)}><UIcon name="x" size={14} /></button>
                     </div>
                   ))}
                   <div className="line-total"><span>รวม {lines.length} รายการ</span><b>{fmtBaht(cartTotal)}</b></div>
@@ -514,18 +539,28 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                 <div><div className="mv-pick-name">{qtyModal.th || qtyModal.name}</div>
                   <div className="mv-pick-sub">{qtyModal.code} · เหลือ <b>{fmtNum(qtyModal.stock)}</b> {qtyModal.unit}</div></div>
               </div>
+              {isDualUnit(qtyModal) && (
+                <label className="fld"><span>หน่วยนับ</span>
+                  <div className="cat-filter" style={{ margin: 0 }}>
+                    {[qtyModal.unit, qtyModal.purchaseUnit].map((u) => (
+                      <button type="button" key={u} className={"cat-chip" + (modalUnit === u ? " on" : "")} onClick={() => changeModalUnit(u)}
+                        style={modalUnit === u ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{u}{u === qtyModal.purchaseUnit ? ` (1 ${u} = ${fmtNum(qtyModal.purchaseQty)} ${qtyModal.unit})` : ""}</button>
+                    ))}
+                  </div>
+                </label>
+              )}
               {type === "purchase" && (
                 <label className="fld"><span>ราคา/หน่วยที่ซื้อ</span>
                   <div className="inp inp-unit"><span className="unit-pre">฿</span>
                     <input type="number" min="0" step="0.01" value={modalPrice} autoFocus onChange={(e) => setModalPrice(e.target.value)} />
-                    <span className="unit-suf">/{qtyModal.unit || "หน่วย"}</span></div>
+                    <span className="unit-suf">/{modalUnit || qtyModal.unit || "หน่วย"}</span></div>
                 </label>
               )}
               <label className="fld"><span>จำนวน</span>
                 <div className="mv-qty-step">
                   <button type="button" onClick={() => setModalQty((q) => Math.max(1, (Number(q) || 1) - 1))}><UIcon name="minus" size={18} /></button>
                   <input type="number" min="1" value={modalQty} onChange={(e) => setModalQty(Math.max(1, Number(e.target.value) || 1))} />
-                  <span className="mv-qty-unit">{qtyModal.unit || "หน่วย"}</span>
+                  <span className="mv-qty-unit">{modalUnit || qtyModal.unit || "หน่วย"}</span>
                   <button type="button" onClick={() => setModalQty((q) => (Number(q) || 1) + 1)}><UIcon name="plus" size={18} /></button>
                 </div>
               </label>

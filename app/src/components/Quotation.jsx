@@ -16,6 +16,7 @@ import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
+import UnitPick, { unitFactor } from "./UnitPick";
 
 const STATUS = {
   draft: { th: "ร่าง", cls: "b-grey" }, sent: { th: "ส่งแล้ว", cls: "b-blue" },
@@ -103,6 +104,12 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     return { ...e, items: [...e.items, { code: m.code, name: m.th, unit: m.unit, qty: add, unit_price: m.salePrice || 0, kind: m.kind, description: m.description || "" }] };
   });
   const setLine = (i, k, v) => setEd((e) => ({ ...e, items: e.items.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
+  // สินค้า 2 หน่วย (เมตร/ม้วน): เปลี่ยนหน่วยนับของบรรทัด → แปลงราคา/หน่วยตามสัดส่วน (ราคา/หน่วยหลักคงเดิม)
+  const setLineUnit = (i, m, u) => setEd((e) => ({ ...e, items: e.items.map((x, j) => {
+    if (j !== i) return x;
+    const ratio = unitFactor(m, u) / unitFactor(m, x.unit || m.unit);
+    return { ...x, unit: u, unit_price: Math.round(((Number(x.unit_price) || 0) * ratio) * 100) / 100 };
+  }) }));
   const delLine = (i) => setEd((e) => ({ ...e, items: e.items.filter((_, j) => j !== i) }));
   const moveLine = (i, dir) => setEd((e) => { const a = [...e.items]; const j = i + dir; if (j < 0 || j >= a.length) return e; [a[i], a[j]] = [a[j], a[i]]; return { ...e, items: a }; });
 
@@ -225,7 +232,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 <div className={"line-item li-" + (it.kind || "material")} key={i}>
                   <div className="boq-line">
                     <div className="line-info"><div className="line-name">{it.name}</div><div className="line-sub">{it.code || "-"}</div></div>
-                    <div className="inp inp-unit boq-in"><input type="number" min="0" value={it.qty} onChange={(e) => setLine(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><span className="unit-suf">{it.unit}</span></div>
+                    <div className="inp inp-unit boq-in"><input type="number" min="0" value={it.qty} onChange={(e) => setLine(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><UnitPick m={matMap[it.code]} value={it.unit} onChange={(u) => setLineUnit(i, matMap[it.code], u)} /></div>
                     <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.unit_price} onChange={(e) => setLine(i, "unit_price", Number(e.target.value) || 0)} /></div>
                     <span className="boq-amt">{fmtBaht(it.qty * it.unit_price)}</span>
                     <div className="line-move">
