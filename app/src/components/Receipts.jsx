@@ -18,7 +18,7 @@ import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 const fmtBaht = fmtBaht2; // receipts show 2 decimals
 const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
 const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
-const METHODS = ["เงินสด", "โอนเงิน", "เช็ค", "บัตรเครดิต", "Trade Account"];
+const METHODS = ["เงินสด", "โอนเงิน", "เช็ค", "บัตรเครดิต", "Trade Baht"];
 const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber" }, paid: { th: "ชำระเงินแล้ว", cls: "b-green" } };
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);

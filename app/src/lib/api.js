@@ -1956,9 +1956,10 @@ export async function syncBankReceipts() {
   ]);
   if (accRes.error) throw accRes.error; if (rcRes.error) throw rcRes.error;
   const accByCode = Object.fromEntries((accRes.data || []).map((a) => [a.code, a.id]));
-  const vatAcc = accByCode.vat, novatAcc = accByCode.novat;
+  const vatAcc = accByCode.vat, novatAcc = accByCode.novat, tradeAcc = accByCode.trade;
   if (!vatAcc || !novatAcc) return { added: 0, updated: 0, removed: 0 };
   const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
+  const TRADE_METHODS = ["Trade Account", "Trade Baht"];   // Trade Baht = ช่องทางเดียวกัน (label เก่า/ใหม่)
 
   // existing receipt-sourced entries — resilient to a missing `reconciled` column (pre-089)
   let ex = await supabase.from("account_entries").select("id,ref_id,reconciled,account_id,amount,entry_date").eq("ref_type", "receipt");
@@ -1972,7 +1973,9 @@ export async function syncBankReceipts() {
     if (r.payment_method === "เงินสด") return;                 // cash → not a bank deposit
     const amt = Math.round((Number(r.net) || Number(r.total) || 0) * 100) / 100;
     if (amt <= 0) return;
-    const account_id = (Number(r.vat_amt) || 0) > 0 ? vatAcc : novatAcc;
+    // Trade Baht (จ่ายผ่าน Trade Account) → บัญชี Trade เดียว (ไม่แยก VAT); อื่น ๆ → ธนาคาร VAT/ไม่ VAT ตามบิล
+    const byVat = (Number(r.vat_amt) || 0) > 0 ? vatAcc : novatAcc;
+    const account_id = TRADE_METHODS.includes(r.payment_method) ? (tradeAcc || byVat) : byVat;
     desired[r.receipt_no] = { account_id, amount: amt, entry_date: r.issue_date || today,
       note: `รับเงินลูกค้า${r.customer_id && custName[r.customer_id] ? " · " + custName[r.customer_id] : ""} · ${r.receipt_no}` };
   });

@@ -92,7 +92,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-03·กระทบแบงค์: ดึงยอดรับเงินลูกค้าจากใบเสร็จเข้าบัญชีธนาคารอัตโนมัติ (VAT→บัญชี VAT) v242";
+const BUILD = "2026-07-03·กระทบแบงค์: เพิ่มบัญชี Trade Baht — ใบเสร็จจ่ายผ่าน Trade เข้าบัญชีนี้อัตโนมัติ v243";
 
 function SetupNotice() {
   return (
