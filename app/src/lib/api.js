@@ -520,16 +520,17 @@ export async function listPurchaseOrders() {
   (itemRes.data || []).forEach((it) => { (byPo[it.po_no] = byPo[it.po_no] || []).push(it); });
   return (poRes.data || []).map((po) => {
     const items = (byPo[po.po_no] || []).map((it) => ({ material_code: it.material_code, qty: Number(it.qty), price: Number(it.price) }));
-    return { ...po, items, total: items.reduce((a, it) => a + it.qty * it.price, 0) };
+    const subtotal = items.reduce((a, it) => a + it.qty * it.price, 0);   // ราคาก่อน VAT
+    const vatAmt = po.vat ? Math.round(subtotal * 0.07 * 100) / 100 : 0;
+    return { ...po, items, subtotal, vatAmt, total: Math.round((subtotal + vatAmt) * 100) / 100 };  // total = รวม VAT (ถ้ามี)
   });
 }
 
 export async function savePurchaseOrder(po, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const e1 = (await supabase.from("purchase_orders").upsert(
-    { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", created_by: user?.id || null },
-    { onConflict: "po_no" }
-  )).error;
+  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, created_by: user?.id || null };
+  let e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
+  if (e1 && /vat|column|PGRST204/i.test(e1.message || "")) { delete head.vat; e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error; } // pre-096 fallback
   if (e1) throw e1;
   const e2 = (await supabase.from("po_items").delete().eq("po_no", po.po_no)).error;
   if (e2) throw e2;
@@ -2820,7 +2821,7 @@ export async function syncCashEntriesFromDocs() {
     supabase.from("invoices").select("invoice_no,due_date,issue_date,total,wht_amt,status,customer_id"),
     supabase.from("receipts").select("receipt_no,issue_date,net,total,status,customer_id"),
     supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at"),
-    supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at"),
+    supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat"),
     supabase.from("po_items").select("po_no,qty,price"),
     supabase.from("customers").select("id,name"),
     supabase.from("teams").select("id,name"),
@@ -2838,7 +2839,7 @@ export async function syncCashEntriesFromDocs() {
   (inv.data || []).forEach((x) => { if (x.status !== "unpaid") return; desired.push({ source_type: "invoice", source_ref: x.invoice_no, direction: "in", status: "projected", entry_date: x.due_date || x.issue_date, amount: Math.max(0, (Number(x.total) || 0) - (Number(x.wht_amt) || 0)), note: `ใบแจ้งหนี้ ${x.invoice_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
   (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entry_date: x.issue_date, amount: Number(x.net || x.total) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
   (pay.data || []).forEach((x) => { const paid = x.status === "paid"; desired.push({ source_type: "payout", source_ref: String(x.id), direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: Number(x.net) || 0, note: `จ่ายช่างซัพ${tn[x.team] ? " " + tn[x.team] : ""}` }); });
-  (po.data || []).forEach((x) => { if (x.status === "cancelled") return; const got = x.status === "received"; desired.push({ source_type: "po", source_ref: x.po_no, direction: "out", status: got ? "actual" : "projected", entry_date: got ? _d(x.received_at) : _d(x.created_at), amount: poTotal[x.po_no] || 0, note: `ใบสั่งซื้อ ${x.po_no}${x.supplier ? " · " + x.supplier : ""}` }); });
+  (po.data || []).forEach((x) => { if (x.status === "cancelled") return; const got = x.status === "received"; const amt = Math.round((poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1) * 100) / 100; desired.push({ source_type: "po", source_ref: x.po_no, direction: "out", status: got ? "actual" : "projected", entry_date: got ? _d(x.received_at) : _d(x.created_at), amount: amt, note: `ใบสั่งซื้อ ${x.po_no}${x.supplier ? " · " + x.supplier : ""}` }); });
   // ค่าแรงช่างซัพที่ยืนยันแล้ว แต่ยังเหลือค้างจ่าย (ยังไม่ตั้งเบิก) → คาดว่าจะจ่าย · พอตั้งเบิกแล้ว remaining=0 รายการนี้หายเอง ไปโผล่เป็น payout แทน
   (laborJobs.data || []).forEach((j) => {
     const remaining = Math.round(((Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0)) * 100) / 100;

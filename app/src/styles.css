@@ -1543,6 +1543,11 @@ select.inp{cursor:pointer}
 .sr-links{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .sr-nojob{font-size:11px;color:var(--ink-3);align-self:center}
 @media(max-width:640px){.sr-detail-body .pf-row{grid-template-columns:1.3fr 1fr 1.4fr}.sr-detail-body .pf-row span:nth-child(3),.sr-detail-body .pf-row span:nth-child(4){display:none}}
+/* supplier autocomplete (ใบสั่งซื้อ) */
+.sup-ac{position:absolute;top:100%;left:0;right:0;z-index:30;margin-top:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);overflow:hidden;max-height:280px;overflow-y:auto}
+.sup-ac-item{display:block;width:100%;text-align:left;padding:9px 13px;font-size:13.5px;color:var(--ink);background:none;border:none;border-bottom:1px solid var(--line-2);cursor:pointer}
+.sup-ac-item:last-child{border-bottom:none}
+.sup-ac-item:hover{background:var(--surface-2)}
 /* กำไรต่องาน — per-job P&L table */
 .pjob-row{display:grid;grid-template-columns:1.9fr 1fr 1fr 1fr 1fr 52px;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:13px}
 .pjob-row.pjob-head{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.3px;background:var(--surface-2)}

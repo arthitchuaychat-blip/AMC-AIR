@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterials } from "../lib/api";
+import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterials, listSuppliers } from "../lib/api";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -13,6 +13,29 @@ const PO_FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open",
 function genPoNo() {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
   return `PO-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+// searchable supplier field — suggests names from the Suppliers register (mig 092), still allows free text
+function SupplierPicker({ value, onChange }) {
+  const [sups, setSups] = React.useState([]);
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => { listSuppliers().then((s) => setSups(s.map((x) => x.name).filter(Boolean))).catch(() => {}); }, []);
+  const v = (value || "").trim();
+  const matches = (v ? sups.filter((n) => matchText(v, n)) : sups).slice(0, 8);
+  return (
+    <div style={{ position: "relative" }}>
+      <input className="inp" value={value} placeholder="พิมพ์ค้นหาชื่อผู้ขาย…"
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+      {open && matches.length > 0 && (
+        <div className="sup-ac">
+          {matches.map((n) => (
+            <button type="button" key={n} className="sup-ac-item" onMouseDown={() => { onChange(n); setOpen(false); }}>{n}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onReceive }) {
@@ -49,13 +72,13 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   // open editor prefilled from dashboard reorder
   React.useEffect(() => {
     if (!prefill || !prefill.length || !mats.length) return;
-    setEditing({ po_no: genPoNo(), supplier: "", note: "",
+    setEditing({ po_no: genPoNo(), supplier: "", note: "", vat: false,
       items: prefill.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: matMap[p.code]?.cost ?? 0 })) });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
 
-  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", items: [] }); }
-  function startEdit(po) { setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: i.price })) }); }
+  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: false, items: [] }); }
+  function startEdit(po) { setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: i.price })) }); }
 
   function addItem() {
     if (!pick.code || pick.qty < 1) return;
@@ -95,7 +118,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     if (!editing.po_no.trim()) return flash("ใส่เลขใบสั่งซื้อ", true);
     if (!editing.items.length) return flash("เพิ่มวัสดุอย่างน้อย 1 รายการ", true);
     if (editing._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
-    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, status: "open" }, editing.items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
+    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, status: "open" }, editing.items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(po) {
@@ -106,7 +129,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   function copyPo(po) {
     const text = `ใบสั่งซื้อ ${po.po_no}${po.supplier ? ` · ${po.supplier}` : ""}\n`
       + po.items.map((it, i) => `${i + 1}. ${matMap[it.material_code]?.th || it.material_code} (${it.material_code}) — ${fmtNum(it.qty)} ${matMap[it.material_code]?.unit || ""} @ ${fmtBaht(it.price)}`).join("\n")
-      + `\nรวม ${po.items.length} รายการ · ${fmtBaht(po.total)}`;
+      + `\nรวม ${po.items.length} รายการ · ${po.vat ? `${fmtBaht(po.subtotal)} + VAT 7% ${fmtBaht(po.vatAmt)} = ${fmtBaht(po.total)}` : fmtBaht(po.total)}`;
     const done = () => flash("คัดลอกใบสั่งซื้อแล้ว — ส่งซัพพลายเออร์ได้เลย");
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done).catch(() => window.prompt("คัดลอก:", text));
     else window.prompt("คัดลอก:", text);
@@ -123,9 +146,15 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
         <div className="card" style={{ maxWidth: 720 }}>
           <div className="fld-row">
             <label className="fld"><span>เลขใบสั่งซื้อ · PO No.</span><input className="inp" value={editing.po_no} onChange={(e) => setEditing({ ...editing, po_no: e.target.value })} /></label>
-            <label className="fld"><span>ซัพพลายเออร์ · Supplier</span><input className="inp" value={editing.supplier} onChange={(e) => setEditing({ ...editing, supplier: e.target.value })} placeholder="ชื่อร้าน/ผู้ขาย" /></label>
+            <label className="fld"><span>ซัพพลายเออร์ · Supplier</span><SupplierPicker value={editing.supplier} onChange={(v) => setEditing((e) => ({ ...e, supplier: v }))} /></label>
           </div>
-          <label className="fld"><span>หมายเหตุ</span><input className="inp" value={editing.note} onChange={(e) => setEditing({ ...editing, note: e.target.value })} placeholder="(ไม่บังคับ)" /></label>
+          <div className="fld-row">
+            <label className="fld"><span>หมายเหตุ</span><input className="inp" value={editing.note} onChange={(e) => setEditing({ ...editing, note: e.target.value })} placeholder="(ไม่บังคับ)" /></label>
+            <label className="fld"><span>ราคา VAT</span>
+              <button type="button" className={"vat-toggle" + (editing.vat ? " on" : "")} onClick={() => setEditing((e) => ({ ...e, vat: !e.vat }))}>
+                {editing.vat ? "รวม VAT 7%" : "ไม่รวม VAT"}
+              </button></label>
+          </div>
           <InternalNoteField value={editing.internal_note} onChange={(v) => setEditing({ ...editing, internal_note: v })} />
 
           <div className="fld"><span>เพิ่มรายการวัสดุ</span>
@@ -168,7 +197,15 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                   <button className="line-x" onClick={() => removeItem(it.code)}><UIcon name="x" size={14} /></button>
                 </div>
               ); })}
-              <div className="line-total"><span>รวม {editing.items.length} รายการ</span><b>{fmtBaht(editTotal)}</b></div>
+              {editing.vat ? (
+                <>
+                  <div className="line-total" style={{ borderBottom: "1px dashed var(--line-2)" }}><span>ยอดก่อน VAT ({editing.items.length} รายการ)</span><b>{fmtBaht(editTotal)}</b></div>
+                  <div className="line-total" style={{ borderBottom: "1px dashed var(--line-2)", color: "var(--ink-3)" }}><span>VAT 7%</span><b>{fmtBaht(editTotal * 0.07)}</b></div>
+                  <div className="line-total"><span>ยอดรวมสุทธิ (รวม VAT)</span><b>{fmtBaht(editTotal * 1.07)}</b></div>
+                </>
+              ) : (
+                <div className="line-total"><span>รวม {editing.items.length} รายการ (ไม่รวม VAT)</span><b>{fmtBaht(editTotal)}</b></div>
+              )}
             </div>
           )}
 
@@ -249,7 +286,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               <div className="job-card-head" style={{ cursor: "default" }}>
                 <div className="job-card-id"><span className="job-no">{po.po_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
                 <div className="job-card-meta">{po.supplier || "ไม่ระบุร้าน"} · {po.items.length} รายการ{po.note ? ` · ${po.note}` : ""}</div>
-                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.created_at)}</span><span>มูลค่ารวม</span><b>{fmtBaht(po.total)}</b></div>
+                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.created_at)}</span><span>มูลค่ารวม{po.vat ? " (รวม VAT)" : ""}</span><b>{fmtBaht(po.total)}</b></div>
               </div>
               <InternalNoteTag note={po.internal_note} />
               <div className="job-lines">
