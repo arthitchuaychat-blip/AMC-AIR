@@ -382,6 +382,15 @@ function ReportTab({ flash }) {
   const diff = stmtNum == null || !single ? null : Math.round((stmtNum - closing) * 100) / 100;
   const shown = inScope.filter((r) => !onlyUnrec || !r.reconciled);
 
+  // running balance per account (passbook style) — seed = ยอดยกมา (opening + รายการก่อน scope), ไล่ตามวัน
+  const runBal = {};
+  (() => {
+    const seed = {}; accounts.forEach((a) => { seed[a.id] = Number(a.opening_balance) || 0; });
+    if (monthly) list.forEach((r) => { if (r.entry_date < monthStart) seed[r.account_id] = (seed[r.account_id] || 0) + sign(r); });
+    [...inScope].sort((a, b) => (a.entry_date || "").localeCompare(b.entry_date || "") || String(a.created_at || "").localeCompare(String(b.created_at || "")))
+      .forEach((r) => { seed[r.account_id] = Math.round(((seed[r.account_id] || 0) + sign(r)) * 100) / 100; runBal[r.id] = seed[r.account_id]; });
+  })();
+
   async function saveOpening() {
     if (!single) return;
     const v = Number(openingInput) || 0;
@@ -461,10 +470,10 @@ function ReportTab({ flash }) {
 
       <div style={{ overflowX: "auto" }}>
         <table className="hr-table">
-          <thead><tr><th style={{ width: 44 }}>กระทบ</th><th style={{ textAlign: "left" }}>วันที่</th>{!single && <th style={{ textAlign: "left" }}>บัญชี</th>}<th style={{ textAlign: "left" }}>รายการ</th><th>เข้า</th><th>ออก</th><th style={{ width: 44 }}></th></tr></thead>
+          <thead><tr><th style={{ width: 44 }}>กระทบ</th><th style={{ textAlign: "left" }}>วันที่</th>{!single && <th style={{ textAlign: "left" }}>บัญชี</th>}<th style={{ textAlign: "left" }}>รายการ</th><th>เข้า</th><th>ออก</th><th>คงเหลือ</th><th style={{ width: 44 }}></th></tr></thead>
           <tbody>
-            {rows === null && <tr><td colSpan={single ? 6 : 7} className="empty sm">กำลังโหลด…</td></tr>}
-            {rows && shown.length === 0 && <tr><td colSpan={single ? 6 : 7} className="empty sm">{monthly ? "ไม่มีรายการในเดือนนี้" : "ไม่มีรายการ"}</td></tr>}
+            {rows === null && <tr><td colSpan={single ? 7 : 8} className="empty sm">กำลังโหลด…</td></tr>}
+            {rows && shown.length === 0 && <tr><td colSpan={single ? 7 : 8} className="empty sm">{monthly ? "ไม่มีรายการในเดือนนี้" : "ไม่มีรายการ"}</td></tr>}
             {shown.map((r) => (
               <tr key={r.id} style={r.reconciled ? { background: "var(--surface-2)" } : {}}>
                 <td style={{ textAlign: "center" }}><input type="checkbox" checked={!!r.reconciled} disabled={busy} onChange={() => toggleRec(r)} title="กระทบกับ statement แล้ว" /></td>
@@ -473,6 +482,7 @@ function ReportTab({ flash }) {
                 <td style={{ textAlign: "left" }}>{r.note || "-"}<span className="jo-dim" style={{ marginLeft: 6 }}>{KIND_TAG[r.kind] || ""}</span></td>
                 <td className="hr-ok">{r.direction === "in" ? fmtBaht(r.amount) : "—"}</td>
                 <td className="hr-bad">{r.direction === "out" ? fmtBaht(r.amount) : "—"}</td>
+                <td style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{runBal[r.id] != null ? fmtBaht(runBal[r.id]) : "—"}</td>
                 <td style={{ textAlign: "center" }}>{r.kind === "manual" && <button className="btn-ghost sm" title="ลบ" onClick={() => del(r)} style={{ padding: "2px 6px" }}><UIcon name="x" size={13} /></button>}</td>
               </tr>
             ))}

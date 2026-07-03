@@ -92,7 +92,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-03·บัญชี: ประวัติการโอนระหว่างบัญชี แก้ไข/ลบได้ (เผื่อบันทึกผิด) v245";
+const BUILD = "2026-07-03·กระทบแบงค์: เพิ่มคอลัมน์ 'คงเหลือ' ไล่ยอดแต่ละวันแบบสมุดบัญชี (ทุกบัญชี) v246";
 
 function SetupNotice() {
   return (
