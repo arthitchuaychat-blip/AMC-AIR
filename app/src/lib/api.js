@@ -1897,6 +1897,11 @@ export async function listAccounts() {
   const bal = {}; (e.data || []).forEach((x) => { bal[x.account_id] = (bal[x.account_id] || 0) + (x.direction === "in" ? 1 : -1) * (Number(x.amount) || 0); });
   return (a.data || []).map((ac) => ({ ...ac, balance: Math.round(((Number(ac.opening_balance) || 0) + (bal[ac.id] || 0)) * 100) / 100 }));
 }
+// set an account's opening/brought-forward balance (ยอดยกมาตั้งต้น) — office only (acc_rw RLS)
+export async function setAccountOpening(accountId, amount) {
+  const { error } = await supabase.from("accounts").update({ opening_balance: Number(amount) || 0 }).eq("id", accountId);
+  if (error) throw error;
+}
 export async function listAccountEntries({ accountId, from, to } = {}) {
   let q = supabase.from("account_entries").select("*").order("entry_date", { ascending: false }).order("created_at", { ascending: false });
   if (accountId) q = q.eq("account_id", accountId);

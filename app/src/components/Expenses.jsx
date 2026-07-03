@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, addAccountEntry, deleteAccountEntry, setEntriesReconciled, syncBankReceipts, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import AttachThumb from "./AttachThumb";
 import { fmtBaht, ATTACH_ACCEPT } from "../lib/format";
@@ -247,6 +247,9 @@ function AccountsTab({ flash }) {
 
 const KIND_TAG = { transfer: "🔁 โอน", expense: "🧾 เบิกจ่าย", receipt: "💰 รับเงินลูกค้า", opening: "⚑ ยอดยกมา", adjust: "⚙ ปรับปรุง", manual: "✍️ บันทึกเอง" };
 const recErr = (e) => /reconciled|column|PGRST204/i.test(e?.message || "") ? "ยังไม่ได้รัน migration 089 (กระทบแบงค์) ใน Supabase ก่อน" : "ไม่สำเร็จ: " + (e?.message || e);
+const pad2 = (n) => String(n).padStart(2, "0");
+const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const thMonth = (d) => d.toLocaleDateString("th-TH", { month: "long", year: "numeric" });
 
 function ReportTab({ flash }) {
   const [accounts, setAccounts] = React.useState([]);
@@ -256,6 +259,9 @@ function ReportTab({ flash }) {
   const [stmt, setStmt] = React.useState("");
   const [addOpen, setAddOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [anchor, setAnchor] = React.useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [allMonths, setAllMonths] = React.useState(false);
+  const [openingInput, setOpeningInput] = React.useState("");
   const accById = React.useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts]);
 
   async function loadAccounts() {
@@ -270,6 +276,8 @@ function ReportTab({ flash }) {
   // on open: pull customer deposits from receipts, then load (so รับเงินลูกค้า appears without pressing sync)
   React.useEffect(() => { (async () => { try { await syncBankReceipts(); } catch (_) {} loadAccounts(); })(); }, []);
   React.useEffect(() => { loadRows(); }, [accountId]);
+  const acc0 = accById[accountId];
+  React.useEffect(() => { if (accountId && accountId !== "all") setOpeningInput(String(Number(acc0?.opening_balance) || 0)); }, [accountId, acc0?.opening_balance]);
   const refresh = () => { loadAccounts(); loadRows(); };
   async function pullReceipts() {
     setBusy(true);
@@ -277,19 +285,34 @@ function ReportTab({ flash }) {
     catch (e) { flash(recErr(e), true); }
     setBusy(false);
   }
+  const move = (n) => { setAllMonths(false); setAnchor((a) => new Date(a.getFullYear(), a.getMonth() + n, 1)); };
 
   const single = !!accountId && accountId !== "all";
   const acc = single ? accById[accountId] : null;
   const list = rows || [];
   const sign = (r) => (r.direction === "in" ? 1 : -1) * (Number(r.amount) || 0);
-  const opening = single ? Number(acc?.opening_balance) || 0 : 0;
-  const systemBal = single ? (acc?.balance ?? 0) : list.reduce((a, r) => a + sign(r), 0);
-  const reconciledBal = opening + list.filter((r) => r.reconciled).reduce((a, r) => a + sign(r), 0);
-  const unrec = list.filter((r) => !r.reconciled);
+  const base = single ? Number(acc?.opening_balance) || 0 : 0;
+  const monthly = single && !allMonths;                       // running month view (opening → closing)
+  const monthStart = ymd(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+  const nextStart = ymd(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1));
+  // ยอดยกมาต้นเดือน = ยอดตั้งต้น + ทุกรายการก่อนเดือนนี้ (ยอดคงเหลือสิ้นเดือนก่อนไหลมาเป็นยอดยกมาอัตโนมัติ)
+  const monthOpening = base + (monthly ? list.filter((r) => r.entry_date < monthStart).reduce((a, r) => a + sign(r), 0) : 0);
+  const inScope = monthly ? list.filter((r) => r.entry_date >= monthStart && r.entry_date < nextStart) : list;
+  const scopeIn = inScope.filter((r) => r.direction === "in").reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const scopeOut = inScope.filter((r) => r.direction === "out").reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const closing = monthOpening + scopeIn - scopeOut;          // ยอดคงเหลือสิ้นเดือน = ยอดยกมาเดือนถัดไป
+  const recCount = inScope.filter((r) => r.reconciled).length;
   const stmtNum = stmt.trim() === "" ? null : Number(stmt);
-  const diff = stmtNum == null || !single ? null : Math.round((stmtNum - reconciledBal) * 100) / 100;
-  const shown = list.filter((r) => !onlyUnrec || !r.reconciled);
+  const diff = stmtNum == null || !single ? null : Math.round((stmtNum - closing) * 100) / 100;
+  const shown = inScope.filter((r) => !onlyUnrec || !r.reconciled);
 
+  async function saveOpening() {
+    if (!single) return;
+    const v = Number(openingInput) || 0;
+    if (v === (Number(acc?.opening_balance) || 0)) return;
+    try { await setAccountOpening(accountId, v); flash("บันทึกยอดยกมาแล้ว ✓"); loadAccounts(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
   async function toggleRec(r) {
     setBusy(true);
     try { await setEntriesReconciled([r.id], !r.reconciled); setRows((rs) => rs.map((x) => x.id === r.id ? { ...x, reconciled: !r.reconciled } : x)); }
@@ -314,7 +337,7 @@ function ReportTab({ flash }) {
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">เดินบัญชี & กระทบแบงค์</div>
-        <div className="sec-sub">ดึงยอดรับเงินจากใบเสร็จอัตโนมัติ (โอน→บัญชี VAT/ไม่ VAT ตามบิล) · บันทึกฝาก/ถอนเอง · ติ๊ก ✓ ที่ตรงกับ statement</div></div>
+        <div className="sec-sub">ดึงยอดรับเงินจากใบเสร็จอัตโนมัติ · ดูแยกรายเดือน (ยอดยกมา→คงเหลือ ยกไปเดือนถัดไปอัตโนมัติ) · ติ๊ก ✓ ที่ตรงกับ statement</div></div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn-ghost" disabled={busy} onClick={pullReceipts}><UIcon name="withdraw" size={15} /> ดึงยอดรับเงินจากเอกสาร</button>
           <button className="btn-primary" onClick={() => setAddOpen(true)}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มรายการ (ฝาก/ถอน)</button>
@@ -327,21 +350,35 @@ function ReportTab({ flash }) {
       </div>
 
       {single && (
-        <div className="exp-accounts" style={{ marginTop: 6 }}>
-          <div className="exp-acc"><div className="exp-acc-name">ยอดตามระบบ</div><div className="exp-acc-bal">{fmtBaht(systemBal)}</div></div>
-          <div className="exp-acc"><div className="exp-acc-name">✓ กระทบแล้ว</div><div className="exp-acc-bal" style={{ color: "var(--up)" }}>{fmtBaht(reconciledBal)}</div></div>
-          <div className="exp-acc"><div className="exp-acc-name">⧗ ยังไม่กระทบ</div><div className="exp-acc-bal" style={{ color: unrec.length ? "var(--down)" : "var(--ink-3)" }}>{fmtBaht(systemBal - reconciledBal)}</div><div className="jo-dim" style={{ marginTop: 2 }}>{unrec.length} รายการ</div></div>
-          <div className="exp-acc">
-            <div className="exp-acc-name">ยอดตาม statement ธนาคาร</div>
-            <span className="inp inp-unit" style={{ marginTop: 6 }}><span className="unit-pre">฿</span><input type="number" step="0.01" value={stmt} onChange={(e) => setStmt(e.target.value)} placeholder="กรอกยอดจากธนาคาร" /></span>
-            {diff != null && <div className="jo-dim" style={{ marginTop: 6, fontWeight: 700, color: diff === 0 ? "var(--up)" : "var(--down)" }}>{diff === 0 ? "✓ ตรงกับยอดที่กระทบแล้ว" : `ผลต่าง ${fmtBaht(diff)}`}</div>}
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "12px 0 2px" }}>
+            <button className="btn-ghost sm" disabled={allMonths} onClick={() => move(-1)}>◀</button>
+            <b style={{ minWidth: 150, textAlign: "center", fontSize: 15 }}>{allMonths ? "ทุกเดือน" : thMonth(anchor)}</b>
+            <button className="btn-ghost sm" disabled={allMonths} onClick={() => move(1)}>▶</button>
+            <button className="btn-ghost sm" onClick={() => { setAllMonths(false); const d = new Date(); setAnchor(new Date(d.getFullYear(), d.getMonth(), 1)); }}>เดือนนี้</button>
+            <button className={"cat-chip" + (allMonths ? " on" : "")} onClick={() => setAllMonths((v) => !v)} style={allMonths ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกเดือน</button>
+            <label className="jo-dim" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>ยอดยกมาตั้งต้น
+              <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span>
+                <input type="number" step="0.01" value={openingInput} onChange={(e) => setOpeningInput(e.target.value)} onBlur={saveOpening} title="ยอดก่อนรายการแรกสุด — เดือนถัด ๆ ไประบบยกยอดให้เอง" /></span></label>
           </div>
-        </div>
+          <div className="exp-accounts" style={{ marginTop: 8 }}>
+            <div className="exp-acc"><div className="exp-acc-name">{monthly ? "ยอดยกมาต้นเดือน" : "ยอดยกมาตั้งต้น"}</div><div className="exp-acc-bal">{fmtBaht(monthOpening)}</div></div>
+            <div className="exp-acc"><div className="exp-acc-name">เงินเข้า{monthly ? "เดือนนี้" : "ทั้งหมด"}</div><div className="exp-acc-bal" style={{ color: "var(--up)" }}>{fmtBaht(scopeIn)}</div></div>
+            <div className="exp-acc"><div className="exp-acc-name">เงินออก{monthly ? "เดือนนี้" : "ทั้งหมด"}</div><div className="exp-acc-bal" style={{ color: "var(--down)" }}>−{fmtBaht(scopeOut)}</div></div>
+            <div className="exp-acc"><div className="exp-acc-name">{monthly ? "ยอดคงเหลือสิ้นเดือน" : "ยอดคงเหลือ"}</div><div className="exp-acc-bal">{fmtBaht(closing)}</div>{monthly && <div className="jo-dim" style={{ marginTop: 2 }}>ยกไปเดือนหน้าอัตโนมัติ</div>}</div>
+            <div className="exp-acc">
+              <div className="exp-acc-name">ยอดตาม statement {monthly ? "(สิ้นเดือน)" : "ธนาคาร"}</div>
+              <span className="inp inp-unit" style={{ marginTop: 6 }}><span className="unit-pre">฿</span><input type="number" step="0.01" value={stmt} onChange={(e) => setStmt(e.target.value)} placeholder="กรอกยอดจากธนาคาร" /></span>
+              {diff != null && <div className="jo-dim" style={{ marginTop: 6, fontWeight: 700, color: diff === 0 ? "var(--up)" : "var(--down)" }}>{diff === 0 ? "✓ ตรงกับยอดในระบบ" : `ผลต่าง ${fmtBaht(diff)}`}</div>}
+            </div>
+          </div>
+        </>
       )}
 
       <div className="cat-filter" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <label className="jo-dim" style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
           <input type="checkbox" checked={onlyUnrec} onChange={(e) => setOnlyUnrec(e.target.checked)} /> แสดงเฉพาะที่ยังไม่กระทบ
+          {single && <span style={{ marginLeft: 8 }}>· กระทบแล้ว {recCount}/{inScope.length}</span>}
         </label>
         <button className="btn-ghost sm" disabled={busy || !shown.some((r) => !r.reconciled)} onClick={reconcileAllShown}>✓ กระทบทั้งหมดที่แสดง</button>
       </div>
@@ -351,7 +388,7 @@ function ReportTab({ flash }) {
           <thead><tr><th style={{ width: 44 }}>กระทบ</th><th style={{ textAlign: "left" }}>วันที่</th>{!single && <th style={{ textAlign: "left" }}>บัญชี</th>}<th style={{ textAlign: "left" }}>รายการ</th><th>เข้า</th><th>ออก</th><th style={{ width: 44 }}></th></tr></thead>
           <tbody>
             {rows === null && <tr><td colSpan={single ? 6 : 7} className="empty sm">กำลังโหลด…</td></tr>}
-            {rows && shown.length === 0 && <tr><td colSpan={single ? 6 : 7} className="empty sm">ไม่มีรายการ</td></tr>}
+            {rows && shown.length === 0 && <tr><td colSpan={single ? 6 : 7} className="empty sm">{monthly ? "ไม่มีรายการในเดือนนี้" : "ไม่มีรายการ"}</td></tr>}
             {shown.map((r) => (
               <tr key={r.id} style={r.reconciled ? { background: "var(--surface-2)" } : {}}>
                 <td style={{ textAlign: "center" }}><input type="checkbox" checked={!!r.reconciled} disabled={busy} onChange={() => toggleRec(r)} title="กระทบกับ statement แล้ว" /></td>
@@ -366,7 +403,7 @@ function ReportTab({ flash }) {
           </tbody>
         </table>
       </div>
-      <p className="page-sub" style={{ marginTop: 10 }}>* ยอดกระทบแล้ว = ยอดยกมา + รายการที่ติ๊ก ✓ · เมื่อกระทบครบตาม statement ผลต่างควรเป็น ฿0 · รายการที่ระบบสร้างเอง (เบิกจ่าย/โอน) ลบไม่ได้ ลบได้เฉพาะรายการที่บันทึกเอง</p>
+      <p className="page-sub" style={{ marginTop: 10 }}>* ยอดยกมาต้นเดือน = ยอดตั้งต้น + ทุกรายการก่อนเดือนนั้น · ยอดคงเหลือสิ้นเดือนจะไหลไปเป็นยอดยกมาเดือนถัดไปอัตโนมัติ · statement เทียบกับยอดคงเหลือระบบ (ควรต่าง ฿0) · รายการที่ระบบสร้างเอง (เบิกจ่าย/โอน/รับเงิน) ลบไม่ได้</p>
 
       {addOpen && <AddEntryModal accounts={accounts} defaultAccountId={single ? accountId : ""} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); refresh(); }} flash={flash} />}
     </div>
