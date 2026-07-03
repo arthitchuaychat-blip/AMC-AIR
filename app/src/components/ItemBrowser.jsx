@@ -7,7 +7,8 @@ import { UIcon, MaterialThumb } from "../icons";
 // drill down with sub-filters, tap a photo card → enter quantity → add (same flow as Stock Movements).
 const TABS = [{ v: "ac", l: "แอร์" }, { v: "material", l: "วัสดุ" }, { v: "service", l: "บริการ" }];
 
-export default function ItemBrowser({ mats, onAdd, matTargets }) {
+export default function ItemBrowser({ mats, onAdd, matTargets, unitOf }) {
+  const unitLbl = (m) => ((unitOf ? unitOf(m) : m?.unit) || "หน่วย");  // e.g. PO passes purchase unit (ม้วน)
   const [kind, setKind] = React.useState("ac");
   const [q, setQ] = React.useState("");
   const [brand, setBrand] = React.useState("all");
@@ -104,11 +105,11 @@ export default function ItemBrowser({ mats, onAdd, matTargets }) {
                   {matTargets.map((t) => <button key={t.id} className={"ib-target-btn" + (matTarget === t.id ? " on" : "")} onClick={() => setMatTarget(t.id)}>{t.label}</button>)}
                 </div>
               )}
-              <label className="fld"><span>จำนวน {qtyModal.unit ? `(${qtyModal.unit})` : ""}</span>
+              <label className="fld"><span>จำนวน ({unitLbl(qtyModal)})</span>
                 <div className="mv-qty-step">
                   <button type="button" onClick={() => setModalQty((x) => Math.max(1, (Number(x) || 1) - 1))}><UIcon name="minus" size={18} /></button>
                   <input type="number" min="1" value={modalQty} onChange={(e) => setModalQty(Math.max(1, Number(e.target.value) || 1))} />
-                  <span className="mv-qty-unit">{qtyModal.unit || "หน่วย"}</span>
+                  <span className="mv-qty-unit">{unitLbl(qtyModal)}</span>
                   <button type="button" onClick={() => setModalQty((x) => (Number(x) || 1) + 1)}><UIcon name="plus" size={18} /></button>
                 </div>
               </label>

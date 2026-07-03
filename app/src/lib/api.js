@@ -36,6 +36,8 @@ function enrich(m, catMap) {
     webPublished: m.web_published === true,
     minStock: Number(m.min_stock),
     stock: Number(m.current_stock ?? m.init_stock ?? 0),
+    purchaseUnit: m.purchase_unit || null,               // หน่วยซื้อ (เช่น ม้วน) — ว่าง = ซื้อหน่วยเดียวกับขาย
+    purchaseQty: Number(m.purchase_qty) || 0,            // 1 หน่วยซื้อ = กี่หน่วยหลัก (เช่น 15)
   };
 }
 
@@ -136,10 +138,15 @@ export async function listMaterialsLite() {
   const catMap = Object.fromEntries(cats.map((c) => [c.id, c]));
   const PAGE = 1000;
   const all = [];
+  const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty";
+  let cols = FULL;
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase.from("materials")
-      .select("code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features")
-      .eq("active", true).range(from, from + PAGE - 1);
+    let { data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1);
+    // pre-098 fallback: retry without the purchase-unit columns so the pickers still load
+    if (error && /purchase_unit|purchase_qty/i.test(error.message || "")) {
+      cols = FULL.replace(",purchase_unit,purchase_qty", "");
+      ({ data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1));
+    }
     if (error) throw error;
     all.push(...(data || []));
     if (!data || data.length < PAGE) break;
@@ -169,13 +176,15 @@ export async function saveMaterial(row, isNew) {
     power_cost_year: (row.power_cost_year === "" || row.power_cost_year == null) ? null : Number(row.power_cost_year),
     features: row.features?.trim() || null,
     web_published: !!row.web_published,
+    purchase_unit: row.purchase_unit?.trim() || null,
+    purchase_qty: Number(row.purchase_qty) > 0 ? Number(row.purchase_qty) : null,
   };
   if (isNew) payload.init_stock = Number(row.init_stock) || 0;
   let { error } = await supabase.from("materials").upsert(payload, { onConflict: "code" });
-  // graceful fallback: if migration 087 (power_cost_year/features) hasn't been run yet, the schema
+  // graceful fallback: if migration 087/098 (new columns) hasn't been run yet, the schema
   // cache rejects those columns and blocks EVERY save — retry without them so the catalog still works
-  if (error && /power_cost_year|features/i.test(error.message || "")) {
-    delete payload.power_cost_year; delete payload.features;
+  if (error && /power_cost_year|features|purchase_unit|purchase_qty/i.test(error.message || "")) {
+    delete payload.power_cost_year; delete payload.features; delete payload.purchase_unit; delete payload.purchase_qty;
     ({ error } = await supabase.from("materials").upsert(payload, { onConflict: "code" }));
   }
   if (error) throw error;
@@ -519,7 +528,7 @@ export async function listPurchaseOrders() {
   const byPo = {};
   (itemRes.data || []).forEach((it) => { (byPo[it.po_no] = byPo[it.po_no] || []).push(it); });
   return (poRes.data || []).map((po) => {
-    const items = (byPo[po.po_no] || []).map((it) => ({ material_code: it.material_code, qty: Number(it.qty), price: Number(it.price) }));
+    const items = (byPo[po.po_no] || []).map((it) => ({ material_code: it.material_code, qty: Number(it.qty), price: Number(it.price), unit: it.unit || null }));
     const subtotal = items.reduce((a, it) => a + it.qty * it.price, 0);   // ราคาก่อน VAT
     const vatAmt = po.vat ? Math.round(subtotal * 0.07 * 100) / 100 : 0;
     return { ...po, items, subtotal, vatAmt, total: Math.round((subtotal + vatAmt) * 100) / 100 };  // total = รวม VAT (ถ้ามี)
@@ -535,7 +544,9 @@ export async function savePurchaseOrder(po, items) {
   const e2 = (await supabase.from("po_items").delete().eq("po_no", po.po_no)).error;
   if (e2) throw e2;
   if (items.length) {
-    const e3 = (await supabase.from("po_items").insert(items.map((it) => ({ po_no: po.po_no, material_code: it.code, qty: Number(it.qty), price: Number(it.price) || 0 })))).error;
+    const rows = items.map((it) => ({ po_no: po.po_no, material_code: it.code, qty: Number(it.qty), price: Number(it.price) || 0, unit: it.unit || null }));
+    let e3 = (await supabase.from("po_items").insert(rows)).error;
+    if (e3 && /unit|column|PGRST204/i.test(e3.message || "")) { rows.forEach((r) => delete r.unit); e3 = (await supabase.from("po_items").insert(rows)).error; } // pre-098 fallback
     if (e3) throw e3;
   }
   syncCashEntriesFromDocs().catch(() => {}); // new/edited PO → "คาดว่าจะจ่าย" in cash flow

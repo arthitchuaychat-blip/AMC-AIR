@@ -79,20 +79,24 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   function startEdit(po) {
     const incl = !!po.vat && !!po.price_incl;   // stored price is pre-VAT → show gross in the field when incl mode
     setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl,
-      items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0) })) });
+      items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0), unit: i.unit || null })) });
   }
 
   const setItem = (code, field, val) => setEditing((e) => ({ ...e, items: e.items.map((x) => x.code === code ? { ...x, [field]: val } : x) }));
   const removeItem = (code) => setEditing((e) => ({ ...e, items: e.items.filter((x) => x.code !== code) }));
+  // หน่วยซื้อ: 1 purchaseUnit (ม้วน) = purchaseQty หน่วยหลัก (15 เมตร) — ใบสั่งซื้อกรอกเป็นหน่วยซื้อ
+  const puFactor = (m) => (m?.purchaseUnit && Number(m.purchaseQty) > 1) ? Number(m.purchaseQty) : 1;
+  const lineUnit = (it, m) => it.unit || m?.purchaseUnit || m?.unit || "";
   // add from ItemPicker/ItemBrowser (same UX as sales docs) — price defaults to the material cost
-  // (in "รวม VAT" mode the field holds the gross price, so pre-fill cost × 1.07)
+  // per PURCHASE unit (cost × factor); in "รวม VAT" mode the field holds the gross price (× 1.07)
   const addLinePO = (m, _target, qty = 1) => setEditing((e) => {
     const add = Math.max(1, Number(qty) || 1);
     const incl = !!e.vat && !!e.priceIncl;
-    const unit = incl ? R2((Number(m.cost) || 0) * 1.07) : (Number(m.cost) || 0);
+    const base = (Number(m.cost) || 0) * puFactor(m);
+    const unitPrice = incl ? R2(base * 1.07) : R2(base);
     const i = e.items.findIndex((x) => x.code === m.code);
     if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + add }; return { ...e, items }; }
-    return { ...e, items: [...e.items, { code: m.code, qty: add, price: unit }] };
+    return { ...e, items: [...e.items, { code: m.code, qty: add, price: unitPrice, unit: m.purchaseUnit || m.unit || null }] };
   });
   // switch VAT/price mode — keep each line's NET price constant across the switch
   function setVatMode(mode) {
@@ -131,7 +135,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   }
   function copyPo(po) {
     const text = `ใบสั่งซื้อ ${po.po_no}${po.supplier ? ` · ${po.supplier}` : ""}\n`
-      + po.items.map((it, i) => `${i + 1}. ${matMap[it.material_code]?.th || it.material_code} (${it.material_code}) — ${fmtNum(it.qty)} ${matMap[it.material_code]?.unit || ""} @ ${fmtBaht(it.price)}`).join("\n")
+      + po.items.map((it, i) => `${i + 1}. ${matMap[it.material_code]?.th || it.material_code} (${it.material_code}) — ${fmtNum(it.qty)} ${it.unit || matMap[it.material_code]?.unit || ""} @ ${fmtBaht(it.price)}`).join("\n")
       + `\nรวม ${po.items.length} รายการ · ${po.vat ? `${fmtBaht(po.subtotal)} + VAT 7% ${fmtBaht(po.vatAmt)} = ${fmtBaht(po.total)}` : fmtBaht(po.total)}`;
     const done = () => flash("คัดลอกใบสั่งซื้อแล้ว — ส่งซัพพลายเออร์ได้เลย");
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done).catch(() => window.prompt("คัดลอก:", text));
@@ -171,13 +175,14 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           )}
           {editing.items.length > 0 && (
             <div className="line-list">
-              {editing.items.map((it) => { const m = matMap[it.code]; return (
+              {editing.items.map((it) => { const m = matMap[it.code]; const u = lineUnit(it, m); const conv = m?.purchaseUnit && u === m.purchaseUnit && puFactor(m) > 1; return (
                 <div className="po-edit-row" key={it.code}>
                   <MaterialThumb mat={m || { color: "#888" }} size={32} radius={8} />
-                  <div className="line-info"><div className="line-name">{m?.th || it.code}</div><div className="line-sub">{m?.unit}</div></div>
+                  <div className="line-info"><div className="line-name">{m?.th || it.code}</div>
+                    <div className="line-sub">{conv ? `1 ${m.purchaseUnit} = ${fmtNum(m.purchaseQty)} ${m.unit} · ราคา/${m.purchaseUnit}` : m?.unit}</div></div>
                   <div className="inp inp-unit po-edit-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.price} onChange={(e) => setItem(it.code, "price", Number(e.target.value) || 0)} /></div>
                   {editIncl && <div className="inp inp-unit po-edit-in" style={{ opacity: 0.7 }} title="ราคาก่อน VAT (คำนวณให้)"><span className="unit-pre">฿</span><input type="number" value={R2(netUnit(it))} disabled /></div>}
-                  <div className="inp inp-unit po-edit-in"><input type="number" min="1" value={it.qty} onChange={(e) => setItem(it.code, "qty", Math.max(1, Number(e.target.value) || 1))} /><span className="unit-suf">{m?.unit}</span></div>
+                  <div className="inp inp-unit po-edit-in"><input type="number" min="1" value={it.qty} onChange={(e) => setItem(it.code, "qty", Math.max(1, Number(e.target.value) || 1))} /><span className="unit-suf">{u}</span></div>
                   <span className="po-edit-val">{fmtBaht((Number(it.qty) || 0) * (Number(it.price) || 0))}</span>
                   <button className="line-x" onClick={() => removeItem(it.code)}><UIcon name="x" size={14} /></button>
                 </div>
@@ -199,7 +204,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึกใบสั่งซื้อ</button>
           </div>
         </div>
-        <ItemBrowser mats={mats} onAdd={addLinePO} />
+        <ItemBrowser mats={mats} onAdd={addLinePO} unitOf={(m) => m.purchaseUnit || m.unit} />
         </div>
         {toast && <Toast toast={toast} />}
       </div>
@@ -249,7 +254,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 {po.items.map((it) => { const m = matMap[it.material_code]; return (
                   <div className="po-view-row" key={it.material_code}>
                     <span className="po-view-name">{m?.th || it.material_code}</span>
-                    <span className="po-view-q">{fmtNum(it.qty)} {m?.unit || ""} × {fmtBaht(it.price)}</span>
+                    <span className="po-view-q">{fmtNum(it.qty)} {it.unit || m?.unit || ""} × {fmtBaht(it.price)}</span>
                     <span className="po-view-v">{fmtBaht(it.qty * it.price)}</span>
                   </div>
                 ); })}

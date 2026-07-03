@@ -30,6 +30,8 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     power_cost_year: initial?.power_cost_year ?? initial?.powerCostYear ?? "",
     features: initial?.features ?? "",
     web_published: initial?.webPublished ?? initial?.web_published ?? false,
+    purchase_unit: initial?.purchaseUnit ?? initial?.purchase_unit ?? "",
+    purchase_qty: initial?.purchaseQty ?? initial?.purchase_qty ?? "",
   }));
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -151,6 +153,18 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
               <input className="inp" type="number" value={f.sale_price} onChange={set("sale_price")} placeholder="0.00" />
             </label>
           </div>
+
+          {/* purchase unit (ซื้อคนละหน่วยกับขาย เช่น ขายเป็นเมตร ซื้อเป็นม้วน) — วัสดุที่นับสต๊อกเท่านั้น */}
+          {isMat && (
+            <div className="fld-row">
+              <label className="fld"><span>หน่วยซื้อ <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(ถ้าซื้อคนละหน่วยกับขาย เช่น ม้วน · เว้นว่าง = หน่วยเดียวกัน)</span></span>
+                <input className="inp" value={f.purchase_unit} onChange={set("purchase_unit")} placeholder="เช่น ม้วน / กล่อง / ลัง" />
+              </label>
+              <label className="fld" style={{ opacity: f.purchase_unit ? 1 : 0.5 }}><span>1 {f.purchase_unit || "หน่วยซื้อ"} = กี่{f.unit || "หน่วย"}</span>
+                <div className="inp inp-unit"><input type="number" min="0" step="0.01" value={f.purchase_qty} disabled={!f.purchase_unit} onChange={set("purchase_qty")} placeholder="เช่น 15" /><span className="unit-suf">{f.unit}</span></div>
+              </label>
+            </div>
+          )}
 
           {/* stock tracking (not for service) */}
           {!isService && (

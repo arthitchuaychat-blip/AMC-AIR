@@ -116,13 +116,19 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     if (withdrawCtx.jobNo) setJobNo(withdrawCtx.jobNo);
     onWithdrawCtxConsumed && onWithdrawCtxConsumed();
   }, [withdrawCtx]);
-  // prefill the purchase cart when receiving a PO ({ poNo, items:[{code,qty,price}] })
+  // prefill the purchase cart when receiving a PO ({ poNo, items:[{code,qty,price,unit}] })
+  // สินค้าที่สั่งเป็น "หน่วยซื้อ" (เช่น ม้วน) → แปลงเข้าสต๊อกเป็นหน่วยหลัก: จำนวน ×แฟกเตอร์ · ราคา/หน่วย ÷แฟกเตอร์
   React.useEffect(() => {
     if (!prefill || !prefill.items?.length || !mats.length) return;
     setType("purchase");
     setJobNo(prefill.poNo || "");
     setReceivePo(prefill.poNo || null);
-    setLines(prefill.items.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: p.price ?? matMap[p.code]?.cost ?? 0 })));
+    setLines(prefill.items.map((p) => {
+      const m = matMap[p.code];
+      const f = (p.unit && m?.purchaseUnit && p.unit === m.purchaseUnit && Number(m.purchaseQty) > 1) ? Number(m.purchaseQty) : 1;
+      const price = p.price ?? m?.cost ?? 0;
+      return { code: p.code, qty: (Number(p.qty) || 1) * f, price: Math.round(((Number(price) || 0) / f) * 100) / 100 };
+    }));
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
   const printWin = React.useRef(null);
