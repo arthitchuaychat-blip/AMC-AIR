@@ -260,10 +260,12 @@ export default function Catalog({ role }) {
                 {canEdit && <label className="cat-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={sel.has(m.code)} onChange={() => toggleSel(m.code)} /></label>}
                 <MaterialThumb mat={m} size={40} radius={11} />
                 <div className="cat-lrow-main">
-                  <div className="cat-lrow-name">{m.th} {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>} {m.webPublished && <span className="web-badge" title="แสดงบนเว็บไซต์">🌐 บนเว็บ</span>} {low && <span className="badge-warn sm">ต่ำ</span>}</div>
+                  <div className="cat-lrow-name">{m.th} {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>} {low && <span className="badge-warn sm">ต่ำ</span>}</div>
                   <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
                   {m.description && <div className="cat-lrow-desc">{m.description}</div>}
                 </div>
+                <div className="cat-lrow-col hide-sm"><span>สต๊อก</span><span className={"job-badge " + (m.tracked ? "b-blue" : "b-grey")} title={m.tracked ? "นับสต๊อก (เบิก/คืน/ซื้อได้)" : "ไม่นับสต๊อก (สั่งตามงาน)"}>{m.tracked ? "✓ นับสต๊อก" : "ไม่นับ"}</span></div>
+                <div className="cat-lrow-col hide-sm"><span>เว็บไซต์</span><span className={"job-badge " + (m.webPublished ? "b-green" : "b-grey")} title={m.webPublished ? "แสดงบนเว็บไซต์" : "ไม่แสดงบนเว็บไซต์"}>{m.webPublished ? "🌐 โชว์" : "ไม่โชว์"}</span></div>
                 <div className="cat-lrow-col hide-sm"><span>คงเหลือ</span><b style={low ? { color: "#dc2626" } : {}}>{m.tracked ? `${m.stock} ${m.unit}` : "—"}</b></div>
                 <div className="cat-lrow-col hide-sm"><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b></div>
                 <div className="cat-lrow-col"><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b></div>
