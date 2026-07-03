@@ -1010,6 +1010,7 @@ export async function saveReceipt(r) {
   if (error) throw error;
   if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no);
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
+  syncBankReceipts().catch(() => {});        // auto-post the deposit into the bank-account ledger
 }
 // update per-line WHT selection + rate + recomputed amounts on a receipt
 export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, net) {
@@ -1079,6 +1080,7 @@ export async function setReceiptStatus(receipt_no, status, invoice_no, reason) {
   if (invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", invoice_no);
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "receipt", target_no: receipt_no, reason });
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
+  syncBankReceipts().catch(() => {});        // paid→post / cancelled→remove the bank-ledger deposit
 }
 export async function saveReceiptFlowAccount(receipt_no, faId, faNo) {
   // RPC stamps only the flowaccount_* columns, gated to the FlowAccount-allowed roles (so hr/sales can
@@ -1096,6 +1098,7 @@ export async function deleteReceipt(receipt_no, invoice_no, reason) {
   if (invoice_no) await supabase.from("invoices").update({ status: "unpaid" }).eq("invoice_no", invoice_no);
   await logAudit({ action: "delete", target_type: "receipt", target_no: receipt_no, reason, snapshot: snap });
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
+  syncBankReceipts().catch(() => {});        // remove the bank-ledger deposit for the deleted receipt
 }
 
 // ---------- JOB ORDERS (ใบงาน) ----------
@@ -1937,6 +1940,56 @@ export async function setEntriesReconciled(ids, reconciled) {
     .update({ reconciled: !!reconciled, reconciled_at: reconciled ? new Date().toISOString() : null })
     .in("id", list);
   if (error) throw error;
+}
+// pull customer payments (paid receipts) into the bank-account ledger for reconciliation.
+// routes by VAT: vat_amt>0 → บัญชีธนาคาร(VAT), else → บัญชีธนาคาร(ไม่ VAT). Cash receipts are skipped
+// (not a bank deposit). Amount = net (after WHT) — the sum that actually lands in the bank.
+// idempotent (kind='receipt', ref_id=receipt_no): inserts new, updates unreconciled, removes stale;
+// NEVER touches lines the user already reconciled (reconciled=true). Needs migration 089 for the flag.
+export async function syncBankReceipts() {
+  const uid = await _uid();
+  const today = new Date().toISOString().slice(0, 10);
+  const [accRes, rcRes, cuRes] = await Promise.all([
+    supabase.from("accounts").select("id,code"),
+    supabase.from("receipts").select("receipt_no,issue_date,vat_amt,net,total,status,payment_method,customer_id"),
+    supabase.from("customers").select("id,name"),
+  ]);
+  if (accRes.error) throw accRes.error; if (rcRes.error) throw rcRes.error;
+  const accByCode = Object.fromEntries((accRes.data || []).map((a) => [a.code, a.id]));
+  const vatAcc = accByCode.vat, novatAcc = accByCode.novat;
+  if (!vatAcc || !novatAcc) return { added: 0, updated: 0, removed: 0 };
+  const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
+
+  // existing receipt-sourced entries — resilient to a missing `reconciled` column (pre-089)
+  let ex = await supabase.from("account_entries").select("id,ref_id,reconciled,account_id,amount,entry_date").eq("ref_type", "receipt");
+  if (ex.error && /reconciled|column|PGRST/i.test(ex.error.message || "")) ex = await supabase.from("account_entries").select("id,ref_id,account_id,amount,entry_date").eq("ref_type", "receipt");
+  if (ex.error) throw ex.error;
+  const existing = {}; (ex.data || []).forEach((e) => { existing[e.ref_id] = e; });
+
+  const desired = {};
+  (rcRes.data || []).forEach((r) => {
+    if (r.status !== "paid") return;
+    if (r.payment_method === "เงินสด") return;                 // cash → not a bank deposit
+    const amt = Math.round((Number(r.net) || Number(r.total) || 0) * 100) / 100;
+    if (amt <= 0) return;
+    const account_id = (Number(r.vat_amt) || 0) > 0 ? vatAcc : novatAcc;
+    desired[r.receipt_no] = { account_id, amount: amt, entry_date: r.issue_date || today,
+      note: `รับเงินลูกค้า${r.customer_id && custName[r.customer_id] ? " · " + custName[r.customer_id] : ""} · ${r.receipt_no}` };
+  });
+
+  const inserts = [], updates = [], removeIds = [];
+  Object.entries(desired).forEach(([rno, d]) => {
+    const e = existing[rno];
+    if (!e) inserts.push({ account_id: d.account_id, direction: "in", amount: d.amount, kind: "receipt", ref_type: "receipt", ref_id: rno, note: d.note, entry_date: d.entry_date, created_by: uid });
+    else if (!e.reconciled && (Math.abs((Number(e.amount) || 0) - d.amount) > 0.005 || e.entry_date !== d.entry_date || e.account_id !== d.account_id))
+      updates.push({ id: e.id, account_id: d.account_id, amount: d.amount, entry_date: d.entry_date });
+  });
+  (ex.data || []).forEach((e) => { if (!desired[e.ref_id] && !e.reconciled) removeIds.push(e.id); });
+
+  if (inserts.length) { const { error } = await supabase.from("account_entries").insert(inserts); if (error) throw error; }
+  for (const u of updates) await supabase.from("account_entries").update({ account_id: u.account_id, amount: u.amount, entry_date: u.entry_date }).eq("id", u.id);
+  for (let i = 0; i < removeIds.length; i += 100) await supabase.from("account_entries").delete().in("id", removeIds.slice(i, i + 100));
+  return { added: inserts.length, updated: updates.length, removed: removeIds.length };
 }
 export async function transferFunds({ fromId, toId, amount, note }) {
   const uid = await _uid(); const amt = Number(amount) || 0;

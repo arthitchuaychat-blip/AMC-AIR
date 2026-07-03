@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, addAccountEntry, deleteAccountEntry, setEntriesReconciled, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, addAccountEntry, deleteAccountEntry, setEntriesReconciled, syncBankReceipts, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import AttachThumb from "./AttachThumb";
 import { fmtBaht, ATTACH_ACCEPT } from "../lib/format";
@@ -245,7 +245,7 @@ function AccountsTab({ flash }) {
   );
 }
 
-const KIND_TAG = { transfer: "🔁 โอน", expense: "🧾 เบิกจ่าย", opening: "⚑ ยอดยกมา", adjust: "⚙ ปรับปรุง", manual: "✍️ บันทึกเอง" };
+const KIND_TAG = { transfer: "🔁 โอน", expense: "🧾 เบิกจ่าย", receipt: "💰 รับเงินลูกค้า", opening: "⚑ ยอดยกมา", adjust: "⚙ ปรับปรุง", manual: "✍️ บันทึกเอง" };
 const recErr = (e) => /reconciled|column|PGRST204/i.test(e?.message || "") ? "ยังไม่ได้รัน migration 089 (กระทบแบงค์) ใน Supabase ก่อน" : "ไม่สำเร็จ: " + (e?.message || e);
 
 function ReportTab({ flash }) {
@@ -267,9 +267,16 @@ function ReportTab({ flash }) {
     try { setRows(await listAccountEntries(accountId !== "all" ? { accountId } : {})); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setRows([]); }
   }
-  React.useEffect(() => { loadAccounts(); }, []);
+  // on open: pull customer deposits from receipts, then load (so รับเงินลูกค้า appears without pressing sync)
+  React.useEffect(() => { (async () => { try { await syncBankReceipts(); } catch (_) {} loadAccounts(); })(); }, []);
   React.useEffect(() => { loadRows(); }, [accountId]);
   const refresh = () => { loadAccounts(); loadRows(); };
+  async function pullReceipts() {
+    setBusy(true);
+    try { const r = await syncBankReceipts(); flash(`ดึงจากใบเสร็จแล้ว · เพิ่ม ${r.added} · อัปเดต ${r.updated}${r.removed ? " · ลบ " + r.removed : ""} ✓`); refresh(); }
+    catch (e) { flash(recErr(e), true); }
+    setBusy(false);
+  }
 
   const single = !!accountId && accountId !== "all";
   const acc = single ? accById[accountId] : null;
@@ -307,8 +314,11 @@ function ReportTab({ flash }) {
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">เดินบัญชี & กระทบแบงค์</div>
-        <div className="sec-sub">บันทึกเงินเข้า/ออกของบัญชีธนาคาร แล้วติ๊ก ✓ รายการที่ตรงกับ statement เพื่อกระทบยอด</div></div>
-        <button className="btn-primary" onClick={() => setAddOpen(true)}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มรายการ (ฝาก/ถอน)</button></div>
+        <div className="sec-sub">ดึงยอดรับเงินจากใบเสร็จอัตโนมัติ (โอน→บัญชี VAT/ไม่ VAT ตามบิล) · บันทึกฝาก/ถอนเอง · ติ๊ก ✓ ที่ตรงกับ statement</div></div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn-ghost" disabled={busy} onClick={pullReceipts}><UIcon name="withdraw" size={15} /> ดึงยอดรับเงินจากเอกสาร</button>
+          <button className="btn-primary" onClick={() => setAddOpen(true)}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มรายการ (ฝาก/ถอน)</button>
+        </div></div>
 
       <div className="cat-filter" style={{ marginTop: 4 }}>
         {[["all", "ทุกบัญชี"], ...accounts.map((a) => [a.id, (a.kind === "cash" ? "💵 " : "🏦 ") + a.name])].map(([v, l]) => (
