@@ -142,8 +142,8 @@ function ApproveTab({ flash }) {
   async function load() { try { setList(await listExpenses()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setList([]); } }
   React.useEffect(() => { load(); }, []);
   async function decide(x, status) {
-    const lbl = { approved: "อนุมัติ", rejected: "ไม่อนุมัติ" }[status];
-    if (!await confirmDialog(`${lbl}คำขอเบิก "${x.title}" (${fmtBaht(x.amount)}) ?`)) return;
+    const lbl = { approved: "อนุมัติ", rejected: "ไม่อนุมัติ", pending: "ยกเลิกอนุมัติ" }[status];
+    if (!await confirmDialog(`${lbl}คำขอเบิก "${x.title}" (${fmtBaht(x.amount)}) ?${status === "pending" ? "\n(รายการจะกลับไปสถานะ “รออนุมัติ”)" : ""}`)) return;
     try { await decideExpense(x.id, status); flash(lbl + "แล้ว"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   const shown = (list || []).filter((x) => statusF === "all" || x.status === statusF);
@@ -164,7 +164,8 @@ function ApproveTab({ flash }) {
           <ExpenseCard key={x.id} x={x}>
             {x.status === "pending" && <><button className="btn-primary sm ok" onClick={() => decide(x, "approved")}>✓ อนุมัติ</button>
               <button className="btn-ghost sm" onClick={() => decide(x, "rejected")}>ไม่อนุมัติ</button></>}
-            {x.status === "approved" && <button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> จ่ายเงิน + แนบหลักฐาน</button>}
+            {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> จ่ายเงิน + แนบหลักฐาน</button>
+              <button className="btn-ghost sm danger" onClick={() => decide(x, "pending")}>ยกเลิกอนุมัติ</button></>}
           </ExpenseCard>
         ))}
       </div>

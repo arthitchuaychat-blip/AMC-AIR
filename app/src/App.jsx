@@ -94,7 +94,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-03·สิทธิ HR: +ทุกอย่างของฝ่ายขาย +อนุมัติ/จ่ายเบิก +คุมเงินสดย่อย/กระแสเงินสด v249";
+const BUILD = "2026-07-03·เบิกจ่าย: เพิ่มปุ่ม 'ยกเลิกอนุมัติ' (คืนรายการที่อนุมัติแล้วกลับไปรออนุมัติ) v250";
 
 function SetupNotice() {
   return (
