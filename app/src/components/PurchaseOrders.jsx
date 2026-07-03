@@ -6,6 +6,8 @@ import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
+import ItemPicker from "./ItemPicker";
+import ItemBrowser from "./ItemBrowser";
 
 const STATUS = { open: { th: "รอรับของ", cls: "b-amber" }, received: { th: "รับแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
 const PO_FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open", label: "รอรับของ" }, { id: "received", label: "รับแล้ว" }, { id: "cancelled", label: "ยกเลิก" }];
@@ -44,13 +46,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
-  const [editing, setEditing] = React.useState(null); // {po_no, supplier, note, items:[{code,qty,price}]} or null
-  const [pick, setPick] = React.useState({ code: "", qty: 1, price: "" });
-  const [poKind, setPoKind] = React.useState("all"); // all | material | ac (picker filter)
-  const [poSearch, setPoSearch] = React.useState("");
-  const [qtyModal, setQtyModal] = React.useState(null); // material being added to the PO
-  const [modalQty, setModalQty] = React.useState(1);
-  const [modalPrice, setModalPrice] = React.useState("");
+  const [editing, setEditing] = React.useState(null); // {po_no, supplier, note, vat, items:[{code,qty,price}]} or null
   const [q, setQ] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
@@ -80,37 +76,15 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: false, items: [] }); }
   function startEdit(po) { setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: i.price })) }); }
 
-  function addItem() {
-    if (!pick.code || pick.qty < 1) return;
-    setEditing((e) => {
-      const i = e.items.findIndex((x) => x.code === pick.code);
-      const price = pick.price === "" ? (matMap[pick.code]?.cost ?? 0) : Number(pick.price);
-      const items = [...e.items];
-      if (i >= 0) items[i] = { ...items[i], qty: items[i].qty + Number(pick.qty), price };
-      else items.push({ code: pick.code, qty: Number(pick.qty), price });
-      return { ...e, items };
-    });
-    setPick({ code: pick.code, qty: 1, price: "" });
-  }
   const setItem = (code, field, val) => setEditing((e) => ({ ...e, items: e.items.map((x) => x.code === code ? { ...x, [field]: val } : x) }));
   const removeItem = (code) => setEditing((e) => ({ ...e, items: e.items.filter((x) => x.code !== code) }));
-  // photo-card picker (same flow as Stock Movements): filter + search → tap card → qty + ราคา → add
-  const pickList = React.useMemo(() => {
-    const s = poSearch.trim().toLowerCase();
-    return mats.filter((m) => m.tracked && (poKind === "all" || m.kind === poKind)
-      && (!s || `${m.code} ${m.th || ""} ${m.en || ""}`.toLowerCase().includes(s))).slice(0, 60);
-  }, [mats, poKind, poSearch]);
-  function openQty(m) { setQtyModal(m); setModalQty(1); setModalPrice(String(m.cost ?? 0)); }
-  function addFromModal() {
-    if (!qtyModal) return;
-    const code = qtyModal.code, qty = Math.max(1, Number(modalQty) || 1), price = Number(modalPrice) || 0;
-    setEditing((e) => {
-      const i = e.items.findIndex((x) => x.code === code);
-      if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + qty, price }; return { ...e, items }; }
-      return { ...e, items: [...e.items, { code, qty, price }] };
-    });
-    setQtyModal(null);
-  }
+  // add from ItemPicker/ItemBrowser (same UX as sales docs) — purchase price defaults to the material cost
+  const addLinePO = (m, _target, qty = 1) => setEditing((e) => {
+    const add = Math.max(1, Number(qty) || 1);
+    const i = e.items.findIndex((x) => x.code === m.code);
+    if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + add }; return { ...e, items }; }
+    return { ...e, items: [...e.items, { code: m.code, qty: add, price: Number(m.cost) || 0 }] };
+  });
 
   const editTotal = editing ? editing.items.reduce((a, x) => a + (Number(x.qty) || 0) * (Number(x.price) || 0), 0) : 0;
 
@@ -143,7 +117,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           <div><h1 className="page-title">ใบสั่งซื้อ <span className="page-title-en">Purchase Order</span></h1>
             <p className="page-sub">แก้ไขรายการ/จำนวน/ราคาได้ · บันทึกแล้วคัดลอกส่งซัพพลายเออร์</p></div>
         </div>
-        <div className="card" style={{ maxWidth: 720 }}>
+        <div className="doc-edit-wrap">
+        <div className="card" style={{ flex: 1, maxWidth: 860 }}>
           <div className="fld-row">
             <label className="fld"><span>เลขใบสั่งซื้อ · PO No.</span><input className="inp" value={editing.po_no} onChange={(e) => setEditing({ ...editing, po_no: e.target.value })} /></label>
             <label className="fld"><span>ซัพพลายเออร์ · Supplier</span><SupplierPicker value={editing.supplier} onChange={(v) => setEditing((e) => ({ ...e, supplier: v }))} /></label>
@@ -157,32 +132,9 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           </div>
           <InternalNoteField value={editing.internal_note} onChange={(v) => setEditing({ ...editing, internal_note: v })} />
 
-          <div className="fld"><span>เพิ่มรายการวัสดุ</span>
-            <div className="line-add" style={{ marginBottom: 6 }}>
-              {[["all", "ทุกชนิด"], ["material", "วัสดุ"], ["ac", "เครื่องปรับอากาศ"]].map(([v, l]) => (
-                <button key={v} type="button" className={"cat-chip" + (poKind === v ? " on" : "")} onClick={() => setPoKind(v)}
-                  style={poKind === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
-              ))}
-            </div>
-            <div className="cat-search" style={{ marginBottom: 8 }}><UIcon name="search" size={16} color="var(--ink-3)" />
-              <input placeholder="ค้นหา รหัส / ชื่อวัสดุ" value={poSearch} onChange={(e) => setPoSearch(e.target.value)} />
-              {poSearch && <button className="cat-search-x" onClick={() => setPoSearch("")}><UIcon name="x" size={14} /></button>}
-            </div>
-            <div className="mv-grid ib-cardgrid">
-              {pickList.length === 0 && <div className="ib-empty" style={{ gridColumn: "1/-1" }}>ไม่พบวัสดุ</div>}
-              {pickList.map((m) => (
-                <button type="button" className="mv-card" key={m.code} onClick={() => openQty(m)} title="กดเพื่อเพิ่มเข้าใบสั่งซื้อ">
-                  <div className="mv-card-photo"><MaterialThumb mat={m} size={108} radius={12} /></div>
-                  <div className="mv-card-info">
-                    <div className="mv-card-name">{m.th}</div>
-                    <div className="mv-card-sub">{m.code} · เหลือ {fmtNum(m.stock)} {m.unit}</div>
-                    <div className="mv-card-stock">฿{fmtNum(m.cost)}</div>
-                  </div>
-                  <span className="mv-card-add"><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่ม</span>
-                </button>
-              ))}
-            </div>
-            <p className="page-sub" style={{ marginTop: 6 }}>กดวัสดุ → ใส่ราคาซื้อ + จำนวน · ปรับเพิ่มได้ในรายการด้านล่าง</p>
+          <div className="fld"><span>เพิ่มรายการ (ค้นหาสินค้า/วัสดุ)</span>
+            <ItemPicker items={mats} placeholder="ค้นหา รหัส / ชื่อสินค้า หรือกดลูกศร…" onPick={addLinePO} />
+            <p className="page-sub" style={{ marginTop: 6 }}>เลือกจากช่องค้นหา หรือเลือกจากแคตตาล็อกด้านขวา → ปรับราคาซื้อ/จำนวนในรายการด้านล่างได้</p>
           </div>
 
           {editing.items.length > 0 && (
@@ -214,37 +166,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึกใบสั่งซื้อ</button>
           </div>
         </div>
-
-        {qtyModal && (
-          <div className="modal-overlay" onClick={() => setQtyModal(null)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
-              <div className="modal-head"><div className="modal-title">เพิ่มเข้าใบสั่งซื้อ</div>
-                <button className="modal-x" onClick={() => setQtyModal(null)}><UIcon name="x" size={18} /></button></div>
-              <div className="modal-body">
-                <div className="mv-pick-head">
-                  <MaterialThumb mat={qtyModal} size={64} radius={12} />
-                  <div><div className="mv-pick-name">{qtyModal.th}</div>
-                    <div className="mv-pick-sub">{qtyModal.code} · เหลือ {fmtNum(qtyModal.stock)} {qtyModal.unit}</div></div>
-                </div>
-                <label className="fld"><span>ราคาซื้อ/หน่วย</span>
-                  <div className="inp inp-unit"><span className="unit-pre">฿</span>
-                    <input type="number" min="0" step="0.01" value={modalPrice} autoFocus onChange={(e) => setModalPrice(e.target.value)} />
-                    <span className="unit-suf">/{qtyModal.unit || "หน่วย"}</span></div>
-                </label>
-                <label className="fld"><span>จำนวน</span>
-                  <div className="mv-qty-step">
-                    <button type="button" onClick={() => setModalQty((x) => Math.max(1, (Number(x) || 1) - 1))}><UIcon name="minus" size={18} /></button>
-                    <input type="number" min="1" value={modalQty} onChange={(e) => setModalQty(Math.max(1, Number(e.target.value) || 1))} />
-                    <span className="mv-qty-unit">{qtyModal.unit || "หน่วย"}</span>
-                    <button type="button" onClick={() => setModalQty((x) => (Number(x) || 1) + 1)}><UIcon name="plus" size={18} /></button>
-                  </div>
-                </label>
-              </div>
-              <div className="modal-foot"><button className="btn-ghost" onClick={() => setQtyModal(null)}>ยกเลิก</button>
-                <button className="btn-primary" onClick={addFromModal}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มเข้าใบสั่งซื้อ</button></div>
-            </div>
-          </div>
-        )}
+        <ItemBrowser mats={mats} onAdd={addLinePO} />
+        </div>
         {toast && <Toast toast={toast} />}
       </div>
     );
