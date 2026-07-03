@@ -35,6 +35,7 @@ export const UNITS = ["เมตร", "ชิ้น", "ตัว", "ชุด", 
 
 // auto customer code derived from the DB id (sequential, unique, no extra column)
 export const custCode = (id) => (id ? "C" + String(id).padStart(6, "0") : "");
+export const suppCode = (id) => (id ? "V" + String(id).padStart(6, "0") : "");
 
 // short Thai document date (accepts a YYYY-MM-DD date or an ISO timestamp)
 export const fmtDocDate = (s) => {

@@ -620,6 +620,41 @@ export async function bulkImportCustomers(rows) {
   return { ok, failed: errors.length, errors };
 }
 
+// ---------- SUPPLIERS (ข้อมูลผู้ขาย · โครงเดียวกับลูกค้า) ----------
+export async function listSuppliers() {
+  const [s, sc, ss] = await Promise.all([
+    _fetchAll((f, t) => supabase.from("suppliers").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(f, t)),
+    _fetchAll((f, t) => supabase.from("supplier_contacts").select("*", { count: "exact" }).range(f, t)),
+    _fetchAll((f, t) => supabase.from("supplier_sites").select("*", { count: "exact" }).range(f, t)),
+  ]);
+  const byC = {}, byS = {};
+  sc.forEach((x) => { (byC[x.supplier_id] = byC[x.supplier_id] || []).push(x); });
+  ss.forEach((x) => { (byS[x.supplier_id] = byS[x.supplier_id] || []).push(x); });
+  return s.map((su) => ({ ...su, contacts: byC[su.id] || [], sites: byS[su.id] || [] }));
+}
+export async function saveSupplier(sup, contacts, sites) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const fields = { type: sup.type, name: sup.name.trim(), address: sup.address?.trim() || null, tax_id: sup.tax_id?.trim() || null, email: sup.email?.trim() || null, vat: !!sup.vat, note: sup.note?.trim() || null };
+  let id = sup.id;
+  if (id) {
+    const e = (await supabase.from("suppliers").update(fields).eq("id", id)).error; if (e) throw e;
+  } else {
+    const r = await supabase.from("suppliers").insert({ ...fields, created_by: user?.id || null }).select("id").single();
+    if (r.error) throw r.error; id = r.data.id;
+  }
+  await supabase.from("supplier_contacts").delete().eq("supplier_id", id);
+  const cRows = contacts.filter((x) => (x.name || x.phone)).map((x) => ({ supplier_id: id, name: x.name?.trim() || null, phone: x.phone?.trim() || null, role: x.role?.trim() || null }));
+  if (cRows.length) { const e = (await supabase.from("supplier_contacts").insert(cRows)).error; if (e) throw e; }
+  await supabase.from("supplier_sites").delete().eq("supplier_id", id);
+  const sRows = sites.filter((x) => (x.site_name || x.address || x.contact_name || x.phone || x.map_url)).map((x) => ({ supplier_id: id, site_name: x.site_name?.trim() || null, address: x.address?.trim() || null, map_url: x.map_url?.trim() || null, contact_name: x.contact_name?.trim() || null, phone: x.phone?.trim() || null }));
+  if (sRows.length) { const e = (await supabase.from("supplier_sites").insert(sRows)).error; if (e) throw e; }
+  return id;
+}
+export async function deleteSupplier(id) {
+  const { error } = await supabase.from("suppliers").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- BOQ (ใบประมาณการต้นทุน) ----------
 export async function listBoqs() {
   const [b, it, cu, si, ct, qt] = await Promise.all([

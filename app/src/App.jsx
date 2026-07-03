@@ -19,6 +19,7 @@ import Settings from "./components/Settings";
 import Jobs from "./components/Jobs";
 import PurchaseOrders from "./components/PurchaseOrders";
 import Customers from "./components/Customers";
+import Suppliers from "./components/Suppliers";
 import BOQ from "./components/BOQ";
 import Quotation from "./components/Quotation";
 import Profit from "./components/Profit";
@@ -71,6 +72,7 @@ const NAV = {
   movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "withdraw" },
   stockcount: { th: "นับสต๊อก", en: "Stock Count", icon: "catalog" },
   jobs: { th: "วัสดุที่ใช้ในงาน", en: "Jobs & Cost", icon: "box" },
+  suppliers: { th: "ผู้ขาย", en: "Suppliers", icon: "building" },
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
@@ -83,7 +85,7 @@ const NAV_GROUPS = [
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
-  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "po"] },
+  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "po"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
 ];
@@ -92,7 +94,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-03·จ่ายช่างซัพ: เลือกบัญชีที่จ่าย → ลงรายการเดินบัญชี + กระแสเงินสด อัตโนมัติ v247";
+const BUILD = "2026-07-03·เพิ่มเมนู 'ผู้ขาย' (Suppliers) — ข้อมูลผู้ขาย/ผู้ติดต่อ/สาขา เหมือนลูกค้า v248";
 
 function SetupNotice() {
   return (
@@ -415,6 +417,7 @@ export default function App() {
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
+        {view === "suppliers" && <Suppliers role={role} />}
         {view === "followup" && <CustomerFollowup role={role}
           onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
           onOpenCustomer={(cid) => { setCustFocus(String(cid)); go("customers"); }}
