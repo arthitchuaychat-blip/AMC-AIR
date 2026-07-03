@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listMaterials, listMaterialsLite, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus, saveBrand, saveBtu, setMaterialsWebPublished } from "../lib/api";
-import { fmtBaht2, fmtNum, eqi, matchText, norm } from "../lib/format";
+import { fmtBaht, fmtBaht2, fmtNum, eqi, matchText, norm } from "../lib/format";
 import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
 import MaterialModal from "./MaterialModal";
@@ -11,6 +11,18 @@ import BulkImportModal from "./BulkImportModal";
 
 const KINDS = [{ v: "all", l: "ทั้งหมด" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }, { v: "material", l: "วัสดุ" }];
 const KIND_LABEL = { ac: "แอร์", service: "บริการ", material: "วัสดุ" };
+
+// สินค้า 2 หน่วย: แตกยอดคงเหลือเป็นหน่วยใหญ่+เศษ เช่น 247 เมตร (1 ม้วน = 100 เมตร) → "= 2 ม้วน 47 เมตร"
+function dualStockText(m) {
+  const f = Number(m.purchaseQty) || 0;
+  if (!m.purchaseUnit || f <= 1 || !m.tracked || m.stock <= 0) return null;
+  const whole = Math.floor(m.stock / f);
+  if (whole < 1) return null;
+  const rem = Math.round((m.stock - whole * f) * 100) / 100;
+  return `= ${fmtNum(whole)} ${m.purchaseUnit}${rem > 0 ? ` ${fmtNum(rem)} ${m.unit}` : ""}`;
+}
+// มูลค่าต้นทุนของสต๊อกคงเหลือ (stock × ต้นทุน/หน่วยหลัก)
+const stockValue = (m) => (m.tracked && m.stock > 0 ? m.stock * m.cost : 0);
 
 export default function Catalog({ role }) {
   const canEdit = can(role, "catalog", "edit");
@@ -238,10 +250,12 @@ export default function Catalog({ role }) {
                 {m.description && <div className="cat-card-desc">{m.description}</div>}
                 <div className="cat-card-stats">
                   {m.tracked
-                    ? <div><span>คงเหลือ</span><b style={low ? { color: "#dc2626" } : {}}>{m.stock} {m.unit}</b></div>
+                    ? <div><span>คงเหลือ</span><b style={low ? { color: "#dc2626" } : {}}>{fmtNum(m.stock)} {m.unit}</b>
+                        {dualStockText(m) && <small className="cat-substat">{dualStockText(m)}</small>}
+                        {stockValue(m) > 0 && <small className="cat-substat">ทุน {fmtBaht(stockValue(m))}</small>}</div>
                     : <div><span>ประเภท</span><b>{m.kind === "service" ? "บริการ" : "สั่งตามงาน"}</b></div>}
-                  <div><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b></div>
-                  <div><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b></div>
+                  <div><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b><small className="cat-substat">/{m.unit || "หน่วย"}</small></div>
+                  <div><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b><small className="cat-substat">/{m.unit || "หน่วย"}</small></div>
                 </div>
                 {m.tracked && <div className="cat-card-move">ดูการเคลื่อนไหว <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>}
                 <EditDel m={m} />
@@ -266,9 +280,11 @@ export default function Catalog({ role }) {
                 </div>
                 <div className="cat-lrow-col hide-sm"><span>สต๊อก</span><span className={"job-badge " + (m.tracked ? "b-blue" : "b-grey")} title={m.tracked ? "นับสต๊อก (เบิก/คืน/ซื้อได้)" : "ไม่นับสต๊อก (สั่งตามงาน)"}>{m.tracked ? "✓ นับสต๊อก" : "ไม่นับ"}</span></div>
                 <div className="cat-lrow-col hide-sm"><span>เว็บไซต์</span><span className={"job-badge " + (m.webPublished ? "b-green" : "b-grey")} title={m.webPublished ? "แสดงบนเว็บไซต์" : "ไม่แสดงบนเว็บไซต์"}>{m.webPublished ? "🌐 โชว์" : "ไม่โชว์"}</span></div>
-                <div className="cat-lrow-col hide-sm"><span>คงเหลือ</span><b style={low ? { color: "#dc2626" } : {}}>{m.tracked ? `${m.stock} ${m.unit}` : "—"}</b></div>
-                <div className="cat-lrow-col hide-sm"><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b></div>
-                <div className="cat-lrow-col"><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b></div>
+                <div className="cat-lrow-col hide-sm"><span>คงเหลือ</span><b style={low ? { color: "#dc2626" } : {}}>{m.tracked ? `${fmtNum(m.stock)} ${m.unit}` : "—"}</b>
+                  {dualStockText(m) && <small className="cat-substat">{dualStockText(m)}</small>}
+                  {stockValue(m) > 0 && <small className="cat-substat">ทุนคงเหลือ {fmtBaht(stockValue(m))}</small>}</div>
+                <div className="cat-lrow-col hide-sm"><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b><small className="cat-substat">/{m.unit || "หน่วย"}</small></div>
+                <div className="cat-lrow-col"><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b><small className="cat-substat">/{m.unit || "หน่วย"}</small></div>
                 <EditDel m={m} />
               </div>
             );
