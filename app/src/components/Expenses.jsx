@@ -208,7 +208,7 @@ function PayModal({ x, onClose, onPaid, flash }) {
 
 function AccountsTab({ flash }) {
   const [accounts, setAccounts] = React.useState([]);
-  const [t, setT] = React.useState({ fromId: "", toId: "", amount: "", note: "" });
+  const [t, setT] = React.useState({ fromId: "", toId: "", amount: "", note: "", date: today() });
   const [transfers, setTransfers] = React.useState(null);
   const [edit, setEdit] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
@@ -224,7 +224,7 @@ function AccountsTab({ flash }) {
     if (!(Number(t.amount) > 0)) return flash("ใส่จำนวนเงิน", true);
     if (!await confirmDialog(`โอน ${fmtBaht(t.amount)} ระหว่างบัญชี?`)) return;
     setBusy(true);
-    try { await transferFunds(t); flash("โอนเงินแล้ว ✓"); setT((s) => ({ ...s, amount: "", note: "" })); load(); }
+    try { await transferFunds(t); flash("โอนเงินแล้ว ✓"); setT((s) => ({ ...s, amount: "", note: "" })); load(); }  // keep date for consecutive transfers
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -250,9 +250,10 @@ function AccountsTab({ flash }) {
           <label className="fld"><span>ไปบัญชี</span><select className="inp" value={t.toId} onChange={(e) => setT({ ...t, toId: e.target.value })}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
         </div>
         <div className="fld-row">
+          <label className="fld"><span>วันที่โอน</span><input type="date" className="inp" value={t.date} onChange={(e) => setT({ ...t, date: e.target.value })} /></label>
           <label className="fld"><span>จำนวนเงิน</span><span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={t.amount} onChange={(e) => setT({ ...t, amount: e.target.value })} /></span></label>
-          <label className="fld"><span>หมายเหตุ</span><input className="inp" value={t.note} onChange={(e) => setT({ ...t, note: e.target.value })} placeholder="(ไม่บังคับ)" /></label>
         </div>
+        <label className="fld"><span>หมายเหตุ</span><input className="inp" value={t.note} onChange={(e) => setT({ ...t, note: e.target.value })} placeholder="(ไม่บังคับ)" /></label>
         <button className="btn-primary" disabled={busy} onClick={transfer}><UIcon name="trend" size={15} color="#fff" /> โอนเงิน</button>
       </div>
 
@@ -339,6 +340,7 @@ function ReportTab({ flash }) {
   const [anchor, setAnchor] = React.useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [allMonths, setAllMonths] = React.useState(false);
   const [openingInput, setOpeningInput] = React.useState("");
+  const [openingLocked, setOpeningLocked] = React.useState(true); // ยอดตั้งต้นล็อกไว้ กันแก้พลาด
   const accById = React.useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts]);
 
   async function loadAccounts() {
@@ -354,7 +356,7 @@ function ReportTab({ flash }) {
   React.useEffect(() => { (async () => { try { await syncBankReceipts(); } catch (_) {} loadAccounts(); })(); }, []);
   React.useEffect(() => { loadRows(); }, [accountId]);
   const acc0 = accById[accountId];
-  React.useEffect(() => { if (accountId && accountId !== "all") setOpeningInput(String(Number(acc0?.opening_balance) || 0)); }, [accountId, acc0?.opening_balance]);
+  React.useEffect(() => { if (accountId && accountId !== "all") { setOpeningInput(String(Number(acc0?.opening_balance) || 0)); setOpeningLocked(true); } }, [accountId, acc0?.opening_balance]);
   const refresh = () => { loadAccounts(); loadRows(); };
   async function pullReceipts() {
     setBusy(true);
@@ -392,12 +394,17 @@ function ReportTab({ flash }) {
       .forEach((r) => { seed[r.account_id] = Math.round(((seed[r.account_id] || 0) + sign(r)) * 100) / 100; runBal[r.id] = seed[r.account_id]; });
   })();
 
+  async function unlockOpening() {
+    if (!await confirmDialog("ปลดล็อกเพื่อแก้ 'ยอดยกมาตั้งต้น' ?\nยอดนี้กระทบยอดคงเหลือทุกเดือน แก้เมื่อจำเป็นเท่านั้น")) return;
+    setOpeningLocked(false);
+  }
   async function saveOpening() {
-    if (!single) return;
+    if (!single) { setOpeningLocked(true); return; }
     const v = Number(openingInput) || 0;
-    if (v === (Number(acc?.opening_balance) || 0)) return;
+    if (v === (Number(acc?.opening_balance) || 0)) { setOpeningLocked(true); return; }
     try { await setAccountOpening(accountId, v); flash("บันทึกยอดยกมาแล้ว ✓"); loadAccounts(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setOpeningLocked(true);
   }
   async function toggleRec(r) {
     setBusy(true);
@@ -444,8 +451,12 @@ function ReportTab({ flash }) {
             <button className="btn-ghost sm" onClick={() => { setAllMonths(false); const d = new Date(); setAnchor(new Date(d.getFullYear(), d.getMonth(), 1)); }}>เดือนนี้</button>
             <button className={"cat-chip" + (allMonths ? " on" : "")} onClick={() => setAllMonths((v) => !v)} style={allMonths ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกเดือน</button>
             <label className="jo-dim" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>ยอดยกมาตั้งต้น
-              <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span>
-                <input type="number" step="0.01" value={openingInput} onChange={(e) => setOpeningInput(e.target.value)} onBlur={saveOpening} title="ยอดก่อนรายการแรกสุด — เดือนถัด ๆ ไประบบยกยอดให้เอง" /></span></label>
+              <span className="inp inp-unit" style={{ width: 150, opacity: openingLocked ? 0.65 : 1 }}><span className="unit-pre">฿</span>
+                <input type="number" step="0.01" value={openingInput} disabled={openingLocked} onChange={(e) => setOpeningInput(e.target.value)} onBlur={saveOpening} title="ยอดก่อนรายการแรกสุด — เดือนถัด ๆ ไประบบยกยอดให้เอง" /></span>
+              {openingLocked
+                ? <button className="btn-ghost sm" onClick={unlockOpening} title="ปลดล็อกเพื่อแก้ยอดตั้งต้น">🔒 แก้</button>
+                : <button className="btn-ghost sm ok" onClick={saveOpening} title="บันทึก + ล็อก">✓ บันทึก</button>}
+            </label>
           </div>
           <div className="exp-accounts" style={{ marginTop: 8 }}>
             <div className="exp-acc"><div className="exp-acc-name">{monthly ? "ยอดยกมาต้นเดือน" : "ยอดยกมาตั้งต้น"}</div><div className="exp-acc-bal">{fmtBaht(monthOpening)}</div></div>

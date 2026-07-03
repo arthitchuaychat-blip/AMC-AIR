@@ -2053,11 +2053,11 @@ export async function syncBankReceipts() {
   for (let i = 0; i < removeIds.length; i += 100) await supabase.from("account_entries").delete().in("id", removeIds.slice(i, i + 100));
   return { added: inserts.length, updated: updates.length, removed: removeIds.length };
 }
-export async function transferFunds({ fromId, toId, amount, note }) {
+export async function transferFunds({ fromId, toId, amount, note, date }) {
   const uid = await _uid(); const amt = Number(amount) || 0;
   if (!fromId || !toId || fromId === toId) throw new Error("เลือกบัญชีต้นทาง/ปลายทางให้ถูกต้อง");
   if (amt <= 0) throw new Error("จำนวนเงินต้องมากกว่า 0");
-  const day = new Date().toISOString().slice(0, 10);
+  const day = date || new Date().toISOString().slice(0, 10);
   const tref = Math.random().toString(36).slice(2, 10);
   const { error } = await supabase.from("account_entries").insert([
     { account_id: fromId, direction: "out", amount: amt, kind: "transfer", ref_type: "transfer", ref_id: tref, note: note || "โอนระหว่างบัญชี", entry_date: day, created_by: uid },
