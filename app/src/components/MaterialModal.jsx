@@ -7,14 +7,13 @@ import { uploadMaterialPhoto } from "../lib/api";
 
 const KINDS = [{ v: "material", l: "วัสดุ" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }];
 
-// ราคาขายแนะนำจากต้นทุน (กำไรคิดเป็น % ของราคาขาย · แก้ทับได้เสมอ)
-// วัสดุ: กำไร 70% → ขาย = ทุน ÷ 0.30 · แอร์: กำไร 5% → ขาย = ทุน ÷ 0.95 (ปัดบาทเต็ม) · บริการ: ไม่คำนวณ
+// ราคาขายแนะนำจากต้นทุน (กำไรคิดเป็น % ของราคาขาย · ราคาก่อน VAT · แก้ทับได้เสมอ)
+// วัสดุ: กำไร 70% → ขาย = ทุน ÷ 0.30 · แอร์: กำไร 5% → ขาย = ทุน ÷ 0.95 · ปัดเศษขึ้นเป็นบาทเต็ม · บริการ: ไม่คำนวณ
 const MARGIN = { material: 0.70, ac: 0.05 };
 function suggestSale(kind, cost) {
   const c = Number(cost) || 0;
   if (c <= 0 || MARGIN[kind] == null) return null;
-  const sale = c / (1 - MARGIN[kind]);
-  return kind === "ac" ? Math.round(sale) : Math.round(sale * 100) / 100;
+  return Math.ceil(c / (1 - MARGIN[kind]));
 }
 
 // Add OR edit a catalog item (material / ac / service). `initial` null => add mode.
@@ -175,7 +174,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
               <input className="inp" type="number" value={f.sale_price} onChange={setSale} placeholder="0.00" />
             </label>
           </div>
-          {MARGIN[f.kind] != null && <p className="page-sub" style={{ margin: "-4px 0 8px" }}>💡 ราคาขายคำนวณอัตโนมัติจากต้นทุน ({f.kind === "ac" ? "แอร์: กำไร 5%" : "วัสดุ: กำไร 70%"} ของราคาขาย) — พิมพ์ทับเองได้</p>}
+          {MARGIN[f.kind] != null && <p className="page-sub" style={{ margin: "-4px 0 8px" }}>💡 ราคาขาย (ก่อน VAT) คำนวณอัตโนมัติจากต้นทุน ({f.kind === "ac" ? "แอร์: กำไร 5%" : "วัสดุ: กำไร 70%"} ของราคาขาย · ปัดเศษขึ้นเป็นบาทเต็ม) — พิมพ์ทับเองได้</p>}
 
           {/* purchase unit (ซื้อคนละหน่วยกับขาย เช่น ขายเป็นเมตร ซื้อเป็นม้วน) — วัสดุที่นับสต๊อกเท่านั้น */}
           {isMat && (
