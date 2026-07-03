@@ -16,6 +16,8 @@ function genPoNo() {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
   return `PO-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
+const R2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const VAT_MODES = [["incl", "ราคารวม VAT (ถอด VAT ให้)"], ["excl", "ราคาก่อน VAT (บวก VAT ท้าย)"], ["none", "ไม่มี VAT"]];
 
 // searchable supplier field — suggests names from the Suppliers register (mig 092), still allows free text
 function SupplierPicker({ value, onChange }) {
@@ -68,31 +70,58 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   // open editor prefilled from dashboard reorder
   React.useEffect(() => {
     if (!prefill || !prefill.length || !mats.length) return;
-    setEditing({ po_no: genPoNo(), supplier: "", note: "", vat: false,
+    setEditing({ po_no: genPoNo(), supplier: "", note: "", vat: true, priceIncl: false,
       items: prefill.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: matMap[p.code]?.cost ?? 0 })) });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
 
-  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: false, items: [] }); }
-  function startEdit(po) { setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: i.price })) }); }
+  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, items: [] }); }
+  function startEdit(po) {
+    const incl = !!po.vat && !!po.price_incl;   // stored price is pre-VAT → show gross in the field when incl mode
+    setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl,
+      items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0) })) });
+  }
 
   const setItem = (code, field, val) => setEditing((e) => ({ ...e, items: e.items.map((x) => x.code === code ? { ...x, [field]: val } : x) }));
   const removeItem = (code) => setEditing((e) => ({ ...e, items: e.items.filter((x) => x.code !== code) }));
-  // add from ItemPicker/ItemBrowser (same UX as sales docs) — purchase price defaults to the material cost
+  // add from ItemPicker/ItemBrowser (same UX as sales docs) — price defaults to the material cost
+  // (in "รวม VAT" mode the field holds the gross price, so pre-fill cost × 1.07)
   const addLinePO = (m, _target, qty = 1) => setEditing((e) => {
     const add = Math.max(1, Number(qty) || 1);
+    const incl = !!e.vat && !!e.priceIncl;
+    const unit = incl ? R2((Number(m.cost) || 0) * 1.07) : (Number(m.cost) || 0);
     const i = e.items.findIndex((x) => x.code === m.code);
     if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + add }; return { ...e, items }; }
-    return { ...e, items: [...e.items, { code: m.code, qty: add, price: Number(m.cost) || 0 }] };
+    return { ...e, items: [...e.items, { code: m.code, qty: add, price: unit }] };
   });
+  // switch VAT/price mode — keep each line's NET price constant across the switch
+  function setVatMode(mode) {
+    setEditing((e) => {
+      const curIncl = !!e.vat && !!e.priceIncl;
+      const newVat = mode !== "none", newIncl = mode === "incl";
+      const items = e.items.map((it) => {
+        const net = curIncl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0);
+        return { ...it, price: R2(newIncl ? net * 1.07 : net) };
+      });
+      return { ...e, vat: newVat, priceIncl: newIncl, items };
+    });
+  }
 
-  const editTotal = editing ? editing.items.reduce((a, x) => a + (Number(x.qty) || 0) * (Number(x.price) || 0), 0) : 0;
+  // per-line entered price is GROSS in "รวม VAT" mode, otherwise NET. Totals always shown as ก่อน VAT → VAT → รวม
+  const editIncl = !!editing?.vat && !!editing?.priceIncl;
+  const netUnit = (it) => editIncl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0);
+  const editSub = editing ? editing.items.reduce((a, x) => a + netUnit(x) * (Number(x.qty) || 0), 0) : 0;
+  const editVatAmt = editing?.vat ? editSub * 0.07 : 0;
+  const editGrand = editSub + editVatAmt;
+  const vatMode = !editing?.vat ? "none" : (editing?.priceIncl ? "incl" : "excl");
 
   async function save() {
     if (!editing.po_no.trim()) return flash("ใส่เลขใบสั่งซื้อ", true);
     if (!editing.items.length) return flash("เพิ่มวัสดุอย่างน้อย 1 รายการ", true);
     if (editing._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
-    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, status: "open" }, editing.items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
+    const incl = !!editing.vat && !!editing.priceIncl;
+    const items = editing.items.map((it) => ({ ...it, price: incl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0) })); // store pre-VAT price
+    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, status: "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(po) {
@@ -125,10 +154,10 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           </div>
           <div className="fld-row">
             <label className="fld"><span>หมายเหตุ</span><input className="inp" value={editing.note} onChange={(e) => setEditing({ ...editing, note: e.target.value })} placeholder="(ไม่บังคับ)" /></label>
-            <label className="fld"><span>ราคา VAT</span>
-              <button type="button" className={"vat-toggle" + (editing.vat ? " on" : "")} onClick={() => setEditing((e) => ({ ...e, vat: !e.vat }))}>
-                {editing.vat ? "รวม VAT 7%" : "ไม่รวม VAT"}
-              </button></label>
+            <label className="fld"><span>ราคาที่กรอก / VAT</span>
+              <select className="inp" value={vatMode} onChange={(e) => setVatMode(e.target.value)}>
+                {VAT_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select></label>
           </div>
           <InternalNoteField value={editing.internal_note} onChange={(v) => setEditing({ ...editing, internal_note: v })} />
 
@@ -137,6 +166,9 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             <p className="page-sub" style={{ marginTop: 6 }}>เลือกจากช่องค้นหา หรือเลือกจากแคตตาล็อกด้านขวา → ปรับราคาซื้อ/จำนวนในรายการด้านล่างได้</p>
           </div>
 
+          {editIncl && editing.items.length > 0 && (
+            <p className="page-sub" style={{ margin: "2px 0 6px" }}>💡 ช่องราคาแรก = <b>ราคารวม VAT</b> (กรอกตามบิล) · ช่องถัดไป = ราคาก่อน VAT (ระบบถอดให้)</p>
+          )}
           {editing.items.length > 0 && (
             <div className="line-list">
               {editing.items.map((it) => { const m = matMap[it.code]; return (
@@ -144,6 +176,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                   <MaterialThumb mat={m || { color: "#888" }} size={32} radius={8} />
                   <div className="line-info"><div className="line-name">{m?.th || it.code}</div><div className="line-sub">{m?.unit}</div></div>
                   <div className="inp inp-unit po-edit-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.price} onChange={(e) => setItem(it.code, "price", Number(e.target.value) || 0)} /></div>
+                  {editIncl && <div className="inp inp-unit po-edit-in" style={{ opacity: 0.7 }} title="ราคาก่อน VAT (คำนวณให้)"><span className="unit-pre">฿</span><input type="number" value={R2(netUnit(it))} disabled /></div>}
                   <div className="inp inp-unit po-edit-in"><input type="number" min="1" value={it.qty} onChange={(e) => setItem(it.code, "qty", Math.max(1, Number(e.target.value) || 1))} /><span className="unit-suf">{m?.unit}</span></div>
                   <span className="po-edit-val">{fmtBaht((Number(it.qty) || 0) * (Number(it.price) || 0))}</span>
                   <button className="line-x" onClick={() => removeItem(it.code)}><UIcon name="x" size={14} /></button>
@@ -151,12 +184,12 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               ); })}
               {editing.vat ? (
                 <>
-                  <div className="line-total" style={{ borderBottom: "1px dashed var(--line-2)" }}><span>ยอดก่อน VAT ({editing.items.length} รายการ)</span><b>{fmtBaht(editTotal)}</b></div>
-                  <div className="line-total" style={{ borderBottom: "1px dashed var(--line-2)", color: "var(--ink-3)" }}><span>VAT 7%</span><b>{fmtBaht(editTotal * 0.07)}</b></div>
-                  <div className="line-total"><span>ยอดรวมสุทธิ (รวม VAT)</span><b>{fmtBaht(editTotal * 1.07)}</b></div>
+                  <div className="line-total" style={{ borderBottom: "1px dashed var(--line-2)" }}><span>ยอดก่อน VAT ({editing.items.length} รายการ)</span><b>{fmtBaht(editSub)}</b></div>
+                  <div className="line-total" style={{ borderBottom: "1px dashed var(--line-2)", color: "var(--ink-3)" }}><span>VAT 7%</span><b>{fmtBaht(editVatAmt)}</b></div>
+                  <div className="line-total"><span>ยอดรวมสุทธิ (รวม VAT)</span><b>{fmtBaht(editGrand)}</b></div>
                 </>
               ) : (
-                <div className="line-total"><span>รวม {editing.items.length} รายการ (ไม่รวม VAT)</span><b>{fmtBaht(editTotal)}</b></div>
+                <div className="line-total"><span>รวม {editing.items.length} รายการ (ไม่มี VAT)</span><b>{fmtBaht(editSub)}</b></div>
               )}
             </div>
           )}
