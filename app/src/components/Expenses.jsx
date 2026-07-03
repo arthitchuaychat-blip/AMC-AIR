@@ -5,7 +5,7 @@ import AttachThumb from "./AttachThumb";
 import { fmtBaht, ATTACH_ACCEPT } from "../lib/format";
 import { UIcon } from "../icons";
 
-const OFFICE = ["admin", "exec", "finance"];
+const OFFICE = ["admin", "exec", "finance", "hr"]; // hr: อนุมัติ/จ่ายเบิก + คุมเงินสดย่อย (v249)
 const EST = { pending: { t: "รออนุมัติ", c: "b-amber" }, approved: { t: "อนุมัติ · รอจ่าย", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", c: "b-red" }, paid: { t: "จ่ายแล้ว", c: "b-green" } };
 const fmtD = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }) : "";
 const today = () => new Date().toISOString().slice(0, 10);

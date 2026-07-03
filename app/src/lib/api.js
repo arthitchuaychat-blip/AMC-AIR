@@ -2108,7 +2108,7 @@ export async function submitExpense(e) {
   });
   if (error) throw error;
   const me = await getProfile();
-  notify(await _usersByRole(["admin", "finance", "exec"]), { category: "hr", title: `🧾 ${me?.name || "พนักงาน"} ขอเบิกค่าใช้จ่าย ${Number(e.amount) || 0} บาท`, body: e.title || "", url: "expenses", ref_type: "expense" });
+  notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🧾 ${me?.name || "พนักงาน"} ขอเบิกค่าใช้จ่าย ${Number(e.amount) || 0} บาท`, body: e.title || "", url: "expenses", ref_type: "expense" });
 }
 export async function listMyExpenses() {
   const uid = await _uid();
