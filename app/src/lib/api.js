@@ -1619,9 +1619,24 @@ export async function createSubPayout({ team, lines, whtRate, note }) {
   syncCashEntriesFromDocs().catch(() => {}); // new payout → "คาดว่าจะจ่าย" in cash flow
   return data.id;
 }
-export async function paySubPayout(id, method) {
-  const { error } = await supabase.from("sub_payouts").update({ status: "paid", paid_at: new Date().toISOString(), method: method || null }).eq("id", id);
-  if (error) throw error;
+// mark a payout paid + choose the paying account → posts an "out" line into that account's
+// ledger (kind='payout') for bank reconciliation. Cash flow is handled separately by the sync.
+// Back-compat: paySubPayout(id, "โอนเงิน") still works (no account).
+export async function paySubPayout(id, opts) {
+  const { accountId, method, payDate } = typeof opts === "string" ? { method: opts } : (opts || {});
+  const uid = await _uid();
+  const { data: p, error: e0 } = await supabase.from("sub_payouts").select("net,team,status").eq("id", id).single();
+  if (e0) throw e0;
+  if (p.status === "paid") throw new Error("ใบนี้บันทึกจ่ายแล้ว");
+  const day = payDate || new Date().toISOString().slice(0, 10);
+  const patch = { status: "paid", paid_at: new Date().toISOString(), method: method || null, paid_from: accountId || null };
+  let upd = await supabase.from("sub_payouts").update(patch).eq("id", id);
+  if (upd.error && /paid_from|column|PGRST204/i.test(upd.error.message || "")) { delete patch.paid_from; upd = await supabase.from("sub_payouts").update(patch).eq("id", id); }
+  if (upd.error) throw upd.error;
+  if (accountId) {
+    const { error: eAcc } = await supabase.from("account_entries").insert({ account_id: accountId, direction: "out", amount: Number(p.net) || 0, kind: "payout", ref_type: "payout", ref_id: id, note: `จ่ายค่าแรงช่างซัพ · ทีม ${p.team}`, entry_date: day, created_by: uid });
+    if (eAcc) throw eAcc;
+  }
   syncCashEntriesFromDocs().catch(() => {}); // paid → move to "จ่ายจริง" in cash flow
 }
 // cancel an unpaid payout → give the allocated amounts back so the jobs return to "รอจ่าย"
@@ -1645,6 +1660,7 @@ export async function cancelSubPayout(id) {
       await supabase.from("job_orders").update({ labor_paid_amt: 0, labor_paid: false }).in("job_no", jobNos);
     }
   }
+  await supabase.from("account_entries").delete().eq("ref_type", "payout").eq("ref_id", id); // defensive: drop any linked bank-ledger line
   const { error: delErr } = await supabase.from("sub_payouts").delete().eq("id", id);
   if (delErr) throw delErr;
   syncCashEntriesFromDocs().catch(() => {}); // removed payout → update its cash-flow line
@@ -1665,6 +1681,8 @@ export async function updateSubPayout({ id, lines, whtRate }) {
   const net = _r2(gross - whtAmt);
   const { error } = await supabase.from("sub_payouts").update({ lines: ls, job_nos: jobNos, gross, wht_rate: rate, wht_amt: whtAmt, net }).eq("id", id);
   if (error) throw error;
+  await supabase.from("account_entries").update({ amount: net }).eq("ref_type", "payout").eq("ref_id", id); // keep the bank-ledger line in sync (paid payouts)
+  syncCashEntriesFromDocs().catch(() => {}); // edited net → refresh cash-flow line
   // re-balance each job's cumulative paid amount by (new − old) for this payout
   const newAmt = Object.fromEntries(ls.map((l) => [l.job_no, Number(l.amount) || 0]));
   const allJobs = [...new Set([...Object.keys(oldAmt), ...jobNos])];
@@ -1699,6 +1717,7 @@ export async function deleteSubPayout(id) {
       await supabase.from("job_orders").update({ labor_paid_amt: 0, labor_paid: false, payout_id: null }).in("job_no", jobNos);
     }
   }
+  await supabase.from("account_entries").delete().eq("ref_type", "payout").eq("ref_id", id); // remove the bank-ledger out line
   const { error: delErr } = await supabase.from("sub_payouts").delete().eq("id", id);
   if (delErr) throw delErr;
   syncCashEntriesFromDocs().catch(() => {}); // removed payout → update its cash-flow line

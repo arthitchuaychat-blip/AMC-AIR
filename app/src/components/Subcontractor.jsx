@@ -1,7 +1,7 @@
 import React from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage } from "../lib/api";
+import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listAccounts, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2 } from "../lib/format";
 import { UIcon } from "../icons";
@@ -280,6 +280,7 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
 function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, flash }) {
   const [slip, setSlip] = React.useState(null); // payout to show as a slip
   const [editPo, setEditPo] = React.useState(null); // payout being edited
+  const [payFor, setPayFor] = React.useState(null); // payout being paid (pick account)
   const [busy, setBusy] = React.useState(false);
   const canEditPayout = EDIT_PAYOUT_ROLES.includes(role);
   // confirmed + still owing
@@ -288,12 +289,6 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
   const teamName = (id) => teamById[id]?.name || id;
   const jobByNo = React.useMemo(() => Object.fromEntries(jobs.map((j) => [j.job_no, j])), [jobs]);
 
-  async function markPaid(p) {
-    if (!await confirmDialog(`ยืนยันว่าจ่ายเงินแล้ว ${fmtBaht(p.net)} ?`)) return;
-    setBusy(true);
-    try { await paySubPayout(p.id, "โอนเงิน"); flash("บันทึกจ่ายแล้ว ✓"); onReload(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
-    setBusy(false);
-  }
   async function cancel(p) {
     if (!await confirmDialog(`ยกเลิกใบรอจ่ายนี้? ยอดที่ตัดไว้จะคืนกลับเข้า “รอจ่าย”`)) return;
     setBusy(true);
@@ -329,7 +324,7 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
                 {p.status === "paid" ? <span className="job-badge b-green">จ่ายแล้ว</span> : <span className="job-badge b-orange">รอจ่าย</span>}
                 <button className="btn-ghost sm" onClick={() => setSlip(p)}><UIcon name="catalog" size={14} /> สลิป/ส่ง</button>
                 {canEditPayout && <button className="btn-ghost sm" disabled={busy} title="แก้ไขยอดค่าแรงจ่าย (ธุรการ/บัญชี)" onClick={() => setEditPo(p)}><UIcon name="edit" size={14} /> แก้ไข</button>}
-                {p.status !== "paid" && <button className="btn-primary sm ok" disabled={busy} onClick={() => markPaid(p)}>บันทึกจ่ายเงิน</button>}
+                {p.status !== "paid" && <button className="btn-primary sm ok" disabled={busy} onClick={() => setPayFor(p)}>บันทึกจ่ายเงิน</button>}
                 {p.status !== "paid" && <button className="btn-ghost sm danger" disabled={busy} onClick={() => cancel(p)}>ยกเลิก</button>}
                 {canEditPayout && <button className="btn-ghost sm danger" disabled={busy} title="ลบใบจ่ายถาวร (ธุรการ/บัญชี)" onClick={() => del(p)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div>
@@ -340,7 +335,44 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
 
       {slip && <PayoutSlip payout={slip} team={teamById[slip.team] || { id: slip.team, name: slip.team }} jobByNo={jobByNo} onClose={() => setSlip(null)} flash={flash} />}
       {editPo && <EditPayout payout={editPo} team={teamById[editPo.team] || { id: editPo.team, name: editPo.team }} jobByNo={jobByNo} onClose={() => setEditPo(null)} onSaved={() => { setEditPo(null); onReload(); }} flash={flash} />}
+      {payFor && <PaySubModal payout={payFor} teamName={teamName(payFor.team)} onClose={() => setPayFor(null)} onPaid={() => { setPayFor(null); onReload(); }} flash={flash} />}
     </>
+  );
+}
+
+// เลือกบัญชีที่ใช้จ่ายค่าแรงช่างซัพ → ลงรายการเดินบัญชี (account_entries) + กระแสเงินสด
+function PaySubModal({ payout, teamName, onClose, onPaid, flash }) {
+  const [accounts, setAccounts] = React.useState(null);
+  const [accountId, setAccountId] = React.useState("");
+  const [payDate, setPayDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => { listAccounts().then((a) => { setAccounts(a); setAccountId((a.find((x) => x.kind === "bank") || a[0])?.id || ""); }).catch(() => setAccounts([])); }, []);
+  async function pay() {
+    if (!accountId) return flash("เลือกบัญชีที่จ่าย", true);
+    setBusy(true);
+    try { await paySubPayout(payout.id, { accountId, method: "โอนเงิน", payDate }); flash("บันทึกจ่ายแล้ว ✓ (ลงบัญชีเดินบัญชี + กระแสเงินสด)"); onPaid(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
+        <div className="modal-head"><div className="modal-title">จ่ายค่าแรงช่างซัพ · {fmtBaht(payout.net)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="jo-dim" style={{ marginBottom: 10 }}>ทีม {teamName} · {(payout.lines || payout.job_nos || []).length} งาน · สุทธิ {fmtBaht(payout.net)}</div>
+          <label className="fld"><span>จ่ายจากบัญชี</span>
+            {accounts === null ? <div className="jo-dim">กำลังโหลดบัญชี…</div> :
+              <select className="inp" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{(a.kind === "cash" ? "💵 " : "🏦 ") + a.name} (คงเหลือ {fmtBaht(a.balance)})</option>)}
+              </select>}
+          </label>
+          <label className="fld"><span>วันที่จ่าย</span><input type="date" className="inp" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
+          <div className="jo-dim">รายการนี้จะถูกบันทึกเป็น <b>เงินออก</b> ในบัญชีที่เลือก (เมนูเบิกจ่าย → เดินบัญชี &amp; กระทบแบงค์) และแสดงใน <b>กระแสเงินสด</b> อัตโนมัติ</div>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy || accounts === null} onClick={pay}>ยืนยันจ่ายเงิน</button></div>
+      </div>
+    </div>
   );
 }
 
