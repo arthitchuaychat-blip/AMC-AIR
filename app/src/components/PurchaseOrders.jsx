@@ -88,11 +88,17 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   React.useEffect(() => { load(); }, []);
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
 
-  // open editor prefilled from dashboard reorder
+  // open editor prefilled — 2 ทาง: (1) สั่งซ้ำจากแดชบอร์ด (array ของ {code,qty})
+  // (2) สร้างจากใบเสนอราคาที่อนุมัติ ({quoteNo, items}) → ผูก quote ให้เลย ราคา default = ต้นทุน/หน่วยหลัก
   React.useEffect(() => {
-    if (!prefill || !prefill.length || !mats.length) return;
-    setEditing({ po_no: genPoNo(), supplier: "", note: "", vat: true, priceIncl: false, quote_no: "",
-      items: prefill.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: matMap[p.code]?.cost ?? 0 })) });
+    if (!prefill || !mats.length) return;
+    const src = Array.isArray(prefill) ? prefill : (prefill.items || []);
+    const quoteNo = Array.isArray(prefill) ? "" : (prefill.quoteNo || "");
+    if (!src.length && !quoteNo) { onPrefillConsumed && onPrefillConsumed(); return; }
+    setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: quoteNo,
+      // จำนวนจากใบเสนอราคาเป็น "หน่วยหลัก" (เมตร/ชุด) → ตั้งหน่วยบรรทัดเป็นหน่วยหลัก + ราคา = ต้นทุน/หน่วยหลัก
+      // (อยากสั่งเป็นม้วน ค่อยสลับหน่วยที่บรรทัด ระบบแปลงราคาให้) · ข้ามรหัสที่ไม่มีในแคตตาล็อก
+      items: src.filter((p) => matMap[p.code]).map((p) => { const m = matMap[p.code]; return { code: p.code, qty: Number(p.qty) || 1, price: Number(m.cost) || 0, unit: m.unit || null }; }) });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
 

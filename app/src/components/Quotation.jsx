@@ -26,7 +26,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
+export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onCreatePo, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "quote", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   const [list, setList] = React.useState([]);
@@ -382,6 +382,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                   : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>))}
                 {q.status === "approved" && q.hasJob && <span className="job-badge b-green">✓ สร้างใบงานแล้ว</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
+                {q.status === "approved" && onCreatePo && can(role, "po", "edit") &&
+                  <button className="btn-ghost sm" style={{ color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} title="เปิดใบสั่งซื้อจากรายการในใบเสนอราคานี้ (ผูกใบเสนอราคาให้อัตโนมัติ)" onClick={() => onCreatePo(q)}>🛒 สร้างใบสั่งซื้อ</button>}
                 {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => cancel(q)}>ยกเลิก</button>}
                 {canDelete && <button className="btn-ghost sm danger" disabled={q.hasInvoice || q.hasJob} title={(q.hasInvoice || q.hasJob) ? (lockMsg(q) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>

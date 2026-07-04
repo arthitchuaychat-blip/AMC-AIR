@@ -94,7 +94,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-04·กำไรงาน: นับ PO ผูกงานที่ยังรอรับของ เป็นต้นทุนจริงทันที (รับของแล้วย้ายไปเบิกจริง ไม่ซ้ำ) v277";
+const BUILD = "2026-07-04·ใบเสนอราคา: ปุ่ม 🛒 สร้างใบสั่งซื้อ — เปิด PO พร้อมรายการ+ผูกใบเสนอราคาให้อัตโนมัติ v278";
 
 function SetupNotice() {
   return (
@@ -436,6 +436,7 @@ export default function App() {
           fromBoq={quoteFromBoq} onFromBoqConsumed={() => setQuoteFromBoq(null)}
           onCreateInvoice={(quoteNo) => { setInvoiceFromQuote(quoteNo); go("invoice"); }}
           onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }}
+          onCreatePo={(q) => { setPoPrefill({ quoteNo: q.quote_no, items: (q.items || []).filter((it) => it.item_code && it.kind !== "service").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })) }); go("po"); }}
           onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "invoice" && <Invoices role={role} focus={invoiceFocus} onFocusConsumed={() => setInvoiceFocus(null)} fromQuote={invoiceFromQuote} onFromQuoteConsumed={() => setInvoiceFromQuote(null)}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }}
