@@ -57,9 +57,11 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
         labor += Number(j.labor_total) || 0;
         expenseReim += Number(exp[j.job_no]) || 0;
       });
-      const expenses = matNet + labor + expenseReim;              // ค่าใช้จ่ายจริงทั้งหมด (นอกเหนือ BOQ)
-      const grossProfit = cost == null ? null : sale - cost;      // กำไรขั้นต้น
-      const net = cost == null ? null : sale - cost - expenses;   // กำไรสุทธิ/งาน
+      // สูตรต้นทุนจริง (เลือกโดยผู้ใช้ 2026-07-04): กำไรสุทธิ = ขาย − ต้นทุนจริง (วัสดุ/แอร์เบิกจริง−คืน + ค่าแรงซัพ + เบิกจ่าย)
+      // BOQ ใช้เป็น "กำไรตามประมาณการ" ไว้เทียบเท่านั้น — ห้ามหักซ้อนกับของจริง (ของจาก PO ผูกงานเข้าช่องเบิกจริงแล้ว)
+      const expenses = matNet + labor + expenseReim;              // ต้นทุนจริงทั้งหมด
+      const grossProfit = cost == null ? null : sale - cost;      // กำไรตามประมาณการ (BOQ)
+      const net = expenses > 0 ? sale - expenses : null;          // ยังไม่มีต้นทุนจริงบันทึก → ไม่โชว์กำไรลวง
       const jobMargin = net == null || sale <= 0 ? null : (net / sale) * 100;
       return { quote_no: q.quote_no, customerName: q.customerName, sale, cost, profit: grossProfit,
         salesId: sid, salesName: sid === "__unknown__" ? "ไม่ทราบผู้ทำ" : (profName[sid] || "ไม่ทราบผู้ทำ"),
@@ -95,7 +97,7 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
       {rows.length === 0 && <div className="empty sm" style={{ padding: 18 }}>ยังไม่มีข้อมูล</div>}
       {rows.length > 0 && (
         <div style={{ padding: "10px 0 4px" }}>
-          <div className="pf-row pf-head"><span>{nameHead}</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน</span><span className="r">กำไร</span></div>
+          <div className="pf-row pf-head"><span>{nameHead}</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน (BOQ)</span><span className="r">กำไร (ประมาณ)</span></div>
           {rows.map((r) => (
             <div className="pf-row pf-click" key={r.id} onClick={() => onRow(r)}>
               <span className="pf-name"><b>{r.name}</b><br /><span className="pf-cust">{r.count} ใบ · ดูรายการ ›</span></span>
@@ -118,29 +120,29 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
           <div className="stat-more">ดูรายการ <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>
         </div>
         <div className="stat-card clickable" onClick={openAll} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openAll()}>
-          <div className="stat-val">{fmtBaht(data.totalCost)}</div><div className="stat-label">ต้นทุนรวม (จาก BOQ)</div>
+          <div className="stat-val">{fmtBaht(data.totalCost)}</div><div className="stat-label">ต้นทุนประมาณการ (BOQ)</div>
           <div className="stat-more">ดูรายการ <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>
         </div>
         <div className="stat-card clickable" onClick={openAll} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openAll()}>
-          <div className="stat-val" style={{ color: data.totalProfit >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(data.totalProfit)}</div><div className="stat-label">กำไรรวม</div>
+          <div className="stat-val" style={{ color: data.totalProfit >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(data.totalProfit)}</div><div className="stat-label">กำไรรวม (ประมาณการ)</div>
           <div className="stat-more">ดูรายการ <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>
         </div>
         <div className="stat-card"><div className="stat-val" style={{ color: "var(--up)" }}>{margin.toFixed(1)}%</div><div className="stat-label">มาร์จินเฉลี่ย</div></div>
       </div>
 
       <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 16 }}>
-        <div className="sec-head" style={{ padding: "16px 18px 0" }}><div><div className="sec-title">กำไรต่องาน</div><div className="sec-sub">แยกตามงาน · กำไรสุทธิ = ยอดขาย − ต้นทุน BOQ − ค่าใช้จ่ายจริง · กดที่งานเพื่อดูรายละเอียด (ขาย/ต้นทุน/ค่าใช้จ่าย/ภาษี/กำไร)</div></div></div>
+        <div className="sec-head" style={{ padding: "16px 18px 0" }}><div><div className="sec-title">กำไรต่องาน</div><div className="sec-sub">กำไรสุทธิ = ยอดขาย − <b>ต้นทุนจริง</b> (วัสดุ/แอร์เบิกจริง + ค่าแรงซัพ + เบิกจ่าย) · BOQ แสดงเป็นประมาณการไว้เทียบ · กดที่งานเพื่อดูรายละเอียด</div></div></div>
         {data.jobRows.length === 0 && <div className="empty sm" style={{ padding: 18 }}>ยังไม่มีงานที่อนุมัติในช่วงนี้</div>}
         {data.jobRows.length > 0 && (
           <div style={{ padding: "10px 0 4px", maxHeight: 460, overflowY: "auto" }}>
-            <div className="pjob-row pjob-head"><span>เลขที่ / ลูกค้า / ทีม</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน</span><span className="r">ค่าใช้จ่าย</span><span className="r">กำไรสุทธิ</span><span className="r">%</span></div>
+            <div className="pjob-row pjob-head"><span>เลขที่ / ลูกค้า / ทีม</span><span className="r">ยอดขาย</span><span className="r">ต้นทุนจริง</span><span className="r">กำไรสุทธิ (จริง)</span><span className="r">ประมาณการ (BOQ)</span><span className="r">%</span></div>
             {data.jobRows.map((q) => (
               <div className="pjob-row pjob-click" key={q.quote_no} onClick={() => setJobDetail(q)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setJobDetail(q)}>
                 <span className="pf-name"><b>{q.quote_no}</b><br /><span className="pf-cust">{q.customerName || "-"} · {q.teamName}{q.jobCount > 1 ? ` · ${q.jobCount} ใบงาน` : ""} · ดูรายละเอียด ›</span></span>
                 <span className="r">{fmtBaht(q.sale)}</span>
-                <span className="r">{q.cost == null ? "—" : fmtBaht(q.cost)}</span>
-                <span className="r">{q.expenses > 0 ? <span style={{ color: "var(--down)" }}>−{fmtBaht(q.expenses)}</span> : "—"}</span>
+                <span className="r">{q.expenses > 0 ? <span style={{ color: "var(--down)" }}>−{fmtBaht(q.expenses)}</span> : <span style={{ color: "var(--ink-3)" }}>ยังไม่บันทึก</span>}</span>
                 <span className="r" style={{ color: q.net == null ? "var(--ink-3)" : q.net >= 0 ? "var(--up)" : "var(--down)", fontWeight: 700 }}>{q.net == null ? "—" : fmtBaht(q.net)}</span>
+                <span className="r" style={{ color: "var(--ink-3)" }}>{q.grossProfit == null ? "—" : fmtBaht(q.grossProfit)}</span>
                 <span className="r" style={{ color: "var(--ink-3)" }}>{q.jobMargin == null ? "—" : q.jobMargin.toFixed(0) + "%"}</span>
               </div>
             ))}
@@ -162,7 +164,7 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
               <button className="modal-x" onClick={() => setDetail(null)}><UIcon name="x" size={18} /></button>
             </div>
             <div className="sr-detail-body">
-              <div className="pf-row pf-head"><span>เลขที่ / ลูกค้า / ทีม</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน</span><span className="r">กำไร</span><span className="sr-links-head">เปิด</span></div>
+              <div className="pf-row pf-head"><span>เลขที่ / ลูกค้า / ทีม</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน (BOQ)</span><span className="r">กำไร (ประมาณ)</span><span className="sr-links-head">เปิด</span></div>
               {detail.quotes.map((q) => (
                 <div className="pf-row sr-detail-row" key={q.quote_no}>
                   <span className="pf-name"><b>{q.quote_no}</b><br /><span className="pf-cust">{q.customerName || "-"} · {q.teamName}</span></span>
@@ -201,20 +203,21 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
                   </>
                 )}
                 <div className="pjob-wf-row mid"><span className="lbl">ยอดขายสุทธิ (ก่อน VAT)</span><span className="val">{fmtBaht(q.sale)}</span></div>
-                <div className="pjob-wf-row sub"><span className="lbl">− ต้นทุนสินค้า/บริการ (BOQ)</span><span className="val" style={{ color: noCost ? "var(--ink-3)" : "var(--down)" }}>{noCost ? "ไม่ได้ผูก BOQ" : "−" + fmtBaht(q.cost)}</span></div>
-                <div className="pjob-wf-row mid"><span className="lbl">กำไรขั้นต้น</span><span className="val" style={{ color: q.grossProfit == null ? "var(--ink-3)" : q.grossProfit >= 0 ? "var(--ink)" : "var(--down)" }}>{q.grossProfit == null ? "—" : fmtBaht(q.grossProfit)}</span></div>
                 {q.expenses > 0 ? (
                   <>
-                    {q.matNet > 0.005 && <div className="pjob-wf-row sub"><span className="lbl">− วัสดุที่เบิกใช้จริง (สุทธิ)</span><span className="val" style={{ color: "var(--down)" }}>−{fmtBaht(q.matNet)}</span></div>}
+                    {q.matNet > 0.005 && <div className="pjob-wf-row sub"><span className="lbl">− วัสดุ/แอร์ที่เบิกใช้จริง (เบิก−คืน · รวมของจาก PO)</span><span className="val" style={{ color: "var(--down)" }}>−{fmtBaht(q.matNet)}</span></div>}
                     {q.labor > 0.005 && <div className="pjob-wf-row sub"><span className="lbl">− ค่าแรงช่างซัพ</span><span className="val" style={{ color: "var(--down)" }}>−{fmtBaht(q.labor)}</span></div>}
                     {q.expenseReim > 0.005 && <div className="pjob-wf-row sub"><span className="lbl">− ค่าใช้จ่าย/เบิกจ่าย</span><span className="val" style={{ color: "var(--down)" }}>−{fmtBaht(q.expenseReim)}</span></div>}
-                    <div className="pjob-wf-row mid"><span className="lbl">รวมค่าใช้จ่ายจริงทั้งหมด</span><span className="val" style={{ color: "var(--down)" }}>−{fmtBaht(q.expenses)}</span></div>
+                    <div className="pjob-wf-row mid"><span className="lbl">รวมต้นทุนจริงทั้งหมด</span><span className="val" style={{ color: "var(--down)" }}>−{fmtBaht(q.expenses)}</span></div>
                   </>
                 ) : (
-                  <div className="pjob-wf-row sub"><span className="lbl">ค่าใช้จ่ายจริง (วัสดุ/ค่าแรงช่างซัพ/เบิกจ่าย)</span><span className="val" style={{ color: "var(--ink-3)" }}>ไม่มี</span></div>
+                  <div className="pjob-wf-row sub"><span className="lbl">ต้นทุนจริง (วัสดุ/แอร์เบิกจริง · ค่าแรงซัพ · เบิกจ่าย)</span><span className="val" style={{ color: "var(--ink-3)" }}>ยังไม่มีการบันทึก</span></div>
                 )}
-                <div className="pjob-wf-row total"><span className="lbl">กำไรสุทธิ</span><span className="val" style={{ color: q.net == null ? "var(--ink-3)" : q.net >= 0 ? "var(--up)" : "var(--down)" }}>{q.net == null ? "คิดไม่ได้ (ไม่มี BOQ)" : fmtBaht(q.net)}</span></div>
+                <div className="pjob-wf-row total"><span className="lbl">กำไรสุทธิ (จากต้นทุนจริง)</span><span className="val" style={{ color: q.net == null ? "var(--ink-3)" : q.net >= 0 ? "var(--up)" : "var(--down)" }}>{q.net == null ? "ยังสรุปไม่ได้ — ยังไม่มีต้นทุนจริง" : fmtBaht(q.net)}</span></div>
                 {q.jobMargin != null && <div className="pjob-wf-row" style={{ borderBottom: "none", paddingTop: 2 }}><span className="lbl">มาร์จินสุทธิ</span><span className="val" style={{ color: q.jobMargin >= 0 ? "var(--up)" : "var(--down)" }}>{q.jobMargin.toFixed(1)}%</span></div>}
+                <div style={{ marginTop: 10, padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10, fontSize: 12.5, color: "var(--ink-3)" }}>
+                  📐 ประมาณการตาม BOQ: {noCost ? "ไม่ได้ผูก BOQ" : <>ต้นทุน {fmtBaht(q.cost)} → กำไรประมาณการ <b style={{ color: q.grossProfit >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(q.grossProfit)}</b>{q.net != null && <> · ต่างจากจริง {fmtBaht(q.net - q.grossProfit)}</>}</>}
+                </div>
                 {q.wht > 0 && <div className="page-sub" style={{ marginTop: 10 }}>* ลูกค้าหัก ณ ที่จ่าย {fmtBaht(q.wht)} — เป็นภาษีที่เครดิต/ขอคืนได้ ไม่นับเป็นต้นทุน</div>}
                 <div className="sr-links" style={{ justifyContent: "flex-start", marginTop: 14 }}>
                   <button className="btn-ghost sm" onClick={() => { setJobDetail(null); onOpenQuote && onOpenQuote(q.quote_no); }}>เปิดใบเสนอราคา</button>

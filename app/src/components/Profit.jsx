@@ -47,8 +47,11 @@ export default function Profit() {
 
         const sale = q.afterDisc;                                   // ยอดขายสุทธิ ก่อน VAT (นับครั้งเดียว)
         const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : null;
-        const gross = cost == null ? null : sale - cost;            // กำไรขั้นต้น
-        const net = gross == null ? null : gross - matNet - labor - expenses;  // กำไรสุทธิ/งาน
+        // สูตรต้นทุนจริง (เลือกโดยผู้ใช้ 2026-07-04): กำไรสุทธิ = ขาย − ต้นทุนจริง (เบิกจริง−คืน + ค่าแรงซัพ + เบิกจ่าย)
+        // BOQ = กำไรตามประมาณการ ไว้เทียบเท่านั้น — ห้ามหักซ้อน (ของจาก PO ผูกงานเข้าช่องเบิกจริงแล้ว)
+        const gross = cost == null ? null : sale - cost;            // กำไรตามประมาณการ (BOQ)
+        const actualCost = matNet + labor + expenses;
+        const net = actualCost > 0 ? sale - actualCost : null;      // ยังไม่มีต้นทุนจริง → ไม่โชว์กำไรลวง
         const margin = net == null || sale <= 0 ? null : (net / sale) * 100;
         out.push({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, net, margin });
       });
@@ -65,20 +68,21 @@ export default function Profit() {
   }
   React.useEffect(() => { load(); }, []);
 
-  const withGross = rows.filter((r) => r.gross != null);
-  const sumSale = withGross.reduce((a, r) => a + r.sale, 0);
-  const sumGross = withGross.reduce((a, r) => a + r.gross, 0);
+  const withEst = rows.filter((r) => r.gross != null);
+  const sumGross = withEst.reduce((a, r) => a + r.gross, 0);           // กำไรประมาณการรวม (BOQ)
+  const withNet = rows.filter((r) => r.net != null);                   // เฉพาะงานที่มีต้นทุนจริงบันทึกแล้ว
+  const sumSaleNet = withNet.reduce((a, r) => a + r.sale, 0);
+  const sumNet = withNet.reduce((a, r) => a + r.net, 0);
   const sumMat = rows.reduce((a, r) => a + r.matNet, 0);
   const sumLabor = rows.reduce((a, r) => a + r.labor, 0);
-  const sumNet = withGross.reduce((a, r) => a + r.net, 0);
-  const margin = sumSale > 0 ? (sumNet / sumSale) * 100 : 0;
+  const margin = sumSaleNet > 0 ? (sumNet / sumSaleNet) * 100 : 0;
   const toggle = (qn) => setOpen((o) => ({ ...o, [qn]: !o[qn] }));
 
   return (
     <div className="adm">
       <div className="adm-head">
         <div><h1 className="page-title">กำไร/งาน <span className="page-title-en">Profit per Job</span></h1>
-          <p className="page-sub">1 ใบเสนอราคา = 1 งาน · เฉพาะงานที่ใบงานเสร็จครบทุกใบ · ยอดขาย−ต้นทุน BOQ−วัสดุเบิกจริง−ค่าแรงช่างซัพ</p></div>
+          <p className="page-sub">1 ใบเสนอราคา = 1 งาน · เฉพาะงานที่ใบงานเสร็จครบทุกใบ · กำไรสุทธิ = ยอดขาย − <b>ต้นทุนจริง</b> (วัสดุ/แอร์เบิกจริง + ค่าแรงซัพ + เบิกจ่าย) · BOQ = ประมาณการไว้เทียบ</p></div>
       </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
@@ -87,11 +91,11 @@ export default function Profit() {
       {!loading && !err && (
         <>
           <div className="kpi-grid">
-            <div className="stat-card"><div className="stat-val">{fmtBaht(sumGross)}</div><div className="stat-label">กำไรขั้นต้นรวม</div><div className="stat-sub">{rows.length} งานที่เสร็จ</div></div>
-            <div className="stat-card"><div className="stat-val" style={{ color: "var(--down)" }}>−{fmtBaht(sumMat)}</div><div className="stat-label">วัสดุที่เบิกใช้จริง (สุทธิ)</div></div>
+            <div className="stat-card"><div className="stat-val">{fmtBaht(sumGross)}</div><div className="stat-label">กำไรประมาณการรวม (BOQ)</div><div className="stat-sub">{rows.length} งานที่เสร็จ</div></div>
+            <div className="stat-card"><div className="stat-val" style={{ color: "var(--down)" }}>−{fmtBaht(sumMat)}</div><div className="stat-label">วัสดุ/แอร์ที่เบิกใช้จริง (สุทธิ)</div></div>
             <div className="stat-card"><div className="stat-val" style={{ color: "var(--down)" }}>−{fmtBaht(sumLabor)}</div><div className="stat-label">ค่าแรงช่างซัพรวม</div></div>
-            <div className="stat-card"><div className="stat-val" style={{ color: sumNet >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(sumNet)}</div><div className="stat-label">กำไรสุทธิรวม</div></div>
-            <div className="stat-card"><div className="stat-val" style={{ color: "var(--up)" }}>{margin.toFixed(1)}%</div><div className="stat-label">มาร์จินสุทธิเฉลี่ย</div></div>
+            <div className="stat-card"><div className="stat-val" style={{ color: sumNet >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(sumNet)}</div><div className="stat-label">กำไรสุทธิรวม (ต้นทุนจริง)</div><div className="stat-sub">{withNet.length} งานที่มีต้นทุนจริง</div></div>
+            <div className="stat-card"><div className="stat-val" style={{ color: "var(--up)" }}>{margin.toFixed(1)}%</div><div className="stat-label">มาร์จินสุทธิเฉลี่ย (จริง)</div></div>
           </div>
 
           {orphans.length > 0 && (
@@ -111,7 +115,7 @@ export default function Profit() {
           {rows.length === 0 && <div className="empty">ยังไม่มีงานที่ทำเสร็จ (ใบงานสถานะ “เสร็จ” ทุกใบของงานนั้น)</div>}
           {rows.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ</span><span className="r">กำไรขั้นต้น</span><span className="r">วัสดุเบิกจริง</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ</span><span className="r">%</span></div>
+              <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ (ประมาณ)</span><span className="r">กำไรประมาณการ</span><span className="r">วัสดุ/แอร์เบิกจริง</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ (จริง)</span><span className="r">%</span></div>
               {rows.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, net, margin }) => {
                 const isOpen = !!open[q.quote_no];
                 return (
@@ -150,7 +154,7 @@ export default function Profit() {
               })}
             </div>
           )}
-          <p className="page-sub" style={{ marginTop: 12 }}>* กดที่แถวเพื่อกางดูวัสดุ + ค่าแรงช่างซัพรายใบงาน · แสดงเฉพาะงานที่ใบงาน “เสร็จ” ครบทุกใบ · ใบที่ “ไม่อ้าง BOQ” คำนวณกำไรขั้นต้นไม่ได้ · ยอดขายเป็นราคาก่อน VAT</p>
+          <p className="page-sub" style={{ marginTop: 12 }}>* กดที่แถวเพื่อกางดูวัสดุ + ค่าแรงช่างซัพรายใบงาน · แสดงเฉพาะงานที่ใบงาน “เสร็จ” ครบทุกใบ · กำไรสุทธิคิดจาก<b>ต้นทุนจริง</b> (งานที่ยังไม่บันทึกต้นทุนจริงจะขึ้น “—” เพื่อไม่ให้กำไรลวง) · BOQ เป็นประมาณการไว้เทียบ · ยอดขายเป็นราคาก่อน VAT</p>
         </>
       )}
     </div>
