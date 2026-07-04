@@ -1554,6 +1554,20 @@ export async function deleteTransaction(id, reason) {
   if (error) throw error;
   await logAudit({ action: "delete", target_type: "transaction", target_no: id, reason, snapshot: snap });
 }
+// ยกเลิกการบันทึกทั้งชุด (batch) — ใช้กับ "ยกเลิกรับเข้าทั้งใบ PO": ลบทุกรายการในชุด (สต๊อกคืนอัตโนมัติ)
+// และถ้าชุดนี้อ้างใบสั่งซื้อ → คืนสถานะ PO เป็น "รอรับของ" + อัปเดตกระแสเงินสด (actual → projected)
+export async function cancelTransactionGroup({ ids, ref_no, po_no }, reason) {
+  if (!ids?.length) throw new Error("ไม่มีรายการในชุดนี้");
+  const { data: snap } = await supabase.from("transactions").select("*").in("id", ids);
+  const { error } = await supabase.from("transactions").delete().in("id", ids);
+  if (error) throw error;
+  await logAudit({ action: "delete", target_type: "transaction_batch", target_no: ref_no || String(ids[0]), reason, snapshot: { po_no: po_no || null, rows: snap || [] } });
+  if (po_no) {
+    const { error: e2 } = await supabase.from("purchase_orders").update({ status: "open", received_at: null }).eq("po_no", po_no).eq("status", "received");
+    if (e2) throw e2;
+    syncCashEntriesFromDocs().catch(() => {});  // PO เด้งกลับ "คาดว่าจะจ่าย"
+  }
+}
 // edit a movement's quantity (stock + value recompute automatically from the transactions table)
 export async function updateTransaction(id, qty) {
   const { error } = await supabase.from("transactions").update({ qty: Number(qty) }).eq("id", id);

@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived } from "../lib/api";
+import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, cancelTransactionGroup, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum } from "../lib/format";
 import { can } from "../lib/permissions";
 import { scheduleLabel } from "../lib/schedule";
@@ -282,6 +282,22 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     try { await updateTransaction(r.id, q); setEditId(null); flash("แก้ไขจำนวนแล้ว ✓"); await load(); }
     catch (e) { flash("แก้ไขไม่สำเร็จ: " + (e.message || e), true); }
   }
+  // ยกเลิกการรับเข้าทั้งชุด — สต๊อกคืนทุกรายการ · ถ้าชุดอ้างใบ PO → ใบเด้งกลับ "รอรับของ"
+  async function cancelGroup(g) {
+    const poNo = g.job_no && /^PO-/i.test(g.job_no) ? g.job_no : null;
+    const reason = await confirmDialog({
+      title: `ยกเลิก${TYPE_BY[g.type].th}ทั้งชุด (${g.rows.length} รายการ)?`,
+      message: `สต๊อกจะคืนค่าทุกรายการ${poNo ? ` · ใบสั่งซื้อ ${poNo} จะกลับเป็น "รอรับของ" ให้รับใหม่ได้` : ""}`,
+      confirmText: "ยกเลิกทั้งชุด",
+      prompt: { label: "เหตุผลที่ยกเลิก (ไม่บังคับ)", placeholder: "เช่น รับผิดใบ / จำนวนผิด" },
+    });
+    if (reason === false) return;
+    try {
+      await cancelTransactionGroup({ ids: g.rows.map((r) => r.id), ref_no: g.ref_no, po_no: poNo }, reason);
+      flash(`ยกเลิกทั้งชุดแล้ว${poNo ? ` · ${poNo} กลับเป็นรอรับของ` : ""} ✓`);
+      await load();
+    } catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
+  }
 
   return (
     <div className="adm">
@@ -494,6 +510,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                     </div>
                     <div className="led-actions" onClick={(e) => e.stopPropagation()}>
                       <button className="led-btn" title="พิมพ์" onClick={() => printGroup(g)}><UIcon name="catalog" size={14} /></button>
+                      {isAdmin && g.type === "purchase" && <button className="led-btn danger" title={g.job_no && /^PO-/i.test(g.job_no) ? `ยกเลิกรับเข้าทั้งใบ — ${g.job_no} กลับเป็นรอรับของ` : "ยกเลิกทั้งชุด"} onClick={() => cancelGroup(g)}><UIcon name="trash" size={14} /></button>}
                       <button className="led-btn" title={open ? "ย่อ" : "ดูรายการ"} onClick={() => toggle(g.key)}><UIcon name={open ? "chevD" : "chevR"} size={14} /></button>
                     </div>
                   </div>
