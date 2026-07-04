@@ -131,6 +131,8 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     setReceivePo(prefill.poNo || null);
     const rj = prefill.quoteNo ? (jobOrders.find((j) => j.quote_no === prefill.quoteNo && j.status !== "cancelled") || null) : null;
     setReceiveJob(rj ? { job_no: rj.job_no, team: rj.assigned_team || null } : null);
+    // กันต้นทุนตกหล่นแบบเงียบ: PO อ้างใบเสนอราคาแต่ยังไม่มีใบงาน → เตือนชัด ๆ (ของจะเข้าสต๊อกเฉย ๆ ไม่เข้างาน)
+    if (prefill.quoteNo && !rj) flash(`⚠️ ${prefill.quoteNo} ยังไม่มีใบงาน — รับรอบนี้ของจะเข้าสต๊อกอย่างเดียว ต้นทุนยังไม่เข้างาน · สร้างใบงานก่อนแล้วค่อยรับ ถ้าต้องการต้นทุนเข้างานอัตโนมัติ`, true);
     setLines(prefill.items.map((p) => {
       const m = matMap[p.code];
       const f = (p.unit && m?.purchaseUnit && p.unit === m.purchaseUnit && Number(m.purchaseQty) > 1) ? Number(m.purchaseQty) : 1;
