@@ -26,7 +26,28 @@ const STICKER_SETS = [
 ];
 const stickerThumb = (id) => `https://stickershop.line-scdn.net/stickershop/v1/sticker/${id}/android/sticker.png`;
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
-const fmtDay = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "";
+const _sameDay = (a, b) => a.toDateString() === b.toDateString();
+// ลิสต์รายชื่อ: วันนี้ → เวลา · เมื่อวาน → "เมื่อวาน 09:05" · เก่ากว่า → "3 ก.ค. 09:05" (ข้ามปีแสดงปีด้วย)
+const fmtWhen = (d) => {
+  if (!d) return "";
+  const x = new Date(d), now = new Date();
+  const t = x.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  if (_sameDay(x, now)) return t;
+  const yd = new Date(now); yd.setDate(now.getDate() - 1);
+  if (_sameDay(x, yd)) return `เมื่อวาน ${t}`;
+  if (x.getFullYear() !== now.getFullYear()) return x.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
+  return `${x.toLocaleDateString("th-TH", { day: "numeric", month: "short" })} ${t}`;
+};
+// แถบคั่นวันในกระดานแชต: "วันนี้ · ศ. 4 ก.ค." / "เมื่อวาน · พฤ. 3 ก.ค." / "อ. 1 ก.ค." (ข้ามปีแสดงปี)
+const fmtDay = (d) => {
+  if (!d) return "";
+  const x = new Date(d), now = new Date();
+  const base = x.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short", ...(x.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
+  if (_sameDay(x, now)) return `วันนี้ · ${base}`;
+  const yd = new Date(now); yd.setDate(now.getDate() - 1);
+  if (_sameDay(x, yd)) return `เมื่อวาน · ${base}`;
+  return base;
+};
 // CRM stages (sales phase) for a LINE contact
 const STAGES = [
   { id: "new", label: "ใหม่", color: "#64748b" },
@@ -370,7 +391,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <button key={c.line_user_id} className={"chat-convo" + (sel === c.line_user_id ? " on" : "")} onClick={() => openContact(c)}>
                 <div className="chat-av">{c.picture_url ? <img src={c.picture_url} alt="" /> : initial(c.display_name)}</div>
                 <div className="chat-convo-body">
-                  <div className="chat-convo-top"><b>{c.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</b><span>{fmtTime(c.last_message_at)}</span></div>
+                  <div className="chat-convo-top"><b>{c.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</b><span title={c.last_message_at ? new Date(c.last_message_at).toLocaleString("th-TH") : ""}>{fmtWhen(c.last_message_at)}</span></div>
                   <div className="chat-convo-last">{c.last_message || "—"}</div>
                   <div className="chat-convo-tags">
                     <span className="conv-stage" style={{ background: sd.color }}>{sd.label}</span>
@@ -445,7 +466,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                             </span>
                           </span>
                         ) : <span>{linkify(m.text)}</span>}
-                        <span className="chat-bubble-time">{fmtTime(m.created_at)}{out ? " · " + senderName : ""}</span>
+                        <span className="chat-bubble-time" title={m.created_at ? new Date(m.created_at).toLocaleString("th-TH") : ""}>{fmtTime(m.created_at)}{out ? " · " + senderName : ""}</span>
                       </div>
                     </React.Fragment>
                   );
