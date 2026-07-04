@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -12,7 +12,10 @@ const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "shor
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
 export default function HR({ role }) {
-  const canManage = role === "admin" || role === "exec"; // แก้ไข/ลบ ให้เฉพาะ HR (ธุรการ) + ผู้บริหาร
+  const canManage = role === "admin" || role === "exec" || role === "hr"; // ธุรการ/ผู้บริหาร/ฝ่ายบุคคล แก้ไข/ลบได้
+  const [selfId, setSelfId] = React.useState(null);       // uid ของผู้ใช้ปัจจุบัน — ฝ่ายบุคคลห้ามแก้เวลาของตัวเอง
+  React.useEffect(() => { getProfile().then((p) => setSelfId(p?.id || null)).catch(() => {}); }, []);
+  const lockSelfId = role === "hr" ? selfId : null;        // admin/exec แก้ได้ทุกคนรวมถึงแถวของ HR เอง
   const [tab, setTab] = React.useState("today");
   const [settings, setSettings] = React.useState(DEFAULT_HR_SETTINGS);
   const [staff, setStaff] = React.useState([]);
@@ -36,7 +39,7 @@ export default function HR({ role }) {
           style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
       </div>
 
-      {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
+      {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "leaves" && <LeavesTab staff={staff} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "advances" && <AdvancesTab canManage={canManage} flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
@@ -50,7 +53,7 @@ export default function HR({ role }) {
 }
 
 // ---------- TODAY ----------
-function TodayTab({ staff, settings, holSet, canManage, flash }) {
+function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
   const [att, setAtt] = React.useState([]);
   const [onLeave, setOnLeave] = React.useState({});
   const [loading, setLoading] = React.useState(true);
@@ -89,7 +92,9 @@ function TodayTab({ staff, settings, holSet, canManage, flash }) {
       <div className="sec-head"><div><div className="sec-title">{thDate(day)}</div>
         <div className="sec-sub">เข้าแล้ว {rows.filter((r) => r.status === "in" || r.status === "late" || r.status === "out").length} · ออกแล้ว {rows.filter((r) => r.status === "out").length} · ยังไม่เข้า {rows.filter((r) => r.status === "absent").length} · ลา {rows.filter((r) => r.status === "leave").length}</div></div></div>
       <div className="set-list">
-        {rows.map(({ p, a, s, status }) => { const b = ST[status]; return (
+        {rows.map(({ p, a, s, status }) => { const b = ST[status];
+          const rowManage = canManage && p.id !== lockSelfId;   // ฝ่ายบุคคลแก้เวลาได้ทุกคน ยกเว้นของตัวเอง
+          return (
           <div className="hr-today-row" key={p.id}>
             <div className="hr-name"><b>{p.name || p.email}</b><span className="jo-dim">{p.department || "-"}</span></div>
             <div className="hr-times">
@@ -97,8 +102,9 @@ function TodayTab({ staff, settings, holSet, canManage, flash }) {
               <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otHours > 0 && <span className="att-tag ot sm">OT {s.otHours} ชม.</span>}</span>
             </div>
             <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]) : b.t}</span>
-            {canManage && <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>}
-            {canManage && a && <button className="btn-ghost sm danger" title="ลบเวลาเข้า-ออก" onClick={() => delAtt(p)}><UIcon name="trash" size={13} /></button>}
+            {rowManage && <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>}
+            {rowManage && a && <button className="btn-ghost sm danger" title="ลบเวลาเข้า-ออก" onClick={() => delAtt(p)}><UIcon name="trash" size={13} /></button>}
+            {canManage && !rowManage && <span className="jo-dim" title="ฝ่ายบุคคลแก้เวลาของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารแก้ให้" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span>}
           </div>
         ); })}
       </div>
