@@ -59,6 +59,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const [q, setQ] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
   const [payF, setPayF] = React.useState("all");
+  const [expanded, setExpanded] = React.useState(() => new Set()); // การ์ดที่กางรายการเต็ม (default ย่อเหลือ 3 บรรทัด)
+  const toggleExpand = (poNo) => setExpanded((s) => { const n = new Set(s); n.has(poNo) ? n.delete(poNo) : n.add(poNo); return n; });
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   const [quotes, setQuotes] = React.useState([]);        // ใบเสนอราคาที่อนุมัติแล้ว (ตัวเลือกอ้างอิง)
   const [sups, setSups] = React.useState([]);            // ทะเบียนผู้ขายฉบับเต็ม (ที่อยู่/เลขภาษี สำหรับใบพิมพ์)
@@ -308,13 +310,18 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               </div>
               <InternalNoteTag note={po.internal_note} />
               <div className="job-lines">
-                {po.items.map((it) => { const m = matMap[it.material_code]; return (
+                {(expanded.has(po.po_no) ? po.items : po.items.slice(0, 3)).map((it) => { const m = matMap[it.material_code]; return (
                   <div className="po-view-row" key={it.material_code}>
                     <span className="po-view-name">{m?.th || it.material_code}</span>
                     <span className="po-view-q">{fmtNum(it.qty)} {it.unit || m?.unit || ""} × {fmtBaht(it.price)}</span>
                     <span className="po-view-v">{fmtBaht(it.qty * it.price)}</span>
                   </div>
                 ); })}
+                {po.items.length > 3 && (
+                  <button type="button" className="po-toggle" onClick={() => toggleExpand(po.po_no)}>
+                    {expanded.has(po.po_no) ? "▲ ย่อรายการ" : `▼ ดูรายการทั้งหมด (${po.items.length} รายการ · ซ่อนอยู่ ${po.items.length - 3})`}
+                  </button>
+                )}
                 <div className="job-actions">
                   <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintPo(po); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                   <button className="btn-ghost sm" onClick={() => copyPo(po)}><UIcon name="clipboard" size={14} /> คัดลอกส่งซัพพลายเออร์</button>
