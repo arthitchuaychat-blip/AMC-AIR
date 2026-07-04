@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listMaterialsLite, listCategories, saveMaterial, deactivateMaterial, listBrands, listBtus, saveBrand, saveBtu, setMaterialsWebPublished } from "../lib/api";
+import { listMaterials, listMaterialsLite, listCategories, saveCategory, saveMaterial, deactivateMaterial, listBrands, listBtus, saveBrand, saveBtu, setMaterialsWebPublished } from "../lib/api";
 import { fmtBaht, fmtBaht2, fmtNum, eqi, matchText, norm } from "../lib/format";
 import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
@@ -84,6 +84,17 @@ export default function Catalog({ role }) {
       if (row.brand?.trim()) { try { await saveBrand(row.brand.trim()); } catch { /* dup — ignore */ } }
       if (row.btu) { try { await saveBtu(Number(row.btu)); } catch { /* dup — ignore */ } }
     }
+  }
+  // สร้าง "หมวดวัสดุ" ใหม่จากในฟอร์มสินค้า — id อัตโนมัติ · ชื่อซ้ำ = ใช้หมวดเดิม · คืน id ให้ฟอร์มเลือกต่อ
+  async function addProductCategory(name) {
+    const nm = (name || "").trim();
+    if (!nm) throw new Error("ใส่ชื่อหมวด");
+    const dup = cats.find((c) => (c.name_th || "").trim() === nm);
+    if (dup) return dup.id;
+    const id = "c" + Date.now().toString(36);
+    await saveCategory({ id, name_th: nm });   // ต้องรัน migration 099 (เปิดสิทธิ์เขียนตาราง categories)
+    setCats(await listCategories());
+    return id;
   }
   const btuOpts = React.useMemo(() => [...new Set(acMats.map((m) => m.btu).filter(Boolean).map(Number))].sort((a, b) => a - b), [acMats]);
   // One shared collator (th) — far faster than calling String.localeCompare per comparison.
@@ -317,7 +328,7 @@ export default function Catalog({ role }) {
       )}
       {openMat && <MaterialDrawer mat={openMat} onClose={() => setOpenMat(null)} />}
       {editing !== undefined && (
-        <MaterialModal initial={editing} categories={cats} brands={brands} btus={btus} acTypes={acTypes}
+        <MaterialModal initial={editing} categories={cats} brands={brands} btus={btus} acTypes={acTypes} onAddCategory={addProductCategory}
           defaultKind={kind === "all" ? "material" : kind}
           onSave={handleSaveMaterial}
           onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setBtu("all"); setAcType("all"); flash(`บันทึกสำเร็จ ✓ — อยู่ในแท็บ "${KINDS.find((k) => k.v === savedKind)?.l || savedKind}"`); } load(); }}

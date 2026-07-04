@@ -17,7 +17,7 @@ function suggestSale(kind, cost) {
 }
 
 // Add OR edit a catalog item (material / ac / service). `initial` null => add mode.
-export default function MaterialModal({ initial, categories, brands = [], btus = [], acTypes = [], defaultKind = "material", onSaved, onClose, onSave }) {
+export default function MaterialModal({ initial, categories, brands = [], btus = [], acTypes = [], defaultKind = "material", onSaved, onClose, onSave, onAddCategory }) {
   const isNew = !initial || !!initial._dup;   // _dup = สร้างสำเนา → ถือเป็นรายการใหม่ (รหัสใหม่)
   const [f, setF] = React.useState(() => ({
     code: initial?.code || "",
@@ -45,6 +45,14 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const [err, setErr] = React.useState(null);
+  // เพิ่มหมวดวัสดุใหม่จากในฟอร์ม (พิมพ์ชื่อ → สร้าง → เลือกให้ทันที)
+  const [catAdding, setCatAdding] = React.useState(false);
+  const [catName, setCatName] = React.useState("");
+  async function confirmAddCat() {
+    const nm = catName.trim(); if (!nm || !onAddCategory) return;
+    try { const id = await onAddCategory(nm); setF((s) => ({ ...s, category: id })); setCatAdding(false); setCatName(""); }
+    catch (ex) { setErr("เพิ่มหมวดไม่สำเร็จ (รัน migration 099 หรือยัง?): " + (ex.message || ex)); }
+  }
   // ราคาขายอัตโนมัติ: รายการใหม่ → พิมพ์ต้นทุนแล้วเติมราคาขายให้ (จนกว่าจะแก้ราคาขายเอง)
   // รายการเดิม → ไม่ทับราคาที่ตั้งไว้ ใช้ปุ่ม ↻ คำนวณใหม่แทน
   const [spTouched, setSpTouched] = React.useState(!isNew);
@@ -102,10 +110,19 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
               <input className="inp" value={f.code} onChange={set("code")} placeholder={isAc ? "เช่น DAIKIN-12K" : isService ? "เช่น SVC-INSTALL" : "เช่น COPP8"} disabled={!isNew} />
             </label>
             {isMat && (
-              <label className="fld"><span>หมวดย่อย · Category</span>
-                <Combo className="inp" value={f.category} onChange={set("category")}>
-                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name_th}</option>)}
-                </Combo>
+              <label className="fld"><span>หมวดย่อย · Category {onAddCategory && !catAdding && <button type="button" className="sp-suggest" onClick={() => { setCatAdding(true); setCatName(""); }}>＋ หมวดใหม่</button>}</span>
+                {catAdding ? (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input className="inp" autoFocus value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="ชื่อหมวดใหม่ เช่น #N ท่อลม"
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmAddCat(); } }} />
+                    <button type="button" className="btn-primary sm" onClick={confirmAddCat}>เพิ่ม</button>
+                    <button type="button" className="btn-ghost sm" onClick={() => { setCatAdding(false); setCatName(""); }}>ยกเลิก</button>
+                  </div>
+                ) : (
+                  <Combo className="inp" value={f.category} onChange={set("category")}>
+                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name_th}</option>)}
+                  </Combo>
+                )}
               </label>
             )}
             {isAc && (
@@ -126,11 +143,11 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
           {isAc && (
             <div className="fld-row">
               <label className="fld"><span>ขนาด BTU</span>
-                <input className="inp" type="number" list="btu-list" value={f.btu} onChange={set("btu")} placeholder="เช่น 12000" />
+                <input className="inp" type="number" list="btu-list" value={f.btu} onChange={set("btu")} placeholder="เลือก หรือพิมพ์ขนาดใหม่ เช่น 12000" />
                 <datalist id="btu-list">{btus.map((b) => <option key={b} value={b} />)}</datalist>
               </label>
               <label className="fld"><span>ประเภทแอร์ · Type</span>
-                <input className="inp" list="actype-list" value={f.ac_type} onChange={set("ac_type")} placeholder="เช่น Wall Type" />
+                <input className="inp" list="actype-list" value={f.ac_type} onChange={set("ac_type")} placeholder="เลือก หรือพิมพ์ประเภทใหม่ เช่น Wall Type" />
                 <datalist id="actype-list">{acTypes.map((t) => <option key={t} value={t} />)}</datalist>
               </label>
             </div>
