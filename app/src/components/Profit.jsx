@@ -1,5 +1,5 @@
 import React from "react";
-import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost } from "../lib/api";
+import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost, listPurchaseOrders } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 
 // กำไร/งาน — 1 ใบเสนอราคา = 1 งาน (รวมทุกใบงานที่อยู่ใต้ใบเสนอราคานั้น รวมใบงานเชื่อม)
@@ -18,8 +18,11 @@ export default function Profit() {
   async function load() {
     setLoading(true); setErr(null);
     try {
-      const [qs, bs, jos, mat, exp] = await Promise.all([listQuotations(), listBoqs(), listJobOrders(), jobMaterialCost(), jobExpenseCost()]);
+      const [qs, bs, jos, mat, exp, pos] = await Promise.all([listQuotations(), listBoqs(), listJobOrders(), jobMaterialCost(), jobExpenseCost(), listPurchaseOrders().catch(() => [])]);
       const boqCost = Object.fromEntries(bs.map((b) => [b.boq_no, b.total]));
+      // PO ผูกงานที่ยังรอรับของ = ต้นทุนที่สั่งแล้วของงาน (ก่อน VAT) · พอรับของจะย้ายไปอยู่ใน "เบิกจริง" แทน (นับเฉพาะ open → ไม่ซ้ำ)
+      const poPendByQuote = {};
+      (pos || []).forEach((p) => { if (p.quote_no && p.status === "open") poPendByQuote[p.quote_no] = (poPendByQuote[p.quote_no] || 0) + (Number(p.subtotal) || 0); });
       const jobByNo = Object.fromEntries(jos.map((j) => [j.job_no, j]));
       // group job orders by quote (1 ใบเสนอราคา = 1 งาน)
       const jobsByQuote = {};
@@ -47,13 +50,15 @@ export default function Profit() {
 
         const sale = q.afterDisc;                                   // ยอดขายสุทธิ ก่อน VAT (นับครั้งเดียว)
         const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : null;
-        // สูตรต้นทุนจริง (เลือกโดยผู้ใช้ 2026-07-04): กำไรสุทธิ = ขาย − ต้นทุนจริง (เบิกจริง−คืน + ค่าแรงซัพ + เบิกจ่าย)
-        // BOQ = กำไรตามประมาณการ ไว้เทียบเท่านั้น — ห้ามหักซ้อน (ของจาก PO ผูกงานเข้าช่องเบิกจริงแล้ว)
+        // สูตรต้นทุนจริง (เลือกโดยผู้ใช้ 2026-07-04): กำไรสุทธิ = ขาย − ต้นทุนจริง
+        // ต้นทุนจริง = เบิกจริง−คืน + ค่าแรงซัพ + เบิกจ่าย + ค่าสินค้าตาม PO ผูกงานที่ยังรอรับของ
+        // BOQ = กำไรตามประมาณการ ไว้เทียบเท่านั้น — ห้ามหักซ้อน
         const gross = cost == null ? null : sale - cost;            // กำไรตามประมาณการ (BOQ)
-        const actualCost = matNet + labor + expenses;
+        const poPend = poPendByQuote[q.quote_no] || 0;
+        const actualCost = matNet + labor + expenses + poPend;
         const net = actualCost > 0 ? sale - actualCost : null;      // ยังไม่มีต้นทุนจริง → ไม่โชว์กำไรลวง
         const margin = net == null || sale <= 0 ? null : (net / sale) * 100;
-        out.push({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, net, margin });
+        out.push({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, net, margin });
       });
       setRows(out);
 
@@ -116,13 +121,13 @@ export default function Profit() {
           {rows.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ (ประมาณ)</span><span className="r">กำไรประมาณการ</span><span className="r">วัสดุ/แอร์เบิกจริง</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ (จริง)</span><span className="r">%</span></div>
-              {rows.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, net, margin }) => {
+              {rows.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, net, margin }) => {
                 const isOpen = !!open[q.quote_no];
                 return (
                   <React.Fragment key={q.quote_no}>
                     <div className="jp-row" style={{ cursor: "pointer" }} onClick={() => toggle(q.quote_no)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && toggle(q.quote_no)}>
                       <span className="jp-name"><b>{isOpen ? "▾ " : "▸ "}{q.quote_no}</b><br />
-                        <span className="jp-cust">{q.customerName || "-"} · {jobs.length} ใบงาน{cost == null ? " · ไม่อ้าง BOQ" : ""}</span></span>
+                        <span className="jp-cust">{q.customerName || "-"} · {jobs.length} ใบงาน{cost == null ? " · ไม่อ้าง BOQ" : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}</span></span>
                       <span className="r">{fmtBaht(sale)}</span>
                       <span className="r">{cost == null ? "—" : fmtBaht(cost)}</span>
                       <span className="r" style={{ color: gross == null ? "var(--ink-3)" : gross >= 0 ? "var(--ink)" : "var(--down)" }}>{gross == null ? "—" : fmtBaht(gross)}</span>
@@ -145,7 +150,7 @@ export default function Profit() {
                         ))}
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0 0", fontWeight: 700 }}>
                           <span>รวมทั้งงาน</span>
-                          <span style={{ textAlign: "right" }}>วัสดุ {fmtBaht(matNet)} · ค่าแรงซัพ {fmtBaht(labor)}{expenses > 0 ? ` · ค่าใช้จ่ายเบิก ${fmtBaht(expenses)}` : ""}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
+                          <span style={{ textAlign: "right" }}>วัสดุ {fmtBaht(matNet)} · ค่าแรงซัพ {fmtBaht(labor)}{expenses > 0 ? ` · ค่าใช้จ่ายเบิก ${fmtBaht(expenses)}` : ""}{poPend > 0 ? ` · PO รอรับของ ${fmtBaht(poPend)}` : ""}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
                         </div>
                       </div>
                     )}
