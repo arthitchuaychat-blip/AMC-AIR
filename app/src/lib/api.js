@@ -2325,11 +2325,10 @@ export async function setLineOwner(uid, userId) {
 // staff list (for owner dropdown + showing who replied)
 export async function listStaff() {
   let { data, error } = await supabase.from("profiles").select("id,name,email,role,avatar_url").order("name");
-  // avatar_url comes from migration 083 — if it's not run yet, don't let the whole staff list fail
-  // (that empties staffMap and makes every chat reply show "ทีมงาน" instead of the sender's name)
-  if (error && /avatar_url/i.test(error.message || "")) {
-    ({ data, error } = await supabase.from("profiles").select("id,name,email,role").order("name"));
-  }
+  // ห้ามให้ลิสต์พนักงานล้มทั้งก้อน — ถ้า staffMap ว่าง ชื่อผู้ตอบแชตทุกคนจะกลายเป็น "ทีมงาน"
+  // ลดรูปลงเรื่อย ๆ: ไม่มี avatar_url (ยังไม่รัน 083) → คอลัมน์หลัก → คอลัมน์ต่ำสุด
+  if (error) ({ data, error } = await supabase.from("profiles").select("id,name,email,role").order("name"));
+  if (error) ({ data, error } = await supabase.from("profiles").select("id,name,email"));
   if (error) throw error;
   return (data || []).map((p) => ({ ...p, name: p.name || p.email }));
 }

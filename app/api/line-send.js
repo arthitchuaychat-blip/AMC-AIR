@@ -4,7 +4,7 @@
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
-const OFFICE = ["admin", "sales", "exec", "finance"];
+const OFFICE = ["admin", "sales", "exec", "finance", "hr"]; // hr ทำงานขายด้วย (v269)
 
 async function readJson(req) {
   if (req.body && typeof req.body === "object") return req.body;

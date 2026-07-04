@@ -130,7 +130,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   React.useEffect(() => {
     loadContacts(); loadQr();
     listCustomers().then(setCusts).catch(() => {});
-    listStaff().then(setStaff).catch(() => {});
+    // ถ้าลิสต์พนักงานโหลดพลาด (เช่น token ยังไม่พร้อม) ลองซ้ำอีกครั้ง — ไม่งั้นชื่อผู้ตอบทุกคนจะขึ้น "ทีมงาน"
+    listStaff().then(setStaff).catch(() => { setTimeout(() => listStaff().then(setStaff).catch(() => {}), 2500); });
     getProfile().then((p) => setMyId(p?.id || null)).catch(() => {});
   }, []);
   const staffMap = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
@@ -418,7 +419,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                           const orig = byLineId[m.quoted_message_id];
                           return (
                             <div className="chat-quote">
-                              <span className="chat-quote-who">{orig ? (orig.direction === "out" ? "ทีมงาน" : (selContact?.display_name || "ลูกค้า")) : "ข้อความที่อ้างอิง"}</span>
+                              <span className="chat-quote-who">{orig ? (orig.direction === "out" ? (orig.sent_by && staffMap[orig.sent_by]) || "ทีมงาน" : (selContact?.display_name || "ลูกค้า")) : "ข้อความที่อ้างอิง"}</span>
                               <span className="chat-quote-text">{orig ? msgSnippet(orig) : "(ข้อความเก่า)"}</span>
                             </div>
                           );
