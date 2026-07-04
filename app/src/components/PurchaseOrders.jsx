@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterialsLite, listSuppliers } from "../lib/api";
+import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies } from "../lib/api";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -9,9 +9,15 @@ import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
 import UnitPick, { unitFactor } from "./UnitPick";
+import Combo from "./Combo";
+import DocSlip from "./DocSlip";
+import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 const STATUS = { open: { th: "รอรับของ", cls: "b-amber" }, received: { th: "รับแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
 const PO_FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open", label: "รอรับของ" }, { id: "received", label: "รับแล้ว" }, { id: "cancelled", label: "ยกเลิก" }];
+// สถานะการจ่ายเงิน (แกนที่ 2 — อิสระจากการรับของ)
+const PAY_STATUS = { unpaid: { th: "ยังไม่จ่าย", cls: "b-grey" }, pending: { th: "รออนุมัติจ่าย", cls: "b-amber" }, paid: { th: "จ่ายแล้ว", cls: "b-green" } };
+const PAY_FILTERS = [{ id: "all", label: "การจ่าย: ทั้งหมด" }, { id: "unpaid", label: "ยังไม่จ่าย" }, { id: "pending", label: "รออนุมัติจ่าย" }, { id: "paid", label: "จ่ายแล้ว" }];
 
 function genPoNo() {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
@@ -49,19 +55,33 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
-  const [editing, setEditing] = React.useState(null); // {po_no, supplier, note, vat, items:[{code,qty,price}]} or null
+  const [editing, setEditing] = React.useState(null); // {po_no, supplier, note, vat, quote_no, items:[{code,qty,price}]} or null
   const [q, setQ] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
+  const [payF, setPayF] = React.useState("all");
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [quotes, setQuotes] = React.useState([]);        // ใบเสนอราคาที่อนุมัติแล้ว (ตัวเลือกอ้างอิง)
+  const [sups, setSups] = React.useState([]);            // ทะเบียนผู้ขายฉบับเต็ม (ที่อยู่/เลขภาษี สำหรับใบพิมพ์)
+  const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
+  const [printPo, setPrintPo] = React.useState(null);
+  const printWin = React.useRef(null);
+  React.useEffect(() => { if (!printPo) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintPo(null); }, 120); return () => clearTimeout(t); }, [printPo]);
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
   const shown = pos.filter((po) => (statusF === "all" || po.status === statusF)
+    && (payF === "all" || po.paymentStatus === payF)
     && inDateRange(po.created_at, dateR)
-    && (matchText(q, po.po_no, po.supplier, po.note) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
+    && (matchText(q, po.po_no, po.supplier, po.note, po.quote_no) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
 
   async function load() {
     setLoading(true);
-    try { const [p, m] = await Promise.all([listPurchaseOrders(), listMaterialsLite()]); setPos(p); setMats(m); }
+    try {
+      const [p, m, qt, sp, co] = await Promise.all([
+        listPurchaseOrders(), listMaterialsLite(),
+        listApprovedQuotesLite().catch(() => []), listSuppliers().catch(() => []), getCompanies().catch(() => null),
+      ]);
+      setPos(p); setMats(m); setQuotes(qt); setSups(sp); if (co) setCompanies(co);
+    }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -71,15 +91,15 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   // open editor prefilled from dashboard reorder
   React.useEffect(() => {
     if (!prefill || !prefill.length || !mats.length) return;
-    setEditing({ po_no: genPoNo(), supplier: "", note: "", vat: true, priceIncl: false,
+    setEditing({ po_no: genPoNo(), supplier: "", note: "", vat: true, priceIncl: false, quote_no: "",
       items: prefill.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: matMap[p.code]?.cost ?? 0 })) });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
 
-  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, items: [] }); }
+  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", items: [] }); }
   function startEdit(po) {
     const incl = !!po.vat && !!po.price_incl;   // stored price is pre-VAT → show gross in the field when incl mode
-    setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl,
+    setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "",
       items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0), unit: i.unit || null })) });
   }
 
@@ -129,11 +149,20 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   async function save() {
     if (!editing.po_no.trim()) return flash("ใส่เลขใบสั่งซื้อ", true);
     if (!editing.items.length) return flash("เพิ่มวัสดุอย่างน้อย 1 รายการ", true);
+    // กติกาธุรกิจ: สั่งแอร์เมื่อมีออเดอร์เท่านั้น → ใบที่มีแอร์ต้องอ้างใบเสนอราคาที่อนุมัติแล้ว (วัสดุล้วนไม่บังคับ)
+    if (editing.items.some((it) => matMap[it.code]?.kind === "ac") && !editing.quote_no)
+      return flash("ใบสั่งซื้อที่มีเครื่องปรับอากาศ ต้องอ้างอิงใบเสนอราคาที่อนุมัติแล้ว (สั่งตามออเดอร์เท่านั้น)", true);
     if (editing._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
     const incl = !!editing.vat && !!editing.priceIncl;
     const items = editing.items.map((it) => ({ ...it, price: incl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0) })); // store pre-VAT price
-    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, status: "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
+    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, status: "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // ส่งขออนุมัติจ่ายเงิน → โผล่ในเมนูเบิกจ่าย (อนุมัติ → จ่าย+เลือกบัญชี → PO ขึ้น "จ่ายแล้ว" อัตโนมัติ)
+  async function requestPay(po) {
+    if (!await confirmDialog(`ส่งขออนุมัติจ่ายค่าสินค้า ${po.po_no} · ${fmtBaht(po.total)}${po.vat ? " (รวม VAT)" : ""} ?\nคำขอจะไปรออนุมัติในเมนู "เบิกจ่าย"`)) return;
+    try { await requestPoPayment(po); flash("ส่งขออนุมัติจ่ายแล้ว — รออนุมัติในเมนูเบิกจ่าย ✓"); await load(); }
+    catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(po) {
     if (!await confirmDialog(`ลบใบสั่งซื้อ ${po.po_no}?`)) return;
@@ -163,6 +192,13 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             <label className="fld"><span>เลขใบสั่งซื้อ · PO No.</span><input className="inp" value={editing.po_no} onChange={(e) => setEditing({ ...editing, po_no: e.target.value })} /></label>
             <label className="fld"><span>ซัพพลายเออร์ · Supplier</span><SupplierPicker value={editing.supplier} onChange={(v) => setEditing((e) => ({ ...e, supplier: v }))} /></label>
           </div>
+          <label className="fld"><span>อ้างอิงใบเสนอราคา (อนุมัติแล้ว) <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>— สั่งแอร์ต้องอ้างอิง · วัสดุจะอ้างอิงหรือไม่ก็ได้ · ถ้าอ้างอิง ต้นทุนจะเข้างานนั้นตอนรับของ</span></span>
+            <Combo className="inp" value={editing.quote_no} onChange={(e) => setEditing((s) => ({ ...s, quote_no: e.target.value }))}>
+              <option value="">— ไม่อ้างอิง (ซื้อเข้าสต๊อกทั่วไป) —</option>
+              {editing.quote_no && !quotes.some((x) => x.quote_no === editing.quote_no) && <option value={editing.quote_no}>{editing.quote_no}</option>}
+              {quotes.map((x) => <option key={x.quote_no} value={x.quote_no}>{x.label}</option>)}
+            </Combo>
+          </label>
           <div className="fld-row">
             <label className="fld"><span>หมายเหตุ</span><input className="inp" value={editing.note} onChange={(e) => setEditing({ ...editing, note: e.target.value })} placeholder="(ไม่บังคับ)" /></label>
             <label className="fld"><span>ราคาที่กรอก / VAT</span>
@@ -233,6 +269,11 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             <button key={f.id} className={"cat-chip" + (statusF === f.id ? " on" : "")} onClick={() => setStatusF(f.id)}
               style={statusF === f.id ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{f.label}</button>
           ))}
+          <span style={{ color: "var(--line)", alignSelf: "center" }}>|</span>
+          {PAY_FILTERS.map((f) => (
+            <button key={f.id} className={"cat-chip" + (payF === f.id ? " on" : "")} onClick={() => setPayF(f.id)}
+              style={payF === f.id ? { background: "#1d4ed8", color: "#fff", borderColor: "#1d4ed8" } : {}}>{f.label}</button>
+          ))}
           <DateRangeBar value={dateR} onChange={setDateR} />
         </div>
         <div className="cat-search">
@@ -252,7 +293,10 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           return (
             <div className={"card job-card" + (po.status !== "open" ? " closed" : "")} key={po.po_no}>
               <div className="job-card-head" style={{ cursor: "default" }}>
-                <div className="job-card-id"><span className="job-no">{po.po_no}</span><span className={"job-badge " + st.cls}>{st.th}</span></div>
+                <div className="job-card-id"><span className="job-no">{po.po_no}</span><span className={"job-badge " + st.cls}>{st.th}</span>
+                  {(() => { const ps = PAY_STATUS[po.paymentStatus] || PAY_STATUS.unpaid; return <span className={"job-badge " + ps.cls}>💳 {ps.th}{po.paymentStatus === "paid" && po.paid_at ? " " + new Date(po.paid_at).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : ""}</span>; })()}
+                  {po.quote_no && <span className="vat-badge vat-on">อ้างอิง {po.quote_no}</span>}
+                </div>
                 <div className="job-card-meta">{po.supplier || "ไม่ระบุร้าน"} · {po.items.length} รายการ{po.note ? ` · ${po.note}` : ""}</div>
                 <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.created_at)}</span><span>มูลค่ารวม{po.vat ? " (รวม VAT)" : ""}</span><b>{fmtBaht(po.total)}</b></div>
               </div>
@@ -266,10 +310,14 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                   </div>
                 ); })}
                 <div className="job-actions">
-                  <button className="btn-ghost sm" onClick={() => copyPo(po)}><UIcon name="catalog" size={14} /> คัดลอกส่งซัพพลายเออร์</button>
+                  <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintPo(po); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
+                  <button className="btn-ghost sm" onClick={() => copyPo(po)}><UIcon name="clipboard" size={14} /> คัดลอกส่งซัพพลายเออร์</button>
+                  {isAdmin && po.status !== "cancelled" && po.paymentStatus === "unpaid" && po.total > 0 &&
+                    <button className="btn-ghost sm" style={{ color: "#1d4ed8", borderColor: "#c7dbff", background: "#eff5ff" }} onClick={() => requestPay(po)}>💳 ส่งขออนุมัติจ่าย</button>}
+                  {po.paymentStatus === "pending" && <span className="job-closed-note">รออนุมัติจ่ายในเมนูเบิกจ่าย</span>}
                   {po.status === "open" && isAdmin && <>
                     <button className="btn-ghost sm" onClick={() => startEdit(po)}><UIcon name="edit" size={14} /> แก้ไข</button>
-                    <button className="btn-primary" onClick={() => onReceive && onReceive(po)}><UIcon name="purchase" size={15} color="#fff" /> รับสินค้าเข้าสต๊อก</button>
+                    <button className="btn-primary" onClick={() => onReceive && onReceive(po)}><UIcon name="purchase" size={15} color="#fff" /> รับสินค้าเข้าสต๊อก{po.quote_no ? " → เข้างาน" : ""}</button>
                     <button className="btn-ghost sm danger" onClick={() => del(po)}><UIcon name="trash" size={14} /></button>
                   </>}
                   {po.status === "received" && <span className="job-closed-note">รับเข้าสต๊อกแล้ว {po.received_at ? new Date(po.received_at).toLocaleDateString("th-TH") : ""}</span>}
@@ -279,6 +327,27 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           );
         })}
       </div>
+
+      {printPo && (() => {
+        const co = printPo.vat ? companies.vat : companies.novat;
+        const sup = sups.find((s) => (s.name || "").trim() === (printPo.supplier || "").trim());
+        const c0 = sup?.contacts?.[0];
+        return (
+          <DocSlip company={co} titleTh="ใบสั่งซื้อ" titleEn="PURCHASE ORDER" docNo={printPo.po_no} partyLabel="ผู้ขาย"
+            metaRows={[{ label: "วันที่", value: fmtDocDate(printPo.created_at) }, ...(printPo.quote_no ? [{ label: "อ้างอิงใบเสนอราคา", value: printPo.quote_no }] : [])]}
+            customer={{ name: printPo.supplier || "-", taxId: sup?.tax_id, address: sup?.address, contactName: c0?.name, contactPhone: c0?.phone }}
+            terms={printPo.note} signLabels={["ผู้สั่งซื้อ", "ผู้อนุมัติ"]}
+            totals={<div className="doc-totals">
+              <div><span>รวมเป็นเงิน</span><b>{fmtBaht(printPo.subtotal)}</b></div>
+              {printPo.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printPo.vatAmt)}</b></div> : null}
+              <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(printPo.total)}</b></div>
+            </div>}>
+            {printPo.items.map((it, i) => { const m = matMap[it.material_code]; return (
+              <tr key={i}><td>{i + 1}</td><td>{it.material_code}</td><td>{m?.th || it.material_code}</td><td className="r">{fmtNum(it.qty)} {it.unit || m?.unit || ""}</td><td className="r">{fmtBaht(it.price)}</td><td className="r">{fmtBaht(it.qty * it.price)}</td></tr>
+            ); })}
+          </DocSlip>
+        );
+      })()}
       {toast && <Toast toast={toast} />}
     </div>
   );

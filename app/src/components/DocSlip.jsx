@@ -31,7 +31,7 @@ function officerSign() {
   } catch { return null; }
 }
 
-export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, projectTitle, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], signUrl, signName, children, totals }) {
+export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, partyLabel = "ลูกค้า", projectTitle, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], signUrl, signName, children, totals }) {
   const co = company || {};
   // explicit per-document signature (saved on the doc) wins; otherwise fall back to the device toggle
   const sign = signUrl !== undefined ? (signUrl ? { url: signUrl, name: signName || "" } : null) : officerSign();
@@ -61,7 +61,7 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
 
           <div className="doc-band">
             <div className="doc-cust">
-              <div className="doc-cust-l">ลูกค้า</div>
+              <div className="doc-cust-l">{partyLabel}</div>
               <div className="doc-cust-r">
                 <div className="doc-cust-name">{customer.name || "-"}{customer.code ? `  (รหัส ${customer.code})` : ""}</div>
                 {customer.address && <div className="doc-cust-line">{customer.address}</div>}

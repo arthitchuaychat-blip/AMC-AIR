@@ -531,17 +531,19 @@ export async function listPurchaseOrders() {
     const items = (byPo[po.po_no] || []).map((it) => ({ material_code: it.material_code, qty: Number(it.qty), price: Number(it.price), unit: it.unit || null }));
     const subtotal = items.reduce((a, it) => a + it.qty * it.price, 0);   // ราคาก่อน VAT
     const vatAmt = po.vat ? Math.round(subtotal * 0.07 * 100) / 100 : 0;
-    return { ...po, items, subtotal, vatAmt, total: Math.round((subtotal + vatAmt) * 100) / 100 };  // total = รวม VAT (ถ้ามี)
+    // สถานะการจ่ายเงิน (แยกจากสถานะรับของ): จ่ายแล้ว / รออนุมัติจ่าย (ส่งเข้าเมนูเบิกจ่ายแล้ว) / ยังไม่จ่าย
+    const paymentStatus = po.paid_at ? "paid" : po.expense_id ? "pending" : "unpaid";
+    return { ...po, items, subtotal, vatAmt, total: Math.round((subtotal + vatAmt) * 100) / 100, paymentStatus };
   });
 }
 
 export async function savePurchaseOrder(po, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, created_by: user?.id || null };
+  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, created_by: user?.id || null };
   let e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
-  // pre-096/097 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
+  // pre-096/097/100 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
   // ห้ามเหมารวม: เคยตัด vat ทิ้งไปด้วยตอน price_incl ยังไม่รัน migration → ใบสั่งซื้อโหมดรวม VAT ถูกเก็บเป็นไม่มี VAT
-  for (const c of ["price_incl", "vat"]) {
+  for (const c of ["price_incl", "vat", "quote_no"]) {
     if (e1 && c in head && (e1.message || "").includes(c)) {
       delete head[c];
       e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
@@ -568,7 +570,37 @@ export async function deletePurchaseOrder(po_no) {
 export async function markPoReceived(po_no) {
   const { error } = await supabase.from("purchase_orders").update({ status: "received", received_at: new Date().toISOString() }).eq("po_no", po_no);
   if (error) throw error;
-  syncCashEntriesFromDocs().catch(() => {}); // received → move to "จ่ายจริง" in cash flow
+  syncCashEntriesFromDocs().catch(() => {}); // อัปเดตกระแสเงินสด (จ่ายจริงอิงการจ่ายเงิน ไม่ใช่การรับของ)
+}
+
+// ใบเสนอราคาที่อนุมัติแล้ว (อย่างย่อ) — ตัวเลือก "อ้างอิงใบเสนอราคา" บนใบสั่งซื้อ
+export async function listApprovedQuotesLite() {
+  const [q, cu] = await Promise.all([
+    supabase.from("quotations").select("quote_no,title,customer_id,approved_at").eq("status", "approved").order("approved_at", { ascending: false }).limit(300),
+    supabase.from("customers").select("id,name"),
+  ]);
+  if (q.error) throw q.error;
+  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  return (q.data || []).map((x) => ({ quote_no: x.quote_no, label: `${x.quote_no} · ${cn[x.customer_id] || "-"}${x.title ? " · " + x.title : ""}` }));
+}
+
+// ส่งใบสั่งซื้อเข้า "ขออนุมัติจ่ายเงิน" ในเมนูเบิกจ่าย — อนุมัติ/จ่าย+เลือกบัญชี ที่เดียวกับการจ่ายอื่นทั้งหมด
+// (job_no ปล่อยว่างเสมอ — ต้นทุนงานเข้าทางรับของ+เบิกเข้างานแล้ว ถ้าผูก job จะโดนนับซ้ำใน jobExpenseCost)
+export async function requestPoPayment(po) {
+  const uid = await _uid();
+  const { data: ex, error } = await supabase.from("expense_requests").insert({
+    requester: uid, job_no: null, category: "ซื้อสินค้า (PO)",
+    title: `ชำระค่าสินค้า ${po.po_no}${po.supplier ? " · " + po.supplier : ""}`,
+    amount: Number(po.total) || 0,
+    note: `ใบสั่งซื้อ ${po.po_no}${po.quote_no ? " · อ้างอิง " + po.quote_no : ""}${po.vat ? " · ยอดรวม VAT" : ""}`,
+    attachments: [], created_by: uid,
+  }).select("id").single();
+  if (error) throw error;
+  const { error: e2 } = await supabase.from("purchase_orders").update({ expense_id: ex.id }).eq("po_no", po.po_no);
+  if (e2) throw new Error(/expense_id|column|PGRST204/i.test(e2.message || "") ? "ยังไม่ได้รัน migration 100 (PO ↔ เบิกจ่าย) ใน Supabase" : (e2.message || e2));
+  const me = await getProfile();
+  notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🛒 ${me?.name || "พนักงาน"} ขออนุมัติจ่ายค่าสินค้า ${po.po_no} · ${Number(po.total) || 0} บาท`, body: po.supplier || "", url: "expenses", ref_type: "expense" });
+  return ex.id;
 }
 
 // ---------- CRM: customers (+ contacts + sites) ----------
@@ -2176,6 +2208,8 @@ export async function decideExpense(id, status, note) {
   const uid = await _uid();
   const { error } = await supabase.from("expense_requests").update({ status, approver: uid, decided_at: new Date().toISOString(), decide_note: note || null }).eq("id", id);
   if (error) throw error;
+  // คำขอชำระใบสั่งซื้อถูกปฏิเสธ → ปลดลิงก์ให้ PO กลับเป็น "ยังไม่จ่าย" (ส่งขอใหม่ได้)
+  if (status === "rejected") { try { await supabase.from("purchase_orders").update({ expense_id: null }).eq("expense_id", id); } catch (_) {} }
   const { data: ex } = await supabase.from("expense_requests").select("requester,title").eq("id", id).maybeSingle();
   const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
   if (ex) notify([ex.requester], { category: "hr", title: `🧾 คำขอเบิก "${ex.title}" : ${lbl}`, body: note || "", url: "expenses", ref_type: "expense" });
@@ -2196,8 +2230,17 @@ export async function payExpense(id, { accountId, proof, payDate }) {
     if (aeErr && /category|column|PGRST204/i.test(aeErr.message || "") && aePayload.category !== undefined) { delete aePayload.category; aeErr = (await supabase.from("account_entries").insert(aePayload)).error; }
     if (aeErr) throw aeErr;
   }
-  // mirror into the Cash Flow ledger (money out, actual)
-  try { await supabase.from("cash_entries").insert({ direction: "out", status: "actual", entry_date: day, amount: Number(ex.amount) || 0, note: noteTxt, source_type: "expense", source_ref: id, created_by: uid }); } catch (_) {}
+  // ถ้าคำขอนี้คือ "ชำระใบสั่งซื้อ" → ประทับวันจ่ายบน PO แล้วให้บรรทัด PO ในกระแสเงินสดเป็นตัวจ่ายจริง
+  // (ห้าม mirror เป็น source_type 'expense' ซ้ำ — จะกลายเป็นจ่าย 2 รอบ)
+  let linkedPo = null;
+  try { linkedPo = (await supabase.from("purchase_orders").select("po_no").eq("expense_id", id).maybeSingle()).data; } catch (_) {}
+  if (linkedPo?.po_no) {
+    await supabase.from("purchase_orders").update({ paid_at: new Date(day + "T00:00:00").toISOString() }).eq("po_no", linkedPo.po_no);
+    syncCashEntriesFromDocs().catch(() => {});   // PO เด้งจาก "คาดว่าจะจ่าย" → "จ่ายจริง"
+  } else {
+    // mirror into the Cash Flow ledger (money out, actual)
+    try { await supabase.from("cash_entries").insert({ direction: "out", status: "actual", entry_date: day, amount: Number(ex.amount) || 0, note: noteTxt, source_type: "expense", source_ref: id, created_by: uid }); } catch (_) {}
+  }
   notify([ex.requester], { category: "hr", title: `💸 จ่ายเงินเบิก "${ex.title}" แล้ว ${Number(ex.amount) || 0} บาท`, body: "แนบหลักฐานการจ่ายเรียบร้อย", url: "expenses", ref_type: "expense" });
 }
 // approved/paid expense cost rolled up per job → adds to job cost in Profit
@@ -2852,7 +2895,7 @@ export async function syncCashEntriesFromDocs() {
     supabase.from("invoices").select("invoice_no,due_date,issue_date,total,wht_amt,status,customer_id"),
     supabase.from("receipts").select("receipt_no,issue_date,net,total,status,customer_id"),
     supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at"),
-    supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat"),
+    supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat,paid_at"),
     supabase.from("po_items").select("po_no,qty,price"),
     supabase.from("customers").select("id,name"),
     supabase.from("teams").select("id,name"),
@@ -2870,7 +2913,14 @@ export async function syncCashEntriesFromDocs() {
   (inv.data || []).forEach((x) => { if (x.status !== "unpaid") return; desired.push({ source_type: "invoice", source_ref: x.invoice_no, direction: "in", status: "projected", entry_date: x.due_date || x.issue_date, amount: Math.max(0, (Number(x.total) || 0) - (Number(x.wht_amt) || 0)), note: `ใบแจ้งหนี้ ${x.invoice_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
   (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entry_date: x.issue_date, amount: Number(x.net || x.total) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
   (pay.data || []).forEach((x) => { const paid = x.status === "paid"; desired.push({ source_type: "payout", source_ref: String(x.id), direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: Number(x.net) || 0, note: `จ่ายช่างซัพ${tn[x.team] ? " " + tn[x.team] : ""}` }); });
-  (po.data || []).forEach((x) => { if (x.status === "cancelled") return; const got = x.status === "received"; const amt = Math.round((poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1) * 100) / 100; desired.push({ source_type: "po", source_ref: x.po_no, direction: "out", status: got ? "actual" : "projected", entry_date: got ? _d(x.received_at) : _d(x.created_at), amount: amt, note: `ใบสั่งซื้อ ${x.po_no}${x.supplier ? " · " + x.supplier : ""}` }); });
+  // PO: จ่ายจริงเมื่อ "จ่ายเงินแล้ว" (paid_at ผ่านเมนูเบิกจ่าย) — ไม่ผูกกับการรับของ (รับก่อน/จ่ายก่อน เครดิตได้)
+  // pre-100 fallback: ถ้ายังไม่มีคอลัมน์ paid_at (ดึงไม่ได้ทั้งก้อน) → ดึงชุดเก่าแล้วใช้เกณฑ์รับของแบบเดิมไปก่อน
+  let poRows = po.data;
+  if (po.error && /paid_at/i.test(po.error.message || "")) {
+    const legacy = await supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat");
+    poRows = (legacy.data || []).map((x) => ({ ...x, paid_at: x.status === "received" ? x.received_at : null }));
+  }
+  (poRows || []).forEach((x) => { if (x.status === "cancelled") return; const paid = !!x.paid_at; const amt = Math.round((poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1) * 100) / 100; desired.push({ source_type: "po", source_ref: x.po_no, direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: amt, note: `ใบสั่งซื้อ ${x.po_no}${x.supplier ? " · " + x.supplier : ""}` }); });
   // ค่าแรงช่างซัพที่ยืนยันแล้ว แต่ยังเหลือค้างจ่าย (ยังไม่ตั้งเบิก) → คาดว่าจะจ่าย · พอตั้งเบิกแล้ว remaining=0 รายการนี้หายเอง ไปโผล่เป็น payout แทน
   (laborJobs.data || []).forEach((j) => {
     const remaining = Math.round(((Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0)) * 100) / 100;

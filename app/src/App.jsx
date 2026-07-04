@@ -94,7 +94,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-04·สต๊อก: ยกเลิกรับเข้าทั้งใบได้ — สต๊อกคืนทุกรายการ + ใบ PO เด้งกลับ 'รอรับของ' v273";
+const BUILD = "2026-07-04·สั่งซื้อตามออเดอร์: PO ผูกใบเสนอราคา · รับของ→ต้นทุนจริงเข้างาน · จ่ายผ่านอนุมัติเบิกจ่าย · สถานะรับ/จ่ายแยกกัน · ใบพิมพ์ PO v274";
 
 function SetupNotice() {
   return (
@@ -460,7 +460,7 @@ export default function App() {
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "stockcount" && <StockCount role={role} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
-          onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) }); go("movements"); }} />}
+          onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, quoteNo: po.quote_no || null, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) }); go("movements"); }} />}
         {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}
         {view === "attendance" && <Attendance me={profile} />}

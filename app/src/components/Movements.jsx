@@ -61,6 +61,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [modalPrice, setModalPrice] = React.useState("");
   const [modalUnit, setModalUnit] = React.useState("");  // หน่วยนับที่เลือก (สินค้า 2 หน่วย เช่น เมตร/ม้วน)
   const [receivePo, setReceivePo] = React.useState(null);
+  const [receiveJob, setReceiveJob] = React.useState(null); // งานปลายทางของ PO ที่อ้างใบเสนอราคา → เบิกเข้างานอัตโนมัติหลังรับ
   // picker filters (เหมือนหน้า BOQ): ชนิด + หมวดวัสดุ
   const [mvKind, setMvKind] = React.useState("all"); // all | ac | material
   const [mvCat, setMvCat] = React.useState("all");
@@ -120,13 +121,16 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     if (withdrawCtx.jobNo) setJobNo(withdrawCtx.jobNo);
     onWithdrawCtxConsumed && onWithdrawCtxConsumed();
   }, [withdrawCtx]);
-  // prefill the purchase cart when receiving a PO ({ poNo, items:[{code,qty,price,unit}] })
+  // prefill the purchase cart when receiving a PO ({ poNo, quoteNo, items:[{code,qty,price,unit}] })
   // สินค้าที่สั่งเป็น "หน่วยซื้อ" (เช่น ม้วน) → แปลงเข้าสต๊อกเป็นหน่วยหลัก: จำนวน ×แฟกเตอร์ · ราคา/หน่วย ÷แฟกเตอร์
+  // PO ที่อ้างใบเสนอราคา → จำงานปลายทางไว้ เพื่อบันทึก "เบิกเข้างาน" ต่อท้ายการซื้อเข้าอัตโนมัติ (ต้นทุนจริงเข้างาน)
   React.useEffect(() => {
     if (!prefill || !prefill.items?.length || !mats.length) return;
     setType("purchase");
     setJobNo(prefill.poNo || "");
     setReceivePo(prefill.poNo || null);
+    const rj = prefill.quoteNo ? (jobOrders.find((j) => j.quote_no === prefill.quoteNo && j.status !== "cancelled") || null) : null;
+    setReceiveJob(rj ? { job_no: rj.job_no, team: rj.assigned_team || null } : null);
     setLines(prefill.items.map((p) => {
       const m = matMap[p.code];
       const f = (p.unit && m?.purchaseUnit && p.unit === m.purchaseUnit && Number(m.purchaseQty) > 1) ? Number(m.purchaseQty) : 1;
@@ -134,7 +138,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
       return { code: p.code, qty: (Number(p.qty) || 1) * f, price: Math.round(((Number(price) || 0) / f) * 100) / 100, unit: m?.unit || null };
     }));
     onPrefillConsumed && onPrefillConsumed();
-  }, [prefill, mats]);
+  }, [prefill, mats, jobOrders]);
   const printWin = React.useRef(null);
   React.useEffect(() => {
     if (!printData) return;
@@ -218,9 +222,20 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           const denom = m.stock + b.qty;
           if (denom > 0) await updateMaterialCost(code, Math.round(((m.stock * m.cost + b.val) / denom) * 100) / 100);
         }
-        if (receivePo) { await markPoReceived(receivePo); setReceivePo(null); }
+        if (receivePo) {
+          await markPoReceived(receivePo);
+          // PO อ้างใบเสนอราคา → เบิกออกเข้างานนั้นทันทีด้วย "ราคาซื้อจริง" (ต้นทุนจริงของออเดอร์เข้ากำไรงาน · สต๊อกไม่ค้าง)
+          if (receiveJob?.job_no) {
+            await recordTransactions(norm.map((l) => ({
+              type: "withdraw", job_no: receiveJob.job_no, team: receiveJob.team,
+              material_code: l.code, qty: l.qty, unit_cost: l.unitCost,
+            })));
+          }
+          setReceivePo(null);
+        }
       }
-      flash(`${T.th} ${lines.length} รายการ สำเร็จ${receivePo ? " · ปิดใบสั่งซื้อแล้ว" : ""}`);
+      flash(`${T.th} ${lines.length} รายการ สำเร็จ${receivePo ? (receiveJob?.job_no ? ` · ปิดใบสั่งซื้อ + เบิกเข้างาน ${receiveJob.job_no} แล้ว` : " · ปิดใบสั่งซื้อแล้ว") : ""}`);
+      setReceiveJob(null);
       setLines([]); setJobNo("");
       await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
