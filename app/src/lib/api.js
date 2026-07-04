@@ -539,7 +539,14 @@ export async function savePurchaseOrder(po, items) {
   const { data: { user } } = await supabase.auth.getUser();
   const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, created_by: user?.id || null };
   let e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
-  if (e1 && /vat|price_incl|column|PGRST204/i.test(e1.message || "")) { delete head.vat; delete head.price_incl; e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error; } // pre-096/097 fallback
+  // pre-096/097 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
+  // ห้ามเหมารวม: เคยตัด vat ทิ้งไปด้วยตอน price_incl ยังไม่รัน migration → ใบสั่งซื้อโหมดรวม VAT ถูกเก็บเป็นไม่มี VAT
+  for (const c of ["price_incl", "vat"]) {
+    if (e1 && c in head && (e1.message || "").includes(c)) {
+      delete head[c];
+      e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
+    }
+  }
   if (e1) throw e1;
   const e2 = (await supabase.from("po_items").delete().eq("po_no", po.po_no)).error;
   if (e2) throw e2;
