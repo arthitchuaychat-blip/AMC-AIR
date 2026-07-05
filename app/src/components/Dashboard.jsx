@@ -150,6 +150,9 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
             <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={fmtBaht(ovStat.sale)} sub={fmtNum(ovStat.count) + " ใบ"} onClick={() => setTab("sales")} />
             <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={fmtBaht(ovStat.est)} sub="กำไรจริงดูในแท็บ ขาย & กำไร" onClick={() => setTab("sales")} />
             <StatCard icon="clipboard" color="#d97706" label="เงินค้างรับ" value={fmtBaht(act?.receivable || 0)} sub={`${fmtNum(act?.unpaidCount || 0)} ใบ · เกินกำหนด ${fmtNum(act?.overdueCount || 0)} ใบ`} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
+            <StatCard icon="withdraw" color="#dc2626" label="ยอดค้างจ่าย" value={fmtBaht(act?.payable || 0)} accent={act?.payable ? "#dc2626" : undefined}
+              sub={`PO ${fmtCompact(act?.poPayable || 0)} · ค่าแรงซัพ ${fmtCompact((act?.payoutUnpaid || 0) + (act?.laborOwed || 0))} · เบิกรอจ่าย ${fmtCompact(act?.approvedExpenseSum || 0)}`}
+              onClick={() => onGo && onGo("cashflow")} />
             <StatCard icon="box" color="#0d9488" label="มูลค่าวัสดุคงเหลือ" value={fmtBaht(invValue)} sub={`${fmtNum(mats.length)} ชนิด · ${fmtNum(low.length)} ต่ำกว่าขั้นต่ำ`} onClick={() => setTab("inv")} />
           </div>
 

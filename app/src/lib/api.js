@@ -576,15 +576,26 @@ export async function markPoReceived(po_no) {
 // ตัวเลขเบา ๆ สำหรับแท็บ "ภาพรวม" ของแดชบอร์ด (นับ/รวมอย่างเดียว ไม่ join อะไรหนัก)
 export async function dashboardActionLite() {
   const today = new Date().toISOString().slice(0, 10);
-  const [inv, exp, po] = await Promise.all([
+  const [inv, exp, po, poi, sp, lj] = await Promise.all([
     supabase.from("invoices").select("total,wht_amt,status,due_date"),
     supabase.from("expense_requests").select("status,amount"),
-    supabase.from("purchase_orders").select("status,expense_id,paid_at").then(async (r) =>
-      (r.error && /expense_id|paid_at/i.test(r.error.message || "")) ? await supabase.from("purchase_orders").select("status") : r), // pre-100 fallback
+    supabase.from("purchase_orders").select("po_no,status,vat,expense_id,paid_at").then(async (r) =>
+      (r.error && /expense_id|paid_at|vat/i.test(r.error.message || "")) ? await supabase.from("purchase_orders").select("po_no,status") : r), // pre-096/100 fallback
+    supabase.from("po_items").select("po_no,qty,price"),
+    supabase.from("sub_payouts").select("status,net"),
+    supabase.from("job_orders").select("labor_total,labor_paid_amt").eq("labor_confirmed", true).gt("labor_total", 0)
+      .then(async (r) => (r.error ? { data: [] } : r)), // pre-045 fallback
   ]);
   const unpaid = (inv.data || []).filter((x) => x.status === "unpaid");
   const pend = (exp.data || []).filter((x) => x.status === "pending");
   const pos = po.data || [];
+  // ---- ยอดค้างจ่าย (เจ้าหนี้) ----
+  const poTotal = {}; (poi.data || []).forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
+  const poPayable = pos.filter((x) => x.status !== "cancelled" && !x.paid_at)
+    .reduce((a, x) => a + (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1), 0);               // PO ที่ยังไม่จ่ายเงิน (รวม VAT)
+  const approvedExpenseSum = (exp.data || []).filter((x) => x.status === "approved").reduce((a, x) => a + (Number(x.amount) || 0), 0); // เบิกอนุมัติแล้วรอจ่าย
+  const payoutUnpaid = (sp.data || []).filter((x) => x.status !== "paid").reduce((a, x) => a + (Number(x.net) || 0), 0);              // ใบจ่ายช่างซัพรอจ่าย
+  const laborOwed = (lj.data || []).reduce((a, j) => a + Math.max(0, (Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0)), 0); // ค่าแรงยืนยันแล้วยังไม่ตั้งเบิก
   return {
     receivable: unpaid.reduce((a, x) => a + (Number(x.total) || 0) - (Number(x.wht_amt) || 0), 0),
     unpaidCount: unpaid.length,
@@ -593,6 +604,8 @@ export async function dashboardActionLite() {
     pendingExpenseSum: pend.reduce((a, x) => a + (Number(x.amount) || 0), 0),
     poOpenCount: pos.filter((x) => x.status === "open").length,
     poAwaitPayCount: pos.filter((x) => x.status !== "cancelled" && x.expense_id && !x.paid_at).length,
+    poPayable, approvedExpenseSum, payoutUnpaid, laborOwed,
+    payable: poPayable + approvedExpenseSum + payoutUnpaid + laborOwed,
   };
 }
 
