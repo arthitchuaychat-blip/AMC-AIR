@@ -162,10 +162,10 @@ export async function saveMaterial(row, isNew) {
     name_th: row.name_th,
     name_en: row.name_en || row.name_th,
     kind,
-    category: kind === "material" ? (row.category || null) : null,
+    category: kind === "material" || kind === "service" ? (row.category || null) : null,   // บริการใช้หมวด sv-* (mig 102)
     brand: kind === "ac" ? (row.brand || null) : null,
-    btu: kind === "ac" && row.btu ? Number(row.btu) : null,
-    ac_type: kind === "ac" ? (row.ac_type || null) : null,
+    btu: (kind === "ac" || kind === "service") && row.btu ? Number(row.btu) : null,          // บริการติดแท็ก BTU ได้ (ตัวกรอง)
+    ac_type: kind === "ac" || kind === "service" ? (row.ac_type || null) : null,             // บริการติดแท็กประเภทแอร์ได้
     tracked: kind === "service" ? false : (row.tracked !== false),
     unit: row.unit,
     cost: Number(row.cost) || 0,

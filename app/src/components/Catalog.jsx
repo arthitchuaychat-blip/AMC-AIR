@@ -119,6 +119,10 @@ export default function Catalog({ role }) {
     return id;
   }
   const btuOpts = React.useMemo(() => [...new Set(acMats.map((m) => m.btu).filter(Boolean).map(Number))].sort((a, b) => a - b), [acMats]);
+  // ตัวเลือกกรองแท็บบริการ (ประเภทแอร์/BTU) — ใช้ค่าที่บริการติดแท็กไว้ก่อน ถ้ายังไม่มีเลยใช้ชุดของแอร์
+  const svcMats = React.useMemo(() => mats.filter((m) => m.kind === "service"), [mats]);
+  const svcTypeOpts = React.useMemo(() => { const o = [...new Set(svcMats.map((m) => m.ac_type).filter(Boolean))]; return (o.length ? o : acTypes).slice().sort((a, b) => a.localeCompare(b, "th")); }, [svcMats, acTypes]);
+  const svcBtuOpts = React.useMemo(() => { const o = [...new Set(svcMats.map((m) => m.btu).filter(Boolean).map(Number))]; return (o.length ? o : btuOpts).slice().sort((a, b) => a - b); }, [svcMats, btuOpts]);
   // One shared collator (th) — far faster than calling String.localeCompare per comparison.
   const collator = React.useMemo(() => new Intl.Collator("th"), []);
   // Memoized so it only recomputes when a filter actually changes — not on every unrelated render
@@ -128,6 +132,8 @@ export default function Catalog({ role }) {
     (kind === "all" || m.kind === kind) &&
     (kind !== "material" || cat === "all" || m.cat === cat) &&
     (kind !== "service" || cat === "all" || svcCatMatch(m, cat)) &&
+    (kind !== "service" || acType === "all" || eqi(m.ac_type, acType)) &&
+    (kind !== "service" || btu === "all" || String(m.btu) === String(btu)) &&
     (kind !== "ac" || brand === "all" || eqi(m.brand, brand)) &&
     (kind !== "ac" || btu === "all" || String(m.btu) === String(btu)) &&
     (kind !== "ac" || acType === "all" || eqi(m.ac_type, acType)) &&
@@ -246,6 +252,12 @@ export default function Catalog({ role }) {
             <button key={c.id} className={"cat-chip" + (cat === c.id ? " on" : "")} onClick={() => setCat(c.id)}
               style={cat === c.id ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{c.l}</button>
           ))}
+          <Combo className="inp" style={{ width: "auto", marginLeft: 6 }} value={acType} onChange={(e) => setAcType(e.target.value)}>
+            <option value="all">ทุกประเภทแอร์</option>{svcTypeOpts.map((t) => <option key={t} value={t}>{t}</option>)}
+          </Combo>
+          <Combo className="inp" style={{ width: "auto" }} value={btu} onChange={(e) => setBtu(e.target.value)}>
+            <option value="all">ทุกขนาด BTU</option>{svcBtuOpts.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
+          </Combo>
         </div>
       )}
       {kind === "ac" && (
@@ -289,7 +301,7 @@ export default function Catalog({ role }) {
                   </div>
                 </div>
                 <div className="cat-card-name">{m.th}</div>
-                <div className="cat-card-en">{m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") || m.en : m.kind === "service" ? [svcCatLabel(m), m.en].filter(Boolean).join(" · ") : m.en}</div>
+                <div className="cat-card-en">{m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") || m.en : m.kind === "service" ? [svcCatLabel(m), m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null, m.en].filter(Boolean).join(" · ") : m.en}</div>
                 {m.description && <div className="cat-card-desc">{m.description}</div>}
                 <div className="cat-card-stats">
                   {m.tracked
@@ -319,7 +331,7 @@ export default function Catalog({ role }) {
                 <MaterialThumb mat={m} size={40} radius={11} />
                 <div className="cat-lrow-main">
                   <div className="cat-lrow-name">{m.th} {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>} {low && <span className="badge-warn sm">ต่ำ</span>}</div>
-                  <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.kind === "service" ? [svcCatLabel(m), m.en].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
+                  <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.kind === "service" ? [svcCatLabel(m), m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null, m.en].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
                   {m.description && <div className="cat-lrow-desc">{m.description}</div>}
                 </div>
                 <div className="cat-lrow-col hide-sm"><span>สต๊อก</span><span className={"job-badge " + (m.tracked ? "b-blue" : "b-grey")} title={m.tracked ? "นับสต๊อก (เบิก/คืน/ซื้อได้)" : "ไม่นับสต๊อก (สั่งตามงาน)"}>{m.tracked ? "✓ นับสต๊อก" : "ไม่นับ"}</span></div>

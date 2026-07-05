@@ -23,6 +23,10 @@ export default function ItemBrowser({ mats, onAdd, matTargets, unitOf }) {
   const acTypes = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "ac" && m.ac_type).map((m) => m.ac_type))].sort((a, b) => a.localeCompare(b, "th")), [mats]);
   const btus = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "ac" && m.btu).map((m) => m.btu))].sort((a, b) => a - b), [mats]);
   const cats = React.useMemo(() => { const seen = {}; mats.filter((m) => m.kind === "material" && m.cat).forEach((m) => { seen[m.cat] = m.catName || m.cat; }); return Object.entries(seen).sort((a, b) => a[1].localeCompare(b[1], "th")); }, [mats]);
+  // ตัวกรองแท็บบริการ: หมวด (sv-*) + ประเภทแอร์ + BTU ที่บริการติดแท็กไว้
+  const svcCats = React.useMemo(() => { const seen = {}; mats.filter((m) => m.kind === "service" && m.cat).forEach((m) => { seen[m.cat] = m.catName || m.cat; }); return Object.entries(seen).sort((a, b) => a[1].localeCompare(b[1], "th")); }, [mats]);
+  const svcTypes = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "service" && m.ac_type).map((m) => m.ac_type))].sort((a, b) => a.localeCompare(b, "th")), [mats]);
+  const svcBtus = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "service" && m.btu).map((m) => m.btu))].sort((a, b) => a - b), [mats]);
 
   const reset = () => { setBrand("all"); setAcType("all"); setBtu("all"); setCat("all"); };
   const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -35,10 +39,13 @@ export default function ItemBrowser({ mats, onAdd, matTargets, unitOf }) {
     if (m.kind !== kind) return false;
     if (kind === "ac") { if (brand !== "all" && m.brand !== brand) return false; if (acType !== "all" && m.ac_type !== acType) return false; if (btu !== "all" && String(m.btu) !== String(btu)) return false; }
     if (kind === "material" && cat !== "all" && m.cat !== cat) return false;
+    if (kind === "service") { if (cat !== "all" && m.cat !== cat) return false; if (acType !== "all" && m.ac_type !== acType) return false; if (btu !== "all" && String(m.btu) !== String(btu)) return false; }
     return true;
   });
   const shown = list.slice(0, 80);
-  const subLine = (m) => m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? fmtNum(m.btu) + " BTU" : null].filter(Boolean).join(" · ") : (m.catName || "");
+  const subLine = (m) => m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? fmtNum(m.btu) + " BTU" : null].filter(Boolean).join(" · ")
+    : m.kind === "service" ? [m.catName, m.ac_type, m.btu ? fmtNum(m.btu) + " BTU" : null].filter(Boolean).join(" · ")
+    : (m.catName || "");
 
   function openQty(m) { setQtyModal(m); setModalQty(1); }
   function addFromModal() {
@@ -65,6 +72,13 @@ export default function ItemBrowser({ mats, onAdd, matTargets, unitOf }) {
       {kind === "material" && (
         <div className="ib-filters">
           <Combo className="inp" value={cat} onChange={(e) => setCat(e.target.value)}><option value="all">ทุกหมวด</option>{cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</Combo>
+        </div>
+      )}
+      {kind === "service" && (
+        <div className="ib-filters">
+          <Combo className="inp" value={cat} onChange={(e) => setCat(e.target.value)}><option value="all">ทุกหมวด</option>{svcCats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</Combo>
+          <Combo className="inp" value={acType} onChange={(e) => setAcType(e.target.value)}><option value="all">ทุกประเภท</option>{svcTypes.map((t) => <option key={t} value={t}>{t}</option>)}</Combo>
+          <Combo className="inp" value={btu} onChange={(e) => setBtu(e.target.value)}><option value="all">ทุก BTU</option>{svcBtus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}</Combo>
         </div>
       )}
       {kind === "material" && matTargets && (

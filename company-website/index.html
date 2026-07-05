@@ -961,7 +961,7 @@ function setProdTab(k) { const t = $("#prodTabs"); if (t) t.querySelectorAll(".p
 function applyFilters(g, navigate) {
   const v = (i) => ($(g[i]) ? $(g[i]).value : "");
   const brand = v(0), type = v(1), btu = v(2), svc = v(3);
-  if (svc) { prodFilter = "service"; prodBrand = prodBtu = prodType = ""; prodQuery = ""; prodSvc = svc; }
+  if (svc) { prodFilter = "service"; prodBrand = ""; prodType = type; prodBtu = btu; prodQuery = ""; prodSvc = svc; }   // เลือกบริการ + ประเภทแอร์/BTU ควบกันได้
   else { prodBrand = brand; prodType = type; prodBtu = btu; prodQuery = ""; prodSvc = ""; prodFilter = (brand || type || btu) ? "ac" : "all"; }
   setProdTab(prodFilter);
   if ($("#prodSearch")) $("#prodSearch").value = prodQuery;

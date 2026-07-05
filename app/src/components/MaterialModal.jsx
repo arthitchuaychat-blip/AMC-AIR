@@ -167,6 +167,19 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
             <input className="inp" value={f.name_en} onChange={set("name_en")} placeholder="(ไม่บังคับ)" />
           </label>
 
+          {isService && (
+            <div className="fld-row">
+              <label className="fld"><span>ประเภทแอร์ที่ให้บริการ (ไม่บังคับ)</span>
+                <input className="inp" list="svc-actype-list" value={f.ac_type} onChange={set("ac_type")} placeholder="เช่น Wall type — เว้นว่าง = ทุกประเภท" />
+                <datalist id="svc-actype-list">{acTypes.map((t) => <option key={t} value={t} />)}</datalist>
+              </label>
+              <label className="fld"><span>ขนาด BTU (ไม่บังคับ)</span>
+                <input className="inp" type="number" list="svc-btu-list" value={f.btu} onChange={set("btu")} placeholder="เช่น 12000 — เว้นว่าง = ทุกขนาด" />
+                <datalist id="svc-btu-list">{btus.map((b) => <option key={b} value={b} />)}</datalist>
+              </label>
+            </div>
+          )}
+
           {isAc && (
             <div className="fld-row">
               <label className="fld"><span>ขนาด BTU</span>
