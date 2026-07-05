@@ -113,6 +113,14 @@ h1{font-size:clamp(24px,4vw,36px);font-weight:800;line-height:1.25;letter-spacin
 .paytable .prow small{color:var(--ink-3);font-weight:600}
 .paytable .prow.cash{background:var(--bg-soft)}
 .paytable .prow.cash b{color:var(--primary-dark)}
+.spectable{margin:12px 0 4px;border:1px solid var(--line);border-radius:13px;overflow:hidden;font-size:14px}
+.spectable .srow{display:flex;justify-content:space-between;gap:12px;padding:8px 14px;border-bottom:1px solid var(--line)}
+.spectable .srow:last-child{border-bottom:none}
+.spectable .srow span{color:var(--ink-2);font-weight:600}
+.sizes{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
+.sizes a{font-size:13px;font-weight:700;padding:7px 14px;border-radius:99px;border:1.5px solid var(--line)}
+.sizes a:hover{border-color:var(--primary)}
+.sizes a.on{background:var(--primary);color:#fff;border-color:var(--primary)}
 footer{background:#0b1220;color:#94a3b8;padding:26px 0;font-size:13px;text-align:center}
 footer a{color:#cbd5e1;font-weight:700}
 .fab{position:fixed;right:16px;bottom:16px;z-index:80;display:flex;flex-direction:column;gap:10px}

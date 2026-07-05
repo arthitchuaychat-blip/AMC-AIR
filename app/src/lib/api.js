@@ -138,10 +138,15 @@ export async function listMaterialsLite() {
   const catMap = Object.fromEntries(cats.map((c) => [c.id, c]));
   const PAGE = 1000;
   const all = [];
-  const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty,btu_min,btu_max";
+  const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty,btu_min,btu_max,series,voltage,refrigerant,seer,pipe_size,energy_label";
   let cols = FULL;
   for (let from = 0; ; from += PAGE) {
     let { data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1);
+    // pre-106 fallback: retry without the AC series/spec columns
+    if (error && /series|voltage|refrigerant|seer|pipe_size|energy_label/i.test(error.message || "")) {
+      cols = cols.replace(",series,voltage,refrigerant,seer,pipe_size,energy_label", "");
+      ({ data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1));
+    }
     // pre-103 fallback: retry without the service BTU-range columns
     if (error && /btu_min|btu_max/i.test(error.message || "")) {
       cols = cols.replace(",btu_min,btu_max", "");
@@ -174,6 +179,13 @@ export async function saveMaterial(row, isNew) {
     // บริการใช้ช่วง BTU (mig 103): ใส่ช่องเดียว = ขนาดเดียว (min = max)
     btu_min: kind === "service" && row.btu_min ? Number(row.btu_min) : null,
     btu_max: kind === "service" && (row.btu_max || row.btu_min) ? Number(row.btu_max || row.btu_min) : null,
+    // สเปคแอร์รายขนาด (mig 106)
+    series: kind === "ac" ? (row.series?.trim() || null) : null,
+    voltage: kind === "ac" ? (row.voltage || null) : null,
+    refrigerant: kind === "ac" ? (row.refrigerant?.trim() || null) : null,
+    seer: kind === "ac" && row.seer ? Number(row.seer) : null,
+    pipe_size: kind === "ac" ? (row.pipe_size?.trim() || null) : null,
+    energy_label: kind === "ac" ? (row.energy_label || null) : null,
     tracked: kind === "service" ? false : (row.tracked !== false),
     unit: row.unit,
     cost: Number(row.cost) || 0,
@@ -191,12 +203,32 @@ export async function saveMaterial(row, isNew) {
   let { error } = await supabase.from("materials").upsert(payload, { onConflict: "code" });
   // graceful fallback: if migration 087/098 (new columns) hasn't been run yet, the schema
   // cache rejects those columns and blocks EVERY save — retry without them so the catalog still works
-  if (error && /power_cost_year|features|purchase_unit|purchase_qty|btu_min|btu_max/i.test(error.message || "")) {
+  if (error && /power_cost_year|features|purchase_unit|purchase_qty|btu_min|btu_max|series|voltage|refrigerant|seer|pipe_size|energy_label/i.test(error.message || "")) {
     delete payload.power_cost_year; delete payload.features; delete payload.purchase_unit; delete payload.purchase_qty;
     delete payload.btu_min; delete payload.btu_max;
+    delete payload.series; delete payload.voltage; delete payload.refrigerant; delete payload.seer; delete payload.pipe_size; delete payload.energy_label;
     ({ error } = await supabase.from("materials").upsert(payload, { onConflict: "code" }));
   }
   if (error) throw error;
+}
+
+// ---------- ข้อมูลระดับ "รุ่นแอร์" (ac_series — mig 106): คุณสมบัติ + โบรชัวร์ ใช้ร่วมทุกขนาด ----------
+export async function getAcSeries(brand, name) {
+  const { data, error } = await supabase.from("ac_series").select("*").eq("brand", brand || "").eq("name", name).maybeSingle();
+  if (error) throw error; return data;
+}
+export async function saveAcSeries(row) {
+  const r = { brand: row.brand || "", name: row.name, features: row.features?.trim() || null, brochure_url: row.brochure_url || null };
+  const { error } = await supabase.from("ac_series").upsert(r, { onConflict: "brand,name" });
+  if (error) throw error;
+}
+// โบรชัวร์รุ่น (PDF/รูป) → bucket photos สาธารณะ เก็บลิงก์ใน ac_series.brochure_url
+export async function uploadBrochureFile(file) {
+  const ext = (file.name.split(".").pop() || "pdf").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `brochures/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "application/pdf" });
+  if (error) throw error;
+  return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
 
 // update a material's (weighted-average) unit cost — used by purchase moving average

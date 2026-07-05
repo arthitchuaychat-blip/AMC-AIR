@@ -69,6 +69,7 @@ export default function Catalog({ role }) {
   const [kind, setKind] = React.useState("all");
   const [cat, setCat] = React.useState("all");
   const [brand, setBrand] = React.useState("all");
+  const [series, setSeries] = React.useState("all");   // รุ่น/ซีรีส์ (mig 106) — ไล่ชั้น ยี่ห้อ → รุ่น → ขนาด
   const [btu, setBtu] = React.useState("all");
   const [acType, setAcType] = React.useState("all");
   const [q, setQ] = React.useState("");
@@ -110,6 +111,9 @@ export default function Catalog({ role }) {
   const acMats = React.useMemo(() => mats.filter((m) => m.kind === "ac"), [mats]);
   const brandOpts = React.useMemo(() => dedupe(acMats.map((m) => m.brand)).sort((a, b) => a.localeCompare(b, "th")), [acMats]);
   const acTypes = React.useMemo(() => dedupe(acMats.map((m) => m.ac_type)).sort((a, b) => a.localeCompare(b, "th")), [acMats]);
+  const seriesAll = React.useMemo(() => dedupe(acMats.map((m) => m.series)).sort((a, b) => a.localeCompare(b, "th")), [acMats]);
+  // รุ่นที่โชว์ในตัวกรอง — ไล่ตามยี่ห้อที่เลือก
+  const seriesOpts = React.useMemo(() => dedupe(acMats.filter((m) => brand === "all" || eqi(m.brand, brand)).map((m) => m.series)).sort((a, b) => a.localeCompare(b, "th")), [acMats, brand]);
 
   // save the item + register any NEW brand/BTU so it persists in the dropdown & filters next time
   async function handleSaveMaterial(row, isNew) {
@@ -151,6 +155,7 @@ export default function Catalog({ role }) {
     (kind !== "service" || acType === "all" || eqi(m.ac_type, acType)) &&
     (kind !== "service" || btu === "all" || svcBtuHit(m, btu)) &&
     (kind !== "ac" || brand === "all" || eqi(m.brand, brand)) &&
+    (kind !== "ac" || series === "all" || eqi(m.series, series)) &&
     (kind !== "ac" || btu === "all" || String(m.btu) === String(btu)) &&
     (kind !== "ac" || acType === "all" || eqi(m.ac_type, acType)) &&
     matchText(q, m.th, m.en, m.code, m.catName, m.brand, m.ac_type)
@@ -158,13 +163,13 @@ export default function Catalog({ role }) {
     (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) ||                       // ชนิด: แอร์ → วัสดุ → บริการ
     collator.compare(a.brand || a.catName || "", b.brand || b.catName || "") ||   // ยี่ห้อ (แอร์) / หมวด (วัสดุ)
     collator.compare(a.th || "", b.th || "")                                       // แล้วเรียงตามตัวอักษรชื่อไทย
-  ), [mats, kind, cat, brand, btu, acType, q, collator]);
+  ), [mats, kind, cat, brand, series, btu, acType, q, collator]);
   // Render in chunks — drawing the whole catalog at once is what made the page lag. Filtering/sort
   // still run over the FULL catalog (search never misses anything); we just paint `limit` cards and
   // grow on demand. Reset back to one page whenever the filter/search changes.
   const PAGE = 120;
   const [limit, setLimit] = React.useState(PAGE);
-  React.useEffect(() => { setLimit(PAGE); }, [kind, cat, brand, btu, acType, q]);
+  React.useEffect(() => { setLimit(PAGE); }, [kind, cat, brand, series, btu, acType, q]);
   const capped = React.useMemo(() => list.slice(0, limit), [list, limit]);
 
   // bulk show/hide the selected items on the public website
@@ -246,7 +251,7 @@ export default function Catalog({ role }) {
       {/* type tabs */}
       <div className="cat-filter">
         {KINDS.map((k) => (
-          <button key={k.v} className={"cat-chip" + (kind === k.v ? " on" : "")} onClick={() => { setKind(k.v); setCat("all"); setBrand("all"); setBtu("all"); setAcType("all"); }}
+          <button key={k.v} className={"cat-chip" + (kind === k.v ? " on" : "")} onClick={() => { setKind(k.v); setCat("all"); setBrand("all"); setSeries("all"); setBtu("all"); setAcType("all"); }}
             style={kind === k.v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{k.l}</button>
         ))}
       </div>
@@ -278,8 +283,11 @@ export default function Catalog({ role }) {
       )}
       {kind === "ac" && (
         <div className="cat-filter" style={{ gap: 10 }}>
-          <Combo className="inp" style={{ width: "auto" }} value={brand} onChange={(e) => setBrand(e.target.value)}>
+          <Combo className="inp" style={{ width: "auto" }} value={brand} onChange={(e) => { setBrand(e.target.value); setSeries("all"); }}>
             <option value="all">ทุกยี่ห้อ</option>{brandOpts.map((b) => <option key={b} value={b}>{b}</option>)}
+          </Combo>
+          <Combo className="inp" style={{ width: "auto" }} value={series} onChange={(e) => setSeries(e.target.value)}>
+            <option value="all">ทุกรุ่น</option>{seriesOpts.map((s) => <option key={s} value={s}>{s}</option>)}
           </Combo>
           <Combo className="inp" style={{ width: "auto" }} value={btu} onChange={(e) => setBtu(e.target.value)}>
             <option value="all">ทุกขนาด BTU</option>{btuOpts.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
@@ -317,7 +325,7 @@ export default function Catalog({ role }) {
                   </div>
                 </div>
                 <div className="cat-card-name">{m.th}</div>
-                <div className="cat-card-en">{m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") || m.en : m.kind === "service" ? [svcCatLabel(m), m.ac_type, svcBtuText(m), m.en].filter(Boolean).join(" · ") : m.en}</div>
+                <div className="cat-card-en">{m.kind === "ac" ? [m.brand, m.series, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") || m.en : m.kind === "service" ? [svcCatLabel(m), m.ac_type, svcBtuText(m), m.en].filter(Boolean).join(" · ") : m.en}</div>
                 {m.description && <div className="cat-card-desc">{m.description}</div>}
                 <div className="cat-card-stats">
                   {m.tracked
@@ -347,7 +355,7 @@ export default function Catalog({ role }) {
                 <MaterialThumb mat={m} size={40} radius={11} />
                 <div className="cat-lrow-main">
                   <div className="cat-lrow-name">{m.th} {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>} {low && <span className="badge-warn sm">ต่ำ</span>}</div>
-                  <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.kind === "service" ? [svcCatLabel(m), m.ac_type, svcBtuText(m), m.en].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
+                  <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.series, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.kind === "service" ? [svcCatLabel(m), m.ac_type, svcBtuText(m), m.en].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
                   {m.description && <div className="cat-lrow-desc">{m.description}</div>}
                 </div>
                 <div className="cat-lrow-col hide-sm"><span>สต๊อก</span><span className={"job-badge " + (m.tracked ? "b-blue" : "b-grey")} title={m.tracked ? "นับสต๊อก (เบิก/คืน/ซื้อได้)" : "ไม่นับสต๊อก (สั่งตามงาน)"}>{m.tracked ? "✓ นับสต๊อก" : "ไม่นับ"}</span></div>
@@ -390,10 +398,10 @@ export default function Catalog({ role }) {
       )}
       {openMat && <MaterialDrawer mat={openMat} onClose={() => setOpenMat(null)} />}
       {editing !== undefined && (
-        <MaterialModal initial={editing} categories={cats.filter((c) => !String(c.id).startsWith("sv-"))} brands={brands} btus={btus} acTypes={acTypes} onAddCategory={addProductCategory}
+        <MaterialModal initial={editing} categories={cats.filter((c) => !String(c.id).startsWith("sv-"))} brands={brands} btus={btus} acTypes={acTypes} seriesList={seriesAll} onAddCategory={addProductCategory}
           defaultKind={kind === "all" ? "material" : kind}
           onSave={handleSaveMaterial}
-          onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setBtu("all"); setAcType("all"); flash(`บันทึกสำเร็จ ✓ — อยู่ในแท็บ "${KINDS.find((k) => k.v === savedKind)?.l || savedKind}"`); } load(); }}
+          onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setSeries("all"); setBtu("all"); setAcType("all"); flash(`บันทึกสำเร็จ ✓ — อยู่ในแท็บ "${KINDS.find((k) => k.v === savedKind)?.l || savedKind}"`); } load(); }}
           onClose={() => setEditing(undefined)} />
       )}
     </div>

@@ -183,6 +183,26 @@ nav.menu a:hover{color:var(--primary);background:var(--bg-soft)}
 .prod .pr small{font-size:12px;font-weight:600;color:var(--ink-3)}
 .prod .pcost{font-size:12.5px;font-weight:700;color:#0a7d2c}
 .prod .cardpay{font-size:11.5px;color:#7c5c00;background:#fff8e6;border:1px solid #f3e3ad;border-radius:8px;padding:3px 8px;line-height:1.5}
+/* series card — การ์ดละ "รุ่น" เลือกขนาด BTU ในตัว */
+.sprod{grid-column:span 2;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:.2s}
+.sprod:hover{box-shadow:var(--shadow)}
+.sprod-top{display:flex;gap:14px;padding:14px 14px 8px}
+.sprod-top .ph{width:118px;height:118px;flex:none;background:var(--bg-soft);border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:36px}
+.sprod-top .ph img{width:100%;height:100%;object-fit:cover}
+.sprod-brand{font-size:11px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.04em}
+.sprod-name{font-weight:800;font-size:16.5px;line-height:1.3}
+.sprod-sub{font-size:11.5px;color:var(--ink-3);font-weight:700;margin-top:2px}
+.sprod-feats{font-size:12px;color:var(--ink-2);line-height:1.55;margin-top:5px;white-space:pre-line;max-height:78px;overflow:hidden}
+.sprod-bro{display:inline-block;font-size:12px;font-weight:800;color:var(--primary);margin-top:4px}
+.sprod-sizes{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 14px 2px}
+.sprod-sizes .lb{font-size:11.5px;font-weight:700;color:var(--ink-3)}
+.ssz{font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:99px;border:1.5px solid var(--line);background:#fff;cursor:pointer;font-family:inherit}
+.ssz:hover{border-color:var(--primary)}
+.ssz.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.sprod-detail{padding:8px 14px 14px}
+.sspec{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;font-size:12.5px;color:var(--ink-2);background:var(--bg-soft);border-radius:10px;padding:9px 12px;margin-bottom:8px}
+.sspec b{color:var(--ink);font-weight:700}
+@media(max-width:560px){.sprod{grid-column:span 1}.sprod-top{flex-direction:row}.sspec{grid-template-columns:1fr}}
 .prod .feats{font-size:12px;color:var(--ink-2);line-height:1.55;white-space:normal}
 .prod .add{margin-top:6px;width:100%;justify-content:center}
 .prod-empty{grid-column:1/-1;text-align:center;color:var(--ink-3);padding:50px;font-size:15px}
@@ -822,6 +842,52 @@ function fillFilters() {
   if (sBtus.length) fill(["#fltSvcBtu"], `<option value="">ทุกขนาด BTU</option>` + sBtus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join(""));
 }
 let allProducts = [], prodFilter = "all", prodQuery = "", prodBrand = "", prodBtu = "", prodType = "", prodSvc = "", prodNote = "";
+const fmtNumB = (n) => Number(n || 0).toLocaleString("en-US");
+
+// ---------- การ์ดละ "รุ่น" (ยี่ห้อ → รุ่น → เลือกขนาด BTU ในการ์ด) ----------
+let SF = {};          // brand||series → {features, brochure_url} จากตาราง ac_series (หลังบ้าน)
+let SG = [];          // กลุ่มรุ่นที่กำลังแสดงอยู่ (renderProducts เติมให้)
+const selSize = {};   // จำขนาดที่เลือกค้างไว้ต่อรุ่น
+async function loadSeriesInfo() {
+  if (!hasSb) return;
+  try {
+    const { data } = await sb.from("ac_series").select("*");
+    (data || []).forEach((s) => { SF[(s.brand || "") + "||" + s.name] = s; });
+    renderProducts();   // ได้คุณสมบัติรุ่น/โบรชัวร์มาแล้ว วาดใหม่
+  } catch (e) { /* ยังไม่รัน migration 106 — การ์ดยังทำงานได้ */ }
+}
+window.selSeriesSize = (gi, i) => { const g = SG[gi]; if (!g) return; selSize[g.key] = i; renderProducts(); };
+function seriesCard(g, gi) {
+  const esc2 = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const items = g.items;
+  const sel = Math.min(selSize[g.key] || 0, items.length - 1);
+  const p = items[sel];
+  const info = SF[g.key] || {};
+  const feats = info.features || p.features || "";
+  const photo = (items.find((x) => x.photo) || {}).photo;
+  const spec = [["รหัสรุ่น", p.code], ["ขนาด", p.btu ? fmtNumB(p.btu) + " BTU" : ""], ["กำลังไฟ", p.voltage], ["น้ำยา", p.refrigerant],
+    ["SEER", p.seer], ["ท่อน้ำยา", p.pipe], ["ฉลาก", p.energyLabel], ["⚡ ค่าไฟ/ปี", p.powerCostYear ? "≈" + baht(p.powerCostYear) : ""]]
+    .filter(([, v]) => v).map(([l, v]) => `<div><span>${l}</span> <b>${esc2(v)}</b></div>`).join("");
+  return `<div class="sprod">
+    <div class="sprod-top">
+      <a class="ph" href="/p/${encodeURIComponent(p.code)}">${photo ? `<img src="${photo}" alt="${esc2(g.series)}" loading="lazy">` : "❄️"}</a>
+      <div style="min-width:0;flex:1">
+        <div class="sprod-brand">${esc2(g.brand)}</div>
+        <div class="sprod-name">รุ่น ${esc2(g.series)}</div>
+        <div class="sprod-sub">${[TYPE_TH[p.ac_type] || p.ac_type, p.energyLabel].filter(Boolean).map(esc2).join(" · ")}</div>
+        ${feats ? `<div class="sprod-feats">${esc2(feats)}</div>` : ""}
+        ${info.brochure_url ? `<a class="sprod-bro" href="${esc2(info.brochure_url)}" target="_blank" rel="noreferrer">📄 ดาวน์โหลดโบรชัวร์</a>` : ""}
+      </div>
+    </div>
+    <div class="sprod-sizes"><span class="lb">เลือกขนาด:</span>${items.map((x, i) => `<button type="button" class="ssz${i === sel ? " on" : ""}" onclick="selSeriesSize(${gi},${i})">${fmtNumB(x.btu)}</button>`).join("")}<span class="lb">BTU</span></div>
+    <div class="sprod-detail">
+      ${spec ? `<div class="sspec">${spec}</div>` : ""}
+      <div class="pr" style="font-size:18px;font-weight:800">${p.price ? baht(p.price) : "สอบถามราคา"} ${p.price ? '<small style="font-size:12px;font-weight:600;color:var(--ink-3)">/เครื่อง</small>' : ""}</div>
+      ${p.price ? `<div class="cardpay" style="margin-top:4px">💳 รูดเต็ม <b>${baht(Math.ceil(p.price * 1.04))}</b> · ผ่อน 10 ด. <b>${baht(Math.ceil(p.price * 1.14))}</b></div>` : ""}
+      <button class="btn btn-primary btn-sm add" style="width:100%;justify-content:center;margin-top:8px" onclick='addToCart(${JSON.stringify({ code: p.code, name: p.name, price: p.price, photo: p.photo }).replace(/'/g, "&#39;")})'>+ เพิ่มลงตะกร้า</button>
+    </div>
+  </div>`;
+}
 function prodCard(p) {
   const purl = "/p/" + encodeURIComponent(p.code);   // หน้ารายละเอียดสินค้า (SSR — ติด Google ได้)
   return `<div class="prod">
@@ -847,15 +913,24 @@ function renderProducts() {
     && (!prodBtu || btuHit(p, prodBtu))
     && (!prodSvc || p.kind !== "service" || svcMatch(p, prodSvc))
     && (!q || (p.name || "").toLowerCase().includes(q)));
-  if (!list.length) { grid.innerHTML = `<div class="prod-empty">${allProducts.length ? "ไม่พบสินค้าที่ค้นหา" : (prodNote || "ยังไม่มีสินค้า")}</div>`; return; }
-  grid.innerHTML = list.map(prodCard).join("") + (prodNote ? `<div class="prod-empty">${prodNote}</div>` : "");
+  if (!list.length) { SG = []; grid.innerHTML = `<div class="prod-empty">${allProducts.length ? "ไม่พบสินค้าที่ค้นหา" : (prodNote || "ยังไม่มีสินค้า")}</div>`; return; }
+  // แอร์ที่มี "รุ่น" → การ์ดละรุ่น (เลือกขนาดในการ์ด) · ที่เหลือ (วัสดุ/บริการ/แอร์ไม่มีรุ่น) → การ์ดเดี่ยวตามเดิม
+  const gm = {}; const singles = [];
+  list.forEach((p) => {
+    if (p.kind === "ac" && p.series) { const k = (p.brand || "") + "||" + p.series; (gm[k] = gm[k] || { key: k, brand: p.brand || "", series: p.series, items: [] }).items.push(p); }
+    else singles.push(p);
+  });
+  SG = Object.values(gm).sort((a, b) => (a.brand + a.series).localeCompare(b.brand + b.series, "th"));
+  SG.forEach((x) => x.items.sort((a, b) => (Number(a.btu) || 0) - (Number(b.btu) || 0)));
+  grid.innerHTML = SG.map((x, gi) => seriesCard(x, gi)).join("") + singles.map(prodCard).join("") + (prodNote ? `<div class="prod-empty">${prodNote}</div>` : "");
 }
 async function loadProducts() {
   if (!hasSb) { allProducts = SAMPLE.slice(); prodNote = "* ตัวอย่างสินค้า — ตั้งค่า Supabase ในไฟล์เพื่อดึงสินค้าจริงจากคลัง"; renderProducts(); return; }
   try {
     const { data, error } = await sb.from("web_products").select("*").limit(1000);
     if (error) throw error;
-    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, category: r.category, tag: r.kind === "service" && SVC_TH[r.category] ? "บริการ · " + SVC_TH[r.category] : KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, btuMin: r.btu_min, btuMax: r.btu_max, ac_type: r.ac_type, powerCostYear: r.power_cost_year, features: r.features }));
+    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, category: r.category, tag: r.kind === "service" && SVC_TH[r.category] ? "บริการ · " + SVC_TH[r.category] : KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, btuMin: r.btu_min, btuMax: r.btu_max, ac_type: r.ac_type, powerCostYear: r.power_cost_year, features: r.features,
+      series: r.series, voltage: r.voltage, refrigerant: r.refrigerant, seer: r.seer, pipe: r.pipe_size, energyLabel: r.energy_label }));
     prodNote = allProducts.length ? "" : "ยังไม่มีสินค้าที่เผยแพร่ — ติ๊ก “ขึ้นเว็บ” ที่สินค้าในระบบหลังบ้าน";
     fillFilters(); renderProducts();
     // มาจากหน้ารายละเอียดสินค้า (/p/…) กด "ใส่ตะกร้า" → /?add=CODE → หยิบลงตะกร้าแล้วเปิดลิ้นชักให้เลย
@@ -1078,6 +1153,7 @@ async function loadBanners() {
 
 renderCart();
 loadProducts();
+loadSeriesInfo();
 loadClients();
 loadBanners();
 loadPortfolio();

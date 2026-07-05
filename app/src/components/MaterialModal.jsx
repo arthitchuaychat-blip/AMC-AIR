@@ -3,7 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { UIcon } from "../icons";
 import { UNITS } from "../lib/format";
-import { uploadMaterialPhoto } from "../lib/api";
+import { uploadMaterialPhoto, getAcSeries, saveAcSeries, uploadBrochureFile } from "../lib/api";
 
 const KINDS = [{ v: "material", l: "วัสดุ" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }];
 
@@ -23,7 +23,7 @@ function suggestSale(kind, cost) {
 }
 
 // Add OR edit a catalog item (material / ac / service). `initial` null => add mode.
-export default function MaterialModal({ initial, categories, brands = [], btus = [], acTypes = [], defaultKind = "material", onSaved, onClose, onSave, onAddCategory }) {
+export default function MaterialModal({ initial, categories, brands = [], btus = [], acTypes = [], seriesList = [], defaultKind = "material", onSaved, onClose, onSave, onAddCategory }) {
   const isNew = !initial || !!initial._dup;   // _dup = สร้างสำเนา → ถือเป็นรายการใหม่ (รหัสใหม่)
   const [f, setF] = React.useState(() => ({
     code: initial?.code || "",
@@ -50,7 +50,35 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     // ช่วง BTU ของบริการ — ถ้าเคยติดแท็ก BTU เดี่ยวไว้ (v291) ดึงมาเป็นค่าต่ำสุดให้เลย
     btu_min: initial?.btu_min ?? ((initial?.kind === "service" && initial?.btu) || ""),
     btu_max: initial?.btu_max ?? "",
+    // สเปคแอร์รายขนาด (mig 106)
+    series: initial?.series ?? "",
+    voltage: initial?.voltage ?? "",
+    refrigerant: initial?.refrigerant ?? "",
+    seer: initial?.seer ?? "",
+    pipe_size: initial?.pipe_size ?? "",
+    energy_label: initial?.energy_label ?? "",
   }));
+  // ข้อมูลระดับ "รุ่น" (คุณสมบัติ + โบรชัวร์ — ใช้ร่วมทุกขนาดในรุ่น) โหลด/บันทึกที่ตาราง ac_series
+  const [srsFeat, setSrsFeat] = React.useState("");
+  const [srsBrochure, setSrsBrochure] = React.useState("");
+  const [srsUploading, setSrsUploading] = React.useState(false);
+  React.useEffect(() => {
+    let dead = false;
+    const b = (f.brand || "").trim(), s = (f.series || "").trim();
+    if (f.kind !== "ac" || !s) { setSrsFeat(""); setSrsBrochure(""); return; }
+    const t = setTimeout(async () => {
+      try { const row = await getAcSeries(b, s); if (!dead) { setSrsFeat(row?.features || ""); setSrsBrochure(row?.brochure_url || ""); } }
+      catch { /* ยังไม่รัน migration 106 — ปล่อยว่าง */ }
+    }, 350);
+    return () => { dead = true; clearTimeout(t); };
+  }, [f.kind, f.brand, f.series]);
+  async function onBrochure(e) {
+    const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+    setSrsUploading(true); setErr(null);
+    try { setSrsBrochure(await uploadBrochureFile(file)); }
+    catch (ex) { setErr("อัปโหลดโบรชัวร์ไม่สำเร็จ: " + (ex.message || ex)); }
+    setSrsUploading(false);
+  }
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const [err, setErr] = React.useState(null);
@@ -104,7 +132,13 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     try {
       // บริการต้องอยู่หมวด sv-* เสมอ (รายการเก่าที่หมวดเป็นของวัสดุ → อื่นๆ)
       const payload = isService && !String(f.category || "").startsWith("sv-") ? { ...f, category: "sv-other" } : f;
-      await onSave(payload, isNew); onSaved(f.kind);
+      await onSave(payload, isNew);
+      // ข้อมูลของรุ่น (คุณสมบัติ+โบรชัวร์) บันทึกครั้งเดียวใช้ทุกขนาด — พลาดไม่ให้ขวางการบันทึกสินค้า
+      if (isAc && (f.series || "").trim()) {
+        try { await saveAcSeries({ brand: f.brand, name: f.series.trim(), features: srsFeat, brochure_url: srsBrochure }); }
+        catch (ex) { console.warn("saveAcSeries:", ex?.message); }
+      }
+      onSaved(f.kind);
     }
     catch (e) {
       const m = e.message || String(e);
@@ -188,6 +222,24 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
 
           {isAc && (
             <div className="fld-row">
+              <label className="fld"><span>รุ่น/ซีรีส์ · Series <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(จัดกลุ่มการ์ดบนเว็บ)</span></span>
+                <input className="inp" list="series-list" value={f.series} onChange={set("series")} placeholder="เช่น FTKQ, Apollo III" />
+                <datalist id="series-list">{seriesList.map((s) => <option key={s} value={s} />)}</datalist>
+              </label>
+              <label className="fld"><span>ฉลากประหยัดไฟ</span>
+                <Combo className="inp" value={f.energy_label} onChange={set("energy_label")}>
+                  <option value="">— ไม่มี —</option>
+                  <option value="เบอร์ 5">เบอร์ 5</option>
+                  <option value="เบอร์ 5 ★">เบอร์ 5 ★</option>
+                  <option value="เบอร์ 5 ★★">เบอร์ 5 ★★</option>
+                  <option value="เบอร์ 5 ★★★">เบอร์ 5 ★★★</option>
+                  <option value="มอก.">มอก.</option>
+                </Combo>
+              </label>
+            </div>
+          )}
+          {isAc && (
+            <div className="fld-row">
               <label className="fld"><span>ขนาด BTU</span>
                 <input className="inp" type="number" list="btu-list" value={f.btu} onChange={set("btu")} placeholder="เลือก หรือพิมพ์ขนาดใหม่ เช่น 12000" />
                 <datalist id="btu-list">{btus.map((b) => <option key={b} value={b} />)}</datalist>
@@ -199,18 +251,62 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
             </div>
           )}
           {isAc && (
+            <div className="fld-row">
+              <label className="fld"><span>กำลังไฟ</span>
+                <Combo className="inp" value={f.voltage} onChange={set("voltage")}>
+                  <option value="">— ไม่ระบุ —</option><option value="220V">220V</option><option value="380V">380V</option>
+                </Combo>
+              </label>
+              <label className="fld"><span>ชนิดน้ำยา</span>
+                <input className="inp" list="refrig-list" value={f.refrigerant} onChange={set("refrigerant")} placeholder="เช่น R32" />
+                <datalist id="refrig-list"><option value="R32" /><option value="R410A" /><option value="R22" /></datalist>
+              </label>
+            </div>
+          )}
+          {isAc && (
+            <div className="fld-row">
+              <label className="fld"><span>ค่า SEER</span>
+                <input className="inp" type="number" step="0.01" value={f.seer} onChange={set("seer")} placeholder="เช่น 14.54" />
+              </label>
+              <label className="fld"><span>ขนาดท่อน้ำยา · Pipe</span>
+                <input className="inp" value={f.pipe_size} onChange={set("pipe_size")} placeholder="เช่น 1/4 1/2" />
+              </label>
+            </div>
+          )}
+          {isAc && (
             <label className="fld"><span>⚡ ประมาณค่าไฟ/ปี (บาท) · แสดงบนเว็บ</span>
               <input className="inp" type="number" value={f.power_cost_year} onChange={set("power_cost_year")} placeholder="เช่น 3500 (ค่าไฟทั้งปีโดยประมาณ)" />
             </label>
+          )}
+          {isAc && (f.series || "").trim() !== "" && (
+            <div style={{ border: "1.5px solid #bae6fd", background: "#f0f9ff", borderRadius: 12, padding: "10px 12px", marginBottom: 4 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: "#0369a1", marginBottom: 6 }}>ข้อมูลของรุ่น {f.series} — ใช้ร่วมกันทุกขนาดในรุ่นนี้ (แก้ที่นี่ = อัปเดตทั้งรุ่น)</div>
+              <label className="fld"><span>✨ คุณสมบัติของรุ่น · แสดงบนเว็บ</span>
+                <textarea className="inp" value={srsFeat} onChange={(e) => setSrsFeat(e.target.value)} rows={4} style={{ resize: "vertical" }}
+                  placeholder={"จุดเด่นของรุ่น เช่น\n• ระบบ Inverter ประหยัดไฟ\n• ฟอกอากาศ PM2.5\n• รับประกันคอมเพรสเซอร์ 10 ปี"} />
+              </label>
+              <div className="fld"><span>📄 โบรชัวร์รุ่น (PDF/รูป)</span>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
+                    {srsUploading ? "กำลังอัปโหลด…" : (srsBrochure ? "เปลี่ยนโบรชัวร์" : "อัปโหลดโบรชัวร์")}
+                    <input type="file" accept="application/pdf,image/*" onChange={onBrochure} style={{ display: "none" }} disabled={srsUploading} />
+                  </label>
+                  {srsBrochure && <a className="btn-ghost sm" href={srsBrochure} target="_blank" rel="noreferrer">เปิดดู ↗</a>}
+                  {srsBrochure && <button type="button" className="btn-ghost sm danger" onClick={() => setSrsBrochure("")}>ลบ</button>}
+                </div>
+              </div>
+            </div>
           )}
 
           <label className="fld"><span>รายละเอียด</span>
             <textarea className="inp" value={f.description} onChange={set("description")} placeholder="คำอธิบาย / สเปก / หมายเหตุ (ไม่บังคับ)" rows={2} style={{ resize: "vertical" }} />
           </label>
+          {!(isAc && (f.series || "").trim()) && (
           <label className="fld"><span>📋 คุณสมบัติสินค้า · แสดงบนเว็บ (ใส่ได้ยาว · ขึ้นบรรทัดใหม่ได้)</span>
             <textarea className="inp" value={f.features} onChange={set("features")} rows={5} style={{ resize: "vertical" }}
               placeholder={"จุดเด่น/สเปกสินค้า เช่น\n• ประหยัดไฟ เบอร์ 5\n• ระบบ Inverter\n• ฟอกอากาศ PM2.5\n• รับประกันคอมเพรสเซอร์ 10 ปี"} />
           </label>
+          )}
           <label className="fld"><span>รูปสินค้า</span>
             <div className="photo-field">
               {f.photo_url ? <img src={f.photo_url} className="photo-thumb" alt="" /> : <div className="photo-thumb empty"><UIcon name="camera" size={22} color="var(--ink-3)" /></div>}

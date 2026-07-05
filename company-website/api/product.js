@@ -18,6 +18,13 @@ module.exports = async (req, res) => {
     const desc = [KIND_TH[p.kind], p.brand, p.btu ? `${Number(p.btu).toLocaleString("en-US")} BTU` : "", TYPE_TH[p.ac_type] || ""]
       .filter(Boolean).join(" · ") || `${name} จาก AMC AIR`;
 
+    // ข้อมูลระดับรุ่น: ขนาดอื่นในรุ่นเดียวกัน + คุณสมบัติ/โบรชัวร์ (ac_series — mig 106; ไม่มีก็ข้าม)
+    let siblings = [], sinfo = null;
+    if (p.kind === "ac" && p.series) {
+      try { siblings = await sbGet(`web_products?kind=eq.ac&brand=eq.${encodeURIComponent(p.brand || "")}&series=eq.${encodeURIComponent(p.series)}&select=code,btu&order=btu`); } catch (e) {}
+      try { const r = await sbGet(`ac_series?brand=eq.${encodeURIComponent(p.brand || "")}&name=eq.${encodeURIComponent(p.series)}&select=*`); sinfo = r && r[0]; } catch (e) {}
+    }
+
     // สินค้าใกล้เคียง: หมวดเดียวกัน (แอร์ = ยี่ห้อเดียวกันก่อน ถ้ามี)
     let rel = [];
     try {
@@ -28,7 +35,8 @@ module.exports = async (req, res) => {
       }
     } catch (e) { /* ไม่มีสินค้าใกล้เคียงก็ข้าม */ }
 
-    const feats = String(p.features || "").split(/\n+/).map((f) => f.trim()).filter(Boolean)
+    // คุณสมบัติ: ใช้ของ "รุ่น" ก่อน (ใช้ร่วมทุกขนาด) ถ้าไม่มีค่อยใช้ของตัวสินค้า
+    const feats = String((sinfo && sinfo.features) || p.features || "").split(/\n+/).map((f) => f.trim()).filter(Boolean)
       .map((f) => `<div>${esc(f)}</div>`).join("");
     const relHtml = rel.map((r) => `<a class="rel-card" href="/p/${encodeURIComponent(r.code)}">
       ${r.photo_url ? `<img src="${esc(r.photo_url)}" alt="${esc(r.name_th || r.code)}" loading="lazy">` : ""}
@@ -78,12 +86,21 @@ module.exports = async (req, res) => {
             </div>`;
           })() : ""}
           ${p.power_cost_year ? `<div class="pcost">⚡ ค่าไฟประมาณ ${baht(p.power_cost_year)}/ปี</div>` : ""}
+          ${(() => {
+            // ตารางสเปครายขนาด (mig 106) — โชว์เฉพาะช่องที่มีข้อมูล
+            const rows = [["รุ่น/ซีรีส์", p.series], ["รหัสรุ่น", p.code], ["ขนาด", p.btu ? nfmt(p.btu) + " BTU" : ""], ["กำลังไฟ", p.voltage],
+              ["ชนิดน้ำยา", p.refrigerant], ["ค่า SEER", p.seer], ["ขนาดท่อน้ำยา", p.pipe_size], ["ฉลากประหยัดไฟ", p.energy_label]].filter(([, v]) => v);
+            return rows.length > 2 ? `<div class="spectable">${rows.map(([l, v]) => `<div class="srow"><span>${l}</span><b>${esc(String(v))}</b></div>`).join("")}</div>` : "";
+          })()}
+          ${siblings.length > 1 ? `<div style="font-size:13.5px;font-weight:800;margin-top:6px">ขนาดอื่นในรุ่น ${esc(p.series)}:</div>
+          <div class="sizes">${siblings.map((s) => `<a class="${s.code === p.code ? "on" : ""}" href="/p/${encodeURIComponent(s.code)}">${nfmt(s.btu)} BTU</a>`).join("")}</div>` : ""}
           ${feats ? `<div class="feats">${feats}</div>` : ""}
           ${p.description ? `<p style="font-size:14.5px;color:var(--ink-2)">${esc(p.description).replace(/\n/g, "<br>")}</p>` : ""}
           <div class="btnrow" style="justify-content:flex-start;margin-top:16px">
             <a class="btn btn-primary" href="/?add=${encodeURIComponent(p.code)}">🛒 ใส่ตะกร้า / สั่งซื้อ</a>
             <a class="btn btn-line" href="${LINE_URL}" target="_blank" rel="noreferrer">สอบถามผ่าน LINE</a>
             <a class="btn btn-ghost" href="${TEL}">โทร ${PHONE}</a>
+            ${sinfo && sinfo.brochure_url ? `<a class="btn btn-ghost" href="${esc(sinfo.brochure_url)}" target="_blank" rel="noreferrer">📄 โบรชัวร์</a>` : ""}
           </div>
           <div class="note">* ราคาเป็นการประมาณการ ทีมงานจะติดต่อยืนยันราคาจริง ค่าติดตั้ง และนัดหมายก่อนเสมอ · ${esc(KIND_TH[p.kind] === "เครื่องปรับอากาศ" ? "แถมสำรวจหน้างานฟรีในพื้นที่บริการ" : "ออกใบกำกับภาษีได้")}</div>
         </div>
