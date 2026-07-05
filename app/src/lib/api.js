@@ -573,6 +573,29 @@ export async function markPoReceived(po_no) {
   syncCashEntriesFromDocs().catch(() => {}); // อัปเดตกระแสเงินสด (จ่ายจริงอิงการจ่ายเงิน ไม่ใช่การรับของ)
 }
 
+// ตัวเลขเบา ๆ สำหรับแท็บ "ภาพรวม" ของแดชบอร์ด (นับ/รวมอย่างเดียว ไม่ join อะไรหนัก)
+export async function dashboardActionLite() {
+  const today = new Date().toISOString().slice(0, 10);
+  const [inv, exp, po] = await Promise.all([
+    supabase.from("invoices").select("total,wht_amt,status,due_date"),
+    supabase.from("expense_requests").select("status,amount"),
+    supabase.from("purchase_orders").select("status,expense_id,paid_at").then(async (r) =>
+      (r.error && /expense_id|paid_at/i.test(r.error.message || "")) ? await supabase.from("purchase_orders").select("status") : r), // pre-100 fallback
+  ]);
+  const unpaid = (inv.data || []).filter((x) => x.status === "unpaid");
+  const pend = (exp.data || []).filter((x) => x.status === "pending");
+  const pos = po.data || [];
+  return {
+    receivable: unpaid.reduce((a, x) => a + (Number(x.total) || 0) - (Number(x.wht_amt) || 0), 0),
+    unpaidCount: unpaid.length,
+    overdueCount: unpaid.filter((x) => x.due_date && x.due_date < today).length,
+    pendingExpenseCount: pend.length,
+    pendingExpenseSum: pend.reduce((a, x) => a + (Number(x.amount) || 0), 0),
+    poOpenCount: pos.filter((x) => x.status === "open").length,
+    poAwaitPayCount: pos.filter((x) => x.status !== "cancelled" && x.expense_id && !x.paid_at).length,
+  };
+}
+
 // ใบเสนอราคาที่อนุมัติแล้ว (อย่างย่อ) — ตัวเลือก "อ้างอิงใบเสนอราคา" บนใบสั่งซื้อ
 export async function listApprovedQuotesLite() {
   const [q, cu] = await Promise.all([

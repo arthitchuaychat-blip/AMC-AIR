@@ -1,6 +1,6 @@
 import React from "react";
-import { listMaterials, listTeams, listTransactionsSince } from "../lib/api";
-import { fmtBaht, fmtNum, fmtCompact } from "../lib/format";
+import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, dashboardActionLite } from "../lib/api";
+import { fmtBaht, fmtNum, fmtCompact, inRange } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import DashDrawer from "./DashDrawer";
 import SalesReport from "./SalesReport";
@@ -46,6 +46,25 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
   const [txns, setTxns] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState(null);
+  // แดชบอร์ดแบบแท็บ (ลดความตาลาย): ภาพรวม | ขาย&กำไร | การเงิน&เอกสาร | กราฟ | คลังวัสดุ
+  const [tab, setTab] = React.useState("overview");
+  const [ov, setOv] = React.useState(null);   // {qs, bs} — ยอดขาย/กำไรประมาณการ บนแท็บภาพรวม
+  const [act, setAct] = React.useState(null); // ตัวเลข "สิ่งที่ต้องทำ" (ค้างรับ/รออนุมัติ/PO ค้าง)
+  React.useEffect(() => {
+    Promise.all([listQuotations(), listBoqs()]).then(([qs, bs]) => setOv({ qs, bs })).catch(() => {});
+    dashboardActionLite().then(setAct).catch(() => {});
+  }, []);
+  const ovStat = React.useMemo(() => {
+    if (!ov) return { sale: 0, count: 0, est: 0 };
+    const boqCost = Object.fromEntries(ov.bs.map((b) => [b.boq_no, b.total]));
+    let sale = 0, count = 0, est = 0;
+    ov.qs.forEach((qo) => {
+      if (qo.status !== "approved" || !inRange(qo.approved_at || qo.issue_date, from, to)) return;
+      sale += qo.afterDisc || 0; count += 1;
+      if (qo.boq_no && boqCost[qo.boq_no] != null) est += (qo.afterDisc || 0) - boqCost[qo.boq_no];
+    });
+    return { sale, count, est };
+  }, [ov, from, to]);
 
   function applyPreset(p) { const r = PRESETS.find((x) => x.id === p).range(); setPreset(p); setFrom(r.from); setTo(r.to); }
   const setCustom = (k, v) => { setPreset("custom"); k === "from" ? setFrom(v) : setTo(v); };
@@ -118,15 +137,46 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
         </div>
       </div>
 
-      <SalesReport onOpenQuote={onOpenQuote} onOpenJob={onOpenJob} from={from} to={to} />
+      <div className="cat-filter" style={{ marginTop: 2 }}>
+        {[["overview", "🏠 ภาพรวม"], ["sales", "ขาย & กำไร"], ["fin", "การเงิน & เอกสาร"], ["trend", "กราฟแนวโน้ม"], ["inv", "คลังวัสดุ & เบิกใช้"]].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
+            style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
+      </div>
 
-      <BillingSummary onGo={onGo} from={from} to={to} />
+      {tab === "overview" && (
+        <>
+          <div className="kpi-grid">
+            <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={fmtBaht(ovStat.sale)} sub={fmtNum(ovStat.count) + " ใบ"} onClick={() => setTab("sales")} />
+            <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={fmtBaht(ovStat.est)} sub="กำไรจริงดูในแท็บ ขาย & กำไร" onClick={() => setTab("sales")} />
+            <StatCard icon="clipboard" color="#d97706" label="เงินค้างรับ" value={fmtBaht(act?.receivable || 0)} sub={`${fmtNum(act?.unpaidCount || 0)} ใบ · เกินกำหนด ${fmtNum(act?.overdueCount || 0)} ใบ`} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
+            <StatCard icon="box" color="#0d9488" label="มูลค่าวัสดุคงเหลือ" value={fmtBaht(invValue)} sub={`${fmtNum(mats.length)} ชนิด · ${fmtNum(low.length)} ต่ำกว่าขั้นต่ำ`} onClick={() => setTab("inv")} />
+          </div>
 
-      <CrmJobsSummary onGo={onGo} />
+          <div className="sec-head" style={{ margin: "20px 0 10px" }}><div><div className="sec-title">สิ่งที่ต้องทำ</div><div className="sec-sub">งานค้างที่รอจัดการ · กดการ์ดเพื่อไปหน้านั้น</div></div></div>
+          <div className="kpi-grid">
+            <StatCard icon="alert" color="#dc2626" label="ของใกล้หมด ต้องสั่งซื้อ" value={fmtNum(low.length) + " รายการ"} sub={low.length ? "มูลค่าที่ต้องสั่ง ~" + fmtBaht(reorderTotal) : "สต๊อกเพียงพอทุกรายการ 🎉"} accent={low.length ? "#dc2626" : "#16a34a"} onClick={() => setTab("inv")} />
+            <StatCard icon="withdraw" color="#7c3aed" label="เบิกจ่ายรออนุมัติ" value={fmtNum(act?.pendingExpenseCount || 0) + " คำขอ"} sub={act?.pendingExpenseSum ? "รวม " + fmtBaht(act.pendingExpenseSum) : "ไม่มีค้างอนุมัติ"} onClick={() => onGo && onGo("expenses")} />
+            <StatCard icon="purchase" color="#d97706" label="ใบสั่งซื้อรอรับของ" value={fmtNum(act?.poOpenCount || 0) + " ใบ"} sub={"รออนุมัติจ่าย " + fmtNum(act?.poAwaitPayCount || 0) + " ใบ"} onClick={() => onGo && onGo("po")} />
+            <StatCard icon="clipboard" color="#2563eb" label="ใบแจ้งหนี้ค้างรับ" value={fmtNum(act?.unpaidCount || 0) + " ใบ"} sub={"เกินกำหนด " + fmtNum(act?.overdueCount || 0) + " ใบ"} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
+          </div>
+        </>
+      )}
 
-      <TrendCharts from={from} to={to} />
+      {tab === "sales" && <SalesReport onOpenQuote={onOpenQuote} onOpenJob={onOpenJob} from={from} to={to} />}
 
-      <div className="sec-head" style={{ margin: "22px 0 10px" }}><div><div className="sec-title">คลังวัสดุ & การเบิกใช้</div><div className="sec-sub">Inventory & usage · {periodLabel}</div></div></div>
+      {tab === "fin" && (
+        <>
+          <BillingSummary onGo={onGo} from={from} to={to} />
+          <CrmJobsSummary onGo={onGo} />
+        </>
+      )}
+
+      {tab === "trend" && <TrendCharts from={from} to={to} />}
+
+      {tab === "inv" && (
+      <>
+      <div className="sec-head" style={{ margin: "8px 0 10px" }}><div><div className="sec-title">คลังวัสดุ & การเบิกใช้</div><div className="sec-sub">Inventory & usage · {periodLabel}</div></div></div>
 
       {err && <div className="empty" style={{ color: "var(--down)" }}>โหลดไม่สำเร็จ: {err}</div>}
       {loading && <div className="empty">กำลังโหลด…</div>}
@@ -232,6 +282,8 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
             </div>
           </div>
         </>
+      )}
+      </>
       )}
 
       {detail && <DashDrawer kind={detail} periodLabel={periodLabel} txns={rangeTxns} teams={teams} mats={mats} onClose={() => setDetail(null)} />}
