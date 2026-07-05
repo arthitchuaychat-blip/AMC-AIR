@@ -368,7 +368,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 {(q.contactName || q.contactPhone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{q.contactName || "ผู้ติดต่อ"}{q.contactPhone && <a href={`tel:${q.contactPhone}`} className="jo-tel">📞 {q.contactPhone}</a>}</div>}
                 {q.siteAddress && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{q.siteAddress}</span>{q.map_url && <a href={q.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
-              {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "quote", no: q.quote_no }} onOpen={onOpenDoc} />; })()}
+              {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "quote", no: q.quote_no }} onOpen={onOpenDoc} />; })()}
               <InternalNoteTag note={q.internal_note} />
               <div className="job-lines"><div className="job-actions">
                 {q.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
@@ -382,8 +382,13 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                   : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>))}
                 {q.status === "approved" && q.hasJob && <span className="job-badge b-green">✓ สร้างใบงานแล้ว</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
-                {q.status === "approved" && onCreatePo && can(role, "po", "edit") &&
-                  <button className="btn-ghost sm" style={{ color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} title="เปิดใบสั่งซื้อจากรายการในใบเสนอราคานี้ (ผูกใบเสนอราคาให้อัตโนมัติ)" onClick={() => onCreatePo(q)}>🛒 สร้างใบสั่งซื้อ</button>}
+                {q.status === "approved" && onCreatePo && can(role, "po", "edit") && (() => {
+                  const poCount = (docLinks.byQuote[q.quote_no]?.poNos || []).length;
+                  return (<>
+                    {poCount > 0 && <span className="job-badge b-green" title="กดชิป 'สั่งซื้อ PO-…' ด้านบนเพื่อเปิดใบสั่งซื้อ">✓ สั่งซื้อแล้ว {poCount} ใบ</span>}
+                    <button className="btn-ghost sm" style={{ color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} title="เปิดใบสั่งซื้อจากรายการในใบเสนอราคานี้ (ผูกใบเสนอราคาให้อัตโนมัติ)" onClick={() => onCreatePo(q)}>🛒 {poCount > 0 ? "สร้างใบสั่งซื้อเพิ่ม" : "สร้างใบสั่งซื้อ"}</button>
+                  </>);
+                })()}
                 {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => cancel(q)}>ยกเลิก</button>}
                 {canDelete && <button className="btn-ghost sm danger" disabled={q.hasInvoice || q.hasJob} title={(q.hasInvoice || q.hasJob) ? (lockMsg(q) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>

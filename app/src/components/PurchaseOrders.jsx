@@ -49,7 +49,7 @@ function SupplierPicker({ value, onChange }) {
   );
 }
 
-export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onReceive }) {
+export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onReceive, focus, onFocusConsumed, onOpenQuote }) {
   const isAdmin = can(role, "po", "edit");
   const [pos, setPos] = React.useState([]);
   const [mats, setMats] = React.useState([]);
@@ -88,6 +88,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+  // เปิดหน้านี้จากชิปเชื่อมโยงของใบเสนอราคา (#po/PO-xxx) → ค้นหาใบนั้นให้เลย + ล้างตัวกรองที่อาจบังไว้
+  React.useEffect(() => { if (focus) { setQ(focus); setStatusF("all"); setPayF("all"); setDateR({ from: "", to: "" }); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
 
   // open editor prefilled — 2 ทาง: (1) สั่งซ้ำจากแดชบอร์ด (array ของ {code,qty})
@@ -303,7 +305,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               <div className="job-card-head" style={{ cursor: "default" }}>
                 <div className="job-card-id"><span className="job-no">{po.po_no}</span><span className={"job-badge " + st.cls}>{st.th}</span>
                   {(() => { const ps = PAY_STATUS[po.paymentStatus] || PAY_STATUS.unpaid; return <span className={"job-badge " + ps.cls}>💳 {ps.th}{po.paymentStatus === "paid" && po.paid_at ? " " + new Date(po.paid_at).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : ""}</span>; })()}
-                  {po.quote_no && <span className="vat-badge vat-on">อ้างอิง {po.quote_no}</span>}
+                  {po.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} title="เปิดใบเสนอราคาที่อ้างอิง" onClick={() => onOpenQuote && onOpenQuote(po.quote_no)}>อ้างอิง {po.quote_no} ↗</button>}
                 </div>
                 <div className="job-card-meta">{po.supplier || "ไม่ระบุร้าน"} · {po.items.length} รายการ{po.note ? ` · ${po.note}` : ""}</div>
                 <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.created_at)}</span><span>มูลค่ารวม{po.vat ? " (รวม VAT)" : ""}</span><b>{fmtBaht(po.total)}</b></div>

@@ -94,7 +94,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-05·แดชบอร์ด: เพิ่มการ์ด 'ยอดค้างจ่าย' (PO ยังไม่จ่าย + ค่าแรงซัพค้าง + เบิกรอจ่าย) v283";
+const BUILD = "2026-07-05·เชื่อมโยง QT↔PO สองทาง: ป้าย 'สั่งซื้อแล้ว N ใบ' + ชิปกดข้ามเอกสารได้ทั้งสองฝั่ง v284";
 
 function SetupNotice() {
   return (
@@ -123,6 +123,7 @@ export default function App() {
   const [lang, setLang] = React.useState(() => { try { return localStorage.getItem("amc_lang") || "th"; } catch { return "th"; } });
   const [purchasePrefill, setPurchasePrefill] = React.useState(null);
   const [poPrefill, setPoPrefill] = React.useState(null);
+  const [poFocus, setPoFocus] = React.useState(null);   // เปิดหน้าใบสั่งซื้อพร้อมค้นหาใบที่ลิงก์มา
   const [joPrefill, setJoPrefill] = React.useState(null);
   const [joSchedule, setJoSchedule] = React.useState(null);
   const [withdrawCtx, setWithdrawCtx] = React.useState(null);
@@ -273,6 +274,7 @@ export default function App() {
     else if (v === "invoice") setInvoiceFocus(focus);
     else if (v === "receipt") setReceiptFocus(focus);
     else if (v === "chat") setChatFocus(focus);
+    else if (v === "po") setPoFocus(focus);
   }, []);
   // keep the URL hash in sync with the current view (replaceState → doesn't disturb the Back scheme above),
   // so refreshing or "open link in new tab" lands on the same menu
@@ -306,7 +308,7 @@ export default function App() {
   // unified cross-document navigation (เชื่อมโยง chips + doc history in chat) → open in a NEW TAB
   // so you don't lose the page you're on; the new tab reads #view/no and focuses that record
   function openDoc(type, no) {
-    const v = { boq: "boq", quote: "quote", job: "joborders", invoice: "invoice", receipt: "receipt" }[type];
+    const v = { boq: "boq", quote: "quote", job: "joborders", invoice: "invoice", receipt: "receipt", po: "po" }[type];
     if (v) openInNewTab(v, no);
   }
 
@@ -461,6 +463,8 @@ export default function App() {
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "stockcount" && <StockCount role={role} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
+          focus={poFocus} onFocusConsumed={() => setPoFocus(null)}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, quoteNo: po.quote_no || null, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) }); go("movements"); }} />}
         {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}

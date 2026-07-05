@@ -2071,6 +2071,7 @@ select.unit-pick:focus{outline:none;color:var(--ink)}
 .dl-job{background:#fff3e0;color:#b45309;border-color:#f3d6a3}
 .dl-invoice{background:#ecf8fb;color:#0e7490;border-color:#c5e8ef}
 .dl-receipt{background:#eefbf3;color:#16a34a;border-color:#c7ebd3}
+.dl-po{background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe}
 
 /* customer info panel in BOQ / quotation editors */
 .cust-info-box{background:var(--surface-2);border:1px solid var(--line);border-left:4px solid var(--primary);border-radius:11px;padding:10px 13px;margin-bottom:14px;display:flex;flex-direction:column;gap:5px}
