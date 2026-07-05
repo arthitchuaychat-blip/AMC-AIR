@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -15,6 +15,7 @@ import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
 import { useDocPeek } from "./DocPeek";
 import { sendDocFromNode } from "../lib/sendDoc";
+import html2canvas from "html2canvas";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
 // LINE's basic bot-sendable sticker sets (only these official packages can be sent by a bot)
@@ -322,23 +323,60 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     });
   };
   const chatQty = (code, d) => setChatCart((c) => c.map((x) => (x.code === code ? { ...x, qty: Math.max(0, x.qty + d) } : x)).filter((x) => x.qty > 0));
-  // ส่งสรุปราคารวมทุกรายการเป็นข้อความเดียว (ราคาตามวิธีชำระ ปรับรายบรรทัดแบบเดียวกับใบเสนอราคา)
+  // ส่งสรุปราคาเป็น "รูปตาราง" อ่านง่าย (capture การ์ด HTML → PNG → ส่งเข้าแชต) · สร้างรูปพลาด → ส่งข้อความแทน
   async function sendChatCart() {
     if (!sel || sending || !chatCart.length) return;
     const pm = CHAT_PAY.find((x) => x.v === chatPay) || CHAT_PAY[0];
     const total = chatCart.reduce((a, x) => a + chatAdj(x.price, pm) * x.qty, 0);
-    const head = pm.v === "cash" ? "💰 สรุปราคา (ชำระเงินสด/โอน)" : pm.v === "card_full" ? "💳 สรุปราคา (บัตรเครดิต รูดเต็ม)" : "💳 สรุปราคา (ผ่อนบัตรเครดิต 10 เดือน)";
-    const lines = chatCart.map((x, i) => `${i + 1}. ${x.name}${x.qty > 1 ? ` × ${x.qty} @ ${fmtBaht(chatAdj(x.price, pm))}` : ""} = ${fmtBaht(chatAdj(x.price, pm) * x.qty)}`);
-    const txt = [head, ...lines, `รวมทั้งสิ้น ${fmtBaht(total)}`,
-      ...(pm.v === "card_inst10" ? [`(≈ ${fmtBaht(Math.ceil(total / 10))}/เดือน × 10 งวด)`] : [])].join("\n");
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const rows = chatCart.map((x, i) => {
+      const adj = chatAdj(x.price, pm);
+      return `<tr style="background:${i % 2 ? "#f4f8fc" : "#fff"}">
+        <td style="padding:11px 12px;color:#64748b;font-weight:700;vertical-align:top">${i + 1}</td>
+        <td style="padding:11px 6px;line-height:1.45">${esc(x.name)}${x.qty > 1 ? `<div style="font-size:13px;color:#64748b;margin-top:2px">× ${x.qty} @ ${fmtBaht(adj)}</div>` : ""}</td>
+        <td style="padding:11px 14px;text-align:right;font-weight:800;white-space:nowrap;vertical-align:top">${fmtBaht(adj * x.qty)}</td></tr>`;
+    }).join("");
+    const cardHtml = `<div style="width:640px;background:#fff;font-family:'IBM Plex Sans Thai','Noto Sans Thai',sans-serif;color:#0f1729;border:1px solid #dbe4ee;border-radius:14px;overflow:hidden">
+      <div style="background:linear-gradient(90deg,#0ea5e9,#0369a1);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:18px;font-weight:800">AMC AIR · สรุปราคา</div>
+        <div style="font-size:14px;font-weight:700;background:rgba(255,255,255,.18);padding:4px 12px;border-radius:99px">${pm.l}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:15px">${rows}</table>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-top:2px solid #0ea5e9">
+        <div style="font-size:16px;font-weight:800">รวมทั้งสิ้น</div>
+        <div style="text-align:right"><div style="font-size:23px;font-weight:800;color:#0369a1">${fmtBaht(total)}</div>
+        ${pm.v === "card_inst10" ? `<div style="font-size:13px;color:#64748b;font-weight:700">≈ ${fmtBaht(Math.ceil(total / 10))}/เดือน × 10 งวด</div>` : ""}</div>
+      </div>
+      <div style="padding:0 16px 12px;font-size:12px;color:#94a3b8">* ราคาโดยประมาณ ทีมงานยืนยันราคา ค่าติดตั้ง และนัดหมายก่อนเสมอ · โทร 099-262-9090</div>
+    </div>`;
     setSending(true);
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed;left:-99999px;top:0;background:#fff;";
+    host.innerHTML = cardHtml;
+    document.body.appendChild(host);
     try {
-      if (chatCart.length === 1 && chatCart[0].photo) await chSendImage(sel, chatCart[0].photo);
-      await chSendText(sel, txt);
+      if (document.fonts?.ready) { try { await document.fonts.ready; } catch { /* ignore */ } }
+      await new Promise((r) => setTimeout(r, 60));
+      const canvas = await html2canvas(host.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
+      const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+      if (chatCart.length === 1 && chatCart[0].photo) await chSendImage(sel, chatCart[0].photo);   // รูปสินค้าก่อน แล้วตามด้วยตาราง
+      const url = await uploadDocFile(blob, "png", "image/png");
+      await chSendImage(sel, url);
       if (isFb) setMsgs(await chListMessages(sel));
       setChatCart([]); setAcPicker(false);
-      flash("ส่งสรุปราคาให้ลูกค้าแล้ว ✓");
-    } catch (ex) { flash("ส่งไม่สำเร็จ: " + (ex.message || ex), true); }
+      flash("ส่งตารางสรุปราคาให้ลูกค้าแล้ว ✓");
+    } catch (ex) {
+      // สร้าง/ส่งรูปไม่สำเร็จ → ส่งแบบข้อความ ลูกค้ายังได้ราคาครบ
+      try {
+        const lines = chatCart.map((x, i) => `${i + 1}. ${x.name}${x.qty > 1 ? ` × ${x.qty}` : ""} = ${fmtBaht(chatAdj(x.price, pm) * x.qty)}`);
+        await chSendText(sel, [`สรุปราคา (${pm.l.replace(/^[^ ]+ /, "")})`, ...lines, `รวมทั้งสิ้น ${fmtBaht(total)}`,
+          ...(pm.v === "card_inst10" ? [`(≈ ${fmtBaht(Math.ceil(total / 10))}/เดือน × 10 งวด)`] : [])].join("\n"));
+        if (isFb) setMsgs(await chListMessages(sel));
+        setChatCart([]); setAcPicker(false);
+        flash("ส่งแบบข้อความแทน (สร้างรูปไม่สำเร็จ) ✓");
+      } catch (e2) { flash("ส่งไม่สำเร็จ: " + (e2.message || e2), true); }
+    }
+    document.body.removeChild(host);
     setSending(false);
   }
   // send a LINE sticker (basic bot-sendable set)
