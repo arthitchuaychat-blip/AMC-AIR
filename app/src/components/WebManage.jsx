@@ -16,8 +16,9 @@ const TABS = [
     hint: "อัปโหลดโลโก้ (PNG พื้นโปร่งใสสวยสุด) + ชื่อ → โชว์ในหมวด “องค์กรที่ไว้วางใจเรา”",
     fields: [{ key: "name", ph: "ชื่อลูกค้า/องค์กร", required: true }], primary: "name" },
   { kind: "articles", chip: "📝 บทความ", label: "บทความเรื่องแอร์", imageLabel: "รูปบทความ", aspect: "16/9", folder: "web-articles", imageRequired: false,
-    hint: "หัวข้อ + คำโปรย + รูป → โชว์ในหมวด “บทความ” · ใส่ลิงก์อ่านต่อได้",
-    fields: [{ key: "title", ph: "หัวข้อบทความ", required: true }, { key: "excerpt", ph: "คำโปรย (สรุปสั้น ๆ)" }, { key: "link_url", ph: "ลิงก์อ่านต่อ (ถ้ามี)" }], primary: "title" },
+    hint: "ใส่ “เนื้อหาบทความ” → เว็บสร้างหน้าบทความแยกให้เอง (amcair.net/a/เลข) ติด Google ได้ · ถ้าไม่ใส่เนื้อหาจะใช้ลิงก์นอกตามเดิม",
+    fields: [{ key: "title", ph: "หัวข้อบทความ", required: true }, { key: "excerpt", ph: "คำโปรย (สรุปสั้น ๆ)" }, { key: "body", ph: "เนื้อหาบทความเต็ม — เว้นบรรทัดว่างเพื่อขึ้นย่อหน้าใหม่", multiline: true }, { key: "link_url", ph: "ลิงก์อ่านต่อภายนอก (ใช้เมื่อไม่ใส่เนื้อหา)" }], primary: "title",
+    viewUrl: (b) => (b.body ? `https://www.amcair.net/a/${b.id}` : b.link_url || null) },
   { kind: "press", chip: "📰 ข่าวในสื่อ", label: "ข่าวในสื่อต่าง ๆ", imageLabel: "รูปข่าว", aspect: "16/9", folder: "web-press", imageRequired: false,
     hint: "ชื่อสื่อ + หัวข้อข่าว + รูป → โชว์ในหมวด “ในสื่อ” + ภาพข่าวล่าสุดในแถบซ้าย · ใส่ลิงก์ข่าวได้",
     fields: [{ key: "source", ph: "ชื่อสื่อ (เช่น ไทยรัฐ, ช่อง 7)" }, { key: "title", ph: "หัวข้อข่าว", required: true }, { key: "link_url", ph: "ลิงก์ข่าว" }], primary: "title" },
@@ -58,6 +59,7 @@ function WebItemManager({ cfg, flash }) {
   const [vals, setVals] = React.useState({});
   const [uploading, setUploading] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [edit, setEdit] = React.useState(null);   // { id, vals } — แก้ไขข้อความของรายการเดิม
 
   async function load() {
     try { setList(await listWebItems(cfg.kind)); }
@@ -78,7 +80,19 @@ function WebItemManager({ cfg, flash }) {
     const row = { [cfg.imageKey || "image_url"]: img || null, sort: (list?.length || 0) + 1 };
     cfg.fields.forEach((f) => { row[f.key] = (vals[f.key] || "").trim() || null; });
     try { await saveWebItem(cfg.kind, row); setImg(""); setVals({}); await load(); flash("เพิ่มแล้ว ✓"); }
-    catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    catch (e) { const m = e.message || String(e); flash("บันทึกไม่สำเร็จ: " + m + (/body/.test(m) ? " — ต้องรัน migration 101 ก่อน" : ""), true); }
+    setBusy(false);
+  }
+  function startEdit(b) {
+    const v = {}; cfg.fields.forEach((f) => { v[f.key] = b[f.key] || ""; });
+    setEdit({ id: b.id, vals: v });
+  }
+  async function saveEdit(b) {
+    setBusy(true);
+    const row = { ...b };
+    cfg.fields.forEach((f) => { row[f.key] = (edit.vals[f.key] || "").trim() || null; });
+    try { await saveWebItem(cfg.kind, row); setEdit(null); await load(); flash("บันทึกแล้ว ✓"); }
+    catch (e) { const m = e.message || String(e); flash("บันทึกไม่สำเร็จ: " + m + (/body/.test(m) ? " — ต้องรัน migration 101 ก่อน" : ""), true); }
     setBusy(false);
   }
   async function remove(b) {
@@ -109,7 +123,11 @@ function WebItemManager({ cfg, flash }) {
             <input type="file" accept="image/*" hidden disabled={uploading} onChange={onImg} />
           </label>
           <div style={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", gap: 8 }}>
-            {cfg.fields.map((f) => (
+            {cfg.fields.map((f) => f.multiline ? (
+              <textarea key={f.key} className="inp" rows={5} placeholder={f.ph + (f.required ? " *" : "")} value={vals[f.key] || ""}
+                onChange={(e) => setVals((s) => ({ ...s, [f.key]: e.target.value }))}
+                style={{ resize: "vertical", fontFamily: "inherit" }} />
+            ) : (
               <input key={f.key} className="inp" placeholder={f.ph + (f.required ? " *" : "")} value={vals[f.key] || ""}
                 onChange={(e) => setVals((s) => ({ ...s, [f.key]: e.target.value }))}
                 onKeyDown={(e) => { if (e.key === "Enter") add(); }} />
@@ -127,14 +145,38 @@ function WebItemManager({ cfg, flash }) {
               <div key={b.id} className={"wb-row" + (b.active ? "" : " off")}>
                 <span className="wb-no">{i + 1}</span>
                 <div className="wb-thumb" style={{ aspectRatio: cfg.aspect, width: cfg.aspect === "1/1" ? 64 : 130 }}>{b[cfg.imageKey || "image_url"] ? <img src={b[cfg.imageKey || "image_url"]} alt="" /> : <span className="jo-dim" style={{ fontSize: 11, display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>ไม่มีรูป</span>}</div>
-                <div className="wb-cap">{b[cfg.primary] || <span className="jo-dim">{cfg.primaryFallback || "—"}</span>}
-                  {b.excerpt ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.excerpt}</div> : null}
-                  {b.source ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.source}</div> : null}</div>
+                {edit && edit.id === b.id ? (
+                  <div className="wb-cap" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {cfg.fields.map((f) => f.multiline ? (
+                      <textarea key={f.key} className="inp" rows={6} placeholder={f.ph} value={edit.vals[f.key] || ""}
+                        onChange={(e) => setEdit((s) => ({ ...s, vals: { ...s.vals, [f.key]: e.target.value } }))}
+                        style={{ resize: "vertical", fontFamily: "inherit", fontWeight: 400 }} />
+                    ) : (
+                      <input key={f.key} className="inp" placeholder={f.ph} value={edit.vals[f.key] || ""}
+                        onChange={(e) => setEdit((s) => ({ ...s, vals: { ...s.vals, [f.key]: e.target.value } }))}
+                        style={{ fontWeight: 400 }} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="wb-cap">{b[cfg.primary] || <span className="jo-dim">{cfg.primaryFallback || "—"}</span>}
+                    {b.excerpt ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.excerpt}</div> : null}
+                    {b.source ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.source}</div> : null}
+                    {cfg.viewUrl && cfg.viewUrl(b) ? <div style={{ marginTop: 2 }}>
+                      {b.body ? <span style={{ fontSize: 11.5, fontWeight: 700, color: "#0a7d2c", marginRight: 8 }}>📄 มีเนื้อหาเต็ม</span> : null}
+                      <a href={cfg.viewUrl(b)} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#0ea5e9", fontWeight: 700 }}>ดูหน้าเว็บ ↗</a>
+                    </div> : null}</div>
+                )}
                 <div className="wb-acts">
-                  <button className="btn-ghost xs" onClick={() => move(b, -1)} disabled={i === 0} title="เลื่อนขึ้น">◀</button>
-                  <button className="btn-ghost xs" onClick={() => move(b, 1)} disabled={i === list.length - 1} title="เลื่อนลง">▶</button>
-                  <button className="btn-ghost xs" onClick={() => toggleActive(b)}>{b.active ? "ซ่อน" : "แสดง"}</button>
-                  <button className="btn-ghost xs danger" onClick={() => remove(b)}>ลบ</button>
+                  {edit && edit.id === b.id ? (<>
+                    <button className="btn-ghost xs" style={{ background: "#111", color: "#fff", borderColor: "#111" }} disabled={busy} onClick={() => saveEdit(b)}>บันทึก ✓</button>
+                    <button className="btn-ghost xs" onClick={() => setEdit(null)}>ยกเลิก</button>
+                  </>) : (<>
+                    <button className="btn-ghost xs" onClick={() => move(b, -1)} disabled={i === 0} title="เลื่อนขึ้น">◀</button>
+                    <button className="btn-ghost xs" onClick={() => move(b, 1)} disabled={i === list.length - 1} title="เลื่อนลง">▶</button>
+                    <button className="btn-ghost xs" onClick={() => startEdit(b)}>แก้ไข</button>
+                    <button className="btn-ghost xs" onClick={() => toggleActive(b)}>{b.active ? "ซ่อน" : "แสดง"}</button>
+                    <button className="btn-ghost xs danger" onClick={() => remove(b)}>ลบ</button>
+                  </>)}
                 </div>
               </div>
             ))}
