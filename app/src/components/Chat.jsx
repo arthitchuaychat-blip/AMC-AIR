@@ -106,6 +106,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [acBrand, setAcBrand] = React.useState("all");
   const [acBtu, setAcBtu] = React.useState("all");
   const [acType, setAcType] = React.useState("all");
+  const [acKind, setAcKind] = React.useState("ac");        // แท็บใน picker: แอร์ / บริการ
+  const [payPick, setPayPick] = React.useState(null);      // สินค้าที่เลือกแล้ว → รอเลือกราคาตามวิธีชำระ
   const [showThread, setShowThread] = React.useState(false); // mobile pane toggle
   const [toast, setToast] = React.useState(null);
   const [quickReplies, setQuickReplies] = React.useState([]);
@@ -297,21 +299,33 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     catch (ex) { flash("ส่งไฟล์ไม่สำเร็จ: " + (ex.message || ex), true); }
     setSending(false);
   }
-  // pick an AC from the catalog → send its details + price (and photo if any) to the customer
+  // pick a product/service from the catalog → choose the payment-method price → send to the customer
   async function openAcPicker() {
     setAcPicker(true);
-    if (!acItems.length) { try { const m = await listMaterialsLite(); setAcItems(m.filter((x) => x.kind === "ac")); } catch { /* ignore */ } }
+    if (!acItems.length) { try { const m = await listMaterialsLite(); setAcItems(m.filter((x) => x.kind === "ac" || x.kind === "service")); } catch { /* ignore */ } }
   }
-  async function sendProduct(it) {
+  // ราคาตามวิธีชำระ (กติกาเดียวกับแคตตาล็อก/เว็บ): เงินสด = ฐาน · รูดเต็ม +4% · ผ่อน 10 เดือน +14% (ปัดขึ้นบาทเต็ม)
+  const CHAT_PAY = [
+    { v: "cash", l: "💵 เงินสด/โอน", rate: 0 },
+    { v: "card_full", l: "💳 บัตรเครดิต รูดเต็ม (+4%)", rate: 0.04 },
+    { v: "card_inst10", l: "💳 ผ่อนบัตร 10 เดือน (+14%)", rate: 0.14 },
+  ];
+  const chatPrice = (it, pm) => { const p = Number(it.salePrice) || 0; return pm.rate ? Math.ceil(p * (1 + pm.rate)) : p; };
+  async function sendProduct(it, method = "cash") {
     if (!sel || sending) return;
-    setAcPicker(false); setSending(true);
+    setPayPick(null); setAcPicker(false); setSending(true);
     try {
+      const pm = CHAT_PAY.find((x) => x.v === method) || CHAT_PAY[0];
+      const p = chatPrice(it, pm);
+      const payLine = method === "cash" ? `💰 ราคา ${fmtBaht(p)} (เงินสด/โอน)`
+        : method === "card_full" ? `💳 ราคาบัตรเครดิต รูดเต็ม ${fmtBaht(p)}`
+        : `💳 ราคาผ่อนบัตร 10 เดือน ${fmtBaht(p)} (≈ ${fmtBaht(Math.ceil(p / 10))}/เดือน)`;
       const spec = [it.brand, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null].filter(Boolean).join(" · ");
-      const txt = `❄️ ${it.th}${spec ? `\n${spec}` : ""}${it.description ? `\n${it.description}` : ""}\n💰 ราคา ${fmtBaht(it.salePrice)}`;
+      const txt = `${it.kind === "service" ? "🛠️" : "❄️"} ${it.th}${spec ? `\n${spec}` : ""}${it.description ? `\n${it.description}` : ""}\n${payLine}`;
       if (it.photoUrl) await chSendImage(sel, it.photoUrl);
       await chSendText(sel, txt);
       if (isFb) setMsgs(await chListMessages(sel));
-    } catch (ex) { flash("ส่งรายการแอร์ไม่สำเร็จ: " + (ex.message || ex), true); }
+    } catch (ex) { flash("ส่งรายการไม่สำเร็จ: " + (ex.message || ex), true); }
     setSending(false);
   }
   // send a LINE sticker (basic bot-sendable set)
@@ -767,17 +781,29 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         const brands = [...new Map(acItems.filter((i) => i.brand).map((i) => [nm(i.brand), i.brand])).values()].sort((a, b) => a.localeCompare(b, "th"));
         const types = [...new Map(acItems.filter((i) => i.ac_type).map((i) => [nm(i.ac_type), i.ac_type])).values()].sort((a, b) => a.localeCompare(b, "th"));
         const btus = [...new Set(acItems.map((i) => i.btu).filter(Boolean).map(Number))].sort((a, b) => a - b);
+        // BTU: บริการมีช่วง btu_min–btu_max → เลือกขนาดที่อยู่ในช่วงก็เจอ
+        const btuOk = (it) => acBtu === "all" || ((it.btu_min != null || it.btu_max != null)
+          ? Number(acBtu) >= Number(it.btu_min ?? it.btu_max) && Number(acBtu) <= Number(it.btu_max ?? it.btu_min)
+          : String(it.btu) === String(acBtu));
         const list = acItems.filter((it) =>
-          matchText(acSearch, it.th, it.en, it.code, it.brand, it.ac_type, String(it.btu || ""))
+          it.kind === acKind
+          && matchText(acSearch, it.th, it.en, it.code, it.brand, it.ac_type, String(it.btu || ""))
           && (acBrand === "all" || eqi(it.brand, acBrand))
-          && (acBtu === "all" || String(it.btu) === String(acBtu))
+          && btuOk(it)
           && (acType === "all" || eqi(it.ac_type, acType)));
         return (
         <div className="modal-overlay" onClick={() => setAcPicker(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 600 }}>
-            <div className="modal-head"><div className="modal-title">เลือกแอร์ส่งให้ลูกค้า</div>
+            <div className="modal-head"><div className="modal-title">เลือกสินค้า/บริการ ส่งให้ลูกค้า</div>
               <button className="drawer-close" onClick={() => setAcPicker(false)}><UIcon name="x" size={20} /></button></div>
             <div className="modal-body">
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                {[["ac", "❄️ แอร์"], ["service", "🛠️ บริการ"]].map(([v, l]) => (
+                  <button key={v} type="button" className={"cat-chip" + (acKind === v ? " on" : "")}
+                    style={acKind === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}
+                    onClick={() => setAcKind(v)}>{l}</button>
+                ))}
+              </div>
               <input className="inp" style={{ marginBottom: 8 }} value={acSearch} onChange={(e) => setAcSearch(e.target.value)} placeholder="🔍 ค้นหา ยี่ห้อ / รุ่น / BTU" />
               <div className="ac-filters">
                 <Combo className="inp" value={acBrand} onChange={(e) => setAcBrand(e.target.value)}>
@@ -792,16 +818,16 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               </div>
               <div className="ac-result-cnt">พบ {list.length} รายการ</div>
               <div className="ac-picklist">
-                {acItems.length === 0 && <div className="empty" style={{ fontSize: 13 }}>กำลังโหลด… (หรือยังไม่มีรายการแอร์)</div>}
-                {acItems.length > 0 && list.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ไม่พบแอร์ตามเงื่อนไข</div>}
+                {acItems.length === 0 && <div className="empty" style={{ fontSize: 13 }}>กำลังโหลด… (หรือยังไม่มีรายการ)</div>}
+                {acItems.length > 0 && list.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ไม่พบรายการตามเงื่อนไข</div>}
                 {list.slice(0, 100).map((it) => (
-                  <button key={it.code} className="ac-pickrow" disabled={sending} onClick={() => sendProduct(it)} title="ส่งให้ลูกค้า">
+                  <button key={it.code} className="ac-pickrow" disabled={sending} onClick={() => setPayPick(it)} title="เลือกราคาตามวิธีชำระ">
                     <MaterialThumb mat={it} size={54} radius={10} />
                     <div className="ac-pickinfo">
                       <div className="ac-pickname">{it.th}</div>
                       <div className="ac-pickspec">{[it.brand, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null].filter(Boolean).join(" · ") || it.code}</div>
                     </div>
-                    <div className="ac-pickprice">{fmtBaht(it.salePrice)}<span>ส่ง ›</span></div>
+                    <div className="ac-pickprice">{fmtBaht(it.salePrice)}<span>เลือกราคา ›</span></div>
                   </button>
                 ))}
               </div>
@@ -810,6 +836,27 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         </div>
         );
       })()}
+      {/* เลือกวิธีชำระ → ส่งราคานั้นให้ลูกค้า (ค่าเริ่มต้นเงินสด · กติกาเดียวกับแคตตาล็อก) */}
+      {payPick && (
+        <div className="modal-overlay" style={{ zIndex: 320 }} onClick={() => setPayPick(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 430 }}>
+            <div className="modal-head"><div className="modal-title" style={{ fontSize: 15 }}>ส่งราคา — {payPick.th}</div>
+              <button className="drawer-close" onClick={() => setPayPick(null)}><UIcon name="x" size={20} /></button></div>
+            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {CHAT_PAY.map((pm, i) => (
+                <button key={pm.v} type="button" className="ac-pickrow" disabled={sending} onClick={() => sendProduct(payPick, pm.v)}
+                  style={i === 0 ? { borderColor: "var(--brand, #2563eb)", borderWidth: 1.5 } : {}}>
+                  <div className="ac-pickinfo">
+                    <div className="ac-pickname">{pm.l}{i === 0 ? <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}> · ค่าเริ่มต้น</span> : null}</div>
+                    {pm.v === "card_inst10" && <div className="ac-pickspec">≈ {fmtBaht(Math.ceil(chatPrice(payPick, pm) / 10))}/เดือน × 10 เดือน</div>}
+                  </div>
+                  <div className="ac-pickprice">{fmtBaht(chatPrice(payPick, pm))}<span>ส่ง ›</span></div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {custForm && <CustomerFormModal initial={custForm.initial} onClose={() => setCustForm(null)} onSaved={onCustSaved} />}
       {capJob && <DocCapture type={capJob.type} no={capJob.no}
         onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}

@@ -62,7 +62,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
-  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
+  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
   // create a new quotation prefilled from a BOQ (customer/site + pulled items)
   function startFromBoq(boqNo) {
     const b = boqs.find((x) => x.boq_no === boqNo); if (!b) return;
@@ -71,7 +71,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       const m = matMap[x.item_code];
       return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
     });
-    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, note: "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
+    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, pay_method: "cash", note: "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
   }
   React.useEffect(() => { if (!fromBoq || !boqs.length) return; startFromBoq(fromBoq); onFromBoqConsumed && onFromBoqConsumed(); }, [fromBoq, boqs]);
   // chain lock: can't edit/delete a quotation that already has an invoice or job order downstream
@@ -80,12 +80,12 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     : null;
   function startEdit(q) {
     const lk = lockMsg(q); if (lk) return alert(lk);
-    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at,
+    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind, description: x.description || "" })) });
   }
   // duplicate: copy a quote's items/details into a brand-new quotation (new number, not _edit) — for repeat/similar quotes
   function duplicate(q) {
-    setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", title: q.title ? q.title + " (สำเนา)" : "", status: "draft", issue_date: today(), valid_until: "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, note: q.note || "", sign_on: defaultSignOn(), terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "",
+    setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", title: q.title ? q.title + " (สำเนา)" : "", status: "draft", issue_date: today(), valid_until: "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", sign_on: defaultSignOn(), terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "",
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind, description: x.description || "" })) });
     flash("คัดลอกเป็นใบเสนอราคาใหม่แล้ว — แก้ไขแล้วกดบันทึก");
   }
@@ -127,16 +127,18 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     flash(`เพิ่ม ${pulled.length} รายการใหม่จาก ${b.boq_no} — ตรวจราคาขายแล้วบันทึก`);
   }
 
-  // totals
+  // totals — วิธีการรับเงิน: เงินสด (ค่าเริ่มต้น) · บัตรรูดเต็ม +4% · ผ่อนบัตร 10 เดือน +14% (ค่าธรรมเนียมคิดจากยอดหลังส่วนลด ก่อน VAT)
   const subtotal = ed ? ed.items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0) : 0;
   const discount = ed ? (ed.discount_type === "percent" ? subtotal * Number(ed.discount_value || 0) / 100 : Number(ed.discount_value || 0)) : 0;
   const afterDisc = subtotal - discount;
-  const vatAmt = ed && ed.vat ? afterDisc * 0.07 : 0;
-  const grand = afterDisc + vatAmt;
-  // หัก ณ ที่จ่าย — เฉพาะลูกค้านิติบุคคลเท่านั้น
+  const payRate = ed?.pay_method === "card_full" ? 0.04 : ed?.pay_method === "card_inst10" ? 0.14 : 0;
+  const payFee = afterDisc * payRate;
+  const vatAmt = ed && ed.vat ? (afterDisc + payFee) * 0.07 : 0;
+  const grand = afterDisc + payFee + vatAmt;
+  // หัก ณ ที่จ่าย — เฉพาะลูกค้านิติบุคคลเท่านั้น (ฐานก่อน VAT รวมค่าธรรมเนียม)
   const selCust = ed ? custs.find((c) => String(c.id) === String(ed.customer_id)) : null;
   const canWht = selCust?.type === "company";
-  const whtAmt = ed && ed.wht && canWht ? afterDisc * (Number(ed.wht_rate) || 3) / 100 : 0;
+  const whtAmt = ed && ed.wht && canWht ? (afterDisc + payFee) * (Number(ed.wht_rate) || 3) / 100 : 0;
   const netPay = grand - whtAmt;
 
   async function save() {
@@ -263,6 +265,18 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               <button type="button" className={"vat-toggle" + (ed.vat ? " on" : "")} onClick={() => setQ("vat", !ed.vat)}>{ed.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</button>
             </label>
           </div>
+
+          {/* วิธีการรับเงิน — ค่าเริ่มต้นเงินสด · บัตรบวกค่าธรรมเนียมอัตโนมัติ */}
+          <div className="fld-row">
+            <label className="fld"><span>วิธีการรับเงิน</span>
+              <div className="line-add" style={{ flexWrap: "wrap" }}>
+                {[["cash", "💵 เงินสด/โอน"], ["card_full", "💳 บัตรรูดเต็ม +4%"], ["card_inst10", "💳 ผ่อนบัตร 10 เดือน +14%"]].map(([v, l]) => (
+                  <button key={v} type="button" className={"vat-toggle" + ((ed.pay_method || "cash") === v ? " on" : "")}
+                    style={{ flex: "none" }} onClick={() => setQ("pay_method", v)}>{l}</button>
+                ))}
+              </div>
+            </label>
+          </div>
           {canWht && (
           <div className="fld-row">
             <label className="fld"><span>หัก ณ ที่จ่าย <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(ลูกค้านิติบุคคล)</span></span>
@@ -281,8 +295,10 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(subtotal)}</b></div>
             {discount > 0 && <div><span>ส่วนลด</span><b style={{ color: "var(--down)" }}>− {fmtBaht(discount)}</b></div>}
             {discount > 0 && <div><span>ยอดหลังหักส่วนลด</span><b>{fmtBaht(afterDisc)}</b></div>}
+            {payFee > 0 && <div><span>{ed.pay_method === "card_full" ? "ค่าธรรมเนียมบัตรเครดิต (รูดเต็ม) 4%" : "ค่าธรรมเนียมผ่อนบัตร 10 เดือน 14%"}</span><b>{fmtBaht(payFee)}</b></div>}
             {ed.vat && <div><span>VAT 7%</span><b>{fmtBaht(vatAmt)}</b></div>}
             <div className="qt-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(grand)}</b></div>
+            {ed.pay_method === "card_inst10" && <div><span>≈ ผ่อนเดือนละ</span><b>{fmtBaht(grand / 10)} × 10 เดือน</b></div>}
             {ed.wht && canWht && <div><span>หัก ณ ที่จ่าย {Number(ed.wht_rate) || 3}%</span><b style={{ color: "var(--down)" }}>− {fmtBaht(whtAmt)}</b></div>}
             {ed.wht && canWht && <div className="qt-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(netPay)}</b></div>}
           </div>
@@ -413,8 +429,10 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(printQ.subtotal)}</b></div>
             {printQ.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(printQ.discount)}</b></div>}
             {printQ.discount > 0 && <div><span>ยอดหลังหักส่วนลด</span><b>{fmtBaht(printQ.afterDisc)}</b></div>}
+            {printQ.payFee > 0 ? <div><span>{printQ.payMethod === "card_full" ? "ค่าธรรมเนียมบัตรเครดิต (รูดเต็ม) 4%" : "ค่าธรรมเนียมผ่อนชำระผ่านบัตร 10 เดือน 14%"}</span><b>{fmtBaht(printQ.payFee)}</b></div> : null}
             {printQ.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printQ.vatAmt)}</b></div> : null}
             <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(printQ.grand)}</b></div>
+            {printQ.payMethod === "card_inst10" ? <div><span>≈ ผ่อนเดือนละ</span><b>{fmtBaht(printQ.grand / 10)} × 10 เดือน</b></div> : null}
             {printQ.wht ? <div><span>หัก ณ ที่จ่าย {Number(printQ.wht_rate) || 3}%</span><b>− {fmtBaht(printQ.whtAmt)}</b></div> : null}
             {printQ.wht ? <div className="doc-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(printQ.netPay)}</b></div> : null}
           </div>}>

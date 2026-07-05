@@ -941,9 +941,13 @@ export async function listQuotations() {
     const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0);
     const discount = qo.discount_type === "percent" ? subtotal * Number(qo.discount_value || 0) / 100 : Number(qo.discount_value || 0);
     const afterDisc = subtotal - discount;
-    const vatAmt = qo.vat ? afterDisc * 0.07 : 0;
-    const grand = afterDisc + vatAmt;
-    const whtAmt = qo.wht ? afterDisc * (Number(qo.wht_rate) || 3) / 100 : 0; // หัก ณ ที่จ่าย คิดจากฐานก่อน VAT
+    // วิธีการรับเงิน: เงินสด (ค่าเริ่มต้น) · บัตรรูดเต็ม +4% · ผ่อนบัตร 10 เดือน +14% — ค่าธรรมเนียมคิดจากยอดหลังส่วนลด (ก่อน VAT)
+    const payMethod = qo.pay_method || "cash";
+    const payRate = payMethod === "card_full" ? 0.04 : payMethod === "card_inst10" ? 0.14 : 0;
+    const payFee = afterDisc * payRate;
+    const vatAmt = qo.vat ? (afterDisc + payFee) * 0.07 : 0;
+    const grand = afterDisc + payFee + vatAmt;
+    const whtAmt = qo.wht ? (afterDisc + payFee) * (Number(qo.wht_rate) || 3) / 100 : 0; // หัก ณ ที่จ่าย คิดจากฐานก่อน VAT
     const s = qo.site_id ? sm[qo.site_id] : null;
     const siteAddress = (s && s.address) || null;
     const address = siteAddress || custAddr[qo.customer_id] || null;
@@ -956,21 +960,28 @@ export async function listQuotations() {
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       jobNo: jobByQuote[qo.quote_no]?.job_no || null, hasJob: !!jobByQuote[qo.quote_no], jobScheduledAt: jobByQuote[qo.quote_no]?.scheduled_at || null,
       hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,
-      items, subtotal, discount, afterDisc, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
+      items, subtotal, discount, afterDisc, payMethod, payFee, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
   });
 }
 
 export async function saveQuotation(q, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const e1 = (await supabase.from("quotations").upsert({
+  const head = {
     quote_no: q.quote_no, customer_id: q.customer_id || null, site_id: q.site_id || null, boq_no: q.boq_no || null,
     title: q.title?.trim() || null, status: q.status || "draft",
     issue_date: q.issue_date || null, valid_until: q.valid_until || null,
     discount_type: q.discount_type || "amount", discount_value: Number(q.discount_value) || 0,
     vat: !!q.vat, wht: !!q.wht, wht_rate: Number(q.wht_rate) || 3, note: q.note?.trim() || null, internal_note: q.internal_note?.trim() || null, ..._termCols(q), ..._signCols(q),
+    pay_method: q.pay_method && q.pay_method !== "cash" ? q.pay_method : null,   // เงินสด = ค่าเริ่มต้น (เก็บ null)
     approved_at: q.status === "approved" ? (q.approved_at || new Date().toISOString()) : null,
     created_by: user?.id || null,
-  }, { onConflict: "quote_no" })).error;
+  };
+  let e1 = (await supabase.from("quotations").upsert(head, { onConflict: "quote_no" })).error;
+  // ยังไม่รัน migration 105 → บันทึกต่อได้ (แค่ยังไม่เก็บวิธีการรับเงิน)
+  if (e1 && /pay_method/i.test(e1.message || "")) {
+    delete head.pay_method;
+    e1 = (await supabase.from("quotations").upsert(head, { onConflict: "quote_no" })).error;
+  }
   if (e1) throw e1;
   const e2 = (await supabase.from("quotation_items").delete().eq("quote_no", q.quote_no)).error;
   if (e2) throw e2;
