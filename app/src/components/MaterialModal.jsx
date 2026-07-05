@@ -47,6 +47,9 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     web_published: initial?.webPublished ?? initial?.web_published ?? false,
     purchase_unit: initial?.purchaseUnit ?? initial?.purchase_unit ?? "",
     purchase_qty: initial?.purchaseQty ?? initial?.purchase_qty ?? "",
+    // ช่วง BTU ของบริการ — ถ้าเคยติดแท็ก BTU เดี่ยวไว้ (v291) ดึงมาเป็นค่าต่ำสุดให้เลย
+    btu_min: initial?.btu_min ?? ((initial?.kind === "service" && initial?.btu) || ""),
+    btu_max: initial?.btu_max ?? "",
   }));
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -173,9 +176,12 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
                 <input className="inp" list="svc-actype-list" value={f.ac_type} onChange={set("ac_type")} placeholder="เช่น Wall type — เว้นว่าง = ทุกประเภท" />
                 <datalist id="svc-actype-list">{acTypes.map((t) => <option key={t} value={t} />)}</datalist>
               </label>
-              <label className="fld"><span>ขนาด BTU (ไม่บังคับ)</span>
-                <input className="inp" type="number" list="svc-btu-list" value={f.btu} onChange={set("btu")} placeholder="เช่น 12000 — เว้นว่าง = ทุกขนาด" />
+              <label className="fld"><span>BTU ต่ำสุด (ไม่บังคับ)</span>
+                <input className="inp" type="number" list="svc-btu-list" value={f.btu_min} onChange={set("btu_min")} placeholder="เช่น 18000 — เว้นว่าง = ทุกขนาด" />
                 <datalist id="svc-btu-list">{btus.map((b) => <option key={b} value={b} />)}</datalist>
+              </label>
+              <label className="fld"><span>BTU สูงสุด</span>
+                <input className="inp" type="number" list="svc-btu-list" value={f.btu_max} onChange={set("btu_max")} placeholder="เช่น 24000 — เว้นว่าง = เท่าต่ำสุด" />
               </label>
             </div>
           )}

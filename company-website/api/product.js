@@ -47,10 +47,15 @@ module.exports = async (req, res) => {
       } : undefined,
     };
 
+    const nfmt = (n) => Number(n).toLocaleString("en-US");
+    // บริการมีช่วง BTU (btu_min–btu_max) · แอร์เป็นค่าเดี่ยว
+    const btuChip = p.btu_min != null && p.btu_max != null && Number(p.btu_min) !== Number(p.btu_max)
+      ? `${nfmt(p.btu_min)}–${nfmt(p.btu_max)} BTU`
+      : (p.btu || p.btu_min) ? `${nfmt(p.btu || p.btu_min)} BTU` : "";
     const chips = [
       p.kind === "service" && SVC_TH[p.category] ? `<span>🛠️ ${SVC_TH[p.category]}</span>` : "",
       p.brand ? `<span>🏷️ ${esc(p.brand)}</span>` : "",
-      p.btu ? `<span>❄️ ${Number(p.btu).toLocaleString("en-US")} BTU</span>` : "",
+      btuChip ? `<span>❄️ ${btuChip}</span>` : "",
       TYPE_TH[p.ac_type] ? `<span>📐 ${TYPE_TH[p.ac_type]}</span>` : "",
       p.unit ? `<span>หน่วย: ${esc(p.unit)}</span>` : "",
     ].filter(Boolean).join("");

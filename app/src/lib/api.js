@@ -138,13 +138,18 @@ export async function listMaterialsLite() {
   const catMap = Object.fromEntries(cats.map((c) => [c.id, c]));
   const PAGE = 1000;
   const all = [];
-  const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty";
+  const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty,btu_min,btu_max";
   let cols = FULL;
   for (let from = 0; ; from += PAGE) {
     let { data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1);
+    // pre-103 fallback: retry without the service BTU-range columns
+    if (error && /btu_min|btu_max/i.test(error.message || "")) {
+      cols = cols.replace(",btu_min,btu_max", "");
+      ({ data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1));
+    }
     // pre-098 fallback: retry without the purchase-unit columns so the pickers still load
     if (error && /purchase_unit|purchase_qty/i.test(error.message || "")) {
-      cols = FULL.replace(",purchase_unit,purchase_qty", "");
+      cols = cols.replace(",purchase_unit,purchase_qty", "");
       ({ data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1));
     }
     if (error) throw error;
@@ -164,8 +169,11 @@ export async function saveMaterial(row, isNew) {
     kind,
     category: kind === "material" || kind === "service" ? (row.category || null) : null,   // บริการใช้หมวด sv-* (mig 102)
     brand: kind === "ac" ? (row.brand || null) : null,
-    btu: (kind === "ac" || kind === "service") && row.btu ? Number(row.btu) : null,          // บริการติดแท็ก BTU ได้ (ตัวกรอง)
+    btu: kind === "ac" && row.btu ? Number(row.btu) : null,
     ac_type: kind === "ac" || kind === "service" ? (row.ac_type || null) : null,             // บริการติดแท็กประเภทแอร์ได้
+    // บริการใช้ช่วง BTU (mig 103): ใส่ช่องเดียว = ขนาดเดียว (min = max)
+    btu_min: kind === "service" && row.btu_min ? Number(row.btu_min) : null,
+    btu_max: kind === "service" && (row.btu_max || row.btu_min) ? Number(row.btu_max || row.btu_min) : null,
     tracked: kind === "service" ? false : (row.tracked !== false),
     unit: row.unit,
     cost: Number(row.cost) || 0,
@@ -183,8 +191,9 @@ export async function saveMaterial(row, isNew) {
   let { error } = await supabase.from("materials").upsert(payload, { onConflict: "code" });
   // graceful fallback: if migration 087/098 (new columns) hasn't been run yet, the schema
   // cache rejects those columns and blocks EVERY save — retry without them so the catalog still works
-  if (error && /power_cost_year|features|purchase_unit|purchase_qty/i.test(error.message || "")) {
+  if (error && /power_cost_year|features|purchase_unit|purchase_qty|btu_min|btu_max/i.test(error.message || "")) {
     delete payload.power_cost_year; delete payload.features; delete payload.purchase_unit; delete payload.purchase_qty;
+    delete payload.btu_min; delete payload.btu_max;
     ({ error } = await supabase.from("materials").upsert(payload, { onConflict: "code" }));
   }
   if (error) throw error;

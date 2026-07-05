@@ -19,6 +19,18 @@ export const SERVICE_CATS = [
 ];
 const svcCatLabel = (m) => (SERVICE_CATS.find((c) => c.id === m.cat) || {}).l || "อื่นๆ";
 const svcCatMatch = (m, id) => (id === "sv-other" ? m.cat === "sv-other" || !String(m.cat || "").startsWith("sv-") : m.cat === id);
+// BTU ของบริการเป็น "ช่วง" (btu_min–btu_max · mig 103): เลือกขนาดที่อยู่ในช่วง = เจอ · ตัวเก่าที่มีค่าเดี่ยว = ต้องตรง
+const svcBtuHit = (m, b) => {
+  if (m.btu_min != null || m.btu_max != null) {
+    const lo = Number(m.btu_min ?? m.btu_max), hi = Number(m.btu_max ?? m.btu_min), B = Number(b);
+    return B >= lo && B <= hi;
+  }
+  return String(m.btu) === String(b);
+};
+const svcBtuText = (m) =>
+  m.btu_min != null && m.btu_max != null && Number(m.btu_min) !== Number(m.btu_max)
+    ? `${fmtNum(m.btu_min)}–${fmtNum(m.btu_max)} BTU`
+    : (m.btu_min ?? m.btu) ? `${fmtNum(m.btu_min ?? m.btu)} BTU` : null;
 
 // ราคาชำระด้วยบัตรเครดิต (เฉพาะแอร์ + ค่าบริการ) — คิดจากราคาเงินสด ปัดขึ้นเป็นบาทเต็ม
 const CARD_RATES = { full: 0.04, inst10: 0.14 };   // รูดเต็ม +4% · ผ่อน 10 เดือน +14%
@@ -122,7 +134,11 @@ export default function Catalog({ role }) {
   // ตัวเลือกกรองแท็บบริการ (ประเภทแอร์/BTU) — ใช้ค่าที่บริการติดแท็กไว้ก่อน ถ้ายังไม่มีเลยใช้ชุดของแอร์
   const svcMats = React.useMemo(() => mats.filter((m) => m.kind === "service"), [mats]);
   const svcTypeOpts = React.useMemo(() => { const o = [...new Set(svcMats.map((m) => m.ac_type).filter(Boolean))]; return (o.length ? o : acTypes).slice().sort((a, b) => a.localeCompare(b, "th")); }, [svcMats, acTypes]);
-  const svcBtuOpts = React.useMemo(() => { const o = [...new Set(svcMats.map((m) => m.btu).filter(Boolean).map(Number))]; return (o.length ? o : btuOpts).slice().sort((a, b) => a - b); }, [svcMats, btuOpts]);
+  const svcBtuOpts = React.useMemo(() => {
+    const vals = new Set(btuOpts);   // ขนาดมาตรฐานจากแอร์ + ทุกค่า/ขอบช่วงที่บริการติดแท็กไว้
+    svcMats.forEach((m) => [m.btu, m.btu_min, m.btu_max].forEach((v) => { if (v) vals.add(Number(v)); }));
+    return [...vals].sort((a, b) => a - b);
+  }, [svcMats, btuOpts]);
   // One shared collator (th) — far faster than calling String.localeCompare per comparison.
   const collator = React.useMemo(() => new Intl.Collator("th"), []);
   // Memoized so it only recomputes when a filter actually changes — not on every unrelated render
@@ -133,7 +149,7 @@ export default function Catalog({ role }) {
     (kind !== "material" || cat === "all" || m.cat === cat) &&
     (kind !== "service" || cat === "all" || svcCatMatch(m, cat)) &&
     (kind !== "service" || acType === "all" || eqi(m.ac_type, acType)) &&
-    (kind !== "service" || btu === "all" || String(m.btu) === String(btu)) &&
+    (kind !== "service" || btu === "all" || svcBtuHit(m, btu)) &&
     (kind !== "ac" || brand === "all" || eqi(m.brand, brand)) &&
     (kind !== "ac" || btu === "all" || String(m.btu) === String(btu)) &&
     (kind !== "ac" || acType === "all" || eqi(m.ac_type, acType)) &&
@@ -301,7 +317,7 @@ export default function Catalog({ role }) {
                   </div>
                 </div>
                 <div className="cat-card-name">{m.th}</div>
-                <div className="cat-card-en">{m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") || m.en : m.kind === "service" ? [svcCatLabel(m), m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null, m.en].filter(Boolean).join(" · ") : m.en}</div>
+                <div className="cat-card-en">{m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") || m.en : m.kind === "service" ? [svcCatLabel(m), m.ac_type, svcBtuText(m), m.en].filter(Boolean).join(" · ") : m.en}</div>
                 {m.description && <div className="cat-card-desc">{m.description}</div>}
                 <div className="cat-card-stats">
                   {m.tracked
@@ -331,7 +347,7 @@ export default function Catalog({ role }) {
                 <MaterialThumb mat={m} size={40} radius={11} />
                 <div className="cat-lrow-main">
                   <div className="cat-lrow-name">{m.th} {m.kind !== "material" && <span className="kind-badge">{KIND_LABEL[m.kind]}</span>} {low && <span className="badge-warn sm">ต่ำ</span>}</div>
-                  <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.kind === "service" ? [svcCatLabel(m), m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null, m.en].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
+                  <div className="cat-lrow-sub"><span className="code-chip">{m.code}</span> {m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? `${fmtNum(m.btu)} BTU` : null].filter(Boolean).join(" · ") : m.kind === "service" ? [svcCatLabel(m), m.ac_type, svcBtuText(m), m.en].filter(Boolean).join(" · ") : m.catName + " · " + m.en}</div>
                   {m.description && <div className="cat-lrow-desc">{m.description}</div>}
                 </div>
                 <div className="cat-lrow-col hide-sm"><span>สต๊อก</span><span className={"job-badge " + (m.tracked ? "b-blue" : "b-grey")} title={m.tracked ? "นับสต๊อก (เบิก/คืน/ซื้อได้)" : "ไม่นับสต๊อก (สั่งตามงาน)"}>{m.tracked ? "✓ นับสต๊อก" : "ไม่นับ"}</span></div>

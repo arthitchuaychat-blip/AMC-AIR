@@ -7,6 +7,19 @@ import { UIcon, MaterialThumb } from "../icons";
 // drill down with sub-filters, tap a photo card → enter quantity → add (same flow as Stock Movements).
 const TABS = [{ v: "ac", l: "แอร์" }, { v: "material", l: "วัสดุ" }, { v: "service", l: "บริการ" }];
 
+// BTU ของบริการเป็นช่วง (btu_min–btu_max): เลือกขนาดที่อยู่ในช่วง = เจอ · ค่าเดี่ยว = ต้องตรง
+const svcBtuHit = (m, b) => {
+  if (m.btu_min != null || m.btu_max != null) {
+    const lo = Number(m.btu_min ?? m.btu_max), hi = Number(m.btu_max ?? m.btu_min), B = Number(b);
+    return B >= lo && B <= hi;
+  }
+  return String(m.btu) === String(b);
+};
+const svcBtuText = (m) =>
+  m.btu_min != null && m.btu_max != null && Number(m.btu_min) !== Number(m.btu_max)
+    ? `${fmtNum(m.btu_min)}–${fmtNum(m.btu_max)} BTU`
+    : (m.btu_min ?? m.btu) ? `${fmtNum(m.btu_min ?? m.btu)} BTU` : null;
+
 export default function ItemBrowser({ mats, onAdd, matTargets, unitOf }) {
   const unitLbl = (m) => ((unitOf ? unitOf(m) : m?.unit) || "หน่วย");  // e.g. PO passes purchase unit (ม้วน)
   const [kind, setKind] = React.useState("ac");
@@ -26,7 +39,11 @@ export default function ItemBrowser({ mats, onAdd, matTargets, unitOf }) {
   // ตัวกรองแท็บบริการ: หมวด (sv-*) + ประเภทแอร์ + BTU ที่บริการติดแท็กไว้
   const svcCats = React.useMemo(() => { const seen = {}; mats.filter((m) => m.kind === "service" && m.cat).forEach((m) => { seen[m.cat] = m.catName || m.cat; }); return Object.entries(seen).sort((a, b) => a[1].localeCompare(b[1], "th")); }, [mats]);
   const svcTypes = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "service" && m.ac_type).map((m) => m.ac_type))].sort((a, b) => a.localeCompare(b, "th")), [mats]);
-  const svcBtus = React.useMemo(() => [...new Set(mats.filter((m) => m.kind === "service" && m.btu).map((m) => m.btu))].sort((a, b) => a - b), [mats]);
+  const svcBtus = React.useMemo(() => {
+    const vals = new Set(btus);   // ขนาดมาตรฐานจากแอร์ + ค่า/ขอบช่วงที่บริการติดแท็ก
+    mats.filter((m) => m.kind === "service").forEach((m) => [m.btu, m.btu_min, m.btu_max].forEach((v) => { if (v) vals.add(Number(v)); }));
+    return [...vals].sort((a, b) => a - b);
+  }, [mats, btus]);
 
   const reset = () => { setBrand("all"); setAcType("all"); setBtu("all"); setCat("all"); };
   const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -39,12 +56,12 @@ export default function ItemBrowser({ mats, onAdd, matTargets, unitOf }) {
     if (m.kind !== kind) return false;
     if (kind === "ac") { if (brand !== "all" && m.brand !== brand) return false; if (acType !== "all" && m.ac_type !== acType) return false; if (btu !== "all" && String(m.btu) !== String(btu)) return false; }
     if (kind === "material" && cat !== "all" && m.cat !== cat) return false;
-    if (kind === "service") { if (cat !== "all" && m.cat !== cat) return false; if (acType !== "all" && m.ac_type !== acType) return false; if (btu !== "all" && String(m.btu) !== String(btu)) return false; }
+    if (kind === "service") { if (cat !== "all" && m.cat !== cat) return false; if (acType !== "all" && m.ac_type !== acType) return false; if (btu !== "all" && !svcBtuHit(m, btu)) return false; }
     return true;
   });
   const shown = list.slice(0, 80);
   const subLine = (m) => m.kind === "ac" ? [m.brand, m.ac_type, m.btu ? fmtNum(m.btu) + " BTU" : null].filter(Boolean).join(" · ")
-    : m.kind === "service" ? [m.catName, m.ac_type, m.btu ? fmtNum(m.btu) + " BTU" : null].filter(Boolean).join(" · ")
+    : m.kind === "service" ? [m.catName, m.ac_type, svcBtuText(m)].filter(Boolean).join(" · ")
     : (m.catName || "");
 
   function openQty(m) { setQtyModal(m); setModalQty(1); }

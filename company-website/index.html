@@ -777,6 +777,14 @@ const KIND_TH = { ac: "แอร์", material: "อะไหล่/วัสด
 // หมวดค่าบริการ (ตรงกับ categories sv-* ในหลังบ้าน — migration 102)
 const SVC_TH = { "sv-install": "ติดตั้ง", "sv-clean": "ล้าง", "sv-move": "ย้าย", "sv-repair": "ซ่อม", "sv-other": "อื่นๆ" };
 const SVC_ID = { "ติดตั้ง": "sv-install", "ล้าง": "sv-clean", "ย้าย": "sv-move", "ซ่อม": "sv-repair", "อื่นๆ": "sv-other" };
+// BTU: แอร์ = ค่าเดี่ยวต้องตรง · บริการมีช่วง (btu_min–btu_max) = ขนาดที่เลือกอยู่ในช่วงก็เจอ
+function btuHit(p, b) {
+  if (p.btuMin != null || p.btuMax != null) {
+    const lo = Number(p.btuMin ?? p.btuMax), hi = Number(p.btuMax ?? p.btuMin), B = Number(b);
+    return B >= lo && B <= hi;
+  }
+  return String(p.btu || "") === String(b);
+}
 function svcMatch(p, label) {
   if (p.category) return label === "อื่นๆ" ? (p.category === "sv-other" || !String(p.category).startsWith("sv-")) : p.category === SVC_ID[label];
   // ยังไม่มีคอลัมน์หมวดจากหลังบ้าน → เดาจากชื่อ (พฤติกรรมเดิม)
@@ -818,7 +826,7 @@ function renderProducts() {
     (prodFilter === "all" || p.kind === prodFilter)
     && (!prodBrand || String(p.brand || "").toLowerCase() === prodBrand.toLowerCase())
     && (!prodType || String(p.ac_type || "") === prodType)
-    && (!prodBtu || String(p.btu || "") === String(prodBtu))
+    && (!prodBtu || btuHit(p, prodBtu))
     && (!prodSvc || p.kind !== "service" || svcMatch(p, prodSvc))
     && (!q || (p.name || "").toLowerCase().includes(q)));
   if (!list.length) { grid.innerHTML = `<div class="prod-empty">${allProducts.length ? "ไม่พบสินค้าที่ค้นหา" : (prodNote || "ยังไม่มีสินค้า")}</div>`; return; }
@@ -829,7 +837,7 @@ async function loadProducts() {
   try {
     const { data, error } = await sb.from("web_products").select("*").limit(1000);
     if (error) throw error;
-    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, category: r.category, tag: r.kind === "service" && SVC_TH[r.category] ? "บริการ · " + SVC_TH[r.category] : KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, ac_type: r.ac_type, powerCostYear: r.power_cost_year, features: r.features }));
+    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, category: r.category, tag: r.kind === "service" && SVC_TH[r.category] ? "บริการ · " + SVC_TH[r.category] : KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, btuMin: r.btu_min, btuMax: r.btu_max, ac_type: r.ac_type, powerCostYear: r.power_cost_year, features: r.features }));
     prodNote = allProducts.length ? "" : "ยังไม่มีสินค้าที่เผยแพร่ — ติ๊ก “ขึ้นเว็บ” ที่สินค้าในระบบหลังบ้าน";
     fillFilters(); renderProducts();
     // มาจากหน้ารายละเอียดสินค้า (/p/…) กด "ใส่ตะกร้า" → /?add=CODE → หยิบลงตะกร้าแล้วเปิดลิ้นชักให้เลย
