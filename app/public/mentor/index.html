@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Top Mentor — ระบบติดตาม Mentoring & Happiness Survey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#1e2a4a; --navy2:#2b3b66; --gold:#d4a017; --gold2:#f0c04a;
+  --bg:#f4f6fb; --card:#ffffff; --line:#e3e8f2; --txt:#22304f; --mut:#7b87a3;
+  --ok:#16a34a; --bad:#dc2626; --warn:#d97706; --info:#2563eb;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Prompt',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);font-size:14.5px}
+header{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:50;box-shadow:0 2px 10px rgba(20,30,60,.25)}
+header .logo{display:flex;align-items:center;gap:10px}
+header .logo .badge{width:40px;height:40px;border-radius:10px;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:22px}
+header h1{font-size:17px;font-weight:600;line-height:1.2}
+header h1 small{display:block;font-size:11px;font-weight:300;opacity:.75}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+nav button{border:0;background:rgba(255,255,255,.1);color:#fff;padding:8px 14px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:13.5px;transition:.15s}
+nav button:hover{background:rgba(255,255,255,.22)}
+nav button.on{background:var(--gold);color:#25200a;font-weight:600}
+#saved{font-size:11px;color:#c9d4ef;min-width:64px;text-align:right;transition:.3s}
+main{max-width:1200px;margin:0 auto;padding:20px 18px 80px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 1px 4px rgba(30,42,74,.05)}
+.card h2{font-size:15.5px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h2 .cnt{background:var(--bg);color:var(--mut);font-size:12px;padding:2px 9px;border-radius:99px;font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.stat .n{font-size:26px;font-weight:700;line-height:1.1}
+.stat .l{font-size:12px;color:var(--mut);margin-top:3px}
+.stat.gold .n{color:var(--gold)} .stat.green .n{color:var(--ok)} .stat.red .n{color:var(--bad)} .stat.blue .n{color:var(--info)}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;color:var(--mut);font-weight:500;text-align:left;padding:8px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr.click{cursor:pointer} tr.click:hover td{background:#f8faff}
+.tblwrap{overflow-x:auto}
+.mname{font-weight:600} .mname small{display:block;font-weight:300;font-size:11.5px;color:var(--mut)}
+.wk{display:inline-flex;gap:3px}
+.wk i{width:14px;height:14px;border-radius:4px;background:#e6eaf3;display:inline-block;font-style:normal}
+.wk i.t{background:var(--ok)} .wk i.f{background:var(--bad)}
+.chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:#eef1f8;color:var(--mut);margin:1px}
+.chip.t{background:#dcf5e5;color:#0e7a37} .chip.f{background:#fde5e5;color:#b32020}
+.badge{display:inline-block;font-size:11.5px;padding:3px 10px;border-radius:99px;font-weight:500;white-space:nowrap}
+.b-done{background:#dcf5e5;color:#0e7a37} .b-wait{background:#e0ecff;color:#1d4fd8}
+.b-due{background:#fdeddc;color:#b45309} .b-notyet{background:#eef1f8;color:#8a94ad}
+.b-first{background:#fff3d6;color:#946b00} .b-old{background:#e7e9f5;color:#4a5480}
+.bar{height:7px;background:#e9edf5;border-radius:99px;overflow:hidden;min-width:80px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2))}
+.bar.full i{background:var(--ok)}
+button.btn{border:0;background:var(--navy);color:#fff;font-family:inherit;font-size:13px;padding:8px 15px;border-radius:9px;cursor:pointer;transition:.15s}
+button.btn:hover{background:var(--navy2)}
+button.btn.gold{background:var(--gold);color:#2a2205;font-weight:600}
+button.btn.ghost{background:#eef1f8;color:var(--txt)}
+button.btn.sm{padding:5px 10px;font-size:12px;border-radius:7px}
+button.btn.red{background:#fde5e5;color:#b32020}
+input[type=text],input[type=date],input[type=url],select,textarea{font-family:inherit;font-size:13.5px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--txt);outline:none;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--gold)}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.toolbar input[type=text]{max-width:260px}
+.toolbar select{width:auto}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:11.5px;color:var(--mut);margin-bottom:4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr}}
+/* modal */
+#ovl{position:fixed;inset:0;background:rgba(15,22,45,.55);display:none;z-index:100;overflow-y:auto;padding:26px 14px}
+#ovl.show{display:block}
+.modal{background:#fff;border-radius:16px;max-width:720px;margin:0 auto;padding:22px;position:relative}
+.modal .x{position:absolute;top:14px;right:16px;border:0;background:#eef1f8;width:32px;height:32px;border-radius:99px;cursor:pointer;font-size:15px}
+.modal h3{font-size:17px;margin-bottom:4px;padding-right:40px}
+.modal .sub{color:var(--mut);font-size:12.5px;margin-bottom:14px}
+.sect{border-top:1px dashed var(--line);margin-top:16px;padding-top:14px}
+.sect h4{font-size:13.5px;font-weight:600;margin-bottom:10px;color:var(--navy)}
+.wkrow{display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid #f0f3fa}
+.wkrow .t{flex:1}
+.wkrow .t b{font-size:13px} .wkrow .t small{display:block;color:var(--mut);font-size:11.5px}
+.tri{border:1px solid var(--line);background:#fff;font-family:inherit;font-size:12.5px;padding:5px 12px;border-radius:99px;cursor:pointer;min-width:96px}
+.tri.t{background:#dcf5e5;border-color:#9fdcb5;color:#0e7a37;font-weight:600}
+.tri.f{background:#fde5e5;border-color:#f3b3b3;color:#b32020;font-weight:600}
+.hsbox{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.hsbox .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.hsbox .top b{font-size:13px}
+.cbl{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none}
+.cbl input{width:16px;height:16px;accent-color:var(--ok)}
+.note-line{background:#fffbea;border:1px solid #f5e6b0;border-radius:9px;padding:8px 12px;font-size:13px;margin-top:8px}
+.help{background:#eef4ff;border:1px solid #cdddfb;border-radius:12px;padding:14px;font-size:13px;line-height:1.7;color:#2b3f6b}
+.empty{color:var(--mut);text-align:center;padding:24px;font-size:13px}
+.rephead{display:none}
+@media print{
+  body{background:#fff;font-size:12px}
+  header,.no-print{display:none!important}
+  main{max-width:none;padding:0}
+  .card{border:0;box-shadow:none;padding:4px;page-break-inside:avoid}
+  .rephead{display:block;text-align:center;margin-bottom:14px}
+  .rephead h2{font-size:18px}
+  .rephead p{color:#444;font-size:12px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="badge">🏆</div>
+    <h1>The Top Mentor<small>ระบบติดตาม Mentoring & Happiness Survey</small></h1>
+  </div>
+  <nav id="nav"></nav>
+  <div id="saved">⏳ กำลังเชื่อมต่อ...</div>
+</header>
+<main id="view"></main>
+<div id="ovl" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
+<script>
+const SEED=[{"id":"m1","name":"Pipat Wattanamongkolsiri","nick":"พัด","prof":"Ai Transformation","status":"ปีแรก","start":"2026-05-27","mentor":"ไมค์ Arthit Chuaychat","weeks":[true,true,true,true,true,null,null,null,null],"slides":{"onepage":null,"s121":null,"s5min":null},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m2","name":"Sarayut Suppachokpakorn","nick":"โอ๋","prof":"พัฒนาระบบ software IoT","status":"ปีแรก","start":"2026-05-20","mentor":"อ้อย Dunggamol Moomgratok","weeks":[true,true,true,true,true,true,null,null,null],"slides":{"onepage":null,"s121":null,"s5min":null},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m3","name":"Kraisee Chaipongpun","nick":"ตี๋","prof":"IT กทม.","status":"ปีแรก","start":"2026-05-06","mentor":"มีน Chaturant Saisanan Na Ayuttaya","weeks":[true,true,true,true,true,true,true,null,null],"slides":{"onepage":null,"s121":null,"s5min":null},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m4","name":"Sivanan Chaipanyawuthikul","nick":"บอส","prof":"สูท","status":"ปีแรก","start":"2026-05-06","mentor":"โน้ตหล่อ Pongsak Ekvinai","weeks":[true,true,true,true,true,true,null,null,null],"slides":{"onepage":null,"s121":null,"s5min":null},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m5","name":"Prachoom Rattanasaneewat","nick":"ประชุม","prof":"โรงงานผลิตน้ำยาทำความสะอาด","status":"ปีแรก","start":"2026-04-22","mentor":"แมน Tinnasit Teerapakdeepun","weeks":[true,true,true,true,true,true,true,true,null],"slides":{"onepage":false,"s121":false,"s5min":false},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m6","name":"Suphat Kosolsirisukkul","nick":"คิว","prof":"ทัวร์","status":"ปีแรก","start":"2026-04-01","mentor":"บิ๊ก Peeranarus Phischayathanakarn","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m7","name":"Thanyasinee Yaowannasiri","nick":"หมวยเล็ก","prof":"ร้านอาหารรจีน","status":"ปีแรก","start":"2026-04-01","mentor":"โอ๊ต Rangsan Chotpanyavisut","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":false,"s5min":false},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m8","name":"Jugkapong Toomdee","nick":"แจ้","prof":"Surveyor","status":"ปีแรก","start":"2026-02-18","mentor":"อ้อย Dunggamol Moomgratok","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":false,"s121":true,"s5min":false},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m9","name":"Kenchayuth Metacharunon","nick":"เกน","prof":"การผลิตเครื่องจักรและอุปกรณ์","status":"ปีแรก","start":"2026-02-01","mentor":"บิ๊ก Peeranarus Phischayathanakarn","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":false,"s121":false,"s5min":false},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":"ให้ความสุข 5 คะแนน"},{"id":"m10","name":"Kla Matatratip","nick":"กล้า","prof":"Human Resources","status":"ปีแรก","start":"2026-02-01","mentor":"ไมค์ Arthit Chuaychat","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":false,"s121":false,"s5min":false},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":"มีความสุข 8/10"},{"id":"m11","name":"Pichaya Srifar","nick":"เอ้","prof":"บริษัทจัดหางาน","status":"ปีแรก","start":"2026-01-01","mentor":"แมน Tinnasit Teerapakdeepun","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m12","name":"Worrawich Suppiumlarp","nick":"เติ๊ด","prof":"บริการทำความสะอาดพรมและเบาะ","status":"ปีแรก","start":"2026-01-01","mentor":"ริน Rossarin Ungrangsee","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":"มีความสุข 7/10"},{"id":"m13","name":"Butsayamat Yaembangyang","nick":"ปุ้ย","prof":"สิ่งทอ","status":"ปีแรก","start":"2025-12-01","mentor":"ป่าน Prompreeya Manaviriyakul","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m14","name":"Prasit Lanon","nick":"บอส","prof":"ผู้เชี่ยวชาญธุรกิจค้าปลีก(อื่นๆ)","status":"ปีแรก","start":"2025-11-01","mentor":"มน Monthiwa Chumnangit","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":"รอบ 3 เดือน บอกไม่ค่อย happy เท่าไหร่"},{"id":"m15","name":"Jeerawan Phuknoo","nick":"มายด์","prof":"จิตรกร","status":"ปีแรก","start":"2025-11-01","mentor":"โอปอ Jeeraphan Mangmanee","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m16","name":"Mongkut Singhanan","nick":"มงกุฏ","prof":"บริการจัดทัวร์/ทัวร์ไกด์","status":"ปีแรก","start":"2025-11-01","mentor":"มะปราง Sasiphapim Techalimsakul","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m17","name":"Pakavadee Voratis","nick":"เดียร์","prof":"ผู้เชี่ยวชาญธุรกิจค้าปลีก(อื่นๆ)","status":"ปีแรก","start":"2025-11-01","mentor":"โน้ตหล่อ Pongsak Ekvinai","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":"มีความสุข 9/10  อยากต่ออายุ"},{"id":"m18","name":"Cholthicha Konchuerat","nick":"ออย","prof":"Paint Manufacture","status":"ปีแรก","start":"2025-10-01","mentor":"ริน Rossarin Ungrangsee","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":"ยังไม่แน่ใจ เพราะบริษัทอาจส่งคนอื่นมาแทน"},{"id":"m19","name":"Jomdecha Ponpreechapakdee","nick":"แป๊บ","prof":"นักกฎหมาย","status":"ปีแรก","start":"2025-10-01","mentor":"เล็ก Phoungrat Khongmueng","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":false,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m20","name":"Krisada Suteerangkul","nick":"มิ๊ก","prof":"ขายปลีกอุปกรณ์อีเล็กทรอนิกส์","status":"ปีแรก","start":"2025-10-01","mentor":"อ้น Pongsak Ekvinai","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m21","name":"Unchalee Chumnanvanich","nick":"อ๊อฟ","prof":"น้ำมันหอมระเหย","status":"ปีแรก","start":"2025-09-01","mentor":"โน้ตหอม Ninart Kasemsai","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":"ต่ออายุ"},{"id":"m22","name":"Tanate Duangpatra","nick":"ต้ั้ม","prof":"ผู้เชี่ยวชาญงานก่อสร้าง(อื่นๆ)","status":"ปีแรก","start":"2025-09-01","mentor":"อ้อย Dunggamol Moomgratok","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":false,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":false,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":"ยังไม่แน่ใจ เวลายุ่ง"},{"id":"m23","name":"Apinya Petnapapun","nick":"มิ้น","prof":"ผู้เชี่ยวชาญด้านกีฬาและการพักผ่อนหย่อนใจ(อื่นๆ)","status":"ปีแรก","start":"2025-09-01","mentor":"แมน Tinnasit Teerapakdeepun","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":false,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":"ดรอป"},{"id":"m24","name":"Wareemon Purapati","nick":"เปิ้ล","prof":"Industrial Automaton","status":"ปีแรก","start":"2025-09-01","mentor":"เน Natipol Chindavat","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":"คิดว่าต่อ แต่จะไม่ต่อล่วงหน้า"},{"id":"m25","name":"Pernnitt Sawangloak","nick":"เปิ่น","prof":"แพทย์","status":"ปีแรก","start":"2025-09-01","mentor":"โก๋ Sakapong Riewsrikul","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":false,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":"ต่ออายุ"},{"id":"m26","name":"Sirikorn Sirisoravichy","nick":"หนู","prof":"ผู้เชี่ยวชาญการผลิต(อื่นๆ)","status":"ปีแรก","start":"2025-09-01","mentor":"โอ๊ต Rangsan Chotpanyavisut","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":""},{"id":"m27","name":"Raymond Haasewinkel","nick":"มะนาว","prof":"บริการจัดทัวร์/ทัวร์ไกด์","status":"ปีแรก","start":"2025-08-01","mentor":"ริน Rossarin Ungrangsee","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":true,"done":true,"note":""}},"note":"ต่ออายุ"},{"id":"m28","name":"Kunyanut Khamjaidee","nick":"เฟิร์ส","prof":"ธุรกิจเกี่ยวกับการเงิน","status":"ปีแรก","start":"2025-08-01","mentor":"นิ Nirawan Thamsiricharoen","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":false,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":true,"done":true,"note":""}},"note":""},{"id":"m29","name":"Nattapon Rangsiyakul","nick":"คริส","prof":"ผู้เชี่ยวชาญงานที่ปรึกษา(อื่นๆ)","status":"ปีแรก","start":"2025-08-01","mentor":"บิ๊ก Peeranarus Phischayathanakarn","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":""},{"id":"m30","name":"Wittaya Wongkhamsao","nick":"นพ","prof":"งานประตูและกระจก","status":"ปีแรก","start":"2025-08-01","mentor":"ริน Rossarin Ungrangsee","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":false,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":"ยัังไม่แน่ใจ ขอดูข้อมูลอื่นๆก่อน"},{"id":"m31","name":"Suriyaphorn Inthachan","nick":"บุ๊ค","prof":"เจ้าหน้าที่รักษาความปลอดภัย","status":"ปีแรก","start":"2025-07-01","mentor":"พลอย Kornkanokporn Pracharoj","weeks":[true,true,null,true,true,true,true,true,true],"slides":{"onepage":false,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":false,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":true,"done":true,"note":""}},"note":""},{"id":"m32","name":"Wannadda Khorprasert","nick":"ปาล์ม","prof":"ผู้เชี่ยวชาญการจัดงานอีเว้นท์ต่างๆ(อื่นๆ)","status":"ปีแรก","start":"2025-07-01","mentor":"มะปราง Sasiphapim Techalimsakul","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":false,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":""},{"id":"m33","name":"Waiwicha Burakorn","nick":"หวาย","prof":"ไอทีและงานระบบเครือข่ายไอที","status":"ปีแรก","start":"2025-06-01","mentor":"นิ Nirawan Thamsiricharoen","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":false,"s121":false,"s5min":false},"hs":{"m3":{"sent":true,"done":false,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":"ต่ออายุ"},{"id":"m34","name":"Saranya Kamnerdsin","nick":"อ้อม","prof":"บริการด้านบัญชี","status":"ปีแรก","start":"2025-04-01","mentor":"อี๊ด Piyanan Auevechanichkul","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":false,"s121":false,"s5min":false},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m35","name":"Pheerom Waralukkij","nick":"กระเป๋า","prof":"บริษัทรับทำป้าย","status":"เกิน 1 ปี","start":"2026-10-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m36","name":"Oranee Kosalwit","nick":"ณี","prof":"นายหน้าประกันภัย","status":"เกิน 1 ปี","start":"2026-04-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m37","name":"Nunthawan Thramsiricharoen","nick":"จิ๋ว","prof":"ผู้เชี่ยวชาญธุรกิจอาหารและเครื่องดื่ม(อื่นๆ)","status":"เกิน 1 ปี","start":"2026-04-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m38","name":"Arthit Chuaychat","nick":"ไมค์","prof":"ระบบปรับอากาศ HVAC","status":"เกิน 1 ปี","start":"2026-04-01","mentor":"คิม Jirakit Charoenbanditsakul","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":true,"done":true,"note":""},"m6":{"sent":true,"done":true,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m39","name":"Piyanan Auevechanichkul","nick":"อี๊ด","prof":"ประกันชีวิตและทุพพลภาพ","status":"เกิน 1 ปี","start":"2026-03-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m40","name":"Tinnasit Teerapakdeepun","nick":"แมน","prof":"สำนักพิมพ์","status":"เกิน 1 ปี","start":"2026-03-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m41","name":"Ruengsit Tiawkullapa","nick":"บลัง","prof":"การป้องกันอัคคีภัย","status":"เกิน 1 ปี","start":"2026-03-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m42","name":"Natthida Panyadee","nick":"ออน","prof":"รับจัดงานอีเวนท์/นักการตลาด","status":"เกิน 1 ปี","start":"2026-03-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m43","name":"Theprit Poosa-ard","nick":"แจ๊คกี้","prof":"ผลิตภัณฑ์เพื่อสุขภาพและความเป็นอยู่ที่ดี","status":"เกิน 1 ปี","start":"2026-03-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m44","name":"Chaturant Saisanan Na Ayuttaya","nick":"มีน","prof":"การจำหน่ายรถยนต์","status":"เกิน 1 ปี","start":"2026-02-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m45","name":"Phiphonphong Pongphanngam","nick":"โต้ง","prof":"บริการด้านสื่อ","status":"เกิน 1 ปี","start":"2026-01-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m46","name":"Warantorn Phocharoen","nick":"เบียร์","prof":"ผู้ก่อสร้างอาคารที่อยู่อาศัยเชิงพาณิชย์","status":"เกิน 1 ปี","start":"2026-01-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m47","name":"Phoungrat Khongmueng","nick":"เล็ก","prof":"Tiles","status":"เกิน 1 ปี","start":"2025-12-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m48","name":"Kornkanokporn Pracharoj","nick":"พลอย","prof":"การจัดการทรัพย์สิน","status":"เกิน 1 ปี","start":"2025-12-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m49","name":"Chakkra Chayote","nick":"ต้น","prof":"โหราศาสตร์","status":"เกิน 1 ปี","start":"2025-12-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m50","name":"Woraphon Leeprasert","nick":"คอนเน่","prof":"ระบบรักษาความปลอดภัย","status":"เกิน 1 ปี","start":"2025-12-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m51","name":"Ninart Kasemsai","nick":"โน้ตหอม","prof":"ผู้เชี่ยวชาญการจัดงานอีเว้นท์ต่างๆ(อื่นๆ)","status":"เกิน 1 ปี","start":"2025-12-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m52","name":"Nirawan Thamsiricharoen","nick":"นิ","prof":"ที่ปรึกษาด้านการเงิน","status":"เกิน 1 ปี","start":"2025-11-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m53","name":"Dunggamol Moomgratok","nick":"อ้อย","prof":"บริการเกี่ยวกับต้นไม้","status":"เกิน 1 ปี","start":"2025-11-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m54","name":"Monthiwa Chumnangit","nick":"มนต์","prof":"Energy Consulting","status":"เกิน 1 ปี","start":"2025-11-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m55","name":"Kuakul Pulput","nick":"เกื้อ","prof":"ผู้รับเหมาก่อสร้าง","status":"เกิน 1 ปี","start":"2025-10-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m56","name":"Prompreeya Manaviriyakul","nick":"ป่าน","prof":"ผู้เชี่ยวชาญการผลิต(อื่นๆ)","status":"เกิน 1 ปี","start":"2025-10-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m57","name":"Rossarin Ungrangsee","nick":"ริน","prof":"สถาปนิกออกแบบตกแต่งภายใน","status":"เกิน 1 ปี","start":"2025-10-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m58","name":"Jeeraphan Mangmanee","nick":"โอปอ","prof":"จัดจำหน่ายวัสดุก่อสร้าง","status":"เกิน 1 ปี","start":"2025-09-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":""},{"id":"m59","name":"Sakapong Riewsrikul","nick":"โก๋","prof":"ผลิตภัณฑ์เพื่อสุขภาพและความเป็นอยู่ที่ดี","status":"เกิน 1 ปี","start":"2025-08-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":""},{"id":"m60","name":"Anusorn Temsakulphong","nick":"กอล์ฟ","prof":"ผู้พัฒนาแอปพลิเคชั่น","status":"เกิน 1 ปี","start":"2025-08-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m61","name":"Peeranarus Phischayathanakarn","nick":"บิ๊ก","prof":"ขายปลีกอุปกรณ์อีเล็กทรอนิกส์","status":"เกิน 1 ปี","start":"2025-07-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":true,"done":true,"note":""}},"note":""},{"id":"m62","name":"Jirakit Charoenbanditsakul","nick":"คิม","prof":"ผู้เชี่ยวชาญธุรกิจบริการด้านอสังหาริมทรัพย์(อื่นๆ)","status":"เกิน 1 ปี","start":"2025-07-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":""},{"id":"m63","name":"Rangsan Chotpanyavisut","nick":"โอ้ต","prof":"การผลิตเหล็ก","status":"เกิน 1 ปี","start":"2025-07-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":""},{"id":"m64","name":"Jirawat Laoudom","nick":"แบงค์","prof":"การปิดกำแพง/ฝาผนัง","status":"เกิน 1 ปี","start":"2025-07-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":""},{"id":"m65","name":"Therdsiddhi Hoprasartsuk","nick":"หล่อ","prof":"สถาปนิก","status":"เกิน 1 ปี","start":"2025-06-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":true,"done":false,"note":""}},"note":""},{"id":"m66","name":"Sasiphapim Techalimsakul","nick":"มะปราง","prof":"บริการเพื่อสุขภาพและความเป็นอยู่ที่ดี","status":"เกิน 1 ปี","start":"2025-06-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":true,"done":true,"note":""}},"note":""},{"id":"m67","name":"Boonlert Paonil","nick":"พอล","prof":"ช่างตัดสูท/ช่างตัดเสื้อตามสั่ง","status":"เกิน 1 ปี","start":"2025-05-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m68","name":"Rakchanok Techawerukul","nick":"หน่อย","prof":"ผู้เชี่ยวชาญงานที่ปรึกษา(อื่นๆ)","status":"เกิน 1 ปี","start":"2025-05-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m69","name":"Phurichchaya Thepyos","nick":"แซมมี่","prof":"เครื่องประดับแฟชั่น","status":"เกิน 1 ปี","start":"2025-05-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m70","name":"Natipol Chindavat","nick":"เน","prof":"ผู้เชี่ยวชาญงานก่อสร้าง(อื่นๆ)","status":"เกิน 1 ปี","start":"2025-04-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m71","name":"Jirapan Kunthawangso","nick":"เป้","prof":"นักกฎหมาย","status":"เกิน 1 ปี","start":"2025-03-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m72","name":"Pongsak Ekvinai","nick":"โน้ตหล่อ","prof":"บริการขนส่งสินค้า","status":"เกิน 1 ปี","start":"2025-03-01","mentor":"","weeks":[true,true,null,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m73","name":"Ekachai Puangnoi","nick":"เอก","prof":"ขายปลีกอุปกรณ์อีเล็กทรอนิกส์","status":"เกิน 1 ปี","start":"2025-03-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m74","name":"Vinai Nattachai","nick":"หลี","prof":"นักออกแบบกราฟฟิก","status":"เกิน 1 ปี","start":"2025-03-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""},{"id":"m75","name":"Songsak Tonsatean","nick":"อ้น","prof":"ผู้เชี่ยวชาญงานก่อสร้าง(อื่นๆ)","status":"เกิน 1 ปี","start":"2025-03-01","mentor":"","weeks":[true,true,true,true,true,true,true,true,true],"slides":{"onepage":true,"s121":true,"s5min":true},"hs":{"m3":{"sent":false,"done":false,"note":""},"m6":{"sent":false,"done":false,"note":""},"m12":{"sent":false,"done":false,"note":""}},"note":""}];
+
+/* ---------- state ---------- */
+const LS_KEY='topmentor_v1';
+const DEF_CONFIG={link3:'',link6:'',link12:'',tpl:'เรียนคุณ {nick} ({name})\nถึงกำหนดทำแบบสอบถาม {survey} ของ Chapter The Top แล้วครับ/ค่ะ\nรบกวนตอบแบบสอบถามได้ที่ลิงก์นี้\n{link}\nขอบคุณครับ/ค่ะ 🙏'};
+let state=load();
+function load(){
+  try{const s=JSON.parse(localStorage.getItem(LS_KEY));
+    if(s&&Array.isArray(s.members)){s.config=Object.assign({},DEF_CONFIG,s.config||{});return s;}
+  }catch(e){}
+  return {members:JSON.parse(JSON.stringify(SEED)),config:Object.assign({},DEF_CONFIG)};
+}
+/* save(t): t = member id ที่แก้ | 'cfg' เมื่อแก้การตั้งค่า | ไม่ใส่ = แค่ cache ในเครื่อง */
+function save(t){
+  localStorage.setItem(LS_KEY,JSON.stringify(state));
+  if(t==='cfg')dirty.cfg=true;
+  else if(t&&!dirty.m.includes(t))dirty.m.push(t);
+  persistDirty();setSync('busy');clearTimeout(save._t);save._t=setTimeout(flush,600);
+}
+function saveDel(id){dirty.del.push(id);dirty.m=dirty.m.filter(x=>x!==id);save();}
+function saveAll(){dirty.all=true;dirty.cfg=true;save();}
+
+/* ---------- cloud sync (Supabase — โปรเจกต์เดียวกับ วัสดุOS, ตาราง tm_*) ---------- */
+const SB_URL='https://tpyrlxhoyghawqvsphfj.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRweXJseGhveWdoYXdxdnNwaGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk3NzYsImV4cCI6MjA5NjU2NTc3Nn0.OnfQ4VipqPlEpg5PfBGXhx44oSpqY1ifW1AlnY52p0Q';
+let dirty=loadDirty();
+function loadDirty(){try{const d=JSON.parse(localStorage.getItem('tm_dirty'));if(d&&Array.isArray(d.m))return d;}catch(e){}return{m:[],del:[],cfg:false,all:false};}
+function persistDirty(){localStorage.setItem('tm_dirty',JSON.stringify(dirty));}
+function hasDirty(){return !!(dirty.all||dirty.cfg||dirty.m.length||dirty.del.length);}
+async function sb(path,opts={}){
+  const r=await fetch(SB_URL+'/rest/v1/'+path,{method:opts.method||'GET',
+    headers:Object.assign({apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},opts.headers||{}),
+    body:opts.body});
+  if(!r.ok)throw new Error('sb '+r.status);
+  return (r.headers.get('content-type')||'').includes('json')?r.json():null;
+}
+const UPSERT={Prefer:'resolution=merge-duplicates,return=minimal'};
+function setSync(s){ /* true=ซิงก์แล้ว false=ออฟไลน์ 'busy'=กำลังบันทึก */
+  const el=document.getElementById('saved');if(!el)return;el.style.opacity=1;
+  if(s==='busy'){el.textContent='⏳ กำลังบันทึก...';el.style.color='#f0c04a';}
+  else if(s){el.textContent='☁️ ซิงก์แล้ว';el.style.color='#9fdcb5';}
+  else{el.textContent='📴 ออฟไลน์ — เก็บในเครื่อง รอซิงก์';el.style.color='#f3b3b3';}
+}
+let flushing=false;
+async function flush(){
+  if(flushing||!hasDirty())return;flushing=true;setSync('busy');
+  try{
+    if(dirty.all){
+      await sb('tm_members?id=neq.__none__',{method:'DELETE'});
+      dirty.all=false;dirty.del=[];dirty.m=state.members.map(m=>m.id);
+    }
+    if(dirty.del.length){await sb('tm_members?id=in.('+dirty.del.join(',')+')',{method:'DELETE'});dirty.del=[];}
+    if(dirty.m.length){
+      const rows=dirty.m.map(id=>findM(id)).filter(Boolean).map(m=>({id:m.id,data:m}));
+      if(rows.length)await sb('tm_members',{method:'POST',headers:UPSERT,body:JSON.stringify(rows)});
+      dirty.m=[];
+    }
+    if(dirty.cfg){await sb('tm_config',{method:'POST',headers:UPSERT,body:JSON.stringify([{key:'main',value:state.config}])});dirty.cfg=false;}
+    setSync(true);
+  }catch(e){setSync(false);}
+  persistDirty();flushing=false;
+}
+async function pushAll(){
+  await sb('tm_members',{method:'POST',headers:UPSERT,body:JSON.stringify(state.members.map(m=>({id:m.id,data:m})))});
+  await sb('tm_config',{method:'POST',headers:UPSERT,body:JSON.stringify([{key:'main',value:state.config}])});
+}
+function editing(){return document.getElementById('ovl').classList.contains('show')||(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));}
+async function fetchAll(){
+  const rows=await sb('tm_members?select=id,data&order=id');
+  if(!rows.length){await pushAll();setSync(true);return;} /* คลาวด์ยังว่าง: ยกข้อมูลในเครื่องขึ้นไปตั้งต้น */
+  if(hasDirty())return; /* มีของค้างส่ง — อย่าดึงมาทับ */
+  const cfg=await sb('tm_config?key=eq.main&select=value');
+  const incoming=rows.map(r=>Object.assign({},r.data,{id:r.id}));
+  const changed=JSON.stringify(incoming)!==JSON.stringify(state.members);
+  state.members=incoming;
+  if(cfg.length)state.config=Object.assign({},DEF_CONFIG,cfg[0].value);
+  localStorage.setItem(LS_KEY,JSON.stringify(state));
+  if(changed&&!editing())render();
+  setSync(true);
+}
+
+/* ---------- helpers ---------- */
+const THM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function pd(iso){if(!iso)return null;const[y,m,d]=iso.split('-').map(Number);return new Date(y,m-1,d);}
+function fmt(d){if(!d)return '—';if(typeof d==='string')d=pd(d);return d?`${d.getDate()} ${THM[d.getMonth()]} ${d.getFullYear()}`:'—';}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
+function today(){const t=new Date();return new Date(t.getFullYear(),t.getMonth(),t.getDate());}
+function dayDiff(a,b){return Math.round((a-b)/864e5);}
+const WEEKS=[
+ ['Week 0','สัปดาห์แรกที่เข้ามาเป็นสมาชิก'],
+ ['Week 1','Invite Visitor + Profile & GAINS sheet'],
+ ['Week 2','Presentation, Top 10 Key Customer List'],
+ ['Week 3','Good Referral, Contact Sphere List'],
+ ['Week 4','1-2-1 Meeting'],
+ ['Week 5','1-2-1 Meeting'],
+ ['Week 6','5 นาที Presentation'],
+ ['Week 7','Member Goal Setting'],
+ ['Week 8','Substitute Policy'],
+];
+const SLIDES=[['onepage','ONEPAGE'],['s121','121'],['s5min','5 นาที']];
+const HS=[
+ {key:'m3', label:'Happiness Survey 3 เดือน', days:90, link:'link3'},
+ {key:'m6', label:'Happiness Survey 6 เดือน', days:180, link:'link6'},
+ {key:'m12',label:'Happiness Survey 12 เดือน (ก่อนต่ออายุ)', days:365, link:'link12'},
+];
+function findM(id){return state.members.find(m=>m.id===id);}
+function wDone(m){return m.weeks.filter(w=>w===true).length;}
+/* สัปดาห์ล่าสุดที่ทำแล้ว — รายงานแบบ สัปดาห์ที่ 0/8, 1/8, ... 8/8 (Week 0 คือสัปดาห์แรก) */
+function wLast(m){let last=-1;m.weeks.forEach((w,i)=>{if(w===true)last=i;});return last;}
+function wLabel(m){const l=wLast(m);return l<0?'ยังไม่เริ่ม':`สัปดาห์ที่ ${l}/8`;}
+function curWeek(m){const s=pd(m.start);if(!s)return null;const w=Math.floor(dayDiff(today(),s)/7);return w<0?0:(w>8?null:w);}
+/* survey status: done | wait(ส่งแล้วรอตอบ) | due(ถึงกำหนด ยังไม่ส่ง) | notyet */
+function hsInfo(m,h){
+  const s=pd(m.start);const rec=m.hs[h.key];
+  let due=s?addDays(s,h.days):null;
+  let open=due; // วันที่เริ่มถึงกำหนดส่ง
+  if(h.key==='m12'&&due){ // ส่งล่วงหน้า 6 เดือนก่อนวันต่ออายุ
+    if(due<today()){const nx=new Date(due);while(nx<today())nx.setFullYear(nx.getFullYear()+1);due=nx;}
+    open=addDays(due,-180);
+  }
+  let st='notyet';
+  if(rec.done)st='done';
+  else if(rec.sent)st='wait';
+  else if(open&&today()>=open)st='due';
+  return {due,open,st,rec};
+}
+const HS_BADGE={done:['b-done','✅ ทำแล้ว'],wait:['b-wait','📨 ส่งแล้ว รอคำตอบ'],due:['b-due','⏰ ถึงกำหนด ยังไม่ส่ง'],notyet:['b-notyet','⏳ ยังไม่ถึงกำหนด']};
+function hsIcon(st){return {done:'✅',wait:'📨',due:'⏰',notyet:'▫️'}[st];}
+function lineMsg(m,h){
+  const link=state.config[h.link]||'(ยังไม่ได้ใส่ลิงก์แบบสอบถาม — ใส่ได้ที่หน้า ตั้งค่า)';
+  return state.config.tpl.replace(/\{nick\}/g,m.nick||m.name).replace(/\{name\}/g,m.name)
+    .replace(/\{survey\}/g,h.label).replace(/\{link\}/g,link);
+}
+function copyText(t){
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t);}
+  else{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
+  toast('คัดลอกข้อความแล้ว — นำไปวางในไลน์ได้เลย');
+}
+function toast(msg){
+  let t=document.getElementById('toast');
+  if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#1e2a4a;color:#fff;padding:10px 20px;border-radius:99px;font-size:13px;z-index:200;box-shadow:0 4px 14px rgba(0,0,0,.3);transition:.3s';document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity=1;clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.opacity=0,2200);
+}
+
+/* ---------- nav ---------- */
+const TABS=[['dash','🏠 แดชบอร์ด'],['members','👥 สมาชิก'],['survey','💛 Happiness Survey'],['report','📊 รายงานประธาน'],['settings','⚙️ ตั้งค่า']];
+let tab='dash';
+function go(t){tab=t;render();}
+function render(){
+  document.getElementById('nav').innerHTML=TABS.map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
+  const v=document.getElementById('view');
+  if(tab==='dash')v.innerHTML=vDash();
+  else if(tab==='members')v.innerHTML=vMembers();
+  else if(tab==='survey')v.innerHTML=vSurvey();
+  else if(tab==='report')v.innerHTML=vReport();
+  else v.innerHTML=vSettings();
+}
+
+/* ---------- dashboard ---------- */
+function vDash(){
+  const ms=state.members;
+  const mentoring=ms.filter(m=>wDone(m)<9&&m.status==='ปีแรก');
+  const finished=ms.filter(m=>wDone(m)===9);
+  let due=[],wait=[];
+  ms.forEach(m=>HS.forEach(h=>{const i=hsInfo(m,h);
+    if(i.st==='due')due.push({m,h,i});
+    if(i.st==='wait')wait.push({m,h,i});}));
+  due.sort((a,b)=>a.i.open-b.i.open);
+  return `
+  <div class="stats">
+    <div class="stat"><div class="n">${ms.length}</div><div class="l">สมาชิกทั้งหมด</div></div>
+    <div class="stat gold"><div class="n">${mentoring.length}</div><div class="l">กำลัง Mentoring (8 สัปดาห์)</div></div>
+    <div class="stat green"><div class="n">${finished.length}</div><div class="l">จบครบ 8 สัปดาห์แล้ว</div></div>
+    <div class="stat red"><div class="n">${due.length}</div><div class="l">แบบสอบถามถึงกำหนด ยังไม่ส่ง</div></div>
+    <div class="stat blue"><div class="n">${wait.length}</div><div class="l">ส่งแล้ว รอคำตอบ</div></div>
+  </div>
+
+  <div class="card">
+    <h2>⏰ แบบสอบถามที่ถึงกำหนดส่ง <span class="cnt">${due.length} รายการ</span></h2>
+    ${due.length?`<div class="tblwrap"><table><tr><th>สมาชิก</th><th>แบบสอบถาม</th><th>ถึงกำหนดตั้งแต่</th><th></th></tr>
+    ${due.slice(0,20).map(({m,h,i})=>`<tr>
+      <td class="mname" style="cursor:pointer" onclick="openMember('${m.id}')">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+      <td>${h.label}</td>
+      <td>${fmt(i.open)} <span style="color:var(--bad);font-size:11.5px">(${dayDiff(today(),i.open)} วันแล้ว)</span></td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="btn sm ghost" onclick="copyText(lineMsg(findM('${m.id}'),HS.find(x=>x.key==='${h.key}')))">📋 คัดลอกข้อความ LINE</button>
+        <button class="btn sm gold" onclick="markSent('${m.id}','${h.key}')">✓ ส่งแล้ว</button>
+      </td></tr>`).join('')}</table></div>
+      ${due.length>20?`<div style="font-size:12px;color:var(--mut);margin-top:8px">แสดง 20 รายการแรก — ดูทั้งหมดที่แท็บ 💛 Happiness Survey</div>`:''}`
+    :`<div class="empty">🎉 ไม่มีแบบสอบถามค้างส่ง</div>`}
+  </div>
+
+  <div class="card">
+    <h2>📨 ส่งแล้ว รอคำตอบ <span class="cnt">${wait.length} รายการ</span></h2>
+    ${wait.length?`<div class="tblwrap"><table><tr><th>สมาชิก</th><th>แบบสอบถาม</th><th></th></tr>
+    ${wait.map(({m,h})=>`<tr>
+      <td class="mname" style="cursor:pointer" onclick="openMember('${m.id}')">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+      <td>${h.label}</td>
+      <td style="text-align:right"><button class="btn sm" onclick="markDone('${m.id}','${h.key}')">✅ ตอบแล้ว — บันทึกคำตอบ</button></td>
+      </tr>`).join('')}</table></div>`
+    :`<div class="empty">ไม่มีรายการรอคำตอบ</div>`}
+  </div>
+
+  <div class="card">
+    <h2>🎓 Mentoring กำลังดำเนินการ <span class="cnt">${mentoring.length} คน</span></h2>
+    ${mentoring.length?`<div class="tblwrap"><table><tr><th>สมาชิกใหม่</th><th>Mentor</th><th>เริ่ม</th><th>ตอนนี้</th><th style="width:180px">ความคืบหน้า</th></tr>
+    ${mentoring.map(m=>{const d=wDone(m);const cw=curWeek(m);return `<tr class="click" onclick="openMember('${m.id}')">
+      <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+      <td>${esc(m.mentor||'—')}</td>
+      <td>${fmt(m.start)}</td>
+      <td>${cw===null?'ครบ 8 สัปดาห์':'สัปดาห์ที่ '+cw}</td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="bar ${d===9?'full':''}" style="flex:1"><i style="width:${Math.round(d/9*100)}%"></i></div><span style="font-size:12px;color:var(--mut);white-space:nowrap">${wLast(m)<0?'ยังไม่เริ่ม':wLast(m)+'/8'}</span></div></td>
+      </tr>`;}).join('')}</table></div>`
+    :`<div class="empty">ไม่มีสมาชิกที่กำลัง Mentoring</div>`}
+  </div>`;
+}
+function markSent(id,k){const m=findM(id);m.hs[k].sent=true;save(id);render();toast('บันทึก: ส่งแบบสอบถามแล้ว');}
+function markDone(id,k){const m=findM(id);m.hs[k].done=true;save(id);openMember(id);toast('บันทึก: ตอบแล้ว — กรอกสรุปคำตอบด้านล่างได้เลย');}
+
+/* ---------- members ---------- */
+let q='',fil='all';
+function vMembers(){
+  let ms=[...state.members];
+  if(q){const qq=q.toLowerCase();ms=ms.filter(m=>(m.name+' '+(m.nick||'')+' '+(m.prof||'')+' '+(m.mentor||'')).toLowerCase().includes(qq));}
+  if(fil==='first')ms=ms.filter(m=>m.status==='ปีแรก');
+  if(fil==='old')ms=ms.filter(m=>m.status!=='ปีแรก');
+  if(fil==='mentoring')ms=ms.filter(m=>wDone(m)<9&&m.status==='ปีแรก');
+  if(fil==='done')ms=ms.filter(m=>wDone(m)===9);
+  ms.sort((a,b)=>(b.start||'').localeCompare(a.start||''));
+  return `
+  <div class="card">
+    <h2>👥 สมาชิก <span class="cnt">${ms.length}/${state.members.length} คน</span></h2>
+    <div class="toolbar no-print">
+      <input type="text" placeholder="🔍 ค้นหา ชื่อ / ชื่อเล่น / อาชีพ / Mentor" value="${esc(q)}" oninput="q=this.value;render()">
+      <select onchange="fil=this.value;render()">
+        <option value="all" ${fil==='all'?'selected':''}>ทั้งหมด</option>
+        <option value="first" ${fil==='first'?'selected':''}>ปีแรก</option>
+        <option value="old" ${fil==='old'?'selected':''}>เกิน 1 ปี</option>
+        <option value="mentoring" ${fil==='mentoring'?'selected':''}>กำลัง Mentoring</option>
+        <option value="done" ${fil==='done'?'selected':''}>จบ 8 สัปดาห์แล้ว</option>
+      </select>
+      <button class="btn gold" onclick="openAdd()">＋ เพิ่มสมาชิกใหม่</button>
+    </div>
+    <div class="tblwrap"><table>
+      <tr><th>สมาชิก</th><th>อาชีพ</th><th>สถานะ</th><th>เริ่ม</th><th>Mentor</th><th>Week 0–8</th><th>สไลด์</th><th>Survey</th></tr>
+      ${ms.map(m=>{
+        const icons=HS.map(h=>hsIcon(hsInfo(m,h).st)).join(' ');
+        return `<tr class="click" onclick="openMember('${m.id}')">
+        <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+        <td style="font-size:12.5px;max-width:170px">${esc(m.prof||'')}</td>
+        <td><span class="badge ${m.status==='ปีแรก'?'b-first':'b-old'}">${esc(m.status||'—')}</span></td>
+        <td style="white-space:nowrap">${fmt(m.start)}</td>
+        <td style="font-size:12.5px">${esc(m.mentor||'—')}</td>
+        <td><span class="wk">${m.weeks.map(w=>`<i class="${w===true?'t':w===false?'f':''}" title=""></i>`).join('')}</span> <span style="font-size:11px;color:var(--mut);white-space:nowrap">${wLast(m)<0?'ยังไม่เริ่ม':wLast(m)+'/8'}</span></td>
+        <td>${SLIDES.map(([k,l])=>`<span class="chip ${m.slides[k]===true?'t':m.slides[k]===false?'f':''}">${l}</span>`).join('')}</td>
+        <td style="font-size:15px;letter-spacing:2px">${icons}</td>
+        </tr>`;}).join('')}
+    </table></div>
+  </div>`;
+}
+
+/* ---------- member modal ---------- */
+function openModal(html){document.getElementById('modalBox').innerHTML=html;document.getElementById('ovl').classList.add('show');}
+function closeModal(){document.getElementById('ovl').classList.remove('show');render();}
+function openMember(id){
+  const m=findM(id);if(!m)return;
+  const cw=curWeek(m);
+  openModal(`
+  <button class="x" onclick="closeModal()">✕</button>
+  <h3>${esc(m.nick||'')} — ${esc(m.name)}</h3>
+  <div class="sub">${esc(m.prof||'')} · เริ่ม ${fmt(m.start)}${cw!==null?` · ขณะนี้อยู่สัปดาห์ที่ ${cw}`:''}</div>
+
+  <div class="grid2">
+    <div class="field"><label>ชื่อสมาชิก (Member Name)</label><input type="text" value="${esc(m.name)}" onchange="upd('${id}','name',this.value)"></div>
+    <div class="field"><label>ชื่อเล่น</label><input type="text" value="${esc(m.nick||'')}" onchange="upd('${id}','nick',this.value)"></div>
+    <div class="field"><label>อาชีพ</label><input type="text" value="${esc(m.prof||'')}" onchange="upd('${id}','prof',this.value)"></div>
+    <div class="field"><label>Personal Mentor</label><input type="text" value="${esc(m.mentor||'')}" onchange="upd('${id}','mentor',this.value)"></div>
+    <div class="field"><label>วันเริ่มเป็นสมาชิก</label><input type="date" value="${esc(m.start||'')}" onchange="upd('${id}','start',this.value)"></div>
+    <div class="field"><label>สถานะสมาชิก</label><select onchange="upd('${id}','status',this.value)">
+      <option ${m.status==='ปีแรก'?'selected':''}>ปีแรก</option><option ${m.status==='เกิน 1 ปี'?'selected':''}>เกิน 1 ปี</option></select></div>
+  </div>
+
+  <div class="sect"><h4>📅 Mentoring 8 สัปดาห์ (${wLabel(m)})</h4>
+    ${WEEKS.map(([t,d],i)=>`<div class="wkrow">
+      <div class="t"><b>${t}</b><small>${d}</small></div>
+      <button class="tri ${m.weeks[i]===true?'t':m.weeks[i]===false?'f':''}" onclick="cycW('${id}',${i},this)">${triLabel(m.weeks[i])}</button>
+    </div>`).join('')}
+  </div>
+
+  <div class="sect"><h4>🖼️ สไลด์ 3 อย่าง</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+    ${SLIDES.map(([k,l])=>`<button class="tri ${m.slides[k]===true?'t':m.slides[k]===false?'f':''}" style="min-width:140px" onclick="cycS('${id}','${k}',this)">${l} · ${triLabel(m.slides[k])}</button>`).join('')}
+    </div>
+  </div>
+
+  <div class="sect"><h4>💛 Happiness Survey</h4>
+    ${HS.map(h=>{const i=hsInfo(m,h);const[cls,txt]=HS_BADGE[i.st];return `
+    <div class="hsbox">
+      <div class="top"><b>${h.label}</b>
+        <span class="badge ${cls}">${txt}</span>
+        <span style="font-size:12px;color:var(--mut)">กำหนด: ${fmt(i.due)}${h.key==='m12'?` (เริ่มส่งได้ ${fmt(i.open)})`:''}</span>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+        <label class="cbl"><input type="checkbox" ${i.rec.sent?'checked':''} onchange="updHS('${id}','${h.key}','sent',this.checked)"> ส่งแบบแล้ว</label>
+        <label class="cbl"><input type="checkbox" ${i.rec.done?'checked':''} onchange="updHS('${id}','${h.key}','done',this.checked)"> ทำแล้ว</label>
+        <button class="btn sm ghost" onclick="copyText(lineMsg(findM('${id}'),HS.find(x=>x.key==='${h.key}')))">📋 คัดลอกข้อความ LINE</button>
+      </div>
+      <div class="field" style="margin-top:8px;margin-bottom:0"><label>สรุปคำตอบ / ความเห็นของสมาชิก</label>
+        <textarea rows="2" onchange="updHS('${id}','${h.key}','note',this.value)">${esc(i.rec.note||'')}</textarea></div>
+    </div>`;}).join('')}
+  </div>
+
+  <div class="sect"><h4>📝 หมายเหตุ</h4>
+    <textarea rows="2" onchange="upd('${id}','note',this.value)">${esc(m.note||'')}</textarea>
+  </div>
+
+  <div class="sect no-print" style="display:flex;justify-content:space-between">
+    <button class="btn red sm" onclick="delMember('${id}')">🗑 ลบสมาชิก</button>
+    <button class="btn" onclick="closeModal()">เสร็จสิ้น</button>
+  </div>`);
+}
+function triLabel(v){return v===true?'✅ ทำแล้ว':v===false?'❌ ไม่ผ่าน':'⬜ ยังไม่ทำ';}
+function cyc(v){return v===null||v===undefined?true:(v===true?false:null);}
+function cycW(id,i,btn){const m=findM(id);m.weeks[i]=cyc(m.weeks[i]);save(id);openMember(id);}
+function cycS(id,k,btn){const m=findM(id);m.slides[k]=cyc(m.slides[k]);save(id);openMember(id);}
+function upd(id,f,v){const m=findM(id);m[f]=v;save(id);}
+function updHS(id,k,f,v){const m=findM(id);m.hs[k][f]=v;save(id);}
+function delMember(id){const m=findM(id);
+  if(!confirm(`ลบสมาชิก "${m.nick||m.name}" ออกจากระบบ?`))return;
+  state.members=state.members.filter(x=>x.id!==id);saveDel(id);closeModal();}
+function openAdd(){
+  openModal(`
+  <button class="x" onclick="closeModal()">✕</button>
+  <h3>＋ เพิ่มสมาชิกใหม่</h3>
+  <div class="sub">สมาชิกใหม่จะเริ่มนับ Week 0 จากวันเริ่มเป็นสมาชิก</div>
+  <div class="grid2">
+    <div class="field"><label>ชื่อสมาชิก (Member Name) *</label><input type="text" id="a_name"></div>
+    <div class="field"><label>ชื่อเล่น</label><input type="text" id="a_nick"></div>
+    <div class="field"><label>อาชีพ</label><input type="text" id="a_prof"></div>
+    <div class="field"><label>Personal Mentor *</label><input type="text" id="a_mentor" list="mentors">
+      <datalist id="mentors">${[...new Set(state.members.map(m=>m.mentor).filter(Boolean))].map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
+    <div class="field"><label>วันเริ่มเป็นสมาชิก *</label><input type="date" id="a_start" value="${new Date().toISOString().slice(0,10)}"></div>
+  </div>
+  <div style="text-align:right;margin-top:10px"><button class="btn gold" onclick="addMember()">บันทึกสมาชิกใหม่</button></div>`);
+}
+function addMember(){
+  const g=i=>document.getElementById(i).value.trim();
+  if(!g('a_name')){toast('กรุณากรอกชื่อสมาชิก');return;}
+  const id='m'+(Date.now());
+  state.members.unshift({id,name:g('a_name'),nick:g('a_nick'),prof:g('a_prof'),status:'ปีแรก',
+    start:g('a_start'),mentor:g('a_mentor'),
+    weeks:[null,null,null,null,null,null,null,null,null],
+    slides:{onepage:null,s121:null,s5min:null},
+    hs:{m3:{sent:false,done:false,note:''},m6:{sent:false,done:false,note:''},m12:{sent:false,done:false,note:''}},
+    note:''});
+  save(id);closeModal();openMember(id);toast('เพิ่มสมาชิกใหม่แล้ว');
+}
+
+/* ---------- survey tab ---------- */
+let hsFil='pending';
+function vSurvey(){
+  return `
+  <div class="card no-print">
+    <div class="toolbar" style="margin-bottom:0">
+      <b style="font-size:14px">💛 Happiness Survey ทุกสมาชิก</b>
+      <select onchange="hsFil=this.value;render()">
+        <option value="pending" ${hsFil==='pending'?'selected':''}>เฉพาะที่ต้องติดตาม (ถึงกำหนด/รอคำตอบ)</option>
+        <option value="all" ${hsFil==='all'?'selected':''}>แสดงทั้งหมด</option>
+      </select>
+    </div>
+  </div>
+  ${HS.map(h=>{
+    let rows=state.members.map(m=>({m,i:hsInfo(m,h)}));
+    if(hsFil==='pending')rows=rows.filter(r=>r.i.st==='due'||r.i.st==='wait');
+    rows.sort((a,b)=>(a.i.due||0)-(b.i.due||0));
+    return `<div class="card">
+    <h2>${h.label} <span class="cnt">${rows.length} คน</span></h2>
+    ${rows.length?`<div class="tblwrap"><table>
+      <tr><th>สมาชิก</th><th>กำหนด</th><th>สถานะ</th><th>ส่งแล้ว</th><th>ทำแล้ว</th><th>สรุปคำตอบ</th><th></th></tr>
+      ${rows.map(({m,i})=>{const[cls,txt]=HS_BADGE[i.st];return `<tr>
+        <td class="mname" style="cursor:pointer" onclick="openMember('${m.id}')">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+        <td style="white-space:nowrap">${fmt(i.due)}</td>
+        <td><span class="badge ${cls}">${txt}</span></td>
+        <td><input type="checkbox" ${i.rec.sent?'checked':''} onchange="updHS('${m.id}','${h.key}','sent',this.checked);render()"></td>
+        <td><input type="checkbox" ${i.rec.done?'checked':''} onchange="updHS('${m.id}','${h.key}','done',this.checked);render()"></td>
+        <td style="font-size:12.5px;max-width:220px">${esc(i.rec.note||'')}</td>
+        <td style="text-align:right"><button class="btn sm ghost" onclick="copyText(lineMsg(findM('${m.id}'),HS.find(x=>x.key==='${h.key}')))">📋 LINE</button></td>
+      </tr>`;}).join('')}</table></div>`
+    :`<div class="empty">ไม่มีรายการ</div>`}
+    </div>`;}).join('')}`;
+}
+
+/* ---------- report ---------- */
+let repRound='all';
+function vReport(){
+  const rounds=repRound==='all'?HS:HS.filter(h=>h.key===repRound);
+  const done=[],pending=[];
+  rounds.forEach(h=>state.members.forEach(m=>{
+    const i=hsInfo(m,h);
+    if(i.rec.done)done.push({m,h,i});
+    else if(i.st==='due'||i.st==='wait')pending.push({m,h,i});
+  }));
+  done.sort((a,b)=>(b.i.due||0)-(a.i.due||0));
+  const answered=done.filter(d=>d.i.rec.note||d.m.note);
+  return `
+  <div class="card no-print">
+    <div class="toolbar" style="margin-bottom:0">
+      <b style="font-size:14px">📊 รายงานสรุปเสนอประธาน</b>
+      <select onchange="repRound=this.value;render()">
+        <option value="all" ${repRound==='all'?'selected':''}>ทุกแบบสอบถาม</option>
+        ${HS.map(h=>`<option value="${h.key}" ${repRound===h.key?'selected':''}>${h.label}</option>`).join('')}
+      </select>
+      <button class="btn gold" onclick="window.print()">🖨 พิมพ์ / บันทึก PDF</button>
+    </div>
+  </div>
+  <div class="rephead"><h2>รายงานสรุป Happiness Survey — Chapter The Top</h2>
+    <p>ข้อมูล ณ วันที่ ${fmt(today())} · ${repRound==='all'?'ทุกแบบสอบถาม':HS.find(h=>h.key===repRound).label}</p></div>
+
+  <div class="stats">
+    <div class="stat green"><div class="n">${done.length}</div><div class="l">ตอบแบบสอบถามแล้ว</div></div>
+    <div class="stat blue"><div class="n">${pending.filter(p=>p.i.st==='wait').length}</div><div class="l">ส่งแล้ว รอคำตอบ</div></div>
+    <div class="stat red"><div class="n">${pending.filter(p=>p.i.st==='due').length}</div><div class="l">ถึงกำหนด ยังไม่ส่ง</div></div>
+  </div>
+
+  <div class="card">
+    <h2>💬 คำตอบ / ความเห็นจากสมาชิก <span class="cnt">${answered.length} รายการ</span></h2>
+    ${answered.length?`<div class="tblwrap"><table>
+      <tr><th>สมาชิก</th><th>แบบสอบถาม</th><th>กำหนด</th><th>คำตอบ / ความเห็น</th></tr>
+      ${answered.map(({m,h,i})=>`<tr>
+        <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+        <td style="font-size:12.5px">${h.label}</td>
+        <td style="white-space:nowrap">${fmt(i.due)}</td>
+        <td style="font-size:13px">${esc(i.rec.note||'')}${m.note?`<div class="note-line">📌 ${esc(m.note)}</div>`:''}</td>
+      </tr>`).join('')}</table></div>`
+    :`<div class="empty">ยังไม่มีคำตอบที่บันทึกไว้ — เปิดหน้าสมาชิกแล้วกรอก "สรุปคำตอบ" ได้เลย</div>`}
+  </div>
+
+  <div class="card">
+    <h2>✅ รายชื่อที่ทำแบบสอบถามแล้ว <span class="cnt">${done.length} รายการ</span></h2>
+    ${done.length?`<div class="tblwrap"><table>
+      <tr><th>สมาชิก</th><th>แบบสอบถาม</th><th>กำหนด</th></tr>
+      ${done.map(({m,h,i})=>`<tr><td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td><td style="font-size:12.5px">${h.label}</td><td>${fmt(i.due)}</td></tr>`).join('')}
+      </table></div>`:`<div class="empty">ยังไม่มี</div>`}
+  </div>
+
+  <div class="card">
+    <h2>⏳ ค้างติดตาม <span class="cnt">${pending.length} รายการ</span></h2>
+    ${pending.length?`<div class="tblwrap"><table>
+      <tr><th>สมาชิก</th><th>แบบสอบถาม</th><th>กำหนด</th><th>สถานะ</th></tr>
+      ${pending.map(({m,h,i})=>{const[cls,txt]=HS_BADGE[i.st];return `<tr><td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td><td style="font-size:12.5px">${h.label}</td><td>${fmt(i.due)}</td><td><span class="badge ${cls}">${txt}</span></td></tr>`;}).join('')}
+      </table></div>`:`<div class="empty">ไม่มีรายการค้าง</div>`}
+  </div>`;
+}
+
+/* ---------- settings ---------- */
+function vSettings(){
+  const c=state.config;
+  return `
+  <div class="card">
+    <h2>🔗 ลิงก์แบบสอบถาม</h2>
+    <div class="sub" style="color:var(--mut);font-size:12.5px;margin-bottom:10px">วางลิงก์ Google Form (หรือแบบฟอร์มอื่น) ของแต่ละแบบสอบถาม — ลิงก์จะถูกใส่ในข้อความ LINE อัตโนมัติ</div>
+    <div class="field"><label>Happiness Survey 3 เดือน</label><input type="url" value="${esc(c.link3)}" onchange="state.config.link3=this.value;save('cfg')" placeholder="https://forms.gle/..."></div>
+    <div class="field"><label>Happiness Survey 6 เดือน</label><input type="url" value="${esc(c.link6)}" onchange="state.config.link6=this.value;save('cfg')" placeholder="https://forms.gle/..."></div>
+    <div class="field"><label>Happiness Survey 12 เดือน (ก่อนต่ออายุ)</label><input type="url" value="${esc(c.link12)}" onchange="state.config.link12=this.value;save('cfg')" placeholder="https://forms.gle/..."></div>
+    <div class="field"><label>ข้อความ LINE (ใช้ {nick} {name} {survey} {link} ได้)</label>
+      <textarea rows="4" onchange="state.config.tpl=this.value;save('cfg')">${esc(c.tpl)}</textarea></div>
+  </div>
+
+  <div class="card">
+    <h2>🤖 การส่งแบบสอบถามใน LINE อัตโนมัติ</h2>
+    <div class="help">
+      ตอนนี้แอปช่วย <b>เตือนเมื่อถึงกำหนด + สร้างข้อความให้คัดลอกไปส่งใน LINE</b> ได้ทันที และข้อมูลอยู่บนคลาวด์แล้ว ✅<br>
+      ส่วนการ <b>ส่งเข้า LINE สมาชิกอัตโนมัติ</b> ขาดอีก 2 อย่าง: <b>LINE Official Account (Messaging API)</b> ของ Chapter + <b>แบบสอบถาม 3 ชุด</b> — เมื่อพร้อมแล้วแจ้งได้เลย เดี๋ยวทำต่อให้ครับ
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>💾 ข้อมูล</h2>
+    <div class="toolbar" style="margin-bottom:0">
+      <button class="btn" onclick="expJson()">⬇️ สำรองข้อมูล (JSON)</button>
+      <label class="btn ghost" style="display:inline-block;cursor:pointer">⬆️ กู้คืนจากไฟล์สำรอง<input type="file" accept=".json" style="display:none" onchange="impJson(this)"></label>
+      <label class="btn ghost" style="display:inline-block;cursor:pointer">📄 นำเข้า CSV (แทนที่ทั้งหมด)<input type="file" accept=".csv" style="display:none" onchange="impCsv(this)"></label>
+      <button class="btn red" onclick="resetSeed()">♻️ กลับไปใช้ข้อมูลตั้งต้น</button>
+    </div>
+    <div style="font-size:12px;color:var(--mut);margin-top:10px">☁️ ข้อมูลเก็บบนคลาวด์ (Supabase) — ทุกคนที่เปิดแอปเห็นข้อมูลชุดเดียวกัน และมีสำเนาในเครื่องเผื่อออฟไลน์ · แนะนำสำรอง JSON เป็นระยะเช่นเดิม</div>
+  </div>`;
+}
+function expJson(){
+  const a=document.createElement('a');
+  a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(state,null,1));
+  a.download='top-mentor-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+  toast('ดาวน์โหลดไฟล์สำรองแล้ว');
+}
+function impJson(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{const s=JSON.parse(r.result);
+    if(!s||!Array.isArray(s.members))throw 0;
+    if(!confirm(`กู้คืนข้อมูล ${s.members.length} คน แทนที่ข้อมูลปัจจุบัน?`))return;
+    s.config=Object.assign({},DEF_CONFIG,s.config||{});state=s;saveAll();render();toast('กู้คืนข้อมูลแล้ว');
+  }catch(e){toast('ไฟล์ไม่ถูกต้อง');}};
+  r.readAsText(f,'utf-8');
+}
+function resetSeed(){
+  if(!confirm('ล้างข้อมูลทั้งหมด แล้วกลับไปใช้ข้อมูลตั้งต้นจากไฟล์รายงานเดิม?'))return;
+  state={members:JSON.parse(JSON.stringify(SEED)),config:Object.assign({},DEF_CONFIG)};saveAll();render();toast('กลับไปใช้ข้อมูลตั้งต้นแล้ว');
+}
+/* CSV import — โครงเดียวกับไฟล์ The Top Mentor - Report.csv */
+function parseCsv(text){
+  const rows=[];let row=[],cur='',inQ=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(inQ){if(ch==='"'){if(text[i+1]==='"'){cur+='"';i++;}else inQ=false;}else cur+=ch;}
+    else if(ch==='"')inQ=true;
+    else if(ch===','){row.push(cur);cur='';}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cur);cur='';if(row.some(c=>c!==''))rows.push(row);row=[];}
+    else cur+=ch;}
+  if(cur!==''||row.length){row.push(cur);if(row.some(c=>c!==''))rows.push(row);}
+  return rows;
+}
+function thDate(s){
+  if(!s)return null;const p=s.trim().split(/\s+/);if(p.length!==3)return null;
+  const mi=THM.indexOf(p[1]);if(mi<0)return null;
+  return `${String(p[2]).padStart(4,'0')}-${String(mi+1).padStart(2,'0')}-${String(p[0]).padStart(2,'0')}`;
+}
+function tb(v){return v==='TRUE'?true:(v==='FALSE'?false:null);}
+function impCsv(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{
+    const rows=parseCsv(r.result).slice(1);
+    const ms=rows.filter(c=>c[1]&&c[1].trim()).map((c,i)=>({
+      id:'m'+(i+1),name:c[1].trim(),nick:(c[3]||'').trim(),prof:(c[4]||'').trim(),status:(c[5]||'').trim(),
+      start:thDate(c[6]),mentor:(c[7]||'').trim(),
+      weeks:[tb(c[8]),tb(c[9]),tb(c[10]),tb(c[11]),tb(c[12]),tb(c[13]),tb(c[14]),tb(c[15]),tb(c[16])],
+      slides:{onepage:tb(c[17]),s121:tb(c[18]),s5min:tb(c[19])},
+      hs:{m3:{sent:!!tb(c[21]),done:!!tb(c[22]),note:''},m6:{sent:!!tb(c[24]),done:!!tb(c[25]),note:''},m12:{sent:!!tb(c[27]),done:!!tb(c[28]),note:''}},
+      note:(c[29]||'').trim()}));
+    if(!ms.length)throw 0;
+    if(!confirm(`พบสมาชิก ${ms.length} คนในไฟล์ CSV — แทนที่ข้อมูลปัจจุบันทั้งหมด?`))return;
+    state.members=ms;saveAll();render();toast('นำเข้า CSV แล้ว '+ms.length+' คน');
+  }catch(e){toast('อ่านไฟล์ CSV ไม่สำเร็จ — ตรวจสอบว่าโครงคอลัมน์ตรงกับไฟล์รายงานเดิม');}};
+  r.readAsText(f,'utf-8');
+}
+
+render();
+/* boot: ส่งของค้าง (ถ้ามี) แล้วดึงข้อมูลล่าสุดจากคลาวด์ + ดึงซ้ำเมื่อกลับมาที่หน้าจอ/ทุก 90 วิ */
+(hasDirty()?flush():Promise.resolve()).then(()=>fetchAll()).catch(()=>setSync(false));
+setInterval(()=>{hasDirty()?flush():fetchAll().catch(()=>setSync(false));},90000);
+window.addEventListener('focus',()=>{if(!hasDirty())fetchAll().catch(()=>setSync(false));});
+window.addEventListener('online',()=>{if(hasDirty())flush();});
+</script>
+</body>
+</html>
