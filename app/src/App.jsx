@@ -38,6 +38,7 @@ import MyJobs from "./components/MyJobs";
 import Invoices from "./components/Invoices";
 import Receipts from "./components/Receipts";
 import Receivables from "./components/Receivables";
+import Payables from "./components/Payables";
 import TaxReport from "./components/TaxReport";
 import CustomerFollowup from "./components/CustomerFollowup";
 import WebOrders from "./components/WebOrders";
@@ -62,6 +63,7 @@ const NAV = {
   receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
   billing: { th: "ใบวางบิล", en: "Billing Notes", icon: "clipboard" },
   receivables: { th: "เงินค้างรับ", en: "Receivables", icon: "trend" },
+  payables: { th: "ค้างจ่าย", en: "Payables", icon: "trend" },
   tax: { th: "รายงานภาษี", en: "Tax Report", icon: "clipboard" },
   profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
   cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "trend" },
@@ -83,7 +85,7 @@ const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "hr"] },
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "customers", "followup", "weborders", "website"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
-  { key: "finance", label: "การเงิน", ids: ["receivables", "tax", "profit", "cashflow", "expenses"] },
+  { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "po"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
@@ -94,7 +96,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-05·ราคารูดเต็ม/ผ่อน 10 เดือน ครอบคลุมวัสดุด้วย (แคตตาล็อก·เว็บ·แชต — เพิ่มแท็บวัสดุในส่งราคา) v296";
+const BUILD = "2026-07-05·เมนูใหม่ ค้างจ่าย (Payables): PO·เบิกจ่าย·ค่าแรงซัพ แยกประเภท/เจ้าหนี้ + แก้นับซ้ำยอดค้างจ่ายแดชบอร์ด v297";
 
 function SetupNotice() {
   return (
@@ -448,6 +450,7 @@ export default function App() {
         {view === "billing" && <BillingNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
         {view === "receivables" && <Receivables role={role} onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
+        {view === "payables" && <Payables role={role} onOpenPo={(no) => { setPoFocus(no); go("po"); }} onGoExpenses={() => go("expenses")} onGoSub={() => go("subcontract")} />}
         {view === "tax" && <TaxReport role={role} />}
         {view === "weborders" && <WebOrders role={role} />}
         {view === "website" && <WebManage role={role} />}

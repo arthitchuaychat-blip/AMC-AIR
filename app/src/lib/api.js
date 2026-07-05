@@ -587,7 +587,7 @@ export async function dashboardActionLite() {
   const today = new Date().toISOString().slice(0, 10);
   const [inv, exp, po, poi, sp, lj] = await Promise.all([
     supabase.from("invoices").select("total,wht_amt,status,due_date"),
-    supabase.from("expense_requests").select("status,amount"),
+    supabase.from("expense_requests").select("id,status,amount"),
     supabase.from("purchase_orders").select("po_no,status,vat,expense_id,paid_at").then(async (r) =>
       (r.error && /expense_id|paid_at|vat/i.test(r.error.message || "")) ? await supabase.from("purchase_orders").select("po_no,status") : r), // pre-096/100 fallback
     supabase.from("po_items").select("po_no,qty,price"),
@@ -602,7 +602,9 @@ export async function dashboardActionLite() {
   const poTotal = {}; (poi.data || []).forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
   const poPayable = pos.filter((x) => x.status !== "cancelled" && !x.paid_at)
     .reduce((a, x) => a + (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1), 0);               // PO ที่ยังไม่จ่ายเงิน (รวม VAT)
-  const approvedExpenseSum = (exp.data || []).filter((x) => x.status === "approved").reduce((a, x) => a + (Number(x.amount) || 0), 0); // เบิกอนุมัติแล้วรอจ่าย
+  // เบิกอนุมัติแล้วรอจ่าย — ไม่นับใบเบิกที่เป็นค่าจ่าย PO (PO ตัวนั้นถูกนับใน poPayable แล้ว ไม่งั้นซ้ำ)
+  const poExpIds = new Set(pos.map((x) => x.expense_id).filter(Boolean));
+  const approvedExpenseSum = (exp.data || []).filter((x) => x.status === "approved" && !poExpIds.has(x.id)).reduce((a, x) => a + (Number(x.amount) || 0), 0);
   const payoutUnpaid = (sp.data || []).filter((x) => x.status !== "paid").reduce((a, x) => a + (Number(x.net) || 0), 0);              // ใบจ่ายช่างซัพรอจ่าย
   const laborOwed = (lj.data || []).reduce((a, j) => a + Math.max(0, (Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0)), 0); // ค่าแรงยืนยันแล้วยังไม่ตั้งเบิก
   return {
@@ -616,6 +618,52 @@ export async function dashboardActionLite() {
     poPayable, approvedExpenseSum, payoutUnpaid, laborOwed,
     payable: poPayable + approvedExpenseSum + payoutUnpaid + laborOwed,
   };
+}
+
+// รายการค้างจ่ายแจกแจงรายใบ (เมนู "ค้างจ่าย") — แหล่ง/สูตรเดียวกับยอดค้างจ่ายบนแดชบอร์ด
+// 4 ประเภทไม่ทับกัน: PO ยังไม่จ่าย · เบิกอนุมัติรอจ่าย (ไม่รวมใบเบิกของ PO) · ใบจ่ายซัพรอจ่าย · ค่าแรงยืนยันแล้วยังไม่ตั้งเบิก
+export async function listPayables() {
+  const [po, poi, exp, sp, lj, tm] = await Promise.all([
+    supabase.from("purchase_orders").select("*").neq("status", "cancelled").order("created_at", { ascending: false }),
+    supabase.from("po_items").select("po_no,qty,price"),
+    supabase.from("expense_requests").select("*").eq("status", "approved").order("created_at", { ascending: false }),
+    supabase.from("sub_payouts").select("*").neq("status", "paid").order("created_at", { ascending: false }),
+    supabase.from("job_orders").select("job_no,team,labor_total,labor_paid_amt,scheduled_at").eq("labor_confirmed", true).gt("labor_total", 0)
+      .then((r) => (r.error ? { data: [] } : r)),
+    supabase.from("teams").select("id,name"),
+  ]);
+  if (po.error) throw po.error;
+  const cb = await _creators();
+  const teamName = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
+  const poTotal = {}; (poi.data || []).forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
+  const rows = [];
+  (po.data || []).filter((x) => !x.paid_at).forEach((x) => rows.push({
+    type: "po", refNo: x.po_no, name: x.supplier || "(ไม่ระบุผู้ขาย)",
+    title: x.quote_no ? `อ้างอิง ${x.quote_no}` : null,
+    amount: (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1),
+    date: (x.created_at || "").slice(0, 10),
+    status: x.expense_id ? "ส่งเบิกแล้ว · รอจ่าย" : "ยังไม่ตั้งเบิกจ่าย",
+  }));
+  const poExpIds = new Set((po.data || []).map((x) => x.expense_id).filter(Boolean));
+  (exp.data || []).filter((x) => !poExpIds.has(x.id)).forEach((x) => rows.push({
+    type: "expense", refNo: `เบิก #${x.id}`, name: cb[x.requester] || cb[x.created_by] || "(ไม่ระบุผู้ขอ)",
+    title: x.title || x.category || null, amount: Number(x.amount) || 0,
+    date: (x.created_at || "").slice(0, 10), status: "อนุมัติแล้ว · รอจ่าย", expenseId: x.id,
+  }));
+  (sp.data || []).forEach((x) => rows.push({
+    type: "payout", refNo: `ใบจ่ายซัพ ${(x.id || "").slice(0, 6)}`, name: teamName[x.team] || x.team || "ทีมช่างซัพ",
+    title: (x.job_nos || []).join(", ") || null, amount: Number(x.net) || 0,
+    date: (x.created_at || "").slice(0, 10), status: "รอจ่าย",
+  }));
+  (lj.data || []).forEach((j) => {
+    const owed = Math.max(0, (Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0));
+    if (owed > 0) rows.push({
+      type: "labor", refNo: j.job_no, name: teamName[j.team] || j.team || "ทีมช่างซัพ",
+      title: "ค่าแรงยืนยันแล้ว · ยังไม่อยู่ในใบจ่ายซัพ", amount: owed,
+      date: (j.scheduled_at || "").slice(0, 10), status: "ยังไม่ตั้งเบิกจ่าย",
+    });
+  });
+  return rows.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 }
 
 // ใบเสนอราคาที่อนุมัติแล้ว (อย่างย่อ) — ตัวเลือก "อ้างอิงใบเสนอราคา" บนใบสั่งซื้อ
