@@ -61,6 +61,15 @@ module.exports = async (req, res) => {
           <h1 style="font-size:clamp(21px,3vw,28px)">${esc(name)}</h1>
           <div class="chips">${chips}</div>
           <div class="price">${p.sale_price ? baht(p.sale_price) : "สอบถามราคา"} ${p.sale_price ? `<small>/ ${esc(p.unit || "หน่วย")}</small>` : ""}</div>
+          ${(p.kind === "ac" || p.kind === "service") && p.sale_price ? (() => {
+            // ราคาชำระด้วยบัตรเครดิต: รูดเต็ม +4% · ผ่อน 10 เดือน +14% (ปัดขึ้นเป็นบาทเต็ม)
+            const full = Math.ceil(Number(p.sale_price) * 1.04), inst = Math.ceil(Number(p.sale_price) * 1.14);
+            return `<div class="paytable">
+              <div class="prow cash"><span>💵 เงินสด / โอน</span><b>${baht(p.sale_price)}</b></div>
+              <div class="prow"><span>💳 บัตรเครดิต รูดเต็ม</span><b>${baht(full)}</b></div>
+              <div class="prow"><span>💳 ผ่อนบัตร 10 เดือน</span><span><b>${baht(inst)}</b> <small>≈ ${baht(Math.ceil(inst / 10))}/เดือน</small></span></div>
+            </div>`;
+          })() : ""}
           ${p.power_cost_year ? `<div class="pcost">⚡ ค่าไฟประมาณ ${baht(p.power_cost_year)}/ปี</div>` : ""}
           ${feats ? `<div class="feats">${feats}</div>` : ""}
           ${p.description ? `<p style="font-size:14.5px;color:var(--ink-2)">${esc(p.description).replace(/\n/g, "<br>")}</p>` : ""}

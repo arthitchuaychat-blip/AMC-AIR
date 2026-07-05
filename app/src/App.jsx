@@ -94,7 +94,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-05·เว็บไซต์ amcair.net: SEO + หน้าบทความ/สินค้าแยก URL + แก้ไขเนื้อหาเว็บจากหลังบ้าน v288";
+const BUILD = "2026-07-05·ราคาบัตรเครดิตอัตโนมัติ (แอร์+บริการ): รูดเต็ม +4% · ผ่อน 10 เดือน +14% — โชว์ในแคตตาล็อก + เว็บไซต์ v289";
 
 function SetupNotice() {
   return (

@@ -105,6 +105,14 @@ h1{font-size:clamp(24px,4vw,36px);font-weight:800;line-height:1.25;letter-spacin
 .feats div{font-size:14px;color:var(--ink-2);display:flex;gap:8px}
 .feats div::before{content:"✓";color:var(--primary);font-weight:800}
 .note{font-size:12.5px;color:var(--ink-3);margin-top:10px}
+.paytable{margin:12px 0 4px;border:1px solid var(--line);border-radius:13px;overflow:hidden}
+.paytable .prow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;font-size:14px;border-bottom:1px solid var(--line)}
+.paytable .prow:last-child{border-bottom:none}
+.paytable .prow span{color:var(--ink-2);font-weight:600}
+.paytable .prow b{font-size:15.5px}
+.paytable .prow small{color:var(--ink-3);font-weight:600}
+.paytable .prow.cash{background:var(--bg-soft)}
+.paytable .prow.cash b{color:var(--primary-dark)}
 footer{background:#0b1220;color:#94a3b8;padding:26px 0;font-size:13px;text-align:center}
 footer a{color:#cbd5e1;font-weight:700}
 .fab{position:fixed;right:16px;bottom:16px;z-index:80;display:flex;flex-direction:column;gap:10px}

@@ -12,6 +12,20 @@ import BulkImportModal from "./BulkImportModal";
 const KINDS = [{ v: "all", l: "ทั้งหมด" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }, { v: "material", l: "วัสดุ" }];
 const KIND_LABEL = { ac: "แอร์", service: "บริการ", material: "วัสดุ" };
 
+// ราคาชำระด้วยบัตรเครดิต (เฉพาะแอร์ + ค่าบริการ) — คิดจากราคาเงินสด ปัดขึ้นเป็นบาทเต็ม
+const CARD_RATES = { full: 0.04, inst10: 0.14 };   // รูดเต็ม +4% · ผ่อน 10 เดือน +14%
+const cardPrice = (p, r) => Math.ceil((Number(p) || 0) * (1 + r));
+const hasCardPrice = (m) => (m.kind === "ac" || m.kind === "service") && Number(m.salePrice) > 0;
+function CardPayLine({ m, compact }) {
+  if (!hasCardPrice(m)) return null;
+  const full = cardPrice(m.salePrice, CARD_RATES.full), inst = cardPrice(m.salePrice, CARD_RATES.inst10);
+  return (
+    <div style={{ fontSize: compact ? 11 : 11.5, color: "#7c5c00", background: "#fff8e6", border: "1px solid #f3e3ad", borderRadius: 8, padding: "3px 8px", marginTop: 6, lineHeight: 1.5 }}>
+      💳 รูดเต็ม <b>{fmtBaht(full)}</b> · ผ่อน 10 ด. <b>{fmtBaht(inst)}</b> <span style={{ opacity: .75 }}>(≈{fmtBaht(Math.ceil(inst / 10))}/ด.)</span>
+    </div>
+  );
+}
+
 // สินค้า 2 หน่วย: แตกยอดคงเหลือเป็นหน่วยใหญ่+เศษ เช่น 247 เมตร (1 ม้วน = 100 เมตร) → "= 2 ม้วน 47 เมตร"
 function dualStockText(m) {
   const f = Number(m.purchaseQty) || 0;
@@ -268,6 +282,7 @@ export default function Catalog({ role }) {
                   <div><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b><small className="cat-substat">/{m.unit || "หน่วย"}</small></div>
                   <div><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b><small className="cat-substat">/{m.unit || "หน่วย"}</small></div>
                 </div>
+                <CardPayLine m={m} />
                 {m.tracked && <div className="cat-card-move">ดูการเคลื่อนไหว <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>}
                 <EditDel m={m} />
               </div>
@@ -295,7 +310,8 @@ export default function Catalog({ role }) {
                   {dualStockText(m) && <small className="cat-substat">{dualStockText(m)}</small>}
                   {stockValue(m) > 0 && <small className="cat-substat">ทุนคงเหลือ {fmtBaht(stockValue(m))}</small>}</div>
                 <div className="cat-lrow-col hide-sm"><span>ต้นทุน</span><b>{fmtBaht2(m.cost)}</b><small className="cat-substat">/{m.unit || "หน่วย"}</small></div>
-                <div className="cat-lrow-col"><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b><small className="cat-substat">/{m.unit || "หน่วย"}</small></div>
+                <div className="cat-lrow-col"><span>ราคาขาย</span><b style={{ color: "var(--up)" }}>{fmtBaht2(m.salePrice)}</b><small className="cat-substat">/{m.unit || "หน่วย"}</small>
+                  {hasCardPrice(m) && <small className="cat-substat" style={{ color: "#7c5c00" }}>💳 {fmtBaht(cardPrice(m.salePrice, CARD_RATES.full))} · ผ่อน10ด. {fmtBaht(cardPrice(m.salePrice, CARD_RATES.inst10))}</small>}</div>
                 <EditDel m={m} />
               </div>
             );
