@@ -3,7 +3,7 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/products", "destination": "/index.html" },
+    { "source": "/products", "destination": "/" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/a/:id", "destination": "/api/article?id=:id" },
     { "source": "/p/:code", "destination": "/api/product?code=:code" },
