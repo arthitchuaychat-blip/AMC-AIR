@@ -106,7 +106,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [acBrand, setAcBrand] = React.useState("all");
   const [acBtu, setAcBtu] = React.useState("all");
   const [acType, setAcType] = React.useState("all");
-  const [acKind, setAcKind] = React.useState("ac");        // แท็บใน picker: แอร์ / บริการ
+  const [acKind, setAcKind] = React.useState("ac");        // แท็บใน picker: แอร์ / บริการ / วัสดุ
+  const [acSeries, setAcSeries] = React.useState("all");   // รุ่น/ซีรีส์ (แอร์ — ไล่ตามยี่ห้อ เหมือนคลังสินค้า)
+  const [acCat, setAcCat] = React.useState("all");         // หมวด (บริการ/วัสดุ)
   const [payPick, setPayPick] = React.useState(null);      // สินค้าที่เลือกแล้ว → รอเลือกราคาตามวิธีชำระ
   const [showThread, setShowThread] = React.useState(false); // mobile pane toggle
   const [toast, setToast] = React.useState(null);
@@ -778,17 +780,24 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       )}
       {acPicker && (() => {
         const nm = (s) => String(s || "").trim().toLowerCase();
-        const brands = [...new Map(acItems.filter((i) => i.brand).map((i) => [nm(i.brand), i.brand])).values()].sort((a, b) => a.localeCompare(b, "th"));
-        const types = [...new Map(acItems.filter((i) => i.ac_type).map((i) => [nm(i.ac_type), i.ac_type])).values()].sort((a, b) => a.localeCompare(b, "th"));
-        const btus = [...new Set(acItems.map((i) => i.btu).filter(Boolean).map(Number))].sort((a, b) => a - b);
+        // ตัวกรองชุดเดียวกับคลังสินค้า: แอร์ = ยี่ห้อ→รุ่น→BTU→ประเภท · บริการ = หมวด+ประเภทแอร์+BTU · วัสดุ = หมวด
+        const pool = acItems.filter((i) => i.kind === acKind);
+        const uniqVals = (arr) => [...new Map(arr.filter(Boolean).map((v) => [nm(v), v])).values()].sort((a, b) => a.localeCompare(b, "th"));
+        const brands = uniqVals(pool.map((i) => i.brand));
+        const seriesOpts = uniqVals(pool.filter((i) => acBrand === "all" || eqi(i.brand, acBrand)).map((i) => i.series));
+        const types = uniqVals((pool.some((i) => i.ac_type) ? pool : acItems.filter((i) => i.kind === "ac")).map((i) => i.ac_type));
+        const btus = [...new Set(pool.flatMap((i) => [i.btu, i.btu_min, i.btu_max]).filter(Boolean).map(Number))].sort((a, b) => a - b);
+        const cats = [...new Map(pool.filter((i) => i.cat).map((i) => [i.cat, i.catName || i.cat])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), "th"));
         // BTU: บริการมีช่วง btu_min–btu_max → เลือกขนาดที่อยู่ในช่วงก็เจอ
         const btuOk = (it) => acBtu === "all" || ((it.btu_min != null || it.btu_max != null)
           ? Number(acBtu) >= Number(it.btu_min ?? it.btu_max) && Number(acBtu) <= Number(it.btu_max ?? it.btu_min)
           : String(it.btu) === String(acBtu));
         const list = acItems.filter((it) =>
           it.kind === acKind
-          && matchText(acSearch, it.th, it.en, it.code, it.brand, it.ac_type, String(it.btu || ""))
-          && (acBrand === "all" || eqi(it.brand, acBrand))
+          && matchText(acSearch, it.th, it.en, it.code, it.brand, it.ac_type, String(it.btu || ""), it.catName, it.series)
+          && (acKind !== "ac" || acBrand === "all" || eqi(it.brand, acBrand))
+          && (acKind !== "ac" || acSeries === "all" || eqi(it.series, acSeries))
+          && (acKind === "ac" || acCat === "all" || it.cat === acCat)
           && btuOk(it)
           && (acType === "all" || eqi(it.ac_type, acType)));
         return (
@@ -801,20 +810,36 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                 {[["ac", "❄️ แอร์"], ["service", "🛠️ บริการ"], ["material", "🔩 วัสดุ"]].map(([v, l]) => (
                   <button key={v} type="button" className={"cat-chip" + (acKind === v ? " on" : "")}
                     style={acKind === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}
-                    onClick={() => setAcKind(v)}>{l}</button>
+                    onClick={() => { setAcKind(v); setAcBrand("all"); setAcSeries("all"); setAcBtu("all"); setAcType("all"); setAcCat("all"); }}>{l}</button>
                 ))}
               </div>
               <input className="inp" style={{ marginBottom: 8 }} value={acSearch} onChange={(e) => setAcSearch(e.target.value)} placeholder="🔍 ค้นหา ยี่ห้อ / รุ่น / BTU" />
               <div className="ac-filters">
-                <Combo className="inp" value={acBrand} onChange={(e) => setAcBrand(e.target.value)}>
-                  <option value="all">ทุกยี่ห้อ</option>{brands.map((b) => <option key={b} value={b}>{b}</option>)}
-                </Combo>
-                <Combo className="inp" value={acBtu} onChange={(e) => setAcBtu(e.target.value)}>
-                  <option value="all">ทุกขนาด BTU</option>{btus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
-                </Combo>
-                <Combo className="inp" value={acType} onChange={(e) => setAcType(e.target.value)}>
-                  <option value="all">ทุกประเภทแอร์</option>{types.map((t) => <option key={t} value={t}>{t}</option>)}
-                </Combo>
+                {acKind === "ac" && (
+                  <Combo className="inp" value={acBrand} onChange={(e) => { setAcBrand(e.target.value); setAcSeries("all"); }}>
+                    <option value="all">ทุกยี่ห้อ</option>{brands.map((b) => <option key={b} value={b}>{b}</option>)}
+                  </Combo>
+                )}
+                {acKind === "ac" && (
+                  <Combo className="inp" value={acSeries} onChange={(e) => setAcSeries(e.target.value)}>
+                    <option value="all">ทุกรุ่น</option>{seriesOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </Combo>
+                )}
+                {acKind !== "ac" && (
+                  <Combo className="inp" value={acCat} onChange={(e) => setAcCat(e.target.value)}>
+                    <option value="all">ทุกหมวด</option>{cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                  </Combo>
+                )}
+                {acKind !== "material" && (
+                  <Combo className="inp" value={acBtu} onChange={(e) => setAcBtu(e.target.value)}>
+                    <option value="all">ทุกขนาด BTU</option>{btus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
+                  </Combo>
+                )}
+                {acKind !== "material" && (
+                  <Combo className="inp" value={acType} onChange={(e) => setAcType(e.target.value)}>
+                    <option value="all">ทุกประเภทแอร์</option>{types.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </Combo>
+                )}
               </div>
               <div className="ac-result-cnt">พบ {list.length} รายการ</div>
               <div className="ac-picklist">
@@ -825,7 +850,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <MaterialThumb mat={it} size={54} radius={10} />
                     <div className="ac-pickinfo">
                       <div className="ac-pickname">{it.th}</div>
-                      <div className="ac-pickspec">{[it.brand, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null].filter(Boolean).join(" · ") || it.code}</div>
+                      <div className="ac-pickspec">{(it.kind === "ac"
+                        ? [it.brand, it.series, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null]
+                        : [it.catName, it.ac_type, it.btu_min != null ? `${fmtNum(it.btu_min)}–${fmtNum(it.btu_max ?? it.btu_min)} BTU` : it.btu ? `${fmtNum(it.btu)} BTU` : null]
+                      ).filter(Boolean).join(" · ") || it.code}</div>
                     </div>
                     <div className="ac-pickprice">{fmtBaht(it.salePrice)}<span>เลือกราคา ›</span></div>
                   </button>
@@ -838,7 +866,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       })()}
       {/* เลือกวิธีชำระ → ส่งราคานั้นให้ลูกค้า (ค่าเริ่มต้นเงินสด · กติกาเดียวกับแคตตาล็อก) */}
       {payPick && (
-        <div className="modal-overlay" style={{ zIndex: 320 }} onClick={() => setPayPick(null)}>
+        <div className="modal-overlay" style={{ zIndex: 1200 }} onClick={() => setPayPick(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 430 }}>
             <div className="modal-head"><div className="modal-title" style={{ fontSize: 15 }}>ส่งราคา — {payPick.th}</div>
               <button className="drawer-close" onClick={() => setPayPick(null)}><UIcon name="x" size={20} /></button></div>
