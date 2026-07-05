@@ -68,7 +68,7 @@ module.exports = async (req, res) => {
           <h1 style="font-size:clamp(21px,3vw,28px)">${esc(name)}</h1>
           <div class="chips">${chips}</div>
           <div class="price">${p.sale_price ? baht(p.sale_price) : "สอบถามราคา"} ${p.sale_price ? `<small>/ ${esc(p.unit || "หน่วย")}</small>` : ""}</div>
-          ${(p.kind === "ac" || p.kind === "service") && p.sale_price ? (() => {
+          ${p.sale_price ? (() => {
             // ราคาชำระด้วยบัตรเครดิต: รูดเต็ม +4% · ผ่อน 10 เดือน +14% (ปัดขึ้นเป็นบาทเต็ม)
             const full = Math.ceil(Number(p.sale_price) * 1.04), inst = Math.ceil(Number(p.sale_price) * 1.14);
             return `<div class="paytable">

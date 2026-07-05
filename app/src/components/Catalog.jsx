@@ -32,10 +32,10 @@ const svcBtuText = (m) =>
     ? `${fmtNum(m.btu_min)}–${fmtNum(m.btu_max)} BTU`
     : (m.btu_min ?? m.btu) ? `${fmtNum(m.btu_min ?? m.btu)} BTU` : null;
 
-// ราคาชำระด้วยบัตรเครดิต (เฉพาะแอร์ + ค่าบริการ) — คิดจากราคาเงินสด ปัดขึ้นเป็นบาทเต็ม
-const CARD_RATES = { full: 0.04, inst10: 0.14 };   // รูดเต็ม +4% · ผ่อน 10 เดือน +14%
+// ราคาชำระด้วยบัตรเครดิต (ทุกชนิด: แอร์ · บริการ · วัสดุ) — คิดจากราคาเงินสด ปัดขึ้นเป็นบาทเต็ม
+const CARD_RATES = { full: 0.04, inst10: 0.14 };   // รูดเต็ม · ผ่อน 10 เดือน
 const cardPrice = (p, r) => Math.ceil((Number(p) || 0) * (1 + r));
-const hasCardPrice = (m) => (m.kind === "ac" || m.kind === "service") && Number(m.salePrice) > 0;
+const hasCardPrice = (m) => Number(m.salePrice) > 0;
 function CardPayLine({ m, compact }) {
   if (!hasCardPrice(m)) return null;
   const full = cardPrice(m.salePrice, CARD_RATES.full), inst = cardPrice(m.salePrice, CARD_RATES.inst10);

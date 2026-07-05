@@ -302,7 +302,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   // pick a product/service from the catalog → choose the payment-method price → send to the customer
   async function openAcPicker() {
     setAcPicker(true);
-    if (!acItems.length) { try { const m = await listMaterialsLite(); setAcItems(m.filter((x) => x.kind === "ac" || x.kind === "service")); } catch { /* ignore */ } }
+    if (!acItems.length) { try { const m = await listMaterialsLite(); setAcItems(m); } catch { /* ignore */ } }
   }
   // ราคาตามวิธีชำระ (กติกาเดียวกับแคตตาล็อก/เว็บ): เงินสด = ฐาน · รูดเต็ม +4% · ผ่อน 10 เดือน +14% (ปัดขึ้นบาทเต็ม)
   const CHAT_PAY = [
@@ -798,7 +798,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <button className="drawer-close" onClick={() => setAcPicker(false)}><UIcon name="x" size={20} /></button></div>
             <div className="modal-body">
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                {[["ac", "❄️ แอร์"], ["service", "🛠️ บริการ"]].map(([v, l]) => (
+                {[["ac", "❄️ แอร์"], ["service", "🛠️ บริการ"], ["material", "🔩 วัสดุ"]].map(([v, l]) => (
                   <button key={v} type="button" className={"cat-chip" + (acKind === v ? " on" : "")}
                     style={acKind === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}
                     onClick={() => setAcKind(v)}>{l}</button>

@@ -812,7 +812,7 @@ function prodCard(p) {
       <span class="tag">${p.tag || ""}</span>
       <a class="nm" href="${purl}">${p.name}</a>
       <div class="pr">${p.price ? baht(p.price) : "สอบถามราคา"} ${p.price ? "<small>/หน่วย</small>" : ""}</div>
-      ${(p.kind === "ac" || p.kind === "service") && p.price ? `<div class="cardpay">💳 รูดเต็ม <b>${baht(Math.ceil(p.price * 1.04))}</b> · ผ่อน 10 ด. <b>${baht(Math.ceil(p.price * 1.14))}</b></div>` : ""}
+      ${p.price ? `<div class="cardpay">💳 รูดเต็ม <b>${baht(Math.ceil(p.price * 1.04))}</b> · ผ่อน 10 ด. <b>${baht(Math.ceil(p.price * 1.14))}</b></div>` : ""}
       ${p.powerCostYear ? `<div class="pcost">⚡ ค่าไฟประมาณ ${baht(p.powerCostYear)}/ปี</div>` : ""}
       ${p.features ? `<div class="feats">${String(p.features).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>` : ""}
       <button class="btn btn-primary btn-sm add" onclick='addToCart(${JSON.stringify({ code: p.code, name: p.name, price: p.price, photo: p.photo }).replace(/'/g, "&#39;")})'>+ เพิ่มลงตะกร้า</button>
