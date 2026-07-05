@@ -8,6 +8,7 @@ import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
+import { useDocPeek } from "./DocPeek";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import ChatCustomerLink from "./ChatCustomerLink";
@@ -24,6 +25,7 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenDoc, focus, onFocusConsumed, onGoChat }) {
+  const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "receipt", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   // ส่งใบกำกับภาษีเข้า FlowAccount — ต้องตรงกับ allowlist ฝั่งเซิร์ฟเวอร์ (api/flowaccount-doc.js)
@@ -241,7 +243,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
                 ) : (<><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></>)}
               </div>
             </div>
-            {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={onOpenDoc} />; })()}
+            {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={openPeek} />; })()}
             <InternalNoteTag note={x.internal_note} />
             <div className="job-lines"><div className="job-actions">
               {x.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
@@ -312,6 +314,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           </div>
         </div>
       )}
+      {peekEl}
       {toast && <Toast t={toast} />}
     </div>
   );

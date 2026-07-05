@@ -13,6 +13,7 @@ import { QR_MY } from "../lib/i18n";
 import { UIcon, MaterialThumb } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
+import { useDocPeek } from "./DocPeek";
 import { sendDocFromNode } from "../lib/sendDoc";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
@@ -88,6 +89,7 @@ async function dlFile(url, name) {
 }
 
 export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey, onCreateTask, focus, onFocusConsumed }) {
+  const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ประวัติเอกสารลูกค้า → พรีวิวแผงขวาก่อน
   const canSend = can(role, "chat", "edit");
   const [contacts, setContacts] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
@@ -645,7 +647,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       return (
                         <div className="cd-job" key={e.type + e.no}>
                           <span className={"cd-job-dot " + st[1]} />
-                          <div className="cd-job-body" role="button" tabIndex={0} onClick={() => onOpenDoc && onOpenDoc(e.type, e.no)}>
+                          <div className="cd-job-body" role="button" tabIndex={0} onClick={() => openPeek(e.type, e.no)}>
                             <div className="cd-job-top"><b><span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span>{e.title || ""}</b><span className={"job-badge " + st[1]}>{st[0]}</span></div>
                             <div className="cd-job-meta">🗓 {dateTxt}{e.teamName ? ` · 👷 ${e.teamName}` : ""}{e.amount != null ? ` · ${fmtBaht(e.amount)}` : ""}</div>
                             <div className="cd-job-no-row">
@@ -816,6 +818,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
           catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
           setCapJob(null);
         }} />}
+      {peekEl}
       {toast && <div className={"chat-toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );

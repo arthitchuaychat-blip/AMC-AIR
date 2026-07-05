@@ -11,6 +11,7 @@ import ItemBrowser from "./ItemBrowser";
 import UnitPick, { unitFactor } from "./UnitPick";
 import Combo from "./Combo";
 import DocSlip from "./DocSlip";
+import { useDocPeek } from "./DocPeek";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 const STATUS = { open: { th: "รอรับของ", cls: "b-amber" }, received: { th: "รับแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
@@ -50,6 +51,8 @@ function SupplierPicker({ value, onChange }) {
 }
 
 export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onReceive, focus, onFocusConsumed, onOpenQuote }) {
+  // ชิป "อ้างอิง QT-…" → พรีวิวใบเสนอราคาแผงขวาก่อน · "เปิดหน้าเต็ม" ค่อยเด้งไปเมนูใบเสนอราคา
+  const [peekEl, openPeek] = useDocPeek((t, n) => { if (t === "quote" && onOpenQuote) onOpenQuote(n); });
   const isAdmin = can(role, "po", "edit");
   const [pos, setPos] = React.useState([]);
   const [mats, setMats] = React.useState([]);
@@ -305,7 +308,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               <div className="job-card-head" style={{ cursor: "default" }}>
                 <div className="job-card-id"><span className="job-no">{po.po_no}</span><span className={"job-badge " + st.cls}>{st.th}</span>
                   {(() => { const ps = PAY_STATUS[po.paymentStatus] || PAY_STATUS.unpaid; return <span className={"job-badge " + ps.cls}>💳 {ps.th}{po.paymentStatus === "paid" && po.paid_at ? " " + new Date(po.paid_at).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : ""}</span>; })()}
-                  {po.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} title="เปิดใบเสนอราคาที่อ้างอิง" onClick={() => onOpenQuote && onOpenQuote(po.quote_no)}>อ้างอิง {po.quote_no} ↗</button>}
+                  {po.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} title="ดูใบเสนอราคาที่อ้างอิง (พรีวิวด้านขวา)" onClick={() => openPeek("quote", po.quote_no)}>อ้างอิง {po.quote_no} ↗</button>}
                 </div>
                 <div className="job-card-meta">{po.supplier || "ไม่ระบุร้าน"} · {po.items.length} รายการ{po.note ? ` · ${po.note}` : ""}</div>
                 <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.created_at)}</span><span>มูลค่ารวม{po.vat ? " (รวม VAT)" : ""}</span><b>{fmtBaht(po.total)}</b></div>
@@ -363,6 +366,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           </DocSlip>
         );
       })()}
+      {peekEl}
       {toast && <Toast toast={toast} />}
     </div>
   );

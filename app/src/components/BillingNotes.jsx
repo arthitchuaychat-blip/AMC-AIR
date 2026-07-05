@@ -6,6 +6,7 @@ import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
+import { useDocPeek } from "./DocPeek";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
@@ -23,6 +24,7 @@ const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"
 const genNo = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BN-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; };
 
 export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoChat }) {
+  const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "billing", "edit");
   const canDelete = role === "admin";
   const [list, setList] = React.useState([]);
@@ -133,7 +135,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
               });
               return [...ch.quotes].map((qn, i) => {
                 const g = docLinks.byQuote[qn] || {};
-                return <DocChips key={qn + i} boqNo={g.boqNo} quoteNo={qn} jobNos={g.jobNos} invoiceNos={g.invoiceNos} receiptNos={g.receiptNos} onOpen={onOpenDoc} />;
+                return <DocChips key={qn + i} boqNo={g.boqNo} quoteNo={qn} jobNos={g.jobNos} invoiceNos={g.invoiceNos} receiptNos={g.receiptNos} poNos={g.poNos} onOpen={openPeek} />;
               });
             })()}
             <InternalNoteTag note={b.internal_note} />
@@ -148,7 +150,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
               <div className="bn-invlist">
                 {b.invoices.map((iv) => (
                   <div className="bn-invrow" key={iv.invoice_no}>
-                    <button className="sub-job-link" onClick={() => onOpenDoc && onOpenDoc("invoice", iv.invoice_no)}>{iv.invoice_no}</button>
+                    <button className="sub-job-link" onClick={() => openPeek("invoice", iv.invoice_no)}>{iv.invoice_no}</button>
                     <span className="jo-dim">งวดที่ {iv.installment} · {Math.round(iv.pct)}%</span>
                     <span className={"job-badge " + (iv.status === "paid" ? "b-green" : iv.status === "cancelled" ? "b-red" : "b-amber")}>{iv.status === "paid" ? "จ่ายแล้ว" : iv.status === "cancelled" ? "ยกเลิก" : "ค้างชำระ"}</span>
                     <b style={{ flex: 1, textAlign: "right" }}>{fmtBaht(iv.total)}</b>
@@ -192,6 +194,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
         );
       })()}
 
+      {peekEl}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );

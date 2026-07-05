@@ -141,3 +141,16 @@ function PeekRow({ l, v, big }) {
     </div>
   );
 }
+
+// hook สำเร็จรูปให้ทุกหน้าใช้ซ้ำ: const [peekEl, openPeek] = useDocPeek(onOpenDoc)
+// openPeek(type, no) → ชนิดที่รองรับ (boq/quote/invoice/receipt/po) เปิดพรีวิวแผงขวาก่อน ·
+// ชนิดอื่น (เช่น job) ส่งต่อการนำทางเดิมทันที · ปุ่ม "เปิดหน้าเต็ม" ใช้ตัวนำทางเดิมเสมอ
+export function useDocPeek(nav) {
+  const [peek, setPeek] = React.useState(null);
+  const open = (t, n) => (META[t] ? setPeek({ type: t, no: n }) : (nav && nav(t, n)));
+  const element = peek ? (
+    <DocPeek type={peek.type} no={peek.no} onClose={() => setPeek(null)}
+      onOpenFull={() => { const p = peek; setPeek(null); nav && nav(p.type, p.no); }} />
+  ) : null;
+  return [element, open];
+}
