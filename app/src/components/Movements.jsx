@@ -62,9 +62,12 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [modalUnit, setModalUnit] = React.useState("");  // หน่วยนับที่เลือก (สินค้า 2 หน่วย เช่น เมตร/ม้วน)
   const [receivePo, setReceivePo] = React.useState(null);
   const [receiveJob, setReceiveJob] = React.useState(null); // งานปลายทางของ PO ที่อ้างใบเสนอราคา → เบิกเข้างานอัตโนมัติหลังรับ
-  // picker filters (เหมือนหน้า BOQ): ชนิด + หมวดวัสดุ
+  // picker filters (เหมือนหน้า BOQ): ชนิด + หมวดวัสดุ + ตัวกรองแอร์ (ยี่ห้อ/ประเภท/BTU)
   const [mvKind, setMvKind] = React.useState("all"); // all | ac | material
   const [mvCat, setMvCat] = React.useState("all");
+  const [mvBrand, setMvBrand] = React.useState("all");
+  const [mvType, setMvType] = React.useState("all");
+  const [mvBtu, setMvBtu] = React.useState("all");
 
   // job flow (return / damage-from-job)
   const [selJob, setSelJob] = React.useState("");
@@ -80,15 +83,20 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     const seen = {}; mats.forEach((m) => { if (m.tracked && m.kind === "material" && m.cat) seen[m.cat] = m.catName || m.cat; });
     return Object.entries(seen).sort((a, b) => a[1].localeCompare(b[1], "th"));
   }, [mats]);
+  // ตัวเลือกกรองแอร์ (จากสินค้าแอร์ที่นับสต๊อก): ยี่ห้อ / ประเภท / ขนาด BTU
+  const mvBrands = React.useMemo(() => [...new Set(mats.filter((m) => m.tracked && m.kind === "ac" && m.brand).map((m) => m.brand))].sort((a, b) => a.localeCompare(b)), [mats]);
+  const mvTypes = React.useMemo(() => [...new Set(mats.filter((m) => m.tracked && m.kind === "ac" && m.ac_type).map((m) => m.ac_type))].sort((a, b) => a.localeCompare(b, "th")), [mats]);
+  const mvBtus = React.useMemo(() => [...new Set(mats.filter((m) => m.tracked && m.kind === "ac" && m.btu).map((m) => Number(m.btu)))].sort((a, b) => a - b), [mats]);
   const pickList = React.useMemo(() => {
     const q = pickSearch.trim().toLowerCase();
     return mats.filter((m) =>
       m.tracked &&
       (mvKind === "all" || m.kind === mvKind) &&
       (mvKind !== "material" || mvCat === "all" || m.cat === mvCat) &&
-      (!q || `${m.code} ${m.th || ""} ${m.name || ""}`.toLowerCase().includes(q))
+      (mvKind !== "ac" || ((mvBrand === "all" || m.brand === mvBrand) && (mvType === "all" || m.ac_type === mvType) && (mvBtu === "all" || String(m.btu) === String(mvBtu)))) &&
+      (!q || `${m.code} ${m.th || ""} ${m.name || ""} ${m.brand || ""} ${m.ac_type || ""} ${m.btu || ""}`.toLowerCase().includes(q))
     );
-  }, [mats, mvKind, mvCat, pickSearch]);
+  }, [mats, mvKind, mvCat, mvBrand, mvType, mvBtu, pickSearch]);
   const T = TYPE_BY[type];
   // which UI flow is active
   const flow = type === "return" ? "job" : type === "damage" ? (damageMode === "job" ? "job" : "cart") : "cart";
@@ -441,14 +449,27 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
               </div>
 
               <div className="fld"><span>เพิ่มรายการวัสดุ</span>
-                <div className="line-add" style={{ marginBottom: 6 }}>
-                  <Combo className="inp" style={{ maxWidth: 150 }} value={mvKind} onChange={(e) => { setMvKind(e.target.value); setMvCat("all"); }}>
+                <div className="line-add" style={{ marginBottom: 6, flexWrap: "wrap" }}>
+                  <Combo className="inp" style={{ maxWidth: 150 }} value={mvKind} onChange={(e) => { setMvKind(e.target.value); setMvCat("all"); setMvBrand("all"); setMvType("all"); setMvBtu("all"); }}>
                     <option value="all">ทุกชนิด</option><option value="material">วัสดุ</option><option value="ac">เครื่องปรับอากาศ</option>
                   </Combo>
                   {mvKind === "material" && (
                     <Combo className="inp" value={mvCat} onChange={(e) => setMvCat(e.target.value)}>
                       <option value="all">ทุกหมวด</option>{matCats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                     </Combo>
+                  )}
+                  {mvKind === "ac" && (
+                    <>
+                      <Combo className="inp" value={mvBrand} onChange={(e) => setMvBrand(e.target.value)}>
+                        <option value="all">ทุกยี่ห้อ</option>{mvBrands.map((b) => <option key={b} value={b}>{b}</option>)}
+                      </Combo>
+                      <Combo className="inp" value={mvType} onChange={(e) => setMvType(e.target.value)}>
+                        <option value="all">ทุกประเภท</option>{mvTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </Combo>
+                      <Combo className="inp" value={mvBtu} onChange={(e) => setMvBtu(e.target.value)}>
+                        <option value="all">ทุกขนาด BTU</option>{mvBtus.map((b) => <option key={b} value={b}>{fmtNum(b)} BTU</option>)}
+                      </Combo>
+                    </>
                   )}
                 </div>
                 <div className="cat-search mv-search" style={{ marginBottom: 8 }}>
