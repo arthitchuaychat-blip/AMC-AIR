@@ -109,7 +109,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [acKind, setAcKind] = React.useState("ac");        // แท็บใน picker: แอร์ / บริการ / วัสดุ
   const [acSeries, setAcSeries] = React.useState("all");   // รุ่น/ซีรีส์ (แอร์ — ไล่ตามยี่ห้อ เหมือนคลังสินค้า)
   const [acCat, setAcCat] = React.useState("all");         // หมวด (บริการ/วัสดุ)
-  const [payPick, setPayPick] = React.useState(null);      // สินค้าที่เลือกแล้ว → รอเลือกราคาตามวิธีชำระ
+  const [chatCart, setChatCart] = React.useState([]);      // ตะกร้าย่อยในแชต: เลือกหลายรายการ (แอร์+ค่าติดตั้ง) รวมยอดส่งทีเดียว
+  const [chatPay, setChatPay] = React.useState("cash");     // วิธีชำระของสรุปราคา (ค่าเริ่มต้นเงินสด)
   const [showThread, setShowThread] = React.useState(false); // mobile pane toggle
   const [toast, setToast] = React.useState(null);
   const [quickReplies, setQuickReplies] = React.useState([]);
@@ -312,22 +313,33 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     { v: "card_full", l: "💳 บัตรเครดิต รูดเต็ม", rate: 0.04 },
     { v: "card_inst10", l: "💳 ผ่อนบัตร 10 เดือน", rate: 0.14 },
   ];
-  const chatPrice = (it, pm) => { const p = Number(it.salePrice) || 0; return pm.rate ? Math.ceil(p * (1 + pm.rate)) : p; };
-  async function sendProduct(it, method = "cash") {
-    if (!sel || sending) return;
-    setPayPick(null); setAcPicker(false); setSending(true);
+  const chatAdj = (p, pm) => (pm.rate ? Math.ceil((Number(p) || 0) * (1 + pm.rate)) : Number(p) || 0);
+  // จิ้มสินค้า = เพิ่มเข้ารายการ (ซ้ำ = +1) — เลือกข้ามแท็บได้ (แอร์ + ค่าติดตั้ง + วัสดุ)
+  const addChatItem = (it) => {
+    setChatCart((c) => {
+      const i = c.findIndex((x) => x.code === it.code);
+      if (i >= 0) { const n = [...c]; n[i] = { ...n[i], qty: n[i].qty + 1 }; return n; }
+      return [...c, { code: it.code, name: it.th, price: Number(it.salePrice) || 0, photo: it.photoUrl || null, qty: 1 }];
+    });
+  };
+  const chatQty = (code, d) => setChatCart((c) => c.map((x) => (x.code === code ? { ...x, qty: Math.max(0, x.qty + d) } : x)).filter((x) => x.qty > 0));
+  // ส่งสรุปราคารวมทุกรายการเป็นข้อความเดียว (ราคาตามวิธีชำระ ปรับรายบรรทัดแบบเดียวกับใบเสนอราคา)
+  async function sendChatCart() {
+    if (!sel || sending || !chatCart.length) return;
+    const pm = CHAT_PAY.find((x) => x.v === chatPay) || CHAT_PAY[0];
+    const total = chatCart.reduce((a, x) => a + chatAdj(x.price, pm) * x.qty, 0);
+    const head = pm.v === "cash" ? "💰 สรุปราคา (ชำระเงินสด/โอน)" : pm.v === "card_full" ? "💳 สรุปราคา (บัตรเครดิต รูดเต็ม)" : "💳 สรุปราคา (ผ่อนบัตรเครดิต 10 เดือน)";
+    const lines = chatCart.map((x, i) => `${i + 1}. ${x.name}${x.qty > 1 ? ` × ${x.qty} @ ${fmtBaht(chatAdj(x.price, pm))}` : ""} = ${fmtBaht(chatAdj(x.price, pm) * x.qty)}`);
+    const txt = [head, ...lines, `รวมทั้งสิ้น ${fmtBaht(total)}`,
+      ...(pm.v === "card_inst10" ? [`(≈ ${fmtBaht(Math.ceil(total / 10))}/เดือน × 10 งวด)`] : [])].join("\n");
+    setSending(true);
     try {
-      const pm = CHAT_PAY.find((x) => x.v === method) || CHAT_PAY[0];
-      const p = chatPrice(it, pm);
-      const payLine = method === "cash" ? `💰 ราคา ${fmtBaht(p)} (เงินสด/โอน)`
-        : method === "card_full" ? `💳 ราคาบัตรเครดิต รูดเต็ม ${fmtBaht(p)}`
-        : `💳 ราคาผ่อนบัตร 10 เดือน ${fmtBaht(p)} (≈ ${fmtBaht(Math.ceil(p / 10))}/เดือน)`;
-      const spec = [it.brand, it.ac_type, it.btu ? `${fmtNum(it.btu)} BTU` : null].filter(Boolean).join(" · ");
-      const txt = `${it.kind === "service" ? "🛠️" : "❄️"} ${it.th}${spec ? `\n${spec}` : ""}${it.description ? `\n${it.description}` : ""}\n${payLine}`;
-      if (it.photoUrl) await chSendImage(sel, it.photoUrl);
+      if (chatCart.length === 1 && chatCart[0].photo) await chSendImage(sel, chatCart[0].photo);
       await chSendText(sel, txt);
       if (isFb) setMsgs(await chListMessages(sel));
-    } catch (ex) { flash("ส่งรายการไม่สำเร็จ: " + (ex.message || ex), true); }
+      setChatCart([]); setAcPicker(false);
+      flash("ส่งสรุปราคาให้ลูกค้าแล้ว ✓");
+    } catch (ex) { flash("ส่งไม่สำเร็จ: " + (ex.message || ex), true); }
     setSending(false);
   }
   // send a LINE sticker (basic bot-sendable set)
@@ -846,7 +858,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                 {acItems.length === 0 && <div className="empty" style={{ fontSize: 13 }}>กำลังโหลด… (หรือยังไม่มีรายการ)</div>}
                 {acItems.length > 0 && list.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ไม่พบรายการตามเงื่อนไข</div>}
                 {list.slice(0, 100).map((it) => (
-                  <button key={it.code} className="ac-pickrow" disabled={sending} onClick={() => setPayPick(it)} title="เลือกราคาตามวิธีชำระ">
+                  <button key={it.code} className="ac-pickrow" disabled={sending} onClick={() => addChatItem(it)} title="กดเพื่อเพิ่มเข้ารายการที่จะส่ง">
                     <MaterialThumb mat={it} size={54} radius={10} />
                     <div className="ac-pickinfo">
                       <div className="ac-pickname">{it.th}</div>
@@ -855,36 +867,49 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                         : [it.catName, it.ac_type, it.btu_min != null ? `${fmtNum(it.btu_min)}–${fmtNum(it.btu_max ?? it.btu_min)} BTU` : it.btu ? `${fmtNum(it.btu)} BTU` : null]
                       ).filter(Boolean).join(" · ") || it.code}</div>
                     </div>
-                    <div className="ac-pickprice">{fmtBaht(it.salePrice)}<span>เลือกราคา ›</span></div>
+                    <div className="ac-pickprice">{fmtBaht(it.salePrice)}<span>{(() => { const inCart = chatCart.find((x) => x.code === it.code); return inCart ? `✓ ใส่แล้ว ${inCart.qty}` : "+ เพิ่ม"; })()}</span></div>
                   </button>
                 ))}
               </div>
+
+              {/* รายการที่จะส่ง — รวมยอด + เลือกวิธีชำระครั้งเดียว แล้วส่งเป็นข้อความสรุปใบเดียว */}
+              {chatCart.length > 0 && (() => {
+                const pm = CHAT_PAY.find((x) => x.v === chatPay) || CHAT_PAY[0];
+                const total = chatCart.reduce((a, x) => a + chatAdj(x.price, pm) * x.qty, 0);
+                return (
+                  <div style={{ borderTop: "2px solid var(--line)", marginTop: 10, paddingTop: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>📋 รายการที่จะส่ง ({chatCart.length})</div>
+                    {chatCart.map((x) => (
+                      <div key={x.code} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", fontSize: 13 }}>
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.name}</span>
+                        <button type="button" className="btn-ghost xs" onClick={() => chatQty(x.code, -1)}>−</button>
+                        <b style={{ minWidth: 18, textAlign: "center" }}>{x.qty}</b>
+                        <button type="button" className="btn-ghost xs" onClick={() => chatQty(x.code, 1)}>+</button>
+                        <b style={{ width: 92, textAlign: "right" }}>{fmtBaht(chatAdj(x.price, pm) * x.qty)}</b>
+                      </div>
+                    ))}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "8px 0" }}>
+                      {CHAT_PAY.map((p) => (
+                        <button key={p.v} type="button" className={"cat-chip" + (chatPay === p.v ? " on" : "")}
+                          style={chatPay === p.v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}
+                          onClick={() => setChatPay(p.v)}>{p.l}</button>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ flex: 1, fontSize: 15.5, fontWeight: 800 }}>รวม {fmtBaht(total)}
+                        {chatPay === "card_inst10" && <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)" }}> · ≈{fmtBaht(Math.ceil(total / 10))}/เดือน</span>}
+                      </div>
+                      <button type="button" className="btn-ghost sm" onClick={() => setChatCart([])}>ล้าง</button>
+                      <button type="button" className="btn-primary sm" disabled={sending} onClick={sendChatCart}>📤 ส่งให้ลูกค้า</button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
         );
       })()}
-      {/* เลือกวิธีชำระ → ส่งราคานั้นให้ลูกค้า (ค่าเริ่มต้นเงินสด · กติกาเดียวกับแคตตาล็อก) */}
-      {payPick && (
-        <div className="modal-overlay" style={{ zIndex: 1200 }} onClick={() => setPayPick(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 430 }}>
-            <div className="modal-head"><div className="modal-title" style={{ fontSize: 15 }}>ส่งราคา — {payPick.th}</div>
-              <button className="drawer-close" onClick={() => setPayPick(null)}><UIcon name="x" size={20} /></button></div>
-            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {CHAT_PAY.map((pm, i) => (
-                <button key={pm.v} type="button" className="ac-pickrow" disabled={sending} onClick={() => sendProduct(payPick, pm.v)}
-                  style={i === 0 ? { borderColor: "var(--brand, #2563eb)", borderWidth: 1.5 } : {}}>
-                  <div className="ac-pickinfo">
-                    <div className="ac-pickname">{pm.l}{i === 0 ? <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}> · ค่าเริ่มต้น</span> : null}</div>
-                    {pm.v === "card_inst10" && <div className="ac-pickspec">≈ {fmtBaht(Math.ceil(chatPrice(payPick, pm) / 10))}/เดือน × 10 เดือน</div>}
-                  </div>
-                  <div className="ac-pickprice">{fmtBaht(chatPrice(payPick, pm))}<span>ส่ง ›</span></div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
       {custForm && <CustomerFormModal initial={custForm.initial} onClose={() => setCustForm(null)} onSaved={onCustSaved} />}
       {capJob && <DocCapture type={capJob.type} no={capJob.no}
         onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
