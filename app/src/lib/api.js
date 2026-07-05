@@ -222,6 +222,23 @@ export async function saveAcSeries(row) {
   const { error } = await supabase.from("ac_series").upsert(r, { onConflict: "brand,name" });
   if (error) throw error;
 }
+// ดึงไฟล์จากลิงก์ภายนอก (ผ่าน /api/fetch-file ฝั่งเซิร์ฟเวอร์ — เลี่ยง CORS) → ได้ File ไปอัปโหลดเก็บถาวรต่อ
+export async function fetchExternalFile(url) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const r = await fetch(`/api/fetch-file?url=${encodeURIComponent(url)}`, {
+    headers: { Authorization: `Bearer ${session?.access_token || ""}` },
+  });
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try { msg = (await r.json()).error || msg; } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  const blob = await r.blob();
+  const ct = r.headers.get("content-type") || "";
+  const ext = /pdf/i.test(ct) || /\.pdf([?#]|$)/i.test(url) ? "pdf" : /png/i.test(ct) ? "png" : /webp/i.test(ct) ? "webp" : "jpg";
+  return new File([blob], `link-file.${ext}`, { type: ct || "application/octet-stream" });
+}
+
 // โบรชัวร์รุ่น (PDF/รูป) → bucket photos สาธารณะ เก็บลิงก์ใน ac_series.brochure_url
 export async function uploadBrochureFile(file) {
   const ext = (file.name.split(".").pop() || "pdf").toLowerCase().replace(/[^a-z0-9]/g, "");

@@ -3,7 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { UIcon } from "../icons";
 import { UNITS } from "../lib/format";
-import { uploadMaterialPhoto, getAcSeries, saveAcSeries, uploadBrochureFile } from "../lib/api";
+import { uploadMaterialPhoto, getAcSeries, saveAcSeries, uploadBrochureFile, fetchExternalFile } from "../lib/api";
 
 const KINDS = [{ v: "material", l: "วัสดุ" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }];
 
@@ -78,6 +78,21 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     try { setSrsBrochure(await uploadBrochureFile(file)); }
     catch (ex) { setErr("อัปโหลดโบรชัวร์ไม่สำเร็จ: " + (ex.message || ex)); }
     setSrsUploading(false);
+  }
+  // "ดึงจากลิงก์": วาง URL จากเว็บผู้ผลิต → เซิร์ฟเวอร์ดาวน์โหลด → เก็บเข้า storage ของเราถาวร
+  async function pullBrochureFromLink() {
+    const url = window.prompt("วางลิงก์โบรชัวร์ (PDF/รูป) จากเว็บผู้ผลิต:"); if (!url?.trim()) return;
+    setSrsUploading(true); setErr(null);
+    try { setSrsBrochure(await uploadBrochureFile(await fetchExternalFile(url.trim()))); }
+    catch (ex) { setErr("ดึงโบรชัวร์ไม่สำเร็จ: " + (ex.message || ex)); }
+    setSrsUploading(false);
+  }
+  async function pullPhotoFromLink() {
+    const url = window.prompt("วางลิงก์รูปสินค้า จากเว็บผู้ผลิต:"); if (!url?.trim()) return;
+    setUploading(true); setErr(null);
+    try { const file = await fetchExternalFile(url.trim()); setF((s) => ({ ...s, photo_url: null })); const up = await uploadMaterialPhoto(file, f.code || "item"); setF((s) => ({ ...s, photo_url: up })); }
+    catch (ex) { setErr("ดึงรูปไม่สำเร็จ: " + (ex.message || ex)); }
+    setUploading(false);
   }
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -291,6 +306,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
                     {srsUploading ? "กำลังอัปโหลด…" : (srsBrochure ? "เปลี่ยนโบรชัวร์" : "อัปโหลดโบรชัวร์")}
                     <input type="file" accept="application/pdf,image/*" onChange={onBrochure} style={{ display: "none" }} disabled={srsUploading} />
                   </label>
+                  <button type="button" className="btn-ghost sm" disabled={srsUploading} onClick={pullBrochureFromLink} title="วางลิงก์จากเว็บผู้ผลิต ระบบดาวน์โหลดมาเก็บถาวรในระบบเรา">🔗 ดึงจากลิงก์</button>
                   {srsBrochure && <a className="btn-ghost sm" href={srsBrochure} target="_blank" rel="noreferrer">เปิดดู ↗</a>}
                   {srsBrochure && <button type="button" className="btn-ghost sm danger" onClick={() => setSrsBrochure("")}>ลบ</button>}
                 </div>
@@ -315,6 +331,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
                   <UIcon name="camera" size={14} /> {uploading ? "กำลังอัปโหลด…" : (f.photo_url ? "เปลี่ยนรูป" : "อัปโหลดรูป")}
                   <input type="file" accept="image/*" onChange={onPhoto} style={{ display: "none" }} disabled={uploading} />
                 </label>
+                <button type="button" className="btn-ghost sm" disabled={uploading} onClick={pullPhotoFromLink} title="วางลิงก์รูปจากเว็บผู้ผลิต ระบบดาวน์โหลดมาเก็บถาวรในระบบเรา">🔗 ดึงจากลิงก์</button>
                 {f.photo_url && <button className="btn-ghost sm danger" onClick={() => setF((s) => ({ ...s, photo_url: "" }))}>ลบรูป</button>}
               </div>
             </div>
