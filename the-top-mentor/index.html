@@ -116,6 +116,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold2);box-shadow:0 0
 .help{background:#eef4ff;border:1px solid #d3e0fb;border-radius:16px;padding:15px;font-size:13px;line-height:1.7;color:#2b3f6b}
 .empty{color:var(--mut);text-align:center;padding:26px;font-size:13px}
 .expander{width:100%;margin-top:10px;text-align:center}
+.stat.purple .ic{background:#efe7fe}.stat.purple .n{color:#7c3aed}
+/* กล่องสไลด์ในหน้าสมาชิก */
+.slbox{border:1px solid var(--line);border-radius:14px;padding:11px;display:flex;flex-direction:column;gap:8px;background:#fcfdff}
+.slbox.has{border-color:#93e5bd;background:#f6fdf9}
+.slhead{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.slhead b{font-size:13px}
+.slfile{display:flex;align-items:center;gap:6px;font-size:11.5px;background:#f1f4fb;border-radius:9px;padding:6px 9px}
+.slfile a{color:#2f5ce0;text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slfile a:hover{text-decoration:underline}
+.slfile button{border:0;background:transparent;cursor:pointer;color:#98a1b8;font-size:13px}
 .rephead{display:none}
 @media print{
   body{background:#fff;font-size:12px}
@@ -251,6 +261,8 @@ function wDone(m){return m.weeks.filter(w=>w===true).length;}
 /* สัปดาห์ล่าสุดที่ทำแล้ว — รายงานแบบ สัปดาห์ที่ 0/8, 1/8, ... 8/8 (Week 0 คือสัปดาห์แรก) */
 function wLast(m){let last=-1;m.weeks.forEach((w,i)=>{if(w===true)last=i;});return last;}
 function wLabel(m){const l=wLast(m);return l<0?'ยังไม่เริ่ม':`สัปดาห์ที่ ${l}/8`;}
+/* สไลด์ "มีแล้ว" ก็ต่อเมื่อ อัพโหลดไฟล์แล้ว หรือแอดมินกดยืนยันว่ามีแล้ว */
+function hasSlide(m,k){return m.slides[k]===true||!!(m.slideFiles&&m.slideFiles[k]);}
 function curWeek(m){const s=pd(m.start);if(!s)return null;const w=Math.floor(dayDiff(today(),s)/7);return w<0?0:(w>8?null:w);}
 /* survey status: done | wait(ส่งแล้วรอตอบ) | due(ถึงกำหนด ยังไม่ส่ง) | notyet */
 function hsInfo(m,h){
@@ -300,7 +312,7 @@ function render(){
 }
 
 /* ---------- dashboard ---------- */
-let dueExpand=false,waitExpand=false;
+let dueExpand=false,waitExpand=false,slideExpand=false;
 function vDash(){
   const ms=state.members;
   const mentoring=ms.filter(m=>wDone(m)<9&&m.status==='ปีแรก');
@@ -311,7 +323,9 @@ function vDash(){
     if(i.st==='wait')wait.push({m,h,i});}));
   due.sort((a,b)=>a.i.open-b.i.open);
   mentoring.sort((a,b)=>(b.start||'').localeCompare(a.start||''));
-  const ST=[['👥',ms.length,'สมาชิกทั้งหมด',''],['🎓',mentoring.length,'กำลัง Mentoring','gold'],['✅',finished.length,'จบครบ 8 สัปดาห์','green'],['⏰',due.length,'ถึงกำหนด ยังไม่ส่ง','red'],['📨',wait.length,'ส่งแล้ว รอคำตอบ','blue']];
+  const noSlide=ms.map(m=>({m,miss:SLIDES.filter(([k])=>!hasSlide(m,k))})).filter(x=>x.miss.length);
+  noSlide.sort((a,b)=>((a.m.status==='ปีแรก'?0:1)-(b.m.status==='ปีแรก'?0:1))||(b.m.start||'').localeCompare(a.m.start||''));
+  const ST=[['👥',ms.length,'สมาชิกทั้งหมด',''],['🎓',mentoring.length,'กำลัง Mentoring','gold'],['✅',finished.length,'จบครบ 8 สัปดาห์','green'],['⏰',due.length,'ถึงกำหนด ยังไม่ส่ง','red'],['📨',wait.length,'ส่งแล้ว รอคำตอบ','blue'],['🖼️',noSlide.length,'สไลด์ยังไม่ครบ','purple']];
   return `
   <div class="stats">${ST.map(([ic,n,l,c])=>`<div class="stat ${c}"><div class="ic">${ic}</div><div><div class="n">${n}</div><div class="l">${l}</div></div></div>`).join('')}</div>
 
@@ -324,13 +338,13 @@ function vDash(){
   <div class="card">
     <h2>⏰ แบบสอบถามที่ถึงกำหนดส่ง <span class="cnt">${due.length} รายการ</span></h2>
     ${due.length?`<div class="tblwrap"><table><tr><th>สมาชิก</th><th>แบบสอบถาม</th><th>ถึงกำหนดตั้งแต่</th><th></th></tr>
-    ${(dueExpand?due:due.slice(0,3)).map(({m,h,i})=>`<tr>
-      <td class="mname" style="cursor:pointer" onclick="openMember('${m.id}')">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+    ${(dueExpand?due:due.slice(0,3)).map(({m,h,i})=>`<tr class="click" onclick="openMember('${m.id}')">
+      <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
       <td>${h.label}</td>
       <td>${fmt(i.open)} <span style="color:var(--bad);font-size:11.5px">(${dayDiff(today(),i.open)} วันแล้ว)</span></td>
       <td style="white-space:nowrap;text-align:right">
-        <button class="btn sm ghost" onclick="copyText(lineMsg(findM('${m.id}'),HS.find(x=>x.key==='${h.key}')))">📋 คัดลอกข้อความ LINE</button>
-        <button class="btn sm gold" onclick="markSent('${m.id}','${h.key}')">✓ ส่งแล้ว</button>
+        <button class="btn sm ghost" onclick="event.stopPropagation();copyText(lineMsg(findM('${m.id}'),HS.find(x=>x.key==='${h.key}')))">📋 คัดลอกข้อความ LINE</button>
+        <button class="btn sm gold" onclick="event.stopPropagation();markSent('${m.id}','${h.key}')">✓ ส่งแล้ว</button>
       </td></tr>`).join('')}</table></div>
       ${due.length>3?`<button class="btn ghost sm expander" onclick="dueExpand=!dueExpand;render()">${dueExpand?'▲ ย่อกลับ':`▼ แสดงทั้งหมด ${due.length} รายการ`}</button>`:''}`
     :`<div class="empty">🎉 ไม่มีแบบสอบถามค้างส่ง</div>`}
@@ -339,19 +353,32 @@ function vDash(){
   <div class="card">
     <h2>📨 ส่งแล้ว รอคำตอบ <span class="cnt">${wait.length} รายการ</span></h2>
     ${wait.length?`<div class="tblwrap"><table><tr><th>สมาชิก</th><th>แบบสอบถาม</th><th></th></tr>
-    ${(waitExpand?wait:wait.slice(0,3)).map(({m,h})=>`<tr>
-      <td class="mname" style="cursor:pointer" onclick="openMember('${m.id}')">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+    ${(waitExpand?wait:wait.slice(0,3)).map(({m,h})=>`<tr class="click" onclick="openMember('${m.id}')">
+      <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
       <td>${h.label}</td>
-      <td style="text-align:right"><button class="btn sm" onclick="markDone('${m.id}','${h.key}')">✅ ตอบแล้ว — บันทึกคำตอบ</button></td>
+      <td style="text-align:right"><button class="btn sm" onclick="event.stopPropagation();markDone('${m.id}','${h.key}')">✅ ตอบแล้ว — บันทึกคำตอบ</button></td>
       </tr>`).join('')}</table></div>
       ${wait.length>3?`<button class="btn ghost sm expander" onclick="waitExpand=!waitExpand;render()">${waitExpand?'▲ ย่อกลับ':`▼ แสดงทั้งหมด ${wait.length} รายการ`}</button>`:''}`
     :`<div class="empty">ไม่มีรายการรอคำตอบ</div>`}
+  </div>
+
+  <div class="card">
+    <h2>🖼️ ยังไม่มีสไลด์ครบ 3 อย่าง <span class="cnt">${noSlide.length} คน</span></h2>
+    ${noSlide.length?`<div class="tblwrap"><table><tr><th>สมาชิก</th><th>สถานะ</th><th>ยังขาด</th><th>Mentor</th></tr>
+    ${(slideExpand?noSlide:noSlide.slice(0,3)).map(({m,miss})=>`<tr class="click" onclick="openMember('${m.id}')">
+      <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+      <td><span class="badge ${m.status==='ปีแรก'?'b-first':'b-old'}">${esc(m.status||'—')}</span></td>
+      <td>${miss.map(([k,l])=>`<span class="chip f">${l}</span>`).join(' ')}</td>
+      <td style="font-size:12.5px">${esc(m.mentor||'—')}</td>
+    </tr>`).join('')}</table></div>
+      ${noSlide.length>3?`<button class="btn ghost sm expander" onclick="slideExpand=!slideExpand;render()">${slideExpand?'▲ ย่อกลับ':`▼ แสดงทั้งหมด ${noSlide.length} รายการ`}</button>`:''}`
+    :`<div class="empty">🎉 ทุกคนมีสไลด์ครบแล้ว</div>`}
   </div>`;
 }
 const AV_COLORS=['#5b6cf0','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#22c55e'];
 function avColor(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return AV_COLORS[h%AV_COLORS.length];}
 function mcardHtml(m){
-  const cw=curWeek(m),l=wLast(m),sd=SLIDES.filter(([k])=>m.slides[k]===true).length;
+  const cw=curWeek(m),l=wLast(m),sd=SLIDES.filter(([k])=>hasSlide(m,k)).length;
   const behind=(cw!==null&&l<cw)?cw-l:0;
   const chip=cw===null?['#dcf7e9','#0a9152','ครบ 8 สัปดาห์แล้ว']
     :behind>=2?['#fee4e2','#d92d20',`สัปดาห์ที่ ${cw} · ช้า ${behind} สัปดาห์`]
@@ -406,7 +433,7 @@ function vMembers(){
         <td style="white-space:nowrap">${fmt(m.start)}</td>
         <td style="font-size:12.5px">${esc(m.mentor||'—')}</td>
         <td><span class="wk">${m.weeks.map(w=>`<i class="${w===true?'t':w===false?'f':''}" title=""></i>`).join('')}</span> <span style="font-size:11px;color:var(--mut);white-space:nowrap">${wLast(m)<0?'ยังไม่เริ่ม':wLast(m)+'/8'}</span></td>
-        <td>${SLIDES.map(([k,l])=>`<span class="chip ${m.slides[k]===true?'t':m.slides[k]===false?'f':''}">${l}</span>`).join('')}</td>
+        <td>${SLIDES.map(([k,l])=>`<span class="chip ${hasSlide(m,k)?'t':m.slides[k]===false?'f':''}">${l}</span>`).join('')}</td>
         <td style="font-size:15px;letter-spacing:2px">${icons}</td>
         </tr>`;}).join('')}
     </table></div>
@@ -441,9 +468,15 @@ function openMember(id){
     </div>`).join('')}
   </div>
 
-  <div class="sect"><h4>🖼️ สไลด์ 3 อย่าง</h4>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-    ${SLIDES.map(([k,l])=>`<button class="tri ${m.slides[k]===true?'t':m.slides[k]===false?'f':''}" style="min-width:140px" onclick="cycS('${id}','${k}',this)">${l} · ${triLabel(m.slides[k])}</button>`).join('')}
+  <div class="sect"><h4>🖼️ สไลด์ 3 อย่าง <span style="font-weight:400;font-size:11px;color:var(--mut)">— นับว่า "มีแล้ว" เมื่ออัพโหลดไฟล์ หรือแอดมินกดยืนยัน</span></h4>
+    <div class="grid3">
+    ${SLIDES.map(([k,l])=>{const sf=m.slideFiles&&m.slideFiles[k];const has=hasSlide(m,k);return `
+      <div class="slbox ${has?'has':''}">
+        <div class="slhead"><b>${l}</b><span class="badge ${has?'b-done':m.slides[k]===false?'b-due':'b-notyet'}">${has?'✅ มีแล้ว':'ยังไม่มี'}</span></div>
+        <button class="tri ${m.slides[k]===true?'t':m.slides[k]===false?'f':''}" style="width:100%" onclick="cycS('${id}','${k}',this)">${triLabel(m.slides[k])}</button>
+        <label class="btn sm ghost" style="display:block;text-align:center;cursor:pointer">📤 อัพโหลดรูป/PDF<input type="file" accept="image/*,application/pdf" style="display:none" onchange="uploadSlide('${id}','${k}',this)"></label>
+        ${sf?`<div class="slfile"><a href="${esc(sf.url)}" target="_blank" title="เปิดดูไฟล์">📎 ${esc(sf.name)}</a><button onclick="delSlideFile('${id}','${k}')" title="ลบไฟล์">✕</button></div>`:''}
+      </div>`;}).join('')}
     </div>
   </div>
 
@@ -477,6 +510,30 @@ function triLabel(v){return v===true?'✅ ทำแล้ว':v===false?'❌ ไ
 function cyc(v){return v===null||v===undefined?true:(v===true?false:null);}
 function cycW(id,i,btn){const m=findM(id);m.weeks[i]=cyc(m.weeks[i]);save(id);openMember(id);}
 function cycS(id,k,btn){const m=findM(id);m.slides[k]=cyc(m.slides[k]);save(id);openMember(id);}
+async function uploadSlide(id,k,inp){
+  const f=inp.files[0];if(!f)return;
+  if(f.size>10*1024*1024){toast('ไฟล์ใหญ่เกิน 10MB');return;}
+  toast('⏳ กำลังอัพโหลด...');
+  const ext=(f.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';
+  const path=id+'/'+k+'_'+Date.now()+'.'+ext;
+  try{
+    const r=await fetch(SB_URL+'/storage/v1/object/tm_slides/'+path,{method:'POST',
+      headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':f.type||'application/octet-stream','x-upsert':'true'},body:f});
+    if(!r.ok)throw new Error(r.status);
+  }catch(e){toast('❌ อัพโหลดไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ต');return;}
+  const m=findM(id);
+  m.slideFiles=m.slideFiles||{};
+  m.slideFiles[k]={url:SB_URL+'/storage/v1/object/public/tm_slides/'+path,name:f.name,path};
+  m.slides[k]=true;
+  save(id);openMember(id);toast('✅ อัพโหลดสไลด์แล้ว');
+}
+async function delSlideFile(id,k){
+  const m=findM(id);const sf=m.slideFiles&&m.slideFiles[k];if(!sf)return;
+  if(!confirm('ลบไฟล์สไลด์ "'+sf.name+'" ?'))return;
+  try{await fetch(SB_URL+'/storage/v1/object/tm_slides/'+sf.path,{method:'DELETE',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});}catch(e){}
+  delete m.slideFiles[k];
+  save(id);openMember(id);toast('ลบไฟล์แล้ว');
+}
 function upd(id,f,v){const m=findM(id);m[f]=v;save(id);}
 function updHS(id,k,f,v){const m=findM(id);m.hs[k][f]=v;save(id);}
 function delMember(id){const m=findM(id);
