@@ -2,6 +2,7 @@
 const { sbGet, esc, baht, pageShell, notFound, SITE, PHONE, TEL, LINE_URL } = require("./_shared");
 
 const KIND_TH = { ac: "เครื่องปรับอากาศ", material: "อะไหล่/วัสดุ", service: "บริการ" };
+const SVC_TH = { "sv-install": "ติดตั้ง", "sv-clean": "ล้าง", "sv-move": "ย้าย", "sv-repair": "ซ่อม", "sv-other": "อื่นๆ" };
 const TYPE_TH = { "Wall type": "ติดผนัง", "Ceiling type": "แขวนใต้ฝ้า", "Cassette 4 way type": "ฝังฝ้า 4 ทิศ", "Cassette 1 way type": "ฝังฝ้า 1 ทิศ", "Duct Type": "ต่อท่อลม", "Floor Standing": "ตู้ตั้ง" };
 
 module.exports = async (req, res) => {
@@ -47,6 +48,7 @@ module.exports = async (req, res) => {
     };
 
     const chips = [
+      p.kind === "service" && SVC_TH[p.category] ? `<span>🛠️ ${SVC_TH[p.category]}</span>` : "",
       p.brand ? `<span>🏷️ ${esc(p.brand)}</span>` : "",
       p.btu ? `<span>❄️ ${Number(p.btu).toLocaleString("en-US")} BTU</span>` : "",
       TYPE_TH[p.ac_type] ? `<span>📐 ${TYPE_TH[p.ac_type]}</span>` : "",

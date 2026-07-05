@@ -7,6 +7,12 @@ import { uploadMaterialPhoto } from "../lib/api";
 
 const KINDS = [{ v: "material", l: "วัสดุ" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }];
 
+// หมวดค่าบริการ — id คงที่ ตรงกับแถวในตาราง categories (migration 102)
+const SERVICE_CATS = [
+  { id: "sv-install", l: "ติดตั้ง" }, { id: "sv-clean", l: "ล้าง" }, { id: "sv-move", l: "ย้าย" },
+  { id: "sv-repair", l: "ซ่อม" }, { id: "sv-other", l: "อื่นๆ" },
+];
+
 // ราคาขายแนะนำจากต้นทุน (กำไรคิดเป็น % ของราคาขาย · ราคาก่อน VAT · แก้ทับได้เสมอ)
 // วัสดุ: กำไร 70% → ขาย = ทุน ÷ 0.30 · แอร์: กำไร 5% → ขาย = ทุน ÷ 0.95 · ปัดเศษขึ้นเป็นบาทเต็ม · บริการ: ไม่คำนวณ
 const MARGIN = { material: 0.70, ac: 0.05 };
@@ -24,7 +30,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     name_th: initial?.name_th || initial?.th || "",
     name_en: initial?.name_en || initial?.en || "",
     kind: initial?.kind || defaultKind,
-    category: initial?.category || initial?.cat || categories[0]?.id || "pipe",
+    category: initial?.category || initial?.cat || ((initial?.kind || defaultKind) === "service" ? "sv-other" : categories[0]?.id || "pipe"),
     brand: initial?.brand || "",
     btu: initial?.btu || "",
     ac_type: initial?.ac_type || "",
@@ -66,7 +72,13 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
   };
   const setSale = (e) => { setSpTouched(true); setF((s) => ({ ...s, sale_price: e.target.value })); };
   const applySuggest = () => { const sug = suggestSale(f.kind, f.cost); if (sug != null) { setSpTouched(true); setF((s) => ({ ...s, sale_price: sug })); } };
-  const setKind = (kind) => setF((s) => ({ ...s, kind, tracked: kind === "service" ? false : s.tracked }));
+  const setKind = (kind) => setF((s) => ({
+    ...s, kind, tracked: kind === "service" ? false : s.tracked,
+    // สลับชนิด → หมวดต้องเป็นชุดของชนิดนั้น (บริการใช้ sv-* · วัสดุใช้หมวดวัสดุ)
+    category: kind === "service"
+      ? (String(s.category || "").startsWith("sv-") ? s.category : "sv-other")
+      : (String(s.category || "").startsWith("sv-") ? (categories[0]?.id || "pipe") : s.category),
+  }));
   const valid = f.code && f.name_th;
   const isAc = f.kind === "ac", isService = f.kind === "service", isMat = f.kind === "material";
 
@@ -86,8 +98,16 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     if (!valid || busy) return;
     if (!isNew && !await confirmDialog(`ยืนยันบันทึกการแก้ไข "${f.th || f.code}" ?`)) return;
     setBusy(true); setErr(null);
-    try { await onSave(f, isNew); onSaved(f.kind); }
-    catch (e) { setErr(e.message || String(e)); setBusy(false); }
+    try {
+      // บริการต้องอยู่หมวด sv-* เสมอ (รายการเก่าที่หมวดเป็นของวัสดุ → อื่นๆ)
+      const payload = isService && !String(f.category || "").startsWith("sv-") ? { ...f, category: "sv-other" } : f;
+      await onSave(payload, isNew); onSaved(f.kind);
+    }
+    catch (e) {
+      const m = e.message || String(e);
+      setErr((isService && /categor|fkey|foreign/i.test(m) ? "ยังไม่มีหมวดบริการในระบบ — รัน migration 102 ก่อน · " : "") + m);
+      setBusy(false);
+    }
   }
 
   return (
@@ -123,6 +143,13 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
                     {categories.map((c) => <option key={c.id} value={c.id}>{c.name_th}</option>)}
                   </Combo>
                 )}
+              </label>
+            )}
+            {isService && (
+              <label className="fld"><span>หมวดบริการ · Category</span>
+                <Combo className="inp" value={SERVICE_CATS.some((c) => c.id === f.category) ? f.category : "sv-other"} onChange={set("category")}>
+                  {SERVICE_CATS.map((c) => <option key={c.id} value={c.id}>{c.l}</option>)}
+                </Combo>
               </label>
             )}
             {isAc && (

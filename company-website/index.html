@@ -455,6 +455,7 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
         <option value="">บริการทั้งหมด</option>
         <option value="ติดตั้ง">ติดตั้งแอร์</option><option value="ล้าง">ล้างแอร์</option>
         <option value="ซ่อม">ซ่อม/แก้ไข</option><option value="ย้าย">ย้ายแอร์</option>
+        <option value="อื่นๆ">บริการอื่น ๆ</option>
       </select>
       <button class="side-go" id="fltGo">ดูสินค้า / บริการ →</button>
     </div>
@@ -641,6 +642,7 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
       <option value="">บริการทั้งหมด</option>
       <option value="ติดตั้ง">ติดตั้งแอร์</option><option value="ล้าง">ล้างแอร์</option>
       <option value="ซ่อม">ซ่อม/แก้ไข</option><option value="ย้าย">ย้ายแอร์</option>
+      <option value="อื่นๆ">บริการอื่น ๆ</option>
     </select>
   </div>
   <div class="prod-tools">
@@ -772,6 +774,16 @@ const SAMPLE = [
   { code: "demo4", name: "รีโมทแอร์ (ตัวอย่าง)", price: 350, kind: "material", tag: "อะไหล่", photo: "" },
 ];
 const KIND_TH = { ac: "แอร์", material: "อะไหล่/วัสดุ", service: "บริการ" };
+// หมวดค่าบริการ (ตรงกับ categories sv-* ในหลังบ้าน — migration 102)
+const SVC_TH = { "sv-install": "ติดตั้ง", "sv-clean": "ล้าง", "sv-move": "ย้าย", "sv-repair": "ซ่อม", "sv-other": "อื่นๆ" };
+const SVC_ID = { "ติดตั้ง": "sv-install", "ล้าง": "sv-clean", "ย้าย": "sv-move", "ซ่อม": "sv-repair", "อื่นๆ": "sv-other" };
+function svcMatch(p, label) {
+  if (p.category) return label === "อื่นๆ" ? (p.category === "sv-other" || !String(p.category).startsWith("sv-")) : p.category === SVC_ID[label];
+  // ยังไม่มีคอลัมน์หมวดจากหลังบ้าน → เดาจากชื่อ (พฤติกรรมเดิม)
+  const nm = p.name || "";
+  if (label === "อื่นๆ") return !["ติดตั้ง", "ล้าง", "ย้าย", "ซ่อม"].some((k) => nm.includes(k));
+  return nm.includes(label);
+}
 const TYPE_TH = { "Wall type": "ติดผนัง", "Ceiling type": "แขวนใต้ฝ้า", "Cassette 4 way type": "ฝังฝ้า 4 ทิศ", "Cassette 1 way type": "ฝังฝ้า 1 ทิศ", "Duct Type": "ต่อท่อลม", "Floor Standing": "ตู้ตั้ง" };
 // build the sidebar filter dropdowns from the real published AC products (so every option matches data)
 function fillFilters() {
@@ -783,7 +795,7 @@ function fillFilters() {
   if (btus.length) fill(["#fltBtu", "#ppBtu"], `<option value="">ทุกขนาด BTU</option>` + btus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join(""));
   if (types.length) fill(["#fltType", "#ppType"], `<option value="">ทุกประเภท</option>` + types.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join(""));
 }
-let allProducts = [], prodFilter = "all", prodQuery = "", prodBrand = "", prodBtu = "", prodType = "", prodNote = "";
+let allProducts = [], prodFilter = "all", prodQuery = "", prodBrand = "", prodBtu = "", prodType = "", prodSvc = "", prodNote = "";
 function prodCard(p) {
   const purl = "/p/" + encodeURIComponent(p.code);   // หน้ารายละเอียดสินค้า (SSR — ติด Google ได้)
   return `<div class="prod">
@@ -807,6 +819,7 @@ function renderProducts() {
     && (!prodBrand || String(p.brand || "").toLowerCase() === prodBrand.toLowerCase())
     && (!prodType || String(p.ac_type || "") === prodType)
     && (!prodBtu || String(p.btu || "") === String(prodBtu))
+    && (!prodSvc || p.kind !== "service" || svcMatch(p, prodSvc))
     && (!q || (p.name || "").toLowerCase().includes(q)));
   if (!list.length) { grid.innerHTML = `<div class="prod-empty">${allProducts.length ? "ไม่พบสินค้าที่ค้นหา" : (prodNote || "ยังไม่มีสินค้า")}</div>`; return; }
   grid.innerHTML = list.map(prodCard).join("") + (prodNote ? `<div class="prod-empty">${prodNote}</div>` : "");
@@ -816,7 +829,7 @@ async function loadProducts() {
   try {
     const { data, error } = await sb.from("web_products").select("*").limit(1000);
     if (error) throw error;
-    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, tag: KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, ac_type: r.ac_type, powerCostYear: r.power_cost_year, features: r.features }));
+    allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, category: r.category, tag: r.kind === "service" && SVC_TH[r.category] ? "บริการ · " + SVC_TH[r.category] : KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, ac_type: r.ac_type, powerCostYear: r.power_cost_year, features: r.features }));
     prodNote = allProducts.length ? "" : "ยังไม่มีสินค้าที่เผยแพร่ — ติ๊ก “ขึ้นเว็บ” ที่สินค้าในระบบหลังบ้าน";
     fillFilters(); renderProducts();
     // มาจากหน้ารายละเอียดสินค้า (/p/…) กด "ใส่ตะกร้า" → /?add=CODE → หยิบลงตะกร้าแล้วเปิดลิ้นชักให้เลย
@@ -831,7 +844,7 @@ async function loadProducts() {
 $("#prodTabs").querySelectorAll(".prod-tab").forEach((t) => t.onclick = () => {
   $("#prodTabs").querySelectorAll(".prod-tab").forEach((x) => x.classList.remove("on"));
   t.classList.add("on"); prodFilter = t.dataset.k;
-  prodBrand = prodBtu = prodType = "";   // เลือกแท็บเอง = ล้างตัวกรอง
+  prodBrand = prodBtu = prodType = prodSvc = "";   // เลือกแท็บเอง = ล้างตัวกรอง
   ["#fltModel", "#fltType", "#fltBtu", "#fltService", "#ppModel", "#ppType", "#ppBtu", "#ppService"].forEach((id) => { if ($(id)) $(id).value = ""; });
   renderProducts();
 });
@@ -948,8 +961,8 @@ function setProdTab(k) { const t = $("#prodTabs"); if (t) t.querySelectorAll(".p
 function applyFilters(g, navigate) {
   const v = (i) => ($(g[i]) ? $(g[i]).value : "");
   const brand = v(0), type = v(1), btu = v(2), svc = v(3);
-  if (svc) { prodFilter = "service"; prodBrand = prodBtu = prodType = ""; prodQuery = svc; }
-  else { prodBrand = brand; prodType = type; prodBtu = btu; prodQuery = ""; prodFilter = (brand || type || btu) ? "ac" : "all"; }
+  if (svc) { prodFilter = "service"; prodBrand = prodBtu = prodType = ""; prodQuery = ""; prodSvc = svc; }
+  else { prodBrand = brand; prodType = type; prodBtu = btu; prodQuery = ""; prodSvc = ""; prodFilter = (brand || type || btu) ? "ac" : "all"; }
   setProdTab(prodFilter);
   if ($("#prodSearch")) $("#prodSearch").value = prodQuery;
   [["#fltModel", "#ppModel", prodBrand], ["#fltType", "#ppType", prodType], ["#fltBtu", "#ppBtu", String(prodBtu || "")], ["#fltService", "#ppService", svc]]
@@ -965,7 +978,7 @@ if ($("#fltGo")) $("#fltGo").onclick = () => applyFilters(["#fltModel", "#fltTyp
 // ---------- หน้าเพจ: หน้าแรก ↔ หน้าสินค้า/บริการ (hash router · รองรับหน้ารายละเอียดสินค้าในอนาคต) ----------
 // ล้างตัวกรองทั้งหมด (ใช้ตอนกลับหน้าแรก — ไม่ให้ประวัติค้นหาค้าง)
 function resetFilters() {
-  prodBrand = prodBtu = prodType = ""; prodQuery = ""; prodFilter = "all";
+  prodBrand = prodBtu = prodType = prodSvc = ""; prodQuery = ""; prodFilter = "all";
   ["#fltModel", "#fltType", "#fltBtu", "#fltService", "#ppModel", "#ppType", "#ppBtu", "#ppService"].forEach((id) => { if ($(id)) $(id).value = ""; });
   if ($("#prodSearch")) $("#prodSearch").value = "";
   setProdTab("all"); renderProducts();
