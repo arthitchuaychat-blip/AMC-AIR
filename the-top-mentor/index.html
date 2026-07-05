@@ -311,7 +311,7 @@ function render(){
   else if(tab==='members')v.innerHTML=vMembers();
   else if(tab==='survey')v.innerHTML=vSurvey();
   else if(tab==='report')v.innerHTML=vReport();
-  else v.innerHTML=vSettings();
+  else{v.innerHTML=vSettings();checkLine();}
 }
 
 /* ---------- dashboard ---------- */
@@ -459,6 +459,12 @@ function openMember(id){
   <button class="x" onclick="closeModal()">✕</button>
   <h3>${esc(m.nick||'')} — ${esc(m.name)}</h3>
   <div class="sub">${esc(m.prof||'')} · เริ่ม ${fmt(m.start)}${cw!==null?` · ขณะนี้อยู่สัปดาห์ที่ ${cw}`:''}</div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 12px">
+    <span class="badge ${m.lineUserId?'b-done':'b-notyet'}">${m.lineUserId?'🟢 เชื่อม LINE แล้ว':'⚪ ยังไม่เชื่อม LINE'}</span>
+    ${m.lineUserId
+      ?`<button class="btn sm ghost" onclick="unlinkLine('${id}')">ยกเลิกการเชื่อม</button>`
+      :`<span style="font-size:11.5px;color:var(--mut)">ให้สมาชิกแอด LINE OA ของ Chapter แล้วพิมพ์ชื่อเล่น "${esc(m.nick||m.name)}" เพื่อเชื่อม</span>`}
+  </div>
 
   <div class="grid2">
     <div class="field"><label>ชื่อสมาชิก (Member Name)</label><input type="text" value="${esc(m.name)}" onchange="upd('${id}','name',this.value)"></div>
@@ -545,6 +551,9 @@ async function delSlideFile(id,k){
 }
 function upd(id,f,v){const m=findM(id);m[f]=v;save(id);}
 function updHS(id,k,f,v){const m=findM(id);m.hs[k][f]=v;save(id);}
+function unlinkLine(id){const m=findM(id);
+  if(!confirm(`ยกเลิกการเชื่อม LINE ของ "${m.nick||m.name}"? (สมาชิกต้องพิมพ์ชื่อเล่นใน OA ใหม่เพื่อเชื่อมอีกครั้ง)`))return;
+  m.lineUserId=null;save(id);openMember(id);toast('ยกเลิกการเชื่อม LINE แล้ว');}
 function delMember(id){const m=findM(id);
   if(!confirm(`ลบสมาชิก "${m.nick||m.name}" ออกจากระบบ?`))return;
   state.members=state.members.filter(x=>x.id!==id);saveDel(id);closeModal();}
@@ -688,9 +697,14 @@ function vSettings(){
 
   <div class="card">
     <h2>🤖 การส่งแบบสอบถามใน LINE อัตโนมัติ</h2>
-    <div class="help">
-      ตอนนี้แอปช่วย <b>เตือนเมื่อถึงกำหนด + สร้างข้อความให้คัดลอกไปส่งใน LINE</b> ได้ทันที และข้อมูลอยู่บนคลาวด์แล้ว ✅<br>
-      ส่วนการ <b>ส่งเข้า LINE สมาชิกอัตโนมัติ</b> ขาดอีก 2 อย่าง: <b>LINE Official Account (Messaging API)</b> ของ Chapter + <b>แบบสอบถาม 3 ชุด</b> — เมื่อพร้อมแล้วแจ้งได้เลย เดี๋ยวทำต่อให้ครับ
+    <div id="lineStatus" class="help">⏳ กำลังตรวจสอบสถานะระบบ...</div>
+    <div style="margin-top:12px;font-size:13px;line-height:1.9">
+      <b>วิธีทำงาน:</b> ระบบตรวจทุกวันเวลา 09:00 น. — สมาชิกที่<b>เชื่อม LINE แล้ว</b> และ<b>ถึงกำหนดแบบสอบถาม</b> จะได้รับลิงก์ทางแชท LINE อัตโนมัติ แล้วสถานะในแอปเปลี่ยนเป็น 📨 ส่งแล้ว ให้เอง<br>
+      <b>วิธีให้สมาชิกเชื่อม LINE:</b> สมาชิกแอด LINE OA ของ Chapter เป็นเพื่อน → พิมพ์<b>ชื่อเล่น</b>ของตัวเอง (เช่น "พัด") → ระบบเชื่อมและตอบยืนยันทันที · ดูสถานะเชื่อมได้ในหน้าข้อมูลสมาชิกแต่ละคน
+    </div>
+    <div class="toolbar" style="margin:12px 0 0">
+      <button class="btn sm ghost" onclick="checkLine(true)">🔄 ตรวจสอบสถานะอีกครั้ง</button>
+      <button class="btn sm ghost" onclick="dryRunCron()">🧪 ทดสอบ: วันนี้จะส่งให้ใครบ้าง (ไม่ส่งจริง)</button>
     </div>
   </div>
 
@@ -704,6 +718,31 @@ function vSettings(){
     </div>
     <div style="font-size:12px;color:var(--mut);margin-top:10px">☁️ ข้อมูลเก็บบนคลาวด์ (Supabase) — ทุกคนที่เปิดแอปเห็นข้อมูลชุดเดียวกัน และมีสำเนาในเครื่องเผื่อออฟไลน์ · แนะนำสำรอง JSON เป็นระยะเช่นเดิม</div>
   </div>`;
+}
+/* ---------- LINE OA status ---------- */
+const API_BASE='https://amc-air.vercel.app/api';
+async function checkLine(manual){
+  const el=document.getElementById('lineStatus');if(!el)return;
+  const linked=state.members.filter(m=>m.lineUserId).length;
+  const links=['link3','link6','link12'].filter(k=>state.config[k]).length;
+  try{
+    const r=await fetch(API_BASE+'/mentor-line');const j=await r.json();
+    const okEnv=j.env&&j.env.token&&j.env.secret;
+    el.innerHTML=okEnv
+      ?`🟢 <b>ระบบ LINE พร้อมใช้งาน</b> — สมาชิกเชื่อม LINE แล้ว <b>${linked}/${state.members.length}</b> คน · ลิงก์แบบสอบถามตั้งแล้ว <b>${links}/3</b> ชุด${links<3?' (ใส่ลิงก์ที่การ์ดด้านบนให้ครบ ระบบถึงจะส่งชุดนั้นได้)':''}`
+      :`🟡 <b>ระบบติดตั้งแล้ว แต่ยังไม่ได้ใส่กุญแจ LINE OA</b> — ผู้ดูแลต้องใส่ MENTOR_LINE_ACCESS_TOKEN และ MENTOR_LINE_CHANNEL_SECRET ใน Vercel ก่อน`;
+  }catch(e){el.innerHTML='🔴 ติดต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';}
+  if(manual)toast('ตรวจสอบสถานะแล้ว');
+}
+async function dryRunCron(){
+  toast('กำลังทดสอบ...');
+  try{
+    const r=await fetch(API_BASE+'/mentor-cron?dry=1');const j=await r.json();
+    if(!j.ok){alert('ระบบยังไม่พร้อม: '+(j.reason||'ไม่ทราบสาเหตุ'));return;}
+    alert(j.sent.length
+      ?'วันนี้ระบบจะส่งแบบสอบถามให้:\n'+j.sent.map(s=>`• ${s.member} — ${s.survey}`).join('\n')+(j.skippedNoLink.length?`\n\n(ข้าม ${j.skippedNoLink.length} รายการเพราะยังไม่ตั้งลิงก์แบบสอบถาม)`:'')
+      :'วันนี้ไม่มีรายการที่จะส่ง — สมาชิกที่เชื่อม LINE ยังไม่มีแบบสอบถามถึงกำหนด'+(j.skippedNoLink.length?`\n(มี ${j.skippedNoLink.length} รายการรอใส่ลิงก์แบบสอบถามให้ครบก่อน)`:''));
+  }catch(e){alert('เรียกเซิร์ฟเวอร์ไม่สำเร็จ');}
 }
 function expJson(){
   const a=document.createElement('a');
