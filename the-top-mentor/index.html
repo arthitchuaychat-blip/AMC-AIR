@@ -33,7 +33,9 @@ main{max-width:1200px;margin:0 auto;padding:22px 18px 90px}
 .card h2{font-size:15.5px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:9px}
 .card h2 .cnt{background:#f1f4fb;color:var(--mut);font-size:11.5px;padding:3px 11px;border-radius:99px;font-weight:500}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;margin-bottom:16px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;display:flex;align-items:center;gap:13px;box-shadow:var(--sh)}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;display:flex;align-items:center;gap:13px;box-shadow:var(--sh);cursor:pointer;transition:.16s}
+.stat:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(28,42,82,.13);border-color:#d8dff0}
+.card{scroll-margin-top:86px}
 .stat .ic{width:46px;height:46px;border-radius:15px;font-size:21px;display:flex;align-items:center;justify-content:center;background:#f1f4fb;flex:none}
 .stat .n{font-size:24px;font-weight:700;line-height:1.05}
 .stat .l{font-size:11.5px;color:var(--mut);margin-top:2px}
@@ -301,6 +303,7 @@ function toast(msg){
 const TABS=[['dash','🏠 แดชบอร์ด'],['members','👥 สมาชิก'],['survey','💛 Happiness Survey'],['report','📊 รายงานประธาน'],['settings','⚙️ ตั้งค่า']];
 let tab='dash';
 function go(t){tab=t;render();}
+function scrollCard(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
 function render(){
   document.getElementById('nav').innerHTML=TABS.map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
   const v=document.getElementById('view');
@@ -325,9 +328,15 @@ function vDash(){
   mentoring.sort((a,b)=>(b.start||'').localeCompare(a.start||''));
   const noSlide=ms.map(m=>({m,miss:SLIDES.filter(([k])=>!hasSlide(m,k))})).filter(x=>x.miss.length);
   noSlide.sort((a,b)=>((a.m.status==='ปีแรก'?0:1)-(b.m.status==='ปีแรก'?0:1))||(b.m.start||'').localeCompare(a.m.start||''));
-  const ST=[['👥',ms.length,'สมาชิกทั้งหมด',''],['🎓',mentoring.length,'กำลัง Mentoring','gold'],['✅',finished.length,'จบครบ 8 สัปดาห์','green'],['⏰',due.length,'ถึงกำหนด ยังไม่ส่ง','red'],['📨',wait.length,'ส่งแล้ว รอคำตอบ','blue'],['🖼️',noSlide.length,'สไลด์ยังไม่ครบ','purple']];
+  const ST=[
+    ['👥',ms.length,'สมาชิกทั้งหมด','',"fil='all';q='';go('members')"],
+    ['🎓',mentoring.length,'กำลัง Mentoring','gold',"fil='mentoring';q='';go('members')"],
+    ['✅',finished.length,'จบครบ 8 สัปดาห์','green',"fil='done';q='';go('members')"],
+    ['⏰',due.length,'ถึงกำหนด ยังไม่ส่ง','red',"dueExpand=true;render();scrollCard('card-due')"],
+    ['📨',wait.length,'ส่งแล้ว รอคำตอบ','blue',"waitExpand=true;render();scrollCard('card-wait')"],
+    ['🖼️',noSlide.length,'สไลด์ยังไม่ครบ','purple',"slideExpand=true;render();scrollCard('card-slide')"]];
   return `
-  <div class="stats">${ST.map(([ic,n,l,c])=>`<div class="stat ${c}"><div class="ic">${ic}</div><div><div class="n">${n}</div><div class="l">${l}</div></div></div>`).join('')}</div>
+  <div class="stats">${ST.map(([ic,n,l,c,act])=>`<div class="stat ${c}" onclick="${act}" title="กดเพื่อดูรายละเอียด"><div class="ic">${ic}</div><div><div class="n">${n}</div><div class="l">${l}</div></div></div>`).join('')}</div>
 
   <div class="card">
     <h2>🎓 Mentoring กำลังดำเนินการ <span class="cnt">${mentoring.length} คน</span></h2>
@@ -335,7 +344,7 @@ function vDash(){
     :`<div class="empty">ไม่มีสมาชิกที่กำลัง Mentoring</div>`}
   </div>
 
-  <div class="card">
+  <div class="card" id="card-due">
     <h2>⏰ แบบสอบถามที่ถึงกำหนดส่ง <span class="cnt">${due.length} รายการ</span></h2>
     ${due.length?`<div class="tblwrap"><table><tr><th>สมาชิก</th><th>แบบสอบถาม</th><th>ถึงกำหนดตั้งแต่</th><th></th></tr>
     ${(dueExpand?due:due.slice(0,3)).map(({m,h,i})=>`<tr class="click" onclick="openMember('${m.id}')">
@@ -350,7 +359,7 @@ function vDash(){
     :`<div class="empty">🎉 ไม่มีแบบสอบถามค้างส่ง</div>`}
   </div>
 
-  <div class="card">
+  <div class="card" id="card-wait">
     <h2>📨 ส่งแล้ว รอคำตอบ <span class="cnt">${wait.length} รายการ</span></h2>
     ${wait.length?`<div class="tblwrap"><table><tr><th>สมาชิก</th><th>แบบสอบถาม</th><th></th></tr>
     ${(waitExpand?wait:wait.slice(0,3)).map(({m,h})=>`<tr class="click" onclick="openMember('${m.id}')">
@@ -362,7 +371,7 @@ function vDash(){
     :`<div class="empty">ไม่มีรายการรอคำตอบ</div>`}
   </div>
 
-  <div class="card">
+  <div class="card" id="card-slide">
     <h2>🖼️ ยังไม่มีสไลด์ครบ 3 อย่าง <span class="cnt">${noSlide.length} คน</span></h2>
     ${noSlide.length?`<div class="tblwrap"><table><tr><th>สมาชิก</th><th>สถานะ</th><th>ยังขาด</th><th>Mentor</th></tr>
     ${(slideExpand?noSlide:noSlide.slice(0,3)).map(({m,miss})=>`<tr class="click" onclick="openMember('${m.id}')">
