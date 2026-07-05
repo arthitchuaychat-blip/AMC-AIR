@@ -6,6 +6,7 @@ import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef
 import { UIcon } from "../icons";
 import JobTimeline from "./JobTimeline";
 import DocChips from "./DocChips";
+import DocPeek from "./DocPeek";
 import ChatCustomerLink from "./ChatCustomerLink";
 import AttachThumb from "./AttachThumb";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
@@ -45,6 +46,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
   const [viewing, setViewing] = React.useState(null); // job being viewed (detail modal)
+  const [peek, setPeek] = React.useState(null);       // {type,no} — พรีวิวเอกสารเชื่อมโยงเป็นแผงด้านขวา ก่อนเปิดหน้าเต็ม
   const [approveCtx, setApproveCtx] = React.useState(null); // { jo, v } → approval choice popup
   const [q, setQ] = React.useState("");
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
@@ -551,7 +553,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 {(jo.contact_name || jo.contact_phone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{jo.contact_name || "ผู้ติดต่อ"}{jo.contact_phone && <a href={`tel:${jo.contact_phone}`} className="jo-tel">📞 {jo.contact_phone}</a>}</div>}
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
-              {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "job", no: jo.job_no }} onOpen={onOpenDoc} />; })()}
+              {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "job", no: jo.job_no }}
+                onOpen={(t, n) => (t === "job" ? (onOpenDoc && onOpenDoc(t, n)) : setPeek({ type: t, no: n }))} />; })()}
               <InternalNoteTag note={jo.internal_note} />
               {(() => { const sibs = siblingsOf(jo); return sibs.length > 1 ? (
                 <div className="job-group-chips"><span style={{ fontSize: 12, color: "var(--ink-2)" }}>🔗 ใบงานเชื่อม:</span>
@@ -675,6 +678,9 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
           </div>
         );
       })()}
+
+      {peek && <DocPeek type={peek.type} no={peek.no} onClose={() => setPeek(null)}
+        onOpenFull={() => { const p = peek; setPeek(null); onOpenDoc && onOpenDoc(p.type, p.no); }} />}
 
       {toast && <Toast t={toast} />}
     </div>
