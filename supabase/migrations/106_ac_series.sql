@@ -60,10 +60,21 @@ update materials m set energy_label = 'มอก.'
 from (select code, coalesce(name_th,'')||' '||coalesce(name_en,'')||' '||coalesce(description,'') as txt from materials) t
 where t.code = m.code and m.kind = 'ac' and m.energy_label is null and t.txt ~* 'มอก';
 
--- ชื่อรุ่น: (ก) ชื่อมี "... Series" → เอาคำหน้า Series (ไม่เกิน 2 คำ) · (ข) ไม่มีก็เดาจากตัวอักษรนำหน้ารหัส (FTKQ09… → FTKQ)
+-- ชื่อรุ่น — ไล่ตามความแม่น 3 ชั้น:
+-- (ก) คำเดียวหน้า "Series" ที่โผล่อยู่ในรหัสสินค้าด้วย → แม่นสุด (เช่น "TGF Series" + รหัส 38TGF0131A1 → TGF)
+update materials m set series = (regexp_match(t.txt, '([A-Za-z0-9]+)\s+Series', 'i'))[1]
+from (select code, coalesce(name_th,'')||' '||coalesce(name_en,'') as txt from materials) t
+where t.code = m.code and m.kind = 'ac' and m.series is null
+  and t.txt ~* '[A-Za-z0-9]\s+Series'
+  and length((regexp_match(t.txt, '([A-Za-z0-9]+)\s+Series', 'i'))[1]) >= 2
+  and position(upper((regexp_match(t.txt, '([A-Za-z0-9]+)\s+Series', 'i'))[1]) in upper(m.code)) > 0;
+
+-- (ข) ชื่อการตลาดหน้า "Series" ไม่เกิน 2 คำ (เช่น Apollo III Series → Apollo III)
 update materials m set series = trim((regexp_match(t.txt, '([A-Za-z0-9]+(?: [A-Za-z0-9]+)?)\s+Series', 'i'))[1])
 from (select code, coalesce(name_th,'')||' '||coalesce(name_en,'') as txt from materials) t
 where t.code = m.code and m.kind = 'ac' and m.series is null and t.txt ~* '[A-Za-z0-9]\s*Series';
+
+-- (ค) ชื่อไม่มีคำว่า Series → เดาจากตัวอักษรนำหน้ารหัส (FTKQ09YV2S → FTKQ)
 update materials set series = upper((regexp_match(code, '^[0-9]*([A-Za-z]{2,})'))[1])
 where kind = 'ac' and series is null and code ~ '^[0-9]*[A-Za-z]{2,}';
 
