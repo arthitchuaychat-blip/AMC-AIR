@@ -307,8 +307,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   // ราคาตามวิธีชำระ (กติกาเดียวกับแคตตาล็อก/เว็บ): เงินสด = ฐาน · รูดเต็ม +4% · ผ่อน 10 เดือน +14% (ปัดขึ้นบาทเต็ม)
   const CHAT_PAY = [
     { v: "cash", l: "💵 เงินสด/โอน", rate: 0 },
-    { v: "card_full", l: "💳 บัตรเครดิต รูดเต็ม (+4%)", rate: 0.04 },
-    { v: "card_inst10", l: "💳 ผ่อนบัตร 10 เดือน (+14%)", rate: 0.14 },
+    { v: "card_full", l: "💳 บัตรเครดิต รูดเต็ม", rate: 0.04 },
+    { v: "card_inst10", l: "💳 ผ่อนบัตร 10 เดือน", rate: 0.14 },
   ];
   const chatPrice = (it, pm) => { const p = Number(it.salePrice) || 0; return pm.rate ? Math.ceil(p * (1 + pm.rate)) : p; };
   async function sendProduct(it, method = "cash") {

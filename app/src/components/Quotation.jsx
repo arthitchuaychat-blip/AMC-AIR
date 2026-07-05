@@ -127,18 +127,19 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     flash(`เพิ่ม ${pulled.length} รายการใหม่จาก ${b.boq_no} — ตรวจราคาขายแล้วบันทึก`);
   }
 
-  // totals — วิธีการรับเงิน: เงินสด (ค่าเริ่มต้น) · บัตรรูดเต็ม +4% · ผ่อนบัตร 10 เดือน +14% (ค่าธรรมเนียมคิดจากยอดหลังส่วนลด ก่อน VAT)
-  const subtotal = ed ? ed.items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0) : 0;
+  // totals — วิธีการรับเงิน: ราคาบัตรปรับเข้า "ราคาต่อหน่วยของแต่ละรายการ" โดยตรง (ปัดขึ้นบาทเต็ม/หน่วย)
+  // ราคาที่เก็บในระบบ = ราคาเงินสดเสมอ → สลับวิธีไปมาได้ไม่เพี้ยน · ไม่มีบรรทัดค่าธรรมเนียมท้ายเอกสาร
+  const payRate = ed?.pay_method === "card_full" ? 0.04 : ed?.pay_method === "card_inst10" ? 0.14 : 0;
+  const adjUnit = (u) => payRate ? Math.ceil(Math.round((Number(u) || 0) * (1 + payRate) * 100) / 100) : Number(u) || 0;
+  const subtotal = ed ? ed.items.reduce((a, x) => a + Number(x.qty) * adjUnit(x.unit_price), 0) : 0;
   const discount = ed ? (ed.discount_type === "percent" ? subtotal * Number(ed.discount_value || 0) / 100 : Number(ed.discount_value || 0)) : 0;
   const afterDisc = subtotal - discount;
-  const payRate = ed?.pay_method === "card_full" ? 0.04 : ed?.pay_method === "card_inst10" ? 0.14 : 0;
-  const payFee = afterDisc * payRate;
-  const vatAmt = ed && ed.vat ? (afterDisc + payFee) * 0.07 : 0;
-  const grand = afterDisc + payFee + vatAmt;
-  // หัก ณ ที่จ่าย — เฉพาะลูกค้านิติบุคคลเท่านั้น (ฐานก่อน VAT รวมค่าธรรมเนียม)
+  const vatAmt = ed && ed.vat ? afterDisc * 0.07 : 0;
+  const grand = afterDisc + vatAmt;
+  // หัก ณ ที่จ่าย — เฉพาะลูกค้านิติบุคคลเท่านั้น (ฐานก่อน VAT)
   const selCust = ed ? custs.find((c) => String(c.id) === String(ed.customer_id)) : null;
   const canWht = selCust?.type === "company";
-  const whtAmt = ed && ed.wht && canWht ? (afterDisc + payFee) * (Number(ed.wht_rate) || 3) / 100 : 0;
+  const whtAmt = ed && ed.wht && canWht ? afterDisc * (Number(ed.wht_rate) || 3) / 100 : 0;
   const netPay = grand - whtAmt;
 
   async function save() {
@@ -237,8 +238,10 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                   <div className="boq-line">
                     <div className="line-info"><div className="line-name">{it.name}</div><div className="line-sub">{it.code || "-"}</div></div>
                     <div className="inp inp-unit boq-in"><input type="number" min="0" value={it.qty} onChange={(e) => setLine(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><UnitPick m={matMap[it.code]} value={it.unit} onChange={(u) => setLineUnit(i, matMap[it.code], u)} /></div>
-                    <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.unit_price} onChange={(e) => setLine(i, "unit_price", Number(e.target.value) || 0)} /></div>
-                    <span className="boq-amt">{fmtBaht(it.qty * it.unit_price)}</span>
+                    <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01"
+                      value={payRate ? adjUnit(it.unit_price) : it.unit_price}
+                      onChange={(e) => setLine(i, "unit_price", payRate ? (Number(e.target.value) || 0) / (1 + payRate) : Number(e.target.value) || 0)} /></div>
+                    <span className="boq-amt">{fmtBaht(it.qty * adjUnit(it.unit_price))}</span>
                     <div className="line-move">
                       <button className="line-mv" disabled={i === 0} onClick={() => moveLine(i, -1)} title="เลื่อนขึ้น"><UIcon name="chevD" size={13} style={{ transform: "rotate(180deg)" }} /></button>
                       <button className="line-mv" disabled={i === ed.items.length - 1} onClick={() => moveLine(i, 1)} title="เลื่อนลง"><UIcon name="chevD" size={13} /></button>
@@ -270,7 +273,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           <div className="fld-row">
             <label className="fld"><span>วิธีการรับเงิน</span>
               <div className="line-add" style={{ flexWrap: "wrap" }}>
-                {[["cash", "💵 เงินสด/โอน"], ["card_full", "💳 บัตรรูดเต็ม +4%"], ["card_inst10", "💳 ผ่อนบัตร 10 เดือน +14%"]].map(([v, l]) => (
+                {[["cash", "💵 เงินสด/โอน"], ["card_full", "💳 บัตรรูดเต็ม"], ["card_inst10", "💳 ผ่อนบัตร 10 เดือน"]].map(([v, l]) => (
                   <button key={v} type="button" className={"vat-toggle" + ((ed.pay_method || "cash") === v ? " on" : "")}
                     style={{ flex: "none" }} onClick={() => setQ("pay_method", v)}>{l}</button>
                 ))}
@@ -295,7 +298,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(subtotal)}</b></div>
             {discount > 0 && <div><span>ส่วนลด</span><b style={{ color: "var(--down)" }}>− {fmtBaht(discount)}</b></div>}
             {discount > 0 && <div><span>ยอดหลังหักส่วนลด</span><b>{fmtBaht(afterDisc)}</b></div>}
-            {payFee > 0 && <div><span>{ed.pay_method === "card_full" ? "ค่าธรรมเนียมบัตรเครดิต (รูดเต็ม) 4%" : "ค่าธรรมเนียมผ่อนบัตร 10 เดือน 14%"}</span><b>{fmtBaht(payFee)}</b></div>}
             {ed.vat && <div><span>VAT 7%</span><b>{fmtBaht(vatAmt)}</b></div>}
             <div className="qt-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(grand)}</b></div>
             {ed.pay_method === "card_inst10" && <div><span>≈ ผ่อนเดือนละ</span><b>{fmtBaht(grand / 10)} × 10 เดือน</b></div>}
@@ -420,7 +422,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       {/* print: full quotation document — letterhead chosen by VAT status */}
       {printQ && (() => { const co = printQ.vat ? companies.vat : companies.novat; return (
         <DocSlip company={co} titleTh="ใบเสนอราคา" titleEn="QUOTATION" docNo={printQ.quote_no}
-          metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }, { label: "อ้างอิง BOQ", value: printQ.boq_no }]}
+          metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }, { label: "อ้างอิง BOQ", value: printQ.boq_no },
+            ...(printQ.payMethod === "card_full" ? [{ label: "การชำระเงิน", value: "บัตรเครดิต (รูดเต็ม)" }] : printQ.payMethod === "card_inst10" ? [{ label: "การชำระเงิน", value: "ผ่อนบัตรเครดิต 10 เดือน" }] : [])]}
           projectTitle={printQ.title}
           customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, address: printQ.customerAddr, contactName: printQ.mainContactName, contactPhone: printQ.mainContactPhone, siteName: printQ.siteName, siteAddress: printQ.siteAddress, siteContactName: printQ.siteContactName, siteContactPhone: printQ.siteContactPhone, mapUrl: printQ.map_url }}
           terms={printQ.note || co.default_terms} termsPayment={printQ.terms_payment} termsFreebies={printQ.terms_freebies} termsWarranty={printQ.terms_warranty} bank={co.bank_info}
@@ -429,7 +432,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             <div><span>รวมเป็นเงิน</span><b>{fmtBaht(printQ.subtotal)}</b></div>
             {printQ.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(printQ.discount)}</b></div>}
             {printQ.discount > 0 && <div><span>ยอดหลังหักส่วนลด</span><b>{fmtBaht(printQ.afterDisc)}</b></div>}
-            {printQ.payFee > 0 ? <div><span>{printQ.payMethod === "card_full" ? "ค่าธรรมเนียมบัตรเครดิต (รูดเต็ม) 4%" : "ค่าธรรมเนียมผ่อนชำระผ่านบัตร 10 เดือน 14%"}</span><b>{fmtBaht(printQ.payFee)}</b></div> : null}
             {printQ.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printQ.vatAmt)}</b></div> : null}
             <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(printQ.grand)}</b></div>
             {printQ.payMethod === "card_inst10" ? <div><span>≈ ผ่อนเดือนละ</span><b>{fmtBaht(printQ.grand / 10)} × 10 เดือน</b></div> : null}
@@ -437,7 +439,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             {printQ.wht ? <div className="doc-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(printQ.netPay)}</b></div> : null}
           </div>}>
           {printQ.items.map((it, i) => (
-            <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{it.qty} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(it.qty * it.unit_price)}</td></tr>
+            <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{it.qty} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td><td className="r">{fmtBaht(it.qty * (it.price_show ?? it.unit_price))}</td></tr>
           ))}
         </DocSlip>
       ); })()}

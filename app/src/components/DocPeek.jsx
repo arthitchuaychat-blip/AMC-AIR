@@ -50,7 +50,7 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
     const arr = type === "po" ? (doc._poLines || []) : (doc.items || []);
     return arr.map((it) => {
       const qty = Number(it.qty) || 0;
-      const price = Number(it.unit_price ?? it.price ?? it.unit_cost) || 0;
+      const price = Number(it.price_show ?? it.unit_price ?? it.price ?? it.unit_cost) || 0;   // price_show = ราคาตามวิธีชำระ (ใบเสนอราคาแบบบัตร)
       return { name: it.name || it.item_code || it.material_code || "-", qty, unit: it.unit || "", price, amount: qty * price, free: it.section === "free" };
     });
   }, [doc, type]);

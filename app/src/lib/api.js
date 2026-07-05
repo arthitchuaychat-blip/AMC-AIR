@@ -938,16 +938,18 @@ export async function listQuotations() {
   const cb = await _creators();
   return (q.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
-    const subtotal = items.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0);
-    const discount = qo.discount_type === "percent" ? subtotal * Number(qo.discount_value || 0) / 100 : Number(qo.discount_value || 0);
-    const afterDisc = subtotal - discount;
-    // วิธีการรับเงิน: เงินสด (ค่าเริ่มต้น) · บัตรรูดเต็ม +4% · ผ่อนบัตร 10 เดือน +14% — ค่าธรรมเนียมคิดจากยอดหลังส่วนลด (ก่อน VAT)
+    // วิธีการรับเงิน: ราคาบัตรปรับเข้า "ราคาต่อหน่วยของแต่ละรายการ" (ปัดขึ้นบาทเต็ม/หน่วย) — ไม่มีบรรทัดค่าธรรมเนียม
+    // unit_price ที่เก็บ = ราคาเงินสดเสมอ · price_show = ราคาที่แสดง/พิมพ์ตามวิธีชำระ
     const payMethod = qo.pay_method || "cash";
     const payRate = payMethod === "card_full" ? 0.04 : payMethod === "card_inst10" ? 0.14 : 0;
-    const payFee = afterDisc * payRate;
-    const vatAmt = qo.vat ? (afterDisc + payFee) * 0.07 : 0;
-    const grand = afterDisc + payFee + vatAmt;
-    const whtAmt = qo.wht ? (afterDisc + payFee) * (Number(qo.wht_rate) || 3) / 100 : 0; // หัก ณ ที่จ่าย คิดจากฐานก่อน VAT
+    const adjU = (u) => payRate ? Math.ceil(Math.round((Number(u) || 0) * (1 + payRate) * 100) / 100) : Number(u) || 0;
+    const itemsX = items.map((x) => ({ ...x, price_show: adjU(x.unit_price) }));
+    const subtotal = itemsX.reduce((a, x) => a + Number(x.qty) * x.price_show, 0);
+    const discount = qo.discount_type === "percent" ? subtotal * Number(qo.discount_value || 0) / 100 : Number(qo.discount_value || 0);
+    const afterDisc = subtotal - discount;
+    const vatAmt = qo.vat ? afterDisc * 0.07 : 0;
+    const grand = afterDisc + vatAmt;
+    const whtAmt = qo.wht ? afterDisc * (Number(qo.wht_rate) || 3) / 100 : 0; // หัก ณ ที่จ่าย คิดจากฐานก่อน VAT
     const s = qo.site_id ? sm[qo.site_id] : null;
     const siteAddress = (s && s.address) || null;
     const address = siteAddress || custAddr[qo.customer_id] || null;
@@ -960,7 +962,7 @@ export async function listQuotations() {
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       jobNo: jobByQuote[qo.quote_no]?.job_no || null, hasJob: !!jobByQuote[qo.quote_no], jobScheduledAt: jobByQuote[qo.quote_no]?.scheduled_at || null,
       hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,
-      items, subtotal, discount, afterDisc, payMethod, payFee, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
+      items: itemsX, subtotal, discount, afterDisc, payMethod, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
   });
 }
 
