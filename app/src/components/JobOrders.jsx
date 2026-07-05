@@ -524,7 +524,17 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
               <div className="job-card-head jo-card-head" style={{ cursor: "pointer" }} onClick={() => setViewing(jo)} title="กดดูรายละเอียด">
                 <div className="job-card-id"><span className="job-no">{jo.job_no}</span>
                   {(() => { const td = jobTypeDef(jo.job_type); return <span className="job-type-chip" style={{ background: td[3] }}>{td[2]} {td[1]}</span>; })()}
-                  <span className={"job-badge " + st.cls}>{st.th}</span>{jo.locked && <span className="job-badge" style={{ background: "#64748b", color: "#fff" }}>🔒 ล็อก</span>}</div>
+                  <span className={"job-badge " + st.cls}>{st.th}</span>{jo.locked && <span className="job-badge" style={{ background: "#64748b", color: "#fff" }}>🔒 ล็อก</span>}
+                  {/* สถานะการสั่งของสำหรับงานนี้ (ผ่านใบเสนอราคา ↔ ใบสั่งซื้อ) — ฝ่ายขาย/ทีมช่างเห็นทันทีว่าสั่งแอร์หรือยัง */}
+                  {jo.quote_no && (() => {
+                    const ch = docLinks.byQuote[jo.quote_no] || {};
+                    const n = (ch.poNos || []).length;
+                    if (!n) return jo.job_type === "install" && jo.status !== "done" && jo.status !== "cancelled"
+                      ? <span className="job-badge b-red" title="งานติดตั้งแต่ยังไม่มีใบสั่งซื้อผูกใบเสนอราคานี้">🛒 ยังไม่สั่งของ</span> : null;
+                    return ch.poOpen > 0
+                      ? <span className="job-badge b-amber" title="มีใบสั่งซื้อแล้ว แต่ยังรอรับของ — กดชิป 'สั่งซื้อ' ด้านล่างเพื่อเปิดดู">🛒 สั่งแล้ว {n} ใบ · รอรับของ {ch.poOpen}</span>
+                      : <span className="job-badge b-green" title="ใบสั่งซื้อทุกใบรับของครบแล้ว">🛒 รับของครบ ({n} ใบ)</span>;
+                  })()}</div>
                 <div className="job-card-meta">
                   <div className="jcm-title">{jo.title || "งานติดตั้ง/บริการ"}</div>
                   <div className="jcm-when">🗓 ทีม {jo.teamName || "ยังไม่มอบ"}{jo.scheduled_at ? ` · ${scheduleLabel(jo)}` : " · ยังไม่กำหนดวัน"}{jo.visits && jo.visits.length > 1 ? ` · 🔁 ${jo.visits.length} รอบ` : ""}</div>
@@ -541,7 +551,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 {(jo.contact_name || jo.contact_phone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{jo.contact_name || "ผู้ติดต่อ"}{jo.contact_phone && <a href={`tel:${jo.contact_phone}`} className="jo-tel">📞 {jo.contact_phone}</a>}</div>}
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
-              {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} self={{ type: "job", no: jo.job_no }} onOpen={onOpenDoc} />; })()}
+              {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "job", no: jo.job_no }} onOpen={onOpenDoc} />; })()}
               <InternalNoteTag note={jo.internal_note} />
               {(() => { const sibs = siblingsOf(jo); return sibs.length > 1 ? (
                 <div className="job-group-chips"><span style={{ fontSize: 12, color: "var(--ink-2)" }}>🔗 ใบงานเชื่อม:</span>

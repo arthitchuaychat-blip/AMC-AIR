@@ -3133,12 +3133,12 @@ export async function listDocLinks() {
     supabase.from("purchase_orders").select("po_no,quote_no,status").then((r) => (r.error ? { data: [] } : r)), // pre-100 → ยังไม่มี quote_no
   ]);
   const byQuote = {};
-  const ensure = (qn) => (byQuote[qn] = byQuote[qn] || { boqNo: null, jobNos: [], invoiceNos: [], receiptNos: [], poNos: [] });
+  const ensure = (qn) => (byQuote[qn] = byQuote[qn] || { boqNo: null, jobNos: [], invoiceNos: [], receiptNos: [], poNos: [], poOpen: 0 });
   (q.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).boqNo = x.boq_no || null; });
   (jo.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).jobNos.push(x.job_no); });
   (inv.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).invoiceNos.push(x.invoice_no); });
   (rc.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).receiptNos.push(x.receipt_no); });
-  (po.data || []).forEach((x) => { if (x.quote_no && x.status !== "cancelled") ensure(x.quote_no).poNos.push(x.po_no); });
+  (po.data || []).forEach((x) => { if (x.quote_no && x.status !== "cancelled") { const e = ensure(x.quote_no); e.poNos.push(x.po_no); if (x.status === "open") e.poOpen += 1; } });
   // reverse lookups → quote_no (so any doc can find its chain)
   const boqToQuote = {}, jobToQuote = {}, invToQuote = {}, rcToQuote = {}, poToQuote = {};
   (q.data || []).forEach((x) => { if (x.boq_no) boqToQuote[x.boq_no] = x.quote_no; });
