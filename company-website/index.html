@@ -455,7 +455,7 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
         <option value="">บริการทั้งหมด</option>
         <option value="ติดตั้ง">ติดตั้งแอร์</option><option value="ล้าง">ล้างแอร์</option>
         <option value="ซ่อม">ซ่อม/แก้ไข</option><option value="ย้าย">ย้ายแอร์</option>
-        <option value="อื่นๆ">บริการอื่น ๆ</option>
+        <option value="รื้อถอน">รื้อถอนแอร์</option><option value="อื่นๆ">บริการอื่น ๆ</option>
       </select>
       <button class="side-go" id="fltGo">ดูสินค้า / บริการ →</button>
     </div>
@@ -642,7 +642,7 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
       <option value="">บริการทั้งหมด</option>
       <option value="ติดตั้ง">ติดตั้งแอร์</option><option value="ล้าง">ล้างแอร์</option>
       <option value="ซ่อม">ซ่อม/แก้ไข</option><option value="ย้าย">ย้ายแอร์</option>
-      <option value="อื่นๆ">บริการอื่น ๆ</option>
+      <option value="รื้อถอน">รื้อถอนแอร์</option><option value="อื่นๆ">บริการอื่น ๆ</option>
     </select>
   </div>
   <div class="prod-tools">
@@ -775,8 +775,8 @@ const SAMPLE = [
 ];
 const KIND_TH = { ac: "แอร์", material: "อะไหล่/วัสดุ", service: "บริการ" };
 // หมวดค่าบริการ (ตรงกับ categories sv-* ในหลังบ้าน — migration 102)
-const SVC_TH = { "sv-install": "ติดตั้ง", "sv-clean": "ล้าง", "sv-move": "ย้าย", "sv-repair": "ซ่อม", "sv-other": "อื่นๆ" };
-const SVC_ID = { "ติดตั้ง": "sv-install", "ล้าง": "sv-clean", "ย้าย": "sv-move", "ซ่อม": "sv-repair", "อื่นๆ": "sv-other" };
+const SVC_TH = { "sv-install": "ติดตั้ง", "sv-clean": "ล้าง", "sv-move": "ย้าย", "sv-repair": "ซ่อม", "sv-remove": "รื้อถอน", "sv-other": "อื่นๆ" };
+const SVC_ID = { "ติดตั้ง": "sv-install", "ล้าง": "sv-clean", "ย้าย": "sv-move", "ซ่อม": "sv-repair", "รื้อถอน": "sv-remove", "อื่นๆ": "sv-other" };
 // BTU: แอร์ = ค่าเดี่ยวต้องตรง · บริการมีช่วง (btu_min–btu_max) = ขนาดที่เลือกอยู่ในช่วงก็เจอ
 function btuHit(p, b) {
   if (p.btuMin != null || p.btuMax != null) {
@@ -789,7 +789,7 @@ function svcMatch(p, label) {
   if (p.category) return label === "อื่นๆ" ? (p.category === "sv-other" || !String(p.category).startsWith("sv-")) : p.category === SVC_ID[label];
   // ยังไม่มีคอลัมน์หมวดจากหลังบ้าน → เดาจากชื่อ (พฤติกรรมเดิม)
   const nm = p.name || "";
-  if (label === "อื่นๆ") return !["ติดตั้ง", "ล้าง", "ย้าย", "ซ่อม"].some((k) => nm.includes(k));
+  if (label === "อื่นๆ") return !["ติดตั้ง", "ล้าง", "ย้าย", "ซ่อม", "รื้อ"].some((k) => nm.includes(k));
   return nm.includes(label);
 }
 const TYPE_TH = { "Wall type": "ติดผนัง", "Ceiling type": "แขวนใต้ฝ้า", "Cassette 4 way type": "ฝังฝ้า 4 ทิศ", "Cassette 1 way type": "ฝังฝ้า 1 ทิศ", "Duct Type": "ต่อท่อลม", "Floor Standing": "ตู้ตั้ง" };

@@ -15,7 +15,7 @@ const KIND_LABEL = { ac: "แอร์", service: "บริการ", material
 // หมวดค่าบริการ — id คงที่ ตรงกับแถวในตาราง categories (migration 102) · รายการเก่าที่ยังไม่จัดหมวด = อื่นๆ
 export const SERVICE_CATS = [
   { id: "sv-install", l: "ติดตั้ง" }, { id: "sv-clean", l: "ล้าง" }, { id: "sv-move", l: "ย้าย" },
-  { id: "sv-repair", l: "ซ่อม" }, { id: "sv-other", l: "อื่นๆ" },
+  { id: "sv-repair", l: "ซ่อม" }, { id: "sv-remove", l: "รื้อถอน" }, { id: "sv-other", l: "อื่นๆ" },
 ];
 const svcCatLabel = (m) => (SERVICE_CATS.find((c) => c.id === m.cat) || {}).l || "อื่นๆ";
 const svcCatMatch = (m, id) => (id === "sv-other" ? m.cat === "sv-other" || !String(m.cat || "").startsWith("sv-") : m.cat === id);

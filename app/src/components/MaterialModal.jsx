@@ -10,7 +10,7 @@ const KINDS = [{ v: "material", l: "วัสดุ" }, { v: "ac", l: "เคร
 // หมวดค่าบริการ — id คงที่ ตรงกับแถวในตาราง categories (migration 102)
 const SERVICE_CATS = [
   { id: "sv-install", l: "ติดตั้ง" }, { id: "sv-clean", l: "ล้าง" }, { id: "sv-move", l: "ย้าย" },
-  { id: "sv-repair", l: "ซ่อม" }, { id: "sv-other", l: "อื่นๆ" },
+  { id: "sv-repair", l: "ซ่อม" }, { id: "sv-remove", l: "รื้อถอน" }, { id: "sv-other", l: "อื่นๆ" },
 ];
 
 // ราคาขายแนะนำจากต้นทุน (กำไรคิดเป็น % ของราคาขาย · ราคาก่อน VAT · แก้ทับได้เสมอ)
