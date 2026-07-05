@@ -149,7 +149,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   }, [printData]);
 
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
-  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); }
+  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); setReceiveJob(null); }
 
   // ----- cart helpers -----
   // สินค้า 2 หน่วย: บรรทัดถือ l.unit (เมตร/ม้วน) · สต๊อก/ต้นทุนคิดเป็นหน่วยหลักเสมอ (แปลงด้วย unitFactor)
@@ -413,6 +413,9 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                 {type === "purchase" && (
                   <label className="fld"><span>เลขใบสั่งซื้อ (PO)</span>
                     <input className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)} placeholder="เช่น PO-260610-01" />
+                    {receivePo && (receiveJob?.job_no
+                      ? <span className="jo-dim" style={{ marginTop: 4, color: "#0a6b3d", fontWeight: 600 }}>✅ ยืนยันแล้วระบบจะ “เบิกเข้างาน {receiveJob.job_no}” ให้อัตโนมัติ ด้วยราคาซื้อจริง (PO ผูกใบเสนอราคา)</span>
+                      : <span className="jo-dim" style={{ marginTop: 4 }}>รับตามใบสั่งซื้อ {receivePo} · เข้าสต๊อกอย่างเดียว (PO ไม่ได้ผูกใบเสนอราคา หรือยังไม่มีใบงาน)</span>)}
                   </label>
                 )}
                 {type !== "purchase" && type !== "damage" && (
