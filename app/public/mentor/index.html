@@ -324,14 +324,17 @@ function curWeek(m){const s=pd(m.start);if(!s)return null;const w=Math.floor(day
 /* survey status: done | wait(ส่งแล้วรอตอบ) | due(ถึงกำหนด ยังไม่ส่ง) | notyet */
 function hsInfo(m,h){
   const s=pd(m.start);const rec=m.hs[h.key];
+  const ageDays=s?dayDiff(today(),s):-1; // อายุสมาชิก (วัน)
   let due=s?addDays(s,h.days):null;
   let open=due; // วันที่เริ่มถึงกำหนดส่ง
-  if(h.key==='m12'&&due){ // ส่งล่วงหน้า 6 เดือนก่อนวันต่ออายุ
+  if(h.key==='m12'&&due){ // ส่งล่วงหน้า 6 เดือนก่อนวันต่ออายุ (เฉพาะสมาชิกเกิน 1 ปี)
     if(due<today()){const nx=new Date(due);while(nx<today())nx.setFullYear(nx.getFullYear()+1);due=nx;}
     open=addDays(due,-180);
   }
   let st='notyet';
-  if(rec.done)st='done';
+  // แบบสอบถาม 12 เดือน = เฉพาะสมาชิกอายุเกิน 1 ปี · สมาชิกปีแรกยังไม่ต้องทำ
+  if(h.key==='m12'&&ageDays<365)st='notyet';
+  else if(rec.done)st='done';
   else if(rec.sent)st='wait';
   else if(open&&today()>=open)st='due';
   return {due,open,st,rec};

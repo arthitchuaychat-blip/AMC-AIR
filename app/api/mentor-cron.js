@@ -24,6 +24,8 @@ function todayTH() { const t = new Date(Date.now() + 7 * 3600e3); return new Dat
 function isDue(startIso, h) {
   const s = pd(startIso); if (!s) return false;
   const today = todayTH();
+  // แบบสอบถาม 12 เดือน = เฉพาะสมาชิกอายุเกิน 1 ปี · ส่ง 6 เดือนก่อนต่ออายุปีถัดไป
+  if (h.key === "m12" && (today - s) / 864e5 < 365) return false;
   let due = addDays(s, h.days);
   let open = due;
   if (h.key === "m12") {
