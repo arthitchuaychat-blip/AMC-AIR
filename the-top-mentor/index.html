@@ -387,12 +387,16 @@ function vDash(){
 const AV_COLORS=['#5b6cf0','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#22c55e'];
 function avColor(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return AV_COLORS[h%AV_COLORS.length];}
 function mcardHtml(m){
-  const cw=curWeek(m),l=wLast(m),sd=SLIDES.filter(([k])=>hasSlide(m,k)).length;
-  const behind=(cw!==null&&l<cw)?cw-l:0;
-  const chip=cw===null?['#dcf7e9','#0a9152','ครบ 8 สัปดาห์แล้ว']
-    :behind>=2?['#fee4e2','#d92d20',`สัปดาห์ที่ ${cw} · ช้า ${behind} สัปดาห์`]
-    :behind===1?['#fdeed3','#b25e04',`สัปดาห์ที่ ${cw} · ช้า 1 สัปดาห์`]
-    :['#e3ebfe','#2f5ce0',`สัปดาห์ที่ ${cw} · ตามแผน`];
+  const l=wLast(m),sd=SLIDES.filter(([k])=>hasSlide(m,k)).length;
+  const s=pd(m.start);
+  const calW=s?Math.floor(dayDiff(today(),s)/7):null; // สัปดาห์ตามปฏิทิน (ไม่จำกัดเพดาน)
+  const expected=calW===null?null:Math.min(Math.max(calW,0),8); // สัปดาห์ที่ "ควรทำถึง" ตามแผน (0–8)
+  const behind=(expected!==null&&l<expected)?expected-l:0;
+  const chip=l===8?['#dcf7e9','#0a9152','ครบ 8 สัปดาห์แล้ว']
+    :(calW!==null&&calW>8)?['#fee4e2','#d92d20',`เกินกำหนด · ทำได้ ${l<0?0:l}/8`]
+    :behind>=2?['#fee4e2','#d92d20',`สัปดาห์ที่ ${expected} · ช้า ${behind} สัปดาห์`]
+    :behind===1?['#fdeed3','#b25e04',`สัปดาห์ที่ ${expected} · ช้า 1 สัปดาห์`]
+    :['#e3ebfe','#2f5ce0',`สัปดาห์ที่ ${expected===null?0:expected} · ตามแผน`];
   return `<div class="mcard" onclick="openMember('${m.id}')">
     <div class="mtop">
       <div class="avatar" style="background:${avColor(m.name)}">${esc((m.nick||m.name).trim().charAt(0))}</div>
