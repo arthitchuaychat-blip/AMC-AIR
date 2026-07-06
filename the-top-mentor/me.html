@@ -96,7 +96,9 @@ const SLIDES=[['onepage','ONEPAGE'],['s121','121'],['s5min','5 นาที']];
 const HS=[{key:'m3',label:'Happiness Survey 3 เดือน',days:90,link:'link3'},{key:'m6',label:'Happiness Survey 6 เดือน',days:180,link:'link6'},{key:'m12',label:'Happiness Survey 12 เดือน (ก่อนต่ออายุ)',days:365,link:'link12'}];
 function wLast(m){let l=-1;m.weeks.forEach((w,i)=>{if(w===true)l=i;});return l;}
 function hasSlide(m,k){return m.slides[k]===true||!!(m.slideFiles&&m.slideFiles[k]);}
-function renewInfo(m){const s=pd(m.start);if(!s)return null;const t=today();let d=new Date(s);d.setFullYear(t.getFullYear());if(d<t)d.setFullYear(d.getFullYear()+1);return {date:d,days:dayDiff(d,t)};}
+function annivAfter(s,ref){let d=new Date(s);d.setFullYear(ref.getFullYear());while(d<ref)d.setFullYear(d.getFullYear()+1);return d;}
+function renewInfo(m){const s=pd(m.start);if(!s)return null;const t=today();let d=annivAfter(s,t);const ru=m.renewedUntil?pd(m.renewedUntil):null;let renewed=false;if(ru&&ru>=d){renewed=true;d=annivAfter(s,addDays(ru,1));}return {date:d,days:dayDiff(d,t),renewed};}
+function ageLabel(m){const s=pd(m.start);if(!s)return '—';const t=today();let mo=(t.getFullYear()-s.getFullYear())*12+(t.getMonth()-s.getMonth());if(t.getDate()<s.getDate())mo--;if(mo<0)mo=0;const y=Math.floor(mo/12),r=mo%12;return y?(r?`${y} ปี ${r} เดือน`:`${y} ปี`):(r?`${r} เดือน`:'ไม่ถึง 1 เดือน');}
 function hsInfo(m,h){const s=pd(m.start);const rec=(m.hs&&m.hs[h.key])||{sent:false,done:false,note:''};let due=s?addDays(s,h.days):null;let open=due;if(h.key==='m12'&&due){if(due<today()){const nx=new Date(due);while(nx<today())nx.setFullYear(nx.getFullYear()+1);due=nx;}open=addDays(due,-180);}let st='notyet';if(rec.done)st='done';else if(rec.sent)st='wait';else if(open&&today()>=open)st='due';return {due,open,st,rec};}
 const AV=['#5b6cf0','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#22c55e'];
 function avColor(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return AV[h%AV.length];}
@@ -145,7 +147,8 @@ function render(){
     <div class="chips">
       <span class="hchip">🎓 Mentor: ${esc(m.mentor||'—')}</span>
       <span class="hchip">📅 เริ่ม ${fmt(m.start)}</span>
-      ${r?`<span class="hchip">🔄 ต่ออายุอีก ${r.days} วัน</span>`:''}
+      <span class="hchip">🎂 สมาชิก ${ageLabel(m)}</span>
+      ${r?(r.renewed?`<span class="hchip">✅ ต่ออายุแล้ว</span>`:`<span class="hchip">🔄 ต่ออายุอีก ${r.days} วัน</span>`):''}
     </div>
   </div>
   <div class="saved" id="saved"></div>
