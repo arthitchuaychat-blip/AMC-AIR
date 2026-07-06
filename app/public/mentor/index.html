@@ -88,6 +88,10 @@ button.btn.red{background:#feecec;color:#d92d20;box-shadow:none}
 input[type=text],input[type=date],input[type=url],select,textarea{font-family:inherit;font-size:13.5px;padding:9px 13px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--txt);outline:none;width:100%;transition:.15s}
 input:focus,select:focus,textarea:focus{border-color:var(--gold2);box-shadow:0 0 0 3px rgba(246,198,75,.18)}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.filterbar{display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;padding:12px 14px;background:#f5f7fc;border:1px solid var(--line);border-radius:14px}
+.filterbar label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:var(--mut);font-weight:600}
+.filterbar select{padding:7px 10px;font-size:12.5px}
+.filterbar .btn{margin-left:auto}
 .toolbar input[type=text]{max-width:280px}
 .toolbar select{width:auto}
 .field{margin-bottom:10px}
@@ -424,9 +428,9 @@ function vDash(){
   noSlide.sort((a,b)=>((a.m.status==='ปีแรก'?0:1)-(b.m.status==='ปีแรก'?0:1))||(b.m.start||'').localeCompare(a.m.start||''));
   const renew6=ms.map(m=>renewInfo(m)).filter(r=>r&&r.days<=180).length;
   const ST=[
-    ['👥',ms.length,'สมาชิกทั้งหมด','',"fil='all';q='';go('members')"],
-    ['🎓',mentoring.length,'กำลัง Mentoring','gold',"fil='mentoring';q='';go('members')"],
-    ['✅',finished.length,'จบครบ 8 สัปดาห์','green',"fil='done';q='';go('members')"],
+    ['👥',ms.length,'สมาชิกทั้งหมด','',"resetFilters();q='';go('members')"],
+    ['🎓',mentoring.length,'กำลัง Mentoring','gold',"resetFilters();mfil.prog='mentoring';q='';go('members')"],
+    ['✅',finished.length,'จบครบ 8 สัปดาห์','green',"resetFilters();mfil.prog='done';q='';go('members')"],
     ['⏰',due.length,'ถึงกำหนด ยังไม่ส่ง','red',"dueExpand=true;render();scrollCard('card-due')"],
     ['📨',wait.length,'ส่งแล้ว รอคำตอบ','blue',"waitExpand=true;render();scrollCard('card-wait')"],
     ['🖼️',noSlide.length,'สไลด์ยังไม่ครบ','purple',"slideExpand=true;render();scrollCard('card-slide')"],
@@ -533,15 +537,26 @@ function markSent(id,k){const m=findM(id);m.hs[k].sent=true;save(id);render();to
 function markDone(id,k){const m=findM(id);m.hs[k].done=true;save(id);openMember(id);toast('บันทึก: ตอบแล้ว — กรอกสรุปคำตอบด้านล่างได้เลย');}
 
 /* ---------- members ---------- */
-let q='',fil='all';
+let q='';
+let mfil={status:'all',prog:'all',mentor:'all',slide:'all',survey:'all'};
+let msort='new';
+function resetFilters(){mfil={status:'all',prog:'all',mentor:'all',slide:'all',survey:'all'};msort='new';}
 function membersList(){
   let ms=[...scopedMembers()];
   if(q){const qq=q.trim().toLowerCase();ms=ms.filter(m=>(m.name+' '+(m.nick||'')+' '+(m.prof||'')+' '+(m.mentor||'')).toLowerCase().includes(qq));}
-  if(fil==='first')ms=ms.filter(m=>m.status==='ปีแรก');
-  if(fil==='old')ms=ms.filter(m=>m.status!=='ปีแรก');
-  if(fil==='mentoring')ms=ms.filter(m=>wDone(m)<9&&m.status==='ปีแรก');
-  if(fil==='done')ms=ms.filter(m=>wDone(m)===9);
-  ms.sort((a,b)=>(b.start||'').localeCompare(a.start||''));
+  if(mfil.status==='first')ms=ms.filter(m=>m.status==='ปีแรก');
+  else if(mfil.status==='old')ms=ms.filter(m=>m.status!=='ปีแรก');
+  if(mfil.prog==='mentoring')ms=ms.filter(m=>wDone(m)<9&&m.status==='ปีแรก');
+  else if(mfil.prog==='done')ms=ms.filter(m=>wDone(m)===9);
+  if(mfil.mentor!=='all')ms=ms.filter(m=>(m.mentor||'').trim()===mfil.mentor);
+  if(mfil.slide==='full')ms=ms.filter(m=>SLIDES.every(([k])=>hasSlide(m,k)));
+  else if(mfil.slide==='incomplete')ms=ms.filter(m=>SLIDES.some(([k])=>!hasSlide(m,k)));
+  if(mfil.survey==='pending')ms=ms.filter(m=>HS.some(h=>['due','wait'].includes(hsInfo(m,h).st)));
+  else if(mfil.survey==='done')ms=ms.filter(m=>HS.some(h=>hsInfo(m,h).st==='done'));
+  if(msort==='old')ms.sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  else if(msort==='name')ms.sort((a,b)=>(a.nick||a.name||'').localeCompare(b.nick||b.name||'','th'));
+  else if(msort==='progress')ms.sort((a,b)=>wLast(b)-wLast(a));
+  else ms.sort((a,b)=>(b.start||'').localeCompare(a.start||'')); // ใหม่→เก่า (ค่าเริ่มต้น)
   return ms;
 }
 function membersTableHtml(){
@@ -579,14 +594,34 @@ function vMembers(){
     <h2>👥 สมาชิก <span class="cnt" id="mcount">${membersList().length}/${scopedMembers().length} คน</span></h2>
     <div class="toolbar no-print">
       <input type="text" placeholder="🔍 ค้นหา ชื่อ / ชื่อเล่น / อาชีพ / Mentor" value="${esc(q)}" oninput="q=this.value;membersRefresh()">
-      <select onchange="fil=this.value;membersRefresh()">
-        <option value="all" ${fil==='all'?'selected':''}>ทั้งหมด</option>
-        <option value="first" ${fil==='first'?'selected':''}>ปีแรก</option>
-        <option value="old" ${fil==='old'?'selected':''}>เกิน 1 ปี</option>
-        <option value="mentoring" ${fil==='mentoring'?'selected':''}>กำลัง Mentoring</option>
-        <option value="done" ${fil==='done'?'selected':''}>จบ 8 สัปดาห์แล้ว</option>
-      </select>
       ${isAdmin()?`<button class="btn gold" onclick="openAdd()">＋ เพิ่มสมาชิกใหม่</button>`:''}
+    </div>
+    <div class="filterbar no-print">
+      <label>สถานะ<select onchange="mfil.status=this.value;membersRefresh()">
+        <option value="all" ${mfil.status==='all'?'selected':''}>ทั้งหมด</option>
+        <option value="first" ${mfil.status==='first'?'selected':''}>ปีแรก</option>
+        <option value="old" ${mfil.status==='old'?'selected':''}>เกิน 1 ปี</option></select></label>
+      <label>Mentoring<select onchange="mfil.prog=this.value;membersRefresh()">
+        <option value="all" ${mfil.prog==='all'?'selected':''}>ทั้งหมด</option>
+        <option value="mentoring" ${mfil.prog==='mentoring'?'selected':''}>กำลังดำเนินการ</option>
+        <option value="done" ${mfil.prog==='done'?'selected':''}>จบ 8 สัปดาห์</option></select></label>
+      <label>Mentor<select onchange="mfil.mentor=this.value;membersRefresh()">
+        <option value="all" ${mfil.mentor==='all'?'selected':''}>ทั้งหมด</option>
+        ${[...new Set(scopedMembers().map(m=>(m.mentor||'').trim()).filter(Boolean))].sort().map(x=>`<option value="${esc(x)}" ${mfil.mentor===x?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
+      <label>สไลด์<select onchange="mfil.slide=this.value;membersRefresh()">
+        <option value="all" ${mfil.slide==='all'?'selected':''}>ทั้งหมด</option>
+        <option value="full" ${mfil.slide==='full'?'selected':''}>ครบ 3 อย่าง</option>
+        <option value="incomplete" ${mfil.slide==='incomplete'?'selected':''}>ยังไม่ครบ</option></select></label>
+      <label>แบบสอบถาม<select onchange="mfil.survey=this.value;membersRefresh()">
+        <option value="all" ${mfil.survey==='all'?'selected':''}>ทั้งหมด</option>
+        <option value="pending" ${mfil.survey==='pending'?'selected':''}>มีค้าง (ถึงกำหนด/รอตอบ)</option>
+        <option value="done" ${mfil.survey==='done'?'selected':''}>ตอบแล้ว</option></select></label>
+      <label>เรียง<select onchange="msort=this.value;membersRefresh()">
+        <option value="new" ${msort==='new'?'selected':''}>ใหม่ → เก่า</option>
+        <option value="old" ${msort==='old'?'selected':''}>เก่า → ใหม่</option>
+        <option value="name" ${msort==='name'?'selected':''}>ชื่อเล่น (ก-ฮ)</option>
+        <option value="progress" ${msort==='progress'?'selected':''}>ความคืบหน้า</option></select></label>
+      <button class="btn ghost sm" onclick="resetFilters();render()">↺ ล้างตัวกรอง</button>
     </div>
     <div id="mtable">${membersTableHtml()}</div>
   </div>`;
