@@ -456,20 +456,47 @@ function markDone(id,k){const m=findM(id);m.hs[k].done=true;save(id);openMember(
 
 /* ---------- members ---------- */
 let q='',fil='all';
-function vMembers(){
+function membersList(){
   let ms=[...state.members];
-  if(q){const qq=q.toLowerCase();ms=ms.filter(m=>(m.name+' '+(m.nick||'')+' '+(m.prof||'')+' '+(m.mentor||'')).toLowerCase().includes(qq));}
+  if(q){const qq=q.trim().toLowerCase();ms=ms.filter(m=>(m.name+' '+(m.nick||'')+' '+(m.prof||'')+' '+(m.mentor||'')).toLowerCase().includes(qq));}
   if(fil==='first')ms=ms.filter(m=>m.status==='ปีแรก');
   if(fil==='old')ms=ms.filter(m=>m.status!=='ปีแรก');
   if(fil==='mentoring')ms=ms.filter(m=>wDone(m)<9&&m.status==='ปีแรก');
   if(fil==='done')ms=ms.filter(m=>wDone(m)===9);
   ms.sort((a,b)=>(b.start||'').localeCompare(a.start||''));
+  return ms;
+}
+function membersTableHtml(){
+  const ms=membersList();
+  if(!ms.length)return `<div class="empty">ไม่พบสมาชิกที่ตรงกับการค้นหา</div>`;
+  return `<div class="tblwrap"><table>
+    <tr><th>สมาชิก</th><th>อาชีพ</th><th>สถานะ</th><th>เริ่ม</th><th>Mentor</th><th>Week 0–8</th><th>สไลด์</th><th>Survey</th></tr>
+    ${ms.map(m=>{
+      const icons=HS.map(h=>hsIcon(hsInfo(m,h).st)).join(' ');
+      return `<tr class="click" onclick="openMember('${m.id}')">
+      <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+      <td style="font-size:12.5px;max-width:170px">${esc(m.prof||'')}</td>
+      <td><span class="badge ${m.status==='ปีแรก'?'b-first':'b-old'}">${esc(m.status||'—')}</span></td>
+      <td style="white-space:nowrap">${fmt(m.start)}</td>
+      <td style="font-size:12.5px">${esc(m.mentor||'—')}</td>
+      <td><span class="wk">${m.weeks.map(w=>`<i class="${w===true?'t':w===false?'f':''}" title=""></i>`).join('')}</span> <span style="font-size:11px;color:var(--mut);white-space:nowrap">${wLast(m)<0?'ยังไม่เริ่ม':wLast(m)+'/8'}</span></td>
+      <td>${SLIDES.map(([k,l])=>`<span class="chip ${hasSlide(m,k)?'t':m.slides[k]===false?'f':''}">${l}</span>`).join('')}</td>
+      <td style="font-size:15px;letter-spacing:2px">${icons}</td>
+      </tr>`;}).join('')}
+  </table></div>`;
+}
+/* อัปเดตเฉพาะตาราง+ตัวนับ ไม่แตะช่องค้นหา (คงโฟกัส + พิมพ์ไทยต่อเนื่อง) */
+function membersRefresh(){
+  const t=document.getElementById('mtable');if(t)t.innerHTML=membersTableHtml();
+  const c=document.getElementById('mcount');if(c)c.textContent=`${membersList().length}/${state.members.length} คน`;
+}
+function vMembers(){
   return `
   <div class="card">
-    <h2>👥 สมาชิก <span class="cnt">${ms.length}/${state.members.length} คน</span></h2>
+    <h2>👥 สมาชิก <span class="cnt" id="mcount">${membersList().length}/${state.members.length} คน</span></h2>
     <div class="toolbar no-print">
-      <input type="text" placeholder="🔍 ค้นหา ชื่อ / ชื่อเล่น / อาชีพ / Mentor" value="${esc(q)}" oninput="q=this.value;render()">
-      <select onchange="fil=this.value;render()">
+      <input type="text" placeholder="🔍 ค้นหา ชื่อ / ชื่อเล่น / อาชีพ / Mentor" value="${esc(q)}" oninput="q=this.value;membersRefresh()">
+      <select onchange="fil=this.value;membersRefresh()">
         <option value="all" ${fil==='all'?'selected':''}>ทั้งหมด</option>
         <option value="first" ${fil==='first'?'selected':''}>ปีแรก</option>
         <option value="old" ${fil==='old'?'selected':''}>เกิน 1 ปี</option>
@@ -478,21 +505,7 @@ function vMembers(){
       </select>
       <button class="btn gold" onclick="openAdd()">＋ เพิ่มสมาชิกใหม่</button>
     </div>
-    <div class="tblwrap"><table>
-      <tr><th>สมาชิก</th><th>อาชีพ</th><th>สถานะ</th><th>เริ่ม</th><th>Mentor</th><th>Week 0–8</th><th>สไลด์</th><th>Survey</th></tr>
-      ${ms.map(m=>{
-        const icons=HS.map(h=>hsIcon(hsInfo(m,h).st)).join(' ');
-        return `<tr class="click" onclick="openMember('${m.id}')">
-        <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
-        <td style="font-size:12.5px;max-width:170px">${esc(m.prof||'')}</td>
-        <td><span class="badge ${m.status==='ปีแรก'?'b-first':'b-old'}">${esc(m.status||'—')}</span></td>
-        <td style="white-space:nowrap">${fmt(m.start)}</td>
-        <td style="font-size:12.5px">${esc(m.mentor||'—')}</td>
-        <td><span class="wk">${m.weeks.map(w=>`<i class="${w===true?'t':w===false?'f':''}" title=""></i>`).join('')}</span> <span style="font-size:11px;color:var(--mut);white-space:nowrap">${wLast(m)<0?'ยังไม่เริ่ม':wLast(m)+'/8'}</span></td>
-        <td>${SLIDES.map(([k,l])=>`<span class="chip ${hasSlide(m,k)?'t':m.slides[k]===false?'f':''}">${l}</span>`).join('')}</td>
-        <td style="font-size:15px;letter-spacing:2px">${icons}</td>
-        </tr>`;}).join('')}
-    </table></div>
+    <div id="mtable">${membersTableHtml()}</div>
   </div>`;
 }
 
