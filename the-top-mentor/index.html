@@ -263,6 +263,21 @@ const HS=[
 ];
 function findM(id){return state.members.find(m=>m.id===id);}
 function wDone(m){return m.weeks.filter(w=>w===true).length;}
+/* วันครบกำหนดต่ออายุ = วันครบรอบปีถัดไปนับจากวันเริ่ม + นับถอยหลังเหลือกี่วัน */
+function renewInfo(m){
+  const s=pd(m.start);if(!s)return null;
+  const t=today();
+  let d=new Date(s);d.setFullYear(t.getFullYear());
+  if(d<t)d.setFullYear(d.getFullYear()+1); // ยังไม่ถึง/ผ่านไปแล้วในปีนี้ → ปีหน้า
+  const days=dayDiff(d,t);
+  return {date:d,days};
+}
+function renewChip(m){
+  const r=renewInfo(m);if(!r)return '';
+  const soon=r.days<=30,warn=r.days<=90;
+  const bg=soon?'#fee4e2':warn?'#fdeed3':'#e3ebfe',fg=soon?'#d92d20':warn?'#b25e04':'#2f5ce0';
+  return `<span class="badge" style="background:${bg};color:${fg}">🔄 ต่ออายุ ${fmt(r.date)} · เหลือ ${r.days} วัน</span>`;
+}
 /* สัปดาห์ล่าสุดที่ทำแล้ว — รายงานแบบ สัปดาห์ที่ 0/8, 1/8, ... 8/8 (Week 0 คือสัปดาห์แรก) */
 function wLast(m){let last=-1;m.weeks.forEach((w,i)=>{if(w===true)last=i;});return last;}
 function wLabel(m){const l=wLast(m);return l<0?'ยังไม่เริ่ม':`สัปดาห์ที่ ${l}/8`;}
@@ -406,7 +421,7 @@ function mcardHtml(m){
       <div class="minfo"><b>${esc(m.nick||m.name)}</b><small>${esc(m.name)}</small></div>
       <span class="wchip" style="background:${chip[0]};color:${chip[1]}">${chip[2]}</span>
     </div>
-    <div class="mmeta"><span>🎓 Mentor: ${esc(m.mentor||'ยังไม่ระบุ')}</span><span>📅 เริ่ม ${fmt(m.start)}</span></div>
+    <div class="mmeta"><span>🎓 Mentor: ${esc(m.mentor||'ยังไม่ระบุ')}</span><span>📅 เริ่ม ${fmt(m.start)}</span>${(()=>{const r=renewInfo(m);return r?`<span>🔄 ต่ออายุ ${fmt(r.date)} · เหลือ ${r.days} วัน</span>`:'';})()}</div>
     <div class="seg ${wDone(m)===9?'done':''}">${m.weeks.map(w=>`<i class="${w===true?'t':w===false?'f':''}"></i>`).join('')}</div>
     <div class="mprog"><b>${l<0?'ยังไม่เริ่ม':`ทำแล้วถึงสัปดาห์ที่ ${l}/8`}</b><span style="font-size:11px;color:var(--mut)">สไลด์ ${sd}/3</span></div>
     <div class="slidechips">${SLIDES.map(([k,lbl])=>`<span class="sc ${hasSlide(m,k)?'on':''}">${hasSlide(m,k)?'✓':'○'} ${lbl}</span>`).join('')}</div>
@@ -468,6 +483,7 @@ function openMember(id){
   <h3>${esc(m.nick||'')} — ${esc(m.name)}</h3>
   <div class="sub">${esc(m.prof||'')} · เริ่ม ${fmt(m.start)}${cw!==null?` · ขณะนี้อยู่สัปดาห์ที่ ${cw}`:''}</div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 12px">
+    ${renewChip(m)}
     <span class="badge ${m.lineUserId?'b-done':'b-notyet'}">${m.lineUserId?'🟢 เชื่อม LINE แล้ว':'⚪ ยังไม่เชื่อม LINE'}</span>
     ${m.lineUserId
       ?`<button class="btn sm ghost" onclick="unlinkLine('${id}')">ยกเลิกการเชื่อม</button>`
