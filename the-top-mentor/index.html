@@ -132,6 +132,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold2);box-shadow:0 0
 .slfile a:hover{text-decoration:underline}
 .slfile button{border:0;background:transparent;cursor:pointer;color:#98a1b8;font-size:13px}
 .rephead{display:none}
+#hdrUser{display:flex;align-items:center;gap:8px}
+.uchip{font-size:12.5px;font-weight:600;color:#fff;background:rgba(255,255,255,.14);padding:6px 12px;border-radius:99px}
+.lo{border:0;background:rgba(255,255,255,.1);color:#fff;font-family:inherit;font-size:12px;padding:6px 12px;border-radius:99px;cursor:pointer}
+.lo:hover{background:rgba(255,255,255,.22)}
+.authwrap{max-width:380px;margin:8vh auto 0;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:30px 26px;box-shadow:0 18px 50px rgba(28,42,82,.14)}
+.authwrap .lgo{text-align:center;font-size:40px;margin-bottom:8px}
+.authwrap h2{text-align:center;font-size:19px;font-weight:700;margin-bottom:4px}
+.authwrap p.sub{text-align:center;color:var(--mut);font-size:12.5px;margin-bottom:20px}
+.autherr{background:#fee4e2;color:#b32020;font-size:12.5px;padding:9px 12px;border-radius:10px;margin-bottom:12px;text-align:center}
 @media print{
   body{background:#fff;font-size:12px}
   header,.no-print{display:none!important}
@@ -150,6 +159,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold2);box-shadow:0 0
     <h1>The Top Mentor<small>ระบบติดตาม Mentoring & Happiness Survey</small></h1>
   </div>
   <nav id="nav"></nav>
+  <div id="hdrUser"></div>
   <div id="saved">⏳ กำลังเชื่อมต่อ...</div>
 </header>
 <main id="view"></main>
@@ -344,25 +354,60 @@ function toast(msg){
   t.textContent=msg;t.style.opacity=1;clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.opacity=0,2200);
 }
 
+/* ---------- auth / roles ---------- */
+let AUTH=loadAuth();
+function loadAuth(){try{const a=JSON.parse(localStorage.getItem('tm_auth'));if(a&&a.token)return a;}catch(e){}return null;}
+function isAdmin(){return AUTH&&AUTH.role==='admin';}
+function isMentor(){return AUTH&&AUTH.role==='mentor';}
+/* สมาชิกที่ผู้ใช้ปัจจุบันเห็นได้ — admin เห็นหมด, mentor เห็นเฉพาะ mentee ของตัวเอง */
+function scopedMembers(){
+  if(isAdmin())return state.members;
+  const mn=(AUTH&&AUTH.mentorName||'').trim();
+  return state.members.filter(m=>(m.mentor||'').trim()===mn);
+}
+async function authApi(action,extra){
+  const r=await fetch(API_BASE+'/mentor-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({action},extra))});
+  return r.json();
+}
+function setAuth(a){AUTH=a;localStorage.setItem('tm_auth',JSON.stringify(a));}
+function logout(){localStorage.removeItem('tm_auth');AUTH=null;tab='dash';location.reload();}
+
 /* ---------- nav ---------- */
-const TABS=[['dash','🏠 แดชบอร์ด'],['members','👥 สมาชิก'],['survey','💛 Happiness Survey'],['report','📊 รายงานประธาน'],['settings','⚙️ ตั้งค่า']];
+function navTabs(){
+  if(isAdmin())return [['dash','🏠 แดชบอร์ด'],['members','👥 สมาชิก'],['survey','💛 Happiness Survey'],['report','📊 รายงานประธาน'],['users','👤 ผู้ใช้/Mentor'],['settings','⚙️ ตั้งค่า']];
+  return [['dash','🏠 แดชบอร์ด'],['members','👥 Mentee ของฉัน'],['survey','💛 Happiness Survey']];
+}
 let tab='dash';
 function go(t){tab=t;render();}
 function scrollCard(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
 function render(){
+  const hdrUser=document.getElementById('hdrUser');
+  if(!AUTH){
+    document.getElementById('nav').innerHTML='';
+    if(hdrUser)hdrUser.innerHTML='';
+    document.getElementById('saved').style.display='none';
+    document.getElementById('view').innerHTML=vAuth();
+    return;
+  }
+  document.getElementById('saved').style.display='';
+  const TABS=navTabs();
+  if(!TABS.some(([k])=>k===tab))tab='dash';
   document.getElementById('nav').innerHTML=TABS.map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
+  if(hdrUser)hdrUser.innerHTML=`<span class="uchip">${isAdmin()?'👑':'🎓'} ${esc(AUTH.name||AUTH.username)}</span><button class="lo" onclick="logout()">ออกจากระบบ</button>`;
   const v=document.getElementById('view');
   if(tab==='dash')v.innerHTML=vDash();
   else if(tab==='members')v.innerHTML=vMembers();
   else if(tab==='survey')v.innerHTML=vSurvey();
-  else if(tab==='report')v.innerHTML=vReport();
-  else{v.innerHTML=vSettings();checkLine();}
+  else if(tab==='report'&&isAdmin())v.innerHTML=vReport();
+  else if(tab==='users'&&isAdmin()){v.innerHTML=vUsers();loadUsers();}
+  else if(tab==='settings'&&isAdmin()){v.innerHTML=vSettings();checkLine();}
+  else v.innerHTML=vDash();
 }
 
 /* ---------- dashboard ---------- */
 let dueExpand=false,waitExpand=false,slideExpand=false,renewFil=180;
 function vDash(){
-  const ms=state.members;
+  const ms=scopedMembers();
   const mentoring=ms.filter(m=>wDone(m)<9&&m.status==='ปีแรก');
   const finished=ms.filter(m=>wDone(m)===9);
   let due=[],wait=[];
@@ -486,7 +531,7 @@ function markDone(id,k){const m=findM(id);m.hs[k].done=true;save(id);openMember(
 /* ---------- members ---------- */
 let q='',fil='all';
 function membersList(){
-  let ms=[...state.members];
+  let ms=[...scopedMembers()];
   if(q){const qq=q.trim().toLowerCase();ms=ms.filter(m=>(m.name+' '+(m.nick||'')+' '+(m.prof||'')+' '+(m.mentor||'')).toLowerCase().includes(qq));}
   if(fil==='first')ms=ms.filter(m=>m.status==='ปีแรก');
   if(fil==='old')ms=ms.filter(m=>m.status!=='ปีแรก');
@@ -521,13 +566,13 @@ function membersRefresh(){
   clearTimeout(mRefreshTimer);
   mRefreshTimer=setTimeout(()=>{
     const t=document.getElementById('mtable');if(t)t.innerHTML=membersTableHtml();
-    const c=document.getElementById('mcount');if(c)c.textContent=`${membersList().length}/${state.members.length} คน`;
+    const c=document.getElementById('mcount');if(c)c.textContent=`${membersList().length}/${scopedMembers().length} คน`;
   },250);
 }
 function vMembers(){
   return `
   <div class="card">
-    <h2>👥 สมาชิก <span class="cnt" id="mcount">${membersList().length}/${state.members.length} คน</span></h2>
+    <h2>👥 สมาชิก <span class="cnt" id="mcount">${membersList().length}/${scopedMembers().length} คน</span></h2>
     <div class="toolbar no-print">
       <input type="text" placeholder="🔍 ค้นหา ชื่อ / ชื่อเล่น / อาชีพ / Mentor" value="${esc(q)}" oninput="q=this.value;membersRefresh()">
       <select onchange="fil=this.value;membersRefresh()">
@@ -537,7 +582,7 @@ function vMembers(){
         <option value="mentoring" ${fil==='mentoring'?'selected':''}>กำลัง Mentoring</option>
         <option value="done" ${fil==='done'?'selected':''}>จบ 8 สัปดาห์แล้ว</option>
       </select>
-      <button class="btn gold" onclick="openAdd()">＋ เพิ่มสมาชิกใหม่</button>
+      ${isAdmin()?`<button class="btn gold" onclick="openAdd()">＋ เพิ่มสมาชิกใหม่</button>`:''}
     </div>
     <div id="mtable">${membersTableHtml()}</div>
   </div>`;
@@ -548,6 +593,8 @@ function openModal(html){document.getElementById('modalBox').innerHTML=html;docu
 function closeModal(){document.getElementById('ovl').classList.remove('show');render();}
 function openMember(id){
   const m=findM(id);if(!m)return;
+  if(isMentor()&&(m.mentor||'').trim()!==(AUTH.mentorName||'').trim()){toast('เปิดดูได้เฉพาะ mentee ของคุณ');return;}
+  const adm=isAdmin();
   const cw=curWeek(m);
   openModal(`
   <button class="x" onclick="closeModal()">✕</button>
@@ -555,22 +602,22 @@ function openMember(id){
   <div class="sub">${esc(m.prof||'')} · เริ่ม ${fmt(m.start)} · อายุสมาชิก ${ageLabel(m)}${cw!==null?` · สัปดาห์ที่ ${cw}`:''}</div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 12px">
     ${renewChip(m)}
-    ${renewInfo(m)&&renewInfo(m).renewed
+    ${adm?(renewInfo(m)&&renewInfo(m).renewed
       ?`<button class="btn sm ghost" onclick="unRenew('${id}')">ยกเลิกต่ออายุ</button>`
-      :`<button class="btn sm gold" onclick="markRenewed('${id}')">✓ ต่ออายุแล้ว (ล่วงหน้า)</button>`}
+      :`<button class="btn sm gold" onclick="markRenewed('${id}')">✓ ต่ออายุแล้ว (ล่วงหน้า)</button>`):''}
     <span class="badge ${m.lineUserId?'b-done':'b-notyet'}">${m.lineUserId?'🟢 เชื่อม LINE แล้ว':'⚪ ยังไม่เชื่อม LINE'}</span>
-    ${m.lineUserId
+    ${adm?(m.lineUserId
       ?`<button class="btn sm ghost" onclick="unlinkLine('${id}')">ยกเลิกการเชื่อม</button>`
-      :`<span style="font-size:11.5px;color:var(--mut)">ให้สมาชิกแอด LINE OA ของ Chapter แล้วพิมพ์ชื่อเล่น "${esc(m.nick||m.name)}" เพื่อเชื่อม</span>`}
+      :`<span style="font-size:11.5px;color:var(--mut)">ให้สมาชิกแอด LINE OA ของ Chapter แล้วพิมพ์ชื่อเล่น "${esc(m.nick||m.name)}" เพื่อเชื่อม</span>`):''}
   </div>
 
   <div class="grid2">
     <div class="field"><label>ชื่อสมาชิก (Member Name)</label><input type="text" value="${esc(m.name)}" onchange="upd('${id}','name',this.value)"></div>
     <div class="field"><label>ชื่อเล่น</label><input type="text" value="${esc(m.nick||'')}" onchange="upd('${id}','nick',this.value)"></div>
     <div class="field"><label>อาชีพ</label><input type="text" value="${esc(m.prof||'')}" onchange="upd('${id}','prof',this.value)"></div>
-    <div class="field"><label>Personal Mentor</label><input type="text" value="${esc(m.mentor||'')}" onchange="upd('${id}','mentor',this.value)"></div>
-    <div class="field"><label>วันเริ่มเป็นสมาชิก</label><input type="date" value="${esc(m.start||'')}" onchange="upd('${id}','start',this.value)"></div>
-    <div class="field"><label>สถานะสมาชิก</label><select onchange="upd('${id}','status',this.value)">
+    <div class="field"><label>Personal Mentor</label><input type="text" value="${esc(m.mentor||'')}" ${adm?`onchange="upd('${id}','mentor',this.value)"`:'readonly style="background:#f1f4fb"'}></div>
+    <div class="field"><label>วันเริ่มเป็นสมาชิก</label><input type="date" value="${esc(m.start||'')}" ${adm?`onchange="upd('${id}','start',this.value)"`:'readonly style="background:#f1f4fb"'}></div>
+    <div class="field"><label>สถานะสมาชิก</label><select ${adm?`onchange="upd('${id}','status',this.value)"`:'disabled style="background:#f1f4fb"'}>
       <option ${m.status==='ปีแรก'?'selected':''}>ปีแรก</option><option ${m.status==='เกิน 1 ปี'?'selected':''}>เกิน 1 ปี</option></select></div>
   </div>
 
@@ -615,7 +662,7 @@ function openMember(id){
   </div>
 
   <div class="sect no-print" style="display:flex;justify-content:space-between">
-    <button class="btn red sm" onclick="delMember('${id}')">🗑 ลบสมาชิก</button>
+    ${adm?`<button class="btn red sm" onclick="delMember('${id}')">🗑 ลบสมาชิก</button>`:'<span></span>'}
     <button class="btn" onclick="closeModal()">เสร็จสิ้น</button>
   </div>`);
 }
@@ -653,6 +700,7 @@ function unlinkLine(id){const m=findM(id);
   if(!confirm(`ยกเลิกการเชื่อม LINE ของ "${m.nick||m.name}"? (สมาชิกต้องพิมพ์ชื่อเล่นใน OA ใหม่เพื่อเชื่อมอีกครั้ง)`))return;
   m.lineUserId=null;save(id);openMember(id);toast('ยกเลิกการเชื่อม LINE แล้ว');}
 function delMember(id){const m=findM(id);
+  if(!isAdmin()){toast('เฉพาะแอดมินเท่านั้น');return;}
   if(!confirm(`ลบสมาชิก "${m.nick||m.name}" ออกจากระบบ?`))return;
   state.members=state.members.filter(x=>x.id!==id);saveDel(id);closeModal();}
 function openAdd(){
@@ -697,7 +745,7 @@ function vSurvey(){
     </div>
   </div>
   ${HS.map(h=>{
-    let rows=state.members.map(m=>({m,i:hsInfo(m,h)}));
+    let rows=scopedMembers().map(m=>({m,i:hsInfo(m,h)}));
     if(hsFil==='pending')rows=rows.filter(r=>r.i.st==='due'||r.i.st==='wait');
     rows.sort((a,b)=>(a.i.due||0)-(b.i.due||0));
     return `<div class="card">
@@ -722,7 +770,7 @@ let repRound='all';
 function vReport(){
   const rounds=repRound==='all'?HS:HS.filter(h=>h.key===repRound);
   const done=[],pending=[];
-  rounds.forEach(h=>state.members.forEach(m=>{
+  rounds.forEach(h=>scopedMembers().forEach(m=>{
     const i=hsInfo(m,h);
     if(i.rec.done)done.push({m,h,i});
     else if(i.st==='due'||i.st==='wait')pending.push({m,h,i});
@@ -777,6 +825,122 @@ function vReport(){
       ${pending.map(({m,h,i})=>{const[cls,txt]=HS_BADGE[i.st];return `<tr><td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td><td style="font-size:12.5px">${h.label}</td><td>${fmt(i.due)}</td><td><span class="badge ${cls}">${txt}</span></td></tr>`;}).join('')}
       </table></div>`:`<div class="empty">ไม่มีรายการค้าง</div>`}
   </div>`;
+}
+
+/* ---------- login / bootstrap ---------- */
+let authMode='login'; // 'login' | 'bootstrap'
+function vAuth(){
+  if(authMode==='bootstrap')return `
+  <div class="authwrap">
+    <div class="lgo">🏆</div>
+    <h2>ตั้งค่าบัญชีแอดมินครั้งแรก</h2>
+    <p class="sub">ยังไม่มีบัญชีในระบบ — สร้างบัญชีผู้ดูแล (แอดมิน) เพื่อเริ่มใช้งาน</p>
+    <div id="autherr"></div>
+    <div class="field"><label>ชื่อ-สกุล ผู้ดูแล</label><input type="text" id="bs_name" placeholder="เช่น ไมค์ Arthit"></div>
+    <div class="field"><label>ชื่อผู้ใช้ (username)</label><input type="text" id="bs_user" placeholder="เช่น admin"></div>
+    <div class="field"><label>รหัสผ่าน</label><input type="password" id="bs_pass"></div>
+    <button class="btn gold" style="width:100%;margin-top:6px" onclick="doBootstrap()">สร้างบัญชีแอดมิน</button>
+  </div>`;
+  return `
+  <div class="authwrap">
+    <div class="lgo">🏆</div>
+    <h2>The Top Mentor</h2>
+    <p class="sub">เข้าสู่ระบบเพื่อจัดการข้อมูล Mentoring</p>
+    <div id="autherr"></div>
+    <div class="field"><label>ชื่อผู้ใช้</label><input type="text" id="lg_user" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="field"><label>รหัสผ่าน</label><input type="password" id="lg_pass" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn gold" style="width:100%;margin-top:6px" onclick="doLogin()">เข้าสู่ระบบ</button>
+  </div>`;
+}
+function authErr(msg){const e=document.getElementById('autherr');if(e)e.innerHTML=msg?`<div class="autherr">${esc(msg)}</div>`:'';}
+async function doLogin(){
+  const u=document.getElementById('lg_user').value.trim(),p=document.getElementById('lg_pass').value;
+  if(!u||!p){authErr('กรอกชื่อผู้ใช้และรหัสผ่าน');return;}
+  authErr('');const btn=event&&event.target;if(btn)btn.textContent='กำลังเข้าสู่ระบบ...';
+  try{const j=await authApi('login',{username:u,password:p});
+    if(!j.ok){authErr(j.error||'เข้าสู่ระบบไม่สำเร็จ');if(btn)btn.textContent='เข้าสู่ระบบ';return;}
+    setAuth({username:j.user.username,role:j.user.role,name:j.user.name,mentorName:j.user.mentorName,token:j.token});
+    tab='dash';render();toast('ยินดีต้อนรับ '+(j.user.name||j.user.username));
+  }catch(e){authErr('ติดต่อเซิร์ฟเวอร์ไม่ได้');if(btn)btn.textContent='เข้าสู่ระบบ';}
+}
+async function doBootstrap(){
+  const name=document.getElementById('bs_name').value.trim(),u=document.getElementById('bs_user').value.trim(),p=document.getElementById('bs_pass').value;
+  if(!u||!p){authErr('กรอกชื่อผู้ใช้และรหัสผ่าน');return;}
+  authErr('');
+  try{const j=await authApi('bootstrapAdmin',{username:u,password:p,name});
+    if(!j.ok){authErr(j.error||'สร้างบัญชีไม่สำเร็จ');return;}
+    setAuth({username:j.user.username,role:'admin',name:j.user.name,mentorName:'',token:j.token});
+    authMode='login';tab='dash';render();toast('สร้างบัญชีแอดมินแล้ว');
+  }catch(e){authErr('ติดต่อเซิร์ฟเวอร์ไม่ได้');}
+}
+async function checkAuthMode(){
+  try{const j=await authApi('status',{});if(j.ok&&!j.hasAdmin){authMode='bootstrap';if(!AUTH)render();}}catch(e){}
+}
+
+/* ---------- users / mentor management (admin) ---------- */
+function vUsers(){
+  return `
+  <div class="card">
+    <h2>👤 บัญชีผู้ใช้ / Mentor <span class="cnt" id="ucount">…</span></h2>
+    <div class="sub" style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Mentor ล็อกอินเพื่อดูและอัปเดตเฉพาะ mentee ของตัวเอง · แอดมินจัดการได้ทุกอย่าง</div>
+    <div class="toolbar" style="margin-bottom:0"><button class="btn gold" onclick="openUserForm()">＋ เพิ่มบัญชี Mentor</button></div>
+    <div id="userlist" style="margin-top:14px"><div class="empty">กำลังโหลด...</div></div>
+  </div>`;
+}
+async function loadUsers(){
+  const el=document.getElementById('userlist');if(!el)return;
+  try{const j=await authApi('listUsers',{token:AUTH.token});
+    if(!j.ok){el.innerHTML=`<div class="autherr">${esc(j.error||'โหลดไม่สำเร็จ')}</div>`;return;}
+    const cc=document.getElementById('ucount');if(cc)cc.textContent=j.users.length+' บัญชี';
+    el.innerHTML=`<div class="tblwrap"><table><tr><th>ชื่อผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>ดูแล (Mentor)</th><th></th></tr>
+    ${j.users.map(u=>`<tr>
+      <td class="mname">${esc(u.username)}</td>
+      <td>${esc(u.name||'—')}</td>
+      <td><span class="badge ${u.role==='admin'?'b-first':'b-old'}">${u.role==='admin'?'👑 แอดมิน':'🎓 Mentor'}</span></td>
+      <td style="font-size:12.5px">${esc(u.mentorName||'—')}${u.role==='mentor'&&u.mentorName?` <span style="color:var(--mut)">(${state.members.filter(m=>(m.mentor||'').trim()===u.mentorName.trim()).length} คน)</span>`:''}</td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="btn sm ghost" onclick='openUserForm(${JSON.stringify(u)})'>แก้ไข</button>
+        <button class="btn sm red" onclick="delUser('${esc(u.username)}')">ลบ</button>
+      </td></tr>`).join('')}</table></div>`;
+  }catch(e){el.innerHTML=`<div class="autherr">ติดต่อเซิร์ฟเวอร์ไม่ได้</div>`;}
+}
+function openUserForm(u){
+  const edit=!!u;u=u||{role:'mentor'};
+  const mentors=[...new Set(state.members.map(m=>(m.mentor||'').trim()).filter(Boolean))].sort();
+  openModal(`
+  <button class="x" onclick="closeModal()">✕</button>
+  <h3>${edit?'แก้ไขบัญชี':'เพิ่มบัญชี Mentor'}</h3>
+  <div class="sub">${edit?esc(u.username):'สร้างบัญชีให้ Mentor ล็อกอินอัปเดต mentee ของตัวเอง'}</div>
+  <div id="uerr"></div>
+  <div class="grid2">
+    <div class="field"><label>ชื่อผู้ใช้ (username) *</label><input type="text" id="u_user" value="${esc(u.username||'')}" ${edit?'readonly style="background:#f1f4fb"':''}></div>
+    <div class="field"><label>ชื่อ-สกุล</label><input type="text" id="u_name" value="${esc(u.name||'')}"></div>
+    <div class="field"><label>บทบาท</label><select id="u_role" onchange="document.getElementById('u_mnwrap').style.display=this.value==='mentor'?'':'none'">
+      <option value="mentor" ${u.role==='mentor'?'selected':''}>🎓 Mentor</option>
+      <option value="admin" ${u.role==='admin'?'selected':''}>👑 แอดมิน</option></select></div>
+    <div class="field" id="u_mnwrap" style="${u.role==='admin'?'display:none':''}"><label>ดูแล Mentor (ให้ตรงกับข้อมูลสมาชิก)</label>
+      <input type="text" id="u_mn" list="mnlist" value="${esc(u.mentorName||'')}" placeholder="เช่น ไมค์ Arthit Chuaychat">
+      <datalist id="mnlist">${mentors.map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
+    <div class="field"><label>รหัสผ่าน ${edit?'(เว้นว่าง = ไม่เปลี่ยน)':'*'}</label><input type="password" id="u_pass" autocomplete="new-password"></div>
+  </div>
+  <div style="text-align:right;margin-top:10px"><button class="btn gold" onclick="saveUser(${edit})">บันทึก</button></div>`);
+}
+async function saveUser(edit){
+  const g=i=>document.getElementById(i).value;
+  const user={username:g('u_user').trim(),name:g('u_name').trim(),role:g('u_role'),mentorName:g('u_mn').trim(),password:g('u_pass')};
+  const ue=document.getElementById('uerr');
+  if(!user.username){ue.innerHTML='<div class="autherr">กรอกชื่อผู้ใช้</div>';return;}
+  if(user.role==='mentor'&&!user.mentorName){ue.innerHTML='<div class="autherr">เลือกชื่อ Mentor ที่บัญชีนี้ดูแล</div>';return;}
+  if(!edit&&!user.password){ue.innerHTML='<div class="autherr">ตั้งรหัสผ่านให้บัญชีใหม่</div>';return;}
+  const j=await authApi('saveUser',{token:AUTH.token,user});
+  if(!j.ok){ue.innerHTML=`<div class="autherr">${esc(j.error||'บันทึกไม่สำเร็จ')}</div>`;return;}
+  closeModal();loadUsers();toast('บันทึกบัญชีแล้ว');
+}
+async function delUser(username){
+  if(!confirm('ลบบัญชี "'+username+'" ?'))return;
+  const j=await authApi('deleteUser',{token:AUTH.token,username});
+  if(!j.ok){toast(j.error||'ลบไม่สำเร็จ');return;}
+  loadUsers();toast('ลบบัญชีแล้ว');
 }
 
 /* ---------- settings ---------- */
@@ -914,6 +1078,7 @@ function impCsv(inp){
 
 render();
 /* boot: ส่งของค้าง (ถ้ามี) แล้วดึงข้อมูลล่าสุดจากคลาวด์ + ดึงซ้ำเมื่อกลับมาที่หน้าจอ/ทุก 90 วิ */
+checkAuthMode();
 (hasDirty()?flush():Promise.resolve()).then(()=>fetchAll()).catch(()=>setSync(false));
 setInterval(()=>{hasDirty()?flush():fetchAll().catch(()=>setSync(false));},90000);
 window.addEventListener('focus',()=>{if(!hasDirty())fetchAll().catch(()=>setSync(false));});
