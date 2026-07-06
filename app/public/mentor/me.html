@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ข้อมูลของฉัน — The Top Mentor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+:root{
+  --gold:#e8a614;--gold2:#f6c64b;--ink:#0f1830;--navy:#1e2a4a;--navy2:#2b3b66;
+  --bg:#eef1f8;--card:#fff;--line:#e7ebf4;--txt:#1c2540;--mut:#8791ab;
+  --ok:#12b76a;--bad:#ef4444;--warn:#f79009;--info:#3b6ef6;--sh:0 10px 30px rgba(28,42,82,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Prompt',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--txt);font-size:15px;background:var(--bg);
+  background-image:radial-gradient(600px 260px at 20% -5%,rgba(246,198,75,.18),transparent 60%);min-height:100vh;padding-bottom:40px}
+.wrap{max-width:560px;margin:0 auto;padding:16px 14px}
+.hero{background:linear-gradient(120deg,#111a35,#25356b);color:#fff;border-radius:22px;padding:20px;box-shadow:0 10px 28px rgba(10,16,40,.25);margin-bottom:14px}
+.hero .top{display:flex;align-items:center;gap:14px}
+.avatar{width:56px;height:56px;border-radius:17px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:24px;color:#fff;flex:none;box-shadow:inset 0 -8px 14px rgba(0,0,0,.16)}
+.hero h1{font-size:20px;font-weight:700;line-height:1.15}
+.hero .sub{font-size:12.5px;opacity:.75;margin-top:2px}
+.hero .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
+.hchip{font-size:11.5px;padding:5px 11px;border-radius:99px;font-weight:600;background:rgba(255,255,255,.14);color:#fff}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:17px;margin-bottom:13px;box-shadow:var(--sh)}
+.card h2{font-size:15px;font-weight:700;margin-bottom:13px;display:flex;align-items:center;gap:8px}
+.card h2 .cnt{margin-left:auto;background:#f1f4fb;color:var(--mut);font-size:11.5px;padding:3px 11px;border-radius:99px;font-weight:500}
+.seg{display:flex;gap:4px;margin-bottom:10px}
+.seg i{flex:1;height:11px;border-radius:6px;background:#e9edf6}
+.seg i.t{background:linear-gradient(135deg,var(--gold2),var(--gold))}
+.seg i.f{background:#f6b5b1}
+.seg.done i.t{background:linear-gradient(135deg,#2fd58a,#0fa564)}
+.wklist{display:flex;flex-direction:column;gap:2px}
+.wkrow{display:flex;align-items:center;gap:11px;padding:9px 2px;border-bottom:1px solid #f2f4fa}
+.wkrow:last-child{border-bottom:0}
+.wkrow .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex:none;background:#eef1f8}
+.wkrow.t .ic{background:#dcf7e9}
+.wkrow .t2{flex:1}.wkrow .t2 b{font-size:13.5px}.wkrow .t2 small{display:block;color:var(--mut);font-size:11.5px}
+.slbox{border:1.5px solid var(--line);border-radius:15px;padding:13px;margin-bottom:10px;background:#fcfdff}
+.slbox.has{border-color:#93e5bd;background:#f6fef9}
+.slhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.slhead b{font-size:14.5px}
+.badge{display:inline-block;font-size:11.5px;padding:4px 11px;border-radius:99px;font-weight:600;white-space:nowrap}
+.b-done{background:#dcf7e9;color:#0a9152}.b-notyet{background:#f1f4fb;color:#8a94ad}
+.b-wait{background:#e3ebfe;color:#2f5ce0}.b-due{background:#fdeed3;color:#b25e04}
+.slfile{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12.5px;background:#eef1f9;border-radius:10px;padding:8px 11px}
+.slfile a{color:var(--info);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slfile button{border:0;background:#fde5e5;color:#b32020;width:24px;height:24px;border-radius:99px;cursor:pointer;flex:none}
+.hsbox{border:1px solid var(--line);border-radius:15px;padding:13px;margin-bottom:10px;background:#fcfdff}
+.hsbox .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px}
+.hsbox .top b{font-size:13.5px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--mut);margin-bottom:5px}
+input[type=text],textarea{font-family:inherit;font-size:15px;padding:11px 13px;border:1.5px solid var(--line);border-radius:13px;background:#fff;color:var(--txt);outline:none;width:100%;transition:.15s}
+input:focus,textarea:focus{border-color:var(--gold2);box-shadow:0 0 0 3px rgba(246,198,75,.18)}
+.btn{display:block;width:100%;text-align:center;border:0;font-family:inherit;font-size:15px;padding:13px;border-radius:14px;cursor:pointer;font-weight:600;transition:.15s}
+.btn.gold{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#241c04;box-shadow:0 4px 12px rgba(232,166,20,.35)}
+.btn.up{background:#eef1f9;color:var(--txt);font-size:13.5px;padding:11px}
+.btn.ln{background:linear-gradient(135deg,#06c755,#04a648);color:#fff;text-decoration:none;display:block}
+.center{text-align:center;padding:40px 20px}
+.spin{width:38px;height:38px;border:4px solid #e3e8f2;border-top-color:var(--gold);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 16px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.big{font-size:52px;margin-bottom:12px}
+.muted{color:var(--mut);font-size:13.5px;line-height:1.7}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e2a4a;color:#fff;padding:11px 22px;border-radius:99px;font-size:13.5px;z-index:200;box-shadow:0 6px 18px rgba(0,0,0,.3);opacity:0;transition:.3s;pointer-events:none}
+.saved{font-size:11.5px;color:var(--ok);text-align:right;height:16px;transition:.3s;opacity:0}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="center"><div class="spin"></div><div class="muted">กำลังเชื่อมต่อ LINE...</div></div>
+</div>
+<div id="toast"></div>
+<script>
+const SB_URL='https://tpyrlxhoyghawqvsphfj.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRweXJseGhveWdoYXdxdnNwaGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk3NzYsImV4cCI6MjA5NjU2NTc3Nn0.OnfQ4VipqPlEpg5PfBGXhx44oSpqY1ifW1AlnY52p0Q';
+const H={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'};
+async function sb(path,opts={}){const r=await fetch(SB_URL+'/rest/v1/'+path,{method:opts.method||'GET',headers:H,body:opts.body});if(!r.ok)throw new Error('sb '+r.status);return (r.headers.get('content-type')||'').includes('json')?r.json():null;}
+
+const THM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function pd(iso){if(!iso)return null;const[y,m,d]=iso.split('-').map(Number);return new Date(y,m-1,d);}
+function fmt(d){if(!d)return '—';if(typeof d==='string')d=pd(d);return d?`${d.getDate()} ${THM[d.getMonth()]} ${d.getFullYear()}`:'—';}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
+function today(){const t=new Date();return new Date(t.getFullYear(),t.getMonth(),t.getDate());}
+function dayDiff(a,b){return Math.round((a-b)/864e5);}
+const WEEKS=[['Week 0','สัปดาห์แรกที่เข้ามาเป็นสมาชิก'],['Week 1','Invite Visitor + Profile & GAINS sheet'],['Week 2','Presentation, Top 10 Key Customer List'],['Week 3','Good Referral, Contact Sphere List'],['Week 4','1-2-1 Meeting'],['Week 5','1-2-1 Meeting'],['Week 6','5 นาที Presentation'],['Week 7','Member Goal Setting'],['Week 8','Substitute Policy']];
+const SLIDES=[['onepage','ONEPAGE'],['s121','121'],['s5min','5 นาที']];
+const HS=[{key:'m3',label:'Happiness Survey 3 เดือน',days:90,link:'link3'},{key:'m6',label:'Happiness Survey 6 เดือน',days:180,link:'link6'},{key:'m12',label:'Happiness Survey 12 เดือน (ก่อนต่ออายุ)',days:365,link:'link12'}];
+function wLast(m){let l=-1;m.weeks.forEach((w,i)=>{if(w===true)l=i;});return l;}
+function hasSlide(m,k){return m.slides[k]===true||!!(m.slideFiles&&m.slideFiles[k]);}
+function renewInfo(m){const s=pd(m.start);if(!s)return null;const t=today();let d=new Date(s);d.setFullYear(t.getFullYear());if(d<t)d.setFullYear(d.getFullYear()+1);return {date:d,days:dayDiff(d,t)};}
+function hsInfo(m,h){const s=pd(m.start);const rec=(m.hs&&m.hs[h.key])||{sent:false,done:false,note:''};let due=s?addDays(s,h.days):null;let open=due;if(h.key==='m12'&&due){if(due<today()){const nx=new Date(due);while(nx<today())nx.setFullYear(nx.getFullYear()+1);due=nx;}open=addDays(due,-180);}let st='notyet';if(rec.done)st='done';else if(rec.sent)st='wait';else if(open&&today()>=open)st='due';return {due,open,st,rec};}
+const AV=['#5b6cf0','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#22c55e'];
+function avColor(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return AV[h%AV.length];}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.opacity=0,2200);}
+
+let ME=null, ROWID=null;
+const app=document.getElementById('app');
+function fail(icon,title,msg){app.innerHTML=`<div class="center"><div class="big">${icon}</div><h1 style="font-size:19px;margin-bottom:10px">${title}</h1><div class="muted">${msg}</div></div>`;}
+
+async function boot(){
+  let cfg={};
+  try{const c=await sb('tm_config?key=eq.main&select=value');cfg=(c[0]||{}).value||{};}catch(e){}
+  const liffId=cfg.liffId;
+  if(!liffId){fail('⚙️','ยังไม่ได้ตั้งค่า','ผู้ดูแลระบบยังไม่ได้ใส่ LIFF ID ในหน้าตั้งค่าของแอป กรุณาแจ้งผู้ดูแลครับ');return;}
+  try{
+    await liff.init({liffId});
+    if(!liff.isLoggedIn()){liff.login();return;}
+    const prof=await liff.getProfile();
+    const uid=prof.userId;
+    const rows=await sb('tm_members?select=id,data');
+    const found=rows.find(r=>(r.data||{}).lineUserId===uid);
+    if(!found){
+      fail('🔗','ยังไม่ได้เชื่อมบัญชี',`พิมพ์ "ชื่อเล่น" ของคุณตามที่ลงทะเบียนกับ Chapter ในแชตนี้ก่อน<br>เพื่อเชื่อมบัญชี แล้วเปิดเมนูนี้อีกครั้งครับ`);
+      return;
+    }
+    ROWID=found.id; ME=Object.assign({},found.data,{id:found.id});
+    render();
+  }catch(e){fail('⚠️','เชื่อมต่อไม่สำเร็จ','กรุณาปิดแล้วเปิดเมนูใหม่อีกครั้ง<br><small style="color:#aab">'+esc(e.message||e)+'</small>');}
+}
+
+async function persist(){
+  const s=document.getElementById('saved');
+  try{await sb('tm_members?id=eq.'+encodeURIComponent(ROWID),{method:'PATCH',body:JSON.stringify({data:ME})});
+    if(s){s.textContent='✓ บันทึกแล้ว';s.style.opacity=1;clearTimeout(persist._t);persist._t=setTimeout(()=>s.style.opacity=0,1500);}
+  }catch(e){toast('บันทึกไม่สำเร็จ — ลองใหม่');}
+}
+
+function render(){
+  const m=ME, l=wLast(m), r=renewInfo(m), sd=SLIDES.filter(([k])=>hasSlide(m,k)).length;
+  app.innerHTML=`
+  <div class="hero">
+    <div class="top">
+      <div class="avatar" style="background:${avColor(m.name)}">${esc((m.nick||m.name).trim().charAt(0))}</div>
+      <div><h1>${esc(m.nick||m.name)}</h1><div class="sub">${esc(m.name)}${m.prof?' · '+esc(m.prof):''}</div></div>
+    </div>
+    <div class="chips">
+      <span class="hchip">🎓 Mentor: ${esc(m.mentor||'—')}</span>
+      <span class="hchip">📅 เริ่ม ${fmt(m.start)}</span>
+      ${r?`<span class="hchip">🔄 ต่ออายุอีก ${r.days} วัน</span>`:''}
+    </div>
+  </div>
+  <div class="saved" id="saved"></div>
+
+  <div class="card">
+    <h2>📅 Mentoring 8 สัปดาห์ <span class="cnt">${l<0?'ยังไม่เริ่ม':'ถึงสัปดาห์ที่ '+l+'/8'}</span></h2>
+    <div class="seg ${m.weeks.filter(w=>w===true).length===9?'done':''}">${m.weeks.map(w=>`<i class="${w===true?'t':w===false?'f':''}"></i>`).join('')}</div>
+    <div class="wklist">${WEEKS.map(([t,d],i)=>`<div class="wkrow ${m.weeks[i]===true?'t':''}">
+      <div class="ic">${m.weeks[i]===true?'✅':m.weeks[i]===false?'❌':'⬜'}</div>
+      <div class="t2"><b>${t}</b><small>${d}</small></div>
+    </div>`).join('')}</div>
+    <div class="muted" style="margin-top:10px;font-size:11.5px">* สถานะสัปดาห์ประเมินโดย Mentor</div>
+  </div>
+
+  <div class="card">
+    <h2>🖼️ สไลด์ของฉัน <span class="cnt">${sd}/3</span></h2>
+    ${SLIDES.map(([k,lbl])=>{const sf=m.slideFiles&&m.slideFiles[k];const has=hasSlide(m,k);return `
+    <div class="slbox ${has?'has':''}">
+      <div class="slhead"><b>${lbl}</b><span class="badge ${has?'b-done':'b-notyet'}">${has?'✅ ส่งแล้ว':'ยังไม่ส่ง'}</span></div>
+      <label class="btn up" style="cursor:pointer">📤 ${sf?'เปลี่ยนไฟล์':'อัพโหลดรูป/PDF'}<input type="file" accept="image/*,application/pdf" style="display:none" onchange="uploadSlide('${k}',this)"></label>
+      ${sf?`<div class="slfile"><a href="${esc(sf.url)}" target="_blank">📎 ${esc(sf.name)}</a><button onclick="delSlide('${k}')">✕</button></div>`:''}
+    </div>`;}).join('')}
+  </div>
+
+  <div class="card">
+    <h2>💛 แบบสอบถาม Happiness Survey</h2>
+    ${HS.map(h=>{const i=hsInfo(m,h);const B={done:['b-done','✅ ทำแล้ว'],wait:['b-wait','📨 รอตอบ'],due:['b-due','⏰ ถึงกำหนด'],notyet:['b-notyet','⏳ ยังไม่ถึง']}[i.st];const link=CFG[h.link];return `
+    <div class="hsbox">
+      <div class="top"><b>${h.label}</b><span class="badge ${B[0]}">${B[1]}</span></div>
+      <div class="muted" style="font-size:12px">กำหนด: ${fmt(i.due)}</div>
+      ${(i.st==='due'||i.st==='wait')&&link?`<a class="btn ln" style="margin-top:10px" href="${esc(link)}" target="_blank">📝 ทำแบบสอบถามนี้</a>`:''}
+    </div>`;}).join('')}
+  </div>
+
+  <div class="card">
+    <h2>✏️ แก้ไขข้อมูลของฉัน</h2>
+    <div class="field"><label>ชื่อเล่น</label><input type="text" id="f_nick" value="${esc(m.nick||'')}"></div>
+    <div class="field"><label>อาชีพ / ธุรกิจ</label><input type="text" id="f_prof" value="${esc(m.prof||'')}"></div>
+    <button class="btn gold" onclick="saveProfile()">💾 บันทึกข้อมูล</button>
+  </div>`;
+}
+let CFG={};
+async function uploadSlide(k,inp){
+  const f=inp.files[0];if(!f)return;
+  if(f.size>10*1024*1024){toast('ไฟล์ใหญ่เกิน 10MB');return;}
+  toast('⏳ กำลังอัพโหลด...');
+  const ext=(f.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';
+  const path=ROWID+'/'+k+'_'+Date.now()+'.'+ext;
+  try{
+    const r=await fetch(SB_URL+'/storage/v1/object/tm_slides/'+path,{method:'POST',
+      headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':f.type||'application/octet-stream','x-upsert':'true'},body:f});
+    if(!r.ok)throw new Error(r.status);
+  }catch(e){toast('❌ อัพโหลดไม่สำเร็จ');return;}
+  ME.slideFiles=ME.slideFiles||{};
+  ME.slideFiles[k]={url:SB_URL+'/storage/v1/object/public/tm_slides/'+path,name:f.name,path};
+  ME.slides[k]=true;
+  await persist();render();toast('✅ ส่งสไลด์แล้ว');
+}
+async function delSlide(k){
+  const sf=ME.slideFiles&&ME.slideFiles[k];if(!sf)return;
+  if(!confirm('ลบไฟล์ "'+sf.name+'" ?'))return;
+  try{await fetch(SB_URL+'/storage/v1/object/tm_slides/'+sf.path,{method:'DELETE',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});}catch(e){}
+  delete ME.slideFiles[k];
+  if(ME.slides[k]===true&&!(ME.slideFiles&&ME.slideFiles[k]))ME.slides[k]=null;
+  await persist();render();toast('ลบไฟล์แล้ว');
+}
+async function saveProfile(){
+  ME.nick=document.getElementById('f_nick').value.trim();
+  ME.prof=document.getElementById('f_prof').value.trim();
+  await persist();render();toast('✅ บันทึกข้อมูลแล้ว');
+}
+// โหลด config ให้ CFG ก่อน (สำหรับลิงก์แบบสอบถาม) แล้ว boot
+(async()=>{try{const c=await sb('tm_config?key=eq.main&select=value');CFG=(c[0]||{}).value||{};}catch(e){}boot();})();
+</script>
+</body>
+</html>

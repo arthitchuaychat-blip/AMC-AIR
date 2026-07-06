@@ -757,6 +757,19 @@ function vSettings(){
   </div>
 
   <div class="card">
+    <h2>📱 เมนูสมาชิก (LIFF) — ให้สมาชิกดู/แก้ข้อมูลตัวเอง</h2>
+    <div class="sub" style="color:var(--mut);font-size:12.5px;margin-bottom:10px">สมาชิกเปิดเมนูนี้ในแชต LINE เพื่อดูความคืบหน้า อัพโหลดสไลด์ และแก้ข้อมูลของตัวเองได้ (เห็นเฉพาะข้อมูลตัวเอง)</div>
+    <div class="field"><label>LIFF ID (จาก LINE Developers → แท็บ LIFF)</label>
+      <input type="text" value="${esc(c.liffId||'')}" onchange="state.config.liffId=this.value.trim();save('cfg')" placeholder="เช่น 2001234567-abcdWXYZ"></div>
+    <div class="help" style="font-size:12.5px">
+      <b>วิธีตั้ง:</b> ที่ LINE Developers → channel The Top Mentoring → แท็บ <b>LIFF</b> → <b>Add</b> →<br>
+      • Endpoint URL: <code>https://amc-air.vercel.app/mentor/me.html</code><br>
+      • Size: <b>Full</b> · Scopes: ติ๊ก <b>profile</b> และ <b>openid</b><br>
+      แล้วคัดลอก <b>LIFF ID</b> มาวางในช่องด้านบน · ${c.liffId?`<b style="color:var(--ok)">ลิงก์เมนูสมาชิก:</b> <a href="https://liff.line.me/${esc(c.liffId)}" target="_blank">https://liff.line.me/${esc(c.liffId)}</a> — เอาไปตั้งเป็น Rich Menu / ปุ่มในแชต`:'ใส่ LIFF ID แล้วจะได้ลิงก์เมนูมาตั้งใน Rich Menu'}
+    </div>
+  </div>
+
+  <div class="card">
     <h2>💾 ข้อมูล</h2>
     <div class="toolbar" style="margin-bottom:0">
       <button class="btn" onclick="expJson()">⬇️ สำรองข้อมูล (JSON)</button>
