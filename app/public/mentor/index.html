@@ -333,7 +333,7 @@ function render(){
 }
 
 /* ---------- dashboard ---------- */
-let dueExpand=false,waitExpand=false,slideExpand=false;
+let dueExpand=false,waitExpand=false,slideExpand=false,renewFil=180;
 function vDash(){
   const ms=state.members;
   const mentoring=ms.filter(m=>wDone(m)<9&&m.status==='ปีแรก');
@@ -346,13 +346,15 @@ function vDash(){
   mentoring.sort((a,b)=>(b.start||'').localeCompare(a.start||''));
   const noSlide=ms.map(m=>({m,miss:SLIDES.filter(([k])=>!hasSlide(m,k))})).filter(x=>x.miss.length);
   noSlide.sort((a,b)=>((a.m.status==='ปีแรก'?0:1)-(b.m.status==='ปีแรก'?0:1))||(b.m.start||'').localeCompare(a.m.start||''));
+  const renew6=ms.map(m=>renewInfo(m)).filter(r=>r&&r.days<=180).length;
   const ST=[
     ['👥',ms.length,'สมาชิกทั้งหมด','',"fil='all';q='';go('members')"],
     ['🎓',mentoring.length,'กำลัง Mentoring','gold',"fil='mentoring';q='';go('members')"],
     ['✅',finished.length,'จบครบ 8 สัปดาห์','green',"fil='done';q='';go('members')"],
     ['⏰',due.length,'ถึงกำหนด ยังไม่ส่ง','red',"dueExpand=true;render();scrollCard('card-due')"],
     ['📨',wait.length,'ส่งแล้ว รอคำตอบ','blue',"waitExpand=true;render();scrollCard('card-wait')"],
-    ['🖼️',noSlide.length,'สไลด์ยังไม่ครบ','purple',"slideExpand=true;render();scrollCard('card-slide')"]];
+    ['🖼️',noSlide.length,'สไลด์ยังไม่ครบ','purple',"slideExpand=true;render();scrollCard('card-slide')"],
+    ['🔄',renew6,'ต่ออายุใน 6 เดือน','red',"renewFil=180;render();scrollCard('card-renew')"]];
   return `
   <div class="stats">${ST.map(([ic,n,l,c,act])=>`<div class="stat ${c}" onclick="${act}" title="กดเพื่อดูรายละเอียด"><div class="ic">${ic}</div><div><div class="n">${n}</div><div class="l">${l}</div></div></div>`).join('')}</div>
 
@@ -400,7 +402,29 @@ function vDash(){
     </tr>`).join('')}</table></div>
       ${noSlide.length>3?`<button class="btn ghost sm expander" onclick="slideExpand=!slideExpand;render()">${slideExpand?'▲ ย่อกลับ':`▼ แสดงทั้งหมด ${noSlide.length} รายการ`}</button>`:''}`
     :`<div class="empty">🎉 ทุกคนมีสไลด์ครบแล้ว</div>`}
+  </div>
+
+  ${(()=>{
+    const RB=[[30,'ภายใน 1 เดือน'],[60,'ภายใน 2 เดือน'],[90,'ภายใน 3 เดือน'],[180,'ภายใน 6 เดือน']];
+    const all=ms.map(m=>({m,r:renewInfo(m)})).filter(x=>x.r).sort((a,b)=>a.r.days-b.r.days);
+    const cnt=d=>all.filter(x=>x.r.days<=d).length;
+    const rows=all.filter(x=>x.r.days<=renewFil);
+    return `<div class="card" id="card-renew">
+    <h2>🔄 สมาชิกใกล้ครบกำหนดต่ออายุ <span class="cnt">${rows.length} คน</span></h2>
+    <div class="toolbar" style="margin-bottom:12px">
+      ${RB.map(([d,l])=>`<button class="btn sm ${renewFil===d?'gold':'ghost'}" onclick="renewFil=${d};render();scrollCard('card-renew')">${l} (${cnt(d)})</button>`).join('')}
+    </div>
+    ${rows.length?`<div class="tblwrap"><table><tr><th>สมาชิก</th><th>สถานะ</th><th>Mentor</th><th>วันครบกำหนดต่ออายุ</th><th>เหลืออีก</th></tr>
+    ${rows.map(({m,r})=>{const soon=r.days<=30,warn=r.days<=90;const bg=soon?'#fee4e2':warn?'#fdeed3':'#e3ebfe',fg=soon?'#d92d20':warn?'#b25e04':'#2f5ce0';return `<tr class="click" onclick="openMember('${m.id}')">
+      <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+      <td><span class="badge ${m.status==='ปีแรก'?'b-first':'b-old'}">${esc(m.status||'—')}</span></td>
+      <td style="font-size:12.5px">${esc(m.mentor||'—')}</td>
+      <td style="white-space:nowrap">${fmt(r.date)}</td>
+      <td><span class="badge" style="background:${bg};color:${fg}">เหลือ ${r.days} วัน</span></td>
+    </tr>`;}).join('')}</table></div>`
+    :`<div class="empty">ไม่มีสมาชิกครบกำหนดต่ออายุในช่วงนี้</div>`}
   </div>`;
+  })()}`;
 }
 const AV_COLORS=['#5b6cf0','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#22c55e'];
 function avColor(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return AV_COLORS[h%AV_COLORS.length];}
