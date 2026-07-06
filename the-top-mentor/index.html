@@ -75,6 +75,9 @@ tr.click{cursor:pointer} tr.click:hover td{background:#f7f9ff}
 .seg.done i.t{background:linear-gradient(135deg,#2fd58a,#0fa564)}
 .mprog{display:flex;justify-content:space-between;font-size:11.5px;color:var(--mut)}
 .mprog b{color:#3f4a6b;font-weight:600}
+.slidechips{display:flex;gap:5px;margin-top:9px}
+.slidechips .sc{flex:1;text-align:center;font-size:10.5px;font-weight:600;padding:4px 4px;border-radius:8px;background:#f1f4fb;color:#9aa3bd;white-space:nowrap}
+.slidechips .sc.on{background:#dcf7e9;color:#0a9152}
 /* ปุ่ม + ฟอร์ม */
 button.btn{border:0;background:linear-gradient(135deg,#25356b,#17224a);color:#fff;font-family:inherit;font-size:13px;padding:9px 17px;border-radius:12px;cursor:pointer;transition:.16s;box-shadow:0 3px 10px rgba(23,34,74,.22)}
 button.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(23,34,74,.3)}
@@ -405,7 +408,8 @@ function mcardHtml(m){
     </div>
     <div class="mmeta"><span>🎓 Mentor: ${esc(m.mentor||'ยังไม่ระบุ')}</span><span>📅 เริ่ม ${fmt(m.start)}</span></div>
     <div class="seg ${wDone(m)===9?'done':''}">${m.weeks.map(w=>`<i class="${w===true?'t':w===false?'f':''}"></i>`).join('')}</div>
-    <div class="mprog"><b>${l<0?'ยังไม่เริ่ม':`ทำแล้วถึงสัปดาห์ที่ ${l}/8`}</b><span>สไลด์ ${sd}/3</span></div>
+    <div class="mprog"><b>${l<0?'ยังไม่เริ่ม':`ทำแล้วถึงสัปดาห์ที่ ${l}/8`}</b><span style="font-size:11px;color:var(--mut)">สไลด์ ${sd}/3</span></div>
+    <div class="slidechips">${SLIDES.map(([k,lbl])=>`<span class="sc ${hasSlide(m,k)?'on':''}">${hasSlide(m,k)?'✓':'○'} ${lbl}</span>`).join('')}</div>
   </div>`;
 }
 function markSent(id,k){const m=findM(id);m.hs[k].sent=true;save(id);render();toast('บันทึก: ส่งแบบสอบถามแล้ว');}
