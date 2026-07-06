@@ -485,10 +485,15 @@ function membersTableHtml(){
       </tr>`;}).join('')}
   </table></div>`;
 }
-/* อัปเดตเฉพาะตาราง+ตัวนับ ไม่แตะช่องค้นหา (คงโฟกัส + พิมพ์ไทยต่อเนื่อง) */
+/* อัปเดตเฉพาะตาราง+ตัวนับ ไม่แตะช่องค้นหา + หน่วงเวลา (debounce)
+   เพื่อไม่ให้การ rebuild ตารางไปขัดการประกอบตัวอักษรภาษาไทยระหว่างพิมพ์ */
+let mRefreshTimer=null;
 function membersRefresh(){
-  const t=document.getElementById('mtable');if(t)t.innerHTML=membersTableHtml();
-  const c=document.getElementById('mcount');if(c)c.textContent=`${membersList().length}/${state.members.length} คน`;
+  clearTimeout(mRefreshTimer);
+  mRefreshTimer=setTimeout(()=>{
+    const t=document.getElementById('mtable');if(t)t.innerHTML=membersTableHtml();
+    const c=document.getElementById('mcount');if(c)c.textContent=`${membersList().length}/${state.members.length} คน`;
+  },250);
 }
 function vMembers(){
   return `
