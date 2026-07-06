@@ -332,8 +332,9 @@ function hsInfo(m,h){
     open=addDays(due,-180);
   }
   let st='notyet';
-  // แบบสอบถาม 12 เดือน = เฉพาะสมาชิกอายุเกิน 1 ปี · สมาชิกปีแรกยังไม่ต้องทำ
+  // 12 เดือน = เฉพาะสมาชิกเกิน 1 ปี (ปีแรกยังไม่ต้องทำ) · 3+6 เดือน = เฉพาะสมาชิกปีแรก (เกิน 1 ปีไม่ต้องทำแล้ว)
   if(h.key==='m12'&&ageDays<365)st='notyet';
+  else if((h.key==='m3'||h.key==='m6')&&ageDays>=365&&!rec.done)st='notyet';
   else if(rec.done)st='done';
   else if(rec.sent)st='wait';
   else if(open&&today()>=open)st='due';
