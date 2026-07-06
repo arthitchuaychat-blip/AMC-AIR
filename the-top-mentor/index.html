@@ -615,6 +615,8 @@ function openMember(id){
     <div class="field"><label>ชื่อสมาชิก (Member Name)</label><input type="text" value="${esc(m.name)}" onchange="upd('${id}','name',this.value)"></div>
     <div class="field"><label>ชื่อเล่น</label><input type="text" value="${esc(m.nick||'')}" onchange="upd('${id}','nick',this.value)"></div>
     <div class="field"><label>อาชีพ</label><input type="text" value="${esc(m.prof||'')}" onchange="upd('${id}','prof',this.value)"></div>
+    <div class="field"><label>อีเมล</label><input type="text" value="${esc(m.email||'')}" placeholder="name@email.com" onchange="upd('${id}','email',this.value)"></div>
+    <div class="field"><label>เบอร์โทร</label><input type="text" value="${esc(m.phone||'')}" placeholder="08x-xxx-xxxx" onchange="upd('${id}','phone',this.value)"></div>
     <div class="field"><label>Personal Mentor</label><input type="text" value="${esc(m.mentor||'')}" ${adm?`onchange="upd('${id}','mentor',this.value)"`:'readonly style="background:#f1f4fb"'}></div>
     <div class="field"><label>วันเริ่มเป็นสมาชิก</label><input type="date" value="${esc(m.start||'')}" ${adm?`onchange="upd('${id}','start',this.value)"`:'readonly style="background:#f1f4fb"'}></div>
     <div class="field"><label>สถานะสมาชิก</label><select ${adm?`onchange="upd('${id}','status',this.value)"`:'disabled style="background:#f1f4fb"'}>
@@ -712,6 +714,8 @@ function openAdd(){
     <div class="field"><label>ชื่อสมาชิก (Member Name) *</label><input type="text" id="a_name"></div>
     <div class="field"><label>ชื่อเล่น</label><input type="text" id="a_nick"></div>
     <div class="field"><label>อาชีพ</label><input type="text" id="a_prof"></div>
+    <div class="field"><label>อีเมล</label><input type="text" id="a_email" placeholder="name@email.com"></div>
+    <div class="field"><label>เบอร์โทร</label><input type="text" id="a_phone" placeholder="08x-xxx-xxxx"></div>
     <div class="field"><label>Personal Mentor *</label><input type="text" id="a_mentor" list="mentors">
       <datalist id="mentors">${[...new Set(state.members.map(m=>m.mentor).filter(Boolean))].map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
     <div class="field"><label>วันเริ่มเป็นสมาชิก *</label><input type="date" id="a_start" value="${new Date().toISOString().slice(0,10)}"></div>
@@ -722,7 +726,7 @@ function addMember(){
   const g=i=>document.getElementById(i).value.trim();
   if(!g('a_name')){toast('กรุณากรอกชื่อสมาชิก');return;}
   const id='m'+(Date.now());
-  state.members.unshift({id,name:g('a_name'),nick:g('a_nick'),prof:g('a_prof'),status:'ปีแรก',
+  state.members.unshift({id,name:g('a_name'),nick:g('a_nick'),prof:g('a_prof'),email:g('a_email'),phone:g('a_phone'),status:'ปีแรก',
     start:g('a_start'),mentor:g('a_mentor'),
     weeks:[null,null,null,null,null,null,null,null,null],
     slides:{onepage:null,s121:null,s5min:null},
