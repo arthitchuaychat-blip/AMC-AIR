@@ -771,6 +771,27 @@ function vSurvey(){
 
 /* ---------- report ---------- */
 let repRound='all';
+/* ประเมินความเสี่ยง/ความน่ากังวลจากคำตอบแบบสอบถาม */
+function memberRisk(m){
+  let score=null,renew='',reasons=[];
+  for(const h of HS){const rec=(m.hs&&m.hs[h.key])||{};if(!rec.done)continue;
+    if(Number.isFinite(rec.happiness)&&(score===null||rec.happiness<score))score=rec.happiness;
+    if(rec.renew)renew=rec.renew;}
+  let level='ok';
+  if(score!==null&&score<=5){level='high';reasons.push(`ความสุขต่ำ ${score}/10`);}
+  else if(score!==null&&score<=6){level='watch';reasons.push(`ความสุขปานกลาง ${score}/10`);}
+  if(renew==='ไม่ต่อ'){level='high';reasons.push('แจ้งว่าจะไม่ต่ออายุ');}
+  else if(renew==='ยังไม่แน่ใจ'){if(level!=='high')level='watch';reasons.push('ยังไม่แน่ใจเรื่องต่ออายุ');}
+  return {level,score,renew,reasons};
+}
+function memberComments(m){
+  const out=[];
+  for(const h of HS){const rec=(m.hs&&m.hs[h.key])||{};if(!rec.done)continue;const a=rec.answers||{};
+    if(a.feel)out.push(`ความรู้สึก: ${a.feel}`);
+    if(a.improve&&a.improve!=='-'&&a.improve!=='ไม่มี')out.push(`ข้อเสนอ: ${a.improve}`);
+    if(rec.note)out.push(`โน้ต: ${rec.note}`);}
+  return out;
+}
 function vReport(){
   const rounds=repRound==='all'?HS:HS.filter(h=>h.key===repRound);
   const done=[],pending=[];
@@ -780,7 +801,7 @@ function vReport(){
     else if(i.st==='due'||i.st==='wait')pending.push({m,h,i});
   }));
   done.sort((a,b)=>(b.i.due||0)-(a.i.due||0));
-  const answered=done.filter(d=>d.i.rec.note||d.m.note);
+  const answered=done.filter(d=>d.i.rec.note||d.i.rec.answers||Number.isFinite(d.i.rec.happiness)||d.i.rec.renew||d.m.note);
   return `
   <div class="card no-print">
     <div class="toolbar" style="margin-bottom:0">
@@ -801,17 +822,39 @@ function vReport(){
     <div class="stat red"><div class="n">${pending.filter(p=>p.i.st==='due').length}</div><div class="l">ถึงกำหนด ยังไม่ส่ง</div></div>
   </div>
 
+  ${(()=>{
+    const risks=scopedMembers().map(m=>({m,r:memberRisk(m)})).filter(x=>x.r.level!=='ok')
+      .sort((a,b)=>(a.r.level==='high'?0:1)-(b.r.level==='high'?0:1)||((a.r.score??99)-(b.r.score??99)));
+    const nHigh=risks.filter(x=>x.r.level==='high').length;
+    return `<div class="card" id="card-risk" style="border:2px solid #f3b3b3">
+    <h2>🚩 สมาชิกน่ากังวล — ควรดูแลเป็นพิเศษ <span class="cnt">${risks.length} คน${nHigh?` · เร่งด่วน ${nHigh}`:''}</span></h2>
+    ${risks.length?`<div class="tblwrap"><table>
+      <tr><th>สมาชิก</th><th>Mentor</th><th>ความสุข</th><th>ต่ออายุ</th><th>ประเด็น</th><th>ความเห็นของสมาชิก</th></tr>
+      ${risks.map(({m,r})=>`<tr class="click" onclick="openMember('${m.id}')">
+        <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+        <td style="font-size:12px">${esc(m.mentor||'—')}</td>
+        <td>${r.score!==null?`<span class="badge ${r.score<=5?'b-due':'b-first'}" style="${r.score<=5?'background:#fee4e2;color:#d92d20':''}">${r.score}/10</span>`:'—'}</td>
+        <td style="font-size:12px">${r.renew?`<span class="badge ${r.renew==='ต่อ'?'b-done':r.renew==='ไม่ต่อ'?'b-due':'b-old'}" ${r.renew==='ไม่ต่อ'?'style="background:#fee4e2;color:#d92d20"':''}>${esc(r.renew)}</span>`:'—'}</td>
+        <td style="font-size:12px;color:#b32020">${r.reasons.map(esc).join(' · ')}</td>
+        <td style="font-size:12px;max-width:240px">${memberComments(m).slice(0,2).map(esc).join('<br>')||'—'}</td>
+      </tr>`).join('')}</table></div>
+      <div style="font-size:11.5px;color:var(--mut);margin-top:9px">🔴 เร่งด่วน = ความสุข ≤5/10 หรือแจ้งไม่ต่ออายุ · 🟡 เฝ้าระวัง = ความสุข 6/10 หรือยังไม่แน่ใจเรื่องต่ออายุ</div>`
+    :`<div class="empty">🎉 ไม่มีสมาชิกที่น่ากังวล — ทุกคนความสุขดีและมีแนวโน้มต่ออายุ</div>`}
+  </div>`;
+  })()}
+
   <div class="card">
     <h2>💬 คำตอบ / ความเห็นจากสมาชิก <span class="cnt">${answered.length} รายการ</span></h2>
     ${answered.length?`<div class="tblwrap"><table>
-      <tr><th>สมาชิก</th><th>แบบสอบถาม</th><th>กำหนด</th><th>คำตอบ / ความเห็น</th></tr>
-      ${answered.map(({m,h,i})=>`<tr>
+      <tr><th>สมาชิก</th><th>แบบสอบถาม</th><th>ความสุข</th><th>ต่ออายุ</th><th>คำตอบ / ความเห็น</th></tr>
+      ${answered.map(({m,h,i})=>{const rec=i.rec;const a=rec.answers||{};return `<tr>
         <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
         <td style="font-size:12.5px">${h.label}</td>
-        <td style="white-space:nowrap">${fmt(i.due)}</td>
-        <td style="font-size:13px">${esc(i.rec.note||'')}${m.note?`<div class="note-line">📌 ${esc(m.note)}</div>`:''}</td>
-      </tr>`).join('')}</table></div>`
-    :`<div class="empty">ยังไม่มีคำตอบที่บันทึกไว้ — เปิดหน้าสมาชิกแล้วกรอก "สรุปคำตอบ" ได้เลย</div>`}
+        <td>${Number.isFinite(rec.happiness)?`<span class="badge ${rec.happiness<=6?'b-due':'b-done'}">${rec.happiness}/10</span>`:'—'}</td>
+        <td style="font-size:12px">${rec.renew?esc(rec.renew):'—'}</td>
+        <td style="font-size:12.5px">${[a.feel&&('ความรู้สึก: '+a.feel),a.improve&&a.improve!=='ไม่มี'&&a.improve!=='-'&&('ข้อเสนอ: '+a.improve),rec.note].filter(Boolean).map(esc).join('<br>')||'—'}</td>
+      </tr>`;}).join('')}</table></div>`
+    :`<div class="empty">ยังไม่มีคำตอบที่บันทึกไว้</div>`}
   </div>
 
   <div class="card">
