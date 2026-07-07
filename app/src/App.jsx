@@ -98,7 +98,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-07·ปุ่ม 📋 เตรียมวัสดุ ย้ายมาอยู่บนการ์ดใบงานด้วย (ดึงรายการจาก QT ที่ผูกให้เอง) v307";
+const BUILD = "2026-07-07·ปุ่มเตรียมวัสดุอยู่ที่ใบงานที่เดียว (เอาออกจากใบเสนอราคา) v308";
 
 function SetupNotice() {
   return (
@@ -444,7 +444,6 @@ export default function App() {
           onCreateInvoice={(quoteNo) => { setInvoiceFromQuote(quoteNo); go("invoice"); }}
           onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }}
           onCreatePo={(q) => { setPoPrefill({ quoteNo: q.quote_no, items: (q.items || []).filter((it) => it.item_code && it.kind !== "service").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })) }); go("po"); }}
-          onCreatePrep={(q) => { setPrepPrefill({ quoteNo: q.quote_no, items: (q.items || []).filter((it) => it.item_code && it.kind !== "service").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })) }); go("prep"); }}
           onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "invoice" && <Invoices role={role} focus={invoiceFocus} onFocusConsumed={() => setInvoiceFocus(null)} fromQuote={invoiceFromQuote} onFromQuoteConsumed={() => setInvoiceFromQuote(null)}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }}
