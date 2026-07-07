@@ -1096,9 +1096,19 @@ export async function saveBoq(boq, items) {
     }));
     let e3 = (await supabase.from("boq_items").insert(rows)).error;
     if (e3 && /description/i.test(e3.message || "")) { rows.forEach((r) => delete r.description); e3 = (await supabase.from("boq_items").insert(rows)).error; } // pre-026 fallback
-    if (e3) throw new Error(/section.*check|boq_items_section/i.test(e3.message || "")
-      ? "บันทึกรายการค่าบริการไม่ได้ — ต้องรัน migration 116 ใน Supabase ก่อน (constraint boq_items.section ยังไม่รวม service)"
-      : "บันทึกรายการไม่สำเร็จ: " + (e3.message || e3));
+    // batch ล้ม (all-or-nothing) → ลองทีละแถว: รายการที่ถูกต้องจะได้บันทึก + เก็บว่าแถวไหนพังเพราะอะไร
+    if (e3) {
+      const failed = [];
+      for (const r of rows) {
+        let { error } = await supabase.from("boq_items").insert(r);
+        if (error && /description/i.test(error.message || "")) { const r2 = { ...r }; delete r2.description; ({ error } = await supabase.from("boq_items").insert(r2)); }
+        if (error) failed.push(`• [${({ ac: "แอร์", free: "วัสดุแถม", charged: "วัสดุคิดเงิน", service: "ค่าบริการ" })[r.section] || r.section}] ${r.name || r.item_code}: ${error.message}`);
+      }
+      if (failed.length) {
+        const hint = failed.some((f) => /section.*check|boq_items_section/i.test(f)) ? "\n\n👉 รายการหมวด “ค่าบริการ” บันทึกไม่ได้ ต้องรัน migration 116/117 ใน Supabase ก่อน" : "";
+        throw new Error(`บันทึกบางรายการไม่สำเร็จ (${failed.length}/${rows.length}) — ที่เหลือบันทึกแล้ว:\n${failed.join("\n")}${hint}`);
+      }
+    }
   }
   syncInternalNote({ boqNo: boq.boq_no }, boq.internal_note).catch(() => {});
 }
