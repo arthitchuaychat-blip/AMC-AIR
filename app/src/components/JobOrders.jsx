@@ -103,7 +103,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     const address = q.siteAddress || site?.address || q.customerAddr || cust?.address || "";
     setEd({
       ...blankEd(), quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "",
-      title: q.title || "",
+      title: q.title || "", internal_note: q.internal_note || "",
       contact_name: q.contactName || contact?.name || "",
       contact_phone: q.contactPhone || contact?.phone || "",
       address, map_url: q.map_url || site?.map_url || mapLink(address), details,
@@ -555,7 +555,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
               </div>
               {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "job", no: jo.job_no }}
                 onOpen={(t, n) => (t === "job" ? (onOpenDoc && onOpenDoc(t, n)) : setPeek({ type: t, no: n }))} />; })()}
-              <InternalNoteTag note={jo.internal_note} />
+              <InternalNoteTag note={jo.internal_note} role={role} />
               {(() => { const sibs = siblingsOf(jo); return sibs.length > 1 ? (
                 <div className="job-group-chips"><span style={{ fontSize: 12, color: "var(--ink-2)" }}>🔗 ใบงานเชื่อม:</span>
                   {sibs.map((s) => <button key={s.job_no} className={"job-group-chip" + (s.job_no === jo.job_no ? " cur" : "")} onClick={() => setViewing(s)}>{s.job_no}</button>)}

@@ -71,7 +71,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       const m = matMap[x.item_code];
       return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
     });
-    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, pay_method: "cash", note: "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
+    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: b.internal_note || "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
   }
   React.useEffect(() => { if (!fromBoq || !boqs.length) return; startFromBoq(fromBoq); onFromBoqConsumed && onFromBoqConsumed(); }, [fromBoq, boqs]);
   // chain lock: can't edit/delete a quotation that already has an invoice or job order downstream
@@ -389,7 +389,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 {q.siteAddress && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{q.siteAddress}</span>{q.map_url && <a href={q.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
               {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "quote", no: q.quote_no }} onOpen={openPeek} />; })()}
-              <InternalNoteTag note={q.internal_note} />
+              <InternalNoteTag note={q.internal_note} role={role} />
               <div className="job-lines"><div className="job-actions">
                 {q.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
                 <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />

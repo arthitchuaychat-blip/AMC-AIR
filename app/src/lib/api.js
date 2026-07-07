@@ -687,6 +687,7 @@ export async function savePurchaseOrder(po, items) {
     if (e3) throw e3;
   }
   syncCashEntriesFromDocs().catch(() => {}); // new/edited PO → "คาดว่าจะจ่าย" in cash flow
+  syncInternalNote({ quoteNo: po.quote_no }, po.internal_note).catch(() => {});
 }
 
 export async function deletePurchaseOrder(po_no) {
@@ -1029,6 +1030,39 @@ const _termCols = (d) => ({
 // per-document signature snapshot (chosen by the issuer at creation time)
 const _signCols = (d) => ({ sign_url: d.sign_url || null, sign_name: d.sign_name || null });
 
+// ส่งต่อ "หมายเหตุภายใน" ให้ทุกเอกสารในสายเดียวกัน (BOQ ↔ ใบเสนอราคา ↔ ใบแจ้งหนี้ ↔ ใบวางบิล ↔ ใบเสร็จ ↔ ใบงาน ↔ PO)
+// เขียนที่ใบไหน ก็ขึ้นครบทุกใบที่เกี่ยวข้อง · ส่งต่อเฉพาะข้อความที่ไม่ว่าง (การล้างหมายเหตุมีผลเฉพาะใบนั้น กันเผลอลบทั้งสาย)
+async function syncInternalNote({ quoteNo, boqNo, invoiceNo }, note) {
+  const n = (note || "").trim();
+  if (!n) return;   // ไม่ส่งต่อค่าว่าง
+  try {
+    let qNo = quoteNo || null, bNo = boqNo || null;
+    // ใบเสร็จ/ใบวางบิล → หา quote_no จากใบแจ้งหนี้
+    if (!qNo && invoiceNo) { const { data } = await supabase.from("invoices").select("quote_no").eq("invoice_no", invoiceNo).maybeSingle(); qNo = data?.quote_no || null; }
+    // เติมข้อต่อที่ขาด: quote → boq_no · boq → quote_no
+    if (qNo && !bNo) { const { data } = await supabase.from("quotations").select("boq_no").eq("quote_no", qNo).maybeSingle(); bNo = data?.boq_no || null; }
+    if (!qNo && bNo) { const { data } = await supabase.from("quotations").select("quote_no").eq("boq_no", bNo).limit(1).maybeSingle(); qNo = data?.quote_no || null; }
+    const up = (tbl, col, val) => supabase.from(tbl).update({ internal_note: n }).eq(col, val);
+    const jobs = [];
+    if (bNo) jobs.push(up("boqs", "boq_no", bNo));
+    if (qNo) {
+      jobs.push(up("quotations", "quote_no", qNo), up("invoices", "quote_no", qNo), up("job_orders", "quote_no", qNo), up("purchase_orders", "quote_no", qNo));
+    } else if (bNo) {
+      jobs.push(supabase.from("quotations").update({ internal_note: n }).eq("boq_no", bNo));
+    }
+    await Promise.all(jobs);
+    // ใบเสร็จ + ใบวางบิล อ้างผ่านใบแจ้งหนี้
+    if (qNo) {
+      const { data: invs } = await supabase.from("invoices").select("invoice_no").eq("quote_no", qNo);
+      const invNos = (invs || []).map((x) => x.invoice_no);
+      if (invNos.length) await Promise.all([
+        supabase.from("receipts").update({ internal_note: n }).in("invoice_no", invNos),
+        supabase.from("billing_notes").update({ internal_note: n }).overlaps("invoice_nos", invNos),
+      ]);
+    }
+  } catch (_) { /* ส่งต่อไม่สำเร็จก็ไม่ให้ขวางการบันทึกหลัก */ }
+}
+
 export async function saveBoq(boq, items) {
   const { data: { user } } = await supabase.auth.getUser();
   const e1 = (await supabase.from("boqs").upsert({
@@ -1046,6 +1080,7 @@ export async function saveBoq(boq, items) {
     })))).error;
     if (e3) throw e3;
   }
+  syncInternalNote({ boqNo: boq.boq_no }, boq.internal_note).catch(() => {});
 }
 
 // add items from a quotation into its linked BOQ (only ones not already there) — keeps the BOQ in sync as the quote grows
@@ -1167,6 +1202,7 @@ export async function saveQuotation(q, items) {
     })))).error;
     if (e3) throw e3;
   }
+  syncInternalNote({ quoteNo: q.quote_no, boqNo: q.boq_no }, q.internal_note).catch(() => {});
 }
 
 export async function deleteQuotation(quote_no, reason) {
@@ -1252,6 +1288,7 @@ export async function saveInvoice(inv) {
   }, { onConflict: "invoice_no" });
   if (error) throw error;
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background (unpaid invoice → "คาดว่าจะรับ")
+  syncInternalNote({ quoteNo: inv.quote_no }, inv.internal_note).catch(() => {});
 }
 // update per-line WHT selection (items) + rate + recomputed amount on an invoice
 export async function setInvoiceWht(invoice_no, items, wht_rate, wht_amt) {
@@ -1327,6 +1364,7 @@ export async function saveReceipt(r) {
   if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no);
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
   syncBankReceipts().catch(() => {});        // auto-post the deposit into the bank-account ledger
+  syncInternalNote({ invoiceNo: r.invoice_no }, r.internal_note).catch(() => {});
 }
 // update per-line WHT selection + rate + recomputed amounts on a receipt
 export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, net) {
@@ -1377,6 +1415,7 @@ export async function saveBillingNote(b) {
     status: b.status || "open", created_by: uid,
   }, { onConflict: "billing_no" });
   if (error) throw error;
+  syncInternalNote({ invoiceNo: (b.invoice_nos || [])[0] }, b.internal_note).catch(() => {});
 }
 export async function setBillingNoteStatus(billing_no, status, reason) {
   const { error } = await supabase.from("billing_notes").update({ status }).eq("billing_no", billing_no);
@@ -1574,6 +1613,7 @@ export async function saveJobOrder(jo, author) {
     const { data: tm } = await supabase.from("profiles").select("id").eq("team", jo.assigned_team);
     notify((tm || []).map((p) => p.id), { category: "job", title: `🔧 มอบหมายงาน ${jo.job_no}`, body: jo.title || "", url: "joborders", ref_type: "job", ref_no: jo.job_no });
   }
+  syncInternalNote({ quoteNo: jo.quote_no }, jo.internal_note).catch(() => {});
 }
 
 export async function updateJobStatus(job_no, status, author) {

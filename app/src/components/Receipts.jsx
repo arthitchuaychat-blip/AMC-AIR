@@ -70,7 +70,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   function onPickInvoice(invoice_no) {
     const iv = invByNo[invoice_no];
     const items = iv?.items?.length ? iv.items.map((x) => ({ ...x })) : snapshotItems(quoteByNo[iv?.quote_no]);
-    setEd((s) => ({ ...s, invoice_no, items, wht_rate: iv?.wht_rate || 3, terms_payment: iv?.terms_payment || "", terms_freebies: iv?.terms_freebies || "", terms_warranty: iv?.terms_warranty || "" }));
+    setEd((s) => ({ ...s, invoice_no, items, wht_rate: iv?.wht_rate || 3, internal_note: s.internal_note || iv?.internal_note || "", terms_payment: iv?.terms_payment || "", terms_freebies: iv?.terms_freebies || "", terms_warranty: iv?.terms_warranty || "" }));
   }
   async function markPaid(x) { try { await setReceiptStatus(x.receipt_no, "paid", x.invoice_no); flash("รับเงินแล้ว ✓"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
@@ -244,7 +244,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               </div>
             </div>
             {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={openPeek} />; })()}
-            <InternalNoteTag note={x.internal_note} />
+            <InternalNoteTag note={x.internal_note} role={role} />
             <div className="job-lines"><div className="job-actions">
               {x.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
               <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />

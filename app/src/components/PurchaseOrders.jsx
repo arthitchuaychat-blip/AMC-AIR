@@ -320,7 +320,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 </div>
                 <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.created_at)}</span><span>มูลค่ารวม{po.vat ? " (รวม VAT)" : ""}</span><b>{fmtBaht(po.total)}</b></div>
               </div>
-              <InternalNoteTag note={po.internal_note} />
+              <InternalNoteTag note={po.internal_note} role={role} />
               <div className="job-lines">
                 {(expanded.has(po.po_no) ? po.items : po.items.slice(0, 3)).map((it) => { const m = matMap[it.material_code]; return (
                   <div className="po-view-row" key={it.material_code}>

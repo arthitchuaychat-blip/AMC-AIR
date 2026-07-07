@@ -138,7 +138,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
                 return <DocChips key={qn + i} boqNo={g.boqNo} quoteNo={qn} jobNos={g.jobNos} invoiceNos={g.invoiceNos} receiptNos={g.receiptNos} poNos={g.poNos} onOpen={openPeek} />;
               });
             })()}
-            <InternalNoteTag note={b.internal_note} />
+            <InternalNoteTag note={b.internal_note} role={role} />
             <div className="job-lines"><div className="job-actions">
               <ChatCustomerLink role={role} customerId={b.customer_id} onGoChat={onGoChat} />
               <button className="btn-ghost sm" onClick={() => setOpenInv(openInv === b.billing_no ? null : b.billing_no)}><UIcon name="clipboard" size={14} /> {openInv === b.billing_no ? "ซ่อนรายการ" : "ดูใบแจ้งหนี้ / ออกใบเสร็จ"}</button>
