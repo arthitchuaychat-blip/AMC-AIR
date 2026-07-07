@@ -63,6 +63,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [modalPrice, setModalPrice] = React.useState("");
   const [modalUnit, setModalUnit] = React.useState("");  // หน่วยนับที่เลือก (สินค้า 2 หน่วย เช่น เมตร/ม้วน)
   const [receivePo, setReceivePo] = React.useState(null);
+  const [prepNo, setPrepNo] = React.useState(null);   // เบิกที่มาจากใบเตรียมวัสดุ → ผูกกลับไว้ (ลบตามกันได้)
   const [receiveJob, setReceiveJob] = React.useState(null); // งานปลายทางของ PO ที่อ้างใบเสนอราคา → เบิกเข้างานอัตโนมัติหลังรับ
   // picker filters (เหมือนหน้า BOQ): ชนิด + หมวดวัสดุ + ตัวกรองแอร์ (ยี่ห้อ/ประเภท/BTU)
   const [mvKind, setMvKind] = React.useState("all"); // all | ac | material
@@ -136,6 +137,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
       else setJobNo(withdrawCtx.jobNo);
     }
     if (withdrawCtx.items?.length) setLines(withdrawCtx.items.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: undefined, unit: p.unit || matMap[p.code]?.unit || null })));
+    setPrepNo(withdrawCtx.prepNo || null);
     onWithdrawCtxConsumed && onWithdrawCtxConsumed();
   }, [withdrawCtx, mats]);
   // prefill the purchase cart when receiving a PO ({ poNo, quoteNo, items:[{code,qty,price,unit}] })
@@ -166,7 +168,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   }, [printData]);
 
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
-  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); setReceiveJob(null); }
+  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); setReceiveJob(null); setPrepNo(null); }
 
   // ----- cart helpers -----
   // สินค้า 2 หน่วย: บรรทัดถือ l.unit (เมตร/ม้วน) · สต๊อก/ต้นทุนคิดเป็นหน่วยหลักเสมอ (แปลงด้วย unitFactor)
@@ -230,6 +232,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
         type, job_no: jobNo, team: type === "damage" ? null : team,
         material_code: l.code, qty: l.qty,
         unit_cost: l.unitCost, reason,
+        prep_no: type === "withdraw" ? prepNo : null,   // ผูกกลับใบเตรียมวัสดุ (เฉพาะรายการเบิก)
       })));
       // weighted moving average: recompute each purchased material's unit cost (ทั้งคู่เป็นหน่วยหลักแล้ว)
       // รวมยอดต่อรหัสก่อน เผื่อสินค้าเดียวกันมี 2 บรรทัดคนละหน่วย (เช่น 1 ม้วน + 5 เมตร)

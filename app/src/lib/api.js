@@ -403,10 +403,12 @@ export async function recordTransactions(rows) {
     qty: Number(t.qty),
     unit_cost: Number(t.unit_cost) || 0,
     reason: t.type === "damage" ? (t.reason || null) : null,
+    prep_no: t.prep_no || null,   // ผูกกลับใบเตรียมวัสดุ (mig 115) — ไว้ลบตามกันได้
     ref_no: ref,
     recorded_by: user?.id || null,
   }));
-  const { error } = await supabase.from("transactions").insert(payload);
+  let { error } = await supabase.from("transactions").insert(payload);
+  if (error && /prep_no/i.test(error.message || "")) { payload.forEach((r) => delete r.prep_no); ({ error } = await supabase.from("transactions").insert(payload)); } // pre-115 fallback
   if (error) throw error;
 }
 
@@ -660,18 +662,32 @@ export async function setPrepStatus(prep_no, status) {
   const { error } = await supabase.from("material_preps").update(patch).eq("prep_no", prep_no);
   if (error) throw error;
 }
-export async function deleteMaterialPrep(prep_no) {
+// ลบใบเตรียมวัสดุ · cascade=true → ลบใบสั่งซื้อ + รายการเบิก ที่แตกออกมาจากใบนี้ด้วย (mig 115)
+export async function deleteMaterialPrep(prep_no, cascade) {
+  if (cascade) {
+    try {
+      const { data: pos } = await supabase.from("purchase_orders").select("po_no").eq("prep_no", prep_no);
+      const poNos = (pos || []).map((x) => x.po_no);
+      if (poNos.length) {
+        await supabase.from("po_items").delete().in("po_no", poNos);
+        await supabase.from("purchase_orders").delete().in("po_no", poNos);
+      }
+      // ลบรายการเบิกที่ผูกใบนี้ → สต๊อกคืนค่าอัตโนมัติ (current_stock คิดจาก transactions)
+      await supabase.from("transactions").delete().eq("prep_no", prep_no);
+      syncCashEntriesFromDocs().catch(() => {});
+    } catch (e) { throw new Error("ลบเอกสารที่ผูกไม่สำเร็จ: " + (e.message || e) + " (รัน migration 115 หรือยัง?)"); }
+  }
   const { error } = await supabase.from("material_preps").delete().eq("prep_no", prep_no);
   if (error) throw error;
 }
 
 export async function savePurchaseOrder(po, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, created_by: user?.id || null };
+  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, prep_no: po.prep_no || null, created_by: user?.id || null };
   let e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
-  // pre-096/097/100 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
+  // pre-096/097/100/115 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
   // ห้ามเหมารวม: เคยตัด vat ทิ้งไปด้วยตอน price_incl ยังไม่รัน migration → ใบสั่งซื้อโหมดรวม VAT ถูกเก็บเป็นไม่มี VAT
-  for (const c of ["price_incl", "vat", "quote_no"]) {
+  for (const c of ["price_incl", "vat", "quote_no", "prep_no"]) {
     if (e1 && c in head && (e1.message || "").includes(c)) {
       delete head[c];
       e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;

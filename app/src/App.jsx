@@ -98,7 +98,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-07·หมายเหตุภายใน: ซ่อนจากช่าง + ส่งต่อทุกเอกสารในสายเดียวกัน (BOQ↔QT↔บิล↔ใบเสร็จ↔งาน↔PO) v315";
+const BUILD = "2026-07-07·เตรียมวัสดุ: พิมพ์แยกซื้อ/เบิก (รูป+PDF) · ลบยืนยันแล้วเฉพาะธุรการ (ลบ PO/เบิกที่ผูกด้วย) v316";
 
 function SetupNotice() {
   return (
@@ -475,8 +475,8 @@ export default function App() {
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "stockcount" && <StockCount role={role} />}
         {view === "prep" && <MaterialPrep role={role} prefill={prepPrefill} onPrefillConsumed={() => setPrepPrefill(null)}
-          onCreatePo={(items, quoteNo) => { setPoPrefill({ quoteNo: quoteNo || null, items }); go("po"); }}
-          onWithdraw={(items, jobNo, team) => { setWithdrawCtx({ jobNo: jobNo || null, team: team || null, items }); go("movements"); }}
+          onCreatePo={(items, quoteNo, prepNo) => { setPoPrefill({ quoteNo: quoteNo || null, prepNo: prepNo || null, items }); go("po"); }}
+          onWithdraw={(items, jobNo, team, prepNo) => { setWithdrawCtx({ jobNo: jobNo || null, team: team || null, prepNo: prepNo || null, items }); go("movements"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           focus={poFocus} onFocusConsumed={() => setPoFocus(null)}

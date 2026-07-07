@@ -8,6 +8,8 @@ import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
 import UnitPick, { unitFactor } from "./UnitPick";
 import { UIcon } from "../icons";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 // ใบเตรียมวัสดุ — ประตูก่อนการสั่งซื้อ/เบิก (mig 109)
 // ดึงรายการจากใบเสนอราคา (หรือเพิ่มเอง) → แบ่งจำนวน "ซื้อ / เบิกจากคลัง" ต่อรายการ (เห็นคงเหลือช่วยตัดสิน)
@@ -24,6 +26,7 @@ const STATUS = {
 export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreatePo, onWithdraw, onOpenQuote, onOpenJob }) {
   const canEdit = can(role, "prep", "edit");
   const canConfirm = canEdit;   // ยืนยันเอง (ไม่ต้องรออนุมัติ) — คนเตรียมวัสดุกดยืนยันได้เลย
+  const canDeleteConfirmed = ["admin", "exec"].includes(role);   // ลบใบที่ยืนยันแล้ว = ธุรการ และเหนือกว่า เท่านั้น
   const [list, setList] = React.useState(null);
   const [mats, setMats] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -131,8 +134,66 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
     try { await setPrepStatus(p.prep_no, "done"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function remove(p) {
-    if (!await confirmDialog(`ลบใบเตรียมวัสดุ ${p.prep_no} ?`)) return;
-    try { await deleteMaterialPrep(p.prep_no); await load(); flash("ลบแล้ว"); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+    const confirmed = p.status !== "draft";
+    if (!await confirmDialog(confirmed
+      ? `ลบใบเตรียมวัสดุ ${p.prep_no} ที่ยืนยันแล้ว?\n⚠️ ใบสั่งซื้อและรายการเบิกที่แตกจากใบนี้จะถูกลบตามไปด้วย (สต๊อกที่เบิกจะคืนกลับ)`
+      : `ลบใบเตรียมวัสดุ ${p.prep_no} ?`)) return;
+    try { await deleteMaterialPrep(p.prep_no, confirmed); await load(); flash(confirmed ? "ลบใบเตรียมวัสดุ + PO/เบิกที่ผูกแล้ว ✓" : "ลบแล้ว"); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // พิมพ์รายการเตรียมวัสดุ (แยก 🛒 สั่งซื้อ / 📦 เบิกจากสต๊อก) — mode "image" | "pdf"
+  async function printPrep(p, mode) {
+    const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const rows = (its, kindQty) => its.map((it, i) => {
+      const m = matMap[it.material_code];
+      return `<tr style="background:${i % 2 ? "#f6f9fc" : "#fff"}">
+        <td style="padding:8px 10px;color:#64748b;text-align:center">${i + 1}</td>
+        <td style="padding:8px 10px">${esc(m?.th || it.name || it.material_code)}<div style="font-size:12px;color:#94a3b8">${esc(it.material_code || "")}</div></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:800;white-space:nowrap">${fmtNum(Number(it[kindQty]) || 0)} <span style="font-weight:400;color:#64748b">${esc(it.unit || m?.unit || "")}</span></td>
+      </tr>`;
+    }).join("");
+    const section = (title, color, its, kindQty) => its.length ? `
+      <div style="margin-top:14px">
+        <div style="font-weight:800;font-size:15px;color:#fff;background:${color};padding:7px 12px;border-radius:8px 8px 0 0">${title} · ${its.length} รายการ</div>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid ${color}33">
+          <tr style="background:${color}1a;font-weight:700;font-size:12.5px;color:#334155">
+            <td style="padding:6px 10px;text-align:center;width:36px">#</td><td style="padding:6px 10px">รายการ</td><td style="padding:6px 12px;text-align:right;width:120px">จำนวน</td></tr>
+          ${rows(its, kindQty)}
+        </table>
+      </div>` : "";
+    const bItems = buyItems(p), wItems = wdItems(p);
+    const html = `<div style="width:720px;background:#fff;font-family:'IBM Plex Sans Thai','Noto Sans Thai',sans-serif;color:#0f1729;padding:22px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0ea5e9;padding-bottom:10px">
+        <div><div style="font-size:20px;font-weight:800">AMC AIR · ใบเตรียมวัสดุ</div>
+          <div style="font-size:13px;color:#475569;margin-top:2px">${esc(p.prep_no)}${p.jobNo ? " · งาน " + esc(p.jobNo) : ""}${p.quote_no ? " · อ้างอิง " + esc(p.quote_no) : ""}</div>
+          ${p.customerName ? `<div style="font-size:13px;color:#475569">ลูกค้า ${esc(p.customerName)}${p.title ? " · " + esc(p.title) : ""}</div>` : (p.title ? `<div style="font-size:13px;color:#475569">${esc(p.title)}</div>` : "")}
+        </div>
+        <div style="text-align:right;font-size:12px;color:#94a3b8">พิมพ์ ${new Date().toLocaleDateString("th-TH")}</div>
+      </div>
+      ${section("🛒 สั่งซื้อ — ไปรับที่ร้านค้า", "#c2410c", bItems, "qty_buy")}
+      ${section("📦 เบิกจากสต๊อก — คลังของเราเอง", "#0369a1", wItems, "qty_withdraw")}
+      ${p.note ? `<div style="margin-top:12px;font-size:13px;color:#475569">หมายเหตุ: ${esc(p.note)}</div>` : ""}
+    </div>`;
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed;left:-99999px;top:0;background:#fff;";
+    host.innerHTML = html;
+    document.body.appendChild(host);
+    try {
+      if (document.fonts?.ready) { try { await document.fonts.ready; } catch { /* ignore */ } }
+      await new Promise((r) => setTimeout(r, 60));
+      const canvas = await html2canvas(host.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
+      if (mode === "image") {
+        const a = document.createElement("a"); a.href = canvas.toDataURL("image/png"); a.download = `เตรียมวัสดุ-${p.prep_no}.png`; a.click();
+      } else {
+        const pdf = new jsPDF({ unit: "pt", format: "a4" });
+        const pw = pdf.internal.pageSize.getWidth(), margin = 28;
+        const w = pw - margin * 2, h = (canvas.height / canvas.width) * w;
+        pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, w, h);
+        pdf.save(`เตรียมวัสดุ-${p.prep_no}.pdf`);
+      }
+      flash(mode === "image" ? "บันทึกรูปแล้ว ✓" : "บันทึก PDF แล้ว ✓");
+    } catch (e) { flash("พิมพ์ไม่สำเร็จ: " + (e.message || e), true); }
+    document.body.removeChild(host);
   }
   const buyItems = (p) => (p.items || []).filter((it) => Number(it.qty_buy) > 0);
   const wdItems = (p) => (p.items || []).filter((it) => Number(it.qty_withdraw) > 0);
@@ -266,13 +327,19 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
                     {p.status === "draft" && canConfirm && <button className="btn-primary sm" onClick={() => confirm(p)}>✓ ยืนยัน</button>}
                     {p.status === "approved" && canEdit && <button className="btn-ghost sm" onClick={() => backToDraft(p)} title="กลับไปแก้ไขรายการ">↩ กลับเป็นร่าง</button>}
                     {p.status === "approved" && nb > 0 && canEdit && (
-                      <button className="btn-primary sm" onClick={() => onCreatePo && onCreatePo(buyItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_buy), unit: it.unit || null })), p.quote_no)}>🛒 สร้างใบสั่งซื้อ ({nb})</button>
+                      <button className="btn-primary sm" onClick={() => onCreatePo && onCreatePo(buyItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_buy), unit: it.unit || null })), p.quote_no, p.prep_no)}>🛒 สร้างใบสั่งซื้อ ({nb})</button>
                     )}
                     {p.status === "approved" && nw > 0 && canEdit && (
-                      <button className="btn-primary sm" style={{ background: "#0369a1" }} onClick={() => onWithdraw && onWithdraw(wdItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_withdraw), unit: it.unit || null })), p.jobNo, p.jobTeam)}>📦 ไปเบิกวัสดุ ({nw})</button>
+                      <button className="btn-primary sm" style={{ background: "#0369a1" }} onClick={() => onWithdraw && onWithdraw(wdItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_withdraw), unit: it.unit || null })), p.jobNo, p.jobTeam, p.prep_no)}>📦 ไปเบิกวัสดุ ({nw})</button>
                     )}
                     {p.status === "approved" && canEdit && <button className="btn-ghost sm" onClick={() => markDone(p)}>ปิดใบ (ครบแล้ว)</button>}
+                    {(nb > 0 || nw > 0) && <>
+                      <button className="btn-ghost sm" onClick={() => printPrep(p, "image")} title="บันทึกรายการเตรียมวัสดุเป็นรูปภาพ">🖼️ รูป</button>
+                      <button className="btn-ghost sm" onClick={() => printPrep(p, "pdf")} title="บันทึกรายการเตรียมวัสดุเป็น PDF">📄 PDF</button>
+                    </>}
+                    {/* ลบ: ร่าง = ธุรการวัสดุลบได้ · ยืนยันแล้ว = เฉพาะธุรการ (ลบ PO/เบิกที่ผูกตามด้วย) */}
                     {p.status === "draft" && canEdit && <button className="btn-ghost sm danger" onClick={() => remove(p)}><UIcon name="trash" size={14} /> ลบ</button>}
+                    {p.status !== "draft" && p.status !== "cancelled" && canDeleteConfirmed && <button className="btn-ghost sm danger" onClick={() => remove(p)} title="ลบใบนี้ + PO/เบิกที่ผูก (ธุรการเท่านั้น)"><UIcon name="trash" size={14} /> ลบทั้งสาย</button>}
                   </div>
                 </div>
               );
