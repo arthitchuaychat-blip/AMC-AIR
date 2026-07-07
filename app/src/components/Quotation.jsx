@@ -136,10 +136,11 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const afterDisc = subtotal - discount;
   const vatAmt = ed && ed.vat ? afterDisc * 0.07 : 0;
   const grand = afterDisc + vatAmt;
-  // หัก ณ ที่จ่าย — เฉพาะลูกค้านิติบุคคลเท่านั้น (ฐานก่อน VAT)
+  // หัก ณ ที่จ่าย — เฉพาะลูกค้านิติบุคคล และคิดจาก "ค่าบริการ" ก่อน VAT เท่านั้น (ค่าสินค้าไม่โดนหัก) — เฉลี่ยส่วนลดตามสัดส่วน
   const selCust = ed ? custs.find((c) => String(c.id) === String(ed.customer_id)) : null;
   const canWht = selCust?.type === "company";
-  const whtAmt = ed && ed.wht && canWht ? afterDisc * (Number(ed.wht_rate) || 3) / 100 : 0;
+  const svcSum = ed ? ed.items.reduce((a, x) => a + ((x.kind || matMap[x.code]?.kind) === "service" ? Number(x.qty) * adjUnit(x.unit_price) : 0), 0) : 0;
+  const whtAmt = ed && ed.wht && canWht && subtotal > 0 ? afterDisc * (svcSum / subtotal) * (Number(ed.wht_rate) || 3) / 100 : 0;
   const netPay = grand - whtAmt;
 
   async function save() {

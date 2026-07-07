@@ -1188,7 +1188,9 @@ export async function listQuotations() {
     const afterDisc = subtotal - discount;
     const vatAmt = qo.vat ? afterDisc * 0.07 : 0;
     const grand = afterDisc + vatAmt;
-    const whtAmt = qo.wht ? afterDisc * (Number(qo.wht_rate) || 3) / 100 : 0; // หัก ณ ที่จ่าย คิดจากฐานก่อน VAT
+    // หัก ณ ที่จ่าย: คิดเฉพาะ "ค่าบริการ" ก่อน VAT (ค่าสินค้าไม่โดนหัก) — เฉลี่ยส่วนลดตามสัดส่วน เหมือนใบแจ้งหนี้
+    const svcSum = itemsX.reduce((a, x) => a + (x.kind === "service" ? Number(x.qty) * x.price_show : 0), 0);
+    const whtAmt = qo.wht && subtotal > 0 ? afterDisc * (svcSum / subtotal) * (Number(qo.wht_rate) || 3) / 100 : 0;
     const s = qo.site_id ? sm[qo.site_id] : null;
     const siteAddress = (s && s.address) || null;
     const address = siteAddress || custAddr[qo.customer_id] || null;
