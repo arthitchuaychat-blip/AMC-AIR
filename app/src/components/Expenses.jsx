@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, listJobOrders } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, setExpenseExpectedDate, listJobOrders } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import AttachThumb from "./AttachThumb";
 import { fmtBaht, ATTACH_ACCEPT } from "../lib/format";
@@ -86,7 +86,7 @@ export default function Expenses({ role, me, onOpenDoc }) {
   );
 }
 
-function ExpenseCard({ x, children, onOpenDoc }) {
+function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
   const st = EST[x.status] || EST.pending;
   const paid = Math.round((Number(x.paid_amount) || 0) * 100) / 100;
   const total = Math.round((Number(x.amount) || 0) * 100) / 100;
@@ -116,6 +116,12 @@ function ExpenseCard({ x, children, onOpenDoc }) {
           {partial && <small style={{ color: "#d97706", fontWeight: 700 }}>จ่ายแล้ว {fmtBaht(paid)} · เหลือ {fmtBaht(total - paid)}</small>}
         </div>
       </div>
+      {partial && onSetExpected && (
+        <div className="job-lines"><div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--ink-2)", padding: "2px 0" }}>
+          📅 ยอดค้าง {fmtBaht(total - paid)} ตั้งประมาณการจ่ายในกระแสเงินสดวันที่:
+          <input type="date" className="inp" style={{ width: 160, padding: "4px 8px" }} value={x.expected_pay_date || ""} onChange={(e) => onSetExpected(x.id, e.target.value)} />
+        </div></div>
+      )}
       {(x.attachments?.length > 0 || x.payment_proof?.length > 0) && (
         <div className="exp-atts">
           {x.attachments?.length > 0 && <div className="exp-att-grp"><span>บิล/หลักฐาน:</span><div className="tb-attach-grid">{x.attachments.map((u, i) => <div className="tb-att" key={i}><AttachThumb url={u} /></div>)}</div></div>}
@@ -207,7 +213,7 @@ function ApproveTab({ flash, onOpenDoc }) {
       {list && shown.length === 0 && <div className="empty">ไม่มีรายการ</div>}
       <div className="job-cards">
         {shown.map((x) => (
-          <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc}>
+          <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} onSetExpected={async (id, d) => { try { await setExpenseExpectedDate(id, d); flash("ตั้งวันประมาณการจ่ายแล้ว ✓"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }}>
             {x.status === "pending" && <><button className="btn-primary sm ok" onClick={() => decide(x, "approved")}>✓ อนุมัติ</button>
               <button className="btn-ghost sm" onClick={() => decide(x, "rejected")}>ไม่อนุมัติ</button></>}
             {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> {Number(x.paid_amount) > 0 ? "จ่ายงวดต่อไป" : "จ่ายเงิน + แนบหลักฐาน"}</button>
@@ -230,17 +236,19 @@ function PayModal({ x, onClose, onPaid, flash }) {
   const [payDate, setPayDate] = React.useState(today());
   const [mode, setMode] = React.useState("full");            // full = จ่ายยอดคงเหลือ · partial = แบ่งจ่าย
   const [amount, setAmount] = React.useState(String(remaining));
+  const [expDate, setExpDate] = React.useState(x.expected_pay_date || "");   // วันคาดจ่ายยอดที่เหลือ
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => { listAccounts().then((a) => { setAccounts(a); setAccountId(a[0]?.id || ""); }).catch(() => {}); }, []);
   const payAmt = mode === "full" ? remaining : (Math.round((Number(amount) || 0) * 100) / 100);
+  const leaves = mode === "partial" && payAmt > 0 && payAmt < remaining;   // จ่ายงวดนี้แล้วยังเหลือค้าง
   async function pay() {
     if (!accountId) return flash("เลือกบัญชีที่จ่าย", true);
     if (!payDate) return flash("เลือกวันที่จ่าย", true);
     if (mode === "partial") { if (payAmt <= 0) return flash("ใส่จำนวนเงินที่จ่ายงวดนี้", true); if (payAmt > remaining + 0.005) return flash("จ่ายเกินยอดคงเหลือ", true); }
     setBusy(true);
     try {
-      await payExpense(x.id, { accountId, proof, payDate, amount: mode === "full" ? undefined : payAmt });
-      flash(payAmt >= remaining - 0.005 ? "จ่ายครบแล้ว + แจ้งผู้ขอเบิก ✓" : "จ่ายบางส่วนแล้ว ✓ (ยังเหลือยอดค้าง)"); onPaid();
+      await payExpense(x.id, { accountId, proof, payDate, amount: mode === "full" ? undefined : payAmt, expectedPayDate: leaves ? (expDate || null) : undefined });
+      flash(payAmt >= remaining - 0.005 ? "จ่ายครบแล้ว + แจ้งผู้ขอเบิก ✓" : "จ่ายบางส่วนแล้ว ✓ (ตั้งประมาณการยอดค้างในกระแสเงินสด)"); onPaid();
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -256,8 +264,10 @@ function PayModal({ x, onClose, onPaid, flash }) {
               <button type="button" className={"cat-chip" + (mode === "partial" ? " on" : "")} style={mode === "partial" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}} onClick={() => setMode("partial")}>แบ่งจ่าย</button>
             </div>
             {mode === "partial" && <div className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" max={remaining} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`ไม่เกิน ${remaining}`} /></div>}
-            {mode === "partial" && payAmt > 0 && payAmt < remaining && <div className="jo-dim" style={{ marginTop: 4, color: "#d97706" }}>จ่ายงวดนี้ {fmtBaht(payAmt)} · เหลือค้าง {fmtBaht(remaining - payAmt)}</div>}
+            {leaves && <div className="jo-dim" style={{ marginTop: 4, color: "#d97706" }}>จ่ายงวดนี้ {fmtBaht(payAmt)} · เหลือค้าง {fmtBaht(remaining - payAmt)}</div>}
           </div>
+          {leaves && <label className="fld"><span>📅 วันคาดว่าจะจ่ายยอดที่เหลือ (ประมาณการในกระแสเงินสด · แก้ไขได้ภายหลัง)</span>
+            <input type="date" className="inp" value={expDate} onChange={(e) => setExpDate(e.target.value)} /></label>}
           <div className="fld-row">
             <label className="fld"><span>จ่ายจากบัญชี</span>
               <select className="inp" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
