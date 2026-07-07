@@ -98,7 +98,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-07·ปุ่มเตรียมวัสดุอยู่ที่ใบงานที่เดียว (เอาออกจากใบเสนอราคา) v308";
+const BUILD = "2026-07-07·ใบงานเพิ่มปุ่ม ↩️ คืนวัสดุ + ⚠️ ตัดเสีย เด้งไปหน้าความเคลื่อนไหวพร้อมเลือกงานให้ v309";
 
 function SetupNotice() {
   return (
@@ -463,6 +463,7 @@ export default function App() {
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} myTeam={profile?.team} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
           surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }}
           onCreatePrep={(jo) => { setPrepPrefill({ quoteNo: jo.quote_no || "", title: `งาน ${jo.job_no}${jo.title ? " · " + jo.title : ""}` }); go("prep"); }}
+          onMovement={(jo, type) => { setWithdrawCtx({ type, jobNo: jo.job_no, team: jo.assigned_team }); go("movements"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "handover" && <Handover role={role} me={profile?.name || profile?.email} startJob={hoStartJob} onStartConsumed={() => setHoStartJob(null)} focusJob={hoFocusJob} onFocusConsumed={() => setHoFocusJob(null)} />}
         {view === "schedule" && <Schedule role={role} team={profile?.team} me={profile?.name || profile?.email} onOpenJob={(jn) => { if (can(role, "joborders")) { setJobFocus(jn); go("joborders"); } else { go("myjobs"); } }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}

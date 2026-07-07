@@ -22,7 +22,7 @@ const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/s
 const blankVisit = () => ({ date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
 const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", internal_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
 
-export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onHandover, onCreatePrep, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
+export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onHandover, onCreatePrep, onMovement, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
   // ช่าง/หัวหน้าช่าง เห็นเฉพาะงานของทีมตัวเอง (งานตัวเอง) — ทีมหลังบ้านเห็นทุกงาน
   const fieldOnly = role === "tech" || role === "lead_tech";
@@ -587,6 +587,10 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                   <button className="btn-ghost sm" style={{ color: "#0369a1", borderColor: "#bae6fd", background: "#f0f9ff" }}
                     title={jo.quote_no ? "สร้างใบเตรียมวัสดุของงานนี้ — ดึงรายการจากใบเสนอราคาที่ผูกให้อัตโนมัติ" : "สร้างใบเตรียมวัสดุของงานนี้ (งานไม่มีใบเสนอราคา — เพิ่มรายการเอง)"}
                     onClick={() => onCreatePrep(jo)}>📋 เตรียมวัสดุ</button>}
+                {onMovement && can(role, "movements", "edit") && jo.status !== "cancelled" &&
+                  <button className="btn-ghost sm" style={{ color: "#16a34a" }} title="คืนวัสดุที่เบิกไปสำหรับงานนี้กลับเข้าคลัง" onClick={() => onMovement(jo, "return")}>↩️ คืนวัสดุ</button>}
+                {onMovement && can(role, "movements", "edit") && !["tech", "lead_tech"].includes(role) && jo.status !== "cancelled" &&
+                  <button className="btn-ghost sm" style={{ color: "#dc2626" }} title="บันทึกวัสดุตัดเสีย/เสียหายของงานนี้" onClick={() => onMovement(jo, "damage")}>⚠️ ตัดเสีย</button>}
                 {canEditJob(jo) && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
                 {canEditJob(jo) && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancelJob(jo)}>ยกเลิก</button>}

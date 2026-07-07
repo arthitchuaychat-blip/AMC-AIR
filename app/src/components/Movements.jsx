@@ -121,14 +121,18 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   React.useEffect(() => { const m = matMap[pickCode]; if (m) setPickPrice(String(m.cost)); }, [pickCode, mats]);
   // when the picker filter narrows the list, keep the selected item valid
   React.useEffect(() => { if (pickList.length && !pickList.some((m) => m.code === pickCode)) setPickCode(pickList[0].code); }, [pickList]);
-  // technician "withdraw for this job" → preset type=withdraw, team, job no
-  // จากใบเตรียมวัสดุ: มี items ติดมาด้วย → เติมตะกร้าเบิก (ร่าง) ให้เลย ตรวจแล้วกดบันทึกตามขั้นตอนเดิม
+  // เด้งมาจากใบงาน/ใบเตรียมวัสดุ → ตั้งประเภท (เบิก/รับคืน/ตัดเสีย) + ทีม + งาน ให้เลย
+  // เบิก: มี items ติดมาด้วย → เติมตะกร้า (ร่าง) · รับคืน/ตัดเสีย: ใช้โฟลว์ "เลือกงานที่เคยเบิก" (selJob)
   React.useEffect(() => {
     if (!withdrawCtx) return;
     if (withdrawCtx.items?.length && !mats.length) return;   // รอ mats โหลดก่อนค่อยเติมตะกร้า
-    setType("withdraw");
+    const t = withdrawCtx.type || "withdraw";
+    setType(t);
     if (withdrawCtx.team) setTeam(withdrawCtx.team);
-    if (withdrawCtx.jobNo) setJobNo(withdrawCtx.jobNo);
+    if (withdrawCtx.jobNo) {
+      if (t === "return" || t === "damage") setSelJob(withdrawCtx.jobNo);
+      else setJobNo(withdrawCtx.jobNo);
+    }
     if (withdrawCtx.items?.length) setLines(withdrawCtx.items.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: undefined, unit: matMap[p.code]?.unit || null })));
     onWithdrawCtxConsumed && onWithdrawCtxConsumed();
   }, [withdrawCtx, mats]);
