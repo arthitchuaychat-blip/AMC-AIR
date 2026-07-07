@@ -123,7 +123,9 @@ export async function listMaterials() {
   const PAGE = 1000;
   const all = [];
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase.from("material_stock").select("*").eq("active", true).range(from, from + PAGE - 1);
+    // ต้องมี order เสมอ — แบ่งหน้าโดยไม่มี order ลำดับไม่คงที่ระหว่างคำขอ (โดยเฉพาะ view แบบ group by)
+    // → บางรายการมาซ้ำ/บางรายการหายไปเงียบ ๆ ทั้งที่ยอดรวมดูถูก (อาการนับต่อหมวดเพี้ยน)
+    const { data, error } = await supabase.from("material_stock").select("*").eq("active", true).order("code").range(from, from + PAGE - 1);
     if (error) throw error;
     all.push(...(data || []));
     if (!data || data.length < PAGE) break;
@@ -140,22 +142,24 @@ export async function listMaterialsLite() {
   const all = [];
   const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty,btu_min,btu_max,series,voltage,refrigerant,seer,pipe_size,energy_label";
   let cols = FULL;
+  // ต้องมี order เสมอ — แบ่งหน้าโดยไม่มี order อาจได้แถวซ้ำ/หายระหว่างหน้า (ลำดับไม่การันตี)
+  const page = (from) => supabase.from("materials").select(cols).eq("active", true).order("code").range(from, from + PAGE - 1);
   for (let from = 0; ; from += PAGE) {
-    let { data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1);
+    let { data, error } = await page(from);
     // pre-106 fallback: retry without the AC series/spec columns
     if (error && /series|voltage|refrigerant|seer|pipe_size|energy_label/i.test(error.message || "")) {
       cols = cols.replace(",series,voltage,refrigerant,seer,pipe_size,energy_label", "");
-      ({ data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1));
+      ({ data, error } = await page(from));
     }
     // pre-103 fallback: retry without the service BTU-range columns
     if (error && /btu_min|btu_max/i.test(error.message || "")) {
       cols = cols.replace(",btu_min,btu_max", "");
-      ({ data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1));
+      ({ data, error } = await page(from));
     }
     // pre-098 fallback: retry without the purchase-unit columns so the pickers still load
     if (error && /purchase_unit|purchase_qty/i.test(error.message || "")) {
       cols = cols.replace(",purchase_unit,purchase_qty", "");
-      ({ data, error } = await supabase.from("materials").select(cols).eq("active", true).range(from, from + PAGE - 1));
+      ({ data, error } = await page(from));
     }
     if (error) throw error;
     all.push(...(data || []));
@@ -852,8 +856,8 @@ async function _fetchAll(build) {
 export async function listCustomers() {
   const [c, cc, cs] = await Promise.all([
     _fetchAll((f, t) => supabase.from("customers").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(f, t)),
-    _fetchAll((f, t) => supabase.from("customer_contacts").select("*", { count: "exact" }).range(f, t)),
-    _fetchAll((f, t) => supabase.from("customer_sites").select("*", { count: "exact" }).range(f, t)),
+    _fetchAll((f, t) => supabase.from("customer_contacts").select("*", { count: "exact" }).order("id").range(f, t)),   // ไม่มี order = แถวซ้ำ/หายระหว่างหน้า
+    _fetchAll((f, t) => supabase.from("customer_sites").select("*", { count: "exact" }).order("id").range(f, t)),
   ]);
   const byC = {}, byS = {};
   cc.forEach((x) => { (byC[x.customer_id] = byC[x.customer_id] || []).push(x); });
@@ -905,8 +909,8 @@ export async function bulkImportCustomers(rows) {
 export async function listSuppliers() {
   const [s, sc, ss] = await Promise.all([
     _fetchAll((f, t) => supabase.from("suppliers").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(f, t)),
-    _fetchAll((f, t) => supabase.from("supplier_contacts").select("*", { count: "exact" }).range(f, t)),
-    _fetchAll((f, t) => supabase.from("supplier_sites").select("*", { count: "exact" }).range(f, t)),
+    _fetchAll((f, t) => supabase.from("supplier_contacts").select("*", { count: "exact" }).order("id").range(f, t)),   // ไม่มี order = แถวซ้ำ/หายระหว่างหน้า
+    _fetchAll((f, t) => supabase.from("supplier_sites").select("*", { count: "exact" }).order("id").range(f, t)),
   ]);
   const byC = {}, byS = {};
   sc.forEach((x) => { (byC[x.supplier_id] = byC[x.supplier_id] || []).push(x); });
@@ -1933,7 +1937,7 @@ export async function listTransactionsSince(startDate) {
 // ต้นทุนวัสดุที่เบิก/คืน รวมต่อใบงาน → { job_no: { withdraw, return } }
 export async function jobMaterialCost() {
   const rows = await _fetchAll((f, t) =>
-    supabase.from("transactions").select("job_no,type,value", { count: "exact" }).not("job_no", "is", null).range(f, t)
+    supabase.from("transactions").select("job_no,type,value", { count: "exact" }).not("job_no", "is", null).order("id").range(f, t)   // ไม่มี order = แถวซ้ำ/หายระหว่างหน้า
   );
   const m = {};
   rows.forEach((r) => {
