@@ -53,12 +53,23 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
     return { code: it.item_code, name: it.name || m?.th || it.item_code, unit: it.unit || m?.unit || "", ...smartSplit(m, need) };
   };
 
-  // เปิดจากปุ่ม "เตรียมวัสดุ" ในใบเสนอราคา — ดึงรายการมาให้อัตโนมัติ
+  // เปิดจากปุ่ม "เตรียมวัสดุ" ในใบเสนอราคา/ใบงาน — ดึงรายการมาให้อัตโนมัติ
+  // (จากใบงานส่งมาแค่ quoteNo → ไปดึงรายการของใบเสนอราคาเอง)
   React.useEffect(() => {
     if (!prefill || !mats.length) return;
-    setEd({ prep_no: genNo(), quote_no: prefill.quoteNo || "", title: "", note: "", status: "draft",
-      items: (prefill.items || []).map((p) => { const m = matMap[p.code]; return { code: p.code, name: m?.th || p.code, unit: m?.unit || "", ...smartSplit(m, Number(p.qty) || 1) }; }) });
-    onPrefillConsumed && onPrefillConsumed();
+    let dead = false;
+    (async () => {
+      let items = prefill.items;
+      if (!items && prefill.quoteNo) {
+        try { items = (await getQuoteItems(prefill.quoteNo)).filter((it) => it.item_code && it.kind !== "service").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })); }
+        catch { items = []; }
+      }
+      if (dead) return;
+      setEd({ prep_no: genNo(), quote_no: prefill.quoteNo || "", title: prefill.title || "", note: "", status: "draft",
+        items: (items || []).map((p) => { const m = matMap[p.code]; return { code: p.code, name: m?.th || p.code, unit: m?.unit || "", ...smartSplit(m, Number(p.qty) || 1) }; }) });
+      onPrefillConsumed && onPrefillConsumed();
+    })();
+    return () => { dead = true; };
   }, [prefill, mats]);
 
   function startNew() { setEd({ prep_no: genNo(), quote_no: "", title: "", note: "", status: "draft", items: [] }); }
