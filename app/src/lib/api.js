@@ -1094,7 +1094,7 @@ export async function saveBoq(boq, items) {
       description: x.description?.trim() || null,
       unit: x.unit || null, qty: Number(x.qty) || 0, unit_cost: Number(x.unit_cost) || 0,
     })))).error;
-    if (e3) throw e3;
+    if (e3) throw new Error(/section.*check|boq_items_section/i.test(e3.message || "") ? "บันทึกรายการค่าบริการไม่ได้ — ต้องรัน migration 116 ใน Supabase ก่อน" : e3.message || e3);
   }
   syncInternalNote({ boqNo: boq.boq_no }, boq.internal_note).catch(() => {});
 }
