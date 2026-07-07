@@ -80,16 +80,16 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
         catch { items = []; }
       }
       if (dead) return;
-      setEd({ prep_no: genNo(), quote_no: prefill.quoteNo || "", title: prefill.title || "", note: "", status: "draft",
+      setEd({ prep_no: genNo(), quote_no: prefill.quoteNo || "", title: prefill.title || "", issue_date: new Date().toISOString().slice(0, 10), note: "", status: "draft",
         items: (items || []).map((p) => { const m = matMap[p.code]; return { code: p.code, name: m?.th || p.code, unit: m?.unit || "", ...smartSplit(m, Number(p.qty) || 1) }; }) });
       onPrefillConsumed && onPrefillConsumed();
     })();
     return () => { dead = true; };
   }, [prefill, mats]);
 
-  function startNew() { setEd({ prep_no: genNo(), quote_no: "", title: "", note: "", status: "draft", items: [] }); }
+  function startNew() { setEd({ prep_no: genNo(), quote_no: "", title: "", issue_date: new Date().toISOString().slice(0, 10), note: "", status: "draft", items: [] }); }
   function startEdit(p) {
-    setEd({ _edit: true, prep_no: p.prep_no, quote_no: p.quote_no || "", title: p.title || "", note: p.note || "", status: p.status,
+    setEd({ _edit: true, prep_no: p.prep_no, quote_no: p.quote_no || "", title: p.title || "", issue_date: p.issue_date || (p.created_at || "").slice(0, 10), note: p.note || "", status: p.status,
       items: (p.items || []).map((it) => ({ code: it.material_code, name: it.name || matMap[it.material_code]?.th || it.material_code, unit: it.unit || "", qty_buy: Number(it.qty_buy) || 0, qty_withdraw: Number(it.qty_withdraw) || 0 })) });
   }
   async function pullQuote() {
@@ -168,7 +168,7 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
           <div style="font-size:13px;color:#475569;margin-top:2px">${esc(p.prep_no)}${p.jobNo ? " · งาน " + esc(p.jobNo) : ""}${p.quote_no ? " · อ้างอิง " + esc(p.quote_no) : ""}</div>
           ${p.customerName ? `<div style="font-size:13px;color:#475569">ลูกค้า ${esc(p.customerName)}${p.title ? " · " + esc(p.title) : ""}</div>` : (p.title ? `<div style="font-size:13px;color:#475569">${esc(p.title)}</div>` : "")}
         </div>
-        <div style="text-align:right;font-size:12px;color:#94a3b8">พิมพ์ ${new Date().toLocaleDateString("th-TH")}</div>
+        <div style="text-align:right;font-size:12px;color:#94a3b8">วันที่ ${p.issue_date ? new Date(p.issue_date + "T00:00:00").toLocaleDateString("th-TH") : new Date().toLocaleDateString("th-TH")}</div>
       </div>
       ${section("🛒 สั่งซื้อ — ไปรับที่ร้านค้า", "#c2410c", bItems, "qty_buy")}
       ${section("📦 เบิกจากสต๊อก — คลังของเราเอง", "#0369a1", wItems, "qty_withdraw")}
@@ -224,6 +224,9 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
             </label>
             <label className="fld"><span>ชื่องาน/หมายเหตุสั้น</span>
               <input className="inp" value={ed.title} onChange={(e) => setEd((s) => ({ ...s, title: e.target.value }))} placeholder="เช่น เตรียมของงานติดตั้ง 5 เครื่อง" />
+            </label>
+            <label className="fld" style={{ maxWidth: 170 }}><span>วันที่</span>
+              <input className="inp" type="date" value={ed.issue_date || ""} onChange={(e) => setEd((s) => ({ ...s, issue_date: e.target.value }))} />
             </label>
           </div>
           <div className="fld"><span>เพิ่มรายการ (ค้นหาสินค้า/วัสดุ)</span>

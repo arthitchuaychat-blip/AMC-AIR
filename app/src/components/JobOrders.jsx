@@ -20,7 +20,7 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
 const blankVisit = () => ({ date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
-const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", internal_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
+const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", issue_date: new Date().toISOString().slice(0, 10), contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", internal_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
 
 export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onHandover, onCreatePrep, onMovement, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
@@ -145,6 +145,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       visits = [{ assigned_team: jo.assigned_team || "", date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", end_date: jo.end_date || "", slot: jo.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: jo.status || "scheduled" }];
     }
     setEd({ ...jo, _edit: true, job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "",
+      issue_date: jo.issue_date || (jo.created_at || "").slice(0, 10),
       assigned_team: jo.assigned_team || jo.visits?.[0]?.assigned_team || "",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
       sales_note: jo.sales_note || "", internal_note: jo.internal_note || "", sales_photos: jo.sales_photos || [], visits, status: jo.status || "pending" });
@@ -295,6 +296,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
           )}
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบงาน</span><input className="inp" value={ed.job_no} onChange={(e) => setF("job_no", e.target.value)} /></label>
+            <label className="fld"><span>วันที่ออกใบงาน</span><input className="inp" type="date" value={ed.issue_date || ""} onChange={(e) => setF("issue_date", e.target.value)} /></label>
             <label className="fld"><span>ประเภทงาน</span>
               <Combo className="inp" value={ed.job_type} onChange={(e) => setF("job_type", e.target.value)}>
                 {JOB_TYPES.map(([v, l, ic]) => <option key={v} value={v}>{ic} {l}</option>)}

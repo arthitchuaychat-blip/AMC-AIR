@@ -650,10 +650,12 @@ export async function listMaterialPreps() {
 }
 export async function saveMaterialPrep(head, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const e1 = (await supabase.from("material_preps").upsert({
-    prep_no: head.prep_no, quote_no: head.quote_no || null, title: head.title?.trim() || null,
+  const pHead = {
+    prep_no: head.prep_no, quote_no: head.quote_no || null, title: head.title?.trim() || null, issue_date: head.issue_date || null,
     note: head.note?.trim() || null, status: head.status || "draft", created_by: user?.id || null,
-  }, { onConflict: "prep_no" })).error;
+  };
+  let e1 = (await supabase.from("material_preps").upsert(pHead, { onConflict: "prep_no" })).error;
+  if (e1 && /issue_date/i.test(e1.message || "")) { delete pHead.issue_date; e1 = (await supabase.from("material_preps").upsert(pHead, { onConflict: "prep_no" })).error; } // pre-119 fallback
   if (e1) throw new Error(/material_preps/.test(e1.message || "") && /relation|find/i.test(e1.message || "") ? "ยังไม่ได้รัน migration 109 ใน Supabase" : e1.message);
   const e2 = (await supabase.from("material_prep_items").delete().eq("prep_no", head.prep_no)).error;
   if (e2) throw e2;
@@ -688,11 +690,11 @@ export async function deleteMaterialPrep(prep_no, cascade) {
 
 export async function savePurchaseOrder(po, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, prep_no: po.prep_no || null, created_by: user?.id || null };
+  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, prep_no: po.prep_no || null, issue_date: po.issue_date || null, created_by: user?.id || null };
   let e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
-  // pre-096/097/100/115 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
+  // pre-096/097/100/115/119 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
   // ห้ามเหมารวม: เคยตัด vat ทิ้งไปด้วยตอน price_incl ยังไม่รัน migration → ใบสั่งซื้อโหมดรวม VAT ถูกเก็บเป็นไม่มี VAT
-  for (const c of ["price_incl", "vat", "quote_no", "prep_no"]) {
+  for (const c of ["price_incl", "vat", "quote_no", "prep_no", "issue_date"]) {
     if (e1 && c in head && (e1.message || "").includes(c)) {
       delete head[c];
       e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
@@ -1087,10 +1089,12 @@ async function syncInternalNote({ quoteNo, boqNo, invoiceNo }, note) {
 
 export async function saveBoq(boq, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const e1 = (await supabase.from("boqs").upsert({
-    boq_no: boq.boq_no, customer_id: boq.customer_id || null, site_id: boq.site_id || null,
+  const bHead = {
+    boq_no: boq.boq_no, customer_id: boq.customer_id || null, site_id: boq.site_id || null, issue_date: boq.issue_date || null,
     title: boq.title?.trim() || null, note: boq.note?.trim() || null, internal_note: boq.internal_note?.trim() || null, ..._termCols(boq), ..._signCols(boq), status: boq.status || "open", created_by: user?.id || null,
-  }, { onConflict: "boq_no" })).error;
+  };
+  let e1 = (await supabase.from("boqs").upsert(bHead, { onConflict: "boq_no" })).error;
+  if (e1 && /issue_date/i.test(e1.message || "")) { delete bHead.issue_date; e1 = (await supabase.from("boqs").upsert(bHead, { onConflict: "boq_no" })).error; } // pre-119 fallback
   if (e1) throw e1;
   const e2 = (await supabase.from("boq_items").delete().eq("boq_no", boq.boq_no)).error;
   if (e2) throw e2;
@@ -1626,15 +1630,17 @@ const _JOB_ST_TH = { pending: "รอเริ่มงาน", scheduled: "น�
 
 export async function saveJobOrder(jo, author) {
   const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from("job_orders").upsert({
+  const jHead = {
     job_no: jo.job_no, group_no: jo.group_no || null, quote_no: jo.quote_no || null, customer_id: jo.customer_id || null, site_id: jo.site_id || null,
     title: jo.title?.trim() || null, job_type: jo.job_type || "install", contact_name: jo.contact_name?.trim() || null, contact_phone: jo.contact_phone?.trim() || null,
     address: jo.address?.trim() || null, map_url: jo.map_url?.trim() || null, details: jo.details?.trim() || null,
     sales_note: jo.sales_note?.trim() || null, sales_photos: jo.sales_photos || [], internal_note: jo.internal_note?.trim() || null,
     assigned_team: jo.assigned_team || null, scheduled_at: jo.scheduled_at || null,
-    end_date: jo.end_date || null, slot: jo.slot || null,
+    end_date: jo.end_date || null, slot: jo.slot || null, issue_date: jo.issue_date || null,
     status: jo.status || "pending", created_by: user?.id || null,
-  }, { onConflict: "job_no" });
+  };
+  let { error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" });
+  if (error && /issue_date/i.test(error.message || "")) { delete jHead.issue_date; ({ error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" })); } // pre-119 fallback
   if (error) throw error;
   // replace this job's visits (job_visits) when provided
   if (Array.isArray(jo.visits)) {

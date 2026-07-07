@@ -64,6 +64,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [modalUnit, setModalUnit] = React.useState("");  // หน่วยนับที่เลือก (สินค้า 2 หน่วย เช่น เมตร/ม้วน)
   const [receivePo, setReceivePo] = React.useState(null);
   const [prepNo, setPrepNo] = React.useState(null);   // เบิกที่มาจากใบเตรียมวัสดุ → ผูกกลับไว้ (ลบตามกันได้)
+  const [txnDate, setTxnDate] = React.useState(() => new Date().toISOString().slice(0, 10));   // วันที่เอกสาร (แก้ไขได้ · เลขอ้างอิงยังรันอัตโนมัติ)
   const [receiveJob, setReceiveJob] = React.useState(null); // งานปลายทางของ PO ที่อ้างใบเสนอราคา → เบิกเข้างานอัตโนมัติหลังรับ
   // picker filters (เหมือนหน้า BOQ): ชนิด + หมวดวัสดุ + ตัวกรองแอร์ (ยี่ห้อ/ประเภท/BTU)
   const [mvKind, setMvKind] = React.useState("all"); // all | ac | material
@@ -168,7 +169,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   }, [printData]);
 
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
-  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); setReceiveJob(null); setPrepNo(null); }
+  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); setReceiveJob(null); setPrepNo(null); setTxnDate(new Date().toISOString().slice(0, 10)); }
 
   // ----- cart helpers -----
   // สินค้า 2 หน่วย: บรรทัดถือ l.unit (เมตร/ม้วน) · สต๊อก/ต้นทุนคิดเป็นหน่วยหลักเสมอ (แปลงด้วย unitFactor)
@@ -231,7 +232,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
       await recordTransactions(norm.map((l) => ({
         type, job_no: jobNo, team: type === "damage" ? null : team,
         material_code: l.code, qty: l.qty,
-        unit_cost: l.unitCost, reason,
+        unit_cost: l.unitCost, reason, txn_date: txnDate || undefined,
         prep_no: type === "withdraw" ? prepNo : null,   // ผูกกลับใบเตรียมวัสดุ (เฉพาะรายการเบิก)
       })));
       // weighted moving average: recompute each purchased material's unit cost (ทั้งคู่เป็นหน่วยหลักแล้ว)
@@ -250,7 +251,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           if (receiveJob?.job_no) {
             await recordTransactions(norm.map((l) => ({
               type: "withdraw", job_no: receiveJob.job_no, team: receiveJob.team,
-              material_code: l.code, qty: l.qty, unit_cost: l.unitCost,
+              material_code: l.code, qty: l.qty, unit_cost: l.unitCost, txn_date: txnDate || undefined,
             })));
           }
           setReceivePo(null);
@@ -276,7 +277,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     setBusy(true);
     try {
       await recordTransactions(rows.map((r) => ({
-        type, job_no: job.job_no, team: job.team, material_code: r.code, qty: r.qty, unit_cost: r.unitCost, reason,
+        type, job_no: job.job_no, team: job.team, material_code: r.code, qty: r.qty, unit_cost: r.unitCost, reason, txn_date: txnDate || undefined,
       })));
       flash(`${T.th} งาน ${job.job_no} สำเร็จ`);
       setSelJob(""); setQtyByCode({});
@@ -405,6 +406,9 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                 </div>
               )}
 
+              <label className="fld" style={{ maxWidth: 190, marginBottom: 8 }}><span>วันที่เอกสาร</span>
+                <input className="inp" type="date" value={txnDate} onChange={(e) => setTxnDate(e.target.value)} />
+              </label>
               <button className="btn-primary big" disabled={!jobValid || busy} onClick={submitJob}
                 style={jobValid ? { background: T.color, boxShadow: "none" } : {}}>
                 <UIcon name={T.icon} size={17} color="#fff" /> {busy ? "กำลังบันทึก…" : `ยืนยัน${T.th}`}
@@ -521,6 +525,9 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                 </div>
               )}
 
+              <label className="fld" style={{ maxWidth: 190, marginBottom: 8 }}><span>วันที่เอกสาร</span>
+                <input className="inp" type="date" value={txnDate} onChange={(e) => setTxnDate(e.target.value)} />
+              </label>
               <button className="btn-primary big" disabled={!cartValid || busy} onClick={submitCart}
                 style={cartValid ? { background: T.color, boxShadow: "none" } : {}}>
                 <UIcon name={T.icon} size={17} color="#fff" /> {busy ? "กำลังบันทึก…" : `ยืนยัน${T.th} ${lines.length || ""} รายการ`}

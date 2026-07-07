@@ -24,6 +24,7 @@ function genPoNo() {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
   return `PO-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
+const todayStr = () => new Date().toISOString().slice(0, 10);
 const R2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const VAT_MODES = [["incl", "ราคารวม VAT (ถอด VAT ให้)"], ["excl", "ราคาก่อน VAT (บวก VAT ท้าย)"], ["none", "ไม่มี VAT"]];
 
@@ -102,7 +103,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     const src = Array.isArray(prefill) ? prefill : (prefill.items || []);
     const quoteNo = Array.isArray(prefill) ? "" : (prefill.quoteNo || "");
     if (!src.length && !quoteNo) { onPrefillConsumed && onPrefillConsumed(); return; }
-    setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: quoteNo, prep_no: (Array.isArray(prefill) ? "" : prefill.prepNo) || "",
+    setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: quoteNo, prep_no: (Array.isArray(prefill) ? "" : prefill.prepNo) || "", issue_date: todayStr(),
       // จำนวนจากใบเสนอราคาเป็น "หน่วยหลัก" (เมตร/ชุด) → ตั้งหน่วยบรรทัดเป็นหน่วยหลัก + ราคา = ต้นทุน/หน่วยหลัก
       // (อยากสั่งเป็นม้วน ค่อยสลับหน่วยที่บรรทัด ระบบแปลงราคาให้) · ข้ามรหัสที่ไม่มีในแคตตาล็อก
       // หน่วยจากใบเตรียมวัสดุ (p.unit) มาก่อน — ถ้าเป็นหน่วยซื้อ (ม้วน) ราคา/หน่วย = ต้นทุนต่อหน่วยหลัก × แฟกเตอร์
@@ -110,10 +111,10 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
 
-  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", items: [] }); }
+  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", issue_date: todayStr(), items: [] }); }
   function startEdit(po) {
     const incl = !!po.vat && !!po.price_incl;   // stored price is pre-VAT → show gross in the field when incl mode
-    setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "",
+    setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10),
       items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0), unit: i.unit || null })) });
   }
 
@@ -169,7 +170,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     if (editing._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
     const incl = !!editing.vat && !!editing.priceIncl;
     const items = editing.items.map((it) => ({ ...it, price: incl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0) })); // store pre-VAT price
-    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, status: "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
+    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, issue_date: editing.issue_date || null, status: "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   // ส่งขออนุมัติจ่ายเงิน → โผล่ในเมนูเบิกจ่าย (อนุมัติ → จ่าย+เลือกบัญชี → PO ขึ้น "จ่ายแล้ว" อัตโนมัติ)
@@ -204,6 +205,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
         <div className="card" style={{ flex: 1, maxWidth: 860 }}>
           <div className="fld-row">
             <label className="fld"><span>เลขใบสั่งซื้อ · PO No.</span><input className="inp" value={editing.po_no} onChange={(e) => setEditing({ ...editing, po_no: e.target.value })} /></label>
+            <label className="fld"><span>วันที่</span><input className="inp" type="date" value={editing.issue_date || ""} onChange={(e) => setEditing({ ...editing, issue_date: e.target.value })} /></label>
             <label className="fld"><span>ซัพพลายเออร์ · Supplier</span><SupplierPicker value={editing.supplier} onChange={(v) => setEditing((e) => ({ ...e, supplier: v }))} /></label>
           </div>
           <label className="fld"><span>อ้างอิงใบเสนอราคา (อนุมัติแล้ว) <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>— สั่งแอร์ต้องอ้างอิง · วัสดุจะอ้างอิงหรือไม่ก็ได้ · ถ้าอ้างอิง ต้นทุนจะเข้างานนั้นตอนรับของ</span></span>
@@ -318,7 +320,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                     {po.teamName ? <span>{po.customerName ? " · " : ""}🔧 ช่าง <b>{po.teamName}</b></span> : null}
                   </div>}
                 </div>
-                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.created_at)}</span><span>มูลค่ารวม{po.vat ? " (รวม VAT)" : ""}</span><b>{fmtBaht(po.total)}</b></div>
+                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.issue_date || po.created_at)}</span><span>มูลค่ารวม{po.vat ? " (รวม VAT)" : ""}</span><b>{fmtBaht(po.total)}</b></div>
               </div>
               <InternalNoteTag note={po.internal_note} role={role} />
               <div className="job-lines">
@@ -359,7 +361,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
         const c0 = sup?.contacts?.[0];
         return (
           <DocSlip company={co} titleTh="ใบสั่งซื้อ" titleEn="PURCHASE ORDER" docNo={printPo.po_no} partyLabel="ผู้ขาย"
-            metaRows={[{ label: "วันที่", value: fmtDocDate(printPo.created_at) }, ...(printPo.quote_no ? [{ label: "อ้างอิงใบเสนอราคา", value: printPo.quote_no }] : [])]}
+            metaRows={[{ label: "วันที่", value: fmtDocDate(printPo.issue_date || printPo.created_at) }, ...(printPo.quote_no ? [{ label: "อ้างอิงใบเสนอราคา", value: printPo.quote_no }] : [])]}
             customer={{ name: printPo.supplier || "-", taxId: sup?.tax_id, address: sup?.address, contactName: c0?.name, contactPhone: c0?.phone }}
             terms={printPo.note} signLabels={["ผู้สั่งซื้อ", "ผู้อนุมัติ"]}
             totals={<div className="doc-totals">
