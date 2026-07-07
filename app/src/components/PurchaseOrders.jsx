@@ -105,7 +105,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: quoteNo,
       // จำนวนจากใบเสนอราคาเป็น "หน่วยหลัก" (เมตร/ชุด) → ตั้งหน่วยบรรทัดเป็นหน่วยหลัก + ราคา = ต้นทุน/หน่วยหลัก
       // (อยากสั่งเป็นม้วน ค่อยสลับหน่วยที่บรรทัด ระบบแปลงราคาให้) · ข้ามรหัสที่ไม่มีในแคตตาล็อก
-      items: src.filter((p) => matMap[p.code]).map((p) => { const m = matMap[p.code]; return { code: p.code, qty: Number(p.qty) || 1, price: Number(m.cost) || 0, unit: m.unit || null }; }) });
+      // หน่วยจากใบเตรียมวัสดุ (p.unit) มาก่อน — ถ้าเป็นหน่วยซื้อ (ม้วน) ราคา/หน่วย = ต้นทุนต่อหน่วยหลัก × แฟกเตอร์
+      items: src.filter((p) => matMap[p.code]).map((p) => { const m = matMap[p.code]; const u = p.unit || m.unit || null; const f = unitFactor(m, u); return { code: p.code, qty: Number(p.qty) || 1, price: Math.round((Number(m.cost) || 0) * f * 100) / 100, unit: u }; }) });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
 

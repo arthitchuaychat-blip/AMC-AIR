@@ -25,8 +25,10 @@ const TYPE_BY = Object.fromEntries([...TYPES,
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
 
 export default function Movements({ role, myTeam, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
-  // ซื้อเข้า/ตัดเสีย/ยกเลิก = สิทธิ์ระดับสโตร์ (ต้องมีสิทธิ์แก้ไข movements และไม่ใช่ช่างภาคสนาม)
+  // ซื้อเข้า/ตัดเสีย = สิทธิ์ระดับสโตร์ (ต้องมีสิทธิ์แก้ไข movements และไม่ใช่ช่างภาคสนาม)
   const isAdmin = can(role, "movements", "edit") && role !== "tech" && role !== "lead_tech";
+  // แก้ไข/ยกเลิกรายการที่บันทึกไปแล้ว — เฉพาะผู้บริหาร/ธุรการ/การเงิน · ธุรการวัสดุ (stock) เห็นได้แต่แก้/ลบไม่ได้
+  const canEditPast = ["admin", "exec", "finance"].includes(role);
   const isTech = role === "tech";
   const isLead = role === "lead_tech"; // หัวหน้าช่าง: เบิก/คืนได้ทุกทีม (แต่ไม่ซื้อ/ตัดเสีย)
   // ช่าง + หัวหน้าช่าง ทำได้เฉพาะ เบิกออก/รับคืน — no ซื้อ/ตัดเสีย
@@ -133,7 +135,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
       if (t === "return" || t === "damage") setSelJob(withdrawCtx.jobNo);
       else setJobNo(withdrawCtx.jobNo);
     }
-    if (withdrawCtx.items?.length) setLines(withdrawCtx.items.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: undefined, unit: matMap[p.code]?.unit || null })));
+    if (withdrawCtx.items?.length) setLines(withdrawCtx.items.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: undefined, unit: p.unit || matMap[p.code]?.unit || null })));
     onWithdrawCtxConsumed && onWithdrawCtxConsumed();
   }, [withdrawCtx, mats]);
   // prefill the purchase cart when receiving a PO ({ poNo, quoteNo, items:[{code,qty,price,unit}] })
@@ -558,7 +560,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                     </div>
                     <div className="led-actions" onClick={(e) => e.stopPropagation()}>
                       <button className="led-btn" title="พิมพ์" onClick={() => printGroup(g)}><UIcon name="catalog" size={14} /></button>
-                      {isAdmin && g.type === "purchase" && <button className="led-btn danger" title={g.job_no && /^PO-/i.test(g.job_no) ? `ยกเลิกรับเข้าทั้งใบ — ${g.job_no} กลับเป็นรอรับของ` : "ยกเลิกทั้งชุด"} onClick={() => cancelGroup(g)}><UIcon name="trash" size={14} /></button>}
+                      {canEditPast && g.type === "purchase" && <button className="led-btn danger" title={g.job_no && /^PO-/i.test(g.job_no) ? `ยกเลิกรับเข้าทั้งใบ — ${g.job_no} กลับเป็นรอรับของ` : "ยกเลิกทั้งชุด"} onClick={() => cancelGroup(g)}><UIcon name="trash" size={14} /></button>}
                       <button className="led-btn" title={open ? "ย่อ" : "ดูรายการ"} onClick={() => toggle(g.key)}><UIcon name={open ? "chevD" : "chevR"} size={14} /></button>
                     </div>
                   </div>
@@ -572,7 +574,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                             : <span className="li-qty" style={{ color: mv.color }}>{mv.dir > 0 ? "+" : "−"}{fmtNum(r.qty)} {m?.unit || ""}</span>}
                           <span className="li-val">{fmtBaht(r.value)}</span>
                           <div className="led-actions">
-                            {isAdmin && (editing
+                            {canEditPast && (editing
                               ? <><button className="led-btn" title="บันทึก" onClick={() => saveEdit(r)}><UIcon name="check" size={14} /></button>
                                    <button className="led-btn" title="ยกเลิกแก้ไข" onClick={() => setEditId(null)}><UIcon name="x" size={14} /></button></>
                               : <>

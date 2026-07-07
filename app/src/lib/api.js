@@ -897,12 +897,17 @@ export async function listSuppliers() {
 }
 export async function saveSupplier(sup, contacts, sites) {
   const { data: { user } } = await supabase.auth.getUser();
-  const fields = { type: sup.type, name: sup.name.trim(), address: sup.address?.trim() || null, tax_id: sup.tax_id?.trim() || null, email: sup.email?.trim() || null, vat: !!sup.vat, note: sup.note?.trim() || null };
+  const fields = { type: sup.type, name: sup.name.trim(), address: sup.address?.trim() || null, tax_id: sup.tax_id?.trim() || null, email: sup.email?.trim() || null, vat: !!sup.vat, note: sup.note?.trim() || null,
+    bank_name: sup.bank_name?.trim() || null, bank_account: sup.bank_account?.trim() || null, bank_holder: sup.bank_holder?.trim() || null };
+  const _stripBank = (f) => { const c = { ...f }; delete c.bank_name; delete c.bank_account; delete c.bank_holder; return c; };  // pre-113 fallback
   let id = sup.id;
   if (id) {
-    const e = (await supabase.from("suppliers").update(fields).eq("id", id)).error; if (e) throw e;
+    let e = (await supabase.from("suppliers").update(fields).eq("id", id)).error;
+    if (e && /bank_/i.test(e.message || "")) e = (await supabase.from("suppliers").update(_stripBank(fields)).eq("id", id)).error;
+    if (e) throw e;
   } else {
-    const r = await supabase.from("suppliers").insert({ ...fields, created_by: user?.id || null }).select("id").single();
+    let r = await supabase.from("suppliers").insert({ ...fields, created_by: user?.id || null }).select("id").single();
+    if (r.error && /bank_/i.test(r.error.message || "")) r = await supabase.from("suppliers").insert({ ..._stripBank(fields), created_by: user?.id || null }).select("id").single();
     if (r.error) throw r.error; id = r.data.id;
   }
   await supabase.from("supplier_contacts").delete().eq("supplier_id", id);

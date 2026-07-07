@@ -5,7 +5,20 @@ import { UIcon } from "../icons";
 import { suppCode, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
 
-const blankSup = () => ({ id: null, type: "company", name: "", tax_id: "", vat: true, address: "", email: "", note: "" });
+const blankSup = () => ({ id: null, type: "company", name: "", tax_id: "", vat: true, address: "", email: "", note: "", bank_name: "", bank_account: "", bank_holder: "" });
+
+// เลขบัญชี + ปุ่มคัดลอก (ไว้โอนเงินให้ผู้ขาย)
+function BankLine({ c }) {
+  const [copied, setCopied] = React.useState(false);
+  if (!c.bank_account) return null;
+  const copy = (e) => { e.stopPropagation(); navigator.clipboard?.writeText(String(c.bank_account).replace(/[^0-9]/g, "")).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginTop: 4, color: "var(--ink-2)" }}>
+      🏦 {c.bank_name ? c.bank_name + " " : ""}<b style={{ letterSpacing: ".5px" }}>{c.bank_account}</b>
+      <button type="button" className="btn-ghost xs" style={{ padding: "1px 8px" }} title="คัดลอกเลขบัญชี" onClick={copy}>{copied ? "✓ คัดลอกแล้ว" : "📋 คัดลอก"}</button>
+    </div>
+  );
+}
 // สีไล่ต่อสาขา เพื่อแยกกล่องให้เห็นง่าย
 const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626"];
 
@@ -38,7 +51,7 @@ export default function Suppliers({ role }) {
   function startNew() { setEditing({ sup: blankSup(), contacts: [{ name: "", phone: "", role: "" }], sites: [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }] }); }
   function startEdit(c) {
     setEditing({
-      sup: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", email: c.email || "", vat: c.vat, address: c.address || "", note: c.note || "" },
+      sup: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", email: c.email || "", vat: c.vat, address: c.address || "", note: c.note || "", bank_name: c.bank_name || "", bank_account: c.bank_account || "", bank_holder: c.bank_holder || "" },
       contacts: c.contacts.length ? c.contacts.map((x) => ({ name: x.name || "", phone: x.phone || "", role: x.role || "" })) : [{ name: "", phone: "", role: "" }],
       sites: c.sites.length ? c.sites.map((x) => ({ site_name: x.site_name || "", contact_name: x.contact_name || "", phone: x.phone || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }],
     });
@@ -85,6 +98,11 @@ export default function Suppliers({ role }) {
             </label>
           </div>
           <label className="fld"><span>อีเมล</span><input className="inp" value={e.sup.email} onChange={(ev) => setSup("email", ev.target.value)} placeholder="(ไม่บังคับ)" /></label>
+          <div className="fld-row">
+            <label className="fld"><span>🏦 ธนาคาร</span><input className="inp" value={e.sup.bank_name} onChange={(ev) => setSup("bank_name", ev.target.value)} placeholder="เช่น กสิกรไทย" /></label>
+            <label className="fld"><span>เลขบัญชี (ไว้คัดลอกโอนเงิน)</span><input className="inp" value={e.sup.bank_account} onChange={(ev) => setSup("bank_account", ev.target.value)} placeholder="xxx-x-xxxxx-x" /></label>
+          </div>
+          <label className="fld"><span>ชื่อบัญชี <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(ถ้าต่างจากชื่อผู้ขาย)</span></span><input className="inp" value={e.sup.bank_holder} onChange={(ev) => setSup("bank_holder", ev.target.value)} placeholder="(ไม่บังคับ)" /></label>
           <label className="fld"><span>ที่อยู่หลัก</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={e.sup.address} onChange={(ev) => setSup("address", ev.target.value)} /></label>
 
           <div className="fld"><span>ผู้ติดต่อ (เพิ่มได้หลายคน)</span>
@@ -178,6 +196,7 @@ export default function Suppliers({ role }) {
               {c.contacts[0] && <div>📞 {c.contacts[0].name || ""} {c.contacts[0].phone || ""}{c.contacts.length > 1 ? ` +${c.contacts.length - 1}` : ""}</div>}
               {c.sites.length > 0 && <div>📍 {c.sites.length} สาขา/ที่ตั้ง</div>}
             </div>
+            <BankLine c={c} />
             <div className="cat-card-move">ดูรายละเอียด <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>
           </div>
         ))}

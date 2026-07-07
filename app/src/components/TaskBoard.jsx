@@ -48,8 +48,10 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
   const canManage = (t) => myId === t.assigner || role === "admin" || role === "exec";
   const canStatus = (t) => canManage(t) || myId === t.assignee;
 
+  // เห็นเฉพาะงานของตัวเอง: ที่ฉันสั่ง หรือ ที่มอบให้ฉัน (ทุกแท็บกรองในขอบเขตของฉันเสมอ)
+  const mine = (t) => t.assigner === myId || t.assignee === myId;
   const scoped = tasks
-    .filter((t) => scope === "all" ? true : scope === "assigned" ? t.assigner === myId : t.assignee === myId)
+    .filter((t) => scope === "assigned" ? t.assigner === myId : scope === "received" ? t.assignee === myId : mine(t))
     .filter((t) => personF === "all" || t.assignee === personF || t.assigner === personF);
   const visible = scoped.filter((t) => showCancelled ? true : t.status !== "cancelled");
   const cancelledCount = scoped.filter((t) => t.status === "cancelled").length;
@@ -67,7 +69,7 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
       </div>
 
       <div className="cat-filter">
-        {[["all", "ทั้งหมด"], ["assigned", "งานที่ฉันสั่ง"], ["received", "งานที่มอบให้ฉัน"]].map(([v, l]) => (
+        {[["all", "ของฉันทั้งหมด"], ["assigned", "งานที่ฉันสั่ง"], ["received", "งานที่มอบให้ฉัน"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (scope === v ? " on" : "")} onClick={() => setScope(v)}
             style={scope === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}

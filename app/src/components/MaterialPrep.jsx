@@ -6,6 +6,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
+import UnitPick, { unitFactor } from "./UnitPick";
 import { UIcon } from "../icons";
 
 // ใบเตรียมวัสดุ — ประตูก่อนการสั่งซื้อ/เบิก (mig 109)
@@ -22,7 +23,7 @@ const STATUS = {
 
 export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreatePo, onWithdraw, onOpenQuote, onOpenJob }) {
   const canEdit = can(role, "prep", "edit");
-  const canApprove = ["admin", "exec"].includes(role);   // คนอนุมัติ: ธุรการ และเหนือกว่า
+  const canConfirm = canEdit;   // ยืนยันเอง (ไม่ต้องรออนุมัติ) — คนเตรียมวัสดุกดยืนยันได้เลย
   const [list, setList] = React.useState(null);
   const [mats, setMats] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -42,17 +43,27 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
   }
   React.useEffect(() => { load(); }, []);
 
-  // แบ่งจำนวนอัตโนมัติ: คลังพอ → เบิกทั้งหมด · ไม่พอ → เบิกเท่าที่มี ที่เหลือสั่งซื้อ (แก้ทับได้)
-  const smartSplit = (m, need) => {
-    const stock = m && m.tracked ? Math.max(0, Number(m.stock) || 0) : 0;
+  // คงเหลือในคลังของหน่วยที่เลือก (สต๊อกเก็บเป็นหน่วยหลักเสมอ → หารด้วยแฟกเตอร์)
+  const stockInUnit = (m, unit) => { if (!m || !m.tracked) return null; const f = unitFactor(m, unit); return Math.floor((Math.max(0, Number(m.stock) || 0) / f) * 100) / 100; };
+  // แบ่งจำนวนอัตโนมัติ (ตามหน่วยที่เลือก): คลังพอ → เบิกทั้งหมด · ไม่พอ → เบิกเท่าที่มี ที่เหลือสั่งซื้อ (แก้ทับได้)
+  const smartSplit = (m, need, unit) => {
+    const stock = stockInUnit(m, unit || m?.unit) ?? 0;
     const wd = Math.min(need, stock);
     return { qty_withdraw: wd, qty_buy: Math.max(0, need - wd) };
   };
   const lineFromQuoteItem = (it) => {
     const m = matMap[it.item_code];
     const need = Number(it.qty) || 1;
-    return { code: it.item_code, name: it.name || m?.th || it.item_code, unit: it.unit || m?.unit || "", ...smartSplit(m, need) };
+    const unit = it.unit || m?.unit || "";
+    return { code: it.item_code, name: it.name || m?.th || it.item_code, unit, ...smartSplit(m, need, unit) };
   };
+  // เปลี่ยนหน่วยของบรรทัด → แปลงจำนวนตามสัดส่วน (ปัดขึ้นให้ครอบ) แล้วแบ่งซื้อ/เบิกใหม่ตามคงเหลือหน่วยใหม่
+  const setLineUnit = (i, u) => setEd((e) => ({ ...e, items: e.items.map((x, j) => {
+    if (j !== i) return x;
+    const m = matMap[x.code]; const oldF = unitFactor(m, x.unit || m?.unit); const newF = unitFactor(m, u);
+    const need = Math.ceil(((x.qty_buy + x.qty_withdraw) * oldF) / newF * 100) / 100;
+    return { ...x, unit: u, ...smartSplit(m, need, u) };
+  }) }));
 
   // เปิดจากปุ่ม "เตรียมวัสดุ" ในใบเสนอราคา/ใบงาน — ดึงรายการมาให้อัตโนมัติ
   // (จากใบงานส่งมาแค่ quoteNo → ไปดึงรายการของใบเสนอราคาเอง)
@@ -92,8 +103,8 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
   }
   const addLine = (m, _t, qty = 1) => setEd((e) => {
     const i = e.items.findIndex((x) => x.code === m.code);
-    if (i >= 0) { const items = [...e.items]; const need = items[i].qty_buy + items[i].qty_withdraw + Number(qty); items[i] = { ...items[i], ...smartSplit(matMap[m.code], need) }; return { ...e, items }; }
-    return { ...e, items: [...e.items, { code: m.code, name: m.th, unit: m.unit || "", ...smartSplit(m, Number(qty) || 1) }] };
+    if (i >= 0) { const items = [...e.items]; const need = items[i].qty_buy + items[i].qty_withdraw + Number(qty); items[i] = { ...items[i], ...smartSplit(matMap[m.code], need, items[i].unit) }; return { ...e, items }; }
+    return { ...e, items: [...e.items, { code: m.code, name: m.th, unit: m.unit || "", ...smartSplit(m, Number(qty) || 1, m.unit) }] };
   });
   const setLine = (i, k, v) => setEd((e) => ({ ...e, items: e.items.map((x, j) => (j === i ? { ...x, [k]: Math.max(0, Number(v) || 0) } : x)) }));
   const delLine = (i) => setEd((e) => ({ ...e, items: e.items.filter((_, j) => j !== i) }));
@@ -102,13 +113,17 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
     const items = ed.items.filter((x) => x.qty_buy > 0 || x.qty_withdraw > 0);
     if (!items.length) return flash("ใส่จำนวน ซื้อ หรือ เบิก อย่างน้อย 1 รายการ", true);
     setBusy(true);
-    try { await saveMaterialPrep(ed, items); setEd(null); await load(); flash("บันทึกใบเตรียมวัสดุแล้ว ✓" + (canApprove ? "" : " — รอธุรการอนุมัติ")); }
+    try { await saveMaterialPrep(ed, items); setEd(null); await load(); flash("บันทึกร่างใบเตรียมวัสดุแล้ว ✓ — ตรวจแล้วกด “ยืนยัน” เพื่อสร้างใบสั่งซื้อ/ใบเบิก"); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
-  async function approve(p) {
-    if (!await confirmDialog(`อนุมัติใบเตรียมวัสดุ ${p.prep_no} ?\nหลังอนุมัติจะกดสร้างใบสั่งซื้อ/ใบเบิกได้`)) return;
-    try { await setPrepStatus(p.prep_no, "approved"); await load(); flash("อนุมัติแล้ว ✓"); }
+  async function confirm(p) {
+    if (!await confirmDialog(`ยืนยันใบเตรียมวัสดุ ${p.prep_no} ?\nหลังยืนยันจะกดสร้างใบสั่งซื้อ/ใบเบิกได้`)) return;
+    try { await setPrepStatus(p.prep_no, "approved"); await load(); flash("ยืนยันแล้ว ✓ — กดสร้างใบสั่งซื้อ/ใบเบิกได้เลย"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function backToDraft(p) {
+    try { await setPrepStatus(p.prep_no, "draft"); await load(); flash("กลับเป็นร่าง — แก้ไขได้"); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function markDone(p) {
@@ -165,13 +180,13 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
               </div>
               {ed.items.map((it, i) => {
                 const m = matMap[it.code];
-                const stock = m && m.tracked ? Number(m.stock) || 0 : null;
-                const overWd = stock != null && it.qty_withdraw > stock;
+                const stk = stockInUnit(m, it.unit);        // คงเหลือในหน่วยที่เลือก
+                const overWd = stk != null && it.qty_withdraw > stk;
                 return (
                   <div className="line-item" key={it.code || i}>
                     <div className="boq-line">
-                      <div className="line-info"><div className="line-name">{it.name}</div><div className="line-sub">{it.code || "-"}{it.unit ? ` · ${it.unit}` : ""}</div></div>
-                      <span style={{ width: 90, textAlign: "center", fontWeight: 700, color: stock === 0 ? "#dc2626" : "var(--ink-2)" }}>{stock == null ? "—" : fmtNum(stock)}</span>
+                      <div className="line-info"><div className="line-name">{it.name}</div><div className="line-sub">{it.code || "-"} · หน่วย: <UnitPick m={m} value={it.unit} onChange={(u) => setLineUnit(i, u)} /></div></div>
+                      <span style={{ width: 90, textAlign: "center", fontWeight: 700, color: stk === 0 ? "#dc2626" : "var(--ink-2)" }}>{stk == null ? "—" : `${fmtNum(stk)} ${it.unit || ""}`}</span>
                       <div className="inp inp-unit boq-in" style={{ width: 110, borderColor: overWd ? "#dc2626" : undefined }}>
                         <input type="number" min="0" value={it.qty_withdraw} onChange={(e) => setLine(i, "qty_withdraw", e.target.value)} />
                       </div>
@@ -180,7 +195,7 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
                       </div>
                       <button className="line-x" onClick={() => delLine(i)}><UIcon name="x" size={14} /></button>
                     </div>
-                    {overWd && <div style={{ fontSize: 12, color: "#dc2626", padding: "0 4px 6px" }}>⚠️ เบิกเกินคงเหลือ ({fmtNum(stock)}) — ส่วนที่เกินควรย้ายไปช่องสั่งซื้อ</div>}
+                    {overWd && <div style={{ fontSize: 12, color: "#dc2626", padding: "0 4px 6px" }}>⚠️ เบิกเกินคงเหลือ ({fmtNum(stk)} {it.unit}) — ส่วนที่เกินควรย้ายไปช่องสั่งซื้อ</div>}
                   </div>
                 );
               })}
@@ -248,13 +263,13 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
                   </div>
                   <div className="jo-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "10px 14px" }}>
                     {p.status === "draft" && canEdit && <button className="btn-ghost sm" onClick={() => startEdit(p)}><UIcon name="edit" size={14} /> แก้ไข</button>}
-                    {p.status === "draft" && canApprove && <button className="btn-primary sm" onClick={() => approve(p)}>✓ อนุมัติ</button>}
-                    {p.status === "draft" && !canApprove && <span className="job-badge b-grey">รอธุรการอนุมัติ</span>}
+                    {p.status === "draft" && canConfirm && <button className="btn-primary sm" onClick={() => confirm(p)}>✓ ยืนยัน</button>}
+                    {p.status === "approved" && canEdit && <button className="btn-ghost sm" onClick={() => backToDraft(p)} title="กลับไปแก้ไขรายการ">↩ กลับเป็นร่าง</button>}
                     {p.status === "approved" && nb > 0 && canEdit && (
-                      <button className="btn-primary sm" onClick={() => onCreatePo && onCreatePo(buyItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_buy) })), p.quote_no)}>🛒 สร้างใบสั่งซื้อ ({nb})</button>
+                      <button className="btn-primary sm" onClick={() => onCreatePo && onCreatePo(buyItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_buy), unit: it.unit || null })), p.quote_no)}>🛒 สร้างใบสั่งซื้อ ({nb})</button>
                     )}
                     {p.status === "approved" && nw > 0 && canEdit && (
-                      <button className="btn-primary sm" style={{ background: "#0369a1" }} onClick={() => onWithdraw && onWithdraw(wdItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_withdraw) })), p.jobNo, p.jobTeam)}>📦 ไปเบิกวัสดุ ({nw})</button>
+                      <button className="btn-primary sm" style={{ background: "#0369a1" }} onClick={() => onWithdraw && onWithdraw(wdItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_withdraw), unit: it.unit || null })), p.jobNo, p.jobTeam)}>📦 ไปเบิกวัสดุ ({nw})</button>
                     )}
                     {p.status === "approved" && canEdit && <button className="btn-ghost sm" onClick={() => markDone(p)}>ปิดใบ (ครบแล้ว)</button>}
                     {p.status === "draft" && canEdit && <button className="btn-ghost sm danger" onClick={() => remove(p)}><UIcon name="trash" size={14} /> ลบ</button>}
