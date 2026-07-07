@@ -5,6 +5,7 @@ import { can } from "../lib/permissions";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import ItemPicker from "./ItemPicker";
+import ItemBrowser from "./ItemBrowser";
 import { UIcon } from "../icons";
 
 // ใบเตรียมวัสดุ — ประตูก่อนการสั่งซื้อ/เบิก (mig 109)
@@ -133,7 +134,8 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
             <p className="page-sub">แบ่งจำนวนแต่ละรายการ: 🛒 สั่งซื้อ / 📦 เบิกจากคลัง (ระบบแบ่งให้ตามคงเหลือ แก้ทับได้)</p></div>
           <button className="btn-ghost" onClick={() => setEd(null)}>‹ กลับ</button>
         </div>
-        <div className="card" style={{ maxWidth: 1000 }}>
+        <div className="doc-edit-wrap">
+        <div className="card" style={{ flex: 1, maxWidth: 860 }}>
           <div className="fld-row">
             <label className="fld"><span>อ้างอิงใบเสนอราคา (ไม่บังคับ)</span>
               <div className="line-add">
@@ -150,6 +152,7 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
           </div>
           <div className="fld"><span>เพิ่มรายการ (ค้นหาสินค้า/วัสดุ)</span>
             <ItemPicker items={mats.filter((m) => m.kind !== "service")} placeholder="ค้นหารหัส / ชื่อสินค้า…" onPick={addLine} />
+            <p className="page-sub" style={{ marginTop: 6 }}>เลือกจากช่องค้นหา หรือเลือกจากแคตตาล็อกด้านขวา (กรองยี่ห้อ/รุ่น/BTU/หมวดได้) → ปรับจำนวน ซื้อ/เบิก ในรายการด้านล่าง</p>
           </div>
           {ed.items.length > 0 && (
             <div className="line-list">
@@ -194,6 +197,8 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
             <button className="btn-primary" disabled={busy} onClick={save}>✓ บันทึกใบเตรียมวัสดุ</button>
           </div>
+        </div>
+        <ItemBrowser mats={mats.filter((m) => m.kind !== "service")} onAdd={addLine} />
         </div>
         {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
       </div>
