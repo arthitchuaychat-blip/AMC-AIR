@@ -517,8 +517,9 @@ export async function deleteStockCount(id) {
 // aggregate all job_no'd movements + the jobs (status) table
 async function _jobAggregate() {
   const [txnRes, jobRes] = await Promise.all([
-    supabase.from("transactions").select("*").not("job_no", "is", null)
-      .in("type", ["withdraw", "return", "damage"]).order("id", { ascending: true }).limit(5000),
+    // limit(5000) ใช้ไม่ได้จริง — Supabase ตัดที่ 1000 แถวเสมอ ต้องดึงเป็นช่วง ๆ ไม่งั้นต้นทุนงานใหม่หาย
+    _fetchAll((f, t) => supabase.from("transactions").select("*", { count: "exact" }).not("job_no", "is", null)
+      .in("type", ["withdraw", "return", "damage"]).order("id", { ascending: true }).range(f, t)).then((rows) => ({ data: rows })),
     supabase.from("jobs").select("*"),
   ]);
   if (txnRes.error) throw txnRes.error;
@@ -581,7 +582,7 @@ export async function reopenJob(job_no) {
 export async function listPurchaseOrders() {
   const [poRes, itemRes, qRes, cuRes, joRes, tmRes] = await Promise.all([
     supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }),
-    supabase.from("po_items").select("*"),
+    _fetchAll((f, t) => supabase.from("po_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("quotations").select("quote_no,customer_id,title"),
     supabase.from("customers").select("id,name"),
     supabase.from("job_orders").select("job_no,quote_no,team,status"),
@@ -621,7 +622,7 @@ export async function getQuoteItems(quote_no) {
 export async function listMaterialPreps() {
   const [pRes, iRes, qRes, cuRes, joRes, tmRes] = await Promise.all([
     supabase.from("material_preps").select("*").order("created_at", { ascending: false }),
-    supabase.from("material_prep_items").select("*").order("id"),
+    _fetchAll((f, t) => supabase.from("material_prep_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("quotations").select("quote_no,customer_id,title"),
     supabase.from("customers").select("id,name"),
     supabase.from("job_orders").select("job_no,quote_no,team,status"),
@@ -726,7 +727,7 @@ export async function dashboardActionLite() {
     supabase.from("expense_requests").select("id,status,amount"),
     supabase.from("purchase_orders").select("po_no,status,vat,expense_id,paid_at").then(async (r) =>
       (r.error && /expense_id|paid_at|vat/i.test(r.error.message || "")) ? await supabase.from("purchase_orders").select("po_no,status") : r), // pre-096/100 fallback
-    supabase.from("po_items").select("po_no,qty,price"),
+    _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("sub_payouts").select("status,net"),
     supabase.from("job_orders").select("labor_total,labor_paid_amt").eq("labor_confirmed", true).gt("labor_total", 0)
       .then(async (r) => (r.error ? { data: [] } : r)), // pre-045 fallback
@@ -761,7 +762,7 @@ export async function dashboardActionLite() {
 export async function listPayables() {
   const [po, poi, exp, sp, lj, tm] = await Promise.all([
     supabase.from("purchase_orders").select("*").neq("status", "cancelled").order("created_at", { ascending: false }),
-    supabase.from("po_items").select("po_no,qty,price"),
+    _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("expense_requests").select("*").eq("status", "approved").order("created_at", { ascending: false }),
     supabase.from("sub_payouts").select("*").neq("status", "paid").order("created_at", { ascending: false }),
     supabase.from("job_orders").select("job_no,team,labor_total,labor_paid_amt,scheduled_at").eq("labor_confirmed", true).gt("labor_total", 0)
@@ -944,7 +945,8 @@ export async function deleteSupplier(id) {
 export async function listBoqs() {
   const [b, it, cu, si, ct, qt] = await Promise.all([
     supabase.from("boqs").select("*").order("created_at", { ascending: false }),
-    supabase.from("boq_items").select("*").order("id"),
+    // ห้ามอ่านทั้งตารางตรง ๆ — Supabase ตัดที่ 1000 แถว รายการใบใหม่ (id ท้ายตาราง) จะหายทั้งที่บันทึกสำเร็จ
+    _fetchAll((f, t) => supabase.from("boq_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })),
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
@@ -1155,7 +1157,7 @@ export async function setJobStatus(job_no, status) {
 export async function listQuotations() {
   const [q, it, cu, si, ct, jo, inv] = await Promise.all([
     supabase.from("quotations").select("*").order("created_at", { ascending: false }),
-    supabase.from("quotation_items").select("*").order("id"),
+    _fetchAll((f, t) => supabase.from("quotation_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("customers").select("id,name,address,tax_id,type"),
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
@@ -1515,7 +1517,7 @@ export async function listJobOrders() {
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat,created_by"),
-    supabase.from("quotation_items").select("quote_no,name,unit,qty,unit_price,kind"),
+    _fetchAll((f, t) => supabase.from("quotation_items").select("quote_no,name,unit,qty,unit_price,kind", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("job_visits").select("*").order("visit_date", { ascending: true }),
   ]);
   if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error; if (qit.error) throw qit.error;
@@ -1918,11 +1920,12 @@ export async function listRecentTransactions(limit = 60) {
 
 // transactions since a date (YYYY-MM-DD); null = all-time. For dashboards.
 export async function listTransactionsSince(startDate) {
-  let q = supabase.from("transactions").select("*").limit(10000);
-  if (startDate) q = q.gte("txn_date", startDate);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data || [];
+  // limit(10000) ใช้ไม่ได้จริง — Supabase ตัดที่ 1000 แถวเสมอ ต้องดึงเป็นช่วง ๆ
+  return _fetchAll((f, t) => {
+    let q = supabase.from("transactions").select("*", { count: "exact" }).order("id");
+    if (startDate) q = q.gte("txn_date", startDate);
+    return q.range(f, t);
+  });
 }
 
 // ต้นทุนวัสดุที่เบิก/คืน รวมต่อใบงาน → { job_no: { withdraw, return } }
@@ -3246,14 +3249,15 @@ export async function setOpeningBalance(amount) {
 export async function syncCashEntriesFromDocs() {
   const _d = (ts) => (ts ? String(ts).slice(0, 10) : null);
   const [inv, rec, pay, po, poItems, cust, team, existing, salaryProfiles, laborJobs, expReq] = await Promise.all([
-    supabase.from("invoices").select("invoice_no,due_date,issue_date,total,wht_amt,status,customer_id"),
-    supabase.from("receipts").select("receipt_no,issue_date,net,total,status,customer_id"),
+    // ตารางเอกสารโตเรื่อย ๆ — ถ้าอ่านไม่ครบ (เพดาน 1000 แถว) sync จะลบ cash lines ของใบที่อ่านไม่ถึง
+    _fetchAll((f, t) => supabase.from("invoices").select("invoice_no,due_date,issue_date,total,wht_amt,status,customer_id", { count: "exact" }).order("invoice_no").range(f, t)).then((rows) => ({ data: rows })),
+    _fetchAll((f, t) => supabase.from("receipts").select("receipt_no,issue_date,net,total,status,customer_id", { count: "exact" }).order("receipt_no").range(f, t)).then((rows) => ({ data: rows })),
     supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at"),
-    supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat,paid_at,expense_id"),
-    supabase.from("po_items").select("po_no,qty,price"),
+    _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat,paid_at,expense_id", { count: "exact" }).order("po_no").range(f, t)).then((rows) => ({ data: rows })),
+    _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("customers").select("id,name"),
     supabase.from("teams").select("id,name"),
-    supabase.from("cash_entries").select("id,source_type,source_ref,edited").neq("source_type", "manual"),
+    _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows })), // ถ้าอ่านไม่ครบ sync จะสร้างซ้ำ
     supabase.from("profiles").select("id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0),
     // confirmed subcontractor labor not yet fully covered by a payout = "ค่าแรงรอจ่าย"
     supabase.from("job_orders").select("job_no,assigned_team,labor_total,labor_paid_amt,labor_confirmed_at,scheduled_at,created_at").eq("labor_confirmed", true).gt("labor_total", 0),
