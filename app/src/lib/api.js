@@ -1089,12 +1089,16 @@ export async function saveBoq(boq, items) {
   const e2 = (await supabase.from("boq_items").delete().eq("boq_no", boq.boq_no)).error;
   if (e2) throw e2;
   if (items.length) {
-    const e3 = (await supabase.from("boq_items").insert(items.map((x) => ({
+    const rows = items.map((x) => ({
       boq_no: boq.boq_no, section: x.section, item_code: x.code || null, name: x.name || null,
       description: x.description?.trim() || null,
       unit: x.unit || null, qty: Number(x.qty) || 0, unit_cost: Number(x.unit_cost) || 0,
-    })))).error;
-    if (e3) throw new Error(/section.*check|boq_items_section/i.test(e3.message || "") ? "บันทึกรายการค่าบริการไม่ได้ — ต้องรัน migration 116 ใน Supabase ก่อน" : e3.message || e3);
+    }));
+    let e3 = (await supabase.from("boq_items").insert(rows)).error;
+    if (e3 && /description/i.test(e3.message || "")) { rows.forEach((r) => delete r.description); e3 = (await supabase.from("boq_items").insert(rows)).error; } // pre-026 fallback
+    if (e3) throw new Error(/section.*check|boq_items_section/i.test(e3.message || "")
+      ? "บันทึกรายการค่าบริการไม่ได้ — ต้องรัน migration 116 ใน Supabase ก่อน (constraint boq_items.section ยังไม่รวม service)"
+      : "บันทึกรายการไม่สำเร็จ: " + (e3.message || e3));
   }
   syncInternalNote({ boqNo: boq.boq_no }, boq.internal_note).catch(() => {});
 }

@@ -98,7 +98,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-07·แก้ BOQ บันทึกค่าบริการไม่ได้ (constraint boq_items.section ไม่รวม service) + ข้อความช่วยชี้ mig 116 v318";
+const BUILD = "2026-07-07·BOQ: กันรายการหายตอนบันทึก (insert ทั้งชุดล้มเพราะ service/description) + fallback + ข้อความชัด v319";
 
 function SetupNotice() {
   return (
