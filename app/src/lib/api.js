@@ -2439,10 +2439,12 @@ async function _enrichExpenseJobs(rows) {
   return rows.map((x) => {
     let job = x.job_no ? jobByNo[x.job_no] : null;
     let quoteNo = job?.quote_no || null;
-    if (!job) { const po = poByExp[x.id]; if (po?.quote_no) { quoteNo = po.quote_no; job = jobByQuote[po.quote_no] || null; } }
+    const po = poByExp[x.id] || null;
+    if (!job && po?.quote_no) { quoteNo = po.quote_no; job = jobByQuote[po.quote_no] || null; }
     const qi = quoteNo ? quoteInfo[quoteNo] : null;
     const custId = job?.customer_id ?? qi?.customer_id ?? null;
-    return { ...x, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null, customerName: custId != null ? custName[custId] || null : null };
+    return { ...x, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null,
+      customerName: custId != null ? custName[custId] || null : null, poNo: po?.po_no || null, quoteNo };
   });
 }
 export async function listMyExpenses() {
@@ -2470,34 +2472,56 @@ export async function decideExpense(id, status, note) {
   const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
   if (ex) notify([ex.requester], { category: "hr", title: `🧾 คำขอเบิก "${ex.title}" : ${lbl}`, body: note || "", url: "expenses", ref_type: "expense" });
 }
-export async function payExpense(id, { accountId, proof, payDate }) {
+// จ่ายเงินเบิก — รองรับ "แบ่งจ่าย": ส่ง amount = งวดนี้ (ไม่ส่ง = จ่ายยอดคงเหลือทั้งหมด)
+//  จ่ายครบ → status=paid + ประทับ PO/กระแสเงินสด · จ่ายบางส่วน → paid_amount เพิ่ม สถานะยัง approved
+export async function payExpense(id, { accountId, proof, payDate, amount } = {}) {
   const uid = await _uid();
   const { data: ex, error: e0 } = await supabase.from("expense_requests").select("*").eq("id", id).single();
   if (e0) throw e0;
-  if (ex.status === "paid") throw new Error("จ่ายเงินไปแล้ว");
+  if (ex.status === "paid") throw new Error("จ่ายเงินครบแล้ว");
+  const total = Math.round((Number(ex.amount) || 0) * 100) / 100;
+  const already = Math.round((Number(ex.paid_amount) || 0) * 100) / 100;
+  const remaining = Math.round((total - already) * 100) / 100;
+  let payAmt = amount != null && amount !== "" ? Math.round((Number(amount) || 0) * 100) / 100 : remaining;
+  if (payAmt <= 0) throw new Error("จำนวนเงินที่จ่ายต้องมากกว่า 0");
+  if (payAmt > remaining + 0.005) throw new Error(`จ่ายเกินยอดคงเหลือ (${remaining.toLocaleString()} บาท)`);
+  const newPaid = Math.round((already + payAmt) * 100) / 100;
+  const fully = newPaid >= total - 0.005;
   const day = payDate || new Date().toISOString().slice(0, 10);
-  const { error } = await supabase.from("expense_requests").update({ status: "paid", paid_from: accountId || null, paid_at: new Date().toISOString(), payment_proof: proof || [] }).eq("id", id);
-  if (error) throw error;
-  const noteTxt = `เบิกจ่าย: ${ex.title}${ex.job_no ? " · งาน " + ex.job_no : ""}`;
+
+  const upd = { payment_proof: [...(ex.payment_proof || []), ...(proof || [])] };
+  upd.paid_amount = newPaid;
+  if (fully) { upd.status = "paid"; upd.paid_from = accountId || null; upd.paid_at = new Date().toISOString(); }
+  let uErr = (await supabase.from("expense_requests").update(upd).eq("id", id)).error;
+  // pre-111: ไม่มีคอลัมน์ paid_amount → แบ่งจ่ายยังไม่พร้อม บังคับจ่ายเต็มจำนวน
+  if (uErr && /paid_amount/i.test(uErr.message || "")) {
+    if (!fully) throw new Error("ยังไม่ได้รัน migration 111 — แบ่งจ่ายยังไม่พร้อม (จ่ายเต็มยอดก่อน)");
+    delete upd.paid_amount;
+    uErr = (await supabase.from("expense_requests").update(upd).eq("id", id)).error;
+  }
+  if (uErr) throw uErr;
+
+  const noteTxt = `เบิกจ่าย: ${ex.title}${!fully ? ` (งวด · เหลือ ${(remaining - payAmt).toLocaleString()})` : ""}${ex.job_no ? " · งาน " + ex.job_no : ""}`;
   if (accountId) {
-    const aePayload = { account_id: accountId, direction: "out", amount: Number(ex.amount) || 0, kind: "expense", ref_type: "expense", ref_id: id, note: noteTxt, entry_date: day, created_by: uid };
+    const aePayload = { account_id: accountId, direction: "out", amount: payAmt, kind: "expense", ref_type: "expense", ref_id: id, note: noteTxt, entry_date: day, created_by: uid };
     if (ex.category) aePayload.category = ex.category;   // carry the expense's category into the ledger for analysis
     let aeErr = (await supabase.from("account_entries").insert(aePayload)).error;
     if (aeErr && /category|column|PGRST204/i.test(aeErr.message || "") && aePayload.category !== undefined) { delete aePayload.category; aeErr = (await supabase.from("account_entries").insert(aePayload)).error; }
     if (aeErr) throw aeErr;
   }
-  // ถ้าคำขอนี้คือ "ชำระใบสั่งซื้อ" → ประทับวันจ่ายบน PO แล้วให้บรรทัด PO ในกระแสเงินสดเป็นตัวจ่ายจริง
-  // (ห้าม mirror เป็น source_type 'expense' ซ้ำ — จะกลายเป็นจ่าย 2 รอบ)
+  // ชำระใบสั่งซื้อ: ประทับ PO เมื่อ "จ่ายครบ" เท่านั้น (PO cash line = ตัวจ่ายจริง ห้าม mirror ซ้ำ)
   let linkedPo = null;
   try { linkedPo = (await supabase.from("purchase_orders").select("po_no").eq("expense_id", id).maybeSingle()).data; } catch (_) {}
   if (linkedPo?.po_no) {
-    await supabase.from("purchase_orders").update({ paid_at: new Date(day + "T00:00:00").toISOString() }).eq("po_no", linkedPo.po_no);
-    syncCashEntriesFromDocs().catch(() => {});   // PO เด้งจาก "คาดว่าจะจ่าย" → "จ่ายจริง"
+    if (fully) {
+      await supabase.from("purchase_orders").update({ paid_at: new Date(day + "T00:00:00").toISOString() }).eq("po_no", linkedPo.po_no);
+      syncCashEntriesFromDocs().catch(() => {});   // PO เด้งจาก "คาดว่าจะจ่าย" → "จ่ายจริง"
+    }
   } else {
-    // mirror into the Cash Flow ledger (money out, actual)
-    try { await supabase.from("cash_entries").insert({ direction: "out", status: "actual", entry_date: day, amount: Number(ex.amount) || 0, note: noteTxt, source_type: "expense", source_ref: id, created_by: uid }); } catch (_) {}
+    // ค่าใช้จ่ายทั่วไป → mirror งวดนี้เข้ากระแสเงินสด (source 'expense' ไม่ถูก sync ลบ ทับได้หลายงวด)
+    try { await supabase.from("cash_entries").insert({ direction: "out", status: "actual", entry_date: day, amount: payAmt, note: noteTxt, source_type: "expense", source_ref: id, created_by: uid }); } catch (_) {}
   }
-  notify([ex.requester], { category: "hr", title: `💸 จ่ายเงินเบิก "${ex.title}" แล้ว ${Number(ex.amount) || 0} บาท`, body: "แนบหลักฐานการจ่ายเรียบร้อย", url: "expenses", ref_type: "expense" });
+  notify([ex.requester], { category: "hr", title: `💸 ${fully ? "จ่ายเงินเบิกครบแล้ว" : "จ่ายเงินเบิกบางส่วน"} "${ex.title}" ${payAmt.toLocaleString()} บาท`, body: fully ? "แนบหลักฐานการจ่ายเรียบร้อย" : `คงเหลืออีก ${(remaining - payAmt).toLocaleString()} บาท`, url: "expenses", ref_type: "expense" });
 }
 // approved/paid expense cost rolled up per job → adds to job cost in Profit
 export async function jobExpenseCost() {

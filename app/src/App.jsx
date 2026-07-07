@@ -98,7 +98,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-07·ใบเบิกจ่ายโชว์ เลขงาน · ชื่องาน · ลูกค้า (ค่าสินค้า PO โยงผ่านใบเสนอราคาให้เอง) v311";
+const BUILD = "2026-07-07·ใบเบิกจ่าย: ชิปลิงก์ไป PO/งาน/ใบเสนอราคา + แบ่งจ่ายทีละงวด (โชว์จ่ายแล้ว/คงเหลือ) v312";
 
 function SetupNotice() {
   return (
@@ -459,7 +459,11 @@ export default function App() {
         {view === "website" && <WebManage role={role} />}
         {view === "profit" && <Profit />}
         {view === "cashflow" && <CashFlow />}
-        {view === "expenses" && <Expenses role={role} me={profile} />}
+        {view === "expenses" && <Expenses role={role} me={profile} onOpenDoc={(t, no) => {
+          if (t === "po") { setPoFocus(no); go("po"); }
+          else if (t === "job") { setJobFocus(no); go("joborders"); }
+          else if (t === "quote") { setQuoteFocus(no); go("quote"); }
+        }} />}
         {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} myTeam={profile?.team} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
           surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }}
           onCreatePrep={(jo) => { setPrepPrefill({ quoteNo: jo.quote_no || "", title: `งาน ${jo.job_no}${jo.title ? " · " + jo.title : ""}` }); go("prep"); }}

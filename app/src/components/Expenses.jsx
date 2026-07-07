@@ -63,7 +63,7 @@ function CategoryPicker({ value, onChange, flash }) {
   );
 }
 
-export default function Expenses({ role, me }) {
+export default function Expenses({ role, me, onOpenDoc }) {
   const office = OFFICE.includes(role);
   const TABS = [["mine", "ขอเบิกของฉัน"], ...(office ? [["approve", "อนุมัติ / จ่าย"], ["accounts", "บัญชี & โอนเงิน"], ["report", "เดินบัญชี & กระทบแบงค์"]] : [])];
   const [tab, setTab] = React.useState("mine");
@@ -77,8 +77,8 @@ export default function Expenses({ role, me }) {
         {TABS.map(([v, l]) => <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
           style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
       </div>
-      {tab === "mine" && <MineTab flash={flash} />}
-      {tab === "approve" && office && <ApproveTab flash={flash} />}
+      {tab === "mine" && <MineTab flash={flash} onOpenDoc={onOpenDoc} />}
+      {tab === "approve" && office && <ApproveTab flash={flash} onOpenDoc={onOpenDoc} />}
       {tab === "accounts" && office && <AccountsTab flash={flash} />}
       {tab === "report" && office && <ReportTab flash={flash} />}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
@@ -86,12 +86,23 @@ export default function Expenses({ role, me }) {
   );
 }
 
-function ExpenseCard({ x, children }) {
+function ExpenseCard({ x, children, onOpenDoc }) {
   const st = EST[x.status] || EST.pending;
+  const paid = Math.round((Number(x.paid_amount) || 0) * 100) / 100;
+  const total = Math.round((Number(x.amount) || 0) * 100) / 100;
+  const partial = x.status !== "paid" && paid > 0 && paid < total;   // จ่ายแล้วบางส่วน
+  const chip = (label, on, color) => <button type="button" className="vat-badge" title="เปิดเอกสารที่เกี่ยวข้อง"
+    style={{ cursor: onOpenDoc ? "pointer" : "default", border: "1px solid transparent", background: color.bg, color: color.fg }}
+    onClick={() => onOpenDoc && on()}>{label} ↗</button>;
   return (
     <div className="card job-card">
       <div className="job-card-head" style={{ cursor: "default" }}>
-        <div className="job-card-id"><span className="job-no">{x.title}</span><span className={"job-badge " + st.c}>{st.t}</span>{(x.jobNo || x.job_no) && <span className="vat-badge vat-on">งาน {x.jobNo || x.job_no}</span>}</div>
+        <div className="job-card-id"><span className="job-no">{x.title}</span><span className={"job-badge " + st.c}>{st.t}</span>
+          {partial && <span className="job-badge b-amber">จ่ายบางส่วน</span>}
+          {x.poNo && chip("PO " + x.poNo, () => onOpenDoc("po", x.poNo), { bg: "#fff7ed", fg: "#c2410c" })}
+          {(x.jobNo || x.job_no) && chip("งาน " + (x.jobNo || x.job_no), () => onOpenDoc("job", x.jobNo || x.job_no), { bg: "#f3e8ff", fg: "#7c3aed" })}
+          {x.quoteNo && chip("อ้างอิง " + x.quoteNo, () => onOpenDoc("quote", x.quoteNo), { bg: "#eff6ff", fg: "#1d4ed8" })}
+        </div>
         <div className="job-card-meta inv-meta">
           {x.customerName && <span className="inv-cust">👤 ลูกค้า {x.customerName}</span>}
           {x.jobTitle && <span className="inv-period">📋 {x.jobTitle}</span>}
@@ -101,7 +112,9 @@ function ExpenseCard({ x, children }) {
           {x.note && <span className="jo-dim">{x.note}</span>}
           {x.decide_note && <span className="jo-dim">หมายเหตุ: {x.decide_note}</span>}
         </div>
-        <div className="job-card-cost"><span>ยอดเบิก</span><b>{fmtBaht(x.amount)}</b></div>
+        <div className="job-card-cost"><span>ยอดเบิก</span><b>{fmtBaht(x.amount)}</b>
+          {partial && <small style={{ color: "#d97706", fontWeight: 700 }}>จ่ายแล้ว {fmtBaht(paid)} · เหลือ {fmtBaht(total - paid)}</small>}
+        </div>
       </div>
       {(x.attachments?.length > 0 || x.payment_proof?.length > 0) && (
         <div className="exp-atts">
@@ -114,7 +127,7 @@ function ExpenseCard({ x, children }) {
   );
 }
 
-function MineTab({ flash }) {
+function MineTab({ flash, onOpenDoc }) {
   const [list, setList] = React.useState(null);
   const [jobs, setJobs] = React.useState([]);
   const [form, setForm] = React.useState(null);
@@ -126,7 +139,7 @@ function MineTab({ flash }) {
         <button className="btn-primary" onClick={() => setForm({ title: "", amount: "", category: "", job_no: "", note: "", attachments: [] })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> ขอเบิกใหม่</button></div>
       {list === null && <div className="empty">กำลังโหลด…</div>}
       {list && list.length === 0 && <div className="empty">ยังไม่มีคำขอเบิก</div>}
-      <div className="job-cards">{(list || []).map((x) => <ExpenseCard key={x.id} x={x} />)}</div>
+      <div className="job-cards">{(list || []).map((x) => <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} />)}</div>
       {form && <ExpenseForm form={form} setForm={setForm} jobs={jobs} onSaved={() => { setForm(null); load(); }} flash={flash} />}
     </div>
   );
@@ -168,7 +181,7 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
   );
 }
 
-function ApproveTab({ flash }) {
+function ApproveTab({ flash, onOpenDoc }) {
   const [list, setList] = React.useState(null);
   const [statusF, setStatusF] = React.useState("pending");
   const [payFor, setPayFor] = React.useState(null);
@@ -194,11 +207,11 @@ function ApproveTab({ flash }) {
       {list && shown.length === 0 && <div className="empty">ไม่มีรายการ</div>}
       <div className="job-cards">
         {shown.map((x) => (
-          <ExpenseCard key={x.id} x={x}>
+          <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc}>
             {x.status === "pending" && <><button className="btn-primary sm ok" onClick={() => decide(x, "approved")}>✓ อนุมัติ</button>
               <button className="btn-ghost sm" onClick={() => decide(x, "rejected")}>ไม่อนุมัติ</button></>}
-            {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> จ่ายเงิน + แนบหลักฐาน</button>
-              <button className="btn-ghost sm danger" onClick={() => decide(x, "pending")}>ยกเลิกอนุมัติ</button></>}
+            {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> {Number(x.paid_amount) > 0 ? "จ่ายงวดต่อไป" : "จ่ายเงิน + แนบหลักฐาน"}</button>
+              {!(Number(x.paid_amount) > 0) && <button className="btn-ghost sm danger" onClick={() => decide(x, "pending")}>ยกเลิกอนุมัติ</button>}</>}
           </ExpenseCard>
         ))}
       </div>
@@ -208,26 +221,43 @@ function ApproveTab({ flash }) {
 }
 
 function PayModal({ x, onClose, onPaid, flash }) {
+  const total = Math.round((Number(x.amount) || 0) * 100) / 100;
+  const already = Math.round((Number(x.paid_amount) || 0) * 100) / 100;
+  const remaining = Math.round((total - already) * 100) / 100;
   const [accounts, setAccounts] = React.useState([]);
   const [accountId, setAccountId] = React.useState("");
   const [proof, setProof] = React.useState([]);
   const [payDate, setPayDate] = React.useState(today());
+  const [mode, setMode] = React.useState("full");            // full = จ่ายยอดคงเหลือ · partial = แบ่งจ่าย
+  const [amount, setAmount] = React.useState(String(remaining));
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => { listAccounts().then((a) => { setAccounts(a); setAccountId(a[0]?.id || ""); }).catch(() => {}); }, []);
+  const payAmt = mode === "full" ? remaining : (Math.round((Number(amount) || 0) * 100) / 100);
   async function pay() {
     if (!accountId) return flash("เลือกบัญชีที่จ่าย", true);
     if (!payDate) return flash("เลือกวันที่จ่าย", true);
+    if (mode === "partial") { if (payAmt <= 0) return flash("ใส่จำนวนเงินที่จ่ายงวดนี้", true); if (payAmt > remaining + 0.005) return flash("จ่ายเกินยอดคงเหลือ", true); }
     setBusy(true);
-    try { await payExpense(x.id, { accountId, proof, payDate }); flash("จ่ายเงินแล้ว + แจ้งผู้ขอเบิก ✓"); onPaid(); }
-    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    try {
+      await payExpense(x.id, { accountId, proof, payDate, amount: mode === "full" ? undefined : payAmt });
+      flash(payAmt >= remaining - 0.005 ? "จ่ายครบแล้ว + แจ้งผู้ขอเบิก ✓" : "จ่ายบางส่วนแล้ว ✓ (ยังเหลือยอดค้าง)"); onPaid();
+    } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
-        <div className="modal-head"><div className="modal-title">จ่ายเงินเบิก · {fmtBaht(x.amount)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-head"><div className="modal-title">จ่ายเงินเบิก · ยอดคงเหลือ {fmtBaht(remaining)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
-          <div className="jo-dim" style={{ marginBottom: 10 }}>{x.title}{(x.jobNo || x.job_no) ? ` · งาน ${x.jobNo || x.job_no}` : ""}{x.customerName ? ` · ลูกค้า ${x.customerName}` : ""} · ผู้ขอเบิก {x.requesterName}</div>
+          <div className="jo-dim" style={{ marginBottom: 10 }}>{x.title}{(x.jobNo || x.job_no) ? ` · งาน ${x.jobNo || x.job_no}` : ""}{x.customerName ? ` · ลูกค้า ${x.customerName}` : ""} · ยอดเบิกรวม {fmtBaht(total)}{already > 0 ? ` · จ่ายแล้ว ${fmtBaht(already)}` : ""}</div>
+          <div className="fld"><span>จำนวนที่จ่ายงวดนี้</span>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <button type="button" className={"cat-chip" + (mode === "full" ? " on" : "")} style={mode === "full" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}} onClick={() => setMode("full")}>จ่ายทั้งหมด ({fmtBaht(remaining)})</button>
+              <button type="button" className={"cat-chip" + (mode === "partial" ? " on" : "")} style={mode === "partial" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}} onClick={() => setMode("partial")}>แบ่งจ่าย</button>
+            </div>
+            {mode === "partial" && <div className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" max={remaining} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`ไม่เกิน ${remaining}`} /></div>}
+            {mode === "partial" && payAmt > 0 && payAmt < remaining && <div className="jo-dim" style={{ marginTop: 4, color: "#d97706" }}>จ่ายงวดนี้ {fmtBaht(payAmt)} · เหลือค้าง {fmtBaht(remaining - payAmt)}</div>}
+          </div>
           <div className="fld-row">
             <label className="fld"><span>จ่ายจากบัญชี</span>
               <select className="inp" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
@@ -238,7 +268,7 @@ function PayModal({ x, onClose, onPaid, flash }) {
           <div className="fld"><span>แนบหลักฐานการจ่าย (สลิปโอน ฯลฯ)</span><AttachRow files={proof} onChange={setProof} flash={flash} label="แนบสลิป/หลักฐาน" /></div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
-          <button className="btn-primary" disabled={busy} onClick={pay}>ยืนยันจ่ายเงิน</button></div>
+          <button className="btn-primary" disabled={busy} onClick={pay}>ยืนยันจ่าย {fmtBaht(payAmt)}</button></div>
       </div>
     </div>
   );
