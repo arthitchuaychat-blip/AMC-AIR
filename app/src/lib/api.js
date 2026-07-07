@@ -2416,10 +2416,40 @@ export async function submitExpense(e) {
   const me = await getProfile();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🧾 ${me?.name || "พนักงาน"} ขอเบิกค่าใช้จ่าย ${Number(e.amount) || 0} บาท`, body: e.title || "", url: "expenses", ref_type: "expense" });
 }
+// เติม เลขงาน · ชื่องาน · ชื่อลูกค้า ให้ใบเบิกจ่าย
+//  - ใบเบิกที่มี job_no ตรง ๆ (ค่าใช้จ่ายเข้างาน) → จากใบงานนั้น
+//  - ใบเบิกค่าสินค้า PO (job_no ว่าง) → โยงผ่าน PO.expense_id → ใบเสนอราคา → ลูกค้า + ใบงาน
+async function _enrichExpenseJobs(rows) {
+  if (!rows.length) return rows;
+  const ids = rows.map((x) => x.id).filter(Boolean);
+  let poByExp = {};
+  try {
+    const { data } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id").in("expense_id", ids.length ? ids : ["_"]);
+    (data || []).forEach((p) => { if (p.expense_id) poByExp[p.expense_id] = p; });
+  } catch (_) { /* pre-100: ไม่มี expense_id — ข้าม */ }
+  const [joRes, quRes, cuRes] = await Promise.all([
+    supabase.from("job_orders").select("job_no,quote_no,customer_id,title,status"),
+    supabase.from("quotations").select("quote_no,customer_id,title"),
+    supabase.from("customers").select("id,name"),
+  ]);
+  const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
+  const jobByNo = Object.fromEntries((joRes.data || []).map((j) => [j.job_no, j]));
+  const quoteInfo = Object.fromEntries((quRes.data || []).map((x) => [x.quote_no, x]));
+  const jobByQuote = {}; (joRes.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
+  return rows.map((x) => {
+    let job = x.job_no ? jobByNo[x.job_no] : null;
+    let quoteNo = job?.quote_no || null;
+    if (!job) { const po = poByExp[x.id]; if (po?.quote_no) { quoteNo = po.quote_no; job = jobByQuote[po.quote_no] || null; } }
+    const qi = quoteNo ? quoteInfo[quoteNo] : null;
+    const custId = job?.customer_id ?? qi?.customer_id ?? null;
+    return { ...x, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null, customerName: custId != null ? custName[custId] || null : null };
+  });
+}
 export async function listMyExpenses() {
   const uid = await _uid();
   const { data, error } = await supabase.from("expense_requests").select("*").eq("requester", uid).order("created_at", { ascending: false });
-  if (error) throw error; return data || [];
+  if (error) throw error;
+  return _enrichExpenseJobs(data || []);
 }
 export async function listExpenses(status) {
   let q = supabase.from("expense_requests").select("*").order("created_at", { ascending: false });
@@ -2427,7 +2457,8 @@ export async function listExpenses(status) {
   const [ex, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,email")]);
   if (ex.error) throw ex.error;
   const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
-  return (ex.data || []).map((x) => ({ ...x, requesterName: nm[x.requester] || "—", approverName: x.approver ? (nm[x.approver] || "—") : null }));
+  const enriched = await _enrichExpenseJobs(ex.data || []);
+  return enriched.map((x) => ({ ...x, requesterName: nm[x.requester] || "—", approverName: x.approver ? (nm[x.approver] || "—") : null }));
 }
 export async function decideExpense(id, status, note) {
   const uid = await _uid();

@@ -91,9 +91,11 @@ function ExpenseCard({ x, children }) {
   return (
     <div className="card job-card">
       <div className="job-card-head" style={{ cursor: "default" }}>
-        <div className="job-card-id"><span className="job-no">{x.title}</span><span className={"job-badge " + st.c}>{st.t}</span>{x.job_no && <span className="vat-badge vat-on">งาน {x.job_no}</span>}</div>
+        <div className="job-card-id"><span className="job-no">{x.title}</span><span className={"job-badge " + st.c}>{st.t}</span>{(x.jobNo || x.job_no) && <span className="vat-badge vat-on">งาน {x.jobNo || x.job_no}</span>}</div>
         <div className="job-card-meta inv-meta">
-          {x.requesterName && <span className="inv-cust">👤 {x.requesterName}</span>}
+          {x.customerName && <span className="inv-cust">👤 ลูกค้า {x.customerName}</span>}
+          {x.jobTitle && <span className="inv-period">📋 {x.jobTitle}</span>}
+          {x.requesterName && <span className="inv-period">ผู้ขอเบิก {x.requesterName}</span>}
           {x.category && <span className="inv-period">{x.category}</span>}
           <span className="inv-period">{fmtD(x.created_at)}</span>
           {x.note && <span className="jo-dim">{x.note}</span>}
@@ -225,7 +227,7 @@ function PayModal({ x, onClose, onPaid, flash }) {
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
         <div className="modal-head"><div className="modal-title">จ่ายเงินเบิก · {fmtBaht(x.amount)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
-          <div className="jo-dim" style={{ marginBottom: 10 }}>{x.title}{x.job_no ? ` · งาน ${x.job_no}` : ""} · ผู้ขอเบิก {x.requesterName}</div>
+          <div className="jo-dim" style={{ marginBottom: 10 }}>{x.title}{(x.jobNo || x.job_no) ? ` · งาน ${x.jobNo || x.job_no}` : ""}{x.customerName ? ` · ลูกค้า ${x.customerName}` : ""} · ผู้ขอเบิก {x.requesterName}</div>
           <div className="fld-row">
             <label className="fld"><span>จ่ายจากบัญชี</span>
               <select className="inp" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
