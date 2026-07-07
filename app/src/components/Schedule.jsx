@@ -108,6 +108,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
         <div className="sched-nav">
           <button className="btn-ghost sm" onClick={() => move(-1)}><UIcon name="chevR" size={15} style={{ transform: "rotate(180deg)" }} /></button>
           <button className="btn-ghost sm" onClick={() => setAnchor(today0())}>วันนี้</button>
+          <button className="btn-ghost sm" onClick={() => { setAnchor(addDays(today0(), 1)); setView("day"); }}>พรุ่งนี้</button>
           <button className="btn-ghost sm" onClick={() => move(1)}><UIcon name="chevR" size={15} /></button>
           <div className="sched-title">{title}</div>
         </div>
