@@ -39,6 +39,7 @@ import Invoices from "./components/Invoices";
 import Receipts from "./components/Receipts";
 import Receivables from "./components/Receivables";
 import Payables from "./components/Payables";
+import MaterialPrep from "./components/MaterialPrep";
 import TaxReport from "./components/TaxReport";
 import CustomerFollowup from "./components/CustomerFollowup";
 import WebOrders from "./components/WebOrders";
@@ -75,6 +76,7 @@ const NAV = {
   stockcount: { th: "นับสต๊อก", en: "Stock Count", icon: "catalog" },
   jobs: { th: "วัสดุที่ใช้ในงาน", en: "Jobs & Cost", icon: "box" },
   suppliers: { th: "ผู้ขาย", en: "Suppliers", icon: "building" },
+  prep: { th: "เตรียมวัสดุ", en: "Material Prep", icon: "box" },
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
@@ -87,7 +89,7 @@ const NAV_GROUPS = [
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
-  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "po"] },
+  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
 ];
@@ -96,7 +98,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-07·ใบสั่งซื้อโชว์ งาน JOB (กดได้) + ชื่อลูกค้า + ทีมช่าง ที่โยงผ่านใบเสนอราคา v304";
+const BUILD = "2026-07-07·เมนูใหม่ ใบเตรียมวัสดุ: ดึงจาก QT → แบ่ง ซื้อ/เบิก → อนุมัติ → แตก PO+ใบเบิก · ฝ่ายขายสั่งซื้อได้ v305";
 
 function SetupNotice() {
   return (
@@ -125,6 +127,7 @@ export default function App() {
   const [lang, setLang] = React.useState(() => { try { return localStorage.getItem("amc_lang") || "th"; } catch { return "th"; } });
   const [purchasePrefill, setPurchasePrefill] = React.useState(null);
   const [poPrefill, setPoPrefill] = React.useState(null);
+  const [prepPrefill, setPrepPrefill] = React.useState(null);   // เปิดใบเตรียมวัสดุจากใบเสนอราคา
   const [poFocus, setPoFocus] = React.useState(null);   // เปิดหน้าใบสั่งซื้อพร้อมค้นหาใบที่ลิงก์มา
   const [joPrefill, setJoPrefill] = React.useState(null);
   const [joSchedule, setJoSchedule] = React.useState(null);
@@ -441,6 +444,7 @@ export default function App() {
           onCreateInvoice={(quoteNo) => { setInvoiceFromQuote(quoteNo); go("invoice"); }}
           onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }}
           onCreatePo={(q) => { setPoPrefill({ quoteNo: q.quote_no, items: (q.items || []).filter((it) => it.item_code && it.kind !== "service").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })) }); go("po"); }}
+          onCreatePrep={(q) => { setPrepPrefill({ quoteNo: q.quote_no, items: (q.items || []).filter((it) => it.item_code && it.kind !== "service").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })) }); go("prep"); }}
           onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "invoice" && <Invoices role={role} focus={invoiceFocus} onFocusConsumed={() => setInvoiceFocus(null)} fromQuote={invoiceFromQuote} onFromQuoteConsumed={() => setInvoiceFromQuote(null)}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }}
@@ -465,6 +469,10 @@ export default function App() {
         {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "stockcount" && <StockCount role={role} />}
+        {view === "prep" && <MaterialPrep role={role} prefill={prepPrefill} onPrefillConsumed={() => setPrepPrefill(null)}
+          onCreatePo={(items, quoteNo) => { setPoPrefill({ quoteNo: quoteNo || null, items }); go("po"); }}
+          onWithdraw={(items, jobNo, team) => { setWithdrawCtx({ jobNo: jobNo || null, team: team || null, items }); go("movements"); }}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           focus={poFocus} onFocusConsumed={() => setPoFocus(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }}

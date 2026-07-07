@@ -122,13 +122,16 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   // when the picker filter narrows the list, keep the selected item valid
   React.useEffect(() => { if (pickList.length && !pickList.some((m) => m.code === pickCode)) setPickCode(pickList[0].code); }, [pickList]);
   // technician "withdraw for this job" → preset type=withdraw, team, job no
+  // จากใบเตรียมวัสดุ: มี items ติดมาด้วย → เติมตะกร้าเบิก (ร่าง) ให้เลย ตรวจแล้วกดบันทึกตามขั้นตอนเดิม
   React.useEffect(() => {
     if (!withdrawCtx) return;
+    if (withdrawCtx.items?.length && !mats.length) return;   // รอ mats โหลดก่อนค่อยเติมตะกร้า
     setType("withdraw");
     if (withdrawCtx.team) setTeam(withdrawCtx.team);
     if (withdrawCtx.jobNo) setJobNo(withdrawCtx.jobNo);
+    if (withdrawCtx.items?.length) setLines(withdrawCtx.items.map((p) => ({ code: p.code, qty: Number(p.qty) || 1, price: undefined, unit: matMap[p.code]?.unit || null })));
     onWithdrawCtxConsumed && onWithdrawCtxConsumed();
-  }, [withdrawCtx]);
+  }, [withdrawCtx, mats]);
   // prefill the purchase cart when receiving a PO ({ poNo, quoteNo, items:[{code,qty,price,unit}] })
   // สินค้าที่สั่งเป็น "หน่วยซื้อ" (เช่น ม้วน) → แปลงเข้าสต๊อกเป็นหน่วยหลัก: จำนวน ×แฟกเตอร์ · ราคา/หน่วย ÷แฟกเตอร์
   // PO ที่อ้างใบเสนอราคา → จำงานปลายทางไว้ เพื่อบันทึก "เบิกเข้างาน" ต่อท้ายการซื้อเข้าอัตโนมัติ (ต้นทุนจริงเข้างาน)

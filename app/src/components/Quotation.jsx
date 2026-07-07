@@ -27,7 +27,7 @@ const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onCreatePo, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
+export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onCreatePo, onCreatePrep, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "quote", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
@@ -409,6 +409,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                     <button className="btn-ghost sm" style={{ color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} title="เปิดใบสั่งซื้อจากรายการในใบเสนอราคานี้ (ผูกใบเสนอราคาให้อัตโนมัติ)" onClick={() => onCreatePo(q)}>🛒 {poCount > 0 ? "สร้างใบสั่งซื้อเพิ่ม" : "สร้างใบสั่งซื้อ"}</button>
                   </>);
                 })()}
+                {q.status === "approved" && onCreatePrep && can(role, "prep", "edit") &&
+                  <button className="btn-ghost sm" style={{ color: "#0369a1", borderColor: "#bae6fd", background: "#f0f9ff" }} title="สร้างใบเตรียมวัสดุ — ดึงรายการจากใบนี้ แล้วแบ่งจำนวน ซื้อ/เบิกจากคลัง ก่อนดำเนินการ" onClick={() => onCreatePrep(q)}>📋 เตรียมวัสดุ</button>}
                 {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => cancel(q)}>ยกเลิก</button>}
                 {canDelete && <button className="btn-ghost sm danger" disabled={q.hasInvoice || q.hasJob} title={(q.hasInvoice || q.hasJob) ? (lockMsg(q) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>

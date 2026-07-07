@@ -609,6 +609,62 @@ export async function listPurchaseOrders() {
   });
 }
 
+// รายการในใบเสนอราคา (ดึงเข้าใบเตรียมวัสดุ)
+export async function getQuoteItems(quote_no) {
+  const { data, error } = await supabase.from("quotation_items").select("*").eq("quote_no", quote_no).order("id");
+  if (error) throw error; return data || [];
+}
+
+// ---------- ใบเตรียมวัสดุ (mig 109) — ประตูก่อนสั่งซื้อ/เบิก: แบ่งจำนวน ซื้อ/เบิก ต่อรายการ + ขั้นอนุมัติ ----------
+export async function listMaterialPreps() {
+  const [pRes, iRes, qRes, cuRes, joRes, tmRes] = await Promise.all([
+    supabase.from("material_preps").select("*").order("created_at", { ascending: false }),
+    supabase.from("material_prep_items").select("*").order("id"),
+    supabase.from("quotations").select("quote_no,customer_id,title"),
+    supabase.from("customers").select("id,name"),
+    supabase.from("job_orders").select("job_no,quote_no,team,status"),
+    supabase.from("teams").select("id,name"),
+  ]);
+  if (pRes.error) throw pRes.error;
+  const byPrep = {}; (iRes.data || []).forEach((it) => { (byPrep[it.prep_no] = byPrep[it.prep_no] || []).push(it); });
+  const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
+  const quoteInfo = Object.fromEntries((qRes.data || []).map((x) => [x.quote_no, x]));
+  const teamName = Object.fromEntries((tmRes.data || []).map((t) => [t.id, t.name]));
+  const jobByQuote = {}; (joRes.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
+  const cb = await _creators();
+  return (pRes.data || []).map((p) => {
+    const qi = p.quote_no ? quoteInfo[p.quote_no] : null;
+    const job = p.quote_no ? jobByQuote[p.quote_no] : null;
+    return { ...p, items: byPrep[p.prep_no] || [],
+      customerName: qi ? custName[qi.customer_id] || null : null, quoteTitle: qi?.title || null,
+      jobNo: job?.job_no || null, jobTeam: job?.team || null, teamName: job ? teamName[job.team] || job.team || null : null,
+      createdByName: cb[p.created_by] || null, approvedByName: cb[p.approved_by] || null };
+  });
+}
+export async function saveMaterialPrep(head, items) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const e1 = (await supabase.from("material_preps").upsert({
+    prep_no: head.prep_no, quote_no: head.quote_no || null, title: head.title?.trim() || null,
+    note: head.note?.trim() || null, status: head.status || "draft", created_by: user?.id || null,
+  }, { onConflict: "prep_no" })).error;
+  if (e1) throw new Error(/material_preps/.test(e1.message || "") && /relation|find/i.test(e1.message || "") ? "ยังไม่ได้รัน migration 109 ใน Supabase" : e1.message);
+  const e2 = (await supabase.from("material_prep_items").delete().eq("prep_no", head.prep_no)).error;
+  if (e2) throw e2;
+  const rows = items.filter((it) => (Number(it.qty_buy) || 0) > 0 || (Number(it.qty_withdraw) || 0) > 0)
+    .map((it) => ({ prep_no: head.prep_no, material_code: it.code || null, name: it.name || null, unit: it.unit || null, qty_buy: Number(it.qty_buy) || 0, qty_withdraw: Number(it.qty_withdraw) || 0 }));
+  if (rows.length) { const e3 = (await supabase.from("material_prep_items").insert(rows)).error; if (e3) throw e3; }
+}
+export async function setPrepStatus(prep_no, status) {
+  const patch = { status };
+  if (status === "approved") { const { data: { user } } = await supabase.auth.getUser(); patch.approved_by = user?.id || null; patch.approved_at = new Date().toISOString(); }
+  const { error } = await supabase.from("material_preps").update(patch).eq("prep_no", prep_no);
+  if (error) throw error;
+}
+export async function deleteMaterialPrep(prep_no) {
+  const { error } = await supabase.from("material_preps").delete().eq("prep_no", prep_no);
+  if (error) throw error;
+}
+
 export async function savePurchaseOrder(po, items) {
   const { data: { user } } = await supabase.auth.getUser();
   const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, created_by: user?.id || null };
