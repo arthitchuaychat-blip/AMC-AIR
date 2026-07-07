@@ -577,21 +577,35 @@ export async function reopenJob(job_no) {
 
 // ---------- PURCHASE ORDERS ----------
 export async function listPurchaseOrders() {
-  const [poRes, itemRes] = await Promise.all([
+  const [poRes, itemRes, qRes, cuRes, joRes, tmRes] = await Promise.all([
     supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }),
     supabase.from("po_items").select("*"),
+    supabase.from("quotations").select("quote_no,customer_id,title"),
+    supabase.from("customers").select("id,name"),
+    supabase.from("job_orders").select("job_no,quote_no,team,status"),
+    supabase.from("teams").select("id,name"),
   ]);
   if (poRes.error) throw poRes.error;
   if (itemRes.error) throw itemRes.error;
   const byPo = {};
   (itemRes.data || []).forEach((it) => { (byPo[it.po_no] = byPo[it.po_no] || []).push(it); });
+  // PO ผูกใบเสนอราคา → โยงต่อถึง ลูกค้า + ใบงาน + ทีมช่าง (ใบงานแรกที่ไม่ถูกยกเลิกของใบเสนอราคานั้น)
+  const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
+  const quoteInfo = Object.fromEntries((qRes.data || []).map((x) => [x.quote_no, x]));
+  const teamName = Object.fromEntries((tmRes.data || []).map((t) => [t.id, t.name]));
+  const jobByQuote = {};
+  (joRes.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
   return (poRes.data || []).map((po) => {
     const items = (byPo[po.po_no] || []).map((it) => ({ material_code: it.material_code, qty: Number(it.qty), price: Number(it.price), unit: it.unit || null }));
     const subtotal = items.reduce((a, it) => a + it.qty * it.price, 0);   // ราคาก่อน VAT
     const vatAmt = po.vat ? Math.round(subtotal * 0.07 * 100) / 100 : 0;
     // สถานะการจ่ายเงิน (แยกจากสถานะรับของ): จ่ายแล้ว / รออนุมัติจ่าย (ส่งเข้าเมนูเบิกจ่ายแล้ว) / ยังไม่จ่าย
     const paymentStatus = po.paid_at ? "paid" : po.expense_id ? "pending" : "unpaid";
-    return { ...po, items, subtotal, vatAmt, total: Math.round((subtotal + vatAmt) * 100) / 100, paymentStatus };
+    const qi = po.quote_no ? quoteInfo[po.quote_no] : null;
+    const job = po.quote_no ? jobByQuote[po.quote_no] : null;
+    return { ...po, items, subtotal, vatAmt, total: Math.round((subtotal + vatAmt) * 100) / 100, paymentStatus,
+      customerName: qi ? custName[qi.customer_id] || null : null,
+      jobNo: job?.job_no || null, teamName: job ? teamName[job.team] || job.team || null : null };
   });
 }
 

@@ -96,7 +96,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-05·แชต: สรุปราคาส่งเป็นรูปตารางสวย ๆ (โลโก้+วิธีชำระ+รวมยอด) แทนข้อความยาว v303";
+const BUILD = "2026-07-07·ใบสั่งซื้อโชว์ งาน JOB (กดได้) + ชื่อลูกค้า + ทีมช่าง ที่โยงผ่านใบเสนอราคา v304";
 
 function SetupNotice() {
   return (
@@ -467,7 +467,7 @@ export default function App() {
         {view === "stockcount" && <StockCount role={role} />}
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           focus={poFocus} onFocusConsumed={() => setPoFocus(null)}
-          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, quoteNo: po.quote_no || null, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) }); go("movements"); }} />}
         {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}

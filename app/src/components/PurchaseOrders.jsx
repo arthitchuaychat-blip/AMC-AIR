@@ -50,7 +50,7 @@ function SupplierPicker({ value, onChange }) {
   );
 }
 
-export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onReceive, focus, onFocusConsumed, onOpenQuote }) {
+export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onReceive, focus, onFocusConsumed, onOpenQuote, onOpenJob }) {
   // ชิป "อ้างอิง QT-…" → พรีวิวใบเสนอราคาแผงขวาก่อน · "เปิดหน้าเต็ม" ค่อยเด้งไปเมนูใบเสนอราคา
   const [peekEl, openPeek] = useDocPeek((t, n) => { if (t === "quote" && onOpenQuote) onOpenQuote(n); });
   const isAdmin = can(role, "po", "edit");
@@ -76,7 +76,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const shown = pos.filter((po) => (statusF === "all" || po.status === statusF)
     && (payF === "all" || po.paymentStatus === payF)
     && inDateRange(po.created_at, dateR)
-    && (matchText(q, po.po_no, po.supplier, po.note, po.quote_no) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
+    && (matchText(q, po.po_no, po.supplier, po.note, po.quote_no, po.customerName, po.jobNo, po.teamName) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
 
   async function load() {
     setLoading(true);
@@ -309,8 +309,14 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 <div className="job-card-id"><span className="job-no">{po.po_no}</span><span className={"job-badge " + st.cls}>{st.th}</span>
                   {(() => { const ps = PAY_STATUS[po.paymentStatus] || PAY_STATUS.unpaid; return <span className={"job-badge " + ps.cls}>💳 {ps.th}{po.paymentStatus === "paid" && po.paid_at ? " " + new Date(po.paid_at).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : ""}</span>; })()}
                   {po.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} title="ดูใบเสนอราคาที่อ้างอิง (พรีวิวด้านขวา)" onClick={() => openPeek("quote", po.quote_no)}>อ้างอิง {po.quote_no} ↗</button>}
+                  {po.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} title="เปิดใบงานที่เชื่อมกัน" onClick={() => onOpenJob && onOpenJob(po.jobNo)}>งาน {po.jobNo} ↗</button>}
                 </div>
-                <div className="job-card-meta">{po.supplier || "ไม่ระบุร้าน"} · {po.items.length} รายการ{po.note ? ` · ${po.note}` : ""}</div>
+                <div className="job-card-meta">{po.supplier || "ไม่ระบุร้าน"} · {po.items.length} รายการ{po.note ? ` · ${po.note}` : ""}
+                  {(po.customerName || po.teamName) && <div style={{ marginTop: 2 }}>
+                    {po.customerName ? <span>👤 ลูกค้า <b>{po.customerName}</b></span> : null}
+                    {po.teamName ? <span>{po.customerName ? " · " : ""}🔧 ช่าง <b>{po.teamName}</b></span> : null}
+                  </div>}
+                </div>
                 <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.created_at)}</span><span>มูลค่ารวม{po.vat ? " (รวม VAT)" : ""}</span><b>{fmtBaht(po.total)}</b></div>
               </div>
               <InternalNoteTag note={po.internal_note} />
