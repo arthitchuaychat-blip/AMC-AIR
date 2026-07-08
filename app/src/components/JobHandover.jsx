@@ -1,6 +1,6 @@
 import React from "react";
 import { custCode, fmtDocDate } from "../lib/format";
-import { PERF_ROWS, PM_ROWS, WORK_TYPES, AC_TYPES, ACCEPT_GROUPS, ACCEPT_OVERALL } from "../lib/handover";
+import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, ACCEPT_GROUPS, ACCEPT_OVERALL } from "../lib/handover";
 
 // Printed/PDF A4 sheet of a SAVED handover (filled in by the technician). Renders the header, the
 // ticked work-types, every sub-form (perf measurement / PM checklist) with the recorded values, and
@@ -17,15 +17,15 @@ function MachineLine({ m = {} }) {
   return <div className="ho-mline">{parts.length ? parts.join("  ·  ") : "— ไม่ระบุข้อมูลเครื่อง —"}</div>;
 }
 
-function PerfForm({ f }) {
+function PerfForm({ f, rowsDef = PERF_ROWS, lb = "ก่อน", la = "หลัง" }) {
   return (
     <table className="ho-tbl">
       <thead>
         <tr><th className="n">ลำดับ</th><th>รายละเอียด</th><th className="rec" colSpan={2}>บันทึกผล</th></tr>
-        <tr className="ho-tbl-sub"><th /><th /><th>ก่อน</th><th>หลัง</th></tr>
+        <tr className="ho-tbl-sub"><th /><th /><th>{lb}</th><th>{la}</th></tr>
       </thead>
       <tbody>
-        {PERF_ROWS.map(([label, kind], i) => {
+        {rowsDef.map(([label, kind], i) => {
           const v = (f.rows && f.rows[i]) || { b: "", a: "" };
           const cell = (side) => kind === "ck"
             ? <td className="ck">{v[side] ? <b className={v[side] === "bad" ? "ho-bad" : "ho-ok"}>{ckText(v[side])}</b> : ""}</td>
@@ -34,6 +34,19 @@ function PerfForm({ f }) {
         })}
       </tbody>
     </table>
+  );
+}
+
+// กริดรูปภาพในใบพิมพ์ — 4 รูป/แถว
+function PhotoGrid({ title, urls }) {
+  if (!urls || !urls.length) return null;
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ fontWeight: 700, fontSize: "0.92em", marginBottom: 3 }}>{title}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "2%" }}>
+        {urls.map((u, i) => <img key={i} src={u} alt="" style={{ width: "23.5%", aspectRatio: "4/3", objectFit: "cover", borderRadius: 6, border: "1px solid #d5dde8", marginBottom: 6, breakInside: "avoid" }} />)}
+      </div>
+    </div>
   );
 }
 
@@ -170,14 +183,35 @@ export default function JobHandover({ handover = {}, company = {} }) {
         ) : null}
 
         {/* ── each sub-form ── */}
-        {forms.map((f, i) => (
-          <section className="ho-sec ho-sec-block ho-form-print" key={i}>
-            <div className="ho-sec-h">{f.kind === "accept" ? `ตรวจรับงานติดตั้ง (ส่งมอบรวม ${f.machines?.length || 0} เครื่อง)` : `${f.kind === "pm" ? "การดำเนินการงาน · งานล้าง / PM" : "การวัดประสิทธิภาพ"} · เครื่องที่ ${i + 1}`}</div>
-            {f.kind !== "accept" && <div className="ho-form-machine"><MachineLine m={f.machine} /></div>}
-            {f.kind === "accept" ? <AcceptForm f={f} /> : f.kind === "pm" ? <PmForm f={f} /> : <PerfForm f={f} />}
-            {f.note ? <div className="ho-form-note">หมายเหตุ: {f.note}</div> : null}
-          </section>
-        ))}
+        {forms.map((f, i) => {
+          const title = f.kind === "accept" ? `ส่งมอบงานติดตั้ง (ตรวจรับรวม ${f.machines?.length || 0} เครื่อง)`
+            : f.kind === "clean" ? `ส่งมอบงานล้าง · เครื่องที่ ${i + 1}`
+            : f.kind === "repair" ? `ส่งมอบงานซ่อม · เครื่องที่ ${i + 1}`
+            : `${f.kind === "pm" ? "การดำเนินการงาน · งานล้าง / PM" : "การวัดประสิทธิภาพ"} · เครื่องที่ ${i + 1}`;
+          return (
+            <section className="ho-sec ho-sec-block ho-form-print" key={i}>
+              <div className="ho-sec-h">{title}</div>
+              {f.kind !== "accept" && <div className="ho-form-machine"><MachineLine m={f.machine} /></div>}
+              {f.kind === "accept" ? <>
+                <AcceptForm f={f} />
+                <PhotoGrid title={`รูปส่งมอบงาน (${(f.photos || []).length})`} urls={f.photos} />
+              </> : f.kind === "clean" ? <>
+                <div style={{ fontWeight: 700, fontSize: "0.92em", margin: "2px 0" }}>สิ่งที่ดำเนินการ (ล้าง / PM)</div>
+                <PmForm f={{ rows: f.acts || [] }} />
+                <div style={{ fontWeight: 700, fontSize: "0.92em", margin: "6px 0 2px" }}>วัดผล ก่อนล้าง / หลังล้าง</div>
+                <PerfForm f={f} rowsDef={CLEAN_ROWS} lb="ก่อนล้าง" la="หลังล้าง" />
+                <PhotoGrid title="รูปก่อนล้าง" urls={f.photosBefore} />
+                <PhotoGrid title="รูปหลังล้าง" urls={f.photosAfter} />
+              </> : f.kind === "repair" ? <>
+                <PerfForm f={f} rowsDef={REPAIR_ROWS} lb="ก่อนซ่อม" la="หลังซ่อม" />
+                {f.fix ? <div className="ho-form-note">สิ่งที่ตรวจพบ / ซ่อม / อะไหล่ที่เปลี่ยน: {f.fix}</div> : null}
+                <PhotoGrid title="รูปก่อนซ่อม" urls={f.photosBefore} />
+                <PhotoGrid title="รูปหลังซ่อม" urls={f.photosAfter} />
+              </> : f.kind === "pm" ? <PmForm f={f} /> : <PerfForm f={f} />}
+              {f.note ? <div className="ho-form-note">หมายเหตุ: {f.note}</div> : null}
+            </section>
+          );
+        })}
 
         {h.fix_note ? (
           <section className="ho-sec ho-sec-block">

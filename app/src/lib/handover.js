@@ -40,6 +40,30 @@ export const PM_ROWS = [
   "เช็คความแน่น นอต สกรู",
 ];
 
+// ส่งมอบงานล้าง — วัดก่อนล้าง/หลังล้าง (ต่อเครื่อง) = 14 แถวเดิม + 2 ข้อสำคัญหลังล้าง
+export const CLEAN_ROWS = [
+  ...PERF_ROWS,
+  ["น้ำทิ้งไหลสะดวก ไม่รั่วซึม", "ck"],
+  ["เสียง / การสั่นสะเทือน", "ck"],
+];
+
+// ส่งมอบงานซ่อม — ตรวจก่อนซ่อม/หลังซ่อม (ต่อเครื่อง)
+export const REPAIR_ROWS = [
+  ["การทำงานของคอมเพรสเซอร์", "ck"],
+  ["มอเตอร์พัดลมคอยล์เย็น (FCU)", "ck"],
+  ["มอเตอร์พัดลมคอยล์ร้อน (CDU)", "ck"],
+  ["แผงควบคุม / เมนบอร์ด", "ck"],
+  ["รีโมท / เซ็นเซอร์อุณหภูมิ", "ck"],
+  ["การทำความเย็น", "ck"],
+  ["กระแสไฟฟ้า", "A"],
+  ["แรงดันไฟฟ้า", "V"],
+  ["แรงดันน้ำยาด้านดูด", "PSI"],
+  ["อุณหภูมิลมส่งคอยล์เย็น (FCU)", "°C"],
+  ["อุณหภูมิลมกลับคอยล์เย็น (FCU)", "°C"],
+  ["น้ำทิ้ง / รอยรั่วซึม", "ck"],
+  ["เสียง / การสั่นสะเทือน", "ck"],
+];
+
 // ตรวจรับงานติดตั้งหลายเครื่อง (ส่งมอบรวม) — [หมวด, [ข้อตรวจ...]] · ติ๊ก ✓ ผ่าน / ✕ ไม่ผ่าน แยกรายเครื่อง
 export const ACCEPT_GROUPS = [
   ["งานติดตั้ง", [
@@ -93,18 +117,27 @@ export const AC_TYPES = ["ติดผนัง", "แขวน", "ฝังฝ�
 // map a job_orders.job_type → the handover work-type value to pre-tick
 export const JOBTYPE_TO_WORK = { install: "install", maintenance: "maintenance", repair: "repair", survey: "survey_install", other: "other" };
 
+// ทุกชนิดที่ระบบรู้จัก (รวมชนิดเก่า perf/pm — ใบเก่าที่บันทึกไว้ยังเปิด/พิมพ์ได้ปกติ)
 export const FORM_KINDS = [
-  { kind: "perf", label: "วัดประสิทธิภาพ", icon: "🌡️", hint: "ก่อน/หลัง 14 รายการ" },
-  { kind: "pm", label: "งานล้าง / PM", icon: "🧊", hint: "เช็คลิสต์ 15 ข้อ" },
-  { kind: "accept", label: "ตรวจรับงานรวม (หลายเครื่อง)", icon: "✅", hint: "ติดตั้งหลายชุดใน 1 งาน — เช็คลิสต์รายเครื่อง 13 ข้อ + ความเรียบร้อยรวม + ผู้ตรวจรับเซ็น" },
+  { kind: "accept", label: "ส่งมอบงานติดตั้ง", icon: "🧰", hint: "หลายเครื่องใน 1 ฟอร์ม — เช็คลิสต์ 13 ข้อรายเครื่อง + ความเรียบร้อยรวม + รูปส่งมอบไม่จำกัด" },
+  { kind: "clean", label: "ส่งมอบงานล้าง", icon: "🧊", hint: "ต่อเครื่อง — สิ่งที่ทำ 15 ข้อ + วัดก่อน/หลังล้าง 16 รายการ + รูปก่อน/หลัง อย่างละ 4" },
+  { kind: "repair", label: "ส่งมอบงานซ่อม", icon: "🛠️", hint: "ต่อเครื่อง — ตรวจก่อน/หลังซ่อม 13 รายการ + อะไหล่ที่เปลี่ยน + รูปก่อน/หลัง อย่างละ 4" },
+  { kind: "perf", label: "วัดประสิทธิภาพ (แบบเดิม)", icon: "🌡️", hint: "ก่อน/หลัง 14 รายการ" },
+  { kind: "pm", label: "งานล้าง / PM (แบบเดิม)", icon: "🧊", hint: "เช็คลิสต์ 15 ข้อ" },
 ];
+// 3 แบบหลักที่ให้เลือกตอนกด "เพิ่มแบบฟอร์ม" (แบบเดิมซ่อนจากเมนู แต่ใบเก่ายังเปิดได้)
+export const ADD_KINDS = ["accept", "clean", "repair"];
 
 export const blankMachine = () => ({ code: "", type: "", building: "", floor: "", room: "", brand: "", model: "", btu: "" });
 
 export function blankForm(kind) {
   if (kind === "pm") return { kind: "pm", machine: blankMachine(), rows: PM_ROWS.map(() => null), note: "" };
-  // ตรวจรับงานรวม: rows[ข้อ][เครื่อง] = 'pass' | 'fail' | null · itemNotes ต่อข้อ (ใช้เมื่อไม่ผ่าน) · overall = ติ๊กรวมทั้งงาน
-  if (kind === "accept") return { kind: "accept", machines: [blankAcceptMachine()], rows: ACCEPT_ROWS.map(() => [null]), itemNotes: ACCEPT_ROWS.map(() => ""), overall: ACCEPT_OVERALL.map(() => false), note: "" };
+  // ตรวจรับงานรวม: rows[ข้อ][เครื่อง] = 'pass' | 'fail' | null · itemNotes ต่อข้อ (ใช้เมื่อไม่ผ่าน) · overall = ติ๊กรวมทั้งงาน · photos = รูปส่งมอบ (ไม่จำกัด)
+  if (kind === "accept") return { kind: "accept", machines: [blankAcceptMachine()], rows: ACCEPT_ROWS.map(() => [null]), itemNotes: ACCEPT_ROWS.map(() => ""), overall: ACCEPT_OVERALL.map(() => false), photos: [], note: "" };
+  // งานล้าง: acts = สิ่งที่ทำ (15 ข้อ ได้ทำ/ไม่ได้ทำ) · rows = วัดก่อน/หลังล้าง · รูปก่อน/หลัง อย่างละ ≤4
+  if (kind === "clean") return { kind: "clean", machine: blankMachine(), acts: PM_ROWS.map(() => null), rows: CLEAN_ROWS.map(() => ({ b: "", a: "" })), photosBefore: [], photosAfter: [], note: "" };
+  // งานซ่อม: rows = ตรวจก่อน/หลังซ่อม · fix = สิ่งที่ซ่อม/อะไหล่ที่เปลี่ยน · รูปก่อน/หลัง อย่างละ ≤4
+  if (kind === "repair") return { kind: "repair", machine: blankMachine(), rows: REPAIR_ROWS.map(() => ({ b: "", a: "" })), fix: "", photosBefore: [], photosAfter: [], note: "" };
   return { kind: "perf", machine: blankMachine(), rows: PERF_ROWS.map(() => ({ b: "", a: "" })), note: "" };
 }
 

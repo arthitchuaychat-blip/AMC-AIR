@@ -2,8 +2,8 @@ import React from "react";
 import { UIcon } from "../icons";
 import { confirmDialog } from "./ConfirmDialog";
 import SignaturePad from "./SignaturePad";
-import { saveHandover, uploadSignatureDataUrl } from "../lib/api";
-import { PERF_ROWS, PM_ROWS, WORK_TYPES, AC_TYPES, FORM_KINDS, blankForm, ACCEPT_GROUPS, ACCEPT_ROWS, ACCEPT_OVERALL, blankAcceptMachine } from "../lib/handover";
+import { saveHandover, uploadSignatureDataUrl, uploadMaterialPhoto } from "../lib/api";
+import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, FORM_KINDS, ADD_KINDS, blankForm, ACCEPT_GROUPS, ACCEPT_ROWS, ACCEPT_OVERALL, blankAcceptMachine } from "../lib/handover";
 
 // Full-screen editor where the technician fills in a handover sheet while on the job.
 // props: initial (a handover object), onClose(), onSaved(saved), flash(msg, bad)
@@ -105,7 +105,7 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
             <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
               <div className="confirm-title">เพิ่มแบบฟอร์ม</div>
               <div className="he-add-list">
-                {FORM_KINDS.map((k) => (
+                {FORM_KINDS.filter((k) => ADD_KINDS.includes(k.kind)).map((k) => (
                   <button key={k.kind} className="he-add-opt" onClick={() => addForm(k.kind)}>
                     <span className="he-add-ic">{k.icon}</span>
                     <span><b>{k.label}</b><small>{k.hint}</small></span>
@@ -149,32 +149,28 @@ function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
         <input className="inp sm" placeholder="ห้อง" value={m.room || ""} onChange={(e) => onMachine(idx, "room", e.target.value)} />
       </div>
 
-      {f.kind === "perf" ? (
-        <table className="he-tbl">
-          <thead><tr><th className="n">#</th><th>รายการ</th><th>ก่อน</th><th>หลัง</th></tr></thead>
-          <tbody>
-            {PERF_ROWS.map(([label, kind], ri) => {
-              const v = f.rows[ri] || { b: "", a: "" };
-              return (
+      {/* งานล้าง: ตาราง "สิ่งที่ดำเนินการ" (15 ข้อ) ก่อนตารางวัดก่อน/หลัง */}
+      {f.kind === "clean" && (
+        <>
+          <div style={{ fontWeight: 700, fontSize: 12.5, margin: "6px 0 2px" }}>สิ่งที่ดำเนินการ (ล้าง / PM)</div>
+          <table className="he-tbl">
+            <thead><tr><th className="n">#</th><th>รายการ</th><th className="pmh">ได้ทำ</th><th className="pmh">ไม่ได้ทำ</th></tr></thead>
+            <tbody>
+              {PM_ROWS.map((label, ri) => { const v = (f.acts || [])[ri]; return (
                 <tr key={ri}>
                   <td className="n">{ri + 1}</td>
                   <td className="lbl">{label}</td>
-                  {["b", "a"].map((side) => (
-                    <td key={side}>
-                      {kind === "ck"
-                        ? <span className="he-ck">
-                            <button type="button" className={"he-ck-b" + (v[side] === "ok" ? " ok" : "")} onClick={() => onRow(idx, ri, { ...v, [side]: v[side] === "ok" ? "" : "ok" })}>ปกติ</button>
-                            <button type="button" className={"he-ck-b" + (v[side] === "bad" ? " bad" : "")} onClick={() => onRow(idx, ri, { ...v, [side]: v[side] === "bad" ? "" : "bad" })}>ไม่ปกติ</button>
-                          </span>
-                        : <span className="he-unit"><input className="inp sm" value={v[side] || ""} onChange={(e) => onRow(idx, ri, { ...v, [side]: e.target.value })} /><small>{kind}</small></span>}
-                    </td>
-                  ))}
+                  <td className="pmc"><button type="button" className={"he-pm" + (v === "done" ? " on" : "")} onClick={() => onPatch({ acts: (f.acts || PM_ROWS.map(() => null)).map((x, i) => i === ri ? (v === "done" ? null : "done") : x) })}>✓</button></td>
+                  <td className="pmc"><button type="button" className={"he-pm" + (v === "not" ? " no" : "")} onClick={() => onPatch({ acts: (f.acts || PM_ROWS.map(() => null)).map((x, i) => i === ri ? (v === "not" ? null : "not") : x) })}>✕</button></td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : (
+              ); })}
+            </tbody>
+          </table>
+          <div style={{ fontWeight: 700, fontSize: 12.5, margin: "8px 0 2px" }}>วัดผล ก่อนล้าง / หลังล้าง</div>
+        </>
+      )}
+
+      {f.kind === "pm" ? (
         <table className="he-tbl">
           <thead><tr><th className="n">#</th><th>รายการ</th><th className="pmh">ได้ทำ</th><th className="pmh">ไม่ได้ทำ</th></tr></thead>
           <tbody>
@@ -191,6 +187,50 @@ function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
             })}
           </tbody>
         </table>
+      ) : (
+        (() => {
+          // ตารางวัด ก่อน/หลัง — ใช้ร่วม 3 ชนิด: perf (เดิม) / clean (ล้าง) / repair (ซ่อม)
+          const BA = f.kind === "clean" ? CLEAN_ROWS : f.kind === "repair" ? REPAIR_ROWS : PERF_ROWS;
+          const [lb, la] = f.kind === "clean" ? ["ก่อนล้าง", "หลังล้าง"] : f.kind === "repair" ? ["ก่อนซ่อม", "หลังซ่อม"] : ["ก่อน", "หลัง"];
+          return (
+            <table className="he-tbl">
+              <thead><tr><th className="n">#</th><th>รายการ</th><th>{lb}</th><th>{la}</th></tr></thead>
+              <tbody>
+                {BA.map(([label, kind], ri) => {
+                  const v = f.rows[ri] || { b: "", a: "" };
+                  return (
+                    <tr key={ri}>
+                      <td className="n">{ri + 1}</td>
+                      <td className="lbl">{label}</td>
+                      {["b", "a"].map((side) => (
+                        <td key={side}>
+                          {kind === "ck"
+                            ? <span className="he-ck">
+                                <button type="button" className={"he-ck-b" + (v[side] === "ok" ? " ok" : "")} onClick={() => onRow(idx, ri, { ...v, [side]: v[side] === "ok" ? "" : "ok" })}>ปกติ</button>
+                                <button type="button" className={"he-ck-b" + (v[side] === "bad" ? " bad" : "")} onClick={() => onRow(idx, ri, { ...v, [side]: v[side] === "bad" ? "" : "bad" })}>ไม่ปกติ</button>
+                              </span>
+                            : <span className="he-unit"><input className="inp sm" value={v[side] || ""} onChange={(e) => onRow(idx, ri, { ...v, [side]: e.target.value })} /><small>{kind}</small></span>}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          );
+        })()
+      )}
+
+      {f.kind === "repair" && (
+        <label className="he-f he-f-wide" style={{ marginTop: 6 }}><span>สิ่งที่ตรวจพบ / สิ่งที่ซ่อม / อะไหล่ที่เปลี่ยน</span>
+          <textarea className="inp" rows={2} value={f.fix || ""} onChange={(e) => onPatch({ fix: e.target.value })} /></label>
+      )}
+
+      {(f.kind === "clean" || f.kind === "repair") && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
+          <PhotoPicker label={`รูปก่อน${f.kind === "clean" ? "ล้าง" : "ซ่อม"} (สูงสุด 4)`} urls={f.photosBefore || []} max={4} onChange={(urls) => onPatch({ photosBefore: urls })} />
+          <PhotoPicker label={`รูปหลัง${f.kind === "clean" ? "ล้าง" : "ซ่อม"} (สูงสุด 4)`} urls={f.photosAfter || []} max={4} onChange={(urls) => onPatch({ photosAfter: urls })} />
+        </div>
       )}
 
       <input className="inp sm" placeholder="หมายเหตุของแบบฟอร์มนี้" value={f.note || ""} onChange={(e) => onNote(e.target.value)} style={{ marginTop: 6 }} />
@@ -285,7 +325,50 @@ function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove }) {
         สรุป: ผ่านครบ {passCnt}/{n} เครื่อง{failCnt ? ` · มีข้อไม่ผ่าน ${failCnt} เครื่อง (ดูหมายเหตุ)` : ""}
       </div>
 
+      <div style={{ marginTop: 8 }}>
+        <PhotoPicker label="รูปส่งมอบงาน (ไม่จำกัดจำนวน)" urls={f.photos || []} onChange={(urls) => onPatch({ photos: urls })} />
+      </div>
+
       <input className="inp sm" placeholder="หมายเหตุของแบบฟอร์มนี้" value={f.note || ""} onChange={(e) => onNote(e.target.value)} style={{ marginTop: 6 }} />
+    </div>
+  );
+}
+
+// ช่องรูปภาพของแบบฟอร์ม — อัปโหลดทันทีที่เลือก (ย่อรูปอัตโนมัติ) · ถ่ายจากกล้องมือถือได้ · max = จำกัดจำนวน (ไม่ใส่ = ไม่จำกัด)
+function PhotoPicker({ label, urls = [], max, onChange }) {
+  const [up, setUp] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+  const room = max ? Math.max(0, max - urls.length) : Infinity;
+  const onSel = async (e) => {
+    const files = Array.from(e.target.files || []); e.target.value = "";
+    if (!files.length || room <= 0) return;
+    setUp(true); setErr(null);
+    try {
+      const out = [...urls];
+      for (const file of files.slice(0, room)) out.push(await uploadMaterialPhoto(file, "handover"));
+      onChange(out);
+    } catch (ex) { setErr("อัปโหลดไม่สำเร็จ: " + (ex.message || ex)); }
+    setUp(false);
+  };
+  return (
+    <div>
+      <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>{label} <span className="jo-dim" style={{ fontWeight: 400 }}>({urls.length}{max ? `/${max}` : ""})</span></div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {urls.map((u, i) => (
+          <span key={i} style={{ position: "relative", display: "inline-block" }}>
+            <img src={u} alt="" style={{ width: 62, height: 62, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line-2)", cursor: "zoom-in" }} onClick={() => window.open(u, "_blank")} />
+            <button type="button" onClick={() => onChange(urls.filter((_, j) => j !== i))}
+              style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: 99, border: 0, background: "#dc2626", color: "#fff", fontSize: 11, lineHeight: "18px", padding: 0, cursor: "pointer" }}>✕</button>
+          </span>
+        ))}
+        {room > 0 && (
+          <label className="btn-ghost sm" style={{ cursor: "pointer", height: 62, width: 62, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2, borderStyle: "dashed" }}>
+            <span style={{ fontSize: 18 }}>{up ? "…" : "📷"}</span><span style={{ fontSize: 10.5 }}>{up ? "กำลังอัป" : "เพิ่มรูป"}</span>
+            <input type="file" accept="image/*" multiple onChange={onSel} style={{ display: "none" }} disabled={up} />
+          </label>
+        )}
+      </div>
+      {err && <div style={{ color: "#b91c1c", fontSize: 11.5, marginTop: 3 }}>{err}</div>}
     </div>
   );
 }
