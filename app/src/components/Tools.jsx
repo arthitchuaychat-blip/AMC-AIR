@@ -1,5 +1,5 @@
 import React from "react";
-import { listTools, saveTool, deleteTool, listToolMoves, requestToolMove, deleteToolMove, decideToolMove, listTeams, listStaff } from "../lib/api";
+import { listTools, saveTool, deleteTool, listToolMoves, requestToolMove, deleteToolMove, decideToolMove, listTeams, listStaff, uploadMaterialPhoto } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { matchText } from "../lib/format";
 import { UIcon } from "../icons";
@@ -24,6 +24,7 @@ export default function Tools({ role, me }) {
   const [reqTool, setReqTool] = React.useState(null); // modal ขอเบิก
   const [repTool, setRepTool] = React.useState(null); // modal แจ้งชำรุด
   const [busy, setBusy] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
 
@@ -63,6 +64,13 @@ export default function Tools({ role, me }) {
     try { await saveTool(ed); setEd(null); flash("บันทึกแล้ว ✓"); await load(); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
+  async function onPhoto(e) {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploading(true);
+    try { const url = await uploadMaterialPhoto(file, "tool-" + (ed.code || ed.name || "x")); setEd((s) => ({ ...s, photo_url: url })); }
+    catch (ex) { flash("อัปโหลดรูปไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUploading(false); e.target.value = "";
+  }
   async function delTool(t) {
     if (!await confirmDialog(`ลบเครื่องมือ "${t.name}" ออกจากทะเบียน? (ประวัติเบิก/คืนของมันจะหายด้วย)`)) return;
     try { await deleteTool(t.id); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
@@ -77,6 +85,9 @@ export default function Tools({ role, me }) {
 
   const ToolRow = ({ t, actions }) => (
     <div className="set-row" style={{ alignItems: "center", gap: 10 }}>
+      {t.photo_url
+        ? <img src={t.photo_url} alt="" style={{ width: 46, height: 46, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line-2)", flex: "none", cursor: "zoom-in" }} onClick={() => window.open(t.photo_url, "_blank")} />
+        : <div style={{ width: 46, height: 46, borderRadius: 10, background: "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: 20 }}>🛠️</div>}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700 }}>{t.name}{t.brand ? <span style={{ fontWeight: 600, color: "#0369a1" }}> · {t.brand}</span> : null}{t.code ? <span className="jo-dim" style={{ fontWeight: 400 }}> · {t.code}</span> : null}</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4, alignItems: "center" }}>
@@ -268,7 +279,19 @@ export default function Tools({ role, me }) {
                 </label>
               )}
               <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note || ""} onChange={(e) => setEd({ ...ed, note: e.target.value })} /></label>
-              <button className="btn-primary" style={{ width: "100%", marginTop: 12 }} disabled={busy} onClick={saveEd}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> บันทึก</button>
+              <label className="fld"><span>รูปเครื่องมือ</span>
+                <div className="photo-field">
+                  {ed.photo_url ? <img src={ed.photo_url} className="photo-thumb" alt="" /> : <div className="photo-thumb empty"><UIcon name="camera" size={22} color="var(--ink-3)" /></div>}
+                  <div className="photo-actions">
+                    <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
+                      <UIcon name="camera" size={14} /> {uploading ? "กำลังอัปโหลด…" : (ed.photo_url ? "เปลี่ยนรูป" : "อัปโหลด/ถ่ายรูป")}
+                      <input type="file" accept="image/*" onChange={onPhoto} style={{ display: "none" }} disabled={uploading} />
+                    </label>
+                    {ed.photo_url && <button type="button" className="btn-ghost sm danger" onClick={() => setEd((s) => ({ ...s, photo_url: "" }))}>ลบรูป</button>}
+                  </div>
+                </div>
+              </label>
+              <button className="btn-primary" style={{ width: "100%", marginTop: 12 }} disabled={busy || uploading} onClick={saveEd}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> บันทึก</button>
             </div>
           </div>
         </div>
