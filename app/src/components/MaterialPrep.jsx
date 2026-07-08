@@ -80,16 +80,16 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
         catch { items = []; }
       }
       if (dead) return;
-      setEd({ prep_no: genNo(), quote_no: prefill.quoteNo || "", title: prefill.title || "", issue_date: new Date().toISOString().slice(0, 10), note: "", status: "draft",
+      setEd({ prep_no: genNo(), quote_no: prefill.quoteNo || "", job_no: prefill.jobNo || "", title: prefill.title || "", issue_date: new Date().toISOString().slice(0, 10), note: "", status: "draft",
         items: (items || []).map((p) => { const m = matMap[p.code]; return { code: p.code, name: m?.th || p.code, unit: m?.unit || "", ...smartSplit(m, Number(p.qty) || 1) }; }) });
       onPrefillConsumed && onPrefillConsumed();
     })();
     return () => { dead = true; };
   }, [prefill, mats]);
 
-  function startNew() { setEd({ prep_no: genNo(), quote_no: "", title: "", issue_date: new Date().toISOString().slice(0, 10), note: "", status: "draft", items: [] }); }
+  function startNew() { setEd({ prep_no: genNo(), quote_no: "", job_no: "", title: "", issue_date: new Date().toISOString().slice(0, 10), note: "", status: "draft", items: [] }); }
   function startEdit(p) {
-    setEd({ _edit: true, prep_no: p.prep_no, quote_no: p.quote_no || "", title: p.title || "", issue_date: p.issue_date || (p.created_at || "").slice(0, 10), note: p.note || "", status: p.status,
+    setEd({ _edit: true, prep_no: p.prep_no, quote_no: p.quote_no || "", job_no: p.job_no || "", title: p.title || "", issue_date: p.issue_date || (p.created_at || "").slice(0, 10), note: p.note || "", status: p.status,
       items: (p.items || []).map((it) => ({ code: it.material_code, name: it.name || matMap[it.material_code]?.th || it.material_code, unit: it.unit || "", qty_buy: Number(it.qty_buy) || 0, qty_withdraw: Number(it.qty_withdraw) || 0 })) });
   }
   async function pullQuote() {

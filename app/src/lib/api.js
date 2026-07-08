@@ -638,24 +638,28 @@ export async function listMaterialPreps() {
   const quoteInfo = Object.fromEntries((qRes.data || []).map((x) => [x.quote_no, x]));
   const teamName = Object.fromEntries((tmRes.data || []).map((t) => [t.id, t.name]));
   const jobByQuote = {}; (joRes.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
+  const jobByNo = Object.fromEntries((joRes.data || []).map((j) => [j.job_no, j]));
   const cb = await _creators();
   return (pRes.data || []).map((p) => {
     const qi = p.quote_no ? quoteInfo[p.quote_no] : null;
-    const job = p.quote_no ? jobByQuote[p.quote_no] : null;
+    // ผูกใบงานตรง ๆ (job_no บนใบ · mig 120) ก่อน — ถ้าไม่มีค่อยเดาผ่านใบเสนอราคา
+    const job = (p.job_no && jobByNo[p.job_no]) || (p.quote_no ? jobByQuote[p.quote_no] : null);
     return { ...p, items: byPrep[p.prep_no] || [],
       customerName: qi ? custName[qi.customer_id] || null : null, quoteTitle: qi?.title || null,
-      jobNo: job?.job_no || null, jobTeam: job?.team || null, teamName: job ? teamName[job.team] || job.team || null : null,
+      jobNo: job?.job_no || p.job_no || null, jobTeam: job?.team || null, teamName: job ? teamName[job.team] || job.team || null : null,
       createdByName: cb[p.created_by] || null, approvedByName: cb[p.approved_by] || null };
   });
 }
 export async function saveMaterialPrep(head, items) {
   const { data: { user } } = await supabase.auth.getUser();
   const pHead = {
-    prep_no: head.prep_no, quote_no: head.quote_no || null, title: head.title?.trim() || null, issue_date: head.issue_date || null,
+    prep_no: head.prep_no, quote_no: head.quote_no || null, job_no: head.job_no || null, title: head.title?.trim() || null, issue_date: head.issue_date || null,
     note: head.note?.trim() || null, status: head.status || "draft", created_by: user?.id || null,
   };
   let e1 = (await supabase.from("material_preps").upsert(pHead, { onConflict: "prep_no" })).error;
-  if (e1 && /issue_date/i.test(e1.message || "")) { delete pHead.issue_date; e1 = (await supabase.from("material_preps").upsert(pHead, { onConflict: "prep_no" })).error; } // pre-119 fallback
+  for (const c of ["issue_date", "job_no"]) { // pre-119/120 fallback — ตัดเฉพาะคอลัมน์ที่ live ยังไม่มี
+    if (e1 && new RegExp(c, "i").test(e1.message || "")) { delete pHead[c]; e1 = (await supabase.from("material_preps").upsert(pHead, { onConflict: "prep_no" })).error; }
+  }
   if (e1) throw new Error(/material_preps/.test(e1.message || "") && /relation|find/i.test(e1.message || "") ? "ยังไม่ได้รัน migration 109 ใน Supabase" : e1.message);
   const e2 = (await supabase.from("material_prep_items").delete().eq("prep_no", head.prep_no)).error;
   if (e2) throw e2;
