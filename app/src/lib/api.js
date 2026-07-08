@@ -3527,11 +3527,13 @@ export async function listTools() {
 }
 
 export async function saveTool(t) {
-  const row = { code: t.code?.trim() || null, name: t.name?.trim(), detail: t.detail?.trim() || null, photo_url: t.photo_url || null,
+  const row = { code: t.code?.trim() || null, name: t.name?.trim(), brand: t.brand?.trim() || null, detail: t.detail?.trim() || null, photo_url: t.photo_url || null,
     location: t.location || "stock", team: t.location === "vehicle" ? (t.team || null) : null,
     holder: t.location === "person" ? (t.holder || null) : null, status: t.status || "normal", note: t.note?.trim() || null };
-  const q = t.id ? supabase.from("tools").update(row).eq("id", t.id) : supabase.from("tools").insert(row);
-  const { error } = await q; if (error) throw _toolErr(error);
+  const run = () => (t.id ? supabase.from("tools").update(row).eq("id", t.id) : supabase.from("tools").insert(row));
+  let { error } = await run();
+  if (error && /brand/i.test(error.message || "")) { delete row.brand; ({ error } = await run()); } // pre-124 fallback
+  if (error) throw _toolErr(error);
 }
 
 export async function deleteTool(id) {

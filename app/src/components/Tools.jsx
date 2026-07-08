@@ -39,7 +39,7 @@ export default function Tools({ role, me }) {
   const mine = (tools || []).filter(isMine);
   const stock = (tools || []).filter((t) => t.location === "stock");
   const pending = moves.filter((x) => x.status === "pending");
-  const shownAll = (tools || []).filter((t) => matchText(q, t.name, t.code, t.detail, t.teamName, t.holderName));
+  const shownAll = (tools || []).filter((t) => matchText(q, t.name, t.brand, t.code, t.detail, t.teamName, t.holderName));
 
   async function submitRequest(m, doneMsg) {
     setBusy(true);
@@ -78,7 +78,7 @@ export default function Tools({ role, me }) {
   const ToolRow = ({ t, actions }) => (
     <div className="set-row" style={{ alignItems: "center", gap: 10 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700 }}>{t.name}{t.code ? <span className="jo-dim" style={{ fontWeight: 400 }}> · {t.code}</span> : null}</div>
+        <div style={{ fontWeight: 700 }}>{t.name}{t.brand ? <span style={{ fontWeight: 600, color: "#0369a1" }}> · {t.brand}</span> : null}{t.code ? <span className="jo-dim" style={{ fontWeight: 400 }}> · {t.code}</span> : null}</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4, alignItems: "center" }}>
           {locChip(t)}{stChip(t)}
           {pendingByTool[t.id] && <span className="job-badge b-amber">รออนุมัติ: {MVT[pendingByTool[t.id].move_type]}</span>}
@@ -101,7 +101,7 @@ export default function Tools({ role, me }) {
     <div className="adm">
       <div className="adm-head"><div><h1 className="page-title">เครื่องมือช่าง <span className="page-title-en">Tools</span></h1>
         <p className="page-sub">ช่างเห็นเครื่องมือประจำตัวของตัวเอง · หัวหน้าช่างเห็นประจำรถทีม + สต๊อก · ธุรการวัสดุขึ้นไปจัดการทะเบียน/อนุมัติ</p></div>
-        {canManage && <button className="btn-primary" onClick={() => setEd({ name: "", code: "", detail: "", location: "stock", team: "", holder: "", status: "normal", note: "" })}><UIcon name="plus" size={16} color="#fff" /> เพิ่มเครื่องมือ</button>}
+        {canManage && <button className="btn-primary" onClick={() => setEd({ name: "", brand: "", code: "", detail: "", location: "stock", team: "", holder: "", status: "normal", note: "" })}><UIcon name="plus" size={16} color="#fff" /> เพิ่มเครื่องมือ</button>}
       </div>
       <div className="cat-filter">
         {TABS.map(([v, l]) => <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
@@ -230,10 +230,13 @@ export default function Tools({ role, me }) {
               <button className="modal-x" onClick={() => setEd(null)}><UIcon name="x" size={18} /></button></div>
             <div className="modal-body">
               <div className="fld-row">
-                <label className="fld"><span>ชื่อเครื่องมือ *</span><input className="inp" value={ed.name} onChange={(e) => setEd({ ...ed, name: e.target.value })} placeholder="เช่น สว่านโรตารี่ Makita" /></label>
-                <label className="fld" style={{ maxWidth: 150 }}><span>รหัส/Serial</span><input className="inp" value={ed.code || ""} onChange={(e) => setEd({ ...ed, code: e.target.value })} /></label>
+                <label className="fld"><span>ชื่อเครื่องมือ *</span><input className="inp" value={ed.name} onChange={(e) => setEd({ ...ed, name: e.target.value })} placeholder="เช่น สว่านโรตารี่" /></label>
+                <label className="fld" style={{ maxWidth: 150 }}><span>รหัส (ถ้ามี)</span><input className="inp" value={ed.code || ""} onChange={(e) => setEd({ ...ed, code: e.target.value })} placeholder="Serial" /></label>
               </div>
-              <label className="fld"><span>รายละเอียด (ยี่ห้อ/สเปค)</span><input className="inp" value={ed.detail || ""} onChange={(e) => setEd({ ...ed, detail: e.target.value })} /></label>
+              <div className="fld-row">
+                <label className="fld"><span>ยี่ห้อ</span><input className="inp" value={ed.brand || ""} onChange={(e) => setEd({ ...ed, brand: e.target.value })} placeholder="เช่น Makita · Bosch" /></label>
+                <label className="fld"><span>รายละเอียด (สเปค/รุ่น)</span><input className="inp" value={ed.detail || ""} onChange={(e) => setEd({ ...ed, detail: e.target.value })} placeholder="เช่น 18V · หัว SDS-Plus" /></label>
+              </div>
               <div className="fld-row">
                 <label className="fld"><span>ที่อยู่เครื่องมือ</span>
                   <select className="inp" value={ed.location} onChange={(e) => setEd({ ...ed, location: e.target.value })}>
