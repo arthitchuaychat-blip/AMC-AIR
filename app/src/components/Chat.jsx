@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile, getAcSeries } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -319,7 +319,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     setChatCart((c) => {
       const i = c.findIndex((x) => x.code === it.code);
       if (i >= 0) { const n = [...c]; n[i] = { ...n[i], qty: n[i].qty + 1 }; return n; }
-      return [...c, { code: it.code, name: it.th, price: Number(it.salePrice) || 0, photo: it.photoUrl || null, qty: 1 }];
+      return [...c, { code: it.code, name: it.th, price: Number(it.salePrice) || 0, photo: it.photoUrl || null, qty: 1,
+        kind: it.kind, brand: it.brand || "", series: it.series || "", powerCost: Number(it.power_cost_year) || null }];
     });
   };
   const chatQty = (code, d) => setChatCart((c) => c.map((x) => (x.code === code ? { ...x, qty: Math.max(0, x.qty + d) } : x)).filter((x) => x.qty > 0));
@@ -333,7 +334,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       const adj = chatAdj(x.price, pm);
       return `<tr style="background:${i % 2 ? "#f4f8fc" : "#fff"}">
         <td style="padding:11px 12px;color:#64748b;font-weight:700;vertical-align:top">${i + 1}</td>
-        <td style="padding:11px 6px;line-height:1.45">${esc(x.name)}${x.qty > 1 ? `<div style="font-size:13px;color:#64748b;margin-top:2px">× ${x.qty} @ ${fmtBaht(adj)}</div>` : ""}</td>
+        <td style="padding:11px 6px;line-height:1.45">${esc(x.name)}${x.qty > 1 ? `<div style="font-size:13px;color:#64748b;margin-top:2px">× ${x.qty} @ ${fmtBaht(adj)}</div>` : ""}${x.kind === "ac" && x.powerCost ? `<div style="font-size:13px;color:#0a6b3d;margin-top:2px">⚡ ค่าไฟประมาณ ${fmtNum(x.powerCost)} บาท/ปี (8 ชม./วัน)</div>` : ""}</td>
         <td style="padding:11px 14px;text-align:right;font-weight:800;white-space:nowrap;vertical-align:top">${fmtBaht(adj * x.qty)}</td></tr>`;
     }).join("");
     const cardHtml = `<div style="width:640px;background:#fff;font-family:'IBM Plex Sans Thai','Noto Sans Thai',sans-serif;color:#0f1729;border:1px solid #dbe4ee;border-radius:14px;overflow:hidden">
@@ -359,12 +360,20 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       await new Promise((r) => setTimeout(r, 60));
       const canvas = await html2canvas(host.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
       const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
-      if (chatCart.length === 1 && chatCart[0].photo) await chSendImage(sel, chatCart[0].photo);   // รูปสินค้าก่อน แล้วตามด้วยตาราง
+      // รูปสินค้าแอร์ทุกรุ่นในตะกร้า (ไม่ซ้ำ · อย่างมาก 4 รูป) → ตามด้วยตารางสรุปราคา
+      const photos = [...new Set(chatCart.filter((x) => x.kind === "ac" && x.photo).map((x) => x.photo))].slice(0, 4);
+      const single = chatCart.length === 1 && chatCart[0].photo ? [chatCart[0].photo] : [];
+      for (const p of (photos.length ? photos : single)) await chSendImage(sel, p);
       const url = await uploadDocFile(blob, "png", "image/png");
       await chSendImage(sel, url);
+      // โบรชัวร์ของแต่ละรุ่นแอร์ (ระดับซีรีส์ · ไม่ซ้ำ · อย่างมาก 3 รุ่น) — ส่งเป็นลิงก์ต่อท้าย
+      const seriesList = [...new Map(chatCart.filter((x) => x.kind === "ac" && x.series).map((x) => [`${x.brand}|${x.series}`, x])).values()].slice(0, 3);
+      for (const s of seriesList) {
+        try { const sr = await getAcSeries(s.brand, s.series); if (sr?.brochure_url) await chSendText(sel, `📄 โบรชัวร์ ${s.brand} ${s.series}\n${sr.brochure_url}`); } catch { /* ไม่มีโบรชัวร์ก็ข้าม */ }
+      }
       if (isFb) setMsgs(await chListMessages(sel));
       setChatCart([]); setAcPicker(false);
-      flash("ส่งตารางสรุปราคาให้ลูกค้าแล้ว ✓");
+      flash("ส่งรูปสินค้า + ตารางราคา + โบรชัวร์ให้ลูกค้าแล้ว ✓");
     } catch (ex) {
       // สร้าง/ส่งรูปไม่สำเร็จ → ส่งแบบข้อความ ลูกค้ายังได้ราคาครบ
       try {
