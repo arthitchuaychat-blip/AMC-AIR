@@ -168,6 +168,13 @@ export async function listMaterialsLite() {
   return all.map((m) => enrich(m, catMap)).sort((a, b) => a.code.localeCompare(b.code));
 }
 
+// ค่าไฟ/ปีโดยประมาณของแอร์ จาก SEER — สมมติฐานร้าน: เปิดใช้ 8 ชม./วัน ทั้งปี · ค่าไฟ 5 บาท/หน่วย
+// กำลังไฟ (kW) = BTU ÷ SEER ÷ 1000 → ค่าไฟ/ปี = kW × 8 × 365 × 5 (ปัดเป็นบาทเต็ม)
+export const acPowerCostYear = (btu, seer) => {
+  const b = Number(btu), s = Number(seer);
+  return b > 0 && s > 0 ? Math.round((b / s / 1000) * 8 * 365 * 5) : null;
+};
+
 // add or update a material (admin only — enforced by RLS)
 export async function saveMaterial(row, isNew) {
   const kind = row.kind || "material";
@@ -197,7 +204,10 @@ export async function saveMaterial(row, isNew) {
     description: row.description?.trim() || null,
     photo_url: row.photo_url || null,
     min_stock: Number(row.min_stock) || 0,
-    power_cost_year: (row.power_cost_year === "" || row.power_cost_year == null) ? null : Number(row.power_cost_year),
+    // ค่าไฟ/ปี: ถ้าไม่กรอก คำนวณอัตโนมัติจาก SEER (แอร์เท่านั้น)
+    power_cost_year: (row.power_cost_year === "" || row.power_cost_year == null)
+      ? (row.kind === "ac" ? acPowerCostYear(row.btu, row.seer) : null)
+      : Number(row.power_cost_year),
     features: row.features?.trim() || null,
     web_published: !!row.web_published,
     purchase_unit: row.purchase_unit?.trim() || null,

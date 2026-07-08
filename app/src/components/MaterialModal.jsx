@@ -3,6 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { UIcon } from "../icons";
 import { UNITS } from "../lib/format";
+import { acPowerCostYear } from "../lib/api";
 import { uploadMaterialPhoto, getAcSeries, saveAcSeries, uploadBrochureFile, fetchExternalFile } from "../lib/api";
 
 const KINDS = [{ v: "material", l: "วัสดุ" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }];
@@ -109,6 +110,12 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
   // รายการเดิม → ไม่ทับราคาที่ตั้งไว้ ใช้ปุ่ม ↻ คำนวณใหม่แทน
   const [spTouched, setSpTouched] = React.useState(!isNew);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  // BTU/SEER เปลี่ยน → คำนวณค่าไฟ/ปีใส่ให้อัตโนมัติ (8 ชม./วัน · 5 บาท/หน่วย) — ยังพิมพ์ทับเองได้
+  const setCalcPower = (k) => (e) => setF((s) => {
+    const n = { ...s, [k]: e.target.value };
+    if (s.kind === "ac") { const auto = acPowerCostYear(n.btu, n.seer); if (auto) n.power_cost_year = auto; }
+    return n;
+  });
   const setCost = (e) => {
     const v = e.target.value;
     setF((s) => {
@@ -256,7 +263,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
           {isAc && (
             <div className="fld-row">
               <label className="fld"><span>ขนาด BTU</span>
-                <input className="inp" type="number" list="btu-list" value={f.btu} onChange={set("btu")} placeholder="เลือก หรือพิมพ์ขนาดใหม่ เช่น 12000" />
+                <input className="inp" type="number" list="btu-list" value={f.btu} onChange={setCalcPower("btu")} placeholder="เลือก หรือพิมพ์ขนาดใหม่ เช่น 12000" />
                 <datalist id="btu-list">{btus.map((b) => <option key={b} value={b} />)}</datalist>
               </label>
               <label className="fld"><span>ประเภทแอร์ · Type</span>
@@ -281,7 +288,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
           {isAc && (
             <div className="fld-row">
               <label className="fld"><span>ค่า SEER</span>
-                <input className="inp" type="number" step="0.01" value={f.seer} onChange={set("seer")} placeholder="เช่น 14.54" />
+                <input className="inp" type="number" step="0.01" value={f.seer} onChange={setCalcPower("seer")} placeholder="เช่น 14.54" />
               </label>
               <label className="fld"><span>ขนาดท่อน้ำยา · Pipe</span>
                 <input className="inp" value={f.pipe_size} onChange={set("pipe_size")} placeholder="เช่น 1/4 1/2" />
@@ -290,7 +297,8 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
           )}
           {isAc && (
             <label className="fld"><span>⚡ ประมาณค่าไฟ/ปี (บาท) · แสดงบนเว็บ</span>
-              <input className="inp" type="number" value={f.power_cost_year} onChange={set("power_cost_year")} placeholder="เช่น 3500 (ค่าไฟทั้งปีโดยประมาณ)" />
+              <input className="inp" type="number" value={f.power_cost_year} onChange={set("power_cost_year")} placeholder="เว้นว่าง = คำนวณจาก SEER อัตโนมัติ" />
+              <span style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 3 }}>คำนวณอัตโนมัติจาก BTU ÷ SEER · ใช้งาน 8 ชม./วัน · ค่าไฟ 5 บาท/หน่วย — พิมพ์ทับเองได้</span>
             </label>
           )}
           {isAc && (f.series || "").trim() !== "" && (
