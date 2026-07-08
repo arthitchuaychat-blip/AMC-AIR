@@ -33,6 +33,7 @@ import Schedule from "./components/Schedule";
 import Chat from "./components/Chat";
 import TeamChat from "./components/TeamChat";
 import TaskBoard from "./components/TaskBoard";
+import TaskReminder from "./components/TaskReminder";
 import NotificationBell from "./components/NotificationBell";
 import MyJobs from "./components/MyJobs";
 import Invoices from "./components/Invoices";
@@ -98,7 +99,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-07·แชต: ส่งราคาแอร์แนบรูปสินค้าทุกรุ่น + ค่าไฟ/ปีในตาราง + ลิงก์โบรชัวร์ให้ลูกค้า v334";
+const BUILD = "2026-07-07·แถบเตือนงานค้าง (รอเริ่ม/กำลังทำ ที่ได้รับมอบหมาย) ติดหัวจอตามทุกเมนู — กดเปิดงานได้เลย v335";
 
 function SetupNotice() {
   return (
@@ -420,6 +421,8 @@ export default function App() {
 
       <main className="main">
         {navHist.length > 0 && <button className="page-back" onClick={goBack}><UIcon name="chevR" size={15} style={{ transform: "rotate(180deg)" }} /> ย้อนกลับ</button>}
+        {/* แถบเตือนงานค้างจากกระดานสั่งงาน — ตามไปทุกเมนู */}
+        {profile?.id && <TaskReminder myId={profile.id} view={view} onOpen={(id) => { setTaskFocus(id); go("tasks"); }} />}
         <InstallBanner />
         {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
