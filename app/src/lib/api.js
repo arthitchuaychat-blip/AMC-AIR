@@ -743,8 +743,8 @@ export async function dashboardActionLite() {
   const pos = po.data || [];
   // ---- ยอดค้างจ่าย (เจ้าหนี้) ----
   const poTotal = {}; (poi.data || []).forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
-  const poPayable = pos.filter((x) => x.status !== "cancelled" && !x.paid_at)
-    .reduce((a, x) => a + (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1), 0);               // PO ที่ยังไม่จ่ายเงิน (รวม VAT)
+  const poPayable = pos.filter((x) => x.status !== "cancelled" && !x.paid_at && (x.status === "received" || x.expense_id))
+    .reduce((a, x) => a + (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1), 0);               // PO ที่ยังไม่จ่ายเงิน (รวม VAT) — นับเฉพาะรับของแล้ว/ส่งเบิกแล้ว
   // เบิกอนุมัติแล้วรอจ่าย — ไม่นับใบเบิกที่เป็นค่าจ่าย PO (PO ตัวนั้นถูกนับใน poPayable แล้ว ไม่งั้นซ้ำ)
   const poExpIds = new Set(pos.map((x) => x.expense_id).filter(Boolean));
   const approvedExpenseSum = (exp.data || []).filter((x) => x.status === "approved" && !poExpIds.has(x.id)).reduce((a, x) => a + (Number(x.amount) || 0), 0);
@@ -764,7 +764,7 @@ export async function dashboardActionLite() {
 }
 
 // รายการค้างจ่ายแจกแจงรายใบ (เมนู "ค้างจ่าย") — แหล่ง/สูตรเดียวกับยอดค้างจ่ายบนแดชบอร์ด
-// 4 ประเภทไม่ทับกัน: PO ยังไม่จ่าย · เบิกอนุมัติรอจ่าย (ไม่รวมใบเบิกของ PO) · ใบจ่ายซัพรอจ่าย · ค่าแรงยืนยันแล้วยังไม่ตั้งเบิก
+// 4 ประเภทไม่ทับกัน: PO ยังไม่จ่าย (เฉพาะรับของแล้ว/ส่งเบิกแล้ว — แค่สั่งไว้ยังไม่นับ) · เบิกอนุมัติรอจ่าย (ไม่รวมใบเบิกของ PO) · ใบจ่ายซัพรอจ่าย · ค่าแรงยืนยันแล้วยังไม่ตั้งเบิก
 export async function listPayables() {
   const [po, poi, exp, sp, lj, tm] = await Promise.all([
     supabase.from("purchase_orders").select("*").neq("status", "cancelled").order("created_at", { ascending: false }),
@@ -780,12 +780,13 @@ export async function listPayables() {
   const teamName = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
   const poTotal = {}; (poi.data || []).forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
   const rows = [];
-  (po.data || []).filter((x) => !x.paid_at).forEach((x) => rows.push({
+  // PO เข้าค้างจ่ายเมื่อ "รับของแล้ว" หรือ "ส่งอนุมัติจ่ายแล้ว" เท่านั้น — แค่สั่งไว้ (ยังไม่รับ/ยังไม่ตั้งเบิก) ยังไม่เป็นหนี้
+  (po.data || []).filter((x) => !x.paid_at && (x.status === "received" || x.expense_id)).forEach((x) => rows.push({
     type: "po", refNo: x.po_no, name: x.supplier || "(ไม่ระบุผู้ขาย)",
     title: x.quote_no ? `อ้างอิง ${x.quote_no}` : null,
     amount: (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1),
     date: (x.created_at || "").slice(0, 10),
-    status: x.expense_id ? "ส่งเบิกแล้ว · รอจ่าย" : "ยังไม่ตั้งเบิกจ่าย",
+    status: x.expense_id ? "ส่งเบิกแล้ว · รอจ่าย" : "รับของแล้ว · ยังไม่ตั้งเบิกจ่าย",
   }));
   const poExpIds = new Set((po.data || []).map((x) => x.expense_id).filter(Boolean));
   (exp.data || []).filter((x) => !poExpIds.has(x.id)).forEach((x) => rows.push({
