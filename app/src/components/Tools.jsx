@@ -12,6 +12,8 @@ const MVT = { withdraw: "เบิกเครื่องมือ", return: "�
 export default function Tools({ role, me }) {
   const myId = me?.id, myTeam = me?.team || null;
   const canManage = ["admin", "exec", "stock"].includes(role);   // จัดการทะเบียน + อนุมัติ
+  // เครื่องมือในสต๊อก เห็นได้เฉพาะ หัวหน้าช่าง / ธุรการวัสดุ ขึ้นไป — ช่างเห็นแค่ของตัวเอง
+  const canSeeStock = ["lead_tech", "stock", "admin", "exec"].includes(role);
   const [tab, setTab] = React.useState("mine");
   const [tools, setTools] = React.useState(null);
   const [moves, setMoves] = React.useState([]);
@@ -87,12 +89,18 @@ export default function Tools({ role, me }) {
     </div>
   );
 
-  const TABS = [["mine", `ของฉัน (${mine.length})`], ["stock", `สต๊อก · เบิกได้ (${stock.length})`], ["req", `คำขอ${pending.length ? ` (${pending.length})` : ""}`], ...(canManage ? [["all", "ทะเบียนเครื่องมือ"]] : [])];
+  // คำขอ: ผู้จัดการเห็นทั้งหมด · คนอื่นเห็นเฉพาะคำขอของตัวเอง
+  const myMoves = canManage ? moves : moves.filter((x) => x.requested_by === myId);
+  const myPending = canManage ? pending : pending.filter((x) => x.requested_by === myId);
+  const TABS = [["mine", `ของฉัน (${mine.length})`],
+    ...(canSeeStock ? [["stock", `สต๊อก · เบิกได้ (${stock.length})`]] : []),
+    ["req", `คำขอ${myPending.length ? ` (${myPending.length})` : ""}`],
+    ...(canManage ? [["all", "ทะเบียนเครื่องมือ"]] : [])];
 
   return (
     <div className="adm">
       <div className="adm-head"><div><h1 className="page-title">เครื่องมือช่าง <span className="page-title-en">Tools</span></h1>
-        <p className="page-sub">ประจำตัวช่าง · ประจำรถ (หัวหน้าทีมรับผิดชอบ) · สต๊อกกลาง (สำรอง/เฉพาะงาน) — เบิก/คืน/แจ้งชำรุดได้ในนี้</p></div>
+        <p className="page-sub">ช่างเห็นเครื่องมือประจำตัวของตัวเอง · หัวหน้าช่างเห็นประจำรถทีม + สต๊อก · ธุรการวัสดุขึ้นไปจัดการทะเบียน/อนุมัติ</p></div>
         {canManage && <button className="btn-primary" onClick={() => setEd({ name: "", code: "", detail: "", location: "stock", team: "", holder: "", status: "normal", note: "" })}><UIcon name="plus" size={16} color="#fff" /> เพิ่มเครื่องมือ</button>}
       </div>
       <div className="cat-filter">
@@ -111,7 +119,7 @@ export default function Tools({ role, me }) {
             </>} />)}
           </div>)}
 
-          {tab === "stock" && (<div className="set-list">
+          {tab === "stock" && canSeeStock && (<div className="set-list">
             <div className="sec-sub" style={{ padding: "4px 0 10px" }}>เครื่องมือสำรอง/เฉพาะงานในสต๊อก — กด "ขอเบิก" แล้วรอธุรการวัสดุอนุมัติ</div>
             {stock.length === 0 && <div className="empty sm">ไม่มีเครื่องมือในสต๊อก</div>}
             {stock.map((t) => <ToolRow key={t.id} t={t} actions={<>
@@ -120,8 +128,8 @@ export default function Tools({ role, me }) {
           </div>)}
 
           {tab === "req" && (<div className="set-list">
-            {moves.length === 0 && <div className="empty sm">ยังไม่มีคำขอ</div>}
-            {moves.slice(0, 60).map((mv) => (
+            {myMoves.length === 0 && <div className="empty sm">ยังไม่มีคำขอ</div>}
+            {myMoves.slice(0, 60).map((mv) => (
               <div className="set-row" key={mv.id} style={{ alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700 }}>{MVT[mv.move_type]} · {mv.toolName}{mv.toolCode ? <span className="jo-dim" style={{ fontWeight: 400 }}> ({mv.toolCode})</span> : null}</div>
