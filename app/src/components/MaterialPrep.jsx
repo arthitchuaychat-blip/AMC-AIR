@@ -142,7 +142,8 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
   // พิมพ์รายการเตรียมวัสดุ (แยก 🛒 สั่งซื้อ / 📦 เบิกจากสต๊อก) — mode "image" | "pdf"
-  async function printPrep(p, mode) {
+  // HTML ใบเตรียมวัสดุ — แชร์ระหว่าง พรีวิว/สั่งพิมพ์ กับ บันทึกรูป/PDF (หน้าตาเหมือนกันทุกทาง)
+  function prepSheetHtml(p) {
     const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
     const rows = (its, kindQty) => its.map((it, i) => {
       const m = matMap[it.material_code];
@@ -162,7 +163,7 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
         </table>
       </div>` : "";
     const bItems = buyItems(p), wItems = wdItems(p);
-    const html = `<div style="width:720px;background:#fff;font-family:'IBM Plex Sans Thai','Noto Sans Thai',sans-serif;color:#0f1729;padding:22px">
+    return `<div style="width:720px;background:#fff;font-family:'IBM Plex Sans Thai','Noto Sans Thai',sans-serif;color:#0f1729;padding:22px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0ea5e9;padding-bottom:10px">
         <div><div style="font-size:20px;font-weight:800">AMC AIR · ใบเตรียมวัสดุ</div>
           <div style="font-size:13px;color:#475569;margin-top:2px">${esc(p.prep_no)}${p.jobNo ? " · งาน " + esc(p.jobNo) : ""}${p.quote_no ? " · อ้างอิง " + esc(p.quote_no) : ""}</div>
@@ -174,6 +175,31 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
       ${section("📦 เบิกจากสต๊อก — คลังของเราเอง", "#0369a1", wItems, "qty_withdraw")}
       ${p.note ? `<div style="margin-top:12px;font-size:13px;color:#475569">หมายเหตุ: ${esc(p.note)}</div>` : ""}
     </div>`;
+  }
+  // 🖨️ พรีวิว + สั่งพิมพ์ทันที — เปิดหน้าต่างใหม่ตอนคลิก (กัน popup-block) มีปุ่มพิมพ์/ปิด และเด้งหน้าต่างพิมพ์ให้เอง
+  function previewPrint(p) {
+    const win = window.open("", "_blank");
+    if (!win) return flash("เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตป๊อปอัปของแอปนี้แล้วลองใหม่", true);
+    win.document.open();
+    win.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ใบเตรียมวัสดุ ${p.prep_no}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page{ size:A4; margin:12mm }
+  body{ margin:0;background:#eef2f7;-webkit-print-color-adjust:exact;print-color-adjust:exact }
+  .bar{ position:sticky;top:0;z-index:9;display:flex;gap:8px;justify-content:center;padding:10px;background:#0f1729 }
+  .bar button{ font:inherit;padding:8px 22px;border-radius:8px;border:0;cursor:pointer;font-weight:700 }
+  .sheet{ width:fit-content;margin:16px auto;box-shadow:0 4px 18px rgba(15,23,41,.12) }
+  @media print{ .bar{ display:none } body{ background:#fff } .sheet{ margin:0 auto;box-shadow:none } .sheet>div{ width:100% !important;box-sizing:border-box } }
+</style></head><body>
+<div class="bar"><button style="background:#0ea5e9;color:#fff" onclick="print()">🖨️ พิมพ์</button><button style="background:#fff" onclick="close()">ปิด</button></div>
+<div class="sheet">${prepSheetHtml(p)}</div>
+<script>onload=()=>{ (document.fonts ? document.fonts.ready : Promise.resolve()).then(()=>setTimeout(()=>print(),150)) }<\/script>
+</body></html>`);
+    win.document.close();
+  }
+  async function printPrep(p, mode) {
+    const html = prepSheetHtml(p);
     const host = document.createElement("div");
     host.style.cssText = "position:fixed;left:-99999px;top:0;background:#fff;";
     host.innerHTML = html;
@@ -337,6 +363,7 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
                     )}
                     {p.status === "approved" && canEdit && <button className="btn-ghost sm" onClick={() => markDone(p)}>ปิดใบ (ครบแล้ว)</button>}
                     {(nb > 0 || nw > 0) && <>
+                      <button className="btn-ghost sm" onClick={() => previewPrint(p)} title="เปิดพรีวิวแล้วสั่งพิมพ์ได้เลย">🖨️ พิมพ์</button>
                       <button className="btn-ghost sm" onClick={() => printPrep(p, "image")} title="บันทึกรายการเตรียมวัสดุเป็นรูปภาพ">🖼️ รูป</button>
                       <button className="btn-ghost sm" onClick={() => printPrep(p, "pdf")} title="บันทึกรายการเตรียมวัสดุเป็น PDF">📄 PDF</button>
                     </>}
