@@ -6,7 +6,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 // แถบเตือนงานค้างจากกระดานสั่งงาน — ติดหัวจอตามไปทุกเมนู
 // โชว์งานที่ "ฉันได้รับมอบหมาย" สถานะ รอเริ่ม/กำลังทำ · กดชิปเปิดงานนั้นในกระดาน · ย่อได้แต่ไม่หาย (ยังเห็นจำนวน)
-export default function TaskReminder({ myId, view, onOpen }) {
+export default function TaskReminder({ myId, view, onOpen, onOpenBoard }) {
   const [tasks, setTasks] = React.useState([]);
   const [min, setMinState] = React.useState(() => { try { return localStorage.getItem("amc_task_bar") === "min"; } catch { return false; } });
   const lastView = React.useRef(view);
@@ -34,7 +34,10 @@ export default function TaskReminder({ myId, view, onOpen }) {
   );
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 12px", padding: "8px 10px 8px 14px", borderRadius: 12, border: "1.5px solid #fbbf24", background: "linear-gradient(90deg,#fffbeb,#fef3c7)" }}>
-      <span style={{ fontWeight: 800, fontSize: 13, color: "#92400e", whiteSpace: "nowrap" }}>⏰ งานค้างของคุณ ({tasks.length})</span>
+      <button onClick={() => onOpenBoard && onOpenBoard()} title="เปิดกระดานสั่งงาน"
+        style={{ border: 0, background: "transparent", padding: 0, fontWeight: 800, fontSize: 13, color: "#92400e", whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}>
+        ⏰ งานค้างของคุณ ({tasks.length}) ↗
+      </button>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", flex: 1, paddingBottom: 2 }}>
         {sorted.map((t) => { const late = t.due_date && t.due_date < t0; const st = ST[t.status] || ST.todo; return (
           <button key={t.id} onClick={() => onOpen(t.id)} title={`${st.th}${t.due_date ? ` · กำหนด ${t.due_date}` : ""} · กดเพื่อเปิดในกระดานสั่งงาน`}
