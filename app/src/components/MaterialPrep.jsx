@@ -10,6 +10,7 @@ import UnitPick, { unitFactor } from "./UnitPick";
 import { UIcon } from "../icons";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import { useDocPeek } from "./DocPeek";
 
 // ใบเตรียมวัสดุ — ประตูก่อนการสั่งซื้อ/เบิก (mig 109)
 // ดึงรายการจากใบเสนอราคา (หรือเพิ่มเอง) → แบ่งจำนวน "ซื้อ / เบิกจากคลัง" ต่อรายการ (เห็นคงเหลือช่วยตัดสิน)
@@ -27,6 +28,8 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
   const canEdit = can(role, "prep", "edit");
   const canConfirm = canEdit;   // ยืนยันเอง (ไม่ต้องรออนุมัติ) — คนเตรียมวัสดุกดยืนยันได้เลย
   const canDeleteConfirmed = ["admin", "exec"].includes(role);   // ลบใบที่ยืนยันแล้ว = ธุรการ และเหนือกว่า เท่านั้น
+  // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน · "เปิดหน้าเต็ม" ค่อยเด้งไปเมนูจริง
+  const [peekEl, openPeek] = useDocPeek((t, n) => (t === "quote" ? (onOpenQuote && onOpenQuote(n)) : t === "job" ? (onOpenJob && onOpenJob(n)) : null));
   const [list, setList] = React.useState(null);
   const [mats, setMats] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
@@ -340,8 +343,8 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
                 <div className={"card job-card" + (p.status === "cancelled" ? " closed" : "")} key={p.prep_no}>
                   <div className="job-card-head" style={{ cursor: "default" }}>
                     <div className="job-card-id"><span className="job-no">{p.prep_no}</span><span className={"job-badge " + st.cls}>{st.th}</span>
-                      {p.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} onClick={() => onOpenQuote && onOpenQuote(p.quote_no)}>อ้างอิง {p.quote_no} ↗</button>}
-                      {p.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} onClick={() => onOpenJob && onOpenJob(p.jobNo)}>งาน {p.jobNo} ↗</button>}
+                      {p.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} onClick={() => openPeek("quote", p.quote_no)}>อ้างอิง {p.quote_no} ↗</button>}
+                      {p.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} onClick={() => openPeek("job", p.jobNo)}>งาน {p.jobNo} ↗</button>}
                     </div>
                     <div className="job-card-meta">{p.title || p.quoteTitle || "—"}
                       {(p.customerName || p.teamName) && <div style={{ marginTop: 2 }}>
@@ -376,6 +379,7 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
             })}
           </div>
         )}
+      {peekEl}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );

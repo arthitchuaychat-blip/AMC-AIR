@@ -557,7 +557,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
               {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "job", no: jo.job_no }}
-                onOpen={(t, n) => (t === "job" ? (onOpenDoc && onOpenDoc(t, n)) : setPeek({ type: t, no: n }))} />; })()}
+                onOpen={(t, n) => setPeek({ type: t, no: n })} />; })()}
               <InternalNoteTag note={jo.internal_note} role={role} />
               {(() => { const sibs = siblingsOf(jo); return sibs.length > 1 ? (
                 <div className="job-group-chips"><span style={{ fontSize: 12, color: "var(--ink-2)" }}>🔗 ใบงานเชื่อม:</span>

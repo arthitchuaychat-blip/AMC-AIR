@@ -1,6 +1,7 @@
 import React from "react";
 import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, setExpenseExpectedDate, listJobOrders } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
+import { useDocPeek } from "./DocPeek";
 import AttachThumb from "./AttachThumb";
 import { fmtBaht, ATTACH_ACCEPT } from "../lib/format";
 import { UIcon } from "../icons";
@@ -69,6 +70,7 @@ export default function Expenses({ role, me, onOpenDoc }) {
   const [tab, setTab] = React.useState("mine");
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
+  const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเอกสาร (PO/งาน/QT) → พรีวิวแผงขวาก่อน · เปิดหน้าเต็มค่อยเด้งไปเมนู
   return (
     <div className="adm">
       <div className="adm-head"><div><h1 className="page-title">เบิกจ่าย <span className="page-title-en">Expenses</span></h1>
@@ -77,10 +79,11 @@ export default function Expenses({ role, me, onOpenDoc }) {
         {TABS.map(([v, l]) => <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
           style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
       </div>
-      {tab === "mine" && <MineTab flash={flash} onOpenDoc={onOpenDoc} />}
-      {tab === "approve" && office && <ApproveTab flash={flash} onOpenDoc={onOpenDoc} />}
+      {tab === "mine" && <MineTab flash={flash} onOpenDoc={openPeek} />}
+      {tab === "approve" && office && <ApproveTab flash={flash} onOpenDoc={openPeek} />}
       {tab === "accounts" && office && <AccountsTab flash={flash} />}
       {tab === "report" && office && <ReportTab flash={flash} />}
+      {peekEl}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );

@@ -53,7 +53,7 @@ function SupplierPicker({ value, onChange }) {
 
 export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onReceive, focus, onFocusConsumed, onOpenQuote, onOpenJob }) {
   // ชิป "อ้างอิง QT-…" → พรีวิวใบเสนอราคาแผงขวาก่อน · "เปิดหน้าเต็ม" ค่อยเด้งไปเมนูใบเสนอราคา
-  const [peekEl, openPeek] = useDocPeek((t, n) => { if (t === "quote" && onOpenQuote) onOpenQuote(n); });
+  const [peekEl, openPeek] = useDocPeek((t, n) => { if (t === "quote" && onOpenQuote) onOpenQuote(n); else if (t === "job" && onOpenJob) onOpenJob(n); });
   const isAdmin = can(role, "po", "edit");
   const [pos, setPos] = React.useState([]);
   const [mats, setMats] = React.useState([]);
@@ -312,7 +312,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 <div className="job-card-id"><span className="job-no">{po.po_no}</span><span className={"job-badge " + st.cls}>{st.th}</span>
                   {(() => { const ps = PAY_STATUS[po.paymentStatus] || PAY_STATUS.unpaid; return <span className={"job-badge " + ps.cls}>💳 {ps.th}{po.paymentStatus === "paid" && po.paid_at ? " " + new Date(po.paid_at).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : ""}</span>; })()}
                   {po.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} title="ดูใบเสนอราคาที่อ้างอิง (พรีวิวด้านขวา)" onClick={() => openPeek("quote", po.quote_no)}>อ้างอิง {po.quote_no} ↗</button>}
-                  {po.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} title="เปิดใบงานที่เชื่อมกัน" onClick={() => onOpenJob && onOpenJob(po.jobNo)}>งาน {po.jobNo} ↗</button>}
+                  {po.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} title="พรีวิวใบงานที่เชื่อมกัน" onClick={() => openPeek("job", po.jobNo)}>งาน {po.jobNo} ↗</button>}
                 </div>
                 <div className="job-card-meta">{po.supplier || "ไม่ระบุร้าน"} · {po.items.length} รายการ{po.note ? ` · ${po.note}` : ""}
                   {(po.customerName || po.teamName) && <div style={{ marginTop: 2 }}>
