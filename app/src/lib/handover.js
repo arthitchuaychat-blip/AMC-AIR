@@ -40,6 +40,42 @@ export const PM_ROWS = [
   "เช็คความแน่น นอต สกรู",
 ];
 
+// ตรวจรับงานติดตั้งหลายเครื่อง (ส่งมอบรวม) — [หมวด, [ข้อตรวจ...]] · ติ๊ก ✓ ผ่าน / ✕ ไม่ผ่าน แยกรายเครื่อง
+export const ACCEPT_GROUPS = [
+  ["งานติดตั้ง", [
+    "เครื่องยึดแน่นหนา ได้ระดับ (คอยล์เย็น + คอยล์ร้อน)",
+    "ตำแหน่งคอยล์ร้อนระบายอากาศได้ดี มีระยะห่างจากผนังเหมาะสม",
+    "รางครอบท่อ/แนวท่อเก็บเรียบร้อย สวยงาม",
+  ]],
+  ["ระบบน้ำยา", [
+    "แวคคั่มระบบตามมาตรฐาน / ทดสอบรั่ว แรงดันคงที่",
+    "แรงดันน้ำยาตามสเปคเครื่อง (R32 / R410A)",
+    "หุ้มฉนวนท่อครบถ้วน ไม่มีเหงื่อ/น้ำแข็งเกาะ",
+  ]],
+  ["ระบบไฟฟ้า", [
+    "เบรกเกอร์แยก + ขนาดสายไฟถูกต้องตามพิกัดเครื่อง",
+    "วัดแรงดันไฟ/กระแส (แอมป์) อยู่ในเกณฑ์ปกติ",
+    "จุดต่อสายแน่นหนา มีสายดินครบ",
+  ]],
+  ["ระบบน้ำทิ้ง", [
+    "เทสต์น้ำทิ้ง ไหลสะดวก ไม่รั่วซึม ความลาดเอียงเพียงพอ",
+  ]],
+  ["ทดสอบการทำงาน", [
+    "เปิดทดสอบ ความเย็นปกติ (วัดอุณหภูมิลมออก)",
+    "รีโมททำงานครบทุกโหมด (สวิง / พัดลม / ตั้งเวลา)",
+    "เสียงและการสั่นสะเทือนปกติ ทั้งคอยล์เย็นและคอยล์ร้อน",
+  ]],
+];
+export const ACCEPT_ROWS = ACCEPT_GROUPS.flatMap(([, rows]) => rows);   // 13 ข้อ (ติ๊กรายเครื่อง)
+// ความเรียบร้อยรวมทั้งงาน — ติ๊กครั้งเดียว ไม่แยกเครื่อง
+export const ACCEPT_OVERALL = [
+  "เก็บกวาดหน้างาน ขนเศษวัสดุออกครบ",
+  "สาธิต/อธิบายการใช้งานให้ผู้ใช้งาน",
+  "ส่งมอบรีโมท คู่มือ ใบรับประกันครบถ้วน",
+  "ถ่ายรูปงานเสร็จครบทุกจุดติดตั้ง",
+];
+export const blankAcceptMachine = () => ({ point: "", brand: "", model: "", btu: "", serial: "" });
+
 // ประเภทงาน — value ↔ label (also pre-ticked from a job's job_type via JOBTYPE_TO_WORK)
 export const WORK_TYPES = [
   ["install", "ติดตั้ง"],
@@ -60,12 +96,15 @@ export const JOBTYPE_TO_WORK = { install: "install", maintenance: "maintenance",
 export const FORM_KINDS = [
   { kind: "perf", label: "วัดประสิทธิภาพ", icon: "🌡️", hint: "ก่อน/หลัง 14 รายการ" },
   { kind: "pm", label: "งานล้าง / PM", icon: "🧊", hint: "เช็คลิสต์ 15 ข้อ" },
+  { kind: "accept", label: "ตรวจรับงานรวม (หลายเครื่อง)", icon: "✅", hint: "ติดตั้งหลายชุดใน 1 งาน — เช็คลิสต์รายเครื่อง 13 ข้อ + ความเรียบร้อยรวม + ผู้ตรวจรับเซ็น" },
 ];
 
 export const blankMachine = () => ({ code: "", type: "", building: "", floor: "", room: "", brand: "", model: "", btu: "" });
 
 export function blankForm(kind) {
   if (kind === "pm") return { kind: "pm", machine: blankMachine(), rows: PM_ROWS.map(() => null), note: "" };
+  // ตรวจรับงานรวม: rows[ข้อ][เครื่อง] = 'pass' | 'fail' | null · itemNotes ต่อข้อ (ใช้เมื่อไม่ผ่าน) · overall = ติ๊กรวมทั้งงาน
+  if (kind === "accept") return { kind: "accept", machines: [blankAcceptMachine()], rows: ACCEPT_ROWS.map(() => [null]), itemNotes: ACCEPT_ROWS.map(() => ""), overall: ACCEPT_OVERALL.map(() => false), note: "" };
   return { kind: "perf", machine: blankMachine(), rows: PERF_ROWS.map(() => ({ b: "", a: "" })), note: "" };
 }
 

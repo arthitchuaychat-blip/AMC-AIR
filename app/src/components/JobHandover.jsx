@@ -1,6 +1,6 @@
 import React from "react";
 import { custCode, fmtDocDate } from "../lib/format";
-import { PERF_ROWS, PM_ROWS, WORK_TYPES, AC_TYPES } from "../lib/handover";
+import { PERF_ROWS, PM_ROWS, WORK_TYPES, AC_TYPES, ACCEPT_GROUPS, ACCEPT_OVERALL } from "../lib/handover";
 
 // Printed/PDF A4 sheet of a SAVED handover (filled in by the technician). Renders the header, the
 // ticked work-types, every sub-form (perf measurement / PM checklist) with the recorded values, and
@@ -53,6 +53,57 @@ function PmForm({ f }) {
         })}
       </tbody>
     </table>
+  );
+}
+
+// ตรวจรับงานรวม (หลายเครื่อง) — ตารางเครื่อง + เมทริกซ์ ✓/✕ รายเครื่อง + ความเรียบร้อยรวม + สรุปผล
+function AcceptForm({ f }) {
+  const machines = f.machines || [];
+  const n = machines.length;
+  const passCnt = machines.filter((_, mi) => (f.rows || []).every((r) => r[mi] === "pass")).length;
+  const failCnt = machines.filter((_, mi) => (f.rows || []).some((r) => r[mi] === "fail")).length;
+  let gi = 0;
+  return (
+    <>
+      <table className="ho-tbl" style={{ marginBottom: 6 }}>
+        <thead><tr><th className="n">#</th><th>จุดติดตั้ง</th><th>ยี่ห้อ / รุ่น</th><th>BTU</th><th>Serial</th></tr></thead>
+        <tbody>
+          {machines.map((m, mi) => (
+            <tr key={mi}><td className="n">{mi + 1}</td><td className="lbl">{m.point || "-"}</td>
+              <td className="lbl">{[m.brand, m.model].filter(Boolean).join(" ") || "-"}</td>
+              <td className="lbl">{m.btu || "-"}</td><td className="lbl">{m.serial || "-"}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <table className="ho-tbl">
+        <thead><tr><th>รายการตรวจ</th>{machines.map((_, mi) => <th key={mi} style={{ width: 34, textAlign: "center" }}>{mi + 1}</th>)}</tr></thead>
+        <tbody>
+          {ACCEPT_GROUPS.map(([gname, rows]) => (
+            <React.Fragment key={gname}>
+              <tr><td colSpan={n + 1} style={{ background: "#eef4fb", fontWeight: 700, fontSize: "0.92em", padding: "2px 8px" }}>{gname}</td></tr>
+              {rows.map((label) => { const ri = gi++; const note = (f.itemNotes || [])[ri]; return (
+                <React.Fragment key={ri}>
+                  <tr><td className="lbl">{label}</td>
+                    {machines.map((_, mi) => { const v = f.rows?.[ri]?.[mi]; return (
+                      <td key={mi} className="ck">{v === "pass" ? <b className="ho-ok">✓</b> : v === "fail" ? <b className="ho-bad">✕</b> : ""}</td>
+                    ); })}
+                  </tr>
+                  {note ? <tr><td colSpan={n + 1} style={{ fontSize: "0.9em", color: "#b91c1c", padding: "0 8px 4px" }}>↳ {note}</td></tr> : null}
+                </React.Fragment>
+              ); })}
+            </React.Fragment>
+          ))}
+          <tr><td colSpan={n + 1} style={{ background: "#eef4fb", fontWeight: 700, fontSize: "0.92em", padding: "2px 8px" }}>ความเรียบร้อยรวมทั้งงาน</td></tr>
+          {ACCEPT_OVERALL.map((label, oi) => (
+            <tr key={oi}><td className="lbl">{label}</td>
+              <td className="ck" colSpan={n}>{(f.overall || [])[oi] ? <b className="ho-ok">✓ เรียบร้อย</b> : ""}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ marginTop: 5, fontWeight: 700, fontSize: "0.95em", color: failCnt ? "#b91c1c" : "#0a6b3d" }}>
+        ผลการตรวจรับ: ผ่านครบ {passCnt}/{n} เครื่อง{failCnt ? ` · มีข้อติดตามแก้ไข ${failCnt} เครื่อง (ตามหมายเหตุ)` : " — รับมอบงานเรียบร้อย"}
+      </div>
+    </>
   );
 }
 
@@ -121,9 +172,9 @@ export default function JobHandover({ handover = {}, company = {} }) {
         {/* ── each sub-form ── */}
         {forms.map((f, i) => (
           <section className="ho-sec ho-sec-block ho-form-print" key={i}>
-            <div className="ho-sec-h">{f.kind === "pm" ? "การดำเนินการงาน · งานล้าง / PM" : "การวัดประสิทธิภาพ"} · เครื่องที่ {i + 1}</div>
-            <div className="ho-form-machine"><MachineLine m={f.machine} /></div>
-            {f.kind === "pm" ? <PmForm f={f} /> : <PerfForm f={f} />}
+            <div className="ho-sec-h">{f.kind === "accept" ? `ตรวจรับงานติดตั้ง (ส่งมอบรวม ${f.machines?.length || 0} เครื่อง)` : `${f.kind === "pm" ? "การดำเนินการงาน · งานล้าง / PM" : "การวัดประสิทธิภาพ"} · เครื่องที่ ${i + 1}`}</div>
+            {f.kind !== "accept" && <div className="ho-form-machine"><MachineLine m={f.machine} /></div>}
+            {f.kind === "accept" ? <AcceptForm f={f} /> : f.kind === "pm" ? <PmForm f={f} /> : <PerfForm f={f} />}
             {f.note ? <div className="ho-form-note">หมายเหตุ: {f.note}</div> : null}
           </section>
         ))}
@@ -139,7 +190,7 @@ export default function JobHandover({ handover = {}, company = {} }) {
         <div className="ho-signs">
           <div className="ho-sign">
             {h.cust_sign_url ? <img className="ho-sign-img" src={h.cust_sign_url} alt="" /> : <div className="ho-sign-blank" />}
-            <div className="ho-sign-lbl">ผู้รับบริการ{h.cust_name ? ` · ${h.cust_name}` : ""}</div>
+            <div className="ho-sign-lbl">{forms.some((f) => f.kind === "accept") ? "ผู้ตรวจสอบ/ผู้รับมอบงาน" : "ผู้รับบริการ"}{h.cust_name ? ` · ${h.cust_name}` : ""}</div>
           </div>
           <div className="ho-sign">
             {h.tech_sign_url ? <img className="ho-sign-img" src={h.tech_sign_url} alt="" /> : <div className="ho-sign-blank" />}
