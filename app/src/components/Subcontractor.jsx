@@ -84,12 +84,15 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
   const [busy, setBusy] = React.useState(null);
   const [teamF, setTeamF] = React.useState("all");
   const [statusF, setStatusF] = React.useState("all");
+  const [laborF, setLaborF] = React.useState("all");   // กรองตามสถานะการกรอกค่าแรง
   const [jobPreview, setJobPreview] = React.useState(null);
   const STATUS = { done: { t: "เสร็จ", c: "b-green" }, in_progress: { t: "กำลังทำ", c: "b-amber" }, scheduled: { t: "นัดแล้ว", c: "b-blue" }, pending: { t: "รอจ่ายงาน", c: "b-grey" }, awaiting_approval: { t: "รออนุมัติ", c: "b-purple" }, reschedule: { t: "นัดเพิ่ม", c: "b-orange" } };
   // only show team / status options that actually appear in the current job list
   const teamOpts = (subTeams || []).filter((t) => jobs.some((j) => j.assigned_team === t.id));
   const statusOpts = [["all", "ทุกสถานะ"], ...Object.entries(STATUS).filter(([k]) => jobs.some((j) => j.status === k)).map(([k, v]) => [k, v.t])];
-  const shown = jobs.filter((j) => (teamF === "all" || j.assigned_team === teamF) && (statusF === "all" || j.status === statusF));
+  const LABOR_F = [["all", "ค่าแรง: ทั้งหมด"], ["none", "ยังไม่กรอกค่าแรง"], ["entered", "กรอกแล้ว · รอยืนยัน"], ["confirmed", "ยืนยันแล้ว · รอจ่าย"], ["partial", "จ่ายบางส่วน"], ["paid", "จ่ายครบแล้ว"]];
+  const laborOpts = LABOR_F.filter(([v]) => v === "all" || jobs.some((j) => state(j).k === v));
+  const shown = jobs.filter((j) => (teamF === "all" || j.assigned_team === teamF) && (statusF === "all" || j.status === statusF) && (laborF === "all" || state(j).k === laborF));
 
   async function confirm(j, val) {
     setBusy(j.job_no);
@@ -100,11 +103,11 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
 
   // labor state for the row badge
   function state(j) {
-    if (!(j.labor_total > 0)) return { t: "ยังไม่กรอกค่าแรง", c: "b-grey" };
-    if (j.labor_paid) return { t: "จ่ายครบแล้ว", c: "b-green" };
-    if ((Number(j.labor_paid_amt) || 0) > 0) return { t: "จ่ายบางส่วน", c: "b-amber" };
-    if (j.labor_confirmed) return { t: "ยืนยันแล้ว · รอจ่าย", c: "b-blue" };
-    return { t: "กรอกแล้ว · รอยืนยัน", c: "b-orange" };
+    if (!(j.labor_total > 0)) return { k: "none", t: "ยังไม่กรอกค่าแรง", c: "b-grey" };
+    if (j.labor_paid) return { k: "paid", t: "จ่ายครบแล้ว", c: "b-green" };
+    if ((Number(j.labor_paid_amt) || 0) > 0) return { k: "partial", t: "จ่ายบางส่วน", c: "b-amber" };
+    if (j.labor_confirmed) return { k: "confirmed", t: "ยืนยันแล้ว · รอจ่าย", c: "b-blue" };
+    return { k: "entered", t: "กรอกแล้ว · รอยืนยัน", c: "b-orange" };
   }
 
   return (
@@ -118,6 +121,13 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
         {statusOpts.map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+        ))}
+      </div>
+      {/* แถวกรองสถานะการกรอกค่าแรง — ส้มเข้มตอนเลือก ให้ต่างจากแถวสถานะงานด้านบน */}
+      <div className="cat-filter" style={{ marginBottom: 10 }}>
+        {laborOpts.map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (laborF === v ? " on" : "")} onClick={() => setLaborF(v)}
+            style={laborF === v ? { background: "#c2410c", color: "#fff", borderColor: "#c2410c" } : {}}>{l}</button>
         ))}
       </div>
       <div className="set-list">
