@@ -42,8 +42,9 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
     setEditTask({ title: prefill.name ? `ติดตามลูกค้า: ${prefill.name}` : "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: prefill.customerId || "" });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill]);
-  // open a specific task's detail (from a notification) — show cancelled too in case it was
-  React.useEffect(() => { if (focus == null) return; setDetailId(Number(focus)); setShowCancelled(true); onFocusConsumed && onFocusConsumed(); }, [focus]);
+  // open a specific task's detail (from a notification / reminder bar) — show cancelled too in case it was
+  // id ของงานเป็น uuid (ตัวอักษร) — ห้ามแปลง Number ไม่งั้นได้ NaN แล้วหางานไม่เจอ (แผ่นงานไม่เด้ง)
+  React.useEffect(() => { if (focus == null) return; setDetailId(String(focus)); setShowCancelled(true); onFocusConsumed && onFocusConsumed(); }, [focus]);
 
   const canManage = (t) => myId === t.assigner || role === "admin" || role === "exec";
   const canStatus = (t) => canManage(t) || myId === t.assignee;
