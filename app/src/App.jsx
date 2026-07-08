@@ -41,6 +41,7 @@ import Receipts from "./components/Receipts";
 import Receivables from "./components/Receivables";
 import Payables from "./components/Payables";
 import MaterialPrep from "./components/MaterialPrep";
+import Tools from "./components/Tools";
 import TaxReport from "./components/TaxReport";
 import CustomerFollowup from "./components/CustomerFollowup";
 import WebOrders from "./components/WebOrders";
@@ -79,6 +80,7 @@ const NAV = {
   suppliers: { th: "ผู้ขาย", en: "Suppliers", icon: "building" },
   prep: { th: "เตรียมวัสดุ", en: "Material Prep", icon: "box" },
   po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
+  tools: { th: "เครื่องมือช่าง", en: "Tools", icon: "box" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
 
@@ -90,7 +92,7 @@ const NAV_GROUPS = [
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
-  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po"] },
+  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po", "tools"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
 ];
@@ -99,7 +101,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-07·แก้กดชิปงานค้างแล้วแผ่นงานไม่เด้ง (id งานเป็น uuid โดนแปลงเป็นตัวเลข) v337";
+const BUILD = "2026-07-07·เมนูใหม่ “เครื่องมือช่าง” — ประจำตัว/ประจำรถ/สต๊อก · เบิก-คืน-แจ้งชำรุด mig 122 v338";
 
 function SetupNotice() {
   return (
@@ -485,6 +487,7 @@ export default function App() {
           focus={poFocus} onFocusConsumed={() => setPoFocus(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }}
           onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, quoteNo: po.quote_no || null, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) }); go("movements"); }} />}
+        {view === "tools" && <Tools role={role} me={profile} />}
         {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}
         {view === "attendance" && <Attendance me={profile} />}

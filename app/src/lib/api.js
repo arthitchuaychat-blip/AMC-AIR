@@ -3510,3 +3510,83 @@ export async function listDocLinks() {
   (po.data || []).forEach((x) => { if (x.quote_no) poToQuote[x.po_no] = x.quote_no; });
   return { byQuote, boqToQuote, jobToQuote, invToQuote, rcToQuote, poToQuote };
 }
+
+// ---------- เครื่องมือช่าง (mig 122): ทะเบียน + เบิก/คืน/แจ้งชำรุด ----------
+const _toolErr = (e) => new Error(/tool/.test(e.message || "") && /relation|find|exist/i.test(e.message || "") ? "ยังไม่ได้รัน migration 122 ใน Supabase" : e.message || e);
+
+export async function listTools() {
+  const [t, tm, pf] = await Promise.all([
+    supabase.from("tools").select("*").order("name"),
+    supabase.from("teams").select("id,name"),
+    supabase.from("profiles").select("id,name,email"),
+  ]);
+  if (t.error) throw _toolErr(t.error);
+  const tn = Object.fromEntries((tm.data || []).map((x) => [x.id, x.name]));
+  const pn = Object.fromEntries((pf.data || []).map((x) => [x.id, x.name || x.email]));
+  return (t.data || []).map((x) => ({ ...x, teamName: x.team ? (tn[x.team] || x.team) : null, holderName: x.holder ? (pn[x.holder] || "—") : null }));
+}
+
+export async function saveTool(t) {
+  const row = { code: t.code?.trim() || null, name: t.name?.trim(), detail: t.detail?.trim() || null, photo_url: t.photo_url || null,
+    location: t.location || "stock", team: t.location === "vehicle" ? (t.team || null) : null,
+    holder: t.location === "person" ? (t.holder || null) : null, status: t.status || "normal", note: t.note?.trim() || null };
+  const q = t.id ? supabase.from("tools").update(row).eq("id", t.id) : supabase.from("tools").insert(row);
+  const { error } = await q; if (error) throw _toolErr(error);
+}
+
+export async function deleteTool(id) {
+  const { error } = await supabase.from("tools").delete().eq("id", id);
+  if (error) throw _toolErr(error);
+}
+
+// คำขอเบิก/คืน/แจ้งชำรุด — สร้างโดยใครก็ได้ รออนุมัติโดยธุรการวัสดุ/ธุรการ/ผู้บริหาร
+export async function requestToolMove(m) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from("tool_moves").insert({
+    tool_id: m.tool_id, move_type: m.move_type, to_loc: m.to_loc || null, to_team: m.to_team || null,
+    to_holder: m.to_holder || null, to_status: m.to_status || null, job_no: m.job_no?.trim() || null,
+    note: m.note?.trim() || null, requested_by: user?.id || null,
+  });
+  if (error) throw _toolErr(error);
+}
+
+export async function listToolMoves() {
+  const [mv, t, pf, tm] = await Promise.all([
+    supabase.from("tool_moves").select("*").order("created_at", { ascending: false }).limit(300),
+    supabase.from("tools").select("id,name,code"),
+    supabase.from("profiles").select("id,name,email"),
+    supabase.from("teams").select("id,name"),
+  ]);
+  if (mv.error) throw _toolErr(mv.error);
+  const tn = Object.fromEntries((t.data || []).map((x) => [x.id, x]));
+  const pn = Object.fromEntries((pf.data || []).map((x) => [x.id, x.name || x.email]));
+  const tmn = Object.fromEntries((tm.data || []).map((x) => [x.id, x.name]));
+  return (mv.data || []).map((x) => ({ ...x, toolName: tn[x.tool_id]?.name || `#${x.tool_id}`, toolCode: tn[x.tool_id]?.code || null,
+    requesterName: pn[x.requested_by] || "—", deciderName: x.decided_by ? pn[x.decided_by] || null : null,
+    toHolderName: x.to_holder ? pn[x.to_holder] || "—" : null, toTeamName: x.to_team ? tmn[x.to_team] || x.to_team : null }));
+}
+
+export async function deleteToolMove(id) {
+  const { error } = await supabase.from("tool_moves").delete().eq("id", id);
+  if (error) throw _toolErr(error);
+}
+
+// อนุมัติ/ปฏิเสธคำขอ — อนุมัติแล้วย้ายเครื่องมือ/อัปเดตสถานะให้เลย
+export async function decideToolMove(mv, approve) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from("tool_moves")
+    .update({ status: approve ? "approved" : "rejected", decided_by: user?.id || null, decided_at: new Date().toISOString() })
+    .eq("id", mv.id);
+  if (error) throw _toolErr(error);
+  if (!approve) return;
+  if (mv.move_type === "report") {
+    const { error: e2 } = await supabase.from("tools").update({ status: mv.to_status || "broken" }).eq("id", mv.tool_id);
+    if (e2) throw _toolErr(e2);
+  } else {
+    const loc = mv.move_type === "return" ? "stock" : (mv.to_loc || "person");
+    const { error: e2 } = await supabase.from("tools").update({
+      location: loc, team: loc === "vehicle" ? mv.to_team || null : null, holder: loc === "person" ? mv.to_holder || null : null,
+    }).eq("id", mv.tool_id);
+    if (e2) throw _toolErr(e2);
+  }
+}
