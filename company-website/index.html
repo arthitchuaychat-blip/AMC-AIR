@@ -60,7 +60,7 @@
     SERVICE_AREAS: ["กรุงเทพฯ", "นนทบุรี", "ปทุมธานี", "สมุทรปราการ", "นครปฐม", "สมุทรสาคร"],
     STATS: [],   // (เอาสถิติออกแล้ว)
     // โปรโมชั่น (เว้น "" ถ้าไม่มี — แบนเนอร์จะไม่ขึ้น)
-    PROMO: "🎉 จองล้างแอร์วันนี้ รับส่วนลดพิเศษ + ตรวจเช็กน้ำยาฟรี",
+    PROMO: "",
 
     // ---- ภาพปก/แบนเนอร์ Hero · สไลด์โชว์ทุก 2 วินาที ----
     // ทีมกราฟิกจัดการจากหลังบ้านได้: ร้านค้าออนไลน์ → แบนเนอร์/ปก (เก็บใน web_banners)
@@ -479,6 +479,9 @@ header.scrolled{background:rgba(255,255,255,.92)}
 @media(max-width:860px){.btucalc{grid-template-columns:1fr;gap:20px}}
 /* น้ำเงินเข้มที่ footer ให้ครบโทนฟ้า-ขาว-น้ำเงิน */
 footer{background:#0b1b33}
+/* โลโก้จริง (logo.png) แทนไอคอน SVG เดิม — กล่องขาวให้เด่นบน footer น้ำเงินด้วย */
+.logo .mark{background:#fff;box-shadow:0 2px 8px rgba(13,71,181,.12);overflow:hidden}
+.logo .mark img{width:100%;height:100%;object-fit:contain}
 </style>
 </head>
 <body>
@@ -487,7 +490,7 @@ footer{background:#0b1b33}
 <header id="header">
   <div class="wrap bar">
     <a href="#top" class="logo">
-      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h18M3 12h18M3 16h12"/><circle cx="19" cy="16" r="2"/></svg></span>
+      <span class="mark"><img src="logo.png" alt="AMC AIR"></span>
       <b>AMC<span> AIR</span></b>
     </a>
     <nav class="menu" id="menu">
@@ -786,7 +789,7 @@ footer{background:#0b1b33}
   <div class="wrap">
     <div class="top">
       <div style="max-width:300px">
-        <a href="#top" class="logo"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h18M3 12h18M3 16h12"/><circle cx="19" cy="16" r="2"/></svg></span><b>AMC<span> AIR</span></b></a>
+        <a href="#top" class="logo"><span class="mark"><img src="logo.png" alt="AMC AIR"></span><b>AMC<span> AIR</span></b></a>
         <p style="margin-top:12px;font-size:13.5px;color:#94a3b8">จำหน่าย ติดตั้ง ล้าง ซ่อมแอร์ครบวงจร โดยทีมช่างมืออาชีพ</p>
       </div>
       <div class="fcol"><h4>บริการ</h4><a href="#services">ติดตั้งแอร์</a><a href="#services">ล้างแอร์</a><a href="#services">ซ่อมแอร์</a></div>
