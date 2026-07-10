@@ -9,7 +9,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{font-family:var(--appfont);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum";}
+body{font-family:var(--appfont);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum";-webkit-text-size-adjust:100%;text-size-adjust:100%;}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 input,select{font-family:inherit}
 ::-webkit-scrollbar{width:9px;height:9px}
@@ -808,6 +808,18 @@ select.inp{cursor:pointer}
 .job-actions{display:flex;align-items:center;gap:12px;margin-top:14px}
 .job-closed-note{font-size:12px;color:var(--ink-3)}
 @media(max-width:760px){.job-lrow{grid-template-columns:1.4fr 46px 46px 60px 70px}.job-lrow span:nth-child(4){display:none}}
+/* การ์ดเอกสารทุกชนิดบนมือถือ (เบิกจ่าย/ใบแจ้งหนี้/PO/เตรียมวัสดุ ฯลฯ): หัวการ์ดเรียงแนวตั้ง
+   เดิม .job-card-id เป็น flex:none แถวเดียว — ชื่อยาว + ชิปหลายตัวดันการ์ดกว้างหลายพัน px
+   เนื้อหาที่เหลือหลุดออกขวา + เบราว์เซอร์มือถือ boost ฟอนต์จนการ์ดโย่งทั้งจอ */
+@media(max-width:760px){
+  .job-card-head{flex-direction:column;align-items:stretch;gap:8px;padding:12px 14px}
+  .job-card-id{flex:1 1 auto;flex-wrap:wrap;min-width:0;row-gap:6px}
+  .job-no{white-space:normal;overflow-wrap:anywhere}
+  .job-card-meta{width:100%}
+  .job-card-cost{text-align:left;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+  .job-actions{flex-wrap:wrap;gap:8px}
+  .job-lines{padding:0 14px 12px}
+}
 
 /* line-add inputs with unit adornments */
 .inp-unit{display:flex;align-items:center;gap:5px;padding:0 11px}
