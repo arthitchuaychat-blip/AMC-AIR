@@ -457,12 +457,17 @@ header.scrolled{background:rgba(255,255,255,.92)}
 .hsr .go{align-self:end;background:var(--grad);color:#fff;font-weight:800;font-size:15px;font-family:inherit;border:none;border-radius:12px;padding:12px 28px;cursor:pointer;transition:.2s;box-shadow:0 8px 20px rgba(29,106,229,.3)}
 .hsr .go:hover{transform:translateY(-2px);filter:brightness(1.1)}
 @media(max-width:720px){.hsr{grid-template-columns:1fr 1fr}.hsr .go{grid-column:1/-1}}
-/* แถบ 4 บริการใต้ hero */
-.strip{background:#fff;border-color:var(--line);padding:20px 0}
-.strip .row .it{flex-direction:column;text-align:center;gap:6px;color:var(--ink);font-size:15px;font-weight:800;cursor:pointer;padding:10px 18px;border-radius:14px;transition:.2s;flex:1;min-width:150px}
-.strip .row .it:hover{background:var(--bg-soft)}
-.strip .it .em{font-size:24px;line-height:1}
+/* หมวดบริการ (รวมแถบ 4 บริการ + หัวข้อ "บริการของเรา" ไว้ที่เดียว) */
+.strip{background:#fff;border-color:var(--line);padding:46px 0 52px}
+.strip .sec-head{margin-bottom:26px}
+.strip .row{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch}
+.strip .row .it{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;color:var(--ink);font-size:15.5px;font-weight:800;cursor:pointer;padding:18px 16px 16px;border-radius:16px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow-sm);transition:.2s;flex:1;min-width:210px}
+.strip .row .it:hover{border-color:var(--primary);box-shadow:var(--shadow);transform:translateY(-3px)}
+.strip .it .em{font-size:26px;line-height:1}
 .strip .it small{display:block;font-weight:500;font-size:12.5px;color:var(--ink-3)}
+.svc-li{list-style:none;width:100%;margin:10px 0 0;padding:10px 2px 0;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);text-align:left}
+.svc-li li{padding-left:20px;position:relative}
+.svc-li li::before{content:"✓";position:absolute;left:2px;color:var(--primary);font-weight:800}
 /* เครื่องคิด BTU + ค่าไฟ */
 .btucalc{background:linear-gradient(135deg,#eaf3ff,#f4faff);border:1px solid #cfe0f7;border-radius:22px;padding:clamp(22px,4vw,42px);display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:center;max-width:1000px;margin:0 auto;box-shadow:var(--shadow)}
 .btucalc h3{font-size:clamp(22px,3vw,32px);font-weight:800;margin:10px 0 8px}
@@ -617,37 +622,28 @@ footer{background:#0b1b33}
   </div>
 </section>
 
-<section class="strip">
-  <div class="wrap row">
-    <div class="it" data-svc="ติดตั้ง"><span class="em">❄️</span> ติดตั้งแอร์ <small>ทีมช่างมืออาชีพ รับประกันงาน</small></div>
-    <div class="it" data-svc="ล้าง"><span class="em">💧</span> ล้างแอร์ <small>ล้างใหญ่ เป่าโฟม เย็นเต็มระบบ</small></div>
-    <div class="it" data-svc="ย้าย"><span class="em">↔️</span> ย้ายแอร์ <small>ถอด–ติดตั้งใหม่ ครบวงจร</small></div>
-    <div class="it" data-svc="ซ่อม"><span class="em">🔧</span> ซ่อมแอร์ <small>ตรวจเช็ก แก้ปัญหาทุกอาการ</small></div>
-  </div>
-</section>
-
-<div class="promo-bar" id="promoBar" style="display:none"></div>
-
-<section class="sec" id="services">
+<!-- บริการ: รวมแถบ 4 บริการ + หมวด "บริการของเรา" ไว้ที่เดียว (การ์ดกดค้นหาบริการได้) -->
+<section class="strip" id="services">
   <div class="wrap">
     <div class="sec-head center">
       <span class="eyebrow">บริการของเรา</span>
       <h2 class="title">ครบทุกเรื่องแอร์ จบที่เดียว</h2>
       <p class="lead">ตั้งแต่ติดตั้งเครื่องใหม่ ดูแลรักษา ไปจนถึงซ่อมแก้ไข ด้วยทีมช่างผู้ชำนาญ</p>
     </div>
-    <div class="grid3">
-      <div class="card svc"><div class="ic" style="background:#16a34a"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6.4 6.4 2 2 6.4-6.4a4 4 0 0 0 5.4-5.4l-2.3 2.3-1.7-.3-.3-1.7z"/></svg></div>
-        <h3>ติดตั้งแอร์</h3><p>ติดตั้งเครื่องปรับอากาศบ้าน/สำนักงาน เดินท่อเรียบร้อย ทดสอบก่อนส่งมอบ</p>
-        <ul><li>สำรวจหน้างานฟรี</li><li>ทีมช่างมืออาชีพ</li><li>รับประกันงานติดตั้ง</li></ul></div>
-      <div class="card svc"><div class="ic" style="background:#0ea5e9"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></div>
-        <h3>ล้างแอร์ / บำรุงรักษา</h3><p>ล้างทำความสะอาดแผงคอยล์ เติมน้ำยา ตรวจเช็กระบบ ให้แอร์เย็นเต็มประสิทธิภาพ</p>
-        <ul><li>ล้างถึงแผงคอยล์</li><li>แนะนำรอบล้างทุก 6 เดือน</li><li>มีบริการสัญญารายปี</li></ul></div>
-      <div class="card svc"><div class="ic" style="background:#f59e0b"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6.4 6.4 2 2 6.4-6.4a4 4 0 0 0 5.4-5.4l-2.3 2.3-1.7-.3-.3-1.7z"/></svg></div>
-        <h3>ซ่อม / แก้ไข</h3><p>แอร์ไม่เย็น มีน้ำหยด เสียงดัง วินิจฉัยและซ่อมโดยช่างผู้ชำนาญ พร้อมอะไหล่แท้</p>
-        <ul><li>ประเมินอาการก่อนซ่อม</li><li>อะไหล่แท้</li><li>รับประกันงานซ่อม</li></ul></div>
+    <div class="row">
+      <div class="it" data-svc="ติดตั้ง"><span class="em">❄️</span> ติดตั้งแอร์ <small>บ้าน/สำนักงาน เดินท่อเรียบร้อย ทดสอบก่อนส่งมอบ</small>
+        <ul class="svc-li"><li>สำรวจหน้างานฟรี</li><li>แถมชุดวัสดุติดตั้งมาตรฐาน</li><li>รับประกันงานติดตั้ง</li></ul></div>
+      <div class="it" data-svc="ล้าง"><span class="em">💧</span> ล้างแอร์ / บำรุงรักษา <small>ล้างใหญ่ เป่าโฟม ถึงแผงคอยล์ เย็นเต็มระบบ</small>
+        <ul class="svc-li"><li>ตรวจเช็กน้ำยา/ระบบ</li><li>แนะนำรอบล้างทุก 6 เดือน</li><li>มีบริการสัญญารายปี</li></ul></div>
+      <div class="it" data-svc="ย้าย"><span class="em">↔️</span> ย้ายแอร์ <small>ถอด–ติดตั้งจุดใหม่ ครบวงจร</small>
+        <ul class="svc-li"><li>เก็บน้ำยาก่อนถอด</li><li>ติดตั้งใหม่พร้อมทดสอบ</li><li>รับประกันงานติดตั้ง</li></ul></div>
+      <div class="it" data-svc="ซ่อม"><span class="em">🔧</span> ซ่อม / แก้ไข <small>แอร์ไม่เย็น น้ำหยด เสียงดัง วินิจฉัยทุกอาการ</small>
+        <ul class="svc-li"><li>ประเมินอาการก่อนซ่อม</li><li>อะไหล่แท้</li><li>รับประกันงานซ่อม</li></ul></div>
     </div>
   </div>
 </section>
+
+<div class="promo-bar" id="promoBar" style="display:none"></div>
 
 <section class="sec" id="btucalc-sec">
   <div class="wrap">
