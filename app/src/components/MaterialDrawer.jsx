@@ -4,11 +4,15 @@ import { fmtBaht, fmtBaht2, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 
 const MOVE = {
-  purchase: { th: "ซื้อเข้า", color: "#7c3aed", dir: 1, icon: "purchase" },
-  withdraw: { th: "เบิกออก", color: "#2563eb", dir: -1, icon: "withdraw" },
-  return:   { th: "รับคืน", color: "#16a34a", dir: 1, icon: "ret" },
-  damage:   { th: "ตัดเสีย", color: "#dc2626", dir: -1, icon: "damage" },
+  purchase:   { th: "ซื้อเข้า", color: "#7c3aed", dir: 1, icon: "purchase" },
+  withdraw:   { th: "เบิกออก", color: "#2563eb", dir: -1, icon: "withdraw" },
+  return:     { th: "รับคืน", color: "#16a34a", dir: 1, icon: "ret" },
+  damage:     { th: "ตัดเสีย", color: "#dc2626", dir: -1, icon: "damage" },
+  adjust_in:  { th: "ปรับยอด (นับสต๊อก +)", color: "#0891b2", dir: 1, icon: "purchase" },
+  adjust_out: { th: "ปรับยอด (นับสต๊อก −)", color: "#ea580c", dir: -1, icon: "damage" },
 };
+// ชนิดที่ไม่รู้จัก (เผื่อเพิ่มในอนาคต) — ต้องไม่ทำให้ drawer พังทั้งจอ
+const MOVE_FALLBACK = { th: "อื่น ๆ", color: "#64748b", dir: 1, icon: "box" };
 
 export default function MaterialDrawer({ mat, onClose }) {
   const [recs, setRecs] = React.useState([]);
@@ -78,12 +82,12 @@ export default function MaterialDrawer({ mat, onClose }) {
           </div>
 
           <div className="drawer-sec">
-            <div className="drawer-sec-title">รายการเคลื่อนไหว <span>{filter === "all" ? "ทั้งหมด" : MOVE[filter].th} · {ledger.length} รายการ</span></div>
+            <div className="drawer-sec-title">รายการเคลื่อนไหว <span>{filter === "all" ? "ทั้งหมด" : (MOVE[filter] || MOVE_FALLBACK).th} · {ledger.length} รายการ</span></div>
             <div className="ledger">
               {loading && <div className="empty sm">กำลังโหลด…</div>}
               {!loading && ledger.length === 0 && <div className="empty sm">ยังไม่มีรายการเคลื่อนไหว</div>}
               {ledger.map((r) => {
-                const mv = MOVE[r.type];
+                const mv = MOVE[r.type] || MOVE_FALLBACK;
                 return (
                   <div className="ledger-row" key={r.id}>
                     <span className="ledger-badge" style={{ background: `color-mix(in srgb, ${mv.color} 13%, white)`, color: mv.color }}>
