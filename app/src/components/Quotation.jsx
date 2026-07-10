@@ -3,6 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems } from "../lib/api";
 import DocSlip from "./DocSlip";
+import NumIn from "./NumIn";
 import DocTerms from "./DocTerms";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
@@ -238,10 +239,10 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 <div className={"line-item li-" + (it.kind || "material")} key={i}>
                   <div className="boq-line">
                     <div className="line-info"><div className="line-name">{it.name}</div><div className="line-sub">{it.code || "-"}</div></div>
-                    <div className="inp inp-unit boq-in"><input type="number" min="0" value={it.qty} onChange={(e) => setLine(i, "qty", Math.max(0, Number(e.target.value) || 0))} /><UnitPick m={matMap[it.code]} value={it.unit} onChange={(u) => setLineUnit(i, matMap[it.code], u)} /></div>
-                    <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01"
+                    <div className="inp inp-unit boq-in"><NumIn className="" autoWidth min="0" value={it.qty} onChange={(n) => setLine(i, "qty", Math.max(0, n))} /><UnitPick m={matMap[it.code]} value={it.unit} onChange={(u) => setLineUnit(i, matMap[it.code], u)} /></div>
+                    <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><NumIn className="" autoWidth min="0" step="0.01"
                       value={payRate ? adjUnit(it.unit_price) : it.unit_price}
-                      onChange={(e) => setLine(i, "unit_price", payRate ? (Number(e.target.value) || 0) / (1 + payRate) : Number(e.target.value) || 0)} /></div>
+                      onChange={(n) => setLine(i, "unit_price", payRate ? n / (1 + payRate) : n)} /></div>
                     <span className="boq-amt">{fmtBaht(it.qty * adjUnit(it.unit_price))}</span>
                     <div className="line-move">
                       <button className="line-mv" disabled={i === 0} onClick={() => moveLine(i, -1)} title="เลื่อนขึ้น"><UIcon name="chevD" size={13} style={{ transform: "rotate(180deg)" }} /></button>
@@ -262,7 +263,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 <Combo className="inp" style={{ width: 90, flex: "none" }} value={ed.discount_type} onChange={(e) => setQ("discount_type", e.target.value)}>
                   <option value="amount">บาท</option><option value="percent">%</option>
                 </Combo>
-                <input className="inp" type="number" min="0" value={ed.discount_value} onChange={(e) => setQ("discount_value", Number(e.target.value) || 0)} />
+                <NumIn className="inp" min="0" value={ed.discount_value} onChange={(n) => setQ("discount_value", n)} />
               </div>
             </label>
             <label className="fld"><span>ภาษีมูลค่าเพิ่ม</span>
@@ -287,7 +288,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               <div className="line-add">
                 <button type="button" className={"vat-toggle" + (ed.wht ? " on" : "")} style={{ flex: 1 }} onClick={() => setQ("wht", !ed.wht)}>{ed.wht ? "หัก ณ ที่จ่าย" : "ไม่หัก ณ ที่จ่าย"}</button>
                 <div className="inp inp-unit" style={{ width: 110, flex: "none", opacity: ed.wht ? 1 : .5 }}>
-                  <input type="number" min="0" step="0.1" value={ed.wht_rate} disabled={!ed.wht} onChange={(e) => setQ("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
+                  <NumIn className="" min="0" step="0.1" value={ed.wht_rate} disabled={!ed.wht} onChange={(n) => setQ("wht_rate", n)} /><span className="unit-suf">%</span>
                 </div>
               </div>
             </label>

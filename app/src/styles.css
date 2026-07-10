@@ -873,13 +873,13 @@ select.inp{cursor:pointer}
 /* ---------- purchase orders ---------- */
 .po-edit-row{display:flex;align-items:center;gap:10px}
 .po-edit-row .line-info{flex:1;min-width:0}
-.po-edit-in{flex:none;width:96px;padding:0 9px}
+.po-edit-in{flex:none;width:auto;min-width:96px;padding:0 9px}
 .po-edit-val{flex:none;width:84px;text-align:right;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
 .po-view-row{display:grid;grid-template-columns:1.6fr 1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
 .po-view-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .po-view-q{color:var(--ink-3);text-align:right}
 .po-view-v{font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
-@media(max-width:560px){.po-edit-in{width:78px}.po-edit-val{display:none}}
+@media(max-width:560px){.po-edit-in{min-width:78px}.po-edit-val{display:none}}
 
 /* logo on print slip */
 .slip-brand{display:flex;align-items:center;gap:10px}
@@ -1386,9 +1386,9 @@ select.inp{cursor:pointer}
 .boq-sec .line-item{background:#fff}
 .boq-line{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line-2)}
 .boq-line .line-info{flex:1;min-width:0}
-.boq-in{flex:none;width:96px;padding:0 9px}
+.boq-in{flex:none;width:auto;min-width:96px;padding:0 9px}
 .boq-amt{flex:none;width:84px;text-align:right;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
-@media(max-width:560px){.boq-in{width:74px}.boq-amt{display:none}}
+@media(max-width:560px){.boq-in{min-width:74px}.boq-amt{display:none}}
 
 /* ---------- searchable item picker (combobox) ---------- */
 .ipick{position:relative}

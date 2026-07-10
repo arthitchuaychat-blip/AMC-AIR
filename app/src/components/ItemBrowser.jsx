@@ -2,6 +2,7 @@ import React from "react";
 import Combo from "./Combo";
 import { fmtBaht2, fmtNum } from "../lib/format";
 import { UIcon, MaterialThumb } from "../icons";
+import NumIn from "./NumIn";
 
 // Right-side product browser for document editors: tab by kind (แอร์/วัสดุ/บริการ),
 // drill down with sub-filters, tap a photo card → enter quantity → add (same flow as Stock Movements).
@@ -139,7 +140,7 @@ export default function ItemBrowser({ mats, onAdd, matTargets, unitOf }) {
               <label className="fld"><span>จำนวน ({unitLbl(qtyModal)})</span>
                 <div className="mv-qty-step">
                   <button type="button" onClick={() => setModalQty((x) => Math.max(1, (Number(x) || 1) - 1))}><UIcon name="minus" size={18} /></button>
-                  <input type="number" min="1" value={modalQty} onChange={(e) => setModalQty(Math.max(1, Number(e.target.value) || 1))} />
+                  <NumIn className="" min="1" value={modalQty} onChange={(n) => setModalQty(Math.max(1, n))} />
                   <span className="mv-qty-unit">{unitLbl(qtyModal)}</span>
                   <button type="button" onClick={() => setModalQty((x) => (Number(x) || 1) + 1)}><UIcon name="plus" size={18} /></button>
                 </div>

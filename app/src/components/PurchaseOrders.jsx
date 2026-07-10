@@ -11,6 +11,7 @@ import ItemBrowser from "./ItemBrowser";
 import UnitPick, { unitFactor } from "./UnitPick";
 import Combo from "./Combo";
 import DocSlip from "./DocSlip";
+import NumIn from "./NumIn";
 import { useDocPeek } from "./DocPeek";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -239,9 +240,9 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                   <MaterialThumb mat={m || { color: "#888" }} size={32} radius={8} />
                   <div className="line-info"><div className="line-name">{m?.th || it.code}</div>
                     <div className="line-sub">{conv ? `1 ${m.purchaseUnit} = ${fmtNum(m.purchaseQty)} ${m.unit} · ราคา/${m.purchaseUnit}` : m?.unit}</div></div>
-                  <div className="inp inp-unit po-edit-in"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={it.price} onChange={(e) => setItem(it.code, "price", Number(e.target.value) || 0)} /></div>
+                  <div className="inp inp-unit po-edit-in"><span className="unit-pre">฿</span><NumIn className="" autoWidth min="0" step="0.01" value={it.price} onChange={(n) => setItem(it.code, "price", n)} /></div>
                   {editIncl && <div className="inp inp-unit po-edit-in" style={{ opacity: 0.7 }} title="ราคาก่อน VAT (คำนวณให้)"><span className="unit-pre">฿</span><input type="number" value={R2(netUnit(it))} disabled /></div>}
-                  <div className="inp inp-unit po-edit-in"><input type="number" min="1" value={it.qty} onChange={(e) => setItem(it.code, "qty", Math.max(1, Number(e.target.value) || 1))} /><UnitPick m={m} value={u} onChange={(nu) => changeLineUnit(it.code, m, nu)} /></div>
+                  <div className="inp inp-unit po-edit-in"><NumIn className="" autoWidth min="0" value={it.qty} onChange={(n) => setItem(it.code, "qty", Math.max(0, n))} /><UnitPick m={m} value={u} onChange={(nu) => changeLineUnit(it.code, m, nu)} /></div>
                   <span className="po-edit-val">{fmtBaht((Number(it.qty) || 0) * (Number(it.price) || 0))}</span>
                   <button className="line-x" onClick={() => removeItem(it.code)}><UIcon name="x" size={14} /></button>
                 </div>

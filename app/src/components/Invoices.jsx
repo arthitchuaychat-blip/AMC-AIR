@@ -6,6 +6,7 @@ import { fmtBaht2, custCode, round2, matchText, matchPhone, fmtDocDate } from ".
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
+import NumIn from "./NumIn";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import { useDocPeek } from "./DocPeek";
@@ -191,7 +192,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 <Combo className="inp" style={{ width: 110, flex: "none" }} value={ed.basis} onChange={(e) => setF("basis", e.target.value)}>
                   <option value="percent">เป็น %</option><option value="amount">เป็นบาท</option>
                 </Combo>
-                <input className="inp" type="number" min="0" step="0.01" value={ed.basis_value} onChange={(e) => setF("basis_value", Number(e.target.value) || 0)} />
+                <NumIn className="inp" min="0" step="0.01" value={ed.basis_value} onChange={(n) => setF("basis_value", n)} />
                 <button className="btn-ghost sm" onClick={() => setF("basis_value", ed.basis === "percent" ? 100 : remaining)} disabled={!selQ}>ยอดคงเหลือ</button>
               </div>
             </label>
@@ -206,7 +207,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                     {calc.whtOn ? `หัก ${calc.whtRate}% จากค่าบริการ ${fmtBaht(calc.whtBase)} = ${fmtBaht(calc.whtAmt)}` : "ไม่มีรายการค่าบริการให้หัก"}
                   </div>
                   <div className="inp inp-unit" style={{ width: 110, flex: "none", opacity: calc.whtOn ? 1 : .5 }}>
-                    <input type="number" min="0" step="0.1" value={ed.wht_rate} disabled={!calc.whtOn} onChange={(e) => setF("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
+                    <NumIn className="" min="0" step="0.1" value={ed.wht_rate} disabled={!calc.whtOn} onChange={(n) => setF("wht_rate", n)} /><span className="unit-suf">%</span>
                   </div>
                 </div>
               </label>
