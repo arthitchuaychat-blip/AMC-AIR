@@ -489,6 +489,8 @@ footer{background:#0b1b33}
 .ci-inst input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer;flex:none}
 .ci-inst b{color:var(--primary)}
 .ci-inst-nm{margin-top:5px;font-size:11.5px;color:var(--ink-3);line-height:1.5}
+/* ของแถม/คุณสมบัติของบริการติดตั้ง — โชว์เมื่อติ๊กซื้อพร้อมติดตั้ง */
+.ci-inst-ft{margin-top:6px;font-size:11px;color:var(--ink-2);line-height:1.7;background:var(--bg-soft);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
 </style>
 </head>
 <body>
@@ -907,9 +909,11 @@ function renderCart() {
     const svc = installSvcFor(x);
     // ราคา/รายการบริการอาจเปลี่ยน — ซิงก์ใหม่ทุกครั้งที่วาด (แต่อย่าล้างตอนสินค้ายังโหลดไม่เสร็จ)
     if (x.install) { if (svc) x.install = { code: svc.code, name: svc.name, price: Number(svc.price) || 0 }; else if (allProducts.length) x.install = null; }
+    const escFt = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
     const inst = svc ? `
         <label class="ci-inst"><input type="checkbox" ${x.install ? "checked" : ""} onchange="toggleInstall('${x.code}', this.checked)"><span>🔧 ซื้อพร้อมติดตั้ง <b>+${baht(svc.price)}</b>/เครื่อง</span></label>
-        ${x.install ? `<div class="ci-inst-nm">↳ ${svc.name}</div>` : ""}` : "";
+        ${x.install ? `<div class="ci-inst-nm">↳ ${svc.name}</div>` : ""}
+        ${x.install && svc.features ? `<div class="ci-inst-ft">${escFt(svc.features)}</div>` : ""}` : "";
     return `
     <div class="ci">
       <div class="ph">${x.photo ? `<img src="${x.photo}" alt="">` : "❄️"}</div>
