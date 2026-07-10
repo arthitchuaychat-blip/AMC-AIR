@@ -484,6 +484,11 @@ footer{background:#0b1b33}
 .logo .mark img{width:100%;height:100%;object-fit:contain}
 /* หน้าสินค้า: ซ่อนแถวแท็บหมวด + ช่องค้นหา — ใช้ตัวกรอง 4 ช่องด้านบนพอ */
 .prod-tools{display:none}
+/* ตะกร้า: ตัวเลือก "ซื้อพร้อมติดตั้ง" ใต้จำนวนของแอร์แต่ละตัว */
+.ci-inst{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:12.5px;font-weight:700;color:var(--ink-2);cursor:pointer;background:var(--bg-soft);border:1px solid var(--line);border-radius:9px;padding:7px 10px}
+.ci-inst input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer;flex:none}
+.ci-inst b{color:var(--primary)}
+.ci-inst-nm{margin-top:5px;font-size:11.5px;color:var(--ink-3);line-height:1.5}
 </style>
 </head>
 <body>
@@ -865,27 +870,58 @@ let cart = (() => { try { return JSON.parse(localStorage.getItem("amc_cart") || 
 const saveCart = () => localStorage.setItem("amc_cart", JSON.stringify(cart));
 function addToCart(p) {
   const ex = cart.find((x) => x.code === p.code);
-  if (ex) ex.qty++; else cart.push({ code: p.code, name: p.name, price: p.price, photo: p.photo, qty: 1 });
+  if (ex) ex.qty++;
+  else {
+    // เก็บชนิด/ประเภทแอร์/BTU ติดรายการไว้ เพื่อจับคู่ค่าบริการติดตั้งในตะกร้า
+    const full = allProducts.find((x) => String(x.code) === String(p.code)) || {};
+    cart.push({ code: p.code, name: p.name, price: p.price, photo: p.photo, qty: 1, kind: full.kind || "", acType: full.ac_type || "", btu: full.btu || "" });
+  }
   saveCart(); renderCart(); openDrawer(); toast("เพิ่มลงตะกร้าแล้ว");
 }
 function setQty(code, d) { const it = cart.find((x) => x.code === code); if (!it) return; it.qty += d; if (it.qty <= 0) cart = cart.filter((x) => x.code !== code); saveCart(); renderCart(); }
 function rmItem(code) { cart = cart.filter((x) => x.code !== code); saveCart(); renderCart(); }
-const cartTotal = () => cart.reduce((a, x) => a + (Number(x.price) || 0) * x.qty, 0);
+// ค่าบริการติดตั้งที่ตรงกับแอร์ตัวนี้: หมวดติดตั้ง + ประเภทแอร์เดียวกัน + BTU อยู่ในช่วงบริการ
+// (เทียบประเภทแบบไม่สนตัวพิมพ์เล็ก/ใหญ่ · บริการที่ไม่ระบุประเภทใช้เป็นตัวสำรอง · ไม่เจอ = ไม่โชว์ตัวเลือก)
+const normType = (s) => String(s || "").trim().toLowerCase();
+function installSvcFor(x) {
+  const full = x.kind ? x : (allProducts.find((p) => String(p.code) === String(x.code)) || {});
+  if ((full.kind || "") !== "ac") return null;
+  const acType = normType(full.acType != null ? full.acType : full.ac_type), btu = Number(full.btu) || 0;
+  const svcs = allProducts.filter((s) => s.kind === "service" && s.category === "sv-install");
+  return svcs.find((s) => normType(s.ac_type) && normType(s.ac_type) === acType && btuHit(s, btu))
+      || svcs.find((s) => !normType(s.ac_type) && btuHit(s, btu)) || null;
+}
+function toggleInstall(code, on) {
+  const it = cart.find((x) => x.code === code); if (!it) return;
+  const svc = installSvcFor(it);
+  it.install = (on && svc) ? { code: svc.code, name: svc.name, price: Number(svc.price) || 0 } : null;
+  saveCart(); renderCart();
+}
+const cartTotal = () => cart.reduce((a, x) => a + ((Number(x.price) || 0) + (x.install ? Number(x.install.price) || 0 : 0)) * x.qty, 0);
 function renderCart() {
   const n = cart.reduce((a, x) => a + x.qty, 0);
   const cc = $("#cartCount"); cc.textContent = n; cc.classList.toggle("on", n > 0);
   const body = $("#cartBody"), foot = $("#cartFoot");
   if (!cart.length) { body.innerHTML = '<div class="cart-empty">ยังไม่มีสินค้าในตะกร้า<br><br>เลือกสินค้าจากหน้าเว็บ หรือกรอกฟอร์มขอใบเสนอราคาด้านล่างได้เลย</div>'; foot.style.display = "none"; return; }
-  body.innerHTML = cart.map((x) => `
+  body.innerHTML = cart.map((x) => {
+    const svc = installSvcFor(x);
+    // ราคา/รายการบริการอาจเปลี่ยน — ซิงก์ใหม่ทุกครั้งที่วาด (แต่อย่าล้างตอนสินค้ายังโหลดไม่เสร็จ)
+    if (x.install) { if (svc) x.install = { code: svc.code, name: svc.name, price: Number(svc.price) || 0 }; else if (allProducts.length) x.install = null; }
+    const inst = svc ? `
+        <label class="ci-inst"><input type="checkbox" ${x.install ? "checked" : ""} onchange="toggleInstall('${x.code}', this.checked)"><span>🔧 ซื้อพร้อมติดตั้ง <b>+${baht(svc.price)}</b>/เครื่อง</span></label>
+        ${x.install ? `<div class="ci-inst-nm">↳ ${svc.name}</div>` : ""}` : "";
+    return `
     <div class="ci">
       <div class="ph">${x.photo ? `<img src="${x.photo}" alt="">` : "❄️"}</div>
       <div class="mid">
         <div class="nm">${x.name}</div>
         <div class="pr">${x.price ? baht(x.price) : "สอบถามราคา"}</div>
         <div class="qty"><button onclick="setQty('${x.code}',-1)">−</button><b>${x.qty}</b><button onclick="setQty('${x.code}',1)">+</button></div>
+        ${inst}
       </div>
       <button class="rm" onclick="rmItem('${x.code}')">ลบ</button>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   $("#cartTotal").textContent = baht(cartTotal());
   foot.style.display = "block";
 }
@@ -1035,6 +1071,7 @@ async function loadProducts() {
       series: r.series, voltage: r.voltage, refrigerant: r.refrigerant, seer: r.seer, pipe: r.pipe_size, energyLabel: r.energy_label }));
     prodNote = allProducts.length ? "" : "ยังไม่มีสินค้าที่เผยแพร่ — ติ๊ก “ขึ้นเว็บ” ที่สินค้าในระบบหลังบ้าน";
     fillFilters(); renderProducts();
+    renderCart();   // วาดตะกร้าใหม่หลังรู้จักสินค้าแล้ว — ตัวเลือก "ซื้อพร้อมติดตั้ง" ถึงจะจับคู่ได้
     // มาจากหน้ารายละเอียดสินค้า (/p/…) กด "ใส่ตะกร้า" → /?add=CODE → หยิบลงตะกร้าแล้วเปิดลิ้นชักให้เลย
     const addCode = new URLSearchParams(location.search).get("add");
     if (addCode) {
@@ -1059,7 +1096,12 @@ async function submitOrder(e) {
   if (!cart.length) { toast("ตะกร้าว่าง", true); return false; }
   const f = e.target;
   const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), note: f.note.value.trim(),
-    items: cart.map((x) => ({ code: x.code, name: x.name, qty: x.qty, price: x.price })), total: cartTotal() };
+    // แตกค่าติดตั้งที่ติ๊กไว้เป็นรายการของตัวเอง (จำนวนตามแอร์) — หลังบ้านเห็นเป็นบรรทัด "↳ ติดตั้ง…" ต่อท้ายแอร์ตัวนั้น
+    items: cart.flatMap((x) => {
+      const rows = [{ code: x.code, name: x.name, qty: x.qty, price: x.price }];
+      if (x.install) rows.push({ code: x.install.code, name: "↳ " + x.install.name, qty: x.qty, price: x.install.price });
+      return rows;
+    }), total: cartTotal() };
   if (!hasSb) { toast("เว็บยังไม่ได้เชื่อมระบบ — โทร " + (C.PHONE || "") + " ได้เลย", true); return false; }
   const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "กำลังส่ง…";
   try {
