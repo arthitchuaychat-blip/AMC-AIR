@@ -501,9 +501,14 @@ export async function applyStockCount(id) {
   const codes = counted.map((it) => it.material_code);
   const sysMap = {};
   for (let i = 0; i < codes.length; i += 300) {
-    const { data: ms } = await supabase.from("material_stock").select("code,current_stock,cost").in("code", codes.slice(i, i + 300));
+    const { data: ms, error: eMs } = await supabase.from("material_stock").select("code,current_stock,cost").in("code", codes.slice(i, i + 300));
+    // ห้ามกลืน error — ถ้าอ่านยอดระบบไม่ได้แล้วเดินต่อ ยอดระบบจะกลายเป็น 0 ทุกตัว → adjust_in เท่ายอดนับทั้งก้อน (สต๊อกบวมเท่าตัว)
+    if (eMs) throw new Error("อ่านยอดคงเหลือปัจจุบันไม่สำเร็จ — ยกเลิกการปรับยอดทั้งรอบ: " + (eMs.message || eMs));
     (ms || []).forEach((m) => { sysMap[m.code] = m; });
   }
+  // ทุกตัวที่นับต้องมียอดระบบอ่านได้จริง ถ้าไม่เจอ = ผิดปกติ ให้หยุดทันที ห้ามเดาเป็น 0
+  const missing = codes.filter((c) => !(c in sysMap) || sysMap[c].current_stock == null);
+  if (missing.length) throw new Error(`หายอดระบบไม่พบ ${missing.length} รายการ (เช่น ${missing.slice(0, 3).join(", ")}) — ยกเลิกการปรับยอดทั้งรอบ ยังไม่มีอะไรถูกเปลี่ยน`);
   const now = new Date().toISOString(), day = now.slice(0, 10);
   const txns = []; let adjusted = 0;
   for (const it of counted) {
