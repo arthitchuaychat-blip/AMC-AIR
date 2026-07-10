@@ -2058,14 +2058,15 @@ export async function createSubPayout({ team, lines, whtRate, note }) {
 // ledger (kind='payout') for bank reconciliation. Cash flow is handled separately by the sync.
 // Back-compat: paySubPayout(id, "โอนเงิน") still works (no account).
 export async function paySubPayout(id, opts) {
-  const { accountId, method, payDate } = typeof opts === "string" ? { method: opts } : (opts || {});
+  const { accountId, method, payDate, slipUrl } = typeof opts === "string" ? { method: opts } : (opts || {});
   const uid = await _uid();
   const { data: p, error: e0 } = await supabase.from("sub_payouts").select("net,team,status").eq("id", id).single();
   if (e0) throw e0;
   if (p.status === "paid") throw new Error("ใบนี้บันทึกจ่ายแล้ว");
   const day = payDate || new Date().toISOString().slice(0, 10);
-  const patch = { status: "paid", paid_at: new Date().toISOString(), method: method || null, paid_from: accountId || null };
+  const patch = { status: "paid", paid_at: new Date().toISOString(), method: method || null, paid_from: accountId || null, pay_slip_url: slipUrl || null };
   let upd = await supabase.from("sub_payouts").update(patch).eq("id", id);
+  if (upd.error && /pay_slip_url/i.test(upd.error.message || "")) { delete patch.pay_slip_url; upd = await supabase.from("sub_payouts").update(patch).eq("id", id); } // pre-128 fallback
   if (upd.error && /paid_from|column|PGRST204/i.test(upd.error.message || "")) { delete patch.paid_from; upd = await supabase.from("sub_payouts").update(patch).eq("id", id); }
   if (upd.error) throw upd.error;
   if (accountId) {

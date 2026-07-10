@@ -1,7 +1,7 @@
 import React from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listAccounts, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage } from "../lib/api";
+import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listAccounts, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage, uploadExpenseFile } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2 } from "../lib/format";
 import { UIcon } from "../icons";
@@ -331,6 +331,7 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
               <div><b>ทีม {teamName(p.team)}</b> · {(p.lines || p.job_nos || []).length} งาน · {fmtDate(p.created_at)}
                 <div className="jo-dim">รวม {fmtBaht(p.gross)} − หัก {fmtBaht(p.wht_amt)} = สุทธิ {fmtBaht(p.net)}{p.paid_at ? ` · จ่าย ${fmtDate(p.paid_at)}` : ""}</div></div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
+                {p.pay_slip_url && <img src={p.pay_slip_url} alt="สลิปโอนเงิน" title="สลิปโอนเงิน — กดดูเต็ม" style={{ width: 30, height: 30, objectFit: "cover", borderRadius: 7, border: "1px solid var(--line)", cursor: "zoom-in" }} onClick={() => window.open(p.pay_slip_url, "_blank")} />}
                 {p.status === "paid" ? <span className="job-badge b-green">จ่ายแล้ว</span> : <span className="job-badge b-orange">รอจ่าย</span>}
                 <button className="btn-ghost sm" onClick={() => setSlip(p)}><UIcon name="catalog" size={14} /> สลิป/ส่ง</button>
                 {canEditPayout && <button className="btn-ghost sm" disabled={busy} title="แก้ไขยอดค่าแรงจ่าย (ธุรการ/บัญชี)" onClick={() => setEditPo(p)}><UIcon name="edit" size={14} /> แก้ไข</button>}
@@ -355,12 +356,21 @@ function PaySubModal({ payout, teamName, onClose, onPaid, flash }) {
   const [accounts, setAccounts] = React.useState(null);
   const [accountId, setAccountId] = React.useState("");
   const [payDate, setPayDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [slipUrl, setSlipUrl] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => { listAccounts().then((a) => { setAccounts(a); setAccountId((a.find((x) => x.kind === "bank") || a[0])?.id || ""); }).catch(() => setAccounts([])); }, []);
+  async function onSlip(e) {
+    const f = e.target.files?.[0]; if (!f) return;
+    setUploading(true);
+    try { setSlipUrl(await uploadExpenseFile(f)); } catch (ex) { flash("อัปโหลดสลิปไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUploading(false); e.target.value = "";
+  }
   async function pay() {
     if (!accountId) return flash("เลือกบัญชีที่จ่าย", true);
+    if (!slipUrl) return flash("แนบสลิปโอนเงินก่อนบันทึกจ่าย", true);
     setBusy(true);
-    try { await paySubPayout(payout.id, { accountId, method: "โอนเงิน", payDate }); flash("บันทึกจ่ายแล้ว ✓ (ลงบัญชีเดินบัญชี + กระแสเงินสด)"); onPaid(); }
+    try { await paySubPayout(payout.id, { accountId, method: "โอนเงิน", payDate, slipUrl }); flash("บันทึกจ่ายแล้ว ✓ (ลงบัญชีเดินบัญชี + กระแสเงินสด)"); onPaid(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -377,10 +387,20 @@ function PaySubModal({ payout, teamName, onClose, onPaid, flash }) {
               </select>}
           </label>
           <label className="fld"><span>วันที่จ่าย</span><input type="date" className="inp" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
+          <label className="fld"><span>สลิปโอนเงิน (จำเป็น) — ส่งให้ทีมพร้อมสลิปรายได้อัตโนมัติ</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {slipUrl ? <img src={slipUrl} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 9, border: "1px solid var(--line)", cursor: "zoom-in" }} onClick={() => window.open(slipUrl, "_blank")} /> : null}
+              <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
+                📎 {uploading ? "กำลังอัปโหลด…" : slipUrl ? "เปลี่ยนสลิป" : "แนบสลิป/ถ่ายรูป"}
+                <input type="file" accept="image/*" onChange={onSlip} style={{ display: "none" }} disabled={uploading} />
+              </label>
+              {slipUrl && <button type="button" className="btn-ghost sm danger" onClick={() => setSlipUrl("")}>ลบ</button>}
+            </div>
+          </label>
           <div className="jo-dim">รายการนี้จะถูกบันทึกเป็น <b>เงินออก</b> ในบัญชีที่เลือก (เมนูเบิกจ่าย → เดินบัญชี &amp; กระทบแบงค์) และแสดงใน <b>กระแสเงินสด</b> อัตโนมัติ</div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
-          <button className="btn-primary" disabled={busy || accounts === null} onClick={pay}>ยืนยันจ่ายเงิน</button></div>
+          <button className="btn-primary" disabled={busy || uploading || accounts === null} onClick={pay}>ยืนยันจ่ายเงิน</button></div>
       </div>
     </div>
   );
@@ -596,10 +616,17 @@ function PayoutSlip({ payout, team, jobByNo = {}, onClose, flash }) {
     try {
       const c = await capture();
       const blob = await new Promise((res) => c.toBlob(res, "image/png"));
-      const file = new File([blob], `payout-${team.name}.png`, { type: "image/png" });
+      const files = [new File([blob], `payout-${team.name}.png`, { type: "image/png" })];
+      // แนบสลิปโอนเงินจริงไปด้วย (ดึงจาก storage — ดึงไม่ได้ก็ส่งเฉพาะสลิปรายได้)
+      if (payout.pay_slip_url) {
+        try { const r = await fetch(payout.pay_slip_url); const b = await r.blob(); files.push(new File([b], `slip-${team.name}.jpg`, { type: b.type || "image/jpeg" })); } catch { /* ignore */ }
+      }
       const txt = `📋 สลิปจ่ายค่าแรง · ทีม ${team.name}${team.lead ? ` (หัวหน้า ${team.lead})` : ""}\nรวม ${fmtBaht(payout.gross)} − หัก ณ ที่จ่าย ${fmtBaht(payout.wht_amt)} = จ่ายสุทธิ ${fmtBaht(payout.net)} (${lines.length} งาน)`;
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "สลิปจ่ายค่าแรงช่างซัพ", text: txt });
+      // บางเครื่องแชร์ได้ทีละไฟล์ — แชร์ 2 ไฟล์ไม่ได้ให้ถอยมาส่งเฉพาะสลิปรายได้
+      const shareFiles = navigator.canShare && navigator.canShare({ files }) ? files
+        : (navigator.canShare && navigator.canShare({ files: files.slice(0, 1) }) ? files.slice(0, 1) : null);
+      if (shareFiles) {
+        await navigator.share({ files: shareFiles, title: "สลิปจ่ายค่าแรงช่างซัพ", text: txt });
         flash("เปิดหน้าต่างแชร์แล้ว — เลือกหัวหน้าช่างได้เลย ✓");
       } else {
         // อุปกรณ์ไม่รองรับแชร์ไฟล์ (เดสก์ท็อปส่วนใหญ่) → ดาวน์โหลดรูปให้แทน
@@ -620,7 +647,8 @@ function PayoutSlip({ payout, team, jobByNo = {}, onClose, flash }) {
       const txt = `📋 สลิปจ่ายค่าแรง · ทีม ${team.name}\nรวม ${fmtBaht(payout.gross)} − หัก ณ ที่จ่าย ${fmtBaht(payout.wht_amt)} = จ่ายสุทธิ ${fmtBaht(payout.net)} (${lines.length} งาน)`;
       await sendChatMessage(roomId, txt);
       await sendChatImage(roomId, url);
-      flash("ส่งสลิปเข้าแชตทีมแล้ว ✓"); onClose();
+      if (payout.pay_slip_url) await sendChatImage(roomId, payout.pay_slip_url);   // สลิปโอนเงินจริงตามไปด้วย
+      flash(payout.pay_slip_url ? "ส่งสลิปรายได้ + สลิปโอนเงินเข้าแชตทีมแล้ว ✓" : "ส่งสลิปเข้าแชตทีมแล้ว ✓"); onClose();
     } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
