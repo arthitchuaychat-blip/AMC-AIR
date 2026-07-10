@@ -1,5 +1,8 @@
 {
-  "crons": [{ "path": "/api/mentor-cron", "schedule": "0 2 * * *" }],
+  "crons": [
+    { "path": "/api/mentor-cron", "schedule": "0 2 * * *" },
+    { "path": "/api/hr-cron", "schedule": "15 2 * * *" }
+  ],
   "rewrites": [{ "source": "/((?!api/|mentor).*)", "destination": "/index.html" }],
   "headers": [
     {

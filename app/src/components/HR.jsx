@@ -1,5 +1,6 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage } from "../lib/api";
+import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -58,7 +59,7 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
   const [onLeave, setOnLeave] = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [edit, setEdit] = React.useState(null); // { p, a } row being corrected
-  const day = todayYmd();
+  const [day, setDay] = React.useState(todayYmd());   // เลือกดูวันไหนก็ได้ ไม่ใช่แค่วันนี้
   async function load() {
     try {
       const [a, lv] = await Promise.all([listAttendance(day, day), listLeaves("approved")]);
@@ -67,7 +68,7 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
-  React.useEffect(() => { load(); }, []);
+  React.useEffect(() => { load(); }, [day]);
   async function delAtt(p) {
     if (!await confirmDialog(`ลบเวลาเข้า-ออกของ ${p.name || p.email} วันนี้?\n(กลับเป็น “ยังไม่เข้า”)`)) return;
     try { await deleteAttendance(p.id, day); flash("ลบเวลาแล้ว"); load(); }
@@ -89,8 +90,12 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
   if (loading) return <div className="empty">กำลังโหลด…</div>;
   return (
     <div className="card">
-      <div className="sec-head"><div><div className="sec-title">{thDate(day)}</div>
-        <div className="sec-sub">เข้าแล้ว {rows.filter((r) => r.status === "in" || r.status === "late" || r.status === "out").length} · ออกแล้ว {rows.filter((r) => r.status === "out").length} · ยังไม่เข้า {rows.filter((r) => r.status === "absent").length} · ลา {rows.filter((r) => r.status === "leave").length}</div></div></div>
+      <div className="sec-head"><div><div className="sec-title">{thDate(day)}{day === todayYmd() ? " (วันนี้)" : ""}</div>
+        <div className="sec-sub">เข้าแล้ว {rows.filter((r) => r.status === "in" || r.status === "late" || r.status === "out").length} · ออกแล้ว {rows.filter((r) => r.status === "out").length} · ยังไม่เข้า {rows.filter((r) => r.status === "absent").length} · ลา {rows.filter((r) => r.status === "leave").length}</div></div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="date" className="inp" style={{ width: 160 }} value={day} onChange={(e) => { setLoading(true); setDay(e.target.value || todayYmd()); }} />
+          {day !== todayYmd() && <button className="btn-ghost sm" onClick={() => { setLoading(true); setDay(todayYmd()); }}>วันนี้</button>}
+        </div></div>
       <div className="set-list">
         {rows.map(({ p, a, s, status }) => { const b = ST[status];
           const rowManage = canManage && p.id !== lockSelfId;   // ฝ่ายบุคคลแก้เวลาได้ทุกคน ยกเว้นของตัวเอง
@@ -272,11 +277,13 @@ function AdvancesTab({ canManage, flash }) {
               <span className={"job-badge " + b.c}>{b.t}</span>
               {canManage && a.status === "approved" && !a.paid_out_at && <button className="btn-primary sm" onClick={() => setPayFor(a)}>💸 โอนจ่าย + สลิป</button>}
               {canManage && a.pay_slip_url && <button className="btn-ghost sm" title="ส่งสลิปเข้าแชตให้พนักงาน" onClick={() => setSlipFor(a)}>📲 ส่งสลิปแชต</button>}
+              {/* 🔒 โอนเงินให้พนักงานแล้ว ห้ามเปลี่ยนสถานะ/แก้/ลบ — ไม่งั้นเงินออกไปแล้วแต่ไม่ถูกหักเงินเดือน */}
               {a.status !== "paid" && a.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
-              {a.status !== "paid" && a.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
-              {a.status !== "paid" && a.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
-              {canManage && a.status !== "paid" && <button className="btn-ghost sm" title="แก้ไขคำขอ" onClick={() => setEdit(a)}><UIcon name="edit" size={13} /></button>}
-              {canManage && a.status !== "paid" && <button className="btn-ghost sm danger" title="ลบคำขอ" onClick={() => del(a)}><UIcon name="trash" size={13} /></button>}
+              {!a.paid_out_at && a.status !== "paid" && a.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
+              {!a.paid_out_at && a.status !== "paid" && a.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
+              {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm" title="แก้ไขคำขอ" onClick={() => setEdit(a)}><UIcon name="edit" size={13} /></button>}
+              {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm danger" title="ลบคำขอ" onClick={() => del(a)}><UIcon name="trash" size={13} /></button>}
+              {a.paid_out_at && a.status === "approved" && <span className="jo-dim" title="โอนเงินแล้ว — รอหักในรอบเงินเดือน">🔒</span>}
             </div>
           </div>
         ); })}
@@ -654,6 +661,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [busy, setBusy] = React.useState(false);
   const [company, setCompany] = React.useState({});
   const [printSlip, setPrintSlip] = React.useState(null); // { row, calc } for the off-screen payslip
+  const [payModal, setPayModal] = React.useState(false);  // จ่ายทั้งรอบ: เลือกบัญชี + สลิปโอน
+  const [dmBusy, setDmBusy] = React.useState(null);       // user_id ที่กำลังส่งสลิป DM
   const printWin = React.useRef(null);
   const lastDay = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
   const payDate = `${ym}-${pad(lastDay)}`;
@@ -694,11 +703,58 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   React.useEffect(() => { load(); }, [ym]);
 
   const calcOf = (r) => computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0 }, r.st, {});
+  // ---- export CSV ราชการ (BOM นำหน้าให้ Excel อ่านไทยถูก) ----
+  const dlCsv = (name, rowsArr) => { const csv = "﻿" + rowsArr.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = name; a.click(); };
+  function exportSso() {
+    const rs = payable.map((r) => ({ r, c: calcOf(r) })).filter((x) => x.c.dSso > 0);
+    if (!rs.length) return flash("ไม่มีพนักงานที่หักประกันสังคมในรอบนี้ (ติ๊ก 'ประกันสังคม' ในแท็บ กะ & ตั้งค่า)", true);
+    dlCsv(`sso-${ym}.csv`, [["ลำดับ", "ชื่อ-สกุล", "เลขบัตรประชาชน", "ค่าจ้างฐานคำนวณ (เพดาน 17,500)", "เงินสมทบพนักงาน 5%", "เงินสมทบนายจ้าง 5%", "รวมนำส่ง"],
+      ...rs.map((x, i) => { const wage = Math.min(x.r.p.pay_type === "daily" ? x.c.base : Number(x.r.p.base_pay) || 0, 17500); return [i + 1, x.r.p.name || x.r.p.email, x.r.p.citizen_id || "", wage, x.c.dSso, x.c.dSso, x.c.dSso * 2]; }),
+      ["", "รวม", "", "", rs.reduce((a, x) => a + x.c.dSso, 0), rs.reduce((a, x) => a + x.c.dSso, 0), rs.reduce((a, x) => a + x.c.dSso * 2, 0)]]);
+    flash("ดาวน์โหลดไฟล์ ปกส. แล้ว ✓ (เลขบัตร ปชช. เติมได้ในแท็บ กะ & ตั้งค่า)");
+  }
+  function exportPnd() {
+    dlCsv(`pnd1-${ym}.csv`, [["ลำดับ", "ชื่อ-สกุล", "เลขบัตรประชาชน", "เงินได้รอบนี้ (ก่อนหัก)", "ภาษีหัก ณ ที่จ่าย (ให้บัญชีกรอก)"],
+      ...payable.map((r, i) => { const c = calcOf(r); return [i + 1, r.p.name || r.p.email, r.p.citizen_id || "", c.gross, ""]; })]);
+    flash("ดาวน์โหลดสรุปยื่น ภงด.1 แล้ว ✓");
+  }
+  // ---- ส่งสลิปเงินเดือนเข้าแชตส่วนตัว (DM) รายคน — การ์ดรูปเหมือนสลิปพิมพ์ + สลิปโอนของรอบ ----
+  async function sendSlipDm(r, c) {
+    setDmBusy(r.p.id);
+    const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const line = (l, v, neg) => (v ? `<tr><td style="padding:5px 10px">${l}</td><td style="padding:5px 12px;text-align:right;font-weight:700;color:${neg ? "#b91c1c" : "#0f1729"}">${neg ? "−" : ""}${fmtBaht(v)}</td></tr>` : "");
+    const html = `<div style="width:460px;background:#fff;font-family:'IBM Plex Sans Thai','Noto Sans Thai',sans-serif;color:#0f1729;padding:20px">
+      <div style="font-size:17px;font-weight:800;border-bottom:2px solid #0ea5e9;padding-bottom:8px">${esc(company.name || "AMC AIR")} · สลิปเงินเดือน</div>
+      <div style="font-size:12.5px;color:#475569;margin:6px 0">${esc(r.p.name || r.p.email)}${r.p.department ? " · " + esc(r.p.department) : ""} · รอบ ${ym} (${from} ถึง ${to})</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        ${line(r.p.pay_type === "daily" ? `ค่าแรง (${r.st.present} วัน)` : "เงินเดือน", c.base)}
+        ${line(`ค่าล่วงเวลา OT (${c.otHours.toFixed(1)} ชม.)`, c.otPay)}
+        ${line("โบนัส/เบี้ยเลี้ยง", c.bonus)}
+        ${line("หักมาสาย", c.dLate, 1)}${line("หักขาดงาน", c.dAbsent, 1)}${line("หักลาเกินโควต้า", c.dLeave, 1)}
+        ${line("ประกันสังคม", c.dSso, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
+        <tr><td style="padding:8px 10px;border-top:2px solid #0ea5e9;font-weight:800">รับสุทธิ</td><td style="padding:8px 12px;border-top:2px solid #0ea5e9;text-align:right;font-weight:800;font-size:16px;color:#0a6b3d">${fmtBaht(c.net)}</td></tr>
+      </table></div>`;
+    const host = document.createElement("div"); host.style.cssText = "position:fixed;left:-99999px;top:0;background:#fff;"; host.innerHTML = html; document.body.appendChild(host);
+    try {
+      if (document.fonts?.ready) { try { await document.fonts.ready; } catch { /* ignore */ } }
+      await new Promise((res) => setTimeout(res, 60));
+      const canvas = await html2canvas(host.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
+      const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+      const url = await uploadChatImage(new File([blob], `payslip-${ym}.png`, { type: "image/png" }));
+      const rid = await createDmRoom(r.p.id);
+      await sendChatMessage(rid, `🧾 สลิปเงินเดือนรอบ ${ym} · รับสุทธิ ${fmtBaht(c.net)}`);
+      await sendChatImage(rid, url);
+      if (r.slip?.pay_slip_url) await sendChatImage(rid, r.slip.pay_slip_url);   // สลิปโอนเงินของรอบตามไปด้วย
+      flash(`ส่งสลิปให้ ${r.p.name || "พนักงาน"} ทางแชตส่วนตัวแล้ว ✓`);
+    } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    document.body.removeChild(host);
+    setDmBusy(null);
+  }
   const setA = (id, k, v) => setAdj((s) => ({ ...s, [id]: { ...s[id], [k]: Number(v) || 0 } }));
   const payable = (rows || []).filter((r) => (Number(r.p.base_pay) || 0) > 0 || r.st.present > 0);
   const totalNet = payable.reduce((a, r) => a + calcOf(r).net, 0);
 
-  async function saveRun(markPaid) {
+  async function saveRun(markPaid, meta) {
     setBusy(true);
     try {
       let runNet = 0;
@@ -710,15 +766,17 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           bonus: c.bonus, other_deduct: c.otherDeduct, net: c.net, status: markPaid ? "paid" : "draft" });
       }
       if (markPaid) {
-        await setPayslipPaid(ym, true);
+        await setPayslipPaid(ym, true, meta || {});
         // settle the advances deducted this run so they aren't deducted again next month
         const ids = payable.flatMap((r) => advIdsByUser[r.p.id] || []);
         await markAdvancesPaid(ym, ids);
+        // เดินบัญชี: เงินเดือนทั้งรอบ = เงินออกจากบัญชีที่เลือก (best-effort — hr อาจไม่มีสิทธิ์)
+        if (meta?.accountId) await bookSalaryEntry(ym, meta.accountId, runNet, meta.payDate || payDate, payable.length).catch(() => {});
         // link to Cash Flow: projected outflow on the month's pay date (วันสิ้นเดือน) — best-effort
         // (ฝ่ายบุคคล/hr อาจไม่มีสิทธิ์เขียนกระแสเงินสด → ปล่อยให้บัญชีซิงค์ทีหลังได้ ไม่บล็อกการจ่าย)
-        await upsertPayrollCashEntry(ym, runNet, payDate, payable.length).catch(() => {});
+        await upsertPayrollCashEntry(ym, runNet, meta?.payDate || payDate, payable.length).catch(() => {});
       }
-      flash(markPaid ? "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓ (เข้ากระแสเงินสดแล้ว)" : "บันทึกรอบเงินเดือนแล้ว ✓"); await load();
+      flash(markPaid ? "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓ (ลงเดินบัญชี + กระแสเงินสด)" : "บันทึกรอบเงินเดือนแล้ว ✓"); await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -730,6 +788,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     try {
       await setPayslipPaid(ym, false);
       await unsettleAdvances(ym);
+      await removeSalaryEntry(ym).catch(() => {});        // ลบรายการเดินบัญชีของรอบ (best-effort)
       await removePayrollCashEntry(ym).catch(() => {});   // best-effort (hr อาจไม่มีสิทธิ์กระแสเงินสด)
       flash("ยกเลิกการจ่ายแล้ว — แก้ไขข้อมูลแล้วกด “ทำจ่ายทั้งรอบ” ใหม่ได้"); await load();
     } catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
@@ -751,9 +810,11 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           ) : (
             <>
               <button className="btn-ghost sm" disabled={busy || !payable.length} onClick={() => saveRun(false)}>บันทึกรอบ</button>
-              <button className="btn-primary sm ok" disabled={busy || !payable.length} onClick={() => saveRun(true)}>ทำจ่ายทั้งรอบ</button>
+              <button className="btn-primary sm ok" disabled={busy || !payable.length} onClick={() => setPayModal(true)}>ทำจ่ายทั้งรอบ</button>
             </>
           )}
+          <button className="btn-ghost sm" disabled={!payable.length} title="ไฟล์นำส่งประกันสังคม สปส.1-10 (CSV เปิดใน Excel)" onClick={exportSso}>⬇ ปกส.</button>
+          <button className="btn-ghost sm" disabled={!payable.length} title="สรุปเงินได้รอบเดือนสำหรับยื่น ภงด.1 (CSV)" onClick={exportPnd}>⬇ ภงด.1</button>
         </div>
       </div>
       {loading ? <div className="empty">กำลังคำนวณ…</div> : payable.length === 0 ? <div className="empty">ยังไม่มีพนักงานที่ตั้งฐานเงินเดือน — ไปตั้งที่แท็บ “กะ & ตั้งค่า”</div> : (
@@ -774,7 +835,10 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
                   <td style={{ fontWeight: 800, color: "var(--up)" }}>{fmtBaht(c.net)}</td>
-                  <td><button className="btn-ghost sm" title="พิมพ์สลิป" onClick={() => { printWin.current = openPrintWindow(); setPrintSlip({ row: r, calc: c }); }}><UIcon name="catalog" size={14} /></button></td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button className="btn-ghost sm" title="พิมพ์สลิป" onClick={() => { printWin.current = openPrintWindow(); setPrintSlip({ row: r, calc: c }); }}><UIcon name="catalog" size={14} /></button>
+                    {paidStatus === "paid" && <button className="btn-ghost sm" title="ส่งสลิปเข้าแชตส่วนตัวของพนักงาน" disabled={dmBusy === r.p.id} onClick={() => sendSlipDm(r, c)}>{dmBusy === r.p.id ? "…" : "📲"}</button>}
+                  </td>
                 </tr>
               ); })}
             </tbody>
@@ -784,6 +848,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       )}
       <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (เพดานฐาน 17,500 = สูงสุด 875) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ”</p>
       {paidStatus === "paid" && <p className="page-sub" style={{ marginTop: 6, color: "var(--down)", fontWeight: 600 }}>🔒 รอบนี้จ่ายแล้ว — ตัวเลขในตารางอัปเดตตามข้อมูลล่าสุดเสมอ แต่สลิปที่บันทึก + รายการกระแสเงินสด ถูกล็อกไว้ ณ ตอนจ่าย · ถ้าแก้เวลาเข้างาน/ลา/เบิกล่วงหน้า แล้วต้องการให้มีผลกับสลิปและกระแสเงินสด ให้กด “ยกเลิกจ่าย” แล้ว “ทำจ่ายทั้งรอบ” ใหม่</p>}
+
+      {payModal && <PayRunModal total={totalNet} count={payable.length} defaultDate={payDate}
+        onClose={() => setPayModal(false)} onConfirm={(meta) => { setPayModal(false); saveRun(true, meta); }} flash={flash} />}
 
       {printSlip && (() => { const r = printSlip.row, c = printSlip.calc, p = r.p; return (
         <div className="print-area payslip-print">
@@ -819,12 +886,64 @@ function PayrollTab({ staff, settings, holSet, flash }) {
 }
 
 // one editable salary row — controlled so saved values show clearly (and re-sync after reload)
+// จ่ายเงินเดือนทั้งรอบ — เลือกบัญชี + วันที่ + แนบสลิปโอน (จำเป็น) เหมือนจ่ายช่างซัพ/เบิกล่วงหน้า
+function PayRunModal({ total, count, defaultDate, onClose, onConfirm, flash }) {
+  const [accounts, setAccounts] = React.useState(null);
+  const [accountId, setAccountId] = React.useState("");
+  const [payDate, setPayDate] = React.useState(defaultDate || new Date().toISOString().slice(0, 10));
+  const [slipUrl, setSlipUrl] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  React.useEffect(() => { listAccounts().then((a) => { setAccounts(a); setAccountId((a.find((x) => x.kind === "bank") || a[0])?.id || ""); }).catch(() => setAccounts([])); }, []);
+  async function onSlip(e) {
+    const f = e.target.files?.[0]; if (!f) return;
+    setUploading(true);
+    try { setSlipUrl(await uploadExpenseFile(f)); } catch (ex) { flash("อัปโหลดสลิปไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUploading(false); e.target.value = "";
+  }
+  function confirmPay() {
+    if (!accountId) return flash("เลือกบัญชีที่จ่าย", true);
+    if (!slipUrl) return flash("แนบสลิปโอนเงินก่อนยืนยันจ่าย", true);
+    onConfirm({ accountId, payDate, slipUrl });
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
+        <div className="modal-head"><div className="modal-title">ทำจ่ายเงินเดือนทั้งรอบ · {fmtBaht(total)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="jo-dim" style={{ marginBottom: 10 }}>{count} คน · รวมจ่ายสุทธิ {fmtBaht(total)}</div>
+          <label className="fld"><span>จ่ายจากบัญชี</span>
+            {accounts === null ? <div className="jo-dim">กำลังโหลดบัญชี…</div> :
+              <select className="inp" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                {accounts.map((x) => <option key={x.id} value={x.id}>{(x.kind === "cash" ? "💵 " : "🏦 ") + x.name} (คงเหลือ {fmtBaht(x.balance)})</option>)}
+              </select>}
+          </label>
+          <label className="fld"><span>วันที่จ่าย</span><input type="date" className="inp" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
+          <label className="fld"><span>สลิปโอนเงิน (จำเป็น — โอนรวมหรือภาพสรุปการโอน)</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {slipUrl ? <img src={slipUrl} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 9, border: "1px solid var(--line)", cursor: "zoom-in" }} onClick={() => window.open(slipUrl, "_blank")} /> : null}
+              <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
+                📎 {uploading ? "กำลังอัปโหลด…" : slipUrl ? "เปลี่ยนสลิป" : "แนบสลิป/ถ่ายรูป"}
+                <input type="file" accept="image/*" onChange={onSlip} style={{ display: "none" }} disabled={uploading} />
+              </label>
+              {slipUrl && <button type="button" className="btn-ghost sm danger" onClick={() => setSlipUrl("")}>ลบ</button>}
+            </div>
+          </label>
+          <div className="jo-dim">ระบบจะบันทึกสลิปทุกคนเป็น "จ่ายแล้ว" · หักเบิกล่วงหน้าที่ค้าง · ลง<b>เดินบัญชี</b>เป็นเงินออกก้อนเดียว · เข้า<b>กระแสเงินสด</b> — แล้วส่งสลิปรายคนได้จากปุ่ม 📲 ในตาราง</div>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={uploading || accounts === null} onClick={confirmPay}>ยืนยันจ่ายทั้งรอบ</button></div>
+      </div>
+    </div>
+  );
+}
+
 function PayRow({ p, onSave }) {
   const [payType, setPayType] = React.useState(p.pay_type || "monthly");
   const [basePay, setBasePay] = React.useState(p.base_pay ?? 0);
   const [otRate, setOtRate] = React.useState(p.ot_rate ?? 0);
   const [sso, setSso] = React.useState(!!p.sso);
-  React.useEffect(() => { setPayType(p.pay_type || "monthly"); setBasePay(p.base_pay ?? 0); setOtRate(p.ot_rate ?? 0); setSso(!!p.sso); }, [p.pay_type, p.base_pay, p.ot_rate, p.sso]);
+  const [cid, setCid] = React.useState(p.citizen_id || "");
+  React.useEffect(() => { setPayType(p.pay_type || "monthly"); setBasePay(p.base_pay ?? 0); setOtRate(p.ot_rate ?? 0); setSso(!!p.sso); setCid(p.citizen_id || ""); }, [p.pay_type, p.base_pay, p.ot_rate, p.sso, p.citizen_id]);
   // Thai law: OT rate = salary ÷ 30 ÷ 8 × 1.5
   const calcAutoOt = (bp) => Math.round((Number(bp) / 30 / 8) * 1.5 * 100) / 100;
   const saveBase = (val) => {
@@ -855,6 +974,8 @@ function PayRow({ p, onSave }) {
         <input type="number" min="0" value={otRate} onChange={(e) => setOtRate(e.target.value)} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (Number(p.ot_rate) || 0)) onSave({ ot_rate: v }); }} /><span className="unit-suf">/ชม.</span></span>
       <button className="btn-ghost sm" type="button" title={`คำนวณ: ${basePay}÷30÷8×1.5 = ${calcAutoOt(basePay)} บ./ชม.`} onClick={applyAutoOt} style={{ fontSize: 11, padding: "2px 6px" }}>÷30÷8×1.5</button>
       <label className="hr-sso"><input type="checkbox" checked={sso} onChange={(e) => { setSso(e.target.checked); onSave({ sso: e.target.checked }); }} /> ประกันสังคม</label>
+      <input className="inp" style={{ width: 150 }} placeholder="เลขบัตร ปชช." title="ใช้ออกไฟล์ประกันสังคม (สปส.1-10) และสรุปยื่น ภงด.1 (ต้องรัน migration 130)" value={cid}
+        onChange={(e) => setCid(e.target.value)} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (p.citizen_id || "")) onSave({ citizen_id: v || null }); }} />
     </div>
   );
 }

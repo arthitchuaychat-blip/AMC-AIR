@@ -3061,10 +3061,12 @@ export async function saveLeaveQuota(userId, year, q) {
 // staff list with HR fields (for the HR settings + reports)
 export async function listHrStaff() {
   // HR covers permanent staff only — subcontractor-team members are excluded (managed on the ช่างซัพ page)
-  const [pr, tm] = await Promise.all([
-    supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso").order("name"),
+  let [pr, tm] = await Promise.all([
+    supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso,citizen_id").order("name"),
     supabase.from("teams").select("id,type"),
   ]);
+  // pre-130 fallback — ยังไม่มีคอลัมน์เลขบัตรประชาชน
+  if (pr.error && /citizen_id/i.test(pr.error.message || "")) pr = await supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso").order("name");
   if (pr.error) throw pr.error;
   const subIds = new Set((tm.data || []).filter((t) => t.type === "sub").map((t) => t.id));
   // permanent staff only (drop subcontractor-team members); position label follows the Settings role
@@ -3107,9 +3109,23 @@ export async function savePayslip(p) {
   }, { onConflict: "period,user_id" });
   if (error) throw error;
 }
-export async function setPayslipPaid(period, paid) {
-  const patch = paid ? { status: "paid", paid_at: new Date().toISOString() } : { status: "draft", paid_at: null };
-  const { error } = await supabase.from("payslips").update(patch).eq("period", period);
+export async function setPayslipPaid(period, paid, meta = {}) {
+  const patch = paid
+    ? { status: "paid", paid_at: new Date().toISOString(), paid_from: meta.accountId || null, pay_slip_url: meta.slipUrl || null }
+    : { status: "draft", paid_at: null, paid_from: null, pay_slip_url: null };
+  let { error } = await supabase.from("payslips").update(patch).eq("period", period);
+  if (error && /paid_from|pay_slip_url|PGRST204/i.test(error.message || "")) { delete patch.paid_from; delete patch.pay_slip_url; ({ error } = await supabase.from("payslips").update(patch).eq("period", period)); } // pre-130 fallback
+  if (error) throw error;
+}
+// ลงเดินบัญชี: เงินเดือนทั้งรอบ = เงินออกก้อนเดียวจากบัญชีที่เลือก (อ้าง ref salary + รอบ ไว้ลบตอนยกเลิกจ่าย)
+export async function bookSalaryEntry(ym, accountId, amount, payDate, headcount) {
+  const uid = await _uid();
+  await supabase.from("account_entries").delete().eq("ref_type", "salary").eq("ref_id", ym);   // กันซ้ำเมื่อจ่ายรอบเดิมใหม่
+  const { error } = await supabase.from("account_entries").insert({ account_id: accountId, direction: "out", amount: Number(amount) || 0, kind: "salary", ref_type: "salary", ref_id: ym, note: `เงินเดือนรอบ ${ym} (${headcount} คน)`, entry_date: payDate || new Date().toISOString().slice(0, 10), created_by: uid });
+  if (error) throw error;
+}
+export async function removeSalaryEntry(ym) {
+  const { error } = await supabase.from("account_entries").delete().eq("ref_type", "salary").eq("ref_id", ym);
   if (error) throw error;
 }
 // link a paid payroll run to Cash Flow as a projected outflow on the month's pay date (วันสิ้นเดือน).
