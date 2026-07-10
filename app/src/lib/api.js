@@ -3014,6 +3014,21 @@ export async function markAdvancesPaid(period, ids) {
   const { error } = await supabase.from("hr_advances").update({ status: "paid", period }).in("id", ids);
   if (error) throw error;
 }
+// โอนเงินเบิกล่วงหน้าให้พนักงานจริง (mig 129) — แนบสลิป + ลงเดินบัญชี · ไม่แตะสถานะหักเงินเดือน
+export async function payAdvanceOut(id, { accountId, payDate, slipUrl }) {
+  const uid = await _uid();
+  const { data: a, error: e0 } = await supabase.from("hr_advances").select("amount,user_id,paid_out_at").eq("id", id).single();
+  if (e0) throw e0;
+  if (a.paid_out_at) throw new Error("รายการนี้โอนจ่ายแล้ว");
+  const patch = { paid_out_at: new Date().toISOString(), paid_from: accountId || null, pay_slip_url: slipUrl || null };
+  const { error } = await supabase.from("hr_advances").update(patch).eq("id", id);
+  if (error) throw new Error(/paid_out_at|paid_from|pay_slip_url|PGRST204/i.test(error.message || "") ? "ยังไม่ได้รัน migration 129 ใน Supabase" : error.message || error);
+  if (accountId) {
+    const { error: eAcc } = await supabase.from("account_entries").insert({ account_id: accountId, direction: "out", amount: Number(a.amount) || 0, kind: "advance", ref_type: "advance", ref_id: id, note: "จ่ายเบิกเงินล่วงหน้าพนักงาน", entry_date: payDate || new Date().toISOString().slice(0, 10), created_by: uid });
+    if (eAcc) throw eAcc;
+  }
+  notify([a.user_id], { category: "hr", title: `💸 โอนเงินเบิกล่วงหน้า ${Number(a.amount) || 0} บาทให้แล้ว`, body: "ยอดนี้จะถูกหักจากรอบเงินเดือนถัดไป", url: "attendance", ref_type: "advance" });
+}
 // HR/admin edit a cash-advance request (amount / request_date / reason)
 export async function updateAdvance(id, fields) {
   const patch = { amount: Number(fields.amount) || 0, request_date: fields.request_date, reason: fields.reason || null };

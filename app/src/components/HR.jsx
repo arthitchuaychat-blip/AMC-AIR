@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -235,6 +235,8 @@ function AdvancesTab({ canManage, flash }) {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [edit, setEdit] = React.useState(null); // advance being edited
+  const [payFor, setPayFor] = React.useState(null);   // โอนจ่ายจริง (เลือกบัญชี + สลิป)
+  const [slipFor, setSlipFor] = React.useState(null); // ส่งสลิปเข้าแชตพนักงาน
   async function load() { try { setList(await listAdvances()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
   React.useEffect(() => { load(); }, []);
   async function decide(a, status) {
@@ -263,9 +265,13 @@ function AdvancesTab({ canManage, flash }) {
             <div><b>{a.name}</b> <span className="jo-dim">{a.department}</span><br />
               <b>{fmtBaht(a.amount)}</b> · {thDate(a.request_date)}
               {a.reason && <div className="jo-dim">เหตุผล: {a.reason}</div>}
+              {a.paid_out_at && <div className="jo-dim">💸 โอนให้พนักงานแล้ว {thDate(a.paid_out_at.slice(0, 10))}</div>}
               {a.status === "paid" && a.period && <div className="jo-dim">หักในรอบ {a.period}</div>}</div>
             <div className="hr-leave-act">
+              {a.pay_slip_url && <img src={a.pay_slip_url} alt="สลิปโอนเงิน" title="สลิปโอนเงิน — กดดูเต็ม" style={{ width: 30, height: 30, objectFit: "cover", borderRadius: 7, border: "1px solid var(--line)", cursor: "zoom-in" }} onClick={() => window.open(a.pay_slip_url, "_blank")} />}
               <span className={"job-badge " + b.c}>{b.t}</span>
+              {canManage && a.status === "approved" && !a.paid_out_at && <button className="btn-primary sm" onClick={() => setPayFor(a)}>💸 โอนจ่าย + สลิป</button>}
+              {canManage && a.pay_slip_url && <button className="btn-ghost sm" title="ส่งสลิปเข้าแชตให้พนักงาน" onClick={() => setSlipFor(a)}>📲 ส่งสลิปแชต</button>}
               {a.status !== "paid" && a.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
               {a.status !== "paid" && a.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
               {a.status !== "paid" && a.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
@@ -277,6 +283,98 @@ function AdvancesTab({ canManage, flash }) {
       </div>
       <p className="page-sub" style={{ marginTop: 8 }}>* ยอดที่ “อนุมัติ” แล้วจะถูกหักอัตโนมัติในรอบเงินเดือนถัดไป แล้วเปลี่ยนเป็น “หักแล้ว” เมื่อกดทำจ่ายทั้งรอบ</p>
       {edit && <AdvanceEditModal adv={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
+      {payFor && <PayAdvanceModal adv={payFor} onClose={() => setPayFor(null)} onPaid={() => { setPayFor(null); load(); }} flash={flash} />}
+      {slipFor && <SendAdvSlipModal adv={slipFor} onClose={() => setSlipFor(null)} flash={flash} />}
+    </div>
+  );
+}
+
+// โอนเงินเบิกล่วงหน้าให้พนักงานจริง — เลือกบัญชี + วันที่ + แนบสลิป (จำเป็น) เหมือนจ่ายช่างซัพ
+function PayAdvanceModal({ adv, onClose, onPaid, flash }) {
+  const [accounts, setAccounts] = React.useState(null);
+  const [accountId, setAccountId] = React.useState("");
+  const [payDate, setPayDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [slipUrl, setSlipUrl] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => { listAccounts().then((a) => { setAccounts(a); setAccountId((a.find((x) => x.kind === "bank") || a[0])?.id || ""); }).catch(() => setAccounts([])); }, []);
+  async function onSlip(e) {
+    const f = e.target.files?.[0]; if (!f) return;
+    setUploading(true);
+    try { setSlipUrl(await uploadExpenseFile(f)); } catch (ex) { flash("อัปโหลดสลิปไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUploading(false); e.target.value = "";
+  }
+  async function pay() {
+    if (!accountId) return flash("เลือกบัญชีที่จ่าย", true);
+    if (!slipUrl) return flash("แนบสลิปโอนเงินก่อนบันทึกจ่าย", true);
+    setBusy(true);
+    try { await payAdvanceOut(adv.id, { accountId, payDate, slipUrl }); flash("บันทึกโอนจ่ายแล้ว ✓ (ลงเดินบัญชี + แจ้งเตือนพนักงาน)"); onPaid(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
+        <div className="modal-head"><div className="modal-title">โอนเงินเบิกล่วงหน้า · {fmtBaht(adv.amount)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="jo-dim" style={{ marginBottom: 10 }}>{adv.name} · {adv.reason || "เบิกล่วงหน้า"} — ยอดนี้จะถูกหักจากรอบเงินเดือนถัดไปตามเดิม</div>
+          <label className="fld"><span>จ่ายจากบัญชี</span>
+            {accounts === null ? <div className="jo-dim">กำลังโหลดบัญชี…</div> :
+              <select className="inp" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                {accounts.map((x) => <option key={x.id} value={x.id}>{(x.kind === "cash" ? "💵 " : "🏦 ") + x.name} (คงเหลือ {fmtBaht(x.balance)})</option>)}
+              </select>}
+          </label>
+          <label className="fld"><span>วันที่โอน</span><input type="date" className="inp" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
+          <label className="fld"><span>สลิปโอนเงิน (จำเป็น)</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {slipUrl ? <img src={slipUrl} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 9, border: "1px solid var(--line)", cursor: "zoom-in" }} onClick={() => window.open(slipUrl, "_blank")} /> : null}
+              <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
+                📎 {uploading ? "กำลังอัปโหลด…" : slipUrl ? "เปลี่ยนสลิป" : "แนบสลิป/ถ่ายรูป"}
+                <input type="file" accept="image/*" onChange={onSlip} style={{ display: "none" }} disabled={uploading} />
+              </label>
+              {slipUrl && <button type="button" className="btn-ghost sm danger" onClick={() => setSlipUrl("")}>ลบ</button>}
+            </div>
+          </label>
+          <div className="jo-dim">บันทึกเป็น <b>เงินออก</b> ในบัญชีที่เลือก (เมนูเบิกจ่าย → เดินบัญชี &amp; กระทบแบงค์) และแจ้งเตือนพนักงานอัตโนมัติ</div>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy || uploading || accounts === null} onClick={pay}>ยืนยันโอนจ่าย</button></div>
+      </div>
+    </div>
+  );
+}
+
+// ส่งสลิปโอนเบิกล่วงหน้าเข้าแชต (เลือกห้อง เช่น DM พนักงาน/ห้องทีม) — แบบเดียวกับสลิปช่างซัพ
+function SendAdvSlipModal({ adv, onClose, flash }) {
+  const [rooms, setRooms] = React.useState([]);
+  const [roomId, setRoomId] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => { listChatRooms().then((r) => { setRooms(r); setRoomId(r[0]?.id || ""); }).catch(() => {}); }, []);
+  async function send() {
+    if (!roomId) return flash("เลือกห้องแชตก่อน", true);
+    setBusy(true);
+    try {
+      await sendChatMessage(roomId, `💸 โอนเงินเบิกล่วงหน้า · ${adv.name}\nจำนวน ${fmtBaht(adv.amount)}${adv.reason ? ` · ${adv.reason}` : ""}\n(ยอดนี้จะถูกหักจากรอบเงินเดือนถัดไป)`);
+      await sendChatImage(roomId, adv.pay_slip_url);
+      flash("ส่งสลิปเข้าแชตแล้ว ✓"); onClose();
+    } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
+        <div className="modal-head"><div className="modal-title">📲 ส่งสลิปเบิกล่วงหน้า · {adv.name}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <img src={adv.pay_slip_url} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "contain", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)" }} />
+          <label className="fld" style={{ marginTop: 10 }}><span>ส่งเข้าห้องแชต</span>
+            <select className="inp" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+              {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy || !rooms.length} onClick={send}>ส่งสลิป</button></div>
+      </div>
     </div>
   );
 }
