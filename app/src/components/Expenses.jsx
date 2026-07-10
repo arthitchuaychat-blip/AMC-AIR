@@ -3,7 +3,8 @@ import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateT
 import { confirmDialog } from "./ConfirmDialog";
 import { useDocPeek } from "./DocPeek";
 import AttachThumb from "./AttachThumb";
-import { fmtBaht, ATTACH_ACCEPT } from "../lib/format";
+import { fmtBaht, ATTACH_ACCEPT, matchText } from "../lib/format";
+import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import { UIcon } from "../icons";
 
 const OFFICE = ["admin", "exec", "finance", "hr"]; // hr: อนุมัติ/จ่ายเบิก + คุมเงินสดย่อย (v249)
@@ -136,19 +137,31 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
   );
 }
 
+// ค้นหาใบเบิก: ชื่อรายการ / เลข PO / ลูกค้า / พนักงานผู้ขอ / งาน / QT / หมวด + ช่วงวันที่สร้าง
+const expMatch = (x, q, dateR) =>
+  matchText(q, x.title, x.poNo, x.customerName, x.requesterName, x.jobNo || x.job_no, x.quoteNo, x.category, x.jobTitle, x.note)
+  && inDateRange(x.created_at, dateR);
+
 function MineTab({ flash, onOpenDoc }) {
   const [list, setList] = React.useState(null);
   const [jobs, setJobs] = React.useState([]);
   const [form, setForm] = React.useState(null);
+  const [q, setQ] = React.useState("");
+  const [dateR, setDateR] = React.useState({ from: "", to: "" });
   async function load() { try { setList(await listMyExpenses()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setList([]); } }
   React.useEffect(() => { load(); listJobOrders().then((j) => setJobs(j.filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">คำขอเบิกของฉัน</div><div className="sec-sub">เบิกค่าใช้จ่ายทั่วไป หรือเบิกจากใบงาน (ค่าใช้จ่ายงานจะรวมเป็นต้นทุนงาน)</div></div>
         <button className="btn-primary" onClick={() => setForm({ title: "", amount: "", category: "", job_no: "", note: "", attachments: [] })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> ขอเบิกใหม่</button></div>
+      <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
+        <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา ลูกค้า / เลข PO / ชื่อรายการ…" /></div>
+        <DateRangeBar value={dateR} onChange={setDateR} />
+      </div>
       {list === null && <div className="empty">กำลังโหลด…</div>}
       {list && list.length === 0 && <div className="empty">ยังไม่มีคำขอเบิก</div>}
-      <div className="job-cards">{(list || []).map((x) => <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} />)}</div>
+      {list && list.length > 0 && (list || []).filter((x) => expMatch(x, q, dateR)).length === 0 && <div className="empty">ไม่พบรายการตามที่ค้นหา</div>}
+      <div className="job-cards">{(list || []).filter((x) => expMatch(x, q, dateR)).map((x) => <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} />)}</div>
       {form && <ExpenseForm form={form} setForm={setForm} jobs={jobs} onSaved={() => { setForm(null); load(); }} flash={flash} />}
     </div>
   );
@@ -194,6 +207,8 @@ function ApproveTab({ flash, onOpenDoc }) {
   const [list, setList] = React.useState(null);
   const [statusF, setStatusF] = React.useState("pending");
   const [payFor, setPayFor] = React.useState(null);
+  const [q, setQ] = React.useState("");
+  const [dateR, setDateR] = React.useState({ from: "", to: "" });
   async function load() { try { setList(await listExpenses()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setList([]); } }
   React.useEffect(() => { load(); }, []);
   async function decide(x, status) {
@@ -201,7 +216,7 @@ function ApproveTab({ flash, onOpenDoc }) {
     if (!await confirmDialog(`${lbl}คำขอเบิก "${x.title}" (${fmtBaht(x.amount)}) ?${status === "pending" ? "\n(รายการจะกลับไปสถานะ “รออนุมัติ”)" : ""}`)) return;
     try { await decideExpense(x.id, status); flash(lbl + "แล้ว"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
-  const shown = (list || []).filter((x) => statusF === "all" || x.status === statusF);
+  const shown = (list || []).filter((x) => (statusF === "all" || x.status === statusF) && expMatch(x, q, dateR));
   const cnt = (s) => (list || []).filter((x) => x.status === s).length;
   return (
     <div className="card">
@@ -211,6 +226,10 @@ function ApproveTab({ flash, onOpenDoc }) {
         {[["pending", "รออนุมัติ"], ["approved", "รอจ่าย"], ["paid", "จ่ายแล้ว"], ["rejected", "ไม่อนุมัติ"], ["all", "ทั้งหมด"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)} style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
+      </div>
+      <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
+        <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา ลูกค้า / เลข PO / พนักงานผู้ขอ…" /></div>
+        <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
       {list === null && <div className="empty">กำลังโหลด…</div>}
       {list && shown.length === 0 && <div className="empty">ไม่มีรายการ</div>}
