@@ -497,6 +497,11 @@ footer{background:#0b1b33}
 .ci-inst-nm{margin-top:5px;font-size:11.5px;color:var(--ink-3);line-height:1.5}
 /* ของแถม/คุณสมบัติของบริการติดตั้ง — โชว์เมื่อติ๊กซื้อพร้อมติดตั้ง */
 .ci-inst-ft{margin-top:6px;font-size:11px;color:var(--ink-2);line-height:1.7;background:var(--bg-soft);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+/* การ์ดบทความ: เนื้อย่อ 3 บรรทัด กดอ่านเพิ่มเพื่อขยาย */
+.art-ex{font-size:13.5px;color:var(--ink-2);margin-top:5px;line-height:1.7;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.art-ex.open{display:block;-webkit-line-clamp:unset;overflow:visible}
+.art-more{margin-top:6px;background:none;border:none;color:var(--primary);font-weight:800;font-size:12.5px;font-family:inherit;cursor:pointer;padding:0;display:block}
+.art-more:hover{text-decoration:underline}
 /* ช่องหมุดโลเคชั่น + ปุ่มใช้ตำแหน่งปัจจุบัน */
 .loc-row{display:flex;gap:8px}
 .loc-row input{flex:1;min-width:0}
@@ -1220,17 +1225,27 @@ async function loadPortfolio() {
 }
 
 // ---------- บทความ + ข่าวในสื่อ (ดึงจากหลังบ้าน ถ้ามี ไม่งั้นใช้เนื้อหาเดิม) ----------
+// ปุ่มอ่านเพิ่ม/ย่อ ของเนื้อบทความ — การ์ดอาจครอบด้วยลิงก์ ต้องกันคลิกไม่ให้เปิดหน้าอื่น
+function artMore(e, btn) {
+  e.preventDefault(); e.stopPropagation();
+  const ex = btn.previousElementSibling;
+  const open = ex.classList.toggle("open");
+  btn.textContent = open ? "ย่อ ▴" : "อ่านเพิ่ม ▾";
+  return false;
+}
 async function loadArticles() {
   if (!hasSb) return;
   try {
     const { data } = await sb.from("web_articles").select("*").eq("active", true).order("sort").order("id");
     if (!data || !data.length) return;
     $("#artGrid").innerHTML = data.map((a) => {
-      const inner = `${a.image_url ? `<img src="${a.image_url}" alt="${(a.title || '').replace(/"/g, '&quot;')}" loading="lazy">` : ""}${a.title || a.excerpt ? `<div style="padding:14px"><b style="font-size:15px">${a.title || ''}</b>${a.excerpt ? `<div style="font-size:13.5px;color:var(--ink-2);margin-top:5px">${a.excerpt}</div>` : ""}${a.body ? `<div style="font-size:13px;color:var(--primary);font-weight:800;margin-top:8px">อ่านบทความ →</div>` : ""}</div>` : ""}`;
+      const inner = `${a.image_url ? `<img src="${a.image_url}" alt="${(a.title || '').replace(/"/g, '&quot;')}" loading="lazy">` : ""}${a.title || a.excerpt ? `<div style="padding:14px"><b style="font-size:15px">${a.title || ''}</b>${a.excerpt ? `<div class="art-ex">${a.excerpt}</div><button class="art-more" onclick="return artMore(event, this)">อ่านเพิ่ม ▾</button>` : ""}${a.body ? `<div style="font-size:13px;color:var(--primary);font-weight:800;margin-top:8px">อ่านบทความ →</div>` : ""}</div>` : ""}`;
       // มีเนื้อหาเต็ม → เปิดหน้าบทความของเว็บเราเอง (/a/<id> — ติด Google ได้) · ไม่มีก็ใช้ลิงก์นอกตามเดิม
       const href = a.body ? `/a/${a.id}` : a.link_url;
       return `<div class="art-card">${href ? `<a href="${href}"${a.body ? "" : ' target="_blank" rel="noreferrer"'}>${inner}</a>` : inner}</div>`;
     }).join("");
+    // เนื้อไม่เกิน 3 บรรทัดอยู่แล้ว → ไม่ต้องมีปุ่มอ่านเพิ่ม
+    $("#artGrid").querySelectorAll(".art-ex").forEach((ex) => { const b = ex.nextElementSibling; if (b && b.classList.contains("art-more") && ex.scrollHeight <= ex.clientHeight + 2) b.remove(); });
   } catch (e) {}
 }
 async function loadPress() {
