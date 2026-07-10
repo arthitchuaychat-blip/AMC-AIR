@@ -420,78 +420,65 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 .gal-grid .port{aspect-ratio:4/3}
 
 /* ===================================================================
-   ธีมดำ (รีสกินตามดีไซน์ใหม่ ก.ค. 2569) — บล็อกทับท้ายไฟล์:
-   เปลี่ยนตัวแปรสี + ทับทุกจุดที่เคยกำหนดพื้นขาวตายตัว · ลบบล็อกนี้ = กลับธีมสว่างเดิม
+   ธีมฟ้า-ขาว-น้ำเงิน (รีสกินตามดีไซน์ใหม่ ก.ค. 2569 · ปรับสว่าง) — บล็อกทับท้ายไฟล์
+   โครงหน้าใหม่: ไม่มี sidebar ซ้าย · hero จัดกลาง + แถบค้นหา · แถบ 4 บริการ · เครื่องคิด BTU
+   ลบบล็อกนี้ = กลับธีม/เลย์เอาต์เดิม
    =================================================================== */
 :root{
-  --primary:#3b82f6; --primary-dark:#2563eb; --accent:#7c6cf5;
-  --grad:linear-gradient(90deg,#2563eb,#7b5ce8);
-  --bg:#070b16; --bg-soft:#0d1526; --surface:#101a30;
-  --ink:#eef3fb; --ink-2:#a7b4cc; --ink-3:#66748f; --line:#1d2a45;
-  --shadow-sm:0 2px 10px rgba(0,0,0,.35); --shadow:0 12px 36px rgba(0,0,0,.45);
-  --shadow-lg:0 24px 60px rgba(37,99,235,.25);
+  --primary:#1d6ae5; --primary-dark:#0d47b5; --accent:#0ea5e9;
+  --grad:linear-gradient(90deg,#0d47b5,#0ea5e9);
+  --bg:#f6faff; --bg-soft:#e9f2fd; --surface:#ffffff;
+  --ink:#0b1b33; --ink-2:#3f5578; --ink-3:#7f95b5; --line:#d8e4f4;
+  --shadow-sm:0 2px 10px rgba(13,71,181,.06); --shadow:0 12px 36px rgba(13,71,181,.12);
+  --shadow-lg:0 24px 60px rgba(29,106,229,.18);
 }
-html{color-scheme:dark}
 body{background:var(--bg)}
-/* ปุ่ม/คอนโทรล */
-.btn-primary,.side-go,.hero-pf-all,.prod .add{background:var(--grad);box-shadow:0 10px 26px rgba(59,130,246,.35)}
-.btn-primary:hover,.side-go:hover{background:var(--grad);filter:brightness(1.15);transform:translateY(-2px)}
-.btn-ghost{background:rgba(255,255,255,.05);color:var(--ink);border-color:#2a3a5f}
-.cart-btn,.burger{background:var(--surface);border-color:var(--line)}
-header.scrolled{background:rgba(5,9,18,.86);box-shadow:0 2px 20px rgba(0,0,0,.5)}
-nav.menu.open{background:#0b1322}
-.eyebrow{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.32);color:#9ec2ff}
-/* hero — จัดกลางตามดีไซน์ใหม่ พาเนลผลงานย้ายไปหมวดผลงานด้านล่าง */
-.hero{background:radial-gradient(1100px 560px at 50% -12%,rgba(37,99,235,.30),transparent 62%),radial-gradient(800px 420px at 88% 36%,rgba(124,92,232,.16),transparent 55%),var(--bg)}
+/* ตัด sidebar ซ้ายออกทั้งแถบ (ตัวกรอง + ข่าว/โฆษณา) — ค้นหาจาก hero/แถบบริการแทน */
+.side{display:none !important}
+.page{display:block;padding-top:72px}
+.page .hero{padding-top:40px}
+/* ปุ่ม */
+.btn-primary,.side-go,.hero-pf-all,.prod .add{background:var(--grad);box-shadow:0 10px 26px rgba(29,106,229,.30)}
+.btn-primary:hover,.side-go:hover{background:var(--grad);filter:brightness(1.1);transform:translateY(-2px)}
+header.scrolled{background:rgba(255,255,255,.92)}
+/* hero — จัดกลาง พาดหัว 2 บรรทัด (บรรทัดสองไล่เฉดฟ้า-น้ำเงิน) */
+.hero{background:radial-gradient(1100px 560px at 50% -12%,rgba(29,106,229,.13),transparent 62%),radial-gradient(800px 420px at 88% 36%,rgba(14,165,233,.10),transparent 55%),var(--bg)}
 .hero-grid{grid-template-columns:1fr;justify-items:center;text-align:center}
 .hero-pf{display:none}
 .hero p.sub{margin-inline:auto}
 .hero-actions,.hero-values{justify-content:center}
-.hero h1 .hl{background:linear-gradient(90deg,#5ea2ff,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
-.hero-values span{color:#9ec2ff;background:rgba(59,130,246,.10);border-color:rgba(59,130,246,.30)}
+.hero h1 .hl{background:linear-gradient(90deg,#0d47b5,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
 /* แถบค้นหากลาง hero */
-.hsr{margin:34px auto 0;width:min(880px,100%);background:rgba(13,21,38,.78);border:1px solid var(--line);border-radius:18px;padding:14px;display:grid;grid-template-columns:repeat(3,1fr) auto;gap:12px;backdrop-filter:blur(10px);box-shadow:var(--shadow);text-align:left}
+.hsr{margin:34px auto 0;width:min(880px,100%);background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px;display:grid;grid-template-columns:repeat(3,1fr) auto;gap:12px;box-shadow:var(--shadow);text-align:left}
 .hsr label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-3);font-weight:700}
-.hsr select{appearance:none;-webkit-appearance:none;background:var(--bg-soft);border:1.5px solid var(--line);color:var(--ink);font-family:inherit;font-size:14px;font-weight:600;padding:11px 30px 11px 12px;border-radius:11px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2366748f' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
-.hsr .go{align-self:end;background:#fff;color:#0b1322;font-weight:800;font-size:15px;font-family:inherit;border:none;border-radius:12px;padding:12px 28px;cursor:pointer;transition:.2s}
-.hsr .go:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(255,255,255,.15)}
+.hsr select{appearance:none;-webkit-appearance:none;background:var(--bg-soft);border:1.5px solid var(--line);color:var(--ink);font-family:inherit;font-size:14px;font-weight:600;padding:11px 30px 11px 12px;border-radius:11px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%237f95b5' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.hsr select:hover{border-color:var(--primary)}
+.hsr .go{align-self:end;background:var(--grad);color:#fff;font-weight:800;font-size:15px;font-family:inherit;border:none;border-radius:12px;padding:12px 28px;cursor:pointer;transition:.2s;box-shadow:0 8px 20px rgba(29,106,229,.3)}
+.hsr .go:hover{transform:translateY(-2px);filter:brightness(1.1)}
 @media(max-width:720px){.hsr{grid-template-columns:1fr 1fr}.hsr .go{grid-column:1/-1}}
 /* แถบ 4 บริการใต้ hero */
-.strip{background:#04070f;border-color:var(--line);padding:20px 0}
+.strip{background:#fff;border-color:var(--line);padding:20px 0}
 .strip .row .it{flex-direction:column;text-align:center;gap:6px;color:var(--ink);font-size:15px;font-weight:800;cursor:pointer;padding:10px 18px;border-radius:14px;transition:.2s;flex:1;min-width:150px}
-.strip .row .it:hover{background:rgba(59,130,246,.08)}
+.strip .row .it:hover{background:var(--bg-soft)}
 .strip .it .em{font-size:24px;line-height:1}
 .strip .it small{display:block;font-weight:500;font-size:12.5px;color:var(--ink-3)}
-/* พื้นผิวการ์ดที่เคยเป็นสีขาวตายตัว */
-.prod,.sprod,.rev,.form,.faq-item,.area-chip,.clients-wrap,.logo-cell,.press-card,.art-card,.drawer,.side-filter{background:var(--surface)}
-.ssz,.prod-tab,.prod-search,.hfilter select,.side-filter select,.pp-filters select,.ci .qty button{background:var(--bg-soft);color:var(--ink);border-color:var(--line)}
-.ssz.on,.prod-tab.on{background:var(--grad);border-color:transparent;color:#fff}
-.form input,.form textarea,.of input,.of textarea{background:var(--bg-soft);color:var(--ink);border-color:var(--line)}
-.form input::placeholder,.form textarea::placeholder,.of input::placeholder,.of textarea::placeholder{color:var(--ink-3)}
-.prod .ph,.sprod-top .ph,.ci .ph,.hero-pf-card,.port{background:#0b1322}
-.prod .pcost{color:#4ade80}
-.prod .cardpay{background:rgba(234,179,8,.10);border-color:rgba(234,179,8,.28);color:#eab308}
-.sspec{background:var(--bg-soft)}
-.drawer-x{background:var(--bg-soft);color:var(--ink)}
-.faq-q{color:var(--ink)}
-footer{background:#04070f;border-top:1px solid var(--line)}
-footer .copy{border-top-color:var(--line)}
-.toast{background:#1a2540;border:1px solid var(--line)}
 /* เครื่องคิด BTU + ค่าไฟ */
-.btucalc{background:linear-gradient(135deg,rgba(37,99,235,.14),rgba(124,92,232,.10)),var(--surface);border:1px solid #24345c;border-radius:22px;padding:clamp(22px,4vw,42px);display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:center;max-width:1000px;margin:0 auto;box-shadow:var(--shadow)}
+.btucalc{background:linear-gradient(135deg,#eaf3ff,#f4faff);border:1px solid #cfe0f7;border-radius:22px;padding:clamp(22px,4vw,42px);display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:center;max-width:1000px;margin:0 auto;box-shadow:var(--shadow)}
 .btucalc h3{font-size:clamp(22px,3vw,32px);font-weight:800;margin:10px 0 8px}
 .btucalc .lead{font-size:14.5px}
-.bc-panel{background:rgba(7,11,22,.55);border:1px solid var(--line);border-radius:16px;padding:20px}
+.bc-panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow-sm)}
 .bc-row{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--ink-2);font-weight:700}
-.bc-row b{color:#5ea2ff;font-size:15px}
+.bc-row b{color:var(--primary);font-size:15px}
 .bc-panel input[type=range]{width:100%;margin:12px 0 16px;accent-color:var(--primary)}
 .bc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
 .bc-stat{background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:10px 12px;text-align:center}
 .bc-stat span{display:block;font-size:11.5px;color:var(--ink-3);font-weight:700}
 .bc-stat b{font-size:19px;font-weight:800}
-.bc-stat.hl b{color:#5ea2ff}
+.bc-stat.hl b{color:var(--primary)}
 .bc-go{width:100%;justify-content:center}
 @media(max-width:860px){.btucalc{grid-template-columns:1fr;gap:20px}}
+/* น้ำเงินเข้มที่ footer ให้ครบโทนฟ้า-ขาว-น้ำเงิน */
+footer{background:#0b1b33}
 </style>
 </head>
 <body>
@@ -590,24 +577,11 @@ footer .copy{border-top-color:var(--line)}
       </div>
       <div class="hsr" id="heroSearch">
         <label>ยี่ห้อ
-          <select id="hsBrand"><option value="">ทุกยี่ห้อ</option>
-            <option value="Daikin">Daikin</option><option value="Mitsubishi">Mitsubishi</option>
-            <option value="LG">LG</option><option value="Samsung">Samsung</option>
-            <option value="Carrier">Carrier</option><option value="Haier">Haier</option>
-            <option value="Panasonic">Panasonic</option><option value="TCL">TCL</option>
-          </select></label>
+          <select id="hsBrand"><option value="">ทุกยี่ห้อ</option></select></label>
         <label>ประเภทแอร์
-          <select id="hsType"><option value="">ทุกประเภท</option>
-            <option value="ติดผนัง">ติดผนัง (Wall)</option><option value="แขวน">แขวน</option>
-            <option value="ฝังฝ้า">ฝังฝ้า (4 ทิศ)</option><option value="ตู้ตั้ง">ตู้ตั้ง</option>
-          </select></label>
+          <select id="hsType"><option value="">ทุกประเภท</option></select></label>
         <label>ขนาด BTU
-          <select id="hsBtu"><option value="">ทุกขนาด</option>
-            <option value="9000">9,000 BTU</option><option value="12000">12,000 BTU</option>
-            <option value="18000">18,000 BTU</option><option value="24000">24,000 BTU</option>
-            <option value="30000">30,000 BTU</option><option value="36000">36,000 BTU</option>
-            <option value="48000">48,000 BTU</option><option value="60000">60,000 BTU</option>
-          </select></label>
+          <select id="hsBtu"><option value="">ทุกขนาด</option></select></label>
         <button class="go" id="hsGo">ค้นหา</button>
       </div>
     </div>
@@ -1297,6 +1271,20 @@ route();
 /* ===== ธีมใหม่: แถบค้นหากลาง hero · แถบ 4 บริการ · เครื่องคิด BTU (ต่อเข้าตัวกรองเดิมทั้งหมด) ===== */
 (function () {
   const $ = (id) => document.getElementById(id);
+  // ตัวเลือกในแถบค้นหา hero ต้องเป็นชุดเดียวกับตัวกรองจริง (flt* เติมจากข้อมูลสินค้าใน DB ทีหลัง)
+  // — ค่าที่พิมพ์เองจะกรองไม่ติด จึงคัดลอกจาก flt* ซ้ำ ๆ ช่วงโหลดจนชุดตัวเลือกนิ่ง
+  function syncHsOpts() {
+    [["fltModel", "hsBrand", "ทุกยี่ห้อ"], ["fltType", "hsType", "ทุกประเภท"], ["fltBtu", "hsBtu", "ทุกขนาด"]].forEach(([src, dst, label]) => {
+      const s = $(src), d = $(dst);
+      if (!s || !d || s.options.length <= 1) return;
+      const html = `<option value="">${label}</option>` + [...s.options].filter((o) => o.value)
+        .map((o) => `<option value="${o.value.replace(/"/g, "&quot;")}">${o.textContent}</option>`).join("");
+      if (d.dataset.sig !== html) { const v = d.value; d.innerHTML = html; d.dataset.sig = html; d.value = v; }
+    });
+  }
+  syncHsOpts();
+  let hsTick = 0;
+  const hsIv = setInterval(() => { syncHsOpts(); if (++hsTick > 25) clearInterval(hsIv); }, 600);
   // ค้นหาแอร์จาก hero → เซ็ตค่าเข้าตัวกรองข้าง (ตัวจริง) แล้วยิงค้นหาเดิม
   $("hsGo")?.addEventListener("click", () => {
     if ($("fltModel")) $("fltModel").value = $("hsBrand").value;
@@ -1304,13 +1292,19 @@ route();
     if ($("fltBtu")) $("fltBtu").value = $("hsBtu").value;
     $("fltGoAc")?.click();
   });
-  // แถบ 4 บริการ → ค้นหาบริการนั้น
+  // แถบ 4 บริการ → ค้นหาบริการนั้น · ถ้าแคตตาล็อกยังไม่มีสินค้าบริการ (ผลว่าง) พาไปหมวดข้อมูลบริการแทน
   document.querySelectorAll(".strip .it[data-svc]").forEach((el) => {
     el.addEventListener("click", () => {
       if ($("fltService")) $("fltService").value = el.dataset.svc;
       if ($("fltSvcType")) $("fltSvcType").value = "";
       if ($("fltSvcBtu")) $("fltSvcBtu").value = "";
       $("fltGoSvc")?.click();
+      setTimeout(() => {
+        if (document.querySelector("#prodGrid .prod-empty")) {
+          if ($("fltService")) $("fltService").value = "";
+          location.hash = "#services";
+        }
+      }, 80);
     });
   });
   // ปุ่มโทรใน hero — ใช้เบอร์เดียวกับปุ่มลอย (ตั้งค่าจากหลังบ้าน)
