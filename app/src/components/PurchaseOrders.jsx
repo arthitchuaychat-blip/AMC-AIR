@@ -114,7 +114,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", issue_date: todayStr(), items: [] }); }
   function startEdit(po) {
     const incl = !!po.vat && !!po.price_incl;   // stored price is pre-VAT → show gross in the field when incl mode
-    setEditing({ _edit: true, po_no: po.po_no, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10),
+    setEditing({ _edit: true, po_no: po.po_no, status: po.status, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10),
       items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0), unit: i.unit || null })) });
   }
 
@@ -170,7 +170,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     if (editing._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
     const incl = !!editing.vat && !!editing.priceIncl;
     const items = editing.items.map((it) => ({ ...it, price: incl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0) })); // store pre-VAT price
-    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, issue_date: editing.issue_date || null, status: "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
+    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, issue_date: editing.issue_date || null, status: editing.status || "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   // ส่งขออนุมัติจ่ายเงิน → โผล่ในเมนูเบิกจ่าย (อนุมัติ → จ่าย+เลือกบัญชี → PO ขึ้น "จ่ายแล้ว" อัตโนมัติ)
@@ -347,7 +347,10 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                     <button className="btn-primary" onClick={() => onReceive && onReceive(po)}><UIcon name="purchase" size={15} color="#fff" /> รับสินค้าเข้าสต๊อก{po.quote_no ? " → เข้างาน" : ""}</button>
                     <button className="btn-ghost sm danger" onClick={() => del(po)}><UIcon name="trash" size={14} /></button>
                   </>}
-                  {po.status === "received" && <span className="job-closed-note">รับเข้าสต๊อกแล้ว {po.received_at ? new Date(po.received_at).toLocaleDateString("th-TH") : ""}</span>}
+                  {/* รับของแล้วแต่บิลซัพฯ มาทีหลัง → ยังแก้ราคาได้จนกว่าจะส่งขออนุมัติจ่าย */}
+                  {po.status === "received" && isAdmin && po.paymentStatus === "unpaid" &&
+                    <button className="btn-ghost sm" onClick={() => startEdit(po)}><UIcon name="edit" size={14} /> แก้ไขราคา (ตามบิลซัพฯ)</button>}
+                  {po.status === "received" && <span className="job-closed-note">รับเข้าสต๊อกแล้ว {po.received_at ? new Date(po.received_at).toLocaleDateString("th-TH") : ""}{po.paymentStatus === "unpaid" && !(po.total > 0) ? " · ใส่ราคาจริงจากบิลก่อน แล้วปุ่มส่งขออนุมัติจ่ายจะขึ้น" : ""}</span>}
                 </div>
               </div>
             </div>
