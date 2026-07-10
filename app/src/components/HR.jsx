@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom } from "../lib/api";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
@@ -344,20 +344,29 @@ function PayAdvanceModal({ adv, onClose, onPaid, flash }) {
   );
 }
 
-// ส่งสลิปโอนเบิกล่วงหน้าเข้าแชต (เลือกห้อง เช่น DM พนักงาน/ห้องทีม) — แบบเดียวกับสลิปช่างซัพ
+// ส่งสลิปโอนเบิกล่วงหน้าเข้าแชต — ปุ่มลัดส่งเข้าแชตส่วนตัว (DM) ของพนักงานคนนั้น หรือเลือกห้องอื่นเอง
 function SendAdvSlipModal({ adv, onClose, flash }) {
   const [rooms, setRooms] = React.useState([]);
   const [roomId, setRoomId] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => { listChatRooms().then((r) => { setRooms(r); setRoomId(r[0]?.id || ""); }).catch(() => {}); }, []);
+  const slipText = `💸 โอนเงินเบิกล่วงหน้า · ${adv.name}\nจำนวน ${fmtBaht(adv.amount)}${adv.reason ? ` · ${adv.reason}` : ""}\n(ยอดนี้จะถูกหักจากรอบเงินเดือนถัดไป)`;
+  async function sendTo(rid) {
+    await sendChatMessage(rid, slipText);
+    await sendChatImage(rid, adv.pay_slip_url);
+  }
+  // ส่งเข้าแชตส่วนตัวของพนักงานคนนี้โดยตรง — เปิด/สร้างห้อง DM ให้อัตโนมัติ
+  async function sendDm() {
+    setBusy(true);
+    try { const rid = await createDmRoom(adv.user_id); await sendTo(rid); flash(`ส่งสลิปเข้าแชตส่วนตัวของ ${adv.name} แล้ว ✓`); onClose(); }
+    catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
   async function send() {
     if (!roomId) return flash("เลือกห้องแชตก่อน", true);
     setBusy(true);
-    try {
-      await sendChatMessage(roomId, `💸 โอนเงินเบิกล่วงหน้า · ${adv.name}\nจำนวน ${fmtBaht(adv.amount)}${adv.reason ? ` · ${adv.reason}` : ""}\n(ยอดนี้จะถูกหักจากรอบเงินเดือนถัดไป)`);
-      await sendChatImage(roomId, adv.pay_slip_url);
-      flash("ส่งสลิปเข้าแชตแล้ว ✓"); onClose();
-    } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    try { await sendTo(roomId); flash("ส่งสลิปเข้าแชตแล้ว ✓"); onClose(); }
+    catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
   return (
@@ -366,14 +375,17 @@ function SendAdvSlipModal({ adv, onClose, flash }) {
         <div className="modal-head"><div className="modal-title">📲 ส่งสลิปเบิกล่วงหน้า · {adv.name}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
           <img src={adv.pay_slip_url} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "contain", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)" }} />
-          <label className="fld" style={{ marginTop: 10 }}><span>ส่งเข้าห้องแชต</span>
+          <button className="btn-primary" style={{ width: "100%", marginTop: 12 }} disabled={busy} onClick={sendDm}>
+            👤 ส่งเข้าแชตส่วนตัวของ {adv.name}</button>
+          <div className="jo-dim" style={{ textAlign: "center", margin: "8px 0 2px" }}>— หรือส่งเข้าห้องอื่น —</div>
+          <label className="fld"><span>เลือกห้องแชต</span>
             <select className="inp" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
               {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           </label>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
-          <button className="btn-primary" disabled={busy || !rooms.length} onClick={send}>ส่งสลิป</button></div>
+          <button className="btn-ghost" disabled={busy || !rooms.length} onClick={send}>ส่งเข้าห้องที่เลือก</button></div>
       </div>
     </div>
   );
