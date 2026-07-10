@@ -8,6 +8,17 @@ const STATUS_TH = { pending: "รอเริ่มงาน", scheduled: "น�
 const STATUS_ACTION = { pending: "🕒 รอจ่ายงาน", scheduled: "📌 นัดหมายแล้ว", in_progress: "🔧 เริ่ม/กำลังทำงาน", awaiting_approval: "📤 ส่งอนุมัติ", reschedule: "📅 ส่งไปนัดหมายเพิ่ม", done: "✅ อนุมัติงานเสร็จ", cancelled: "❌ ยกเลิกงาน" };
 const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."; };
 
+// ลิงก์ในข้อความกดได้ — เว็บไซต์ (http/https/www.) และลิงก์แผนที่ (maps.app.goo.gl / goo.gl/maps) เปิดแท็บใหม่
+const URL_SPLIT = /((?:https?:\/\/|www\.|maps\.app\.goo\.gl\/|goo\.gl\/maps\/)[^\s<>"']+)/gi;
+function Linkify({ text }) {
+  return String(text || "").split(URL_SPLIT).map((p, i) =>
+    /^(https?:\/\/|www\.|maps\.app\.goo\.gl\/|goo\.gl\/maps\/)/i.test(p)
+      ? <a key={i} href={/^https?:\/\//i.test(p) ? p : `https://${p}`} target="_blank" rel="noopener noreferrer"
+          style={{ color: "#1d4ed8", textDecoration: "underline", wordBreak: "break-all" }}
+          onClick={(e) => e.stopPropagation()}>{/^(maps\.|goo\.gl|https?:\/\/(maps\.|www\.google\.[^/]+\/maps))/i.test(p) ? "📍 " : ""}{p}</a>
+      : p);
+}
+
 // single image thumbnail: tries to display directly, if it fails fetches as blob + converts HEIC
 async function blobifyUrl(url) {
   const res = await fetch(url);
@@ -126,7 +137,7 @@ export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, f
                     : l.type === "edit"
                     ? <div className="tl-status">✏️ บันทึก/แก้ไขใบงาน{l.status ? ` · สถานะ: ${STATUS_TH[l.status] || l.status}` : ""}</div>
                     : <>
-                        {l.note && <div className="tl-note">{l.note}</div>}
+                        {l.note && <div className="tl-note"><Linkify text={l.note} /></div>}
                         <Photos photos={l.photos} onOpen={openLb} />
                       </>}
 
@@ -136,7 +147,7 @@ export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, f
                       {replies.map((r) => (
                         <div className="tl-reply" key={r.id}>
                           <div className="tl-meta">↳ {fmtWhen(r.created_at)}{r.author ? ` · ${r.author}` : ""}</div>
-                          {r.note && <div className="tl-note">{r.note}</div>}
+                          {r.note && <div className="tl-note"><Linkify text={r.note} /></div>}
                           <Photos photos={r.photos} onOpen={openLb} />
                         </div>
                       ))}
