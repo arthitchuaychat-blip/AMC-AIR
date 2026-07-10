@@ -418,6 +418,80 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 .gal-x{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;font-size:20px;cursor:pointer}
 .gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;max-width:1100px;margin:0 auto}
 .gal-grid .port{aspect-ratio:4/3}
+
+/* ===================================================================
+   ธีมดำ (รีสกินตามดีไซน์ใหม่ ก.ค. 2569) — บล็อกทับท้ายไฟล์:
+   เปลี่ยนตัวแปรสี + ทับทุกจุดที่เคยกำหนดพื้นขาวตายตัว · ลบบล็อกนี้ = กลับธีมสว่างเดิม
+   =================================================================== */
+:root{
+  --primary:#3b82f6; --primary-dark:#2563eb; --accent:#7c6cf5;
+  --grad:linear-gradient(90deg,#2563eb,#7b5ce8);
+  --bg:#070b16; --bg-soft:#0d1526; --surface:#101a30;
+  --ink:#eef3fb; --ink-2:#a7b4cc; --ink-3:#66748f; --line:#1d2a45;
+  --shadow-sm:0 2px 10px rgba(0,0,0,.35); --shadow:0 12px 36px rgba(0,0,0,.45);
+  --shadow-lg:0 24px 60px rgba(37,99,235,.25);
+}
+html{color-scheme:dark}
+body{background:var(--bg)}
+/* ปุ่ม/คอนโทรล */
+.btn-primary,.side-go,.hero-pf-all,.prod .add{background:var(--grad);box-shadow:0 10px 26px rgba(59,130,246,.35)}
+.btn-primary:hover,.side-go:hover{background:var(--grad);filter:brightness(1.15);transform:translateY(-2px)}
+.btn-ghost{background:rgba(255,255,255,.05);color:var(--ink);border-color:#2a3a5f}
+.cart-btn,.burger{background:var(--surface);border-color:var(--line)}
+header.scrolled{background:rgba(5,9,18,.86);box-shadow:0 2px 20px rgba(0,0,0,.5)}
+nav.menu.open{background:#0b1322}
+.eyebrow{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.32);color:#9ec2ff}
+/* hero — จัดกลางตามดีไซน์ใหม่ พาเนลผลงานย้ายไปหมวดผลงานด้านล่าง */
+.hero{background:radial-gradient(1100px 560px at 50% -12%,rgba(37,99,235,.30),transparent 62%),radial-gradient(800px 420px at 88% 36%,rgba(124,92,232,.16),transparent 55%),var(--bg)}
+.hero-grid{grid-template-columns:1fr;justify-items:center;text-align:center}
+.hero-pf{display:none}
+.hero p.sub{margin-inline:auto}
+.hero-actions,.hero-values{justify-content:center}
+.hero h1 .hl{background:linear-gradient(90deg,#5ea2ff,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-values span{color:#9ec2ff;background:rgba(59,130,246,.10);border-color:rgba(59,130,246,.30)}
+/* แถบค้นหากลาง hero */
+.hsr{margin:34px auto 0;width:min(880px,100%);background:rgba(13,21,38,.78);border:1px solid var(--line);border-radius:18px;padding:14px;display:grid;grid-template-columns:repeat(3,1fr) auto;gap:12px;backdrop-filter:blur(10px);box-shadow:var(--shadow);text-align:left}
+.hsr label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-3);font-weight:700}
+.hsr select{appearance:none;-webkit-appearance:none;background:var(--bg-soft);border:1.5px solid var(--line);color:var(--ink);font-family:inherit;font-size:14px;font-weight:600;padding:11px 30px 11px 12px;border-radius:11px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2366748f' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.hsr .go{align-self:end;background:#fff;color:#0b1322;font-weight:800;font-size:15px;font-family:inherit;border:none;border-radius:12px;padding:12px 28px;cursor:pointer;transition:.2s}
+.hsr .go:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(255,255,255,.15)}
+@media(max-width:720px){.hsr{grid-template-columns:1fr 1fr}.hsr .go{grid-column:1/-1}}
+/* แถบ 4 บริการใต้ hero */
+.strip{background:#04070f;border-color:var(--line);padding:20px 0}
+.strip .row .it{flex-direction:column;text-align:center;gap:6px;color:var(--ink);font-size:15px;font-weight:800;cursor:pointer;padding:10px 18px;border-radius:14px;transition:.2s;flex:1;min-width:150px}
+.strip .row .it:hover{background:rgba(59,130,246,.08)}
+.strip .it .em{font-size:24px;line-height:1}
+.strip .it small{display:block;font-weight:500;font-size:12.5px;color:var(--ink-3)}
+/* พื้นผิวการ์ดที่เคยเป็นสีขาวตายตัว */
+.prod,.sprod,.rev,.form,.faq-item,.area-chip,.clients-wrap,.logo-cell,.press-card,.art-card,.drawer,.side-filter{background:var(--surface)}
+.ssz,.prod-tab,.prod-search,.hfilter select,.side-filter select,.pp-filters select,.ci .qty button{background:var(--bg-soft);color:var(--ink);border-color:var(--line)}
+.ssz.on,.prod-tab.on{background:var(--grad);border-color:transparent;color:#fff}
+.form input,.form textarea,.of input,.of textarea{background:var(--bg-soft);color:var(--ink);border-color:var(--line)}
+.form input::placeholder,.form textarea::placeholder,.of input::placeholder,.of textarea::placeholder{color:var(--ink-3)}
+.prod .ph,.sprod-top .ph,.ci .ph,.hero-pf-card,.port{background:#0b1322}
+.prod .pcost{color:#4ade80}
+.prod .cardpay{background:rgba(234,179,8,.10);border-color:rgba(234,179,8,.28);color:#eab308}
+.sspec{background:var(--bg-soft)}
+.drawer-x{background:var(--bg-soft);color:var(--ink)}
+.faq-q{color:var(--ink)}
+footer{background:#04070f;border-top:1px solid var(--line)}
+footer .copy{border-top-color:var(--line)}
+.toast{background:#1a2540;border:1px solid var(--line)}
+/* เครื่องคิด BTU + ค่าไฟ */
+.btucalc{background:linear-gradient(135deg,rgba(37,99,235,.14),rgba(124,92,232,.10)),var(--surface);border:1px solid #24345c;border-radius:22px;padding:clamp(22px,4vw,42px);display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:center;max-width:1000px;margin:0 auto;box-shadow:var(--shadow)}
+.btucalc h3{font-size:clamp(22px,3vw,32px);font-weight:800;margin:10px 0 8px}
+.btucalc .lead{font-size:14.5px}
+.bc-panel{background:rgba(7,11,22,.55);border:1px solid var(--line);border-radius:16px;padding:20px}
+.bc-row{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--ink-2);font-weight:700}
+.bc-row b{color:#5ea2ff;font-size:15px}
+.bc-panel input[type=range]{width:100%;margin:12px 0 16px;accent-color:var(--primary)}
+.bc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.bc-stat{background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:10px 12px;text-align:center}
+.bc-stat span{display:block;font-size:11.5px;color:var(--ink-3);font-weight:700}
+.bc-stat b{font-size:19px;font-weight:800}
+.bc-stat.hl b{color:#5ea2ff}
+.bc-go{width:100%;justify-content:center}
+@media(max-width:860px){.btucalc{grid-template-columns:1fr;gap:20px}}
 </style>
 </head>
 <body>
@@ -450,43 +524,44 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 <div class="page wrap" id="pageHome">
   <div class="side">
   <div class="side-filter">
-      <div class="side-filter-h">ค้นหารุ่นแอร์</div>
-      <select id="fltModel" aria-label="เลือกรุ่นแอร์">
-        <option value="">รุ่นแอร์ทั้งหมด</option>
+      <div class="side-filter-h">ค้นหาเครื่องปรับอากาศ</div>
+      <select id="fltModel" aria-label="ยี่ห้อเครื่องปรับอากาศ">
+        <option value="">ยี่ห้อเครื่องปรับอากาศ</option>
         <option value="Daikin">Daikin</option><option value="Mitsubishi">Mitsubishi</option>
         <option value="LG">LG</option><option value="Samsung">Samsung</option>
         <option value="Carrier">Carrier</option><option value="Haier">Haier</option>
         <option value="Panasonic">Panasonic</option><option value="TCL">TCL</option>
       </select>
-      <select id="fltType" aria-label="ประเภทแอร์">
-        <option value="">ทุกประเภท</option>
+      <select id="fltType" aria-label="ประเภทเครื่องปรับอากาศ">
+        <option value="">ประเภทเครื่องปรับอากาศ</option>
         <option value="ติดผนัง">ติดผนัง</option><option value="แขวน">แขวน</option>
         <option value="ฝังฝ้า">ฝังฝ้า (4 ทิศ)</option><option value="ตู้ตั้ง">ตู้ตั้ง</option>
       </select>
       <select id="fltBtu" aria-label="ขนาด BTU">
-        <option value="">ทุกขนาด BTU</option>
+        <option value="">ขนาด BTU</option>
         <option value="9000">9,000 BTU</option><option value="12000">12,000 BTU</option>
         <option value="18000">18,000 BTU</option><option value="24000">24,000 BTU</option>
         <option value="30000">30,000 BTU</option><option value="36000">36,000 BTU</option>
         <option value="48000">48,000 BTU</option><option value="60000">60,000 BTU</option>
       </select>
-      <div class="side-filter-h" style="margin-top:4px">ค้นหาบริการ</div>
-      <select id="fltService" aria-label="เลือกบริการ">
-        <option value="">บริการทั้งหมด</option>
+      <button class="side-go" id="fltGoAc">ค้นหา →</button>
+      <div class="side-filter-h" style="margin-top:10px">ค้นหาบริการต่าง ๆ</div>
+      <select id="fltService" aria-label="บริการ">
+        <option value="">บริการ</option>
         <option value="ติดตั้ง">ติดตั้งแอร์</option><option value="ล้าง">ล้างแอร์</option>
         <option value="ซ่อม">ซ่อม/แก้ไข</option><option value="ย้าย">ย้ายแอร์</option>
         <option value="รื้อถอน">รื้อถอนแอร์</option><option value="อื่นๆ">บริการอื่น ๆ</option>
       </select>
-      <select id="fltSvcType" aria-label="ประเภทแอร์ที่รับบริการ">
-        <option value="">ทุกประเภทแอร์</option>
+      <select id="fltSvcType" aria-label="ประเภทเครื่องปรับอากาศ">
+        <option value="">ประเภทเครื่องปรับอากาศ</option>
       </select>
-      <select id="fltSvcBtu" aria-label="ขนาด BTU ที่รับบริการ">
-        <option value="">ทุกขนาด BTU</option>
+      <select id="fltSvcBtu" aria-label="ขนาด BTU">
+        <option value="">ขนาด BTU</option>
         <option value="9000">9,000 BTU</option><option value="12000">12,000 BTU</option>
         <option value="18000">18,000 BTU</option><option value="24000">24,000 BTU</option>
         <option value="36000">36,000 BTU</option><option value="48000">48,000 BTU</option>
       </select>
-      <button class="side-go" id="fltGo">ดูสินค้า / บริการ →</button>
+      <button class="side-go" id="fltGoSvc">ค้นหา →</button>
     </div>
     <div class="side-rail">
       <a class="side-news" id="sideNews" target="_blank" rel="noreferrer" style="display:none"></a>
@@ -505,13 +580,35 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 <section class="hero">
   <div class="wrap hero-grid">
     <div>
-      <span class="eyebrow">จำหน่าย · ติดตั้ง · ล้างแอร์ · ซ่อม</span>
-      <h1>AMC <span class="hl">AIR</span><br>แอร์เย็นเจี๊บบ</h1>
+      <span class="eyebrow">AMC AIR · แอร์ครบทุกยี่ห้อ · ติดตั้ง ล้าง ย้าย ซ่อม</span>
+      <h1>เย็นทั่วถึง คุ้มทุกบาท<br><span class="hl">ติดตั้งโดยช่างมืออาชีพ</span></h1>
       <div class="hero-values" id="heroValues"></div>
-      <p class="sub">ดูแลครบวงจร ตั้งแต่เลือกเครื่อง ติดตั้ง ล้างทำความสะอาด ไปจนถึงซ่อมบำรุง — ตรงเวลา ราคายุติธรรม รับประกันงานทุกชิ้น</p>
+      <p class="sub">ขายพร้อมติดตั้ง แจ้งราคารวมค่าแรงชัดเจน ประเมินหน้างานฟรี รับประกันงานติดตั้งทุกเครื่อง</p>
       <div class="hero-actions">
-        <a href="#products" class="btn btn-primary">เลือกซื้อแอร์ →</a>
-        <a href="#contact" class="btn btn-ghost">ขอใบเสนอราคาฟรี</a>
+        <a href="#contact" class="btn btn-primary">ขอใบเสนอราคาฟรี</a>
+        <a href="#" id="heroCall" class="btn btn-ghost">☎ โทรเลย</a>
+      </div>
+      <div class="hsr" id="heroSearch">
+        <label>ยี่ห้อ
+          <select id="hsBrand"><option value="">ทุกยี่ห้อ</option>
+            <option value="Daikin">Daikin</option><option value="Mitsubishi">Mitsubishi</option>
+            <option value="LG">LG</option><option value="Samsung">Samsung</option>
+            <option value="Carrier">Carrier</option><option value="Haier">Haier</option>
+            <option value="Panasonic">Panasonic</option><option value="TCL">TCL</option>
+          </select></label>
+        <label>ประเภทแอร์
+          <select id="hsType"><option value="">ทุกประเภท</option>
+            <option value="ติดผนัง">ติดผนัง (Wall)</option><option value="แขวน">แขวน</option>
+            <option value="ฝังฝ้า">ฝังฝ้า (4 ทิศ)</option><option value="ตู้ตั้ง">ตู้ตั้ง</option>
+          </select></label>
+        <label>ขนาด BTU
+          <select id="hsBtu"><option value="">ทุกขนาด</option>
+            <option value="9000">9,000 BTU</option><option value="12000">12,000 BTU</option>
+            <option value="18000">18,000 BTU</option><option value="24000">24,000 BTU</option>
+            <option value="30000">30,000 BTU</option><option value="36000">36,000 BTU</option>
+            <option value="48000">48,000 BTU</option><option value="60000">60,000 BTU</option>
+          </select></label>
+        <button class="go" id="hsGo">ค้นหา</button>
       </div>
     </div>
     <div class="hero-pf">
@@ -523,10 +620,10 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 
 <section class="strip">
   <div class="wrap row">
-    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> ทีมช่างมีใบรับรอง</div>
-    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.6 5.7 21l2.3-7.2-6-4.4h7.6z"/></svg> รับประกันงานติดตั้ง</div>
-    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> นัดหมายรวดเร็ว</div>
-    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg> ใบกำกับภาษีถูกต้อง</div>
+    <div class="it" data-svc="ติดตั้ง"><span class="em">❄️</span> ติดตั้งแอร์ <small>ทีมช่างมืออาชีพ รับประกันงาน</small></div>
+    <div class="it" data-svc="ล้าง"><span class="em">💧</span> ล้างแอร์ <small>ล้างใหญ่ เป่าโฟม เย็นเต็มระบบ</small></div>
+    <div class="it" data-svc="ย้าย"><span class="em">↔️</span> ย้ายแอร์ <small>ถอด–ติดตั้งใหม่ ครบวงจร</small></div>
+    <div class="it" data-svc="ซ่อม"><span class="em">🔧</span> ซ่อมแอร์ <small>ตรวจเช็ก แก้ปัญหาทุกอาการ</small></div>
   </div>
 </section>
 
@@ -553,10 +650,32 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
   </div>
 </section>
 
+<section class="sec" id="btucalc-sec">
+  <div class="wrap">
+    <div class="btucalc">
+      <div>
+        <span class="eyebrow">เครื่องมือช่วยเลือก</span>
+        <h3>คำนวณ BTU + ค่าไฟต่อเดือน</h3>
+        <p class="lead">เลื่อนปรับขนาดห้อง ระบบจะแนะนำขนาดแอร์ที่พอดี พร้อมประมาณค่าไฟ เพื่อเลือกได้คุ้มที่สุด</p>
+      </div>
+      <div class="bc-panel">
+        <div class="bc-row"><span>ขนาดห้อง</span><b><span id="bcArea">24</span> ตร.ม.</b></div>
+        <input type="range" id="bcSlider" min="9" max="60" step="1" value="24" aria-label="ขนาดห้อง (ตารางเมตร)" />
+        <div class="bc-stats">
+          <div class="bc-stat"><span>BTU ที่ต้องการ</span><b id="bcNeed">19,200</b></div>
+          <div class="bc-stat hl"><span>แนะนำ</span><b id="bcRec">24,000</b></div>
+          <div class="bc-stat"><span>ค่าไฟ/ด. โดยประมาณ</span><b id="bcCost">฿1,320</b></div>
+        </div>
+        <button class="btn btn-primary bc-go" id="bcGo">ดูแอร์ 24,000 BTU</button>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="sec" id="portfolio">
   <div class="wrap">
-    <div class="sec-head center"><span class="eyebrow">ผลงานของเรา</span><h2 class="title">งานที่เราภูมิใจ</h2>
-      <p class="lead">ตัวอย่างงานติดตั้งจริงจากทีมช่าง AMC AIR</p></div>
+    <div class="sec-head center"><span class="eyebrow">ผลงานของเรา</span><h2 class="title">อัลบั้มผลงานของเรา</h2>
+      <p class="lead">งานติดตั้งและบริการจริงจากหน้างาน โดยทีมช่าง AMC AIR</p></div>
     <div class="port-grid" id="portGrid"></div>
   </div>
 </section>
@@ -829,17 +948,21 @@ function fillFilters() {
   const uniq = (k) => [...new Set(acs.map((p) => p[k]).filter((v) => v != null && v !== ""))];
   const brands = uniq("brand").sort(), btus = uniq("btu").sort((a, b) => a - b), types = uniq("ac_type").sort();
   const fill = (ids, html) => ids.forEach((id) => { const el = $(id); if (el) el.innerHTML = html; });
-  if (brands.length) fill(["#fltModel", "#ppModel"], `<option value="">รุ่นแอร์ทั้งหมด</option>` + brands.map((b) => `<option value="${b}">${b}</option>`).join(""));
-  if (btus.length) fill(["#fltBtu", "#ppBtu"], `<option value="">ทุกขนาด BTU</option>` + btus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join(""));
-  if (types.length) fill(["#fltType", "#ppType"], `<option value="">ทุกประเภท</option>` + types.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join(""));
+  // แถบซ้ายใช้ป้ายชื่อช่องตามดีไซน์ (ยี่ห้อ/ประเภท/ขนาด) · หน้าสินค้าใช้ป้าย "ทั้งหมด"
+  const brandOpts = brands.map((b) => `<option value="${b}">${b}</option>`).join("");
+  const btuOptsH = btus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join("");
+  const typeOpts = types.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join("");
+  if (brands.length) { fill(["#fltModel"], `<option value="">ยี่ห้อเครื่องปรับอากาศ</option>` + brandOpts); fill(["#ppModel"], `<option value="">รุ่นแอร์ทั้งหมด</option>` + brandOpts); }
+  if (btus.length) { fill(["#fltBtu"], `<option value="">ขนาด BTU</option>` + btuOptsH); fill(["#ppBtu"], `<option value="">ทุกขนาด BTU</option>` + btuOptsH); }
+  if (types.length) { fill(["#fltType"], `<option value="">ประเภทเครื่องปรับอากาศ</option>` + typeOpts); fill(["#ppType"], `<option value="">ทุกประเภท</option>` + typeOpts); }
   // ตัวกรองฝั่งบริการ (เหมือนหลังบ้าน): ประเภท/ขนาดที่บริการติดแท็กไว้ก่อน ถ้าไม่มีใช้ชุดของแอร์ · BTU รวมขอบช่วงของบริการ
   const sTypes = [...new Set(svcs.map((p) => p.ac_type).filter(Boolean))].sort();
   const useTypes = sTypes.length ? sTypes : types;
   const sBtuSet = new Set(btus.map(Number));
   svcs.forEach((p) => [p.btu, p.btuMin, p.btuMax].forEach((v) => { if (v) sBtuSet.add(Number(v)); }));
   const sBtus = [...sBtuSet].sort((a, b) => a - b);
-  if (useTypes.length) fill(["#fltSvcType"], `<option value="">ทุกประเภทแอร์</option>` + useTypes.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join(""));
-  if (sBtus.length) fill(["#fltSvcBtu"], `<option value="">ทุกขนาด BTU</option>` + sBtus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join(""));
+  if (useTypes.length) fill(["#fltSvcType"], `<option value="">ประเภทเครื่องปรับอากาศ</option>` + useTypes.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join(""));
+  if (sBtus.length) fill(["#fltSvcBtu"], `<option value="">ขนาด BTU</option>` + sBtus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join(""));
 }
 let allProducts = [], prodFilter = "all", prodQuery = "", prodBrand = "", prodBtu = "", prodType = "", prodSvc = "", prodNote = "";
 const fmtNumB = (n) => Number(n || 0).toLocaleString("en-US");
@@ -1059,12 +1182,12 @@ async function loadPress() {
 // ---------- แถบกรอง (แถบซ้าย) → เด้งไปหน้าสินค้า/บริการ พร้อมกรอง ----------
 function setProdTab(k) { const t = $("#prodTabs"); if (t) t.querySelectorAll(".prod-tab").forEach((x) => x.classList.toggle("on", x.dataset.k === k)); }
 // อ่านตัวกรองจากกลุ่ม g → ตั้งสถานะ → ซิงค์ทั้ง 2 กลุ่ม (แถบซ้าย flt* + หน้าสินค้า pp*) → แสดงผล
-function applyFilters(g, navigate) {
+function applyFilters(g, navigate, force) {
   const v = (i) => ($(g[i]) ? $(g[i]).value : "");
   const brand = v(0), type = v(1), btu = v(2), svc = v(3), svcType = v(4), svcBtu = v(5);
-  // แตะกลุ่มบริการ (หมวด/ประเภทแอร์/BTU — เหมือนตัวกรองหลังบ้าน) → โหมดบริการ · หน้าสินค้าใช้ select ประเภท/BTU ร่วมกัน (g มี 4 ช่อง)
-  if (svc || svcType || svcBtu) { prodFilter = "service"; prodBrand = ""; prodType = svcType || type; prodBtu = svcBtu || btu; prodQuery = ""; prodSvc = svc; }
-  else { prodBrand = brand; prodType = type; prodBtu = btu; prodQuery = ""; prodSvc = ""; prodFilter = (brand || type || btu) ? "ac" : "all"; }
+  // force = ปุ่ม "ค้นหา" ของแต่ละกล่องบังคับโหมด (กดโดยไม่เลือกอะไร = ดูทั้งหมดของกลุ่มนั้น)
+  if (force === "service" || svc || svcType || svcBtu) { prodFilter = "service"; prodBrand = ""; prodType = svcType || type; prodBtu = svcBtu || btu; prodQuery = ""; prodSvc = svc; }
+  else { prodBrand = brand; prodType = type; prodBtu = btu; prodQuery = ""; prodSvc = ""; prodFilter = (force === "ac" || brand || type || btu) ? "ac" : "all"; }
   setProdTab(prodFilter);
   if ($("#prodSearch")) $("#prodSearch").value = prodQuery;
   const isSvc = prodFilter === "service";
@@ -1076,7 +1199,15 @@ function applyFilters(g, navigate) {
   if (navigate) location.hash = "products";
 }
 // หน้าหลัก: เลือกตัวกรอง (ไม่เด้ง) → กดปุ่ม "ดูสินค้า/บริการ" ถึงเด้งไปหน้าสินค้า
-if ($("#fltGo")) $("#fltGo").onclick = () => applyFilters(["#fltModel", "#fltType", "#fltBtu", "#fltService", "#fltSvcType", "#fltSvcBtu"], true);
+// สองปุ่มค้นหาแยกกล่อง: แอร์ (ล้างตัวกรองบริการก่อน) · บริการ (ล้างตัวกรองแอร์ก่อน)
+if ($("#fltGoAc")) $("#fltGoAc").onclick = () => {
+  ["#fltService", "#fltSvcType", "#fltSvcBtu"].forEach((id) => { if ($(id)) $(id).value = ""; });
+  applyFilters(["#fltModel", "#fltType", "#fltBtu"], true, "ac");
+};
+if ($("#fltGoSvc")) $("#fltGoSvc").onclick = () => {
+  ["#fltModel", "#fltType", "#fltBtu"].forEach((id) => { if ($(id)) $(id).value = ""; });
+  applyFilters(["#fltModel", "#fltType", "#fltBtu", "#fltService", "#fltSvcType", "#fltSvcBtu"], true, "service");
+};
 // หน้าสินค้า: เลือกตัวกรองแล้วกรองทันที (อยู่หน้าสินค้าอยู่แล้ว)
 ["#ppModel", "#ppType", "#ppBtu", "#ppService"].forEach((id) => { if ($(id)) $(id).onchange = () => applyFilters(["#ppModel", "#ppType", "#ppBtu", "#ppService"], false); });
 
@@ -1139,7 +1270,7 @@ async function loadBanners() {
   }).join("");
   dots.innerHTML = banners.map((_, i) => `<button class="hs-dot${i === 0 ? " on" : ""}" data-i="${i}" aria-label="สไลด์ ${i + 1}"></button>`).join("");
   $("#heroSlider").style.display = "block";
-  const hero = $(".hero"); if (hero) hero.style.display = "none"; // ใช้สไลด์ปกแทน hero เดิม
+  // ธีมใหม่: สไลด์ปกแสดง "คู่กับ" hero (พาดหัว + แถบค้นหา) — ไม่ซ่อน hero แล้ว
   const n = banners.length; let idx = 0, timer = null;
   const dotEls = dots.querySelectorAll(".hs-dot");
   const go = (i) => { idx = (i + n) % n; track.style.transform = `translateX(-${idx * 100}%)`; dotEls.forEach((d, k) => d.classList.toggle("on", k === idx)); };
@@ -1161,6 +1292,57 @@ loadArticles();
 loadPress();
 loadSidebar();
 route();
+</script>
+<script>
+/* ===== ธีมใหม่: แถบค้นหากลาง hero · แถบ 4 บริการ · เครื่องคิด BTU (ต่อเข้าตัวกรองเดิมทั้งหมด) ===== */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  // ค้นหาแอร์จาก hero → เซ็ตค่าเข้าตัวกรองข้าง (ตัวจริง) แล้วยิงค้นหาเดิม
+  $("hsGo")?.addEventListener("click", () => {
+    if ($("fltModel")) $("fltModel").value = $("hsBrand").value;
+    if ($("fltType")) $("fltType").value = $("hsType").value;
+    if ($("fltBtu")) $("fltBtu").value = $("hsBtu").value;
+    $("fltGoAc")?.click();
+  });
+  // แถบ 4 บริการ → ค้นหาบริการนั้น
+  document.querySelectorAll(".strip .it[data-svc]").forEach((el) => {
+    el.addEventListener("click", () => {
+      if ($("fltService")) $("fltService").value = el.dataset.svc;
+      if ($("fltSvcType")) $("fltSvcType").value = "";
+      if ($("fltSvcBtu")) $("fltSvcBtu").value = "";
+      $("fltGoSvc")?.click();
+    });
+  });
+  // ปุ่มโทรใน hero — ใช้เบอร์เดียวกับปุ่มลอย (ตั้งค่าจากหลังบ้าน)
+  $("heroCall")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const href = $("fabCall")?.getAttribute("href");
+    if (href && href !== "#") location.href = href;
+    else location.hash = "#contact";
+  });
+  // เครื่องคิด BTU: ต้องการ = ตร.ม. × 800 · แนะนำ = ขนาดมาตรฐานที่ ≥ ต้องการ · ค่าไฟ/ด. ≈ BTU × 0.055 (เปิด ~8 ชม./วัน)
+  const SIZES = [9000, 12000, 18000, 24000, 30000, 36000, 48000, 60000];
+  const fmt = (n) => n.toLocaleString("th-TH");
+  function bcCalc() {
+    const area = Number($("bcSlider").value) || 24;
+    const need = area * 800;
+    const rec = SIZES.find((s) => s >= need) || SIZES[SIZES.length - 1];
+    $("bcArea").textContent = area;
+    $("bcNeed").textContent = fmt(need);
+    $("bcRec").textContent = fmt(rec);
+    $("bcCost").textContent = "฿" + fmt(Math.round(rec * 0.055));
+    $("bcGo").textContent = `ดูแอร์ ${fmt(rec)} BTU`;
+    $("bcGo").dataset.btu = rec;
+  }
+  $("bcSlider")?.addEventListener("input", bcCalc);
+  $("bcGo")?.addEventListener("click", () => {
+    if ($("fltModel")) $("fltModel").value = "";
+    if ($("fltType")) $("fltType").value = "";
+    if ($("fltBtu")) $("fltBtu").value = $("bcGo").dataset.btu || "";
+    $("fltGoAc")?.click();
+  });
+  if ($("bcSlider")) bcCalc();
+})();
 </script>
 </body>
 </html>
