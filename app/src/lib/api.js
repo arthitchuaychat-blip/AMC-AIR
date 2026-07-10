@@ -3629,3 +3629,24 @@ export async function decideToolMove(mv, approve) {
     if (e2) throw _toolErr(e2);
   }
 }
+
+// ---------- ภาษีมูลค่าเพิ่มเดือนนี้ (การ์ดแดชบอร์ด): ภาษีขายจากใบเสร็จ · ภาษีซื้อจาก PO ที่ติ๊ก VAT ----------
+export async function vatSummary(ym) {
+  const last = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
+  const from = `${ym}-01`, to = `${ym}-${String(last).padStart(2, "0")}`;
+  const [rc, po] = await Promise.all([
+    supabase.from("receipts").select("vat_amt,status,issue_date").neq("status", "cancelled").gte("issue_date", from).lte("issue_date", to),
+    supabase.from("purchase_orders").select("po_no,vat,status,issue_date,created_at").neq("status", "cancelled").eq("vat", true),
+  ]);
+  if (rc.error) throw rc.error; if (po.error) throw po.error;
+  const saleVat = (rc.data || []).reduce((a, r) => a + (Number(r.vat_amt) || 0), 0);
+  const pos = (po.data || []).filter((x) => { const d = x.issue_date || (x.created_at || "").slice(0, 10); return d >= from && d <= to; });
+  let buyVat = 0;
+  const nos = pos.map((x) => x.po_no);
+  for (let i = 0; i < nos.length; i += 300) {
+    const { data: items, error } = await supabase.from("po_items").select("po_no,qty,price").in("po_no", nos.slice(i, i + 300));
+    if (error) throw error;
+    (items || []).forEach((it) => { buyVat += (Number(it.qty) || 0) * (Number(it.price) || 0) * 0.07; });   // ราคาที่เก็บเป็นก่อน VAT เสมอ
+  }
+  return { saleVat: _round2(saleVat), buyVat: _round2(buyVat), net: _round2(saleVat - buyVat), saleCount: (rc.data || []).length, buyCount: pos.length };
+}

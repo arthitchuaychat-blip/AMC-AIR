@@ -101,7 +101,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-10·ไทม์ไลน์ใบงาน: ลิงก์เว็บไซต์/แผนที่ในคอมเมนต์กดเปิดได้เลย v356";
+const BUILD = "2026-07-10·ภาษีซื้อ-ภาษีขาย: รายงานภาษีมีภาษีซื้อ + VAT นำส่งสุทธิ · การ์ด VAT เดือนนี้บนแดชบอร์ด v357";
 
 function SetupNotice() {
   return (
@@ -426,7 +426,7 @@ export default function App() {
         {/* แถบเตือนงานค้างจากกระดานสั่งงาน — ตามไปทุกเมนู */}
         {profile?.id && <TaskReminder myId={profile.id} view={view} onOpen={(id) => { setTaskFocus(id); go("tasks"); }} onOpenBoard={() => go("tasks")} />}
         <InstallBanner />
-        {view === "dashboard" && <Dashboard onReorder={(items) => { setPoPrefill(items); go("po"); }}
+        {view === "dashboard" && <Dashboard role={role} onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
         {view === "suppliers" && <Suppliers role={role} />}

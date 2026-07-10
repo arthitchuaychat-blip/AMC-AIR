@@ -1,5 +1,6 @@
 import React from "react";
-import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, dashboardActionLite } from "../lib/api";
+import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, dashboardActionLite, vatSummary } from "../lib/api";
+import { can } from "../lib/permissions";
 import { fmtBaht, fmtNum, fmtCompact, inRange } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import DashDrawer from "./DashDrawer";
@@ -36,7 +37,14 @@ function StatCard({ icon, color, label, value, sub, accent, onClick }) {
   );
 }
 
-export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
+export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onGo }) {
+  // ภาษีมูลค่าเพิ่มเดือนนี้ (ขาย/ซื้อ/นำส่ง) — เฉพาะบทบาทที่เห็นเมนูรายงานภาษี
+  const [vat, setVat] = React.useState(null);
+  React.useEffect(() => {
+    if (!can(role, "tax")) return;
+    const d = new Date(), ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    vatSummary(ym).then(setVat).catch(() => {});
+  }, [role]);
   const [preset, setPreset] = React.useState("month");
   const [from, setFrom] = React.useState(PRESETS.find((p) => p.id === "month").range().from);
   const [to, setTo] = React.useState("");
@@ -154,6 +162,12 @@ export default function Dashboard({ onReorder, onOpenQuote, onOpenJob, onGo }) {
               sub={`PO ${fmtCompact(act?.poPayable || 0)} · ค่าแรงซัพ ${fmtCompact((act?.payoutUnpaid || 0) + (act?.laborOwed || 0))} · เบิกรอจ่าย ${fmtCompact(act?.approvedExpenseSum || 0)}`}
               onClick={() => onGo && onGo("cashflow")} />
             <StatCard icon="box" color="#0d9488" label="มูลค่าวัสดุคงเหลือ" value={fmtBaht(invValue)} sub={`${fmtNum(mats.length)} ชนิด · ${fmtNum(low.length)} ต่ำกว่าขั้นต่ำ`} onClick={() => setTab("inv")} />
+            {can(role, "tax") && vat && (
+              <StatCard icon="clipboard" color="#0891b2" label={(vat.net >= 0 ? "VAT นำส่ง" : "VAT ขอคืน") + " · เดือนนี้"}
+                value={fmtBaht(Math.abs(vat.net))} accent={vat.net > 0 ? "#dc2626" : "#16a34a"}
+                sub={`ภาษีขาย ${fmtCompact(vat.saleVat)} − ภาษีซื้อ ${fmtCompact(vat.buyVat)}`}
+                onClick={() => onGo && onGo("tax")} />
+            )}
           </div>
 
           <div className="sec-head" style={{ margin: "20px 0 10px" }}><div><div className="sec-title">สิ่งที่ต้องทำ</div><div className="sec-sub">งานค้างที่รอจัดการ · กดการ์ดเพื่อไปหน้านั้น</div></div></div>

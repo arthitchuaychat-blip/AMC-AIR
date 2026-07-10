@@ -1,5 +1,5 @@
 import React from "react";
-import { listReceipts } from "../lib/api";
+import { listReceipts, listPurchaseOrders } from "../lib/api";
 import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
 
@@ -9,16 +9,22 @@ const netOf = (r) => Number(r.net) || ((Number(r.total) || 0) - (Number(r.wht_am
 
 export default function TaxReport({ role }) {
   const [receipts, setReceipts] = React.useState(null);
+  const [pos, setPos] = React.useState([]);   // ใบสั่งซื้อที่ติ๊ก VAT → ภาษีซื้อ
   const [year, setYear] = React.useState(() => new Date().getFullYear());
   const [openMonth, setOpenMonth] = React.useState(null);
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
 
   async function load() {
-    try { const r = await listReceipts(); setReceipts(r.filter((x) => x.status !== "cancelled" && x.issue_date)); }
+    try {
+      const [r, p] = await Promise.all([listReceipts(), listPurchaseOrders().catch(() => [])]);
+      setReceipts(r.filter((x) => x.status !== "cancelled" && x.issue_date));
+      setPos(p.filter((x) => x.status !== "cancelled" && x.vat));
+    }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setReceipts([]); }
   }
   React.useEffect(() => { load(); }, []);
+  const poDate = (x) => x.issue_date || (x.created_at || "").slice(0, 10);
 
   const years = React.useMemo(() => {
     const ys = new Set((receipts || []).map((r) => Number((r.issue_date || "").slice(0, 4))).filter(Boolean));
@@ -29,24 +35,33 @@ export default function TaxReport({ role }) {
   const ofYear = React.useMemo(() => (receipts || []).filter((r) => (r.issue_date || "").slice(0, 4) === String(year)), [receipts, year]);
 
   // aggregate per month (index 0–11): tax is recognised on the receipt (ใบกำกับภาษี) date
+  // ภาษีซื้อ: จากใบสั่งซื้อที่ติ๊ก VAT ตามวันที่ใบ (ประมาณการ — ตอนยื่นจริงใช้ใบกำกับภาษีซื้อจากผู้ขาย)
   const months = React.useMemo(() => {
-    const m = Array.from({ length: 12 }, () => ({ count: 0, base: 0, vat: 0, wht: 0, net: 0, rows: [] }));
+    const m = Array.from({ length: 12 }, () => ({ count: 0, base: 0, vat: 0, buyVat: 0, buyCount: 0, wht: 0, net: 0, rows: [] }));
     ofYear.forEach((r) => {
       const mi = Number((r.issue_date || "").slice(5, 7)) - 1;
       if (mi < 0 || mi > 11) return;
       const b = m[mi];
       b.count++; b.base += Number(r.base) || 0; b.vat += Number(r.vat_amt) || 0; b.wht += Number(r.wht_amt) || 0; b.net += netOf(r); b.rows.push(r);
     });
-    m.forEach((b) => { b.base = round2(b.base); b.vat = round2(b.vat); b.wht = round2(b.wht); b.net = round2(b.net); b.rows.sort((a, c) => (a.issue_date < c.issue_date ? -1 : 1)); });
+    pos.forEach((x) => {
+      const d = poDate(x);
+      if ((d || "").slice(0, 4) !== String(year)) return;
+      const mi = Number((d || "").slice(5, 7)) - 1;
+      if (mi < 0 || mi > 11) return;
+      m[mi].buyVat += Number(x.vatAmt) || 0; m[mi].buyCount++;
+    });
+    m.forEach((b) => { b.base = round2(b.base); b.vat = round2(b.vat); b.buyVat = round2(b.buyVat); b.wht = round2(b.wht); b.net = round2(b.net); b.vatDue = round2(b.vat - b.buyVat); b.rows.sort((a, c) => (a.issue_date < c.issue_date ? -1 : 1)); });
     return m;
-  }, [ofYear]);
+  }, [ofYear, pos, year]);
 
-  const tot = months.reduce((a, b) => ({ count: a.count + b.count, base: round2(a.base + b.base), vat: round2(a.vat + b.vat), wht: round2(a.wht + b.wht), net: round2(a.net + b.net) }), { count: 0, base: 0, vat: 0, wht: 0, net: 0 });
+  const tot = months.reduce((a, b) => ({ count: a.count + b.count, base: round2(a.base + b.base), vat: round2(a.vat + b.vat), buyVat: round2(a.buyVat + b.buyVat), buyCount: a.buyCount + b.buyCount, wht: round2(a.wht + b.wht), net: round2(a.net + b.net) }), { count: 0, base: 0, vat: 0, buyVat: 0, buyCount: 0, wht: 0, net: 0 });
+  tot.vatDue = round2(tot.vat - tot.buyVat);
 
   function exportMonthly() {
-    const headers = ["เดือน", "จำนวนใบเสร็จ", "ยอดก่อน VAT", "VAT 7%", "หัก ณ ที่จ่าย", "รับสุทธิ"];
-    const rows = months.map((b, i) => [`${TH_MONTHS[i]} ${year + 543}`, b.count, b.base, b.vat, b.wht, b.net]);
-    rows.push(["รวมทั้งปี", tot.count, tot.base, tot.vat, tot.wht, tot.net]);
+    const headers = ["เดือน", "จำนวนใบเสร็จ", "ยอดก่อน VAT", "ภาษีขาย", "ภาษีซื้อ (ประมาณการ)", "VAT นำส่ง (ขาย−ซื้อ)", "หัก ณ ที่จ่าย", "รับสุทธิ"];
+    const rows = months.map((b, i) => [`${TH_MONTHS[i]} ${year + 543}`, b.count, b.base, b.vat, b.buyVat, b.vatDue, b.wht, b.net]);
+    rows.push(["รวมทั้งปี", tot.count, tot.base, tot.vat, tot.buyVat, tot.vatDue, tot.wht, tot.net]);
     downloadCsv(`รายงานภาษี-สรุปรายเดือน-${year + 543}`, headers, rows);
   }
   function exportDetail() {
@@ -82,29 +97,32 @@ export default function TaxReport({ role }) {
       </div>
 
       <div className="kpi-grid">
-        <div className="stat-card"><div className="stat-val">{fmtBaht(tot.base)}</div><div className="stat-label">ยอดขายก่อน VAT (ปีนี้)</div></div>
-        <div className="stat-card"><div className="stat-val" style={{ color: "#1d4ed8" }}>{fmtBaht(tot.vat)}</div><div className="stat-label">VAT ขาย (ต้องนำส่ง)</div></div>
+        <div className="stat-card"><div className="stat-val">{fmtBaht(tot.base)}</div><div className="stat-label">ยอดขายก่อน VAT (ปีนี้) · {tot.count} ใบ</div></div>
+        <div className="stat-card"><div className="stat-val" style={{ color: "#1d4ed8" }}>{fmtBaht(tot.vat)}</div><div className="stat-label">ภาษีขาย (จากใบกำกับ)</div></div>
+        <div className="stat-card"><div className="stat-val" style={{ color: "#0d9488" }}>{fmtBaht(tot.buyVat)}</div><div className="stat-label">ภาษีซื้อ (จาก PO มี VAT · {tot.buyCount} ใบ)</div></div>
+        <div className="stat-card"><div className="stat-val" style={{ color: tot.vatDue > 0 ? "#dc2626" : "#16a34a" }}>{fmtBaht(Math.abs(tot.vatDue))}</div><div className="stat-label">{tot.vatDue >= 0 ? "VAT นำส่งสุทธิ (ขาย − ซื้อ)" : "VAT ขอคืน (ซื้อ > ขาย)"}</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#d97706" }}>{fmtBaht(tot.wht)}</div><div className="stat-label">ภาษีหัก ณ ที่จ่าย (เครดิตคืน)</div></div>
-        <div className="stat-card"><div className="stat-val">{tot.count}</div><div className="stat-label">จำนวนใบเสร็จ</div></div>
       </div>
 
       {receipts === null ? <div className="empty">กำลังโหลด…</div>
-        : tot.count === 0 ? <div className="empty" style={{ padding: 40 }}>ไม่มีใบเสร็จในปี {year + 543}</div>
+        : (tot.count === 0 && tot.buyCount === 0) ? <div className="empty" style={{ padding: 40 }}>ไม่มีใบเสร็จ/ใบสั่งซื้อ VAT ในปี {year + 543}</div>
         : (
           <div className="card" style={{ padding: 0, overflow: "auto" }}>
             <table className="cf-table">
               <thead><tr>
                 <th style={{ textAlign: "left" }}>เดือน</th>
-                <th>จำนวนใบ</th><th>ยอดก่อน VAT</th><th>VAT 7%</th><th>หัก ณ ที่จ่าย</th><th>รับสุทธิ</th><th></th>
+                <th>จำนวนใบ</th><th>ยอดก่อน VAT</th><th>ภาษีขาย</th><th>ภาษีซื้อ</th><th>VAT นำส่ง</th><th>หัก ณ ที่จ่าย</th><th>รับสุทธิ</th><th></th>
               </tr></thead>
               <tbody>
-                {months.map((b, i) => b.count === 0 ? null : (
+                {months.map((b, i) => (b.count === 0 && b.buyCount === 0) ? null : (
                   <React.Fragment key={i}>
                     <tr className="tax-monthrow" onClick={() => setOpenMonth(openMonth === i ? null : i)} style={{ cursor: "pointer" }}>
                       <td style={{ textAlign: "left", fontWeight: 700 }}>{TH_MONTHS[i]}</td>
                       <td>{b.count}</td>
                       <td>{fmtBaht(b.base)}</td>
                       <td style={{ color: "#1d4ed8", fontWeight: 700 }}>{fmtBaht(b.vat)}</td>
+                      <td style={{ color: "#0d9488" }}>{b.buyVat ? fmtBaht(b.buyVat) : "—"}</td>
+                      <td style={{ fontWeight: 700, color: b.vatDue > 0 ? "#dc2626" : b.vatDue < 0 ? "#16a34a" : undefined }}>{fmtBaht(b.vatDue)}</td>
                       <td style={{ color: "#d97706" }}>{b.wht ? fmtBaht(b.wht) : "—"}</td>
                       <td style={{ fontWeight: 700 }}>{fmtBaht(b.net)}</td>
                       <td><UIcon name="chevR" size={13} style={{ transform: openMonth === i ? "rotate(90deg)" : "none", color: "var(--ink-3)" }} /></td>
@@ -118,6 +136,7 @@ export default function TaxReport({ role }) {
                         <td></td>
                         <td>{fmtBaht(r.base)}</td>
                         <td style={{ color: "#1d4ed8" }}>{fmtBaht(r.vat_amt)}</td>
+                        <td></td><td></td>
                         <td style={{ color: "#d97706" }}>{r.wht_amt ? fmtBaht(r.wht_amt) : "—"}</td>
                         <td>{fmtBaht(netOf(r))}</td>
                         <td></td>
@@ -131,6 +150,8 @@ export default function TaxReport({ role }) {
                 <td>{tot.count}</td>
                 <td>{fmtBaht(tot.base)}</td>
                 <td style={{ color: "#1d4ed8" }}>{fmtBaht(tot.vat)}</td>
+                <td style={{ color: "#0d9488" }}>{fmtBaht(tot.buyVat)}</td>
+                <td style={{ fontWeight: 700, color: tot.vatDue > 0 ? "#dc2626" : "#16a34a" }}>{fmtBaht(tot.vatDue)}</td>
                 <td style={{ color: "#d97706" }}>{fmtBaht(tot.wht)}</td>
                 <td>{fmtBaht(tot.net)}</td>
                 <td></td>
@@ -140,7 +161,7 @@ export default function TaxReport({ role }) {
         )}
 
       <p className="page-sub" style={{ marginTop: 12, fontSize: 12 }}>
-        💡 ภาษีคิดจาก<b>ใบเสร็จ/ใบกำกับภาษี</b>ที่ยังไม่ถูกยกเลิก ตามวันที่ในใบเสร็จ (วันเกิดภาษีตามบัญชีไทย) · VAT ขาย = ภาษีที่ต้องนำส่งสรรพากร · หัก ณ ที่จ่าย = ภาษีที่ลูกค้าหักไว้ (ใช้เป็นเครดิตคืน)
+        💡 <b>ภาษีขาย</b>คิดจากใบเสร็จ/ใบกำกับภาษีที่ยังไม่ถูกยกเลิก ตามวันที่ในใบเสร็จ · <b>ภาษีซื้อ</b>ประมาณการจากใบสั่งซื้อที่ติ๊ก VAT ตามวันที่ใบสั่งซื้อ (ตอนยื่น ภพ.30 ให้ใช้ยอดจากใบกำกับภาษีซื้อจริงของผู้ขาย) · <b>VAT นำส่ง</b> = ภาษีขาย − ภาษีซื้อ (ติดลบ = ขอคืน/ยกยอด) · หัก ณ ที่จ่าย = ภาษีที่ลูกค้าหักไว้ (เครดิตคืน)
       </p>
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
