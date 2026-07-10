@@ -55,6 +55,7 @@
     PHONE: "099-262-9090",        // เบอร์หลัก
     PHONE2: "",                   // เบอร์ที่ 2 (ไม่มีก็เว้นว่าง)
     LINE: "https://lin.ee/r42KRPY",
+    LINE_ID: "@amcair",           // LINE OA ID — ใช้เปิดแชทพร้อมข้อความคำสั่งซื้อ (เว้น "" ถ้าไม่ใช้)
     HOURS: "จันทร์–เสาร์ 08.00–17.00",
     ADDRESS: "93/97 ถนนจรัญสนิทวงศ์ แขวงบางขุนศรี เขตบางกอกน้อย กรุงเทพมหานคร 10700",
     SERVICE_AREAS: ["กรุงเทพฯ", "นนทบุรี", "ปทุมธานี", "สมุทรปราการ", "นครปฐม", "สมุทรสาคร"],
@@ -491,6 +492,12 @@ footer{background:#0b1b33}
 .ci-inst-nm{margin-top:5px;font-size:11.5px;color:var(--ink-3);line-height:1.5}
 /* ของแถม/คุณสมบัติของบริการติดตั้ง — โชว์เมื่อติ๊กซื้อพร้อมติดตั้ง */
 .ci-inst-ft{margin-top:6px;font-size:11px;color:var(--ink-2);line-height:1.7;background:var(--bg-soft);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+/* หน้าจอหลังส่งคำสั่งซื้อสำเร็จ — ปุ่มส่งรายการเข้า LINE */
+.order-ok{text-align:center;padding:34px 18px;color:var(--ink)}
+.order-ok .ok-ic{font-size:44px;margin-bottom:10px}
+.order-ok b{font-size:18px;font-weight:800;display:block;margin-bottom:8px}
+.order-ok p{font-size:13.5px;color:var(--ink-2);line-height:1.7;margin:0 0 18px}
+.order-ok .btn{justify-content:center}
 </style>
 </head>
 <body>
@@ -1095,6 +1102,18 @@ $("#prodTabs").querySelectorAll(".prod-tab").forEach((t) => t.onclick = () => {
 $("#prodSearch").oninput = (e) => { prodQuery = e.target.value; renderProducts(); };
 
 // ---------- submit order (from cart) ----------
+// ข้อความสรุปคำสั่งซื้อสำหรับส่งเข้าแชท LINE ร้าน
+function lineOrderMsg(p) {
+  let n = 0;
+  const rows = p.items.map((it) => {
+    const amt = Number(it.price) ? " = " + baht(Number(it.price) * it.qty) : " (สอบถามราคา)";
+    return it.name.startsWith("↳") ? `    ${it.name} ×${it.qty}${amt}` : `${++n}. ${it.name} ×${it.qty}${amt}`;
+  });
+  const tail = ["", "รวมโดยประมาณ: " + baht(p.total), "", "ชื่อ: " + p.name, "โทร: " + p.phone];
+  if (p.address) tail.push("ที่อยู่: " + p.address);
+  if (p.note) tail.push("หมายเหตุ: " + p.note);
+  return ["🛒 คำสั่งซื้อจากเว็บ www.amcair.net", ""].concat(rows, tail).join("\n");
+}
 async function submitOrder(e) {
   e.preventDefault();
   if (!cart.length) { toast("ตะกร้าว่าง", true); return false; }
@@ -1111,8 +1130,20 @@ async function submitOrder(e) {
   try {
     const { error } = await sb.from("web_orders").insert(payload);
     if (error) throw error;
-    cart = []; saveCart(); renderCart(); f.reset(); closeDrawer();
+    // ลิงก์เปิดแชท LINE OA พร้อมข้อความรายการ (ปุ่มให้ลูกค้ากดเอง — เปิดอัตโนมัติโดน popup blocker)
+    const lineUrl = C.LINE_ID
+      ? "https://line.me/R/oaMessage/" + encodeURIComponent(C.LINE_ID) + "/?" + encodeURIComponent(lineOrderMsg(payload))
+      : (C.LINE || "");
+    cart = []; saveCart(); renderCart(); f.reset();
     toast("ส่งคำสั่งซื้อแล้ว ✓ ทีมงานจะติดต่อกลับโดยเร็ว");
+    if (lineUrl) {
+      $("#cartBody").innerHTML = `<div class="order-ok">
+        <div class="ok-ic">✅</div>
+        <b>ส่งคำสั่งซื้อเรียบร้อย</b>
+        <p>ทีมงานจะติดต่อกลับโดยเร็ว — อยากคุยกับร้านทันที กดส่งรายการนี้เข้า LINE ได้เลย</p>
+        <a class="btn btn-primary" target="_blank" rel="noreferrer" href="${lineUrl.replace(/"/g, "&quot;")}">📲 ส่งรายการเข้า LINE ${C.LINE_ID || ""}</a>
+      </div>`;
+    } else closeDrawer();
   } catch (err) { toast("ส่งไม่สำเร็จ ลองใหม่หรือโทรหาเรา", true); }
   btn.disabled = false; btn.textContent = "ส่งคำสั่งซื้อ";
   return false;
