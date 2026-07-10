@@ -432,7 +432,7 @@ const _round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 export async function listStockCounts() {
   const [scRes, itemRes, profRes] = await Promise.all([
     supabase.from("stock_counts").select("*").order("created_at", { ascending: false }),
-    supabase.from("stock_count_items").select("count_id,counted_qty,diff"),
+    _fetchAll((f, t) => supabase.from("stock_count_items").select("count_id,counted_qty,diff", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("profiles").select("id,name,email"),
   ]);
   if (scRes.error) throw scRes.error;
@@ -473,8 +473,8 @@ export async function getStockCount(id) {
   if (error) throw error; return data;
 }
 export async function getStockCountItems(id) {
-  const { data, error } = await supabase.from("stock_count_items").select("*").eq("count_id", id);
-  if (error) throw error; return data || [];
+  // รอบนับทั้งคลังมีเกิน 1,000 รายการ — ต้องอ่านเป็นช่วง ไม่งั้นรายการท้าย ๆ หายจากหน้าจอ
+  return _fetchAll((f, t) => supabase.from("stock_count_items").select("*", { count: "exact" }).eq("count_id", id).order("id").range(f, t));
 }
 // save typed "counted" quantities on a draft (null = not counted yet)
 export async function saveStockCountCounts(id, counts) {
@@ -494,8 +494,8 @@ export async function applyStockCount(id) {
   const { data: sc, error: e0 } = await supabase.from("stock_counts").select("id,count_no,status").eq("id", id).single();
   if (e0) throw e0;
   if (sc.status === "applied") throw new Error("รอบนี้อัพเดทสต๊อกไปแล้ว");
-  const { data: items, error: e1 } = await supabase.from("stock_count_items").select("id,material_code,counted_qty,unit_cost").eq("count_id", id);
-  if (e1) throw e1;
+  // อ่านเป็นช่วงให้ครบทุกรายการ — เพดาน 1,000 แถวเคยทำให้ปรับยอดได้ไม่ครบรอบ
+  const items = await _fetchAll((f, t) => supabase.from("stock_count_items").select("id,material_code,counted_qty,unit_cost", { count: "exact" }).eq("count_id", id).order("id").range(f, t));
   const counted = (items || []).filter((it) => it.counted_qty != null);
   if (!counted.length) throw new Error("ยังไม่มีรายการที่นับ — กรอกยอดนับก่อน");
   const codes = counted.map((it) => it.material_code);
