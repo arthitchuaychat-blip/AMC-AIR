@@ -43,7 +43,7 @@ export default function HR({ role }) {
       {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "leaves" && <LeavesTab staff={staff} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "advances" && <AdvancesTab canManage={canManage} flash={flash} />}
-      {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
+      {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "staff" && <StaffTab staff={staff} settings={settings} holidays={holidays} onReload={loadBase} flash={flash} />}
@@ -431,7 +431,7 @@ function AdvanceEditModal({ adv, onClose, onSaved, flash }) {
 }
 
 // ---------- REPORT ----------
-function ReportTab({ staff, settings, holSet, flash }) {
+function ReportTab({ staff, settings, holSet, canManage, flash }) {
   const now = new Date();
   const [ym, setYm] = React.useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [rows, setRows] = React.useState(null);
@@ -528,12 +528,14 @@ function ReportTab({ staff, settings, holSet, flash }) {
         </div>
       )}
 
-      {detail && <PersonDetail row={detail} days={personDays(detail.p)} onClose={() => setDetail(null)} />}
+      {detail && <PersonDetail row={(rows || []).find((r) => r.p.id === detail.p.id) || detail} days={personDays(detail.p)}
+        canManage={canManage} flash={flash} onChanged={load} onClose={() => setDetail(null)} />}
     </div>
   );
 }
 
-function PersonDetail({ row, days, onClose }) {
+function PersonDetail({ row, days, onClose, canManage, flash, onChanged }) {
+  const [editDay, setEditDay] = React.useState(null);   // แก้เวลาเข้า-ออกย้อนหลังของวันนั้น
   const KIND = {
     present: { t: "มา", c: "b-green" }, late: { t: "มาสาย", c: "b-amber" },
     absent: { t: "ขาด", c: "b-red" }, leave: { t: "ลา", c: "b-blue" },
@@ -564,10 +566,13 @@ function PersonDetail({ row, days, onClose }) {
                     : "—"}
                 </span>
                 <span className={"job-badge " + b.c}>{d.kind === "leave" ? leaveLabel(d.leaveType) : b.t}</span>
+                {canManage && <button className="btn-ghost sm" title="แก้เวลาเข้า-ออกย้อนหลัง" onClick={() => setEditDay(d)}><UIcon name="edit" size={13} /></button>}
               </div>
             ); })}
           </div>
         </div>
+        {editDay && <AttEditModal day={editDay.k} row={{ p: row.p, a: editDay.a }} flash={flash}
+          onClose={() => setEditDay(null)} onSaved={() => { setEditDay(null); onChanged && onChanged(); }} />}
       </div>
     </div>
   );
