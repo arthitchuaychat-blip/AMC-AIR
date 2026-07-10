@@ -492,6 +492,12 @@ footer{background:#0b1b33}
 .ci-inst-nm{margin-top:5px;font-size:11.5px;color:var(--ink-3);line-height:1.5}
 /* ของแถม/คุณสมบัติของบริการติดตั้ง — โชว์เมื่อติ๊กซื้อพร้อมติดตั้ง */
 .ci-inst-ft{margin-top:6px;font-size:11px;color:var(--ink-2);line-height:1.7;background:var(--bg-soft);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+/* ช่องหมุดโลเคชั่น + ปุ่มใช้ตำแหน่งปัจจุบัน */
+.loc-row{display:flex;gap:8px}
+.loc-row input{flex:1;min-width:0}
+.loc-btn{flex:none;width:44px;border:1.5px solid var(--line);background:var(--bg-soft);border-radius:10px;font-size:17px;cursor:pointer;transition:.15s}
+.loc-btn:hover{border-color:var(--primary)}
+.loc-btn:disabled{opacity:.6;cursor:wait}
 /* หน้าจอหลังส่งคำสั่งซื้อสำเร็จ — ปุ่มส่งรายการเข้า LINE */
 .order-ok{text-align:center;padding:34px 18px;color:var(--ink)}
 .order-ok .ok-ic{font-size:44px;margin-bottom:10px}
@@ -827,6 +833,11 @@ footer{background:#0b1b33}
       <label>ชื่อ-สกุล *</label><input name="name" required placeholder="ชื่อของคุณ" />
       <label>เบอร์โทร *</label><input name="phone" required placeholder="0xx-xxx-xxxx" />
       <label>ที่อยู่จัดส่ง/ติดตั้ง</label><input name="address" placeholder="ที่อยู่" />
+      <label>หมุดโลเคชั่น · Google Maps (ไม่บังคับ)</label>
+      <div class="loc-row">
+        <input name="mapUrl" inputmode="url" placeholder="วางลิงก์แผนที่ หรือกด 📍 ใช้ตำแหน่งปัจจุบัน" />
+        <button type="button" class="loc-btn" id="locBtn" title="ใช้ตำแหน่งปัจจุบัน">📍</button>
+      </div>
       <label>หมายเหตุ</label><textarea name="note" rows="2" placeholder="รายละเอียดเพิ่มเติม"></textarea>
       <button class="btn btn-primary" type="submit" style="width:100%;margin-top:14px;justify-content:center">ส่งคำสั่งซื้อ</button>
     </form>
@@ -1118,7 +1129,10 @@ async function submitOrder(e) {
   e.preventDefault();
   if (!cart.length) { toast("ตะกร้าว่าง", true); return false; }
   const f = e.target;
-  const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), note: f.note.value.trim(),
+  // หมุดโลเคชั่น (ไม่บังคับ) — เก็บต่อท้ายหมายเหตุ ขึ้นต้น 📍 ให้หลังบ้านเห็น/ก๊อปลิงก์ได้เลย
+  const mapUrl = (f.mapUrl.value || "").trim();
+  const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(),
+    note: [f.note.value.trim(), mapUrl ? "📍 หมุด: " + mapUrl : ""].filter(Boolean).join("\n"),
     // แตกค่าติดตั้งที่ติ๊กไว้เป็นรายการของตัวเอง (จำนวนตามแอร์) — หลังบ้านเห็นเป็นบรรทัด "↳ ติดตั้ง…" ต่อท้ายแอร์ตัวนั้น
     items: cart.flatMap((x) => {
       const rows = [{ code: x.code, name: x.name, qty: x.qty, price: x.price }];
@@ -1388,6 +1402,17 @@ route();
         }
       }, 80);
     });
+  });
+  // ปุ่ม 📍 ในฟอร์มสั่งซื้อ — ดึงตำแหน่งปัจจุบันเป็นลิงก์ Google Maps (ลูกค้าต้องกดอนุญาต)
+  $("locBtn")?.addEventListener("click", () => {
+    const btn = $("locBtn"), inp = document.querySelector('#orderForm input[name="mapUrl"]');
+    if (!navigator.geolocation) { toast("เบราว์เซอร์นี้ไม่รองรับ — วางลิงก์แผนที่แทนได้", true); return; }
+    btn.disabled = true; btn.textContent = "⏳";
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { inp.value = "https://www.google.com/maps?q=" + pos.coords.latitude.toFixed(6) + "," + pos.coords.longitude.toFixed(6); btn.disabled = false; btn.textContent = "📍"; },
+      () => { btn.disabled = false; btn.textContent = "📍"; toast("ไม่ได้รับอนุญาตตำแหน่ง — วางลิงก์แผนที่แทนได้", true); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   });
   // ปุ่มโทรใน hero — ใช้เบอร์เดียวกับปุ่มลอย (ตั้งค่าจากหลังบ้าน)
   $("heroCall")?.addEventListener("click", (e) => {
