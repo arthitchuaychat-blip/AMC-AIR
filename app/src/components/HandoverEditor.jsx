@@ -34,7 +34,8 @@ function MachineHead({ m = {}, onSet }) {
 export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
   const [h, setH] = React.useState(initial);
   const [busy, setBusy] = React.useState(false);
-  const [addOpen, setAddOpen] = React.useState(false);
+  // ใบใหม่ยังไม่มีแบบฟอร์ม → เด้งตัวเลือกแบบฟอร์ม (ติดตั้ง/ล้าง/ซ่อม/PM) ให้เลือกก่อนเลย
+  const [addOpen, setAddOpen] = React.useState(!(initial.forms && initial.forms.length));
   // ขนาด BTU อ้างอิงจากสินค้าแอร์จริงในแคตตาล็อก (โหลดไม่ได้ → ใช้ชุดมาตรฐาน)
   const [btuList, setBtuList] = React.useState(BTU_SIZES);
   React.useEffect(() => {

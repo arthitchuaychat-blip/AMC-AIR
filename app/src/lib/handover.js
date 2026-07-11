@@ -327,8 +327,6 @@ export function blankForm(kind) {
 export function blankHandover(jo) {
   const wt = jo && JOBTYPE_TO_WORK[jo.job_type] ? [JOBTYPE_TO_WORK[jo.job_type]] : [];
   const schedAt = jo && ((jo.visits && jo.visits.length && jo.visits[0].scheduled_at) || jo.scheduled_at);
-  // แบบฟอร์มตั้งต้นตามประเภทงานของใบงาน (แก้/เพิ่มเองได้)
-  const kind0 = jo?.job_type === "install" ? "inst" : jo?.job_type === "maintenance" ? "wash" : jo?.job_type === "repair" ? "fix" : "wash";
   return {
     job_no: jo?.job_no || null,
     customer_id: jo?.customer_id || null,
@@ -341,7 +339,7 @@ export function blankHandover(jo) {
     work_types: wt,
     detail: jo?.details || "",
     fix_note: "",
-    forms: [blankForm(kind0)],
+    forms: [],   // ไม่ใส่ฟอร์มตั้งต้น — editor เด้งตัวเลือกแบบฟอร์มให้เลือกเองก่อน
     tech_sign_url: "", tech_name: "",
     cust_sign_url: "", cust_name: "",
     status: "draft",
