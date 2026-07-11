@@ -591,6 +591,10 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                     title={jo.quote_no ? "สร้างใบเตรียมวัสดุของงานนี้ — ดึงรายการจากใบเสนอราคาที่ผูกให้อัตโนมัติ" : "สร้างใบเตรียมวัสดุของงานนี้ (งานไม่มีใบเสนอราคา — เพิ่มรายการเอง)"}
                     onClick={() => onCreatePrep(jo)}>📋 เตรียมวัสดุ</button>}
                 {onMovement && can(role, "movements", "edit") && jo.status !== "cancelled" &&
+                  <button className="btn-ghost sm" style={{ color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }}
+                    title="เบิกวัสดุเพิ่มสำหรับงานนี้ — เปิดหน้าความเคลื่อนไหวสินค้า โหมดเบิก ผูกเลขงาน+ทีมให้อัตโนมัติ"
+                    onClick={() => onMovement(jo, "withdraw")}>📦 เบิกวัสดุ</button>}
+                {onMovement && can(role, "movements", "edit") && jo.status !== "cancelled" &&
                   <button className="btn-ghost sm" style={{ color: "#16a34a" }} title="คืนวัสดุที่เบิกไปสำหรับงานนี้กลับเข้าคลัง" onClick={() => onMovement(jo, "return")}>↩️ คืนวัสดุ</button>}
                 {onMovement && can(role, "movements", "edit") && !["tech", "lead_tech"].includes(role) && jo.status !== "cancelled" &&
                   <button className="btn-ghost sm" style={{ color: "#dc2626" }} title="บันทึกวัสดุตัดเสีย/เสียหายของงานนี้" onClick={() => onMovement(jo, "damage")}>⚠️ ตัดเสีย</button>}
