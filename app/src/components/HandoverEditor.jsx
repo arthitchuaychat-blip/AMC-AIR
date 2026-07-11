@@ -3,7 +3,9 @@ import { UIcon } from "../icons";
 import { confirmDialog } from "./ConfirmDialog";
 import SignaturePad from "./SignaturePad";
 import { saveHandover, uploadSignatureDataUrl, uploadMaterialPhoto, listMaterialsLite } from "../lib/api";
-import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, AC_BRANDS, BTU_SIZES, FORM_KINDS, ADD_KINDS, blankForm, ACCEPT_GROUPS, ACCEPT_ROWS, ACCEPT_OVERALL, blankAcceptMachine } from "../lib/handover";
+import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, AC_BRANDS, BTU_SIZES, FORM_KINDS, ADD_KINDS, blankForm, ACCEPT_GROUPS, ACCEPT_ROWS, ACCEPT_OVERALL, blankAcceptMachine,
+  REFRIGERANTS, INST_WORKKINDS, INST_SECTIONS, INST_MEAS, WASH_WORKKINDS, WASH_SECTIONS, WASH_MEAS,
+  FIX_SYMPTOMS, FIX_DIAG, FIX_REPAIR, FIX_MEAS, FIX_RESULTS, PMC_FREQS, PMC_ACTS, PMC_REF, blankPmcMachine } from "../lib/handover";
 
 // หัวข้อมูลแอร์มาตรฐาน — ทุกแบบฟอร์มใช้ชุดเดียวกัน: รหัส / ประเภท (dropdown) / ยี่ห้อ (datalist) /
 // รุ่น / BTU (datalist จากแคตตาล็อก) / อาคาร / ชั้น / ห้อง / Serial · ป้าย 2 ภาษา
@@ -154,10 +156,78 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
   );
 }
 
+// ── ตารางเช็คลิสต์ตามเอกสาร: หมวด → [รายการ | เกณฑ์ | ผ่าน | ไม่ผ่าน] · values[si][ri] = 'pass'|'fail'|null
+function ChecksTable({ sections, values, onChange, passLabel = "ผ่าน · Pass", failLabel = "ไม่ผ่าน · Fail" }) {
+  const setV = (si, ri, v) => onChange(values.map((sec, i) => (i === si ? sec.map((x, j) => (j === ri ? (x === v ? null : v) : x)) : sec)));
+  return sections.map(([title, rows], si) => (
+    <React.Fragment key={si}>
+      <div style={{ fontWeight: 700, fontSize: 12.5, margin: "8px 0 2px", color: "#1d4ed8" }}>{title}</div>
+      <table className="he-tbl">
+        <thead><tr><th className="n">#</th><th>รายการตรวจสอบ / ขั้นตอน · Checklist item</th><th style={{ width: 120 }}>เกณฑ์ · Standard</th><th className="pmh">{passLabel}</th><th className="pmh">{failLabel}</th></tr></thead>
+        <tbody>
+          {rows.map(([label, std], ri) => { const v = (values[si] || [])[ri]; return (
+            <tr key={ri}>
+              <td className="n">{ri + 1}</td>
+              <td className="lbl">{label}</td>
+              <td className="lbl" style={{ fontSize: 11, color: "var(--ink-3)" }}>{std}</td>
+              <td className="pmc"><button type="button" className={"he-pm" + (v === "pass" ? " on" : "")} onClick={() => setV(si, ri, "pass")}>✓</button></td>
+              <td className="pmc"><button type="button" className={"he-pm" + (v === "fail" ? " no" : "")} onClick={() => setV(si, ri, "fail")}>✕</button></td>
+            </tr>
+          ); })}
+        </tbody>
+      </table>
+    </React.Fragment>
+  ));
+}
+
+// ── ตารางค่าที่วัด: [ค่าที่วัด | หน่วย | ค่ามาตรฐาน | ค่าที่วัดได้ (เดี่ยว หรือ ก่อน/หลัง)]
+function MeasTable({ title, rows, values, onChange, beforeAfter, lb = "ก่อน · Before", la = "หลัง · After" }) {
+  return (
+    <>
+      <div style={{ fontWeight: 700, fontSize: 12.5, margin: "8px 0 2px", color: "#1d4ed8" }}>{title}</div>
+      <table className="he-tbl">
+        <thead><tr><th>ค่าที่วัด · Measurement</th><th style={{ width: 46 }}>หน่วย · Unit</th><th style={{ width: 130 }}>ค่ามาตรฐาน · Standard</th>
+          {beforeAfter ? <><th style={{ width: 80 }}>{lb}</th><th style={{ width: 80 }}>{la}</th></> : <th style={{ width: 110 }}>ค่าที่วัดได้ · Measured</th>}</tr></thead>
+        <tbody>
+          {rows.map(([label, unit, std], ri) => { const v = values[ri]; return (
+            <tr key={ri}>
+              <td className="lbl">{label}</td>
+              <td className="lbl" style={{ textAlign: "center" }}>{unit}</td>
+              <td className="lbl" style={{ fontSize: 11, color: "var(--ink-3)" }}>{std}</td>
+              {beforeAfter ? <>
+                <td><input className="inp sm" value={(v || {}).b || ""} onChange={(e) => onChange(values.map((x, j) => j === ri ? { ...x, b: e.target.value } : x))} /></td>
+                <td><input className="inp sm" value={(v || {}).a || ""} onChange={(e) => onChange(values.map((x, j) => j === ri ? { ...x, a: e.target.value } : x))} /></td>
+              </> : <td><input className="inp sm" value={v || ""} onChange={(e) => onChange(values.map((x, j) => j === ri ? e.target.value : x))} /></td>}
+            </tr>
+          ); })}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+// ── ชิปเลือกค่าเดียว (ประเภทงานย่อย / น้ำยา / ผลการซ่อม ฯลฯ)
+function PickChips({ label, options, value, onChange }) {
+  return (
+    <div style={{ margin: "6px 0" }}>
+      <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 3 }}>{label}</div>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+        {options.map((o) => { const v = Array.isArray(o) ? o[0] : o, l = Array.isArray(o) ? o[1] : o; return (
+          <button key={v} type="button" className={"he-chip" + (value === v ? " on" : "")} onClick={() => onChange(value === v ? "" : v)}>{l}</button>
+        ); })}
+      </div>
+    </div>
+  );
+}
+
 // one sub-form card (perf / pm / accept) with its machine fields + rows + note
 function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
   const meta = FORM_KINDS.find((k) => k.kind === f.kind) || FORM_KINDS[0];
   if (f.kind === "accept") return <AcceptCard f={f} idx={idx} meta={meta} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
+  if (f.kind === "inst") return <InstCard f={f} idx={idx} meta={meta} onMachine={onMachine} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
+  if (f.kind === "wash") return <WashCard f={f} idx={idx} meta={meta} onMachine={onMachine} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
+  if (f.kind === "fix") return <FixCard f={f} idx={idx} meta={meta} onMachine={onMachine} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
+  if (f.kind === "pmc") return <PmcCard f={f} idx={idx} meta={meta} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
   const m = f.machine || {};
   return (
     <div className="he-form">
@@ -358,6 +428,178 @@ function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove }) {
 
       <input className="inp sm" placeholder="หมายเหตุของแบบฟอร์มนี้ · Note" value={f.note || ""} onChange={(e) => onNote(e.target.value)} style={{ marginTop: 6 }} />
     </div>
+  );
+}
+
+// เปลือกการ์ดฟอร์มใหม่ — หัว badge + ปุ่มลบ + หมายเหตุท้ายฟอร์ม ใช้ร่วม 4 ชนิด
+function NewFormShell({ meta, idx, onRemove, onNote, note, children }) {
+  return (
+    <div className="he-form">
+      <div className="he-form-h">
+        <span className="he-form-badge">{meta.icon} {meta.label}</span>
+        <span className="he-form-no">#{idx + 1}</span>
+        <button type="button" className="he-form-x" onClick={onRemove}><UIcon name="trash" size={14} /></button>
+      </div>
+      {children}
+      <input className="inp sm" placeholder="หมายเหตุของแบบฟอร์มนี้ · Note" value={note || ""} onChange={(e) => onNote(e.target.value)} style={{ marginTop: 6 }} />
+    </div>
+  );
+}
+
+// ── เช็คลิสต์ติดตั้ง (AMC-IN) ──
+function InstCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
+  return (
+    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onNote={onNote} note={f.note}>
+      <MachineHead m={f.machine || {}} onSet={(k, v) => onMachine(idx, k, v)} />
+      <div className="he-machine">
+        <input className="inp sm" placeholder="S/N คอยล์ร้อน · Outdoor S/N" value={f.serial_out || ""} onChange={(e) => onPatch({ serial_out: e.target.value })} />
+        <input className="inp sm" placeholder="ขนาดท่อ (หุน) เล็ก/ใหญ่ · Pipe size" value={f.pipe_size || ""} onChange={(e) => onPatch({ pipe_size: e.target.value })} />
+        <input className="inp sm" placeholder="ความยาวท่อที่เดิน (ม.) · Pipe length (m)" value={f.pipe_len || ""} onChange={(e) => onPatch({ pipe_len: e.target.value })} />
+      </div>
+      <PickChips label="ประเภทงาน · Job type" options={INST_WORKKINDS} value={f.work_kind || ""} onChange={(v) => onPatch({ work_kind: v })} />
+      <PickChips label="น้ำยา · Refrigerant" options={REFRIGERANTS} value={f.refrigerant || ""} onChange={(v) => onPatch({ refrigerant: v })} />
+      <ChecksTable sections={INST_SECTIONS} values={f.checks || []} onChange={(v) => onPatch({ checks: v })} />
+      <MeasTable title="ค่าที่ต้องวัดและบันทึก (รับประกันคุณภาพติดตั้ง) · Measurements" rows={INST_MEAS} values={f.meas || []} onChange={(v) => onPatch({ meas: v })} />
+      <div className="he-grid2" style={{ marginTop: 6 }}>
+        <label className="he-f"><span>รับประกันงานติดตั้ง · Installation warranty</span><input className="inp sm" value={f.warranty_install || ""} onChange={(e) => onPatch({ warranty_install: e.target.value })} placeholder="เช่น 1 ปี · e.g. 1 year" /></label>
+        <label className="he-f"><span>รับประกันคอมเพรสเซอร์ · Compressor warranty</span><input className="inp sm" value={f.warranty_comp || ""} onChange={(e) => onPatch({ warranty_comp: e.target.value })} placeholder="เช่น 5 ปี · e.g. 5 years" /></label>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <PhotoPicker label="รูปงานติดตั้ง/ส่งมอบ · Installation photos (ไม่จำกัด)" urls={f.photos || []} onChange={(urls) => onPatch({ photos: urls })} />
+      </div>
+    </NewFormShell>
+  );
+}
+
+// ── เช็คลิสต์ล้าง (AMC-CL) ──
+function WashCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
+  return (
+    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onNote={onNote} note={f.note}>
+      <MachineHead m={f.machine || {}} onSet={(k, v) => onMachine(idx, k, v)} />
+      <div className="he-machine">
+        <input className="inp sm" placeholder="อายุการใช้งานโดยประมาณ · Approx. age" value={f.age || ""} onChange={(e) => onPatch({ age: e.target.value })} />
+      </div>
+      <PickChips label="ประเภทงาน · Job type" options={WASH_WORKKINDS} value={f.work_kind || ""} onChange={(v) => onPatch({ work_kind: v })} />
+      <PickChips label="น้ำยา · Refrigerant" options={REFRIGERANTS} value={f.refrigerant || ""} onChange={(v) => onPatch({ refrigerant: v })} />
+      <ChecksTable sections={WASH_SECTIONS} values={f.checks || []} onChange={(v) => onPatch({ checks: v })} />
+      <MeasTable title="ค่าที่วัด ก่อน–หลังล้าง (พิสูจน์ผลงาน) · Measurements before–after" rows={WASH_MEAS} values={f.meas || []} onChange={(v) => onPatch({ meas: v })} beforeAfter lb="ก่อนล้าง · Before" la="หลังล้าง · After" />
+      <label className="he-f" style={{ marginTop: 6 }}><span>นัดล้างครั้งถัดไป (แนะนำทุก 4–6 เดือน) · Next cleaning date</span>
+        <input type="date" className="inp sm" style={{ maxWidth: 180 }} value={f.next_date || ""} onChange={(e) => onPatch({ next_date: e.target.value })} /></label>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
+        <PhotoPicker label="รูปก่อนล้าง · Before (สูงสุด 4)" urls={f.photosBefore || []} max={4} onChange={(urls) => onPatch({ photosBefore: urls })} />
+        <PhotoPicker label="รูปหลังล้าง · After (สูงสุด 4)" urls={f.photosAfter || []} max={4} onChange={(urls) => onPatch({ photosAfter: urls })} />
+      </div>
+    </NewFormShell>
+  );
+}
+
+// ── รายงานซ่อม (AMC-RP) ──
+function FixCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
+  const parts = f.parts || [];
+  const setPart = (pi, k, v) => onPatch({ parts: parts.map((p, j) => (j === pi ? { ...p, [k]: v } : p)) });
+  const partTotal = parts.reduce((a, p) => a + (Number(p.qty) || 0) * (Number(p.price) || 0), 0);
+  const toggleSym = (si) => onPatch({ symptoms: (f.symptoms || FIX_SYMPTOMS.map(() => false)).map((v, j) => (j === si ? !v : v)) });
+  return (
+    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onNote={onNote} note={f.note}>
+      <MachineHead m={f.machine || {}} onSet={(k, v) => onMachine(idx, k, v)} />
+      <PickChips label="น้ำยา · Refrigerant" options={REFRIGERANTS} value={f.refrigerant || ""} onChange={(v) => onPatch({ refrigerant: v })} />
+      <PickChips label="งานในประกัน · Under warranty" options={[["yes", "ใช่ · Yes"], ["no", "ไม่ใช่ · No"]]} value={f.in_warranty || ""} onChange={(v) => onPatch({ in_warranty: v })} />
+      <div style={{ fontWeight: 700, fontSize: 12, margin: "6px 0 3px" }}>อาการที่ลูกค้าแจ้ง / ที่ตรวจพบ · Reported symptoms</div>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+        {FIX_SYMPTOMS.map((s, si) => (
+          <button key={si} type="button" className={"he-chip" + ((f.symptoms || [])[si] ? " on" : "")} onClick={() => toggleSym(si)}>{s}</button>
+        ))}
+      </div>
+      <div className="he-grid2" style={{ marginTop: 6 }}>
+        <label className="he-f"><span>อื่น ๆ · Other</span><input className="inp sm" value={f.symptom_other || ""} onChange={(e) => onPatch({ symptom_other: e.target.value })} /></label>
+      </div>
+      <label className="he-f he-f-wide"><span>รายละเอียดอาการ / สิ่งที่ตรวจพบ · Symptom details / findings</span>
+        <textarea className="inp" rows={2} value={f.symptom_detail || ""} onChange={(e) => onPatch({ symptom_detail: e.target.value })} /></label>
+      <ChecksTable sections={[["การวิเคราะห์และตรวจวินิจฉัย (Diagnosis)", FIX_DIAG]]} values={[f.diag || []]} onChange={(v) => onPatch({ diag: v[0] })} />
+      <label className="he-f he-f-wide"><span>สาเหตุของปัญหา (Root cause)</span>
+        <textarea className="inp" rows={2} value={f.rootcause || ""} onChange={(e) => onPatch({ rootcause: e.target.value })} /></label>
+      <ChecksTable sections={[["การซ่อม · Repair work", FIX_REPAIR]]} values={[f.rep || []]} onChange={(v) => onPatch({ rep: v[0] })} />
+      <div style={{ fontWeight: 700, fontSize: 12.5, margin: "8px 0 2px", color: "#1d4ed8" }}>รายการอะไหล่ / วัสดุที่ใช้ · Parts / materials used
+        <button type="button" className="btn-ghost sm" style={{ marginLeft: 8 }} onClick={() => onPatch({ parts: [...parts, { name: "", qty: "", price: "" }] })}>＋ เพิ่มแถว · Add</button>
+      </div>
+      {parts.map((p, pi) => (
+        <div key={pi} style={{ display: "flex", gap: 6, marginBottom: 4, alignItems: "center" }}>
+          <span style={{ width: 18, textAlign: "center", fontWeight: 700, color: "var(--ink-3)", flex: "none" }}>{pi + 1}</span>
+          <input className="inp sm" style={{ flex: "1 1 200px" }} placeholder="รายการอะไหล่/วัสดุ · Part / material" value={p.name || ""} onChange={(e) => setPart(pi, "name", e.target.value)} />
+          <input className="inp sm" style={{ flex: "0 1 70px" }} placeholder="จำนวน · Qty" value={p.qty || ""} onChange={(e) => setPart(pi, "qty", e.target.value)} />
+          <input className="inp sm" style={{ flex: "0 1 100px" }} placeholder="ราคา/หน่วย · Price" value={p.price || ""} onChange={(e) => setPart(pi, "price", e.target.value)} />
+          <span style={{ flex: "0 0 80px", fontSize: 12, fontWeight: 700, textAlign: "right" }}>{((Number(p.qty) || 0) * (Number(p.price) || 0)).toLocaleString("en-US")}</span>
+          {parts.length > 1 && <button type="button" className="he-form-x" onClick={() => onPatch({ parts: parts.filter((_, j) => j !== pi) })}><UIcon name="x" size={13} /></button>}
+        </div>
+      ))}
+      {partTotal > 0 && <div style={{ textAlign: "right", fontWeight: 800, fontSize: 12.5 }}>รวมค่าอะไหล่/วัสดุ · Parts total: ฿{partTotal.toLocaleString("en-US")}</div>}
+      <MeasTable title="ค่าที่วัดหลังซ่อม (ยืนยันเครื่องกลับมาปกติ) · Post-repair measurements" rows={FIX_MEAS} values={f.meas || []} onChange={(v) => onPatch({ meas: v })} />
+      <PickChips label="ผลการซ่อม · Repair result" options={FIX_RESULTS} value={f.result || ""} onChange={(v) => onPatch({ result: v })} />
+      <div className="he-grid2">
+        <label className="he-f"><span>รับประกันงานซ่อม/อะไหล่ · Repair/parts warranty</span><input className="inp sm" value={f.warranty || ""} onChange={(e) => onPatch({ warranty: e.target.value })} /></label>
+        <label className="he-f"><span>นัดติดตามผล · Follow-up</span><input className="inp sm" value={f.follow || ""} onChange={(e) => onPatch({ follow: e.target.value })} /></label>
+      </div>
+      <label className="he-f he-f-wide"><span>คำแนะนำเพิ่มเติมสำหรับลูกค้า · Advice for customer</span>
+        <textarea className="inp" rows={2} value={f.advice || ""} onChange={(e) => onPatch({ advice: e.target.value })} /></label>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
+        <PhotoPicker label="รูปก่อนซ่อม · Before (สูงสุด 4)" urls={f.photosBefore || []} max={4} onChange={(urls) => onPatch({ photosBefore: urls })} />
+        <PhotoPicker label="รูปหลังซ่อม · After (สูงสุด 4)" urls={f.photosAfter || []} max={4} onChange={(urls) => onPatch({ photosAfter: urls })} />
+      </div>
+    </NewFormShell>
+  );
+}
+
+// ── บันทึก PM ตามสัญญา (AMC-PM) — หลายเครื่องใน 1 ฟอร์ม ──
+function PmcCard({ f, idx, meta, onPatch, onNote, onRemove }) {
+  const machines = f.machines || [];
+  const setM = (mi, k, v) => onPatch({ machines: machines.map((m, j) => (j === mi ? { ...m, [k]: v } : m)) });
+  return (
+    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onNote={onNote} note={f.note}>
+      <div className="he-machine">
+        <input className="inp sm" placeholder="เลขที่สัญญา · Contract no." value={f.contract_no || ""} onChange={(e) => onPatch({ contract_no: e.target.value })} />
+        <input className="inp sm" placeholder="รอบครั้งที่ · Visit no." value={f.round || ""} onChange={(e) => onPatch({ round: e.target.value })} />
+        <input className="inp sm" placeholder="จากทั้งหมด (ครั้ง) · Of total" value={f.round_of || ""} onChange={(e) => onPatch({ round_of: e.target.value })} />
+        <input className="inp sm" placeholder="เวลาเข้า–ออก · Time in–out" value={f.time_in_out || ""} onChange={(e) => onPatch({ time_in_out: e.target.value })} />
+      </div>
+      <PickChips label="ความถี่ตามสัญญา · Contract frequency" options={PMC_FREQS} value={f.freq || ""} onChange={(v) => onPatch({ freq: v })} />
+      <div style={{ fontWeight: 700, fontSize: 12.5, margin: "8px 0 2px", color: "#1d4ed8" }}>ทะเบียนเครื่องและค่าที่วัด (บันทึกทุกเครื่อง) · Unit registry & readings
+        <button type="button" className="btn-ghost sm" style={{ marginLeft: 8 }} onClick={() => onPatch({ machines: [...machines, blankPmcMachine()] })}>＋ เพิ่มเครื่อง · Add unit</button>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table className="he-tbl" style={{ minWidth: 620 }}>
+          <thead><tr><th className="n">#</th><th>จุดติดตั้ง · Location</th><th>รหัส · Code</th><th>ยี่ห้อ · Brand</th><th>BTU</th><th>ลมออก · Supply (°C)</th><th>ΔT (°C)</th><th>Amp (A)</th><th>สภาพ/หมายเหตุ · Condition</th><th /></tr></thead>
+          <tbody>
+            {machines.map((m, mi) => (
+              <tr key={mi}>
+                <td className="n">{mi + 1}</td>
+                <td><input className="inp sm" value={m.point || ""} onChange={(e) => setM(mi, "point", e.target.value)} /></td>
+                <td><input className="inp sm" style={{ width: 70 }} value={m.code || ""} onChange={(e) => setM(mi, "code", e.target.value)} /></td>
+                <td><input className="inp sm" list="ho-brand-list" style={{ width: 90 }} value={m.brand || ""} onChange={(e) => setM(mi, "brand", e.target.value)} /></td>
+                <td><input className="inp sm" list="ho-btu-list" style={{ width: 70 }} value={m.btu || ""} onChange={(e) => setM(mi, "btu", e.target.value)} /></td>
+                <td><input className="inp sm" style={{ width: 55 }} value={m.out || ""} onChange={(e) => setM(mi, "out", e.target.value)} /></td>
+                <td><input className="inp sm" style={{ width: 55 }} value={m.dt || ""} onChange={(e) => setM(mi, "dt", e.target.value)} /></td>
+                <td><input className="inp sm" style={{ width: 55 }} value={m.amp || ""} onChange={(e) => setM(mi, "amp", e.target.value)} /></td>
+                <td><input className="inp sm" value={m.note || ""} onChange={(e) => setM(mi, "note", e.target.value)} /></td>
+                <td style={{ padding: 2 }}>{machines.length > 1 && <button type="button" className="he-form-x" onClick={() => onPatch({ machines: machines.filter((_, j) => j !== mi) })}><UIcon name="x" size={13} /></button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="jo-dim" style={{ fontSize: 11, marginTop: 2 }}>{PMC_REF}</div>
+      <ChecksTable sections={[["รายการบำรุงรักษาที่ดำเนินการ (ทุกเครื่อง) · Maintenance performed", PMC_ACTS]]} values={[f.acts || []]} onChange={(v) => onPatch({ acts: v[0] })} failLabel="แก้ไข · Fixed" />
+      <label className="he-f he-f-wide" style={{ marginTop: 6 }}><span>ปัญหาที่พบ · งานที่ต้องแก้ไข · ข้อเสนอ (แจ้งลูกค้า) · Issues found / follow-up needed</span>
+        <textarea className="inp" rows={2} value={f.issues || ""} onChange={(e) => onPatch({ issues: e.target.value })} /></label>
+      <PickChips label="สรุปผลรอบนี้ · Round summary" options={[["ok", "ทุกเครื่องปกติ · All units normal"], ["fix", "มีเครื่องต้องแก้ไข · Some units need repair"]]} value={f.summary || ""} onChange={(v) => onPatch({ summary: v })} />
+      <div className="he-grid2">
+        <label className="he-f"><span>นัดเข้าบริการรอบถัดไป · Next PM visit</span>
+          <input type="date" className="inp sm" value={f.next_date || ""} onChange={(e) => onPatch({ next_date: e.target.value })} /></label>
+        <div><PickChips label="เสนอราคางานเพิ่มเติม · Extra-work quote" options={[["yes", "มี · Yes"], ["no", "ไม่มี · No"]]} value={f.extra_quote || ""} onChange={(v) => onPatch({ extra_quote: v })} /></div>
+      </div>
+      <div style={{ marginTop: 6 }}>
+        <PhotoPicker label="รูปประกอบ · Photos (ไม่จำกัด)" urls={f.photos || []} onChange={(urls) => onPatch({ photos: urls })} />
+      </div>
+    </NewFormShell>
   );
 }
 

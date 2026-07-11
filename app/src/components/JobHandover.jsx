@@ -1,6 +1,7 @@
 import React from "react";
 import { custCode, fmtDocDate } from "../lib/format";
-import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, ACCEPT_GROUPS, ACCEPT_OVERALL } from "../lib/handover";
+import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, ACCEPT_GROUPS, ACCEPT_OVERALL,
+  INST_SECTIONS, INST_MEAS, WASH_SECTIONS, WASH_MEAS, FIX_SYMPTOMS, FIX_DIAG, FIX_REPAIR, FIX_MEAS, FIX_RESULTS, PMC_ACTS, PMC_REF, FORM_KINDS } from "../lib/handover";
 
 // Printed/PDF A4 sheet of a SAVED handover (filled in by the technician). Renders the header, the
 // ticked work-types, every sub-form (perf measurement / PM checklist) with the recorded values, and
@@ -69,6 +70,49 @@ function PmForm({ f }) {
     </table>
   );
 }
+
+// ── ใบพิมพ์ชุดใหม่: เช็คลิสต์ตามหมวด (รายการ | เกณฑ์ | ผ่าน | ไม่ผ่าน) ──
+function PrintChecks({ sections, values, passLabel = "ผ่าน · Pass", failLabel = "ไม่ผ่าน · Fail" }) {
+  return sections.map(([title, rows], si) => (
+    <React.Fragment key={si}>
+      <div style={{ fontWeight: 700, fontSize: "0.92em", margin: "5px 0 2px" }}>{title}</div>
+      <table className="ho-tbl">
+        <thead><tr><th className="n">#</th><th>รายการตรวจสอบ · Checklist item</th><th style={{ width: "22%" }}>เกณฑ์ · Standard</th><th style={{ width: 52 }}>{passLabel}</th><th style={{ width: 52 }}>{failLabel}</th></tr></thead>
+        <tbody>
+          {rows.map(([label, std], ri) => { const v = (values?.[si] || [])[ri]; return (
+            <tr key={ri}><td className="n">{ri + 1}</td><td className="lbl">{label}</td>
+              <td className="lbl" style={{ fontSize: "0.85em", color: "#64748b" }}>{std}</td>
+              <td className="ck">{v === "pass" ? <b className="ho-ok">✓</b> : ""}</td>
+              <td className="ck">{v === "fail" ? <b className="ho-bad">✕</b> : ""}</td></tr>
+          ); })}
+        </tbody>
+      </table>
+    </React.Fragment>
+  ));
+}
+// ── ใบพิมพ์: ตารางค่าที่วัด (เดี่ยว หรือ ก่อน/หลัง) ──
+function PrintMeas({ title, rows, values, beforeAfter, lb = "ก่อน · Before", la = "หลัง · After" }) {
+  return (
+    <>
+      <div style={{ fontWeight: 700, fontSize: "0.92em", margin: "5px 0 2px" }}>{title}</div>
+      <table className="ho-tbl">
+        <thead><tr><th>ค่าที่วัด · Measurement</th><th style={{ width: 44 }}>หน่วย · Unit</th><th style={{ width: "24%" }}>ค่ามาตรฐาน · Standard</th>
+          {beforeAfter ? <><th style={{ width: 70 }}>{lb}</th><th style={{ width: 70 }}>{la}</th></> : <th style={{ width: 100 }}>ค่าที่วัดได้ · Measured</th>}</tr></thead>
+        <tbody>
+          {rows.map(([label, unit, std], ri) => { const v = values?.[ri]; return (
+            <tr key={ri}><td className="lbl">{label}</td><td className="lbl" style={{ textAlign: "center" }}>{unit}</td>
+              <td className="lbl" style={{ fontSize: "0.85em", color: "#64748b" }}>{std}</td>
+              {beforeAfter ? <><td className="u">{(v || {}).b || ""}</td><td className="u">{(v || {}).a || ""}</td></> : <td className="u">{v || ""}</td>}</tr>
+          ); })}
+        </tbody>
+      </table>
+    </>
+  );
+}
+const InfoLine = ({ pairs }) => {
+  const parts = pairs.filter(([, v]) => v).map(([l, v]) => `${l} ${v}`);
+  return parts.length ? <div className="ho-mline">{parts.join("  ·  ")}</div> : null;
+};
 
 // ตรวจรับงานรวม (หลายเครื่อง) — ตารางเครื่อง + เมทริกซ์ ✓/✕ รายเครื่อง + ความเรียบร้อยรวม + สรุปผล
 function AcceptForm({ f }) {
@@ -187,15 +231,78 @@ export default function JobHandover({ handover = {}, company = {} }) {
 
         {/* ── each sub-form ── */}
         {forms.map((f, i) => {
+          const meta = FORM_KINDS.find((k) => k.kind === f.kind);
           const title = f.kind === "accept" ? `ส่งมอบงานติดตั้ง · Installation Handover (ตรวจรับรวม ${f.machines?.length || 0} เครื่อง / ${f.machines?.length || 0} units)`
+            : f.kind === "pmc" ? `${meta.label} (${f.machines?.length || 0} เครื่อง / units)`
+            : ["inst", "wash", "fix"].includes(f.kind) ? `${meta.label} — เครื่องที่ ${i + 1} (Unit ${i + 1})`
             : f.kind === "clean" ? `ส่งมอบงานล้าง · Cleaning Handover — เครื่องที่ ${i + 1} (Unit ${i + 1})`
             : f.kind === "repair" ? `ส่งมอบงานซ่อม · Repair Handover — เครื่องที่ ${i + 1} (Unit ${i + 1})`
             : `${f.kind === "pm" ? "การดำเนินการงาน · งานล้าง / PM · Cleaning / PM" : "การวัดประสิทธิภาพ · Performance Test"} — เครื่องที่ ${i + 1} (Unit ${i + 1})`;
           return (
             <section className="ho-sec ho-sec-block ho-form-print" key={i}>
               <div className="ho-sec-h">{title}</div>
-              {f.kind !== "accept" && <div className="ho-form-machine"><MachineLine m={f.machine} /></div>}
-              {f.kind === "accept" ? <>
+              {f.kind !== "accept" && f.kind !== "pmc" && <div className="ho-form-machine"><MachineLine m={f.machine} /></div>}
+              {f.kind === "inst" ? <>
+                <InfoLine pairs={[["ประเภทงาน · Job:", f.work_kind], ["น้ำยา · Refrig.:", f.refrigerant], ["S/N คอยล์ร้อน · Outdoor:", f.serial_out], ["ขนาดท่อ · Pipe:", f.pipe_size], ["ความยาวท่อ · Length:", f.pipe_len && `${f.pipe_len} ม./m`]]} />
+                <PrintChecks sections={INST_SECTIONS} values={f.checks} />
+                <PrintMeas title="ค่าที่วัดและบันทึก · Measurements" rows={INST_MEAS} values={f.meas} />
+                <InfoLine pairs={[["รับประกันงานติดตั้ง · Install warranty:", f.warranty_install], ["รับประกันคอมเพรสเซอร์ · Compressor warranty:", f.warranty_comp]]} />
+                <PhotoGrid title="รูปงานติดตั้ง/ส่งมอบ · Photos" urls={f.photos} />
+              </> : f.kind === "wash" ? <>
+                <InfoLine pairs={[["ประเภทงาน · Job:", f.work_kind], ["น้ำยา · Refrig.:", f.refrigerant], ["อายุการใช้งาน · Age:", f.age]]} />
+                <PrintChecks sections={WASH_SECTIONS} values={f.checks} />
+                <PrintMeas title="ค่าที่วัด ก่อน–หลังล้าง · Measurements before–after cleaning" rows={WASH_MEAS} values={f.meas} beforeAfter lb="ก่อนล้าง · Before" la="หลังล้าง · After" />
+                {f.next_date ? <div className="ho-form-note">นัดล้างครั้งถัดไป · Next cleaning: {fmtDocDate(f.next_date)}</div> : null}
+                <PhotoGrid title="รูปก่อนล้าง · Before cleaning" urls={f.photosBefore} />
+                <PhotoGrid title="รูปหลังล้าง · After cleaning" urls={f.photosAfter} />
+              </> : f.kind === "fix" ? <>
+                <InfoLine pairs={[["น้ำยา · Refrig.:", f.refrigerant], ["งานในประกัน · Warranty job:", f.in_warranty === "yes" ? "ใช่ · Yes" : f.in_warranty === "no" ? "ไม่ใช่ · No" : ""]]} />
+                <InfoLine pairs={[["อาการ · Symptoms:", [FIX_SYMPTOMS.filter((_, si) => (f.symptoms || [])[si]).join(", "), f.symptom_other].filter(Boolean).join(", ")]]} />
+                {f.symptom_detail ? <div className="ho-form-note">รายละเอียดอาการ · Details: {f.symptom_detail}</div> : null}
+                <PrintChecks sections={[["การวิเคราะห์และตรวจวินิจฉัย (Diagnosis)", FIX_DIAG]]} values={[f.diag || []]} />
+                {f.rootcause ? <div className="ho-form-note">สาเหตุของปัญหา (Root cause): {f.rootcause}</div> : null}
+                <PrintChecks sections={[["การซ่อม · Repair work", FIX_REPAIR]]} values={[f.rep || []]} />
+                {(f.parts || []).some((p) => p.name) && (
+                  <>
+                    <div style={{ fontWeight: 700, fontSize: "0.92em", margin: "5px 0 2px" }}>รายการอะไหล่ / วัสดุที่ใช้ · Parts / materials used</div>
+                    <table className="ho-tbl">
+                      <thead><tr><th className="n">#</th><th>รายการ · Item</th><th style={{ width: 60 }}>จำนวน · Qty</th><th style={{ width: 80 }}>ราคา/หน่วย · Price</th><th style={{ width: 80 }}>รวม · Total</th></tr></thead>
+                      <tbody>
+                        {(f.parts || []).filter((p) => p.name).map((p, pi) => (
+                          <tr key={pi}><td className="n">{pi + 1}</td><td className="lbl">{p.name}</td><td className="u">{p.qty || ""}</td>
+                            <td className="u">{p.price ? Number(p.price).toLocaleString("en-US") : ""}</td>
+                            <td className="u">{((Number(p.qty) || 0) * (Number(p.price) || 0)).toLocaleString("en-US")}</td></tr>
+                        ))}
+                        <tr><td colSpan={4} style={{ textAlign: "right", fontWeight: 700, padding: "2px 8px" }}>รวมค่าอะไหล่/วัสดุ · Parts total (฿)</td>
+                          <td className="u" style={{ fontWeight: 700 }}>{(f.parts || []).reduce((a, p) => a + (Number(p.qty) || 0) * (Number(p.price) || 0), 0).toLocaleString("en-US")}</td></tr>
+                      </tbody>
+                    </table>
+                  </>
+                )}
+                <PrintMeas title="ค่าที่วัดหลังซ่อม · Post-repair measurements" rows={FIX_MEAS} values={f.meas} />
+                <InfoLine pairs={[["ผลการซ่อม · Result:", (FIX_RESULTS.find(([v]) => v === f.result) || [])[1]], ["รับประกันงานซ่อม · Warranty:", f.warranty], ["นัดติดตามผล · Follow-up:", f.follow]]} />
+                {f.advice ? <div className="ho-form-note">คำแนะนำ · Advice: {f.advice}</div> : null}
+                <PhotoGrid title="รูปก่อนซ่อม · Before repair" urls={f.photosBefore} />
+                <PhotoGrid title="รูปหลังซ่อม · After repair" urls={f.photosAfter} />
+              </> : f.kind === "pmc" ? <>
+                <InfoLine pairs={[["เลขที่สัญญา · Contract:", f.contract_no], ["รอบครั้งที่ · Visit:", f.round && `${f.round}${f.round_of ? " / " + f.round_of : ""}`], ["ความถี่ · Frequency:", f.freq], ["เวลาเข้า–ออก · Time:", f.time_in_out]]} />
+                <div style={{ fontWeight: 700, fontSize: "0.92em", margin: "5px 0 2px" }}>ทะเบียนเครื่องและค่าที่วัด · Unit registry & readings</div>
+                <table className="ho-tbl">
+                  <thead><tr><th className="n">#</th><th>จุดติดตั้ง · Location</th><th>รหัส · Code</th><th>ยี่ห้อ · Brand</th><th>BTU</th><th style={{ width: 56 }}>ลมออก (°C)</th><th style={{ width: 48 }}>ΔT (°C)</th><th style={{ width: 48 }}>Amp</th><th>สภาพ · Condition</th></tr></thead>
+                  <tbody>
+                    {(f.machines || []).map((m, mi) => (
+                      <tr key={mi}><td className="n">{mi + 1}</td><td className="lbl">{m.point || "-"}</td><td className="lbl">{m.code || "-"}</td>
+                        <td className="lbl">{m.brand || "-"}</td><td className="lbl">{m.btu || "-"}</td>
+                        <td className="u">{m.out || ""}</td><td className="u">{m.dt || ""}</td><td className="u">{m.amp || ""}</td><td className="lbl">{m.note || ""}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: "0.85em", color: "#64748b", margin: "2px 0" }}>{PMC_REF}</div>
+                <PrintChecks sections={[["รายการบำรุงรักษาที่ดำเนินการ (ทุกเครื่อง) · Maintenance performed", PMC_ACTS]]} values={[f.acts || []]} failLabel="แก้ไข · Fixed" />
+                {f.issues ? <div className="ho-form-note">ปัญหาที่พบ / ข้อเสนอ · Issues / recommendations: {f.issues}</div> : null}
+                <InfoLine pairs={[["สรุปผลรอบนี้ · Summary:", f.summary === "ok" ? "ทุกเครื่องปกติ · All units normal" : f.summary === "fix" ? "มีเครื่องต้องแก้ไข · Some units need repair" : ""], ["นัดรอบถัดไป · Next visit:", f.next_date && fmtDocDate(f.next_date)], ["เสนอราคางานเพิ่ม · Extra-work quote:", f.extra_quote === "yes" ? "มี · Yes" : f.extra_quote === "no" ? "ไม่มี · No" : ""]]} />
+                <PhotoGrid title="รูปประกอบ · Photos" urls={f.photos} />
+              </> : f.kind === "accept" ? <>
                 <AcceptForm f={f} />
                 <PhotoGrid title={`รูปส่งมอบงาน · Handover photos (${(f.photos || []).length})`} urls={f.photos} />
               </> : f.kind === "clean" ? <>
