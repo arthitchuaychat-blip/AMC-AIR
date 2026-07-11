@@ -3163,18 +3163,30 @@ export async function listQuickReplies() {
   if (error) throw error;
   return data || [];
 }
-export async function addQuickReply(text, title) {
+export async function addQuickReply(text, title, images) {
   // put new replies at the end (largest sort + 1)
   const { data } = await supabase.from("quick_replies").select("sort").order("sort", { ascending: false }).limit(1);
   const nextSort = ((data && data[0] && data[0].sort) || 0) + 1;
-  const { error } = await supabase.from("quick_replies").insert({ text: text.trim(), title: (title || "").trim() || null, sort: nextSort });
+  const row = { text: text.trim(), title: (title || "").trim() || null, sort: nextSort };
+  if (images && images.length) row.images = images;
+  let { error } = await supabase.from("quick_replies").insert(row);
+  // ยังไม่รัน migration 132 (ไม่มีคอลัมน์ images) → บันทึกเฉพาะข้อความ
+  if (error && "images" in row && (error.code === "PGRST204" || /images/.test(error.message || ""))) {
+    delete row.images;
+    ({ error } = await supabase.from("quick_replies").insert(row));
+  }
   if (error) throw error;
 }
 export async function updateQuickReply(id, fields) {
   const patch = {};
   if (fields.text != null) patch.text = String(fields.text).trim();
   if (fields.title !== undefined) patch.title = (fields.title || "").trim() || null;
-  const { error } = await supabase.from("quick_replies").update(patch).eq("id", id);
+  if (fields.images !== undefined) patch.images = fields.images || [];
+  let { error } = await supabase.from("quick_replies").update(patch).eq("id", id);
+  if (error && "images" in patch && (error.code === "PGRST204" || /images/.test(error.message || ""))) {
+    delete patch.images;
+    ({ error } = Object.keys(patch).length ? await supabase.from("quick_replies").update(patch).eq("id", id) : { error: null });
+  }
   if (error) throw error;
 }
 // persist a new order: write sort = position for each id (list is small)

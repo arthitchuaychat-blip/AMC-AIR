@@ -1990,6 +1990,15 @@ select.unit-pick:focus{outline:none;color:var(--ink)}
 .qr-del[title="แก้ไข"]{color:var(--ink-3)}
 .qr-del:hover{background:#fde8e8}
 .qr-del[title="แก้ไข"]:hover{background:var(--surface-2);color:var(--primary)}
+/* รูปแนบในข้อความตอบกลับสำเร็จรูป */
+.qr-imgrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.qr-imgrow img{width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.qr-imgchip{position:relative;display:inline-block;line-height:0}
+.qr-imgchip button{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:var(--ink);color:#fff;font-size:10px;cursor:pointer;line-height:1;padding:0}
+.qr-imgadd{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:44px;padding:0 10px;border:1.5px dashed var(--line);border-radius:8px;font-size:12px;font-weight:700;color:var(--ink-3);cursor:pointer;background:var(--surface-2)}
+.qr-imgadd:hover{border-color:var(--primary);color:var(--primary)}
+.chat-reply-bar .qr-imgrow{margin-top:5px}
+.chat-reply-bar .qr-imgrow img{width:34px;height:34px}
 /* end-of-document terms editor (shared by BOQ/quote/invoice/receipt) */
 .docterms{border:1px solid var(--line);border-radius:12px;padding:13px 14px;background:var(--surface-2);margin-top:8px}
 .docterms-head{font-size:13.5px;font-weight:700;color:var(--ink);margin-bottom:10px}

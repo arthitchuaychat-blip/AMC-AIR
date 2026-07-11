@@ -118,7 +118,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [qrManage, setQrManage] = React.useState(false);
   const [newQr, setNewQr] = React.useState("");
   const [newQrTitle, setNewQrTitle] = React.useState("");
-  const [qrEdit, setQrEdit] = React.useState(null); // { id, title, text } while editing one reply
+  const [newQrImgs, setNewQrImgs] = React.useState([]);   // รูปแนบของข้อความสำเร็จรูปที่กำลังเพิ่ม
+  const [qrEdit, setQrEdit] = React.useState(null); // { id, title, text, images } while editing one reply
+  const [qrUploading, setQrUploading] = React.useState(false);
+  const [qrPendImgs, setQrPendImgs] = React.useState([]);  // รูปจากข้อความสำเร็จรูปที่กดไว้ — ส่งพร้อมข้อความตอนกดส่ง
   const [qrSearch, setQrSearch] = React.useState("");
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
   const [teams, setTeams] = React.useState([]);       // permanent teams for the queue panel
@@ -172,7 +175,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   React.useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
   // reload + reset when switching channel (LINE ↔ FB)
-  React.useEffect(() => { setSel(null); setMsgs([]); setShowThread(false); loadContacts(); }, [channel]);
+  React.useEffect(() => { setSel(null); setMsgs([]); setShowThread(false); setQrPendImgs([]); loadContacts(); }, [channel]);
 
   // realtime: new messages + contact changes (subscribes to the active channel's tables)
   React.useEffect(() => {
@@ -199,6 +202,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
 
   async function openContact(c) {
     setSel(c.line_user_id); setShowThread(true); setShowInfo(false);
+    setQrPendImgs([]);   // รูปแนบค้างจากแชตก่อนหน้า — อย่าหลุดไปห้องอื่น
     try { setMsgs(await chListMessages(c.line_user_id)); if (c.unread) { chMarkRead(c.line_user_id); loadContacts(); } }
     catch (e) { flash("โหลดข้อความไม่สำเร็จ", true); }
   }
@@ -252,12 +256,17 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   }
 
   async function send() {
-    const t = text.trim(); if (!t || !sel || sending) return;
+    const t = text.trim(), imgs = qrPendImgs;
+    if ((!t && !imgs.length) || !sel || sending) return;
     setSending(true);
     try {
-      if (isFb) { await sendFbMessage(sel, t); setMsgs(await chListMessages(sel)); }            // FB: no quote-reply; refresh
-      else { await sendLineMessage(sel, t, replyTo ? { quoteToken: replyTo.quote_token, quotedMessageId: replyTo.line_message_id } : undefined); } // LINE appends via realtime
-      setText(""); setReplyTo(null);
+      if (t) {
+        if (isFb) await sendFbMessage(sel, t);
+        else await sendLineMessage(sel, t, replyTo ? { quoteToken: replyTo.quote_token, quotedMessageId: replyTo.line_message_id } : undefined); // LINE appends via realtime
+      }
+      for (const u of imgs) await chSendImage(sel, u);   // รูปแนบจากข้อความสำเร็จรูป — ตามหลังข้อความ
+      if (isFb) setMsgs(await chListMessages(sel));      // FB: no realtime; refresh
+      setText(""); setReplyTo(null); setQrPendImgs([]);
     }
     catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setSending(false);
@@ -409,9 +418,27 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   }
   function pickJob(jo) { setText(buildOrderConfirm(jo)); setJobPicker(null); flash("ใส่ข้อความคอนเฟิมแล้ว — ตรวจทานแล้วกดส่ง"); }
 
-  const insertQr = (t) => setText((cur) => cur ? cur + (cur.endsWith("\n") ? "" : "\n") + t : t);
-  async function addQr() { const t = newQr.trim(); if (!t) return; try { await addQuickReply(t, newQrTitle); setNewQr(""); setNewQrTitle(""); await loadQr(); } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e.message || e), true); } }
-  async function saveQrEdit() { if (!qrEdit || !qrEdit.text.trim()) return; try { await updateQuickReply(qrEdit.id, { title: qrEdit.title, text: qrEdit.text }); setQrEdit(null); await loadQr(); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); } }
+  // กดปุ่มข้อความสำเร็จรูป: เติมข้อความลงช่องพิมพ์ + พักรูปแนบไว้ (ส่งพร้อมกันตอนกดส่ง)
+  const insertQr = (qr) => {
+    setText((cur) => cur ? cur + (cur.endsWith("\n") ? "" : "\n") + qr.text : qr.text);
+    const imgs = Array.isArray(qr.images) ? qr.images : [];
+    if (imgs.length) setQrPendImgs((s) => [...new Set([...s, ...imgs])]);
+  };
+  // อัปโหลดรูปแนบของข้อความสำเร็จรูป (ฟอร์มเพิ่ม / ฟอร์มแก้ไข)
+  async function onQrImgs(e, mode) {
+    const files = [...(e.target.files || [])]; e.target.value = "";
+    if (!files.length) return;
+    setQrUploading(true);
+    try {
+      const urls = [];
+      for (const f of files) urls.push(await uploadChatImage(f));
+      if (mode === "edit") setQrEdit((s) => (s ? { ...s, images: [...(s.images || []), ...urls] } : s));
+      else setNewQrImgs((s) => [...s, ...urls]);
+    } catch (ex) { flash("อัปโหลดรูปไม่สำเร็จ: " + (ex.message || ex), true); }
+    setQrUploading(false);
+  }
+  async function addQr() { const t = newQr.trim(); if (!t) return; try { await addQuickReply(t, newQrTitle, newQrImgs); setNewQr(""); setNewQrTitle(""); setNewQrImgs([]); await loadQr(); } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e.message || e), true); } }
+  async function saveQrEdit() { if (!qrEdit || !qrEdit.text.trim()) return; try { await updateQuickReply(qrEdit.id, { title: qrEdit.title, text: qrEdit.text, images: qrEdit.images || [] }); setQrEdit(null); await loadQr(); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); } }
   async function moveQr(id, dir) {
     const ids = quickReplies.map((q) => q.id);
     const i = ids.indexOf(id), j = i + dir;
@@ -564,9 +591,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <button className="chat-tool" disabled={sending} onClick={openAcPicker}>❄️ ส่งแอร์</button>
                     {quickReplies.map((qr) => {
                       const label = qr.title || qr.text;
+                      const nImg = (qr.images || []).length;
                       return (
-                        <button key={qr.id} className="chat-qr" title={qr.text} onClick={() => insertQr(qr.text)}>
-                          {label.length > 22 ? label.slice(0, 22) + "…" : label}
+                        <button key={qr.id} className="chat-qr" title={qr.text + (nImg ? ` (+${nImg} รูป)` : "")} onClick={() => insertQr(qr)}>
+                          {nImg ? "🖼 " : ""}{label.length > 22 ? label.slice(0, 22) + "…" : label}
                         </button>
                       );
                     })}
@@ -598,11 +626,28 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       <button className="chat-reply-cancel" title="ยกเลิกการตอบกลับ" onClick={() => setReplyTo(null)}>✕</button>
                     </div>
                   )}
+                  {qrPendImgs.length > 0 && (
+                    <div className="chat-reply-bar">
+                      <span className="chat-reply-icon">🖼</span>
+                      <div className="chat-reply-info">
+                        <b>รูปแนบ {qrPendImgs.length} รูป — ส่งพร้อมข้อความ</b>
+                        <span className="qr-imgrow">
+                          {qrPendImgs.map((u, i) => (
+                            <span className="qr-imgchip" key={u}>
+                              <img src={u} alt="" />
+                              <button title="เอารูปนี้ออก" onClick={() => setQrPendImgs((s) => s.filter((_, j) => j !== i))}>✕</button>
+                            </span>
+                          ))}
+                        </span>
+                      </div>
+                      <button className="chat-reply-cancel" title="ยกเลิกรูปแนบทั้งหมด" onClick={() => setQrPendImgs([])}>✕</button>
+                    </div>
+                  )}
                   <div className="chat-compose">
                     <textarea className="inp chat-input" rows={4} value={text} placeholder={sending ? "กำลังส่ง…" : (replyTo ? "พิมพ์คำตอบ…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)")}
                       onChange={(e) => setText(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
-                    <button className="btn-primary" disabled={sending || !text.trim()} onClick={send}>{sending ? "…" : "ส่ง"}</button>
+                    <button className="btn-primary" disabled={sending || (!text.trim() && !qrPendImgs.length)} onClick={send}>{sending ? "…" : "ส่ง"}</button>
                   </div>
                 </div>
               ) : <div className="chat-readonly">ดูได้อย่างเดียว — เฉพาะฝ่ายออฟฟิศตอบกลับได้</div>}
@@ -770,7 +815,19 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <div className="qr-add">
                 <input className="inp" value={newQrTitle} onChange={(e) => setNewQrTitle(e.target.value)} placeholder="ชื่อหัวข้อ (ไว้ค้นหา/แสดงบนปุ่ม) เช่น โอนเงิน กสิกร" />
                 <textarea className="inp" rows={2} value={newQr} onChange={(e) => setNewQr(e.target.value)} placeholder="พิมพ์ข้อความที่ใช้บ่อย…" />
-                <button className="btn-primary" disabled={!newQr.trim()} onClick={addQr}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม</button>
+                <div className="qr-imgrow">
+                  {newQrImgs.map((u, i) => (
+                    <span className="qr-imgchip" key={u + i}>
+                      <img src={u} alt="" />
+                      <button title="เอารูปนี้ออก" onClick={() => setNewQrImgs((s) => s.filter((_, j) => j !== i))}>✕</button>
+                    </span>
+                  ))}
+                  <label className="qr-imgadd" title="แนบรูป — ส่งพร้อมข้อความเมื่อกดใช้">
+                    {qrUploading ? "กำลังอัปโหลด…" : "🖼 + รูปแนบ"}
+                    <input type="file" accept="image/*" multiple hidden disabled={qrUploading} onChange={(e) => onQrImgs(e, "new")} />
+                  </label>
+                </div>
+                <button className="btn-primary" disabled={!newQr.trim() || qrUploading} onClick={addQr}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม</button>
               </div>
               {quickReplies.length > 5 && (
                 <input className="inp" style={{ marginBottom: 10 }} value={qrSearch} onChange={(e) => setQrSearch(e.target.value)} placeholder="🔍 ค้นหาหัวข้อ / ข้อความ…" />
@@ -784,9 +841,21 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       <div className="qr-edit-fields">
                         <input className="inp" value={qrEdit.title} onChange={(e) => setQrEdit({ ...qrEdit, title: e.target.value })} placeholder="ชื่อหัวข้อ" />
                         <textarea className="inp" rows={2} value={qrEdit.text} onChange={(e) => setQrEdit({ ...qrEdit, text: e.target.value })} placeholder="ข้อความ" />
+                        <div className="qr-imgrow">
+                          {(qrEdit.images || []).map((u, i) => (
+                            <span className="qr-imgchip" key={u + i}>
+                              <img src={u} alt="" />
+                              <button title="เอารูปนี้ออก" onClick={() => setQrEdit((s) => ({ ...s, images: s.images.filter((_, j) => j !== i) }))}>✕</button>
+                            </span>
+                          ))}
+                          <label className="qr-imgadd" title="แนบรูป — ส่งพร้อมข้อความเมื่อกดใช้">
+                            {qrUploading ? "กำลังอัปโหลด…" : "🖼 + รูปแนบ"}
+                            <input type="file" accept="image/*" multiple hidden disabled={qrUploading} onChange={(e) => onQrImgs(e, "edit")} />
+                          </label>
+                        </div>
                         <div className="qr-edit-acts">
                           <button className="btn-ghost sm" onClick={() => setQrEdit(null)}>ยกเลิก</button>
-                          <button className="btn-primary sm" disabled={!qrEdit.text.trim()} onClick={saveQrEdit}>บันทึก</button>
+                          <button className="btn-primary sm" disabled={!qrEdit.text.trim() || qrUploading} onClick={saveQrEdit}>บันทึก</button>
                         </div>
                       </div>
                     </div>
@@ -800,8 +869,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       <div className="qr-body">
                         {qr.title && <div className="qr-title">{qr.title}</div>}
                         <div className="qr-text">{qr.text}</div>
+                        {(qr.images || []).length > 0 && (
+                          <div className="qr-imgrow">
+                            {qr.images.map((u, i) => <img key={u + i} src={u} alt="" onClick={() => window.open(u, "_blank")} style={{ cursor: "pointer" }} />)}
+                          </div>
+                        )}
                       </div>
-                      <button className="qr-del" title="แก้ไข" onClick={() => setQrEdit({ id: qr.id, title: qr.title || "", text: qr.text })}><UIcon name="edit" size={15} /></button>
+                      <button className="qr-del" title="แก้ไข" onClick={() => setQrEdit({ id: qr.id, title: qr.title || "", text: qr.text, images: qr.images || [] })}><UIcon name="edit" size={15} /></button>
                       <button className="qr-del" title="ลบ" onClick={() => delQr(qr.id)}><UIcon name="trash" size={15} /></button>
                     </div>
                   );
