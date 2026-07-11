@@ -464,6 +464,7 @@ header.scrolled{background:rgba(255,255,255,.92)}
 .strip .row .it{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;color:var(--ink);font-size:15.5px;font-weight:800;cursor:pointer;padding:18px 16px 16px;border-radius:16px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow-sm);transition:.2s;flex:1;min-width:210px}
 .strip .row .it:hover{border-color:var(--primary);box-shadow:var(--shadow);transform:translateY(-3px)}
 .strip .it .em{font-size:26px;line-height:1}
+.strip .it .em img{width:34px;height:34px;object-fit:contain;display:block}
 .strip .it small{display:block;font-weight:500;font-size:12.5px;color:var(--ink-3)}
 .svc-li{list-style:none;width:100%;margin:10px 0 0;padding:10px 2px 0;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);text-align:left}
 .svc-li li{padding-left:20px;position:relative}
@@ -635,7 +636,7 @@ footer{background:#0b1b33}
       <h2 class="title">ครบทุกเรื่องแอร์ จบที่เดียว</h2>
       <p class="lead">ตั้งแต่ติดตั้งเครื่องใหม่ ดูแลรักษา ไปจนถึงซ่อมแก้ไข ด้วยทีมช่างผู้ชำนาญ</p>
     </div>
-    <div class="row">
+    <div class="row" id="svcRow">
       <div class="it" data-svc="ติดตั้ง"><span class="em">❄️</span> ติดตั้งแอร์ <small>บ้าน/สำนักงาน เดินท่อเรียบร้อย ทดสอบก่อนส่งมอบ</small>
         <ul class="svc-li"><li>สำรวจหน้างานฟรี</li><li>แถมชุดวัสดุติดตั้งมาตรฐาน</li><li>รับประกันงานติดตั้ง</li></ul></div>
       <div class="it" data-svc="ล้าง"><span class="em">💧</span> ล้างแอร์ / บำรุงรักษา <small>ล้างใหญ่ เป่าโฟม ถึงแผงคอยล์ เย็นเต็มระบบ</small>
@@ -1248,6 +1249,22 @@ async function loadArticles() {
     $("#artGrid").querySelectorAll(".art-ex").forEach((ex) => { const b = ex.nextElementSibling; if (b && b.classList.contains("art-more") && ex.scrollHeight <= ex.clientHeight + 2) b.remove(); });
   } catch (e) {}
 }
+// การ์ดบริการหน้าแรก — ทีมกราฟิกแก้จากหลังบ้าน (จัดการเว็บไซต์ → การ์ดบริการ · ตาราง web_services mig 131)
+// ยังไม่รัน migration / ไม่มีรายการ → ใช้การ์ดที่ฝังในไฟล์ตามเดิม
+async function loadServices() {
+  if (!hasSb) return;
+  try {
+    const { data } = await sb.from("web_services").select("*").eq("active", true).order("sort").order("id");
+    if (!data || !data.length) return;
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    $("#svcRow").innerHTML = data.map((s) => `
+      <div class="it"${s.svc ? ` data-svc="${esc(s.svc)}"` : ""}>
+        <span class="em">${s.image_url ? `<img src="${esc(s.image_url)}" alt="" loading="lazy">` : esc(s.emoji || "🔧")}</span> ${esc(s.title)}
+        ${s.subtitle ? `<small>${esc(s.subtitle)}</small>` : ""}
+        ${s.bullets ? `<ul class="svc-li">${String(s.bullets).split(/\n+/).map((b) => b.trim()).filter(Boolean).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}
+      </div>`).join("");
+  } catch (e) {}
+}
 async function loadPress() {
   if (!hasSb) return;
   try {
@@ -1371,6 +1388,7 @@ loadBanners();
 loadPortfolio();
 loadArticles();
 loadPress();
+loadServices();
 loadSidebar();
 route();
 </script>
@@ -1400,19 +1418,20 @@ route();
     $("fltGoAc")?.click();
   });
   // แถบ 4 บริการ → ค้นหาบริการนั้น · ถ้าแคตตาล็อกยังไม่มีสินค้าบริการ (ผลว่าง) พาไปหมวดข้อมูลบริการแทน
-  document.querySelectorAll(".strip .it[data-svc]").forEach((el) => {
-    el.addEventListener("click", () => {
-      if ($("fltService")) $("fltService").value = el.dataset.svc;
-      if ($("fltSvcType")) $("fltSvcType").value = "";
-      if ($("fltSvcBtu")) $("fltSvcBtu").value = "";
-      $("fltGoSvc")?.click();
-      setTimeout(() => {
-        if (document.querySelector("#prodGrid .prod-empty")) {
-          if ($("fltService")) $("fltService").value = "";
-          location.hash = "#services";
-        }
-      }, 80);
-    });
+  // (ผูกที่ตัวแถว ไม่ผูกที่การ์ด — การ์ดถูกวาดใหม่จากหลังบ้าน (web_services) แล้วยังกดได้)
+  $("svcRow")?.addEventListener("click", (e) => {
+    const el = e.target.closest(".it[data-svc]");
+    if (!el) return;
+    if ($("fltService")) $("fltService").value = el.dataset.svc;
+    if ($("fltSvcType")) $("fltSvcType").value = "";
+    if ($("fltSvcBtu")) $("fltSvcBtu").value = "";
+    $("fltGoSvc")?.click();
+    setTimeout(() => {
+      if (document.querySelector("#prodGrid .prod-empty")) {
+        if ($("fltService")) $("fltService").value = "";
+        location.hash = "#services";
+      }
+    }, 80);
   });
   // ปุ่ม 📍 ในฟอร์มสั่งซื้อ — ดึงตำแหน่งปัจจุบันเป็นลิงก์ Google Maps (ลูกค้าต้องกดอนุญาต)
   $("locBtn")?.addEventListener("click", () => {

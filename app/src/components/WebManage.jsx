@@ -25,6 +25,15 @@ const TABS = [
   { kind: "ads", chip: "📢 โฆษณาแถบข้าง", label: "ภาพโฆษณา (แถบข้างเว็บ)", imageLabel: "ภาพโฆษณา", aspect: "4/3", folder: "web-ads", imageRequired: true,
     hint: "ภาพโฆษณาที่เรียงในแถบซ้ายของเว็บ (ใต้ตัวกรองค้นหา) · ใส่ลิงก์กดได้ · เรียงลำดับด้วย ◀▶",
     fields: [{ key: "title", ph: "ชื่อ/คำบรรยาย (ไม่ใส่ก็ได้)" }, { key: "link_url", ph: "ลิงก์ (ถ้ามี)" }], primary: "title", primaryFallback: "(โฆษณา)" },
+  { kind: "services", chip: "🛠️ การ์ดบริการ", label: "การ์ดบริการ (หมวด “ครบทุกเรื่องแอร์”)", imageLabel: "รูปไอคอน", aspect: "1/1", folder: "web-services", imageRequired: false,
+    hint: "การ์ด 4 บริการบนหน้าแรก · ไอคอนใช้อีโมจิ (หรืออัปโหลดรูปแทน) · จุดเด่นพิมพ์บรรทัดละ 1 ข้อ เว็บใส่ ✓ ให้เอง · ต้องรัน migration 131 ก่อน",
+    fields: [
+      { key: "emoji", ph: "อีโมจิไอคอน เช่น ❄️ 💧 ↔️ 🔧" },
+      { key: "title", ph: "ชื่อบริการ (เช่น ติดตั้งแอร์)", required: true },
+      { key: "subtitle", ph: "คำโปรยใต้ชื่อ (สั้น ๆ 1 บรรทัด)" },
+      { key: "bullets", ph: "จุดเด่น — บรรทัดละ 1 ข้อ", multiline: true },
+      { key: "svc", ph: "หมวดค้นหาเมื่อกด: ติดตั้ง / ล้าง / ย้าย / ซ่อม / รื้อถอน / อื่นๆ (เว้นว่าง = กดไม่ลิงก์)" },
+    ], primary: "title" },
 ];
 
 export default function WebManage({ role }) {
