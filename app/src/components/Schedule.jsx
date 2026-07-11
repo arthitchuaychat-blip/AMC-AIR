@@ -2,7 +2,7 @@ import React from "react";
 import { listJobOrders, listTeams } from "../lib/api";
 import { UIcon } from "../icons";
 import { BUCKETS, slotDef, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef, JOB_STATUSES, jobStatusDef } from "../lib/schedule";
-import JobTimeline from "./JobTimeline";
+import JobTimeline, { Linkify } from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
 import { can } from "../lib/permissions";
 
@@ -174,7 +174,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
             {(j.sales_note || (j.sales_photos && j.sales_photos.length > 0)) && (
               <div className="myjob-brief">
                 <div className="myjob-brief-title">📋 บรีฟจากฝ่ายขาย</div>
-                {j.sales_note && <div className="myjob-brief-note">{j.sales_note}</div>}
+                {j.sales_note && <div className="myjob-brief-note"><Linkify text={j.sales_note} /></div>}
                 {j.sales_photos && j.sales_photos.length > 0 && (
                   <div className="tl-photos">{j.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>
                 )}

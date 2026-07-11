@@ -4,7 +4,7 @@ import Combo from "./Combo";
 import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
-import JobTimeline from "./JobTimeline";
+import JobTimeline, { Linkify } from "./JobTimeline";
 import DocChips from "./DocChips";
 import DocPeek from "./DocPeek";
 import ChatCustomerLink from "./ChatCustomerLink";
@@ -326,7 +326,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
           <label className="fld"><span>รายละเอียดงาน / รายการที่ต้องทำ</span><textarea className="inp" rows={4} style={{ resize: "vertical" }} value={ed.details} onChange={(e) => setF("details", e.target.value)} /></label>
 
           <label className="fld"><span>โน้ตถึงทีมช่าง (ฝ่ายขาย → ช่าง)</span>
-            <textarea className="inp" rows={2} style={{ resize: "vertical" }} value={ed.sales_note} onChange={(e) => setF("sales_note", e.target.value)} placeholder="ข้อความ/ข้อควรระวังถึงช่าง เช่น ลูกค้าสะดวกช่วงบ่าย, จอดรถหลังตึก, ระวังพื้นไม้" /></label>
+            <textarea className="inp" rows={2} style={{ resize: "vertical" }} value={ed.sales_note} onChange={(e) => setF("sales_note", e.target.value)} placeholder="ข้อความ/ข้อควรระวังถึงช่าง เช่น ลูกค้าสะดวกช่วงบ่าย, จอดรถหลังตึก · วางลิงก์เว็บ/หมุดแผนที่ได้ ช่างกดเปิดได้เลย" /></label>
           <InternalNoteField value={ed.internal_note} onChange={(v) => setF("internal_note", v)} />
           <div className="fld"><span>รูป/ไฟล์หน้างานเบื้องต้น (ให้ช่างดูก่อนเข้างาน)</span>
             <div className="myjob-photos">
@@ -660,7 +660,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 ) : null; })()}
 
                 {jo.details && <><div className="cd-sec">รายละเอียดงาน</div><div className="cd-v" style={{ whiteSpace: "pre-wrap" }}>{jo.details}</div></>}
-                {jo.sales_note && <><div className="cd-sec">บรีฟจากฝ่ายขาย</div><div className="cd-v" style={{ whiteSpace: "pre-wrap" }}>{jo.sales_note}</div></>}
+                {jo.sales_note && <><div className="cd-sec">บรีฟจากฝ่ายขาย</div><div className="cd-v" style={{ whiteSpace: "pre-wrap" }}><Linkify text={jo.sales_note} /></div></>}
                 {jo.sales_photos?.length > 0 && <div className="tl-photos" style={{ marginTop: 8 }}>{jo.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>}
               </div>
               <div className="modal-foot">

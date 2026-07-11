@@ -9,8 +9,9 @@ const STATUS_ACTION = { pending: "🕒 รอจ่ายงาน", scheduled: 
 const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."; };
 
 // ลิงก์ในข้อความกดได้ — เว็บไซต์ (http/https/www.) และลิงก์แผนที่ (maps.app.goo.gl / goo.gl/maps) เปิดแท็บใหม่
+// (export ให้โน้ตถึงทีมช่าง/บรีฟ ในใบงาน · งานของฉัน · ตารางงาน · ช่างซัพ ใช้ตัวเดียวกัน)
 const URL_SPLIT = /((?:https?:\/\/|www\.|maps\.app\.goo\.gl\/|goo\.gl\/maps\/)[^\s<>"']+)/gi;
-function Linkify({ text }) {
+export function Linkify({ text }) {
   return String(text || "").split(URL_SPLIT).map((p, i) =>
     /^(https?:\/\/|www\.|maps\.app\.goo\.gl\/|goo\.gl\/maps\/)/i.test(p)
       ? <a key={i} href={/^https?:\/\//i.test(p) ? p : `https://${p}`} target="_blank" rel="noopener noreferrer"

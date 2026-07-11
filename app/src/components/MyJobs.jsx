@@ -3,7 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import { listJobOrders, updateJobStatus, updateVisitStatus } from "../lib/api";
 import { UIcon } from "../icons";
 import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel, JOB_STATUSES, ymd } from "../lib/schedule";
-import JobTimeline from "./JobTimeline";
+import JobTimeline, { Linkify } from "./JobTimeline";
 import AttachThumb from "./AttachThumb";
 import { buildJobBriefMy, useLang, JOB_STATUS_MY, MYJOB_TAB_MY } from "../lib/i18n";
 
@@ -135,7 +135,7 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
               {expanded[jo.job_no] && (jo.sales_note || (jo.sales_photos && jo.sales_photos.length > 0)) && (
                 <div className="myjob-brief">
                   <div className="myjob-brief-title">📋 {t("บรีฟจากฝ่ายขาย", "အရောင်းအဖွဲ့မှ အကြောင်းကြားချက်")}</div>
-                  {jo.sales_note && <div className="myjob-brief-note">{jo.sales_note}</div>}
+                  {jo.sales_note && <div className="myjob-brief-note"><Linkify text={jo.sales_note} /></div>}
                   {jo.sales_photos && jo.sales_photos.length > 0 && (
                     <div className="tl-photos">{jo.sales_photos.map((u, i) => <AttachThumb key={i} url={u} />)}</div>
                   )}

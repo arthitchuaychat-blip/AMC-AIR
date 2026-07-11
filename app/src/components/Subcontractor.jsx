@@ -3,6 +3,7 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listAccounts, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage, uploadExpenseFile } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
+import { Linkify } from "./JobTimeline";
 import { fmtBaht, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 
@@ -181,7 +182,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
                 <div>🗓 {jp.scheduled_at ? fmtDate(jp.scheduled_at) : "ยังไม่กำหนดวัน"}{jp.end_date && jp.end_date !== jp.scheduled_at ? ` – ${fmtDate(jp.end_date)}` : ""}</div>
                 <div>👷 ทีม {team?.name || jp.assigned_team || "-"}</div>
                 {jp.details && <div style={{ background: "var(--surface-2)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap" }}>{jp.details}</div>}
-                {jp.sales_note && <div className="jo-dim" style={{ whiteSpace: "pre-wrap" }}>📌 บรีฟ: {jp.sales_note}</div>}
+                {jp.sales_note && <div className="jo-dim" style={{ whiteSpace: "pre-wrap" }}>📌 บรีฟ: <Linkify text={jp.sales_note} /></div>}
                 {(() => { const items = quoteBy[jp.quote_no]?.items; if (!items?.length) return null; return (
                   <div style={{ marginTop: 4 }}>
                     <div style={{ fontWeight: 600, fontSize: 12, color: "var(--ink-2)", marginBottom: 4 }}>รายการสินค้า</div>
@@ -539,7 +540,7 @@ function PayTeam({ team, list, quoteBy, flash, onCreated }) {
                 <div>🗓 {jp.scheduled_at ? fmtDate(jp.scheduled_at) : "ยังไม่กำหนดวัน"}{jp.end_date && jp.end_date !== jp.scheduled_at ? ` – ${fmtDate(jp.end_date)}` : ""}</div>
                 <div>👷 ทีม {team.name}</div>
                 {jp.details && <div style={{ background: "var(--surface-2)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap" }}>{jp.details}</div>}
-                {jp.sales_note && <div className="jo-dim" style={{ whiteSpace: "pre-wrap" }}>📌 บรีฟ: {jp.sales_note}</div>}
+                {jp.sales_note && <div className="jo-dim" style={{ whiteSpace: "pre-wrap" }}>📌 บรีฟ: <Linkify text={jp.sales_note} /></div>}
                 {(() => { const items = quoteBy[jp.quote_no]?.items; if (!items?.length) return null; return (
                   <div style={{ marginTop: 4 }}>
                     <div style={{ fontWeight: 600, fontSize: 12, color: "var(--ink-2)", marginBottom: 4 }}>รายการสินค้า</div>
