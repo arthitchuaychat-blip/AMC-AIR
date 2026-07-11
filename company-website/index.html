@@ -719,7 +719,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <section class="sec soft" id="reviews">
   <div class="wrap">
     <div class="sec-head center"><span class="eyebrow">เสียงจากลูกค้า</span><h2 class="title">ลูกค้าพูดถึงเรา</h2></div>
-    <div class="rev-grid">
+    <div class="rev-grid" id="revGrid">
       <div class="rev"><div class="stars">★★★★★</div><p>“ติดตั้งเร็ว เก็บงานเรียบร้อย ช่างสุภาพมาก แอร์เย็นฉ่ำเลยค่ะ”</p><div class="who"><span class="av">ก</span><div><b>คุณกนกวรรณ</b><span>ลูกค้าบ้านพักอาศัย</span></div></div></div>
       <div class="rev"><div class="stars">★★★★★</div><p>“ใช้บริการล้างแอร์ประจำทุก 6 เดือน ตรงเวลา ราคายุติธรรม แนะนำเลย”</p><div class="who"><span class="av">ส</span><div><b>คุณสมชาย</b><span>เจ้าของร้านอาหาร</span></div></div></div>
       <div class="rev"><div class="stars">★★★★★</div><p>“ดูแลแอร์ทั้งออฟฟิศ 20 กว่าเครื่อง มีระบบติดตามงานชัดเจน ประทับใจ”</p><div class="who"><span class="av">ณ</span><div><b>คุณณัฐพล</b><span>ผู้จัดการอาคาร</span></div></div></div>
@@ -1271,6 +1271,23 @@ async function loadArticles() {
     $("#artGrid").querySelectorAll(".art-ex").forEach((ex) => { const b = ex.nextElementSibling; if (b && b.classList.contains("art-more") && ex.scrollHeight <= ex.clientHeight + 2) b.remove(); });
   } catch (e) {}
 }
+// รีวิวลูกค้า — ทีมกราฟิกแก้จากหลังบ้าน (จัดการเว็บไซต์ → รีวิวลูกค้า · ตาราง web_reviews mig 134)
+// ยังไม่รัน migration / ไม่มีรายการ → ใช้รีวิวที่ฝังในไฟล์ตามเดิม
+async function loadReviews() {
+  if (!hasSb) return;
+  try {
+    const { data } = await sb.from("web_reviews").select("*").eq("active", true).order("sort").order("id");
+    if (!data || !data.length) return;
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    $("#revGrid").innerHTML = data.map((r) => {
+      const stars = "★".repeat(Math.max(1, Math.min(5, Number(r.stars) || 5)));
+      const av = r.image_url ? `<img src="${esc(r.image_url)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">` : esc((r.name || "?").replace(/^คุณ\s*/, "").charAt(0) || "?");
+      return `
+      <div class="rev"><div class="stars">${stars}</div><p>“${esc(r.text)}”</p>
+        <div class="who"><span class="av">${av}</span><div><b>${esc(r.name)}</b><span>${esc(r.role || "")}</span></div></div></div>`;
+    }).join("");
+  } catch (e) {}
+}
 // การ์ดบริการหน้าแรก — ทีมกราฟิกแก้จากหลังบ้าน (จัดการเว็บไซต์ → การ์ดบริการ · ตาราง web_services mig 131)
 // ยังไม่รัน migration / ไม่มีรายการ → ใช้การ์ดที่ฝังในไฟล์ตามเดิม
 async function loadServices() {
@@ -1411,6 +1428,7 @@ loadPortfolio();
 loadArticles();
 loadPress();
 loadServices();
+loadReviews();
 loadSidebar();
 route();
 </script>

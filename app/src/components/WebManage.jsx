@@ -34,6 +34,14 @@ const TABS = [
       { key: "bullets", ph: "จุดเด่น — บรรทัดละ 1 ข้อ", multiline: true },
       { key: "svc", ph: "หมวดค้นหาเมื่อกด: ติดตั้ง / ล้าง / ย้าย / ซ่อม / รื้อถอน / อื่นๆ (เว้นว่าง = กดไม่ลิงก์)" },
     ], primary: "title" },
+  { kind: "reviews", chip: "⭐ รีวิวลูกค้า", label: "รีวิวลูกค้า (หมวด “ลูกค้าพูดถึงเรา”)", imageLabel: "รูปลูกค้า", aspect: "1/1", folder: "web-reviews", imageRequired: false,
+    hint: "รีวิวบนหน้าแรก · ไม่ใส่รูปจะใช้อักษรย่อจากชื่อ · ดาวใส่ 1–5 · ต้องรัน migration 134 ก่อน",
+    fields: [
+      { key: "name", ph: "ชื่อลูกค้า (เช่น คุณกนกวรรณ)", required: true },
+      { key: "role", ph: "คำอธิบายใต้ชื่อ (เช่น ลูกค้าบ้านพักอาศัย / เจ้าของร้านอาหาร)" },
+      { key: "text", ph: "ข้อความรีวิว", multiline: true, required: true },
+      { key: "stars", ph: "จำนวนดาว 1–5 (ไม่ใส่ = 5)" },
+    ], primary: "name" },
 ];
 
 export default function WebManage({ role }) {
@@ -170,6 +178,7 @@ function WebItemManager({ cfg, flash }) {
                   <div className="wb-cap">{b[cfg.primary] || <span className="jo-dim">{cfg.primaryFallback || "—"}</span>}
                     {b.excerpt ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.excerpt}</div> : null}
                     {b.source ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.source}</div> : null}
+                    {b.text ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{"★".repeat(Math.max(1, Math.min(5, Number(b.stars) || 5)))} “{b.text}”{b.role ? ` — ${b.role}` : ""}</div> : null}
                     {cfg.viewUrl && cfg.viewUrl(b) ? <div style={{ marginTop: 2 }}>
                       {b.body ? <span style={{ fontSize: 11.5, fontWeight: 700, color: "#0a7d2c", marginRight: 8 }}>📄 มีเนื้อหาเต็ม</span> : null}
                       <a href={cfg.viewUrl(b)} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#0ea5e9", fontWeight: 700 }}>ดูหน้าเว็บ ↗</a>
