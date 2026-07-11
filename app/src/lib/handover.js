@@ -141,124 +141,80 @@ export const JOBTYPE_TO_WORK = { install: "install", maintenance: "maintenance",
 
 export const REFRIGERANTS = ["R32", "R410A", "R22"];
 
-// ── ติดตั้ง (AMC-IN) ──
+// ── ติดตั้ง (AMC-IN) — ฉบับกระชับ พิมพ์จบใน A4 1 ใบ ──
 export const INST_WORKKINDS = ["ติดตั้งใหม่ · New install", "ย้าย/รื้อถอน+ติดตั้ง · Relocate", "เปลี่ยนเครื่องเดิม · Replacement"];
 export const INST_SECTIONS = [
-  ["ก่อนติดตั้ง (สำรวจและเตรียมงาน) · Before installation", [
-    ["ตรวจสภาพเครื่อง/อุปกรณ์ก่อนแกะกล่อง ไม่บุบ/แตกร้าว ครบชุด · Inspect unit before unboxing, complete & undamaged", "สภาพสมบูรณ์ · Complete"],
-    ["เลือกจุดติดตั้งเหมาะสม ระบายลม/ความร้อนดี เว้นระยะบริการ · Proper location, good airflow, service clearance", "ตามคู่มือรุ่น · Per manual"],
-    ["ตรวจโครงสร้างผนัง/จุดยึด รับน้ำหนักได้ · Wall/mounting structure supports the load", "แข็งแรง · Solid"],
-    ["วางแผนแนวเดินท่อ/ท่อน้ำทิ้ง/สายไฟ สั้น เรียบร้อย · Plan pipe/drain/cable routing, short & neat", "ระยะเหมาะสม · Optimal run"],
-    ["ปูผ้าใบ/กันเปื้อน คุ้มครองพื้นที่หน้างานลูกค้า · Protect customer's area with drop cloths", "ไม่เลอะ · No mess"],
-  ]],
-  ["การติดตั้งชุดคอยล์เย็น–คอยล์ร้อน · Indoor & outdoor unit installation", [
-    ["ยึดแผ่นหลัง (Bracket) คอยล์เย็น ได้ระดับน้ำ แน่นหนา · Indoor bracket level & secure", "ได้ระดับ ไม่เอียง · Level"],
-    ["ขาแขวน/ฐานคอยล์ร้อนมั่นคง มีแท่นยาง/สปริงกันสั่น · Outdoor mount solid with vibration pads", "ไม่สั่นสะเทือน · No vibration"],
-    ["คอยล์ร้อนอยู่ที่ระบายความร้อนดี ไม่อับ ไม่โดนแดด/ฝนตรง · Outdoor unit well ventilated, sheltered", "อากาศถ่ายเทดี · Good airflow"],
-    ["เดินท่อน้ำยาหุ้มฉนวนครบ ดัดท่อไม่หักพับ ไม่แบน · Pipes insulated, bent without kinks", "ท่อไม่ตีบ · No kinks"],
-    ["บานแฟลร์ (Flare) เรียบร้อย ขันแน่นตามค่าทอร์ค · Flares clean, torqued to spec", "ตามพิกัดทอร์ค · Torque spec"],
-    ["ท่อน้ำทิ้งมีความลาดเอียง ระบายได้ ไม่ย้อนกลับ · Drain sloped, drains freely", "ลาดเอียง ≥ 1% · Slope ≥ 1%"],
-    ["เก็บงานท่อ/รางครอบเรียบร้อย สวยงาม (ถ้ามี) · Trunking neatly finished", "เรียบร้อย · Neat"],
-  ]],
-  ["ระบบไฟฟ้า · สุญญากาศ · น้ำยา · Electrical · Vacuum · Refrigerant", [
-    ["สายไฟขนาดถูกต้องตามพิกัด มีเบรกเกอร์แยกวงจร · Correct cable size, dedicated breaker", "ตามพิกัดกระแส · Rated"],
-    ["ต่อสายดิน (Ground) ครบถ้วนตามมาตรฐาน · Grounding complete to standard", "มีสายดิน · Grounded"],
-    ["ขั้วสายไฟคอยล์เย็น–ร้อนถูกตำแหน่ง ขันแน่น · Terminals correct & tight", "แน่น ไม่หลุด · Tight"],
-    ["ทำสุญญากาศ (Vacuum) ไล่อากาศ/ความชื้นตามเวลา · Vacuum system to remove air/moisture", "บังคับทุกงาน · Mandatory"],
-    ["ทดสอบรั่ว (Leak test) ทุกจุดต่อก่อนเปิดน้ำยา · Leak test all joints before releasing refrigerant", "ไม่มีรั่ว · No leaks"],
-    ["เปิดวาล์วปล่อยน้ำยา / เติมเพิ่มตามความยาวท่อ · Release refrigerant / top-up per pipe length", "ตามสเปกรุ่น · Per spec"],
+  ["การติดตั้งและระบบ · Installation & systems", [
+    ["เครื่อง/อุปกรณ์ครบชุด สภาพสมบูรณ์ ก่อนติดตั้ง · Unit & parts complete, undamaged", "สภาพสมบูรณ์ · Complete"],
+    ["ยึดคอยล์เย็น–คอยล์ร้อนแน่นหนา ได้ระดับ มีกันสั่น · Both units mounted level, secure, vibration pads", "แน่น ได้ระดับ · Level"],
+    ["คอยล์ร้อนระบายความร้อนดี มีระยะบริการ · Outdoor unit ventilated, service clearance", "อากาศถ่ายเทดี · Ventilated"],
+    ["ท่อน้ำยาหุ้มฉนวนครบ แฟลร์ขันแน่นตามทอร์ค เก็บงานเรียบร้อย · Pipes insulated, flares torqued, neat", "เรียบร้อย · Neat"],
+    ["ท่อน้ำทิ้งลาดเอียง ระบายน้ำได้จริง · Drain sloped, tested with water", "ลาดเอียง ≥ 1%"],
+    ["สายไฟถูกพิกัด เบรกเกอร์แยก มีสายดิน ขั้วแน่น · Correct cable, dedicated breaker, grounded, tight", "ตามมาตรฐาน · To standard"],
+    ["ทำสุญญากาศ + ทดสอบรั่วทุกจุด ก่อนปล่อยน้ำยา · Vacuum + leak test before releasing refrigerant", "< 500 micron · ไม่รั่ว"],
+    ["ปล่อย/เติมน้ำยาตามความยาวท่อ · Release / top-up refrigerant per pipe length", "ตามสเปกรุ่น · Per spec"],
   ]],
   ["ทดสอบและส่งมอบงาน · Test & handover", [
-    ["เปิดทดสอบ ≥ 15–30 นาที ตรวจทุกโหมด · Test run ≥ 15–30 min, all modes", "ทำงานปกติ · Normal"],
-    ["ไม่มีน้ำยารั่ว/น้ำหยด/เสียงผิดปกติขณะทำงาน · No leaks, dripping or abnormal noise", "ปกติทุกจุด · All normal"],
-    ["ทดสอบระบายน้ำทิ้ง เทน้ำ ไหลออกจริง · Drain test with water, drains out", "ระบายดี · Drains well"],
-    ["ทดสอบรีโมท/ฟังก์ชัน ตั้งอุณหภูมิ สวิง ทุกปุ่ม · Remote & all functions work", "ครบทุกฟังก์ชัน · All OK"],
-    ["เก็บกวาดพื้นที่ ขนเศษวัสดุ/กล่องออก · Clean up site, remove debris & boxes", "สะอาด · Clean"],
-    ["มอบคู่มือ/ใบรับประกัน + อธิบายการใช้งาน · Hand over manual/warranty, explain usage", "ลูกค้ารับทราบ · Informed"],
-    ["แนะนำรอบล้าง (ทุก 4–6 เดือน) / เสนอสัญญาดูแล · Advise cleaning cycle / offer PM contract", "นัดหมาย · Scheduled"],
+    ["เปิดทดสอบ ≥ 15 นาที ทุกโหมด ไม่มีรั่ว/หยด/เสียงผิดปกติ · Test run ≥ 15 min, no leaks or noise", "ทำงานปกติ · Normal"],
+    ["ทดสอบรีโมทครบฟังก์ชัน + ระบายน้ำทิ้ง · Remote all functions + drain test", "ครบ · All OK"],
+    ["เก็บกวาดพื้นที่ ขนเศษวัสดุ/กล่องออก · Clean up site, remove debris", "สะอาด · Clean"],
+    ["มอบคู่มือ/ใบรับประกัน อธิบายการใช้งาน + แนะนำรอบล้าง · Manual/warranty handed over, cycle advised", "ลูกค้ารับทราบ · Informed"],
   ]],
 ];
 export const INST_MEAS = [
   ["ค่าสุญญากาศ (Vacuum)", "micron", "< 500 micron (≥ 30 นาที · min)"],
-  ["ผลทดสอบรั่ว (Leak test)", "", "ไม่มีฟองรั่ว/แรงดันคงที่ · No leak, holds"],
+  ["ผลทดสอบรั่ว (Leak test)", "", "ไม่มีฟองรั่ว/แรงดันคงที่ · No leak"],
   ["แรงดันน้ำยาด้าน Low (Suction)", "psi", "ตามชนิดน้ำยา · Per refrigerant"],
-  ["แรงดันน้ำยาด้าน High (Discharge)", "psi", "ตามพิกัดรุ่น · Per model"],
   ["อุณหภูมิลมออก (ช่องลมเย็น) · Supply air", "°C", "~ 12–16 °C"],
   ["ผลต่างอุณหภูมิ ΔT (ลมเข้า–ออก)", "°C", "≥ 8–12 °C = ปกติ · Normal"],
-  ["กระแสไฟ Compressor (Running)", "A", "ไม่เกินพิกัดข้างเครื่อง · Within rating"],
-  ["แรงดันไฟฟ้า (Voltage)", "V", "220–240 V (1 เฟส · phase)"],
-  ["ปริมาณน้ำยาที่เติมเพิ่ม (ถ้ามี) · Top-up", "g", "ตามความยาวท่อส่วนเกิน · Per extra pipe"],
+  ["กระแสไฟ Compressor / แรงดันไฟ · Amp / Volt", "A · V", "ไม่เกินพิกัด · 220–240 V"],
 ];
 
-// ── ล้าง (AMC-CL) ──
+// ── ล้าง (AMC-CL) — ฉบับกระชับ พิมพ์จบใน A4 1 ใบ ──
 export const WASH_WORKKINDS = ["ล้างปกติ · Standard clean", "ล้างใหญ่ (Overhaul)", "ในสัญญาบำรุงรักษา · Under PM contract"];
 export const WASH_SECTIONS = [
-  ["ก่อนเริ่มงาน (เตรียมงาน) · Preparation", [
-    ["แจ้งลูกค้า/ตรวจอาการเบื้องต้น ทดสอบเปิดก่อนล้าง · Check & test-run before cleaning", "บันทึกอาการ · Recorded"],
-    ["ปูผ้าใบ/พลาสติกกันเปื้อน คลุมพื้น เฟอร์นิเจอร์ ผนัง · Cover floor, furniture & walls", "ไม่มีคราบน้ำ · No stains"],
-    ["ตัดเบรกเกอร์/ปิดไฟก่อนถอดชิ้นส่วน · Power off at breaker before disassembly", "เพื่อความปลอดภัย · Safety"],
-    ["ถ่ายรูปสภาพก่อนล้าง (ก่อน–หลัง ส่งลูกค้า) · Photo before cleaning", "เก็บหลักฐาน · Documented"],
-  ]],
-  ["ขั้นตอนการล้าง — ชุดคอยล์เย็น (Indoor unit)", [
-    ["ถอดและล้างแผ่นกรองอากาศ (Filter) ให้สะอาด · Remove & wash filters", "ไม่มีฝุ่นอุดตัน · No clogging"],
-    ["ล้างคอยล์เย็น (Evaporator) ด้วยน้ำแรงดัน/โฟม · Wash evaporator coil", "ครีบไม่พับงอ · Fins intact"],
-    ["ล้างใบพัดลมกรงกระรอก (Blower) ไม่มีเมือก/เชื้อรา · Clean blower wheel", "หมุนคล่อง · Spins freely"],
-    ["ล้างถาดน้ำทิ้ง/ตรวจท่อน้ำทิ้ง ไม่อุดตัน · Clean drain pan & line", "น้ำไหลสะดวก · Free flow"],
-    ["ทำความสะอาด/ฆ่าเชื้อ ลดกลิ่นอับ (Anti-bacteria) · Sanitize, deodorize", "ไม่มีกลิ่น · No odor"],
-    ["เช็ดหน้ากาก บานสวิง ตัวเครื่อง · Wipe casing, louvers & body", "ผิวสะอาด · Clean"],
-  ]],
-  ["ชุดคอยล์ร้อน (Outdoor) และระบบไฟ/น้ำยา · Outdoor unit & electrical/refrigerant", [
-    ["ล้างคอยล์ร้อน (Condenser) ฝุ่น/ใบไม้ ครีบระบาย · Wash condenser coil", "ครีบโล่ง · Fins clear"],
-    ["ตรวจใบพัดลมคอยล์ร้อน หมุนสมดุล ไม่มีเสียงผิดปกติ · Check outdoor fan, balanced & quiet", "ไม่สั่น/ไม่ดัง · Smooth"],
-    ["ตรวจ/ขันแน่นจุดต่อสายไฟ ขั้ว Terminal · Check & tighten terminals", "แน่น ไม่ร้อน · Tight, cool"],
-    ["ตรวจฉนวนหุ้มท่อน้ำยา ไม่ฉีกขาด ไม่มีน้ำหยด · Check pipe insulation, no condensate", "ฉนวนสมบูรณ์ · Intact"],
-    ["ตรวจแรงดันน้ำยา / เติมหากพร่อง (ระบุปริมาณ) · Check pressure / top-up if low", "ตามพิกัดรุ่น · Per spec"],
-    ["ตรวจรอยรั่วจุดต่อ (Flare) และวาล์วบริการ · Leak-check flares & service valves", "ไม่มีรอยรั่ว · No leaks"],
+  ["ขั้นตอนการล้าง · Cleaning steps", [
+    ["กันเปื้อนพื้นที่ + ตัดไฟ + ถ่ายรูปก่อนล้าง · Protect area, power off, photo before", "ปลอดภัย ไม่เลอะ · Safe"],
+    ["ล้างแผ่นกรอง + คอยล์เย็น + โบลเวอร์ สะอาด · Wash filters, evaporator coil & blower", "สะอาด ครีบไม่งอ · Clean"],
+    ["ล้างถาด/ท่อน้ำทิ้ง ไม่อุดตัน ระบายได้ · Clean drain pan & line, free flow", "น้ำไหลสะดวก · Free flow"],
+    ["ฆ่าเชื้อ ลดกลิ่นอับ + เช็ดตัวเครื่อง/บานสวิง · Sanitize, deodorize, wipe casing", "ไม่มีกลิ่น · No odor"],
+    ["ล้างคอยล์ร้อน ครีบโล่ง ใบพัดสมดุลไม่มีเสียง · Wash condenser, fan balanced & quiet", "ครีบโล่ง · Fins clear"],
+    ["ขันแน่นจุดต่อสายไฟ + ตรวจฉนวนท่อ · Tighten terminals, check pipe insulation", "แน่น สมบูรณ์ · Tight"],
+    ["ตรวจแรงดันน้ำยา/รอยรั่ว เติมหากพร่อง · Check refrigerant pressure & leaks, top-up", "ตามพิกัด ไม่รั่ว · Per spec"],
   ]],
   ["ทดสอบและส่งมอบงาน · Test & handover", [
-    ["ประกอบชิ้นส่วนกลับครบ ยึดแน่น ไม่มีเหลือ · Reassemble completely", "ครบ/แน่น · Complete"],
-    ["เปิดทดสอบ ≥ 15 นาที ตรวจการทำงานรวม · Test run ≥ 15 min", "ทำงานปกติ · Normal"],
-    ["ตรวจน้ำทิ้ง ไม่รั่วซึม ไม่หยดจากเครื่อง/ท่อ · No leaks or dripping", "ไม่มีน้ำหยด · No drips"],
-    ["ตรวจเสียง/แรงลม ไม่มีเสียงผิดปกติ ลมสม่ำเสมอ · Check noise & airflow", "ปกติ · Normal"],
-    ["เก็บกวาดพื้นที่ให้สะอาดเหมือนเดิม · Clean up work area", "สะอาด · Clean"],
-    ["ส่งรูปก่อน–หลัง + ค่าที่วัดให้ลูกค้า · Send before/after photos & readings", "ลูกค้ารับทราบ · Informed"],
+    ["ประกอบกลับครบ เปิดทดสอบ ≥ 15 นาที · Reassemble, test run ≥ 15 min", "ทำงานปกติ · Normal"],
+    ["ไม่มีน้ำหยด เสียง/แรงลมปกติ · No dripping, normal noise & airflow", "ปกติ · Normal"],
+    ["เก็บพื้นที่สะอาด + ส่งรูปก่อน–หลังให้ลูกค้า · Clean up, send before/after photos", "ลูกค้ารับทราบ · Informed"],
     ["แนะนำรอบล้างถัดไป / เสนอสัญญาบำรุงรักษา · Advise next cleaning / offer PM contract", "นัดหมาย · Scheduled"],
   ]],
 ];
 export const WASH_MEAS = [
   ["อุณหภูมิลมออก (ช่องลมเย็น) · Supply air", "°C", "~ 12–16 °C"],
-  ["อุณหภูมิลมเข้า (Return air)", "°C", "อุณหภูมิห้อง · Room temp"],
   ["ผลต่างอุณหภูมิ ΔT (ลมเข้า–ออก)", "°C", "≥ 8–12 °C = เย็นดี · Good"],
-  ["กระแสไฟ Compressor", "A", "ไม่เกินพิกัดข้างเครื่อง · Within rating"],
-  ["แรงดันไฟฟ้า (Voltage)", "V", "220–240 V (1 เฟส · phase)"],
+  ["กระแสไฟ Compressor", "A", "ไม่เกินพิกัด · Within rating"],
+  ["แรงดันไฟฟ้า (Voltage)", "V", "220–240 V"],
   ["แรงดันน้ำยาด้าน Low (Suction)", "psi", "ตามชนิดน้ำยา · Per refrigerant"],
-  ["แรงดันน้ำยาด้าน High (ถ้ามี · if any)", "psi", "ตามพิกัดรุ่น · Per model"],
-  ["อุณหภูมิคอยล์ร้อน / ลมระบาย · Condenser air", "°C", "ระบายความร้อนดี · Good rejection"],
 ];
 
 // ── ซ่อม (AMC-RP) ──
 export const FIX_SYMPTOMS = ["ไม่เย็น · No cooling", "เย็นน้อย · Weak cooling", "น้ำหยด · Water dripping", "เสียงดัง · Noisy", "มีกลิ่น · Odor", "ไม่ทำงาน · Dead", "น้ำยารั่ว · Refrigerant leak"];
 export const FIX_DIAG = [
-  ["ตรวจแหล่งจ่ายไฟ / เบรกเกอร์ / แรงดันไฟเข้า · Power supply, breaker, incoming voltage", "ไฟปกติ · Power OK"],
-  ["ตรวจแผงคอนโทรล / เมนบอร์ด / รีโมท / เซนเซอร์ · Control board, remote, sensors", "ทำงานปกติ · Working"],
+  ["ตรวจไฟเข้า/เบรกเกอร์ + แผงคอนโทรล/รีโมท/เซนเซอร์ · Power, breaker, control board, remote, sensors", "ปกติ · OK"],
   ["ตรวจคอมเพรสเซอร์ / คาปาซิเตอร์ / มอเตอร์พัดลม · Compressor, capacitor, fan motors", "ค่าปกติ · In range"],
-  ["ตรวจแรงดัน/ปริมาณน้ำยา และหารอยรั่ว (Leak test) · Refrigerant pressure & leak check", "ไม่รั่ว/ครบ · No leak"],
-  ["ตรวจท่อน้ำทิ้ง / การอุดตัน / ถาดน้ำทิ้ง · Drain line, clogging, drain pan", "ระบายดี · Drains well"],
-  ["ตรวจการอุดตันคอยล์ / แผงกรอง / ใบพัดลม · Coil, filter & fan clogging", "ไม่อุดตัน · Clear"],
+  ["ตรวจแรงดัน/ปริมาณน้ำยา และหารอยรั่ว · Refrigerant pressure & leak check", "ไม่รั่ว/ครบ · No leak"],
+  ["ตรวจน้ำทิ้ง/การอุดตันคอยล์/แผงกรอง/ใบพัดลม · Drain, coil, filter & fan clogging", "ไม่อุดตัน · Clear"],
 ];
 export const FIX_REPAIR = [
-  ["งานที่ดำเนินการซ่อม (ระบุในตารางอะไหล่) · Repair work performed (see parts table)", "เสร็จสมบูรณ์ · Completed"],
-  ["เปลี่ยน/เติมน้ำยา (ระบุชนิดและปริมาณ) · Replace/top-up refrigerant (type & amount)", "ตามพิกัด · Per spec"],
-  ["ทำสุญญากาศใหม่ หากเปิดระบบน้ำยา · Re-vacuum if refrigerant circuit opened", "< 500 micron"],
+  ["ซ่อม/เปลี่ยนอะไหล่ตามตารางด้านล่าง · Repair / replace parts per table below", "เสร็จสมบูรณ์ · Completed"],
+  ["เติม/เปลี่ยนน้ำยา + ทำสุญญากาศใหม่หากเปิดระบบ · Top-up refrigerant + re-vacuum if opened", "< 500 micron"],
   ["ทดสอบรอยรั่วหลังซ่อมทุกจุดต่อ · Post-repair leak test at all joints", "ไม่มีรั่ว · No leaks"],
 ];
 export const FIX_MEAS = [
   ["อุณหภูมิลมออก (ช่องลมเย็น) · Supply air", "°C", "~ 12–16 °C"],
   ["ผลต่างอุณหภูมิ ΔT (ลมเข้า–ออก)", "°C", "≥ 8–12 °C = เย็นปกติ · Normal"],
-  ["กระแสไฟ Compressor (Running)", "A", "ไม่เกินพิกัดข้างเครื่อง · Within rating"],
-  ["แรงดันไฟฟ้า (Voltage)", "V", "220–240 V (1 เฟส · phase)"],
+  ["กระแสไฟ Compressor / แรงดันไฟ · Amp / Volt", "A · V", "ไม่เกินพิกัด · 220–240 V"],
   ["แรงดันน้ำยาด้าน Low (Suction)", "psi", "ตามชนิดน้ำยา · Per refrigerant"],
-  ["แรงดันน้ำยาด้าน High (ถ้ามี · if any)", "psi", "ตามพิกัดรุ่น · Per model"],
   ["ผลเช็ครั่วหลังซ่อม · Post-repair leak check", "", "ไม่มีรอยรั่ว · No leaks"],
 ];
 export const FIX_RESULTS = [["done", "ซ่อมเสร็จ ใช้งานได้ปกติ · Repaired, working normally"], ["temp", "ซ่อมชั่วคราว (รออะไหล่) · Temporary fix (awaiting parts)"], ["replace", "แนะนำเปลี่ยนเครื่อง · Replacement recommended"]];
@@ -266,13 +222,11 @@ export const FIX_RESULTS = [["done", "ซ่อมเสร็จ ใช้ง�
 // ── PM ตามสัญญา (AMC-PM) ──
 export const PMC_FREQS = ["ทุก 3 เดือน · Every 3 months", "ทุก 4 เดือน · Every 4 months", "ทุก 6 เดือน · Every 6 months"];
 export const PMC_ACTS = [
-  ["ล้าง/เป่าทำความสะอาดแผ่นกรองอากาศ · Clean/blow air filters", "ไม่อุดตัน · Clear"],
-  ["ตรวจ/ล้างคอยล์เย็น–คอยล์ร้อน ตามรอบสัญญา · Check/clean coils per contract cycle", "ครีบสะอาด · Fins clean"],
+  ["ล้างแผ่นกรอง + ตรวจ/ล้างคอยล์ตามรอบสัญญา · Clean filters, check/clean coils per cycle", "สะอาด ไม่อุดตัน · Clean"],
   ["ล้างถาดน้ำทิ้ง ตรวจท่อน้ำทิ้งไม่อุดตัน · Clean drain pan, check drain line", "ระบายดี · Drains well"],
   ["ตรวจ/ขันแน่นจุดต่อสายไฟ ขั้ว Terminal · Check & tighten electrical terminals", "แน่น ไม่ร้อน · Tight, cool"],
-  ["ตรวจแรงดัน/ปริมาณน้ำยา และหารอยรั่ว · Check refrigerant pressure & leaks", "ครบ/ไม่รั่ว · Full, no leak"],
-  ["ตรวจคอมเพรสเซอร์/พัดลม เสียง/การสั่น · Check compressor/fans, noise & vibration", "ปกติ · Normal"],
-  ["ตรวจฉนวนท่อน้ำยา ไม่ฉีกขาด ไม่มีน้ำหยด · Check pipe insulation, no condensate", "สมบูรณ์ · Intact"],
+  ["ตรวจแรงดัน/ปริมาณน้ำยา และหารอยรั่ว · Check refrigerant pressure & leaks", "ครบ/ไม่รั่ว · No leak"],
+  ["ตรวจคอม/พัดลม เสียง/สั่น + ฉนวนท่อ · Compressor/fans, noise/vibration, insulation", "ปกติ สมบูรณ์ · Normal"],
   ["ทดสอบรีโมท/ระบบควบคุม เดินเครื่องทดสอบ · Test remote/controls, run test", "ใช้งานได้ · Working"],
 ];
 export const PMC_REF = "เกณฑ์อ้างอิง · Reference: ลมออก Supply ~12–16 °C · ΔT ≥ 8–12 °C · Amp ไม่เกินพิกัด Within rating · ไฟ 220–240 V";
@@ -281,10 +235,10 @@ export const blankPmcMachine = () => ({ point: "", code: "", brand: "", btu: "",
 // ทุกชนิดที่ระบบรู้จัก (รวมชนิดเก่า perf/pm — ใบเก่าที่บันทึกไว้ยังเปิด/พิมพ์ได้ปกติ)
 export const FORM_KINDS = [
   // ชุดใหม่ตามเอกสาร AMC-AIR (ก.ค. 2569)
-  { kind: "inst", label: "เช็คลิสต์ติดตั้งแอร์ · Installation Checklist", icon: "🧰", hint: "ต่อ 1 ชุด — เช็คลิสต์ 4 หมวด 25 ข้อ + ค่าที่วัด 9 รายการ (แวคคั่ม/เช็ครั่ว) + รับประกัน + รูป" },
-  { kind: "wash", label: "เช็คลิสต์ล้างแอร์ · Cleaning Checklist", icon: "🧊", hint: "ต่อเครื่อง — เช็คลิสต์ 4 หมวด 23 ข้อ + วัดก่อน/หลังล้าง 8 ค่า + นัดรอบถัดไป + รูปก่อน/หลัง" },
-  { kind: "fix", label: "รายงานซ่อมแอร์ · Repair Service Report", icon: "🛠️", hint: "ต่อเครื่อง — อาการ + วินิจฉัย 6 ข้อ + การซ่อม/อะไหล่ + วัดหลังซ่อม 7 ค่า + ผล/รับประกัน + รูป" },
-  { kind: "pmc", label: "บันทึก PM ตามสัญญา · PM Service Record", icon: "📋", hint: "หลายเครื่องใน 1 ฟอร์ม — ทะเบียนเครื่อง+ค่าวัดรายเครื่อง + บำรุงรักษา 8 ข้อ + สรุปรอบ/นัดถัดไป" },
+  { kind: "inst", label: "เช็คลิสต์ติดตั้งแอร์ · Installation Checklist", icon: "🧰", hint: "ต่อ 1 ชุด — เช็คลิสต์ 12 ข้อ + ค่าที่วัด 6 รายการ (แวคคั่ม/เช็ครั่ว) + รับประกัน + รูป · พิมพ์จบใน A4 1 ใบ" },
+  { kind: "wash", label: "เช็คลิสต์ล้างแอร์ · Cleaning Checklist", icon: "🧊", hint: "ต่อเครื่อง — เช็คลิสต์ 11 ข้อ + วัดก่อน/หลังล้าง 5 ค่า + นัดรอบถัดไป + รูปก่อน/หลัง · พิมพ์จบใน A4 1 ใบ" },
+  { kind: "fix", label: "รายงานซ่อมแอร์ · Repair Service Report", icon: "🛠️", hint: "ต่อเครื่อง — อาการ + วินิจฉัย 4 ข้อ + การซ่อม/อะไหล่ + วัดหลังซ่อม 5 ค่า + ผล/รับประกัน + รูป · พิมพ์จบใน A4 1 ใบ" },
+  { kind: "pmc", label: "บันทึก PM ตามสัญญา · PM Service Record", icon: "📋", hint: "หลายเครื่องใน 1 ฟอร์ม — ทะเบียนเครื่อง+ค่าวัดรายเครื่อง + บำรุงรักษา 6 ข้อ + สรุปรอบ/นัดถัดไป · พิมพ์จบใน A4 1 ใบ" },
   // ชนิดเดิม — ใบเก่าที่บันทึกไว้ยังเปิด/พิมพ์ได้ปกติ
   { kind: "accept", label: "ส่งมอบงานติดตั้ง · Installation Handover", icon: "🧰", hint: "หลายเครื่องใน 1 ฟอร์ม — เช็คลิสต์ 13 ข้อรายเครื่อง + ความเรียบร้อยรวม + รูปส่งมอบไม่จำกัด" },
   { kind: "clean", label: "ส่งมอบงานล้าง · Cleaning Handover", icon: "🧊", hint: "ต่อเครื่อง — สิ่งที่ทำ 15 ข้อ + วัดก่อน/หลังล้าง 16 รายการ + รูปก่อน/หลัง อย่างละ 4" },
