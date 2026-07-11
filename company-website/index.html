@@ -909,6 +909,17 @@ document.querySelectorAll(".faq-q").forEach((q) => q.onclick = () => q.parentEle
 
 function toast(msg, bad) { const t = $("#toast"); t.textContent = msg; t.className = "toast on" + (bad ? " bad" : ""); setTimeout(() => t.className = "toast", 3200); }
 
+// ---------- conversion events → dataLayer (GTM) — ทีม ads ตั้ง trigger/conversion ได้เลย ----------
+// events: add_to_cart · generate_lead (ส่งออเดอร์/ฟอร์มติดต่อ) · click_line · click_call
+function track(event, params) { try { (window.dataLayer = window.dataLayer || []).push({ event, ...(params || {}) }); } catch (_) {} }
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[href]");
+  if (!a) return;
+  const h = a.getAttribute("href") || "";
+  if (h.indexOf("tel:") === 0) track("click_call", { link_url: h });
+  else if (/lin\.ee|line\.me/.test(a.href)) track("click_line", { link_url: a.href });
+});
+
 // ---------- cart (localStorage) ----------
 let cart = (() => { try { return JSON.parse(localStorage.getItem("amc_cart") || "[]"); } catch { return []; } })();
 const saveCart = () => localStorage.setItem("amc_cart", JSON.stringify(cart));
@@ -921,6 +932,7 @@ function addToCart(p) {
     cart.push({ code: p.code, name: p.name, price: p.price, photo: p.photo, qty: 1, kind: full.kind || "", acType: full.ac_type || "", btu: full.btu || "" });
   }
   saveCart(); renderCart(); openDrawer(); toast("เพิ่มลงตะกร้าแล้ว");
+  track("add_to_cart", { currency: "THB", value: Number(p.price) || 0, item_code: p.code, item_name: p.name });
 }
 function setQty(code, d) { const it = cart.find((x) => x.code === code); if (!it) return; it.qty += d; if (it.qty <= 0) cart = cart.filter((x) => x.code !== code); saveCart(); renderCart(); }
 function rmItem(code) { cart = cart.filter((x) => x.code !== code); saveCart(); renderCart(); }
@@ -1111,7 +1123,9 @@ function renderProducts() {
 async function loadProducts() {
   if (!hasSb) { allProducts = SAMPLE.slice(); prodNote = "* ตัวอย่างสินค้า — ตั้งค่า Supabase ในไฟล์เพื่อดึงสินค้าจริงจากคลัง"; renderProducts(); return; }
   try {
-    const { data, error } = await sb.from("web_products").select("*").limit(1000);
+    // เลือกเฉพาะคอลัมน์ที่หน้าเว็บใช้จริง (ไม่เอา description/unit) — ลด payload ที่ต้องโหลดทุกครั้งที่เปิดเว็บ
+    const COLS = "code,name_th,name_en,kind,brand,btu,ac_type,sale_price,photo_url,power_cost_year,features,category,btu_min,btu_max,series,voltage,refrigerant,seer,pipe_size,energy_label";
+    const { data, error } = await sb.from("web_products").select(COLS).limit(1000);
     if (error) throw error;
     allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, category: r.category, tag: r.kind === "service" && SVC_TH[r.category] ? "บริการ · " + SVC_TH[r.category] : KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, btuMin: r.btu_min, btuMax: r.btu_max, ac_type: r.ac_type, powerCostYear: r.power_cost_year, features: r.features,
       series: r.series, voltage: r.voltage, refrigerant: r.refrigerant, seer: r.seer, pipe: r.pipe_size, energyLabel: r.energy_label }));
@@ -1173,6 +1187,7 @@ async function submitOrder(e) {
       ? "https://line.me/R/oaMessage/" + encodeURIComponent(C.LINE_ID) + "/?" + encodeURIComponent(lineOrderMsg(payload))
       : (C.LINE || "");
     cart = []; saveCart(); renderCart(); f.reset();
+    track("generate_lead", { currency: "THB", value: Number(payload.total) || 0, lead_type: "order", items_count: payload.items.length });
     toast("ส่งคำสั่งซื้อแล้ว ✓ ทีมงานจะติดต่อกลับโดยเร็ว");
     if (lineUrl) {
       $("#cartBody").innerHTML = `<div class="order-ok">
@@ -1197,6 +1212,7 @@ async function submitLead(e) {
     const { error } = await sb.from("web_orders").insert(payload);
     if (error) throw error;
     f.reset(); toast("ส่งคำขอแล้ว ✓ ทีมงานจะติดต่อกลับโดยเร็ว");
+    track("generate_lead", { currency: "THB", value: 0, lead_type: "contact_form" });
   } catch (err) { toast("ส่งไม่สำเร็จ ลองใหม่หรือโทรหาเรา", true); }
   btn.disabled = false; btn.textContent = "ส่งคำขอ";
   return false;
@@ -1488,6 +1504,7 @@ route();
   $("heroCall")?.addEventListener("click", (e) => {
     e.preventDefault();
     const href = $("fabCall")?.getAttribute("href");
+    if (typeof track === "function" && href && href.indexOf("tel:") === 0) track("click_call", { link_url: href });
     if (href && href !== "#") location.href = href;
     else location.hash = "#contact";
   });
