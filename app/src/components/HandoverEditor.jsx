@@ -2,8 +2,30 @@ import React from "react";
 import { UIcon } from "../icons";
 import { confirmDialog } from "./ConfirmDialog";
 import SignaturePad from "./SignaturePad";
-import { saveHandover, uploadSignatureDataUrl, uploadMaterialPhoto } from "../lib/api";
-import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, FORM_KINDS, ADD_KINDS, blankForm, ACCEPT_GROUPS, ACCEPT_ROWS, ACCEPT_OVERALL, blankAcceptMachine } from "../lib/handover";
+import { saveHandover, uploadSignatureDataUrl, uploadMaterialPhoto, listMaterialsLite } from "../lib/api";
+import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, AC_BRANDS, BTU_SIZES, FORM_KINDS, ADD_KINDS, blankForm, ACCEPT_GROUPS, ACCEPT_ROWS, ACCEPT_OVERALL, blankAcceptMachine } from "../lib/handover";
+
+// หัวข้อมูลแอร์มาตรฐาน — ทุกแบบฟอร์มใช้ชุดเดียวกัน: รหัส / ประเภท (dropdown) / ยี่ห้อ (datalist) /
+// รุ่น / BTU (datalist จากแคตตาล็อก) / อาคาร / ชั้น / ห้อง / Serial · ป้าย 2 ภาษา
+function MachineHead({ m = {}, onSet }) {
+  return (
+    <div className="he-machine">
+      <input className="inp sm" placeholder="รหัสประจำเครื่อง · Code" value={m.code || ""} onChange={(e) => onSet("code", e.target.value)} />
+      <select className="inp sm" value={m.type || ""} onChange={(e) => onSet("type", e.target.value)}>
+        <option value="">ประเภทเครื่อง · Type…</option>
+        {m.type && !AC_TYPES.includes(m.type) && <option value={m.type}>{m.type}</option>}
+        {AC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+      </select>
+      <input className="inp sm" list="ho-brand-list" placeholder="ยี่ห้อ · Brand" value={m.brand || ""} onChange={(e) => onSet("brand", e.target.value)} />
+      <input className="inp sm" placeholder="รุ่น · Model" value={m.model || ""} onChange={(e) => onSet("model", e.target.value)} />
+      <input className="inp sm" list="ho-btu-list" placeholder="ขนาด BTU" value={m.btu || ""} onChange={(e) => onSet("btu", e.target.value)} />
+      <input className="inp sm" placeholder="Serial No." value={m.serial || ""} onChange={(e) => onSet("serial", e.target.value)} />
+      <input className="inp sm" placeholder="อาคาร · Building" value={m.building || ""} onChange={(e) => onSet("building", e.target.value)} />
+      <input className="inp sm" placeholder="ชั้น · Floor" value={m.floor || ""} onChange={(e) => onSet("floor", e.target.value)} />
+      <input className="inp sm" placeholder="ห้อง · Room" value={m.room || ""} onChange={(e) => onSet("room", e.target.value)} />
+    </div>
+  );
+}
 
 // Full-screen editor where the technician fills in a handover sheet while on the job.
 // props: initial (a handover object), onClose(), onSaved(saved), flash(msg, bad)
@@ -11,6 +33,14 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
   const [h, setH] = React.useState(initial);
   const [busy, setBusy] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
+  // ขนาด BTU อ้างอิงจากสินค้าแอร์จริงในแคตตาล็อก (โหลดไม่ได้ → ใช้ชุดมาตรฐาน)
+  const [btuList, setBtuList] = React.useState(BTU_SIZES);
+  React.useEffect(() => {
+    listMaterialsLite().then((m) => {
+      const s = [...new Set(m.filter((x) => x.kind === "ac" && x.btu).map((x) => String(x.btu)))].sort((a, b) => a - b);
+      if (s.length) setBtuList(s);
+    }).catch(() => {});
+  }, []);
   const set = (k, v) => setH((s) => ({ ...s, [k]: v }));
 
   const toggleWork = (v) => setH((s) => ({ ...s, work_types: s.work_types.includes(v) ? s.work_types.filter((x) => x !== v) : [...s.work_types, v] }));
@@ -45,31 +75,34 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
         </div>
 
         <div className="modal-body he-body">
+          {/* datalist กลาง — ช่องยี่ห้อ/BTU ของทุกแบบฟอร์มชี้มาที่นี่ (เลือกจากรายการ หรือพิมพ์เองได้) */}
+          <datalist id="ho-brand-list">{AC_BRANDS.map((b) => <option key={b} value={b} />)}</datalist>
+          <datalist id="ho-btu-list">{btuList.map((b) => <option key={b} value={b} />)}</datalist>
           <div className="he-hint">📋 <b>ก่อนเริ่มงาน:</b> กรอกค่าช่อง “ก่อน” แล้วกด <b>บันทึกร่าง</b> · <b>ทำเสร็จแล้ว:</b> กลับเข้ามากรอกช่อง “หลัง” + เช็คลิสต์ แล้วกด <b>บันทึก &amp; ส่ง</b></div>
           {/* ── ผู้รับบริการ ── */}
-          <div className="he-sec-t">ผู้รับบริการ</div>
+          <div className="he-sec-t">ผู้รับบริการ · Customer</div>
           <div className="he-grid2">
-            <label className="he-f"><span>บริษัท / ชื่อ-สกุล</span><input className="inp" value={h.customer_name || ""} onChange={(e) => set("customer_name", e.target.value)} /></label>
-            <label className="he-f"><span>ผู้ติดต่อ</span><input className="inp" value={h.contact_name || ""} onChange={(e) => set("contact_name", e.target.value)} /></label>
-            <label className="he-f"><span>เบอร์โทร</span><input className="inp" value={h.contact_phone || ""} onChange={(e) => set("contact_phone", e.target.value)} /></label>
-            <label className="he-f"><span>เอกสารอ้างอิง</span><input className="inp" value={h.doc_ref || ""} onChange={(e) => set("doc_ref", e.target.value)} /></label>
-            <label className="he-f he-f-wide"><span>ที่อยู่</span><input className="inp" value={h.address || ""} onChange={(e) => set("address", e.target.value)} /></label>
-            <label className="he-f"><span>วันที่</span><input type="date" className="inp" value={h.doc_date || ""} onChange={(e) => set("doc_date", e.target.value)} /></label>
+            <label className="he-f"><span>บริษัท / ชื่อ-สกุล · Company / Name</span><input className="inp" value={h.customer_name || ""} onChange={(e) => set("customer_name", e.target.value)} /></label>
+            <label className="he-f"><span>ผู้ติดต่อ · Contact person</span><input className="inp" value={h.contact_name || ""} onChange={(e) => set("contact_name", e.target.value)} /></label>
+            <label className="he-f"><span>เบอร์โทร · Phone</span><input className="inp" value={h.contact_phone || ""} onChange={(e) => set("contact_phone", e.target.value)} /></label>
+            <label className="he-f"><span>เอกสารอ้างอิง · Reference</span><input className="inp" value={h.doc_ref || ""} onChange={(e) => set("doc_ref", e.target.value)} /></label>
+            <label className="he-f he-f-wide"><span>ที่อยู่ · Address</span><input className="inp" value={h.address || ""} onChange={(e) => set("address", e.target.value)} /></label>
+            <label className="he-f"><span>วันที่ · Date</span><input type="date" className="inp" value={h.doc_date || ""} onChange={(e) => set("doc_date", e.target.value)} /></label>
           </div>
 
           {/* ── ประเภทงาน ── */}
-          <div className="he-sec-t">ประเภทงาน</div>
+          <div className="he-sec-t">ประเภทงาน · Work Type</div>
           <div className="he-chips">
             {WORK_TYPES.map(([v, l]) => (
               <button key={v} type="button" className={"he-chip" + (h.work_types.includes(v) ? " on" : "")} onClick={() => toggleWork(v)}>{l}</button>
             ))}
           </div>
 
-          <label className="he-f he-f-wide"><span>รายละเอียด / อาการเสีย / การสำรวจหน้างาน</span>
+          <label className="he-f he-f-wide"><span>รายละเอียด / อาการเสีย / การสำรวจหน้างาน · Details / Symptoms / Survey</span>
             <textarea className="inp" rows={2} value={h.detail || ""} onChange={(e) => set("detail", e.target.value)} /></label>
 
           {/* ── แบบฟอร์มย่อย ── */}
-          <div className="he-sec-t">แบบฟอร์ม ({h.forms.length})
+          <div className="he-sec-t">แบบฟอร์ม · Forms ({h.forms.length})
             <button type="button" className="btn-primary sm" style={{ marginLeft: "auto" }} onClick={() => setAddOpen(true)}><UIcon name="plus" size={14} color="#fff" /> เพิ่มแบบฟอร์ม</button>
           </div>
           {h.forms.length === 0 && <div className="he-empty">ยังไม่มีแบบฟอร์ม — กด “เพิ่มแบบฟอร์ม” เพื่อเริ่มบันทึกเครื่องแรก</div>}
@@ -78,19 +111,19 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
           ))}
 
           {/* ── การแก้ไข/หมายเหตุ ── */}
-          <label className="he-f he-f-wide"><span>การแก้ไข / หมายเหตุอื่น ๆ</span>
+          <label className="he-f he-f-wide"><span>การแก้ไข / หมายเหตุอื่น ๆ · Remarks</span>
             <textarea className="inp" rows={2} value={h.fix_note || ""} onChange={(e) => set("fix_note", e.target.value)} /></label>
 
           {/* ── ลายเซ็น ── */}
-          <div className="he-sec-t">ลายเซ็น</div>
+          <div className="he-sec-t">ลายเซ็น · Signatures</div>
           <div className="he-signs">
             <div className="he-sign-col">
-              <SignaturePad label="ลายเซ็นช่างผู้ให้บริการ" value={h.tech_sign_url} onChange={(d) => set("tech_sign_url", d)} />
-              <input className="inp" placeholder="ชื่อช่าง" value={h.tech_name || ""} onChange={(e) => set("tech_name", e.target.value)} />
+              <SignaturePad label="ลายเซ็นช่างผู้ให้บริการ · Technician" value={h.tech_sign_url} onChange={(d) => set("tech_sign_url", d)} />
+              <input className="inp" placeholder="ชื่อช่าง · Technician name" value={h.tech_name || ""} onChange={(e) => set("tech_name", e.target.value)} />
             </div>
             <div className="he-sign-col">
-              <SignaturePad label={h.forms.some((f) => f.kind === "accept") ? "ลายเซ็นผู้ตรวจสอบ/ผู้รับมอบงาน" : "ลายเซ็นผู้รับบริการ (ลูกค้า)"} value={h.cust_sign_url} onChange={(d) => set("cust_sign_url", d)} />
-              <input className="inp" placeholder={h.forms.some((f) => f.kind === "accept") ? "ชื่อผู้ตรวจสอบ/ผู้รับมอบงาน" : "ชื่อผู้รับบริการ"} value={h.cust_name || ""} onChange={(e) => set("cust_name", e.target.value)} />
+              <SignaturePad label={h.forms.some((f) => f.kind === "accept") ? "ลายเซ็นผู้ตรวจสอบ/ผู้รับมอบงาน · Inspector / Receiver" : "ลายเซ็นผู้รับบริการ (ลูกค้า) · Customer"} value={h.cust_sign_url} onChange={(d) => set("cust_sign_url", d)} />
+              <input className="inp" placeholder={h.forms.some((f) => f.kind === "accept") ? "ชื่อผู้ตรวจสอบ/ผู้รับมอบงาน · Inspector name" : "ชื่อผู้รับบริการ · Customer name"} value={h.cust_name || ""} onChange={(e) => set("cust_name", e.target.value)} />
             </div>
           </div>
         </div>
@@ -134,27 +167,15 @@ function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
         <button type="button" className="he-form-x" onClick={onRemove}><UIcon name="trash" size={14} /></button>
       </div>
 
-      {/* machine identity */}
-      <div className="he-machine">
-        <input className="inp sm" placeholder="รหัสประจำเครื่อง" value={m.code || ""} onChange={(e) => onMachine(idx, "code", e.target.value)} />
-        <select className="inp sm" value={m.type || ""} onChange={(e) => onMachine(idx, "type", e.target.value)}>
-          <option value="">ประเภทเครื่อง…</option>
-          {AC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <input className="inp sm" placeholder="ยี่ห้อ" value={m.brand || ""} onChange={(e) => onMachine(idx, "brand", e.target.value)} />
-        <input className="inp sm" placeholder="รุ่น" value={m.model || ""} onChange={(e) => onMachine(idx, "model", e.target.value)} />
-        <input className="inp sm" placeholder="ขนาด BTU" value={m.btu || ""} onChange={(e) => onMachine(idx, "btu", e.target.value)} />
-        <input className="inp sm" placeholder="อาคาร" value={m.building || ""} onChange={(e) => onMachine(idx, "building", e.target.value)} />
-        <input className="inp sm" placeholder="ชั้น" value={m.floor || ""} onChange={(e) => onMachine(idx, "floor", e.target.value)} />
-        <input className="inp sm" placeholder="ห้อง" value={m.room || ""} onChange={(e) => onMachine(idx, "room", e.target.value)} />
-      </div>
+      {/* machine identity — หัวข้อมูลแอร์มาตรฐาน ชุดเดียวกันทุกแบบฟอร์ม */}
+      <MachineHead m={m} onSet={(k, v) => onMachine(idx, k, v)} />
 
       {/* งานล้าง: ตาราง "สิ่งที่ดำเนินการ" (15 ข้อ) ก่อนตารางวัดก่อน/หลัง */}
       {f.kind === "clean" && (
         <>
-          <div style={{ fontWeight: 700, fontSize: 12.5, margin: "6px 0 2px" }}>สิ่งที่ดำเนินการ (ล้าง / PM)</div>
+          <div style={{ fontWeight: 700, fontSize: 12.5, margin: "6px 0 2px" }}>สิ่งที่ดำเนินการ (ล้าง / PM) · Work performed</div>
           <table className="he-tbl">
-            <thead><tr><th className="n">#</th><th>รายการ</th><th className="pmh">ได้ทำ</th><th className="pmh">ไม่ได้ทำ</th></tr></thead>
+            <thead><tr><th className="n">#</th><th>รายการ · Item</th><th className="pmh">ได้ทำ · Done</th><th className="pmh">ไม่ได้ทำ · Not</th></tr></thead>
             <tbody>
               {PM_ROWS.map((label, ri) => { const v = (f.acts || [])[ri]; return (
                 <tr key={ri}>
@@ -166,13 +187,13 @@ function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
               ); })}
             </tbody>
           </table>
-          <div style={{ fontWeight: 700, fontSize: 12.5, margin: "8px 0 2px" }}>วัดผล ก่อนล้าง / หลังล้าง</div>
+          <div style={{ fontWeight: 700, fontSize: 12.5, margin: "8px 0 2px" }}>วัดผล ก่อนล้าง / หลังล้าง · Measurements before / after cleaning</div>
         </>
       )}
 
       {f.kind === "pm" ? (
         <table className="he-tbl">
-          <thead><tr><th className="n">#</th><th>รายการ</th><th className="pmh">ได้ทำ</th><th className="pmh">ไม่ได้ทำ</th></tr></thead>
+          <thead><tr><th className="n">#</th><th>รายการ · Item</th><th className="pmh">ได้ทำ · Done</th><th className="pmh">ไม่ได้ทำ · Not</th></tr></thead>
           <tbody>
             {PM_ROWS.map((label, ri) => {
               const v = f.rows[ri];
@@ -191,10 +212,10 @@ function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
         (() => {
           // ตารางวัด ก่อน/หลัง — ใช้ร่วม 3 ชนิด: perf (เดิม) / clean (ล้าง) / repair (ซ่อม)
           const BA = f.kind === "clean" ? CLEAN_ROWS : f.kind === "repair" ? REPAIR_ROWS : PERF_ROWS;
-          const [lb, la] = f.kind === "clean" ? ["ก่อนล้าง", "หลังล้าง"] : f.kind === "repair" ? ["ก่อนซ่อม", "หลังซ่อม"] : ["ก่อน", "หลัง"];
+          const [lb, la] = f.kind === "clean" ? ["ก่อนล้าง · Before", "หลังล้าง · After"] : f.kind === "repair" ? ["ก่อนซ่อม · Before", "หลังซ่อม · After"] : ["ก่อน · Before", "หลัง · After"];
           return (
             <table className="he-tbl">
-              <thead><tr><th className="n">#</th><th>รายการ</th><th>{lb}</th><th>{la}</th></tr></thead>
+              <thead><tr><th className="n">#</th><th>รายการ · Item</th><th>{lb}</th><th>{la}</th></tr></thead>
               <tbody>
                 {BA.map(([label, kind], ri) => {
                   const v = f.rows[ri] || { b: "", a: "" };
@@ -206,8 +227,8 @@ function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
                         <td key={side}>
                           {kind === "ck"
                             ? <span className="he-ck">
-                                <button type="button" className={"he-ck-b" + (v[side] === "ok" ? " ok" : "")} onClick={() => onRow(idx, ri, { ...v, [side]: v[side] === "ok" ? "" : "ok" })}>ปกติ</button>
-                                <button type="button" className={"he-ck-b" + (v[side] === "bad" ? " bad" : "")} onClick={() => onRow(idx, ri, { ...v, [side]: v[side] === "bad" ? "" : "bad" })}>ไม่ปกติ</button>
+                                <button type="button" className={"he-ck-b" + (v[side] === "ok" ? " ok" : "")} title="ปกติ · Normal" onClick={() => onRow(idx, ri, { ...v, [side]: v[side] === "ok" ? "" : "ok" })}>ปกติ</button>
+                                <button type="button" className={"he-ck-b" + (v[side] === "bad" ? " bad" : "")} title="ไม่ปกติ · Abnormal" onClick={() => onRow(idx, ri, { ...v, [side]: v[side] === "bad" ? "" : "bad" })}>ไม่ปกติ</button>
                               </span>
                             : <span className="he-unit"><input className="inp sm" value={v[side] || ""} onChange={(e) => onRow(idx, ri, { ...v, [side]: e.target.value })} /><small>{kind}</small></span>}
                         </td>
@@ -222,18 +243,18 @@ function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
       )}
 
       {f.kind === "repair" && (
-        <label className="he-f he-f-wide" style={{ marginTop: 6 }}><span>สิ่งที่ตรวจพบ / สิ่งที่ซ่อม / อะไหล่ที่เปลี่ยน</span>
+        <label className="he-f he-f-wide" style={{ marginTop: 6 }}><span>สิ่งที่ตรวจพบ / สิ่งที่ซ่อม / อะไหล่ที่เปลี่ยน · Findings / repairs / parts replaced</span>
           <textarea className="inp" rows={2} value={f.fix || ""} onChange={(e) => onPatch({ fix: e.target.value })} /></label>
       )}
 
       {(f.kind === "clean" || f.kind === "repair") && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
-          <PhotoPicker label={`รูปก่อน${f.kind === "clean" ? "ล้าง" : "ซ่อม"} (สูงสุด 4)`} urls={f.photosBefore || []} max={4} onChange={(urls) => onPatch({ photosBefore: urls })} />
-          <PhotoPicker label={`รูปหลัง${f.kind === "clean" ? "ล้าง" : "ซ่อม"} (สูงสุด 4)`} urls={f.photosAfter || []} max={4} onChange={(urls) => onPatch({ photosAfter: urls })} />
+          <PhotoPicker label={`รูปก่อน${f.kind === "clean" ? "ล้าง" : "ซ่อม"} · Before (สูงสุด 4)`} urls={f.photosBefore || []} max={4} onChange={(urls) => onPatch({ photosBefore: urls })} />
+          <PhotoPicker label={`รูปหลัง${f.kind === "clean" ? "ล้าง" : "ซ่อม"} · After (สูงสุด 4)`} urls={f.photosAfter || []} max={4} onChange={(urls) => onPatch({ photosAfter: urls })} />
         </div>
       )}
 
-      <input className="inp sm" placeholder="หมายเหตุของแบบฟอร์มนี้" value={f.note || ""} onChange={(e) => onNote(e.target.value)} style={{ marginTop: 6 }} />
+      <input className="inp sm" placeholder="หมายเหตุของแบบฟอร์มนี้ · Note" value={f.note || ""} onChange={(e) => onNote(e.target.value)} style={{ marginTop: 6 }} />
     </div>
   );
 }
@@ -263,17 +284,23 @@ function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove }) {
         <button type="button" className="he-form-x" onClick={onRemove}><UIcon name="trash" size={14} /></button>
       </div>
 
-      <div style={{ fontWeight: 700, fontSize: 12.5, margin: "6px 0 4px" }}>รายการเครื่องที่ติดตั้ง ({n})
-        <button type="button" className="btn-ghost sm" style={{ marginLeft: 8 }} onClick={addMachine}>＋ เพิ่มเครื่อง</button>
+      <div style={{ fontWeight: 700, fontSize: 12.5, margin: "6px 0 4px" }}>รายการเครื่องที่ติดตั้ง · Installed units ({n})
+        <button type="button" className="btn-ghost sm" style={{ marginLeft: 8 }} onClick={addMachine}>＋ เพิ่มเครื่อง · Add unit</button>
       </div>
       {machines.map((m, mi) => (
         <div key={mi} style={{ display: "flex", gap: 6, marginBottom: 4, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ width: 22, textAlign: "center", fontWeight: 700, color: "var(--ink-3)", flex: "none" }}>{mi + 1}</span>
-          <input className="inp sm" style={{ flex: "1 1 120px" }} placeholder="จุดติดตั้ง เช่น ห้องประชุม" value={m.point || ""} onChange={(e) => setMachine(mi, "point", e.target.value)} />
-          <input className="inp sm" style={{ flex: "1 1 90px" }} placeholder="ยี่ห้อ" value={m.brand || ""} onChange={(e) => setMachine(mi, "brand", e.target.value)} />
-          <input className="inp sm" style={{ flex: "1 1 110px" }} placeholder="รุ่น" value={m.model || ""} onChange={(e) => setMachine(mi, "model", e.target.value)} />
-          <input className="inp sm" style={{ flex: "0 1 80px" }} placeholder="BTU" value={m.btu || ""} onChange={(e) => setMachine(mi, "btu", e.target.value)} />
-          <input className="inp sm" style={{ flex: "1 1 100px" }} placeholder="Serial" value={m.serial || ""} onChange={(e) => setMachine(mi, "serial", e.target.value)} />
+          <input className="inp sm" style={{ flex: "1 1 120px" }} placeholder="จุดติดตั้ง · Location" value={m.point || ""} onChange={(e) => setMachine(mi, "point", e.target.value)} />
+          <input className="inp sm" style={{ flex: "0 1 95px" }} placeholder="รหัส · Code" value={m.code || ""} onChange={(e) => setMachine(mi, "code", e.target.value)} />
+          <select className="inp sm" style={{ flex: "1 1 120px" }} value={m.type || ""} onChange={(e) => setMachine(mi, "type", e.target.value)}>
+            <option value="">ประเภท · Type…</option>
+            {m.type && !AC_TYPES.includes(m.type) && <option value={m.type}>{m.type}</option>}
+            {AC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input className="inp sm" list="ho-brand-list" style={{ flex: "1 1 90px" }} placeholder="ยี่ห้อ · Brand" value={m.brand || ""} onChange={(e) => setMachine(mi, "brand", e.target.value)} />
+          <input className="inp sm" style={{ flex: "1 1 100px" }} placeholder="รุ่น · Model" value={m.model || ""} onChange={(e) => setMachine(mi, "model", e.target.value)} />
+          <input className="inp sm" list="ho-btu-list" style={{ flex: "0 1 80px" }} placeholder="BTU" value={m.btu || ""} onChange={(e) => setMachine(mi, "btu", e.target.value)} />
+          <input className="inp sm" style={{ flex: "1 1 95px" }} placeholder="Serial" value={m.serial || ""} onChange={(e) => setMachine(mi, "serial", e.target.value)} />
           {n > 1 && <button type="button" className="he-form-x" onClick={() => rmMachine(mi)}><UIcon name="x" size={13} /></button>}
         </div>
       ))}
@@ -281,7 +308,7 @@ function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove }) {
       <div style={{ overflowX: "auto", marginTop: 8 }}>
         <table className="he-tbl" style={{ minWidth: n > 3 ? 480 + n * 52 : undefined }}>
           <thead>
-            <tr><th>รายการตรวจ · กดช่องเพื่อติ๊ก ✓ ผ่าน / ✕ ไม่ผ่าน</th>
+            <tr><th>รายการตรวจ · Inspection item — กดช่องเพื่อติ๊ก ✓ ผ่าน Pass / ✕ ไม่ผ่าน Fail</th>
               {machines.map((_, mi) => <th key={mi} style={{ width: 52, textAlign: "center" }}>{mi + 1}<br />
                 <button type="button" className="btn-ghost sm" style={{ padding: "1px 6px", fontSize: 10.5 }} title={`ติ๊กผ่านทุกข้อ เครื่อง ${mi + 1}`} onClick={() => allPass(mi)}>✓ทั้งคอลัมน์</button></th>)}
             </tr>
@@ -311,7 +338,7 @@ function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove }) {
         </table>
       </div>
 
-      <div style={{ fontWeight: 700, fontSize: 12.5, margin: "10px 0 4px" }}>ความเรียบร้อยรวมทั้งงาน</div>
+      <div style={{ fontWeight: 700, fontSize: 12.5, margin: "10px 0 4px" }}>ความเรียบร้อยรวมทั้งงาน · Overall completion</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {ACCEPT_OVERALL.map((label, oi) => { const on = (f.overall || [])[oi]; return (
           <button key={oi} type="button" onClick={() => toggleOverall(oi)}
@@ -326,10 +353,10 @@ function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove }) {
       </div>
 
       <div style={{ marginTop: 8 }}>
-        <PhotoPicker label="รูปส่งมอบงาน (ไม่จำกัดจำนวน)" urls={f.photos || []} onChange={(urls) => onPatch({ photos: urls })} />
+        <PhotoPicker label="รูปส่งมอบงาน · Handover photos (ไม่จำกัดจำนวน)" urls={f.photos || []} onChange={(urls) => onPatch({ photos: urls })} />
       </div>
 
-      <input className="inp sm" placeholder="หมายเหตุของแบบฟอร์มนี้" value={f.note || ""} onChange={(e) => onNote(e.target.value)} style={{ marginTop: 6 }} />
+      <input className="inp sm" placeholder="หมายเหตุของแบบฟอร์มนี้ · Note" value={f.note || ""} onChange={(e) => onNote(e.target.value)} style={{ marginTop: 6 }} />
     </div>
   );
 }
