@@ -117,7 +117,9 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     setMats(m); setTeams(tm); setRecent(r); setJobs(j);
     const firstTracked = m.find((x) => x.tracked);
     if (!pickCode && firstTracked) setPickCode(firstTracked.code);
-    if (!team && tm.length) setTeam(isTech && myTeam ? myTeam : tm[0].id);
+    // ค่าเริ่มต้นทีม — เซ็ตแบบ functional: ถ้าถูกตั้งไว้แล้ว (เช่น เด้งมาจากปุ่มเบิกวัสดุบนใบงาน
+    // ที่ผูกทีมมาให้ก่อน load เสร็จ) ห้ามทับ (closure เก่าของ team ตอนสร้าง load() เป็นค่าว่างเสมอ)
+    if (tm.length) setTeam((cur) => cur || (isTech && myTeam ? myTeam : tm[0].id));
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
