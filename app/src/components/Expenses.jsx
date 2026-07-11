@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, setExpenseExpectedDate, listJobOrders } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { useDocPeek } from "./DocPeek";
 import AttachThumb from "./AttachThumb";
@@ -9,6 +9,8 @@ import { UIcon } from "../icons";
 
 const OFFICE = ["admin", "exec", "finance", "hr"]; // hr: อนุมัติ/จ่ายเบิก + คุมเงินสดย่อย (v249)
 const EST = { pending: { t: "รออนุมัติ", c: "b-amber" }, approved: { t: "อนุมัติ · รอจ่าย", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", c: "b-red" }, paid: { t: "จ่ายแล้ว", c: "b-green" } };
+// เบิกเงินไปแล้ว (จ่ายครบหรือบางส่วน) แต่ยังไม่มีรูปใบเสร็จ/บิลแนบ → ตามทวงใบเสร็จ
+const needReceipt = (x) => x.status !== "rejected" && (x.status === "paid" || Number(x.paid_amount) > 0) && !(x.attachments?.length);
 const fmtD = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }) : "";
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -75,7 +77,7 @@ export default function Expenses({ role, me, onOpenDoc }) {
   return (
     <div className="adm">
       <div className="adm-head"><div><h1 className="page-title">เบิกจ่าย <span className="page-title-en">Expenses</span></h1>
-        <p className="page-sub">ขอเบิกค่าใช้จ่าย แนบบิล → อนุมัติ → จ่ายจากกระเป๋าเงิน + แนบหลักฐาน · โอนเงินระหว่างบัญชี</p></div></div>
+        <p className="page-sub">ขอเบิก (ใบเสร็จยังไม่มีได้) → อนุมัติ → โอนจ่าย + แนบสลิป → เอาเงินไปจ่ายแล้วกลับมาแนบใบเสร็จ · โอนเงินระหว่างบัญชี</p></div></div>
       <div className="cat-filter">
         {TABS.map(([v, l]) => <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
           style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
@@ -103,6 +105,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
       <div className="job-card-head" style={{ cursor: "default" }}>
         <div className="job-card-id"><span className="job-no">{x.title}</span><span className={"job-badge " + st.c}>{st.t}</span>
           {partial && <span className="job-badge b-amber">จ่ายบางส่วน</span>}
+          {needReceipt(x) && <span className="job-badge b-amber">📎 ค้างแนบใบเสร็จ</span>}
           {x.poNo && chip("PO " + x.poNo, () => onOpenDoc("po", x.poNo), { bg: "#fff7ed", fg: "#c2410c" })}
           {(x.jobNo || x.job_no) && chip("งาน " + (x.jobNo || x.job_no), () => onOpenDoc("job", x.jobNo || x.job_no), { bg: "#f3e8ff", fg: "#7c3aed" })}
           {x.quoteNo && chip("อ้างอิง " + x.quoteNo, () => onOpenDoc("quote", x.quoteNo), { bg: "#eff6ff", fg: "#1d4ed8" })}
@@ -128,8 +131,8 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
       )}
       {(x.attachments?.length > 0 || x.payment_proof?.length > 0) && (
         <div className="exp-atts">
-          {x.attachments?.length > 0 && <div className="exp-att-grp"><span>บิล/หลักฐาน:</span><div className="tb-attach-grid">{x.attachments.map((u, i) => <div className="tb-att" key={i}><AttachThumb url={u} /></div>)}</div></div>}
-          {x.payment_proof?.length > 0 && <div className="exp-att-grp"><span>หลักฐานการจ่าย:</span><div className="tb-attach-grid">{x.payment_proof.map((u, i) => <div className="tb-att" key={i}><AttachThumb url={u} /></div>)}</div></div>}
+          {x.attachments?.length > 0 && <div className="exp-att-grp"><span>🧾 ใบเสร็จ/บิล:</span><div className="tb-attach-grid">{x.attachments.map((u, i) => <div className="tb-att" key={i}><AttachThumb url={u} /></div>)}</div></div>}
+          {x.payment_proof?.length > 0 && <div className="exp-att-grp"><span>💸 สลิปโอนเงิน:</span><div className="tb-attach-grid">{x.payment_proof.map((u, i) => <div className="tb-att" key={i}><AttachThumb url={u} /></div>)}</div></div>}
         </div>
       )}
       {children && <div className="job-lines"><div className="job-actions">{children}</div></div>}
@@ -146,13 +149,16 @@ function MineTab({ flash, onOpenDoc }) {
   const [list, setList] = React.useState(null);
   const [jobs, setJobs] = React.useState([]);
   const [form, setForm] = React.useState(null);
+  const [rcptFor, setRcptFor] = React.useState(null);   // รายการที่กำลังแนบใบเสร็จย้อนหลัง
   const [q, setQ] = React.useState("");
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   async function load() { try { setList(await listMyExpenses()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setList([]); } }
   React.useEffect(() => { load(); listJobOrders().then((j) => setJobs(j.filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
+  const pendRcpt = (list || []).filter(needReceipt).length;
   return (
     <div className="card">
-      <div className="sec-head"><div><div className="sec-title">คำขอเบิกของฉัน</div><div className="sec-sub">เบิกค่าใช้จ่ายทั่วไป หรือเบิกจากใบงาน (ค่าใช้จ่ายงานจะรวมเป็นต้นทุนงาน)</div></div>
+      <div className="sec-head"><div><div className="sec-title">คำขอเบิกของฉัน</div><div className="sec-sub">เบิกค่าใช้จ่ายทั่วไป หรือเบิกจากใบงาน (ค่าใช้จ่ายงานจะรวมเป็นต้นทุนงาน)
+        {pendRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 ค้างแนบใบเสร็จ {pendRcpt} รายการ</b>}</div></div>
         <button className="btn-primary" onClick={() => setForm({ title: "", amount: "", category: "", job_no: "", note: "", attachments: [] })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> ขอเบิกใหม่</button></div>
       <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
         <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา ลูกค้า / เลข PO / ชื่อรายการ…" /></div>
@@ -161,8 +167,43 @@ function MineTab({ flash, onOpenDoc }) {
       {list === null && <div className="empty">กำลังโหลด…</div>}
       {list && list.length === 0 && <div className="empty">ยังไม่มีคำขอเบิก</div>}
       {list && list.length > 0 && (list || []).filter((x) => expMatch(x, q, dateR)).length === 0 && <div className="empty">ไม่พบรายการตามที่ค้นหา</div>}
-      <div className="job-cards">{(list || []).filter((x) => expMatch(x, q, dateR)).map((x) => <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} />)}</div>
+      <div className="job-cards">{(list || []).filter((x) => expMatch(x, q, dateR)).map((x) => (
+        <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc}>
+          {x.status !== "rejected" && (
+            needReceipt(x)
+              ? <button className="btn-primary sm" onClick={() => setRcptFor(x)}>📎 แนบใบเสร็จ</button>
+              : (x.status === "paid" || Number(x.paid_amount) > 0) && <button className="btn-ghost sm" onClick={() => setRcptFor(x)}>📎 แนบใบเสร็จเพิ่ม</button>
+          )}
+        </ExpenseCard>
+      ))}</div>
       {form && <ExpenseForm form={form} setForm={setForm} jobs={jobs} onSaved={() => { setForm(null); load(); }} flash={flash} />}
+      {rcptFor && <ReceiptModal x={rcptFor} onClose={() => setRcptFor(null)} onSaved={() => { setRcptFor(null); load(); }} flash={flash} />}
+    </div>
+  );
+}
+
+// แนบใบเสร็จ/บิลย้อนหลัง — เบิกเงินไปจ่ายก่อน ใบเสร็จตามมาทีหลัง (มิเกรชัน 133)
+function ReceiptModal({ x, onClose, onSaved, flash }) {
+  const [files, setFiles] = React.useState([]);
+  const [busy, setBusy] = React.useState(false);
+  async function save() {
+    if (!files.length) return flash("แนบรูปใบเสร็จก่อน", true);
+    setBusy(true);
+    try { await attachExpenseReceipt(x.id, files); flash("แนบใบเสร็จแล้ว ✓"); onSaved(); }
+    catch (e) { const m = e.message || String(e); flash("ไม่สำเร็จ: " + m + (/expense_attach_receipt|function|schema cache/i.test(m) ? " — ต้องรัน migration 133 ก่อน" : ""), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
+        <div className="modal-head"><div className="modal-title">แนบใบเสร็จ · {x.title}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="jo-dim" style={{ marginBottom: 10 }}>ยอดเบิก {fmtBaht(x.amount)}{x.attachments?.length ? ` · มีใบเสร็จแนบแล้ว ${x.attachments.length} รูป (รูปใหม่จะเพิ่มต่อท้าย)` : " · ยังไม่มีใบเสร็จแนบ"}</div>
+          <div className="fld"><span>รูปใบเสร็จ/บิล</span><AttachRow files={files} onChange={setFiles} flash={flash} label="แนบใบเสร็จ" /></div>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy || !files.length} onClick={save}>บันทึกใบเสร็จ</button></div>
+      </div>
     </div>
   );
 }
@@ -194,7 +235,7 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
               {jobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.customerName || j.title || "งาน"}</option>)}
             </select></label>
           <label className="fld"><span>รายละเอียดเพิ่มเติม</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="อธิบายรายละเอียดค่าใช้จ่าย (ไม่บังคับ)" /></label>
-          <div className="fld"><span>แนบบิล/หลักฐาน</span><AttachRow files={form.attachments} onChange={(a) => set("attachments", a)} flash={flash} /></div>
+          <div className="fld"><span>🧾 แนบใบเสร็จ/บิล — ยังไม่มีก็ส่งขอเบิกได้เลย แล้วกลับมาแนบทีหลัง (รายการจะขึ้น "ค้างแนบใบเสร็จ" เตือนไว้)</span><AttachRow files={form.attachments} onChange={(a) => set("attachments", a)} flash={flash} label="แนบใบเสร็จ/บิล" /></div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={() => setForm(null)}>ยกเลิก</button>
           <button className="btn-primary" disabled={busy} onClick={save}>ส่งขออนุมัติ</button></div>
@@ -207,6 +248,7 @@ function ApproveTab({ flash, onOpenDoc }) {
   const [list, setList] = React.useState(null);
   const [statusF, setStatusF] = React.useState("pending");
   const [payFor, setPayFor] = React.useState(null);
+  const [rcptFor, setRcptFor] = React.useState(null);   // แนบใบเสร็จแทนพนักงาน (ออฟฟิศ)
   const [q, setQ] = React.useState("");
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   async function load() { try { setList(await listExpenses()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setList([]); } }
@@ -216,14 +258,15 @@ function ApproveTab({ flash, onOpenDoc }) {
     if (!await confirmDialog(`${lbl}คำขอเบิก "${x.title}" (${fmtBaht(x.amount)}) ?${status === "pending" ? "\n(รายการจะกลับไปสถานะ “รออนุมัติ”)" : ""}`)) return;
     try { await decideExpense(x.id, status); flash(lbl + "แล้ว"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
-  const shown = (list || []).filter((x) => (statusF === "all" || x.status === statusF) && expMatch(x, q, dateR));
+  const nRcpt = (list || []).filter(needReceipt).length;
+  const shown = (list || []).filter((x) => (statusF === "needReceipt" ? needReceipt(x) : (statusF === "all" || x.status === statusF)) && expMatch(x, q, dateR));
   const cnt = (s) => (list || []).filter((x) => x.status === s).length;
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">อนุมัติ / จ่ายเงินเบิก</div>
-        <div className="sec-sub">รออนุมัติ {cnt("pending")} · รอจ่าย {cnt("approved")}</div></div></div>
+        <div className="sec-sub">รออนุมัติ {cnt("pending")} · รอจ่าย {cnt("approved")}{nRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 ค้างแนบใบเสร็จ {nRcpt}</b>}</div></div></div>
       <div className="cat-filter">
-        {[["pending", "รออนุมัติ"], ["approved", "รอจ่าย"], ["paid", "จ่ายแล้ว"], ["rejected", "ไม่อนุมัติ"], ["all", "ทั้งหมด"]].map(([v, l]) => (
+        {[["pending", "รออนุมัติ"], ["approved", "รอจ่าย"], ["paid", "จ่ายแล้ว"], ["needReceipt", `📎 ค้างแนบใบเสร็จ${nRcpt ? ` (${nRcpt})` : ""}`], ["rejected", "ไม่อนุมัติ"], ["all", "ทั้งหมด"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)} style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
       </div>
@@ -238,12 +281,14 @@ function ApproveTab({ flash, onOpenDoc }) {
           <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} onSetExpected={async (id, d) => { try { await setExpenseExpectedDate(id, d); flash("ตั้งวันประมาณการจ่ายแล้ว ✓"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }}>
             {x.status === "pending" && <><button className="btn-primary sm ok" onClick={() => decide(x, "approved")}>✓ อนุมัติ</button>
               <button className="btn-ghost sm" onClick={() => decide(x, "rejected")}>ไม่อนุมัติ</button></>}
-            {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> {Number(x.paid_amount) > 0 ? "จ่ายงวดต่อไป" : "จ่ายเงิน + แนบหลักฐาน"}</button>
+            {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> {Number(x.paid_amount) > 0 ? "จ่ายงวดต่อไป" : "จ่ายเงิน + แนบสลิปโอน"}</button>
               {!(Number(x.paid_amount) > 0) && <button className="btn-ghost sm danger" onClick={() => decide(x, "pending")}>ยกเลิกอนุมัติ</button>}</>}
+            {needReceipt(x) && <button className="btn-ghost sm" onClick={() => setRcptFor(x)}>📎 แนบใบเสร็จแทนพนักงาน</button>}
           </ExpenseCard>
         ))}
       </div>
       {payFor && <PayModal x={payFor} onClose={() => setPayFor(null)} onPaid={() => { setPayFor(null); load(); }} flash={flash} />}
+      {rcptFor && <ReceiptModal x={rcptFor} onClose={() => setRcptFor(null)} onSaved={() => { setRcptFor(null); load(); }} flash={flash} />}
     </div>
   );
 }
@@ -297,7 +342,7 @@ function PayModal({ x, onClose, onPaid, flash }) {
               </select></label>
             <label className="fld"><span>วันที่จ่าย</span><input type="date" className="inp" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
           </div>
-          <div className="fld"><span>แนบหลักฐานการจ่าย (สลิปโอน ฯลฯ)</span><AttachRow files={proof} onChange={setProof} flash={flash} label="แนบสลิป/หลักฐาน" /></div>
+          <div className="fld"><span>💸 แนบสลิปโอนเงิน (หลักฐานการจ่าย)</span><AttachRow files={proof} onChange={setProof} flash={flash} label="แนบสลิปโอนเงิน" /></div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
           <button className="btn-primary" disabled={busy} onClick={pay}>ยืนยันจ่าย {fmtBaht(payAmt)}</button></div>

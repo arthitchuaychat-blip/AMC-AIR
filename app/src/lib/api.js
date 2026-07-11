@@ -2583,6 +2583,17 @@ export async function decideExpense(id, status, note) {
   const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
   if (ex) notify([ex.requester], { category: "hr", title: `🧾 คำขอเบิก "${ex.title}" : ${lbl}`, body: note || "", url: "expenses", ref_type: "expense" });
 }
+// แนบใบเสร็จย้อนหลัง (เบิกเงินไปจ่ายก่อน ใบเสร็จตามมาทีหลัง) — ผ่าน RPC มิเกรชัน 133:
+// ผู้ขอเบิกเติมรูปใน attachments ของรายการตัวเองได้อย่างเดียว แก้ยอด/สถานะไม่ได้
+export async function attachExpenseReceipt(id, urls) {
+  const { error } = await supabase.rpc("expense_attach_receipt", { p_id: id, p_urls: urls });
+  if (error) throw error;
+  // บอกผู้อนุมัติว่าใบเสร็จมาแล้ว (พลาดได้ไม่เป็นไร — รูปแนบสำเร็จไปแล้ว)
+  try {
+    const { data: ex } = await supabase.from("expense_requests").select("title,approver").eq("id", id).maybeSingle();
+    if (ex?.approver) notify([ex.approver], { category: "hr", title: `📎 แนบใบเสร็จแล้ว: "${ex.title}"`, body: `เพิ่มรูปใบเสร็จ ${urls.length} รูป`, url: "expenses", ref_type: "expense" });
+  } catch (_) {}
+}
 // จ่ายเงินเบิก — รองรับ "แบ่งจ่าย": ส่ง amount = งวดนี้ (ไม่ส่ง = จ่ายยอดคงเหลือทั้งหมด)
 //  จ่ายครบ → status=paid + ประทับ PO/กระแสเงินสด · จ่ายบางส่วน → paid_amount เพิ่ม สถานะยัง approved
 export async function payExpense(id, { accountId, proof, payDate, amount, expectedPayDate } = {}) {
