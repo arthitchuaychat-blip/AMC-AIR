@@ -92,7 +92,7 @@ async function dlFile(url, name) {
 export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey, onCreateTask, focus, onFocusConsumed }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ประวัติเอกสารลูกค้า → พรีวิวแผงขวาก่อน
   const canSend = can(role, "chat", "edit");
-  const [contacts, setContacts] = React.useState([]);
+  const [allC, setAllC] = React.useState({ line: [], fb: [] });   // ผู้ติดต่อทั้ง 2 แหล่ง — ไว้โชว์ยอดค้างอ่านทุกแท็บพร้อมกัน
   const [custs, setCusts] = React.useState([]);
   const [sel, setSel] = React.useState(null);          // selected line_user_id
   const [msgs, setMsgs] = React.useState([]);
@@ -159,7 +159,21 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const pendingOpenRef = React.useRef(null); // line_user_id/psid to open once contacts (re)load after a channel switch
 
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
-  async function loadContacts() { try { setContacts(await chListContacts()); } catch (e) { flash("โหลดแชตไม่สำเร็จ: " + (e.message || e), true); } }
+  // โหลดทั้ง LINE และ FB พร้อมกัน — แท็บที่ไม่ได้เปิดอยู่จะได้โชว์ตัวเลขค้างอ่านถูกต้อง
+  async function loadContacts() {
+    try {
+      const [lc, fc] = await Promise.all([listLineContacts().catch(() => []), listFbContacts().catch(() => [])]);
+      setAllC({ line: lc, fb: fc });
+    } catch (e) { flash("โหลดแชตไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  const contacts = isFb ? allC.fb : allC.line;
+  // ยอดค้างอ่านต่อแท็บ: LINE ลูกค้า / ซัพพลายเออร์ (แหล่งเดียวกัน แยกด้วย kind) / Facebook
+  const unreadOf = (list) => list.reduce((a, c) => a + (Number(c.unread) || 0), 0);
+  const tabUnread = {
+    line: unreadOf(allC.line.filter((c) => (c.kind || "customer") !== "supplier")),
+    sup: unreadOf(allC.line.filter((c) => c.kind === "supplier")),
+    fb: unreadOf(allC.fb),
+  };
 
   async function loadQr() { try { setQuickReplies(await listQuickReplies()); } catch { /* ignore */ } }
   React.useEffect(() => {
@@ -502,9 +516,15 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         {/* conversation list */}
         <div className="chat-list">
           <div className="chat-channel-tabs">
-            <button className={"chat-ch" + (channel === "line" ? " on line" : "")} onClick={() => setChannel("line")}>LINE</button>
-            <button className={"chat-ch" + (isFb ? " on fb" : "")} onClick={() => setChannel("fb")}>Facebook</button>
-            <button className={"chat-ch" + (isSup ? " on sup" : "")} title="แชตซัพพลายเออร์ (LINE เดียวกัน แยกกระดาน)" onClick={() => setChannel("sup")}>🏭 ซัพฯ</button>
+            <button className={"chat-ch" + (channel === "line" ? " on line" : "")} onClick={() => setChannel("line")}>
+              LINE{tabUnread.line > 0 && <span className="chat-ch-cnt">{tabUnread.line > 99 ? "99+" : tabUnread.line}</span>}
+            </button>
+            <button className={"chat-ch" + (isFb ? " on fb" : "")} onClick={() => setChannel("fb")}>
+              Facebook{tabUnread.fb > 0 && <span className="chat-ch-cnt">{tabUnread.fb > 99 ? "99+" : tabUnread.fb}</span>}
+            </button>
+            <button className={"chat-ch" + (isSup ? " on sup" : "")} title="แชตซัพพลายเออร์ (LINE เดียวกัน แยกกระดาน)" onClick={() => setChannel("sup")}>
+              🏭 ซัพฯ{tabUnread.sup > 0 && <span className="chat-ch-cnt">{tabUnread.sup > 99 ? "99+" : tabUnread.sup}</span>}
+            </button>
           </div>
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า" value={q} onChange={(e) => setQ(e.target.value)} />

@@ -1770,6 +1770,8 @@ select.unit-pick:focus{outline:none;color:var(--ink)}
 .chat-ch.on.line{background:#06c755;border-color:#06c755;color:#fff}
 .chat-ch.on.fb{background:#0866ff;border-color:#0866ff;color:#fff}
 .chat-ch.on.sup{background:#d97706;border-color:#d97706;color:#fff}
+/* ตัวเลขค้างอ่านบนแท็บช่องทาง */
+.chat-ch-cnt{display:inline-flex;align-items:center;justify-content:center;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:800;min-width:17px;height:16px;padding:0 5px;margin-left:5px;vertical-align:middle;line-height:1}
 .chat-search{display:flex;align-items:center;gap:7px;padding:9px 11px;border-bottom:1px solid var(--line)}
 .chat-search input{border:none;background:none;outline:none;font-family:inherit;font-size:13px;width:100%;color:var(--ink)}
 .chat-convos{flex:1;overflow-y:auto}
