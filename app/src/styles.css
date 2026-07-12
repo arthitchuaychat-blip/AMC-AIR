@@ -1979,11 +1979,13 @@ select.unit-pick:focus{outline:none;color:var(--ink)}
 .cdock-ic{border:none;background:none;cursor:pointer;font-size:16px;color:var(--ink-2);padding:2px 7px;border-radius:7px;line-height:1;display:flex;align-items:center}
 .cdock-ic:hover{background:var(--line-2)}
 .cdock-rooms{flex:1;overflow-y:auto;padding:6px}
-.cdock-room{display:flex;flex-direction:column;gap:1px;width:100%;text-align:left;border:none;background:none;padding:8px 34px 8px 10px;border-radius:9px;cursor:pointer;position:relative}
+.cdock-room{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:none;background:none;padding:7px 34px 7px 8px;border-radius:10px;cursor:pointer;position:relative}
 .cdock-room:hover{background:var(--surface-2)}
+.cdock-room-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
 .cdock-room-t{font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cdock-room-cnt{font-weight:500;color:var(--ink-3);font-size:11px}
 .cdock-room-l{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cdock-room .chat-unread{position:absolute;right:8px;top:12px}
+.cdock-room .chat-unread{position:absolute;right:8px;top:50%;transform:translateY(-50%)}
 .cdock-msgs{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px;background:var(--bg)}
 .cdock-compose{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line);align-items:flex-end;flex:none}
 .cdock-compose .inp{flex:1;resize:none;min-height:34px;max-height:90px}

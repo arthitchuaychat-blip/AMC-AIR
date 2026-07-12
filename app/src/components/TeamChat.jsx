@@ -27,7 +27,8 @@ function avColor(id) {
 }
 
 // avatar: photo if set, else a coloured initial. cls picks the base style (tc-av / tc-msg-av / tc-room-ic)
-function Avatar({ url, name, id, size, cls = "tc-av" }) {
+// (export ให้ ChatDock แผงลอยใช้ชุดเดียวกัน — หน้าตาห้อง/คนเหมือนหน้าแชตเต็ม)
+export function Avatar({ url, name, id, size, cls = "tc-av" }) {
   if (url) return (
     <span className={cls + " tc-av-img"} style={size ? { width: size, height: size } : undefined}>
       <img src={url} alt="" />
@@ -44,7 +45,7 @@ function Avatar({ url, name, id, size, cls = "tc-av" }) {
 //  · DM ไม่มีรูป → วงกลมตัวอักษรขึ้นต้นชื่อคู่สนทนา (เหมือน avatar ในข้อความ)
 //  · กลุ่มไม่มีรูป → รูปสมาชิก 2 คนแรกซ้อนกัน + ป้าย 👥 ให้เห็นชัดว่าเป็นกลุ่ม
 //  · อื่น ๆ (บริษัท/ห้องงาน) → อีโมจิบนพื้นไล่เฉดตามเดิม
-function RoomIcon({ room, size = 44, staffById = {} }) {
+export function RoomIcon({ room, size = 44, staffById = {} }) {
   if (room.avatar_url) return (
     <span className="tc-room-ic tc-av-img" style={{ width: size, height: size }}><img src={room.avatar_url} alt="" /></span>
   );

@@ -1,6 +1,7 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
 import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, uploadChatImage, markChatRead, listStaff } from "../lib/api";
+import { Avatar, RoomIcon } from "./TeamChat";   // ไอคอนห้อง/คนชุดเดียวกับหน้าแชตเต็ม
 import { UIcon } from "../icons";
 
 // แผงแชตทีมย่อ ลอยขวามือ ตามไปทุกเมนู — ทีมหลังบ้านเห็นความเคลื่อนไหว/ตอบแชตได้โดยไม่ต้องสลับหน้า
@@ -20,6 +21,7 @@ export default function ChatDock({ me, hidden, onOpenFull }) {
 
   const totalUnread = rooms.reduce((a, r) => a + (r.unread || 0), 0);
   const staffName = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
+  const staffById = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s])), [staff]);
 
   async function loadRooms() { try { setRooms(await listChatRooms()); } catch { } }
   const queueLoadRooms = () => { clearTimeout(timer.current); timer.current = setTimeout(loadRooms, 800); };
@@ -75,6 +77,7 @@ export default function ChatDock({ me, hidden, onOpenFull }) {
       <div className="cdock-head">
         {selRoom ? (<>
           <button className="cdock-ic" title="กลับรายชื่อห้อง" onClick={() => { setSel(null); loadRooms(); }}>‹</button>
+          <RoomIcon room={selRoom} size={28} staffById={staffById} />
           <b className="cdock-title">{selRoom.title}</b>
         </>) : <b className="cdock-title">💬 แชตทีม{totalUnread > 0 ? ` · ยังไม่อ่าน ${totalUnread}` : ""}</b>}
         <button className="cdock-ic" title="เปิดหน้าแชตทีมเต็ม" onClick={onOpenFull}><UIcon name="chevR" size={14} /></button>
@@ -86,8 +89,11 @@ export default function ChatDock({ me, hidden, onOpenFull }) {
           {rooms.length === 0 && <div className="empty sm">กำลังโหลด…</div>}
           {rooms.map((r) => (
             <button key={r.id} className="cdock-room" onClick={() => openRoom(r.id)}>
-              <span className="cdock-room-t">{r.title}</span>
-              <span className="cdock-room-l">{r.lastText || "—"}</span>
+              <RoomIcon room={r} size={36} staffById={staffById} />
+              <span className="cdock-room-mid">
+                <span className="cdock-room-t">{r.title}{r.kind !== "dm" && r.memberCount ? <span className="cdock-room-cnt"> · {r.memberCount} คน</span> : null}</span>
+                <span className="cdock-room-l">{r.lastText || "—"}</span>
+              </span>
               {r.unread > 0 && <span className="chat-unread">{r.unread}</span>}
             </button>
           ))}
@@ -98,6 +104,7 @@ export default function ChatDock({ me, hidden, onOpenFull }) {
             const out = m.sender === me?.id;
             return (
               <div key={m.id} className={"tc-msg-row" + (out ? " out" : "")}>
+                {!out && <Avatar url={staffById[m.sender]?.avatar_url} name={staffName[m.sender] || "T"} id={m.sender} cls="tc-msg-av" />}
                 <div className={"chat-bubble " + (out ? "out" : "in")}>
                   {!out && <span className="chat-sender">{staffName[m.sender] || "ทีมงาน"}</span>}
                   {m.image_url ? (
