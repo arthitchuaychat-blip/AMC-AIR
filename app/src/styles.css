@@ -1938,19 +1938,21 @@ select.unit-pick:focus{outline:none;color:var(--ink)}
 .tc-msg-av{flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11.5px;color:#fff;text-transform:uppercase;box-shadow:0 1px 3px rgba(0,0,0,.18)}
 /* job link card */
 .tc-job-card{background:#fff;border:1.5px solid #e0e7ef;border-radius:13px;padding:11px 13px;min-width:210px;cursor:default;box-shadow:0 2px 8px rgba(0,0,0,.07)}
-.tc-job-card.out{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.35)}
+/* การ์ดฝั่ง "ของฉัน" วางบนพื้นหน้าจอโดยตรง (bubble ถูกปิดพื้น) — ต้องเป็นการ์ดทึบ ตัวหนังสือขาวชัด */
+.tc-job-card.out{background:linear-gradient(135deg,#2563eb,#1d4ed8);border-color:#1e40af;box-shadow:0 3px 10px rgba(29,78,216,.35)}
 .tc-job-card-tag{font-size:10.5px;font-weight:700;color:var(--ink-3);margin-bottom:5px}
-.tc-job-card.out .tc-job-card-tag{color:rgba(255,255,255,.7)}
+.tc-job-card.out .tc-job-card-tag{color:rgba(255,255,255,.85)}
 .tc-job-card-no{font-size:15px;font-weight:900;color:var(--primary);margin-bottom:2px}
-.tc-job-card.out .tc-job-card-no{color:#bfdbfe}
+.tc-job-card.out .tc-job-card-no{color:#fff}
 .tc-job-card-cust{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:2px}
 .tc-job-card.out .tc-job-card-cust{color:#fff}
 .tc-job-card-title{font-size:12px;color:var(--ink-2);margin-bottom:6px}
-.tc-job-card.out .tc-job-card-title{color:rgba(255,255,255,.75)}
+.tc-job-card.out .tc-job-card-title{color:rgba(255,255,255,.92)}
 .tc-job-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
 .tc-job-card-btn{font-size:12px;font-weight:800;color:#fff;background:var(--primary);border:none;border-radius:8px;padding:5px 13px;cursor:pointer}
 .tc-job-card-btn:hover{opacity:.88}
-.tc-job-card.out .tc-job-card-btn{background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.45)}
+.tc-job-card.out .tc-job-card-btn{background:#fff;color:#1d4ed8;border:none}
+.tc-job-card.out .chat-bubble-time{color:rgba(255,255,255,.8)}
 /* modals */
 .tc-picklist{max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
 .tc-pickrow,.tc-checkrow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:13.5px;color:var(--ink)}
