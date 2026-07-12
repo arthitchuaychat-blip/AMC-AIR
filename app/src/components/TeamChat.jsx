@@ -1,7 +1,8 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
 import { confirmDialog } from "./ConfirmDialog";
-import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, renameChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar, listChatNotes, saveChatNote, deleteChatNote, listAllChatNotes } from "../lib/api";
+import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, renameChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar, listChatNotes, saveChatNote, deleteChatNote, listAllChatNotes, translateText } from "../lib/api";
+import { useLang } from "../lib/i18n";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
@@ -145,6 +146,9 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   const [hasMore, setHasMore] = React.useState(false);   // ห้องนี้ยังมีข้อความเก่ากว่าที่โหลดมา
   const [rename, setRename] = React.useState(null);      // string = กำลังแก้ชื่อกลุ่ม · null = ปกติ
   const [noteIdx, setNoteIdx] = React.useState(null);     // room_id → [ข้อความโน้ต] — โหลดครั้งแรกที่เริ่มค้นหา
+  const [trMap, setTrMap] = React.useState({});           // msg id → คำแปล ("…" = กำลังแปล)
+  const [trBusy, setTrBusy] = React.useState(false);      // กำลังแปลข้อความในช่องพิมพ์
+  const lang = useLang();                                 // ภาษา UI ของฉัน (th/my) — กำหนดทิศทางการแปล
   const endRef  = React.useRef(null);
   const selRef  = React.useRef(null);
   const taRef   = React.useRef(null);
@@ -310,6 +314,25 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     try { const id = await createDmRoom(otherId); setModal(null); await loadRooms(); setSel(id); }
     catch (e) { flash("เปิดแชตไม่สำเร็จ: " + (e?.message || e)); }
   }
+  // ── แปลภาษา ไทย↔พม่า (ทิศทางตามภาษา UI ของฉัน) ──
+  // แปลข้อความที่ได้รับ → เป็นภาษาของฉัน (ไทยเห็นไทย · พม่าเห็นพม่า)
+  async function translateMsg(m) {
+    if (!m.text || trMap[m.id]) return;
+    setTrMap((s) => ({ ...s, [m.id]: "…" }));
+    try { const out = await translateText(m.text, lang === "my" ? "my" : "th"); setTrMap((s) => ({ ...s, [m.id]: out })); }
+    catch (e) { setTrMap((s) => { const n = { ...s }; delete n[m.id]; return n; }); flash("แปลไม่สำเร็จ: " + (e?.message || e)); }
+  }
+  // แปลข้อความที่พิมพ์ → เป็นภาษาอีกฝั่ง แล้วต่อท้ายให้ตรวจก่อนส่ง (ส่งทั้งสองภาษาในข้อความเดียว)
+  async function translateCompose() {
+    const t = text.trim(); if (!t || trBusy) return;
+    setTrBusy(true);
+    try {
+      const out = await translateText(t, lang === "my" ? "th" : "my");
+      if (out && out.trim() && out.trim() !== t) setText(t + "\n" + out.trim());
+    } catch (e) { flash("แปลไม่สำเร็จ: " + (e?.message || e)); }
+    setTrBusy(false);
+  }
+
   // แก้ชื่อห้องกลุ่ม/ห้องงาน (ทีมหลังบ้าน)
   async function saveRename() {
     const nm = (rename || "").trim(); if (!nm || !selRoom) return;
@@ -514,7 +537,12 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                         ) : m.file_url ? (
                           <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || "เปิดไฟล์"}</a>
                         ) : (
-                          <span>{renderRich(m.text)}</span>
+                          <>
+                            <span>{renderRich(m.text)}</span>
+                            {trMap[m.id]
+                              ? <span className="tc-tr">🌐 {trMap[m.id]}</span>
+                              : <button type="button" className="tc-tr-btn" title="แปลเป็นภาษาของฉัน · ဘာသာပြန်" onClick={() => translateMsg(m)}>🌐 แปล · ဘာသာပြန်</button>}
+                          </>
                         )}
                         {!jc && (
                           <span className="chat-bubble-time">
@@ -549,6 +577,11 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                 <button className={"chat-tool" + (!sel || sending ? " disabled" : "")} title="ส่งลิงก์ใบงาน"
                   onClick={() => { if (sel && !sending) { ensureJobs(); setModal("joblink"); } }}>
                   🔗
+                </button>
+                <button className={"chat-tool" + (!text.trim() || trBusy ? " disabled" : "")}
+                  title={lang === "my" ? "ထိုင်းဘာသာသို့ ပြန်ဆိုပြီး နောက်ဆက်တွဲ" : "แปลเป็นพม่า แนบท้ายข้อความ (ตรวจก่อนส่งได้)"}
+                  onClick={translateCompose}>
+                  {trBusy ? "…" : "🌐"}
                 </button>
                 <textarea ref={taRef} className="inp" rows={3} value={text} onPaste={onPaste}
                   placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · @ แท็กสมาชิก · วางรูปได้)"}

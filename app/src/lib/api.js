@@ -3557,6 +3557,19 @@ export async function createChatRoom({ name, memberIds = [], refType = null, ref
   return data;
 }
 
+// แปลภาษา ไทย↔พม่า (ตรวจต้นทางอัตโนมัติ) ผ่าน /api/translate — ใช้ในแชตทีม
+export async function translateText(text, target) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch("/api/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+    body: JSON.stringify({ text, target }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || "แปลไม่สำเร็จ");
+  return j.text;
+}
+
 // ลบห้องกลุ่ม/ห้องงานถาวร (ธุรการ/ผู้บริหาร) — RPC มิเกรชัน 135: ลบข้อความ+สมาชิก+ห้องทั้งชุด
 export async function deleteChatRoom(roomId) {
   const { error } = await supabase.rpc("chat_delete_room", { p_room: roomId });
