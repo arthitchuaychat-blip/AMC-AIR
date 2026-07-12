@@ -101,7 +101,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-12·แชตทีม: ค้นหาโน้ตได้ — ทั้งในหน้าโน้ต และช่องค้นหาห้องหลัก (เจอจากเนื้อโน้ต โชว์บรรทัดที่เจอ) v375";
+const BUILD = "2026-07-12·แชตทีม: แถบตัวกรองประเภทห้องตัดบรรทัดพอดีช่อง ไม่ล้นขอบ v376";
 
 function SetupNotice() {
   return (
