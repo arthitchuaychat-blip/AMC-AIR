@@ -1,6 +1,7 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
-import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar } from "../lib/api";
+import { confirmDialog } from "./ConfirmDialog";
+import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar } from "../lib/api";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
@@ -38,11 +39,28 @@ function Avatar({ url, name, id, size, cls = "tc-av" }) {
     </span>
   );
 }
-// room icon: room photo if set, else the kind emoji on its gradient
-function RoomIcon({ room, size = 44 }) {
+// room icon:
+//  · มีรูปตั้งเอง → รูปนั้น (DM = รูปของคู่สนทนา — listChatRooms ใส่มาให้แล้ว)
+//  · DM ไม่มีรูป → วงกลมตัวอักษรขึ้นต้นชื่อคู่สนทนา (เหมือน avatar ในข้อความ)
+//  · กลุ่มไม่มีรูป → รูปสมาชิก 2 คนแรกซ้อนกัน + ป้าย 👥 ให้เห็นชัดว่าเป็นกลุ่ม
+//  · อื่น ๆ (บริษัท/ห้องงาน) → อีโมจิบนพื้นไล่เฉดตามเดิม
+function RoomIcon({ room, size = 44, staffById = {} }) {
   if (room.avatar_url) return (
     <span className="tc-room-ic tc-av-img" style={{ width: size, height: size }}><img src={room.avatar_url} alt="" /></span>
   );
+  if (room.kind === "dm") return <Avatar name={room.title} id={room.dmPartner || room.title} size={size} cls="tc-av" />;
+  if (room.kind === "group" && (room.memberIds || []).length >= 2) {
+    const [aId, bId] = room.memberIds;
+    const A = staffById[aId] || {}, B = staffById[bId] || {};
+    const s = Math.round(size * 0.66);
+    return (
+      <span className="tc-room-collage" style={{ width: size, height: size }}>
+        <Avatar url={A.avatar_url} name={A.name || room.title} id={aId} size={s} cls="tc-av tc-col-a" />
+        <Avatar url={B.avatar_url} name={B.name || room.title} id={bId} size={s} cls="tc-av tc-col-b" />
+        <span className="tc-col-badge">👥</span>
+      </span>
+    );
+  }
   return (
     <span className="tc-room-ic" style={{ background: ROOM_BG[room.kind] || ROOM_BG.group, width: size, height: size, fontSize: Math.round(size * 0.48) }}>
       {KIND_ICON[room.kind] || "💬"}
@@ -278,6 +296,13 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     try { const id = await createDmRoom(otherId); setModal(null); await loadRooms(); setSel(id); }
     catch (e) { flash("เปิดแชตไม่สำเร็จ: " + (e?.message || e)); }
   }
+  // ธุรการ/ผู้บริหาร ลบห้องกลุ่ม/ห้องงานถาวร (ข้อความ+สมาชิกหายทั้งชุด)
+  async function delRoom() {
+    if (!selRoom) return;
+    if (!await confirmDialog(`ลบห้อง "${selRoom.title}" ถาวร?\nข้อความ รูป และไฟล์ในห้องจะถูกลบทั้งหมด สมาชิกทุกคนจะไม่เห็นห้องนี้อีก`)) return;
+    try { await deleteChatRoom(selRoom.id); setSel(null); await loadRooms(); flash("ลบห้องแล้ว ✓"); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e?.message || e)); }
+  }
 
   const selRoom = rooms.find((r) => r.id === sel);
   const kindCounts = React.useMemo(() => {
@@ -302,8 +327,8 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
         </div>
         <div className="cat-head-actions">
           <label className="tc-myav" title="เปลี่ยนรูปโปรไฟล์ของฉัน">
-            <Avatar url={me?.avatar_url} name={me?.name} id={me?.id} size={36} />
-            <span className="tc-myav-cam">📷</span>
+            <Avatar url={me?.avatar_url} name={me?.name} id={me?.id} size={46} />
+            <span className="tc-myav-cam" style={{ width: 19, height: 19, fontSize: 11 }}>📷</span>
             <input type="file" accept="image/*" hidden onChange={onMyAvatar} />
           </label>
           <NotifyButton />
@@ -344,7 +369,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
             {shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ยังไม่มีห้องแชต</div>}
             {shown.map((r) => (
               <button key={r.id} className={"tc-room" + (sel === r.id ? " on" : "")} onClick={() => setSel(r.id)}>
-                <RoomIcon room={r} size={40} />
+                <RoomIcon room={r} size={40} staffById={staffById} />
                 <span className="tc-room-mid">
                   <span className="tc-room-title">
                     {r.title}
@@ -374,11 +399,11 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
               <div className="tc-main-head" style={{ borderTop: `3px solid ${accentColor}` }}>
                 {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") ? (
                   <label className="tc-roomav-edit" title="เปลี่ยนรูปกลุ่ม">
-                    <RoomIcon room={selRoom} size={42} />
+                    <RoomIcon room={selRoom} size={42} staffById={staffById} />
                     <span className="tc-myav-cam">📷</span>
                     <input type="file" accept="image/*" hidden onChange={onRoomAvatar} />
                   </label>
-                ) : <RoomIcon room={selRoom} size={42} />}
+                ) : <RoomIcon room={selRoom} size={42} staffById={staffById} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="tc-main-title">{selRoom.title}</div>
                   <div className="tc-main-sub">
@@ -391,6 +416,10 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                 {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") &&
                   <button className="btn-ghost sm" onClick={() => setModal("members")}>
                     <UIcon name="user" size={14} /> สมาชิก
+                  </button>}
+                {["admin", "exec"].includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") &&
+                  <button className="btn-ghost sm danger" title="ลบห้องนี้ถาวร (ธุรการ/ผู้บริหาร)" onClick={delRoom}>
+                    <UIcon name="trash" size={14} /> ลบกลุ่ม
                   </button>}
               </div>
 

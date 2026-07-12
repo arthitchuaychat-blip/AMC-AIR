@@ -3471,7 +3471,8 @@ export async function listChatRooms() {
     // DM shows the other person's avatar; group/room shows its own avatar
     const avatar_url = r.kind === "dm" ? (avById[otherIds[0]] || null) : (r.avatar_url || null);
     const lm = last[r.id];
-    return { ...r, title, avatar_url, memberNames: others, memberIds: mem.map((m) => m.user_id), memberCount: mem.length,
+    return { ...r, title, avatar_url, dmPartner: r.kind === "dm" ? (otherIds[0] || null) : null,
+      memberNames: others, memberIds: mem.map((m) => m.user_id), memberCount: mem.length,
       lastText: lm ? (lm.text || (lm.image_url ? "[รูปภาพ]" : lm.file_url ? `[ไฟล์] ${lm.file_name || ""}` : "")) : "", lastAt: lm ? lm.created_at : r.created_at, unread: unread[r.id] || 0 };
   }).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
 }
@@ -3549,6 +3550,12 @@ export async function createChatRoom({ name, memberIds = [], refType = null, ref
   const { data, error } = await supabase.rpc("chat_create_room", { p_name: name || "", p_members: memberIds, p_ref_type: refType, p_ref_no: refNo });
   if (error) throw error;
   return data;
+}
+
+// ลบห้องกลุ่ม/ห้องงานถาวร (ธุรการ/ผู้บริหาร) — RPC มิเกรชัน 135: ลบข้อความ+สมาชิก+ห้องทั้งชุด
+export async function deleteChatRoom(roomId) {
+  const { error } = await supabase.rpc("chat_delete_room", { p_room: roomId });
+  if (error) throw /chat_delete_room|schema cache/i.test(error.message || "") ? new Error("ต้องรัน migration 135 ใน Supabase ก่อน") : error;
 }
 
 // mark a room read up to now (creates my membership row for the company room on first open)
