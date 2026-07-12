@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
-import { listChatRooms, listChatMessages, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar } from "../lib/api";
+import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar } from "../lib/api";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
@@ -65,6 +65,17 @@ function renderMentions(text) {
   const parts = text.split(/(@\S+)/);
   return parts.map((p, i) => p.startsWith("@") && p.length > 1 ? <span key={i} className="chat-mention">{p}</span> : p);
 }
+// ลิงก์เว็บ/หมุดแผนที่ในข้อความกดเปิดได้ + ยังไฮไลต์ @แท็กในส่วนที่เหลือ (regex เดียวกับโน้ตช่าง)
+const URL_RE = /((?:https?:\/\/|www\.|maps\.app\.goo\.gl\/|goo\.gl\/maps\/)[^\s<>"']+)/gi;
+function renderRich(text) {
+  if (!text) return text;
+  return String(text).split(URL_RE).map((p, i) =>
+    /^(https?:\/\/|www\.|maps\.app\.goo\.gl\/|goo\.gl\/maps\/)/i.test(p)
+      ? <a key={i} href={/^https?:\/\//i.test(p) ? p : `https://${p}`} target="_blank" rel="noopener noreferrer"
+          style={{ color: "inherit", fontWeight: 700, textDecoration: "underline", wordBreak: "break-all" }}
+          onClick={(e) => e.stopPropagation()}>{/^(maps\.|goo\.gl|https?:\/\/(maps\.|www\.google\.[^/]+\/maps))/i.test(p) ? "📍 " : ""}{p}</a>
+      : <React.Fragment key={i}>{renderMentions(p)}</React.Fragment>);
+}
 
 // [JOBCARD|job_no|customer|status|title]
 function parseJobCard(text) {
@@ -112,9 +123,13 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   const [toast, setToast]   = React.useState(null);
   const [mentionQ, setMentionQ]         = React.useState(null); // null = closed
   const [mentionAnchor, setMentionAnchor] = React.useState(0);
+  const [hasMore, setHasMore] = React.useState(false);   // ห้องนี้ยังมีข้อความเก่ากว่าที่โหลดมา
   const endRef  = React.useRef(null);
   const selRef  = React.useRef(null);
   const taRef   = React.useRef(null);
+  const msgsRef = React.useRef(null);          // กล่องข้อความ (ไว้คุมตำแหน่ง scroll)
+  const keepScrollRef = React.useRef(null);    // จำ scroll ก่อนเติมข้อความเก่าด้านบน
+  const roomsTimer = React.useRef(null);       // debounce โหลดรายชื่อห้องตอนข้อความ realtime รัว ๆ
   selRef.current = sel;
 
   const flash     = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
@@ -169,7 +184,23 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   }
 
   async function loadRooms() { try { setRooms(await listChatRooms()); } catch { } }
-  async function loadMsgs(roomId) { try { setMsgs(await listChatMessages(roomId)); } catch { setMsgs([]); } }
+  // ช่วงคุยรัว ๆ realtime ยิงเข้ามาถี่ — รวบโหลดรายชื่อห้องเป็นครั้งเดียวทุก ~0.8 วิ
+  function queueLoadRooms() { clearTimeout(roomsTimer.current); roomsTimer.current = setTimeout(loadRooms, 800); }
+  async function loadMsgs(roomId) {
+    try { const rows = await listChatMessages(roomId); setMsgs(rows); setHasMore(rows.length >= CHAT_PAGE); }
+    catch { setMsgs([]); setHasMore(false); }
+  }
+  // ปุ่ม "ดูข้อความเก่า" — ดึงหน้าถัดไปย้อนหลังแล้วเติมด้านบน โดยตรึงตำแหน่งที่อ่านอยู่
+  async function loadOlder() {
+    if (!sel || !msgs.length) return;
+    const el = msgsRef.current;
+    keepScrollRef.current = el ? { h: el.scrollHeight, top: el.scrollTop } : null;
+    try {
+      const older = await listChatMessages(sel, { before: msgs[0].created_at });
+      setMsgs((cur) => [...older, ...cur]);
+      setHasMore(older.length >= CHAT_PAGE);
+    } catch { keepScrollRef.current = null; flash("โหลดข้อความเก่าไม่สำเร็จ"); }
+  }
   async function ensureJobs() { if (!jobs.length) { try { setJobs(await listJobOrders()); } catch { } } }
 
   React.useEffect(() => {
@@ -185,9 +216,9 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           setMsgs((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
           markChatRead(m.room_id).catch(() => {});
         }
-        loadRooms();
+        queueLoadRooms();
       }).subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { supabase.removeChannel(ch); clearTimeout(roomsTimer.current); };
   }, []);
 
   React.useEffect(() => { if (focus == null) return; setSel(Number(focus)); onFocusConsumed && onFocusConsumed(); }, [focus]);
@@ -196,7 +227,16 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     loadMsgs(sel);
     markChatRead(sel).then(loadRooms).catch(() => {});
   }, [sel]);
-  React.useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [msgs]);
+  React.useEffect(() => {
+    const el = msgsRef.current;
+    if (keepScrollRef.current && el) {
+      // เพิ่งเติมข้อความเก่าด้านบน → คงตำแหน่งเดิมที่ผู้ใช้อ่านอยู่ (ไม่กระโดดลงล่าง)
+      el.scrollTop = el.scrollHeight - keepScrollRef.current.h + keepScrollRef.current.top;
+      keepScrollRef.current = null;
+    } else {
+      endRef.current?.scrollIntoView({ block: "end" });
+    }
+  }, [msgs]);
 
   async function send() {
     const t = text.trim(); if (!t || !sel || sending) return;
@@ -205,14 +245,23 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     try { await sendChatMessage(sel, t, ids); await loadMsgs(sel); } catch { flash("ส่งไม่สำเร็จ"); setText(t); }
     setSending(false);
   }
-  async function onImage(e) {
-    const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel) return;
+  const isImg = (f) => (f.type || "").startsWith("image/") || /\.(heic|heif)$/i.test(f.name || "");
+  // ส่งรูปได้ทีละหลายรูป (เลือกหลายไฟล์ / วางจากคลิปบอร์ด) — อัปโหลดย่อ+แปลง HEIC ให้อัตโนมัติ
+  async function sendImages(files) {
+    if (!files.length || !sel || sending) return;
     setSending(true);
-    try { const url = await uploadChatImage(f); await sendChatImage(sel, url); await loadMsgs(sel); } catch { flash("ส่งรูปไม่สำเร็จ"); }
+    try { for (const f of files) { const url = await uploadChatImage(f); await sendChatImage(sel, url); } await loadMsgs(sel); }
+    catch { flash("ส่งรูปไม่สำเร็จ"); }
     setSending(false);
+  }
+  function onImage(e) { const fs = Array.from(e.target.files || []); e.target.value = ""; sendImages(fs); }
+  function onPaste(e) {
+    const fs = Array.from(e.clipboardData?.files || []).filter(isImg);
+    if (fs.length) { e.preventDefault(); sendImages(fs); }
   }
   async function onFile(e) {
     const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel) return;
+    if (isImg(f)) return sendImages([f]);   // รูป (รวม HEIC จากไอโฟน) → ส่งเป็นรูปดูในแชตได้เลย ไม่ใช่ลิงก์ไฟล์
     setSending(true);
     try { const url = await uploadChatImage(f); await sendChatFile(sel, url, f.name); await loadMsgs(sel); } catch (err) { flash("ส่งไฟล์ไม่สำเร็จ: " + (err?.message || err)); }
     setSending(false);
@@ -345,7 +394,12 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                   </button>}
               </div>
 
-              <div className="tc-msgs">
+              <div className="tc-msgs" ref={msgsRef}>
+                {hasMore && (
+                  <button className="btn-ghost sm" style={{ alignSelf: "center", margin: "2px auto 10px", display: "block" }} onClick={loadOlder}>
+                    ⌃ ดูข้อความเก่าก่อนหน้า
+                  </button>
+                )}
                 {msgs.map((m) => {
                   const out = m.sender === me?.id;
                   const jc  = parseJobCard(m.text);
@@ -387,7 +441,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                         ) : m.file_url ? (
                           <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || "เปิดไฟล์"}</a>
                         ) : (
-                          <span>{renderMentions(m.text)}</span>
+                          <span>{renderRich(m.text)}</span>
                         )}
                         {!jc && (
                           <span className="chat-bubble-time">
@@ -413,8 +467,8 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                 </div>
               )}
               <div className="chat-compose">
-                <label className={"chat-tool" + (sending ? " disabled" : "")} title="ส่งรูป">
-                  📷<input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
+                <label className={"chat-tool" + (sending ? " disabled" : "")} title="ส่งรูป (เลือกได้หลายรูป)">
+                  📷<input type="file" accept="image/*" multiple hidden disabled={sending} onChange={onImage} />
                 </label>
                 <label className={"chat-tool" + (sending ? " disabled" : "")} title="ส่งไฟล์">
                   📎<input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} />
@@ -423,8 +477,8 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                   onClick={() => { if (sel && !sending) { ensureJobs(); setModal("joblink"); } }}>
                   🔗
                 </button>
-                <textarea ref={taRef} className="inp" rows={3} value={text}
-                  placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · @ แท็กสมาชิก)"}
+                <textarea ref={taRef} className="inp" rows={3} value={text} onPaste={onPaste}
+                  placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · @ แท็กสมาชิก · วางรูปได้)"}
                   onChange={(e) => {
                     const val = e.target.value; setText(val);
                     const pos = e.target.selectionStart;

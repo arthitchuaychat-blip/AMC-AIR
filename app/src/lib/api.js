@@ -3482,10 +3482,16 @@ export async function countUnreadTeamChats() {
   return rooms.reduce((a, r) => a + (r.unread || 0), 0);
 }
 
-export async function listChatMessages(roomId) {
-  const { data, error } = await supabase.from("chat_messages").select("*").eq("room_id", roomId).order("created_at", { ascending: true });
+// โหลดข้อความห้อง — เอา "ล่าสุด" ก่อนเสมอ (เรียงใหม่→เก่า + limit แล้วกลับด้าน)
+// ห้ามโหลดทั้งห้องแบบเรียงเก่า→ใหม่: เกินเพดาน 1000 แถวเมื่อไหร่ ข้อความใหม่จะหายทั้งห้อง
+// before = created_at ของข้อความบนสุดที่มี → ดึงหน้าถัดไปย้อนหลัง (ปุ่ม "ดูข้อความเก่า")
+export const CHAT_PAGE = 150;
+export async function listChatMessages(roomId, { before, limit = CHAT_PAGE } = {}) {
+  let q = supabase.from("chat_messages").select("*").eq("room_id", roomId).order("created_at", { ascending: false }).limit(limit);
+  if (before) q = q.lt("created_at", before);
+  const { data, error } = await q;
   if (error) throw error;
-  return data || [];
+  return (data || []).reverse();
 }
 
 // fire-and-forget Web Push to the room's other members (no-op if VAPID isn't configured)
@@ -3502,19 +3508,14 @@ async function _firePush(roomId, body) {
   } catch (_) {}
 }
 
-// in-app notification for a team-chat room's members (push is handled separately by _firePush)
-async function _notifyChatRoom(roomId, body) {
-  try {
-    const { data: mem } = await supabase.from("chat_members").select("user_id").eq("room_id", roomId);
-    const me = await getProfile();
-    notify((mem || []).map((m) => m.user_id), { category: "team_chat", title: `แชตทีม · ${me?.name || "ทีมงาน"}`, body, url: "teamchat", ref_type: "room", ref_no: String(roomId), push: false });
-  } catch (_) {}
-}
+// หมายเหตุ: เลิกสร้าง in-app notification ให้สมาชิกทุกคนทุกข้อความแล้ว (กระดิ่งสแปม)
+// — แชตทีมมี unread badge ของตัวเองในเมนู + Web Push (_firePush) ตอนไม่ได้เปิดแอปอยู่แล้ว
+// เหลือแจ้งเตือนเฉพาะคนถูก @แท็ก (ใน sendChatMessage ด้านล่าง)
 export async function sendChatMessage(roomId, text, mentionIds = []) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, text: text.trim() });
   if (error) throw error;
-  _firePush(roomId, text.trim()); _notifyChatRoom(roomId, text.trim());
+  _firePush(roomId, text.trim());
   if (mentionIds.length) {
     const me = await getProfile();
     notify(mentionIds.filter((id) => id !== uid), {
@@ -3527,13 +3528,13 @@ export async function sendChatImage(roomId, imageUrl) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, image_url: imageUrl, text: null });
   if (error) throw error;
-  _firePush(roomId, "[รูปภาพ]"); _notifyChatRoom(roomId, "[รูปภาพ]");
+  _firePush(roomId, "[รูปภาพ]");
 }
 export async function sendChatFile(roomId, fileUrl, fileName) {
   const uid = await _uid();
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, file_url: fileUrl, file_name: fileName || "ไฟล์", text: null });
   if (error) throw error;
-  _firePush(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`); _notifyChatRoom(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`);
+  _firePush(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`);
 }
 
 // find-or-create a 1:1 DM room — done in a SECURITY DEFINER RPC so it isn't blocked by insert RLS
