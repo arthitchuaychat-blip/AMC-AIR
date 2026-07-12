@@ -1,5 +1,5 @@
 // shared labels/status for the unified document+job history (customer detail & chat panel)
-export const TYPE_LABEL = { quote: "ใบเสนอ", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", job: "ใบงาน" };
+export const TYPE_LABEL = { quote: "ใบเสนอ", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", job: "ใบงาน", po: "ใบสั่งซื้อ" };
 export const DOC_FILTERS = [["all", "ทั้งหมด"], ["quote", "ใบเสนอราคา"], ["invoice", "ใบแจ้งหนี้"], ["receipt", "ใบเสร็จ"], ["job", "ใบงาน"]];
 const DOC_STATUS = {
   quote: { draft: ["ร่าง", "b-grey"], sent: ["ส่งแล้ว", "b-blue"], approved: ["อนุมัติ", "b-green"], rejected: ["ปฏิเสธ", "b-red"], expired: ["หมดอายุ", "b-grey"] },

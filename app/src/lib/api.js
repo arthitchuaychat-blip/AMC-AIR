@@ -2699,6 +2699,11 @@ export const adminSetUserPassword = (userId, password) => callAdminUser({ action
 export const adminDeleteUser = (userId) => callAdminUser({ action: "delete", userId });
 
 // ---------- LINE OA chat ----------
+// ตั้งชนิดผู้ติดต่อ LINE (ลูกค้า ↔ ซัพพลายเออร์) + ผูกทะเบียนผู้ขาย — มิเกรชัน 138
+export async function setLineContactKind(lineUserId, kind, supplierId = null) {
+  const { error } = await supabase.from("line_contacts").update({ kind, supplier_id: supplierId }).eq("line_user_id", lineUserId);
+  if (error) throw (error.code === "PGRST204" || /'kind'|supplier_id|schema cache/i.test(error.message || "")) ? new Error("ต้องรัน migration 138 ใน Supabase ก่อน") : error;
+}
 export async function listLineContacts() {
   const [c, cu, links] = await Promise.all([
     supabase.from("line_contacts").select("*").order("last_message_at", { ascending: false, nullsFirst: false }),

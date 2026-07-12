@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile, getAcSeries } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile, getAcSeries } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -141,8 +141,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [stageF, setStageF] = React.useState("all");     // list filter by stage
   const [mineOnly, setMineOnly] = React.useState(false); // list filter: assigned to me
   const [replyTo, setReplyTo] = React.useState(null);    // message being replied-to (quote)
-  const [channel, setChannel] = React.useState("line"); // "line" | "fb" — unified inbox switch
+  const [sups, setSups] = React.useState([]);            // ทะเบียนผู้ขาย (โหลดเมื่อใช้แท็บซัพ/ผูกผู้ขาย)
+  const [poPicker, setPoPicker] = React.useState(false); // โมดัลเลือก PO ส่งเข้าแชตซัพ
+  const [pos, setPos] = React.useState([]);              // ใบสั่งซื้อ (โหลดครั้งแรกที่กดส่ง PO)
+  const [channel, setChannel] = React.useState("line"); // "line" | "fb" | "sup" — unified inbox switch
   const isFb = channel === "fb";
+  const isSup = channel === "sup";   // แท็บซัพพลายเออร์ = ผู้ติดต่อ LINE ที่ kind='supplier' (mig 138)
   // channel-aware data calls (FB returns the same shape, psid aliased to line_user_id)
   const chListContacts = () => (isFb ? listFbContacts() : listLineContacts());
   const chListMessages = (id) => (isFb ? listFbMessages(id) : listLineMessages(id));
@@ -219,7 +223,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       // focus = a customer id (from a doc) OR a LINE/FB conversation id (from a notification)
       const inLine = lc.find((c) => String(c.customer_id) === String(focus) || String(c.line_user_id) === String(focus));
       const inFb = fc.find((c) => String(c.customer_id) === String(focus) || String(c.line_user_id) === String(focus));
-      const target = inLine ? { ch: "line", c: inLine } : inFb ? { ch: "fb", c: inFb } : null;
+      const target = inLine ? { ch: inLine.kind === "supplier" ? "sup" : "line", c: inLine } : inFb ? { ch: "fb", c: inFb } : null;
       if (!target) { flash("ลูกค้ารายนี้ยังไม่มีแชตที่เชื่อมไว้", true); return; }
       if (target.ch !== channel) { pendingOpenRef.current = target.c.line_user_id; setChannel(target.ch); }
       else openContact(target.c);
@@ -293,6 +297,28 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     if (!await confirmDialog("เอาลูกค้ารายนี้ออกจากแชตนี้?")) return;
     try { await removeLineCustomer(sel, cid); await loadContacts(); flash("เอาออกแล้ว"); }
     catch (e) { flash("เอาออกไม่สำเร็จ: " + (e.message || e), true); }
+  }
+
+  // ── ซัพพลายเออร์: ย้ายผู้ติดต่อระหว่างกระดานลูกค้า ↔ ซัพ + ผูกทะเบียนผู้ขาย (mig 138) ──
+  const ensureSups = () => { if (!sups.length) listSuppliers().then(setSups).catch(() => {}); };
+  React.useEffect(() => { if (isSup) ensureSups(); }, [channel]);
+  async function moveToSupplier() {
+    if (!await confirmDialog("ย้ายแชตนี้ไปกระดานซัพพลายเออร์?\n(จะหายจากแท็บ LINE ลูกค้า ไปอยู่แท็บ 🏭 ซัพฯ)")) return;
+    try { await setLineContactKind(sel, "supplier", null); await loadContacts(); ensureSups(); flash("ย้ายไปกระดานซัพพลายเออร์แล้ว ✓ — เปิดดูที่แท็บ 🏭 ซัพฯ"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function moveToCustomer() {
+    if (!await confirmDialog("ย้ายแชตนี้กลับกระดานลูกค้า?")) return;
+    try { await setLineContactKind(sel, "customer", null); await loadContacts(); flash("ย้ายกลับกระดานลูกค้าแล้ว ✓"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function setSupplierLink(sid) {
+    try { await setLineContactKind(sel, "supplier", sid ? Number(sid) : null); await loadContacts(); flash(sid ? "ผูกผู้ขายแล้ว ✓" : "ยกเลิกการผูกผู้ขายแล้ว"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function openPoPicker() {
+    setPoPicker(true); ensureSups();
+    if (!pos.length) { try { setPos(await listPurchaseOrders()); } catch (e) { flash("โหลดใบสั่งซื้อไม่สำเร็จ: " + (e.message || e), true); } }
   }
 
   // send an image: upload to storage → push the public URL to LINE
@@ -455,6 +481,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const shown = contacts.filter((c) =>
     (stageF === "all" || (c.stage || "new") === stageF)
     && (!mineOnly || c.assigned_to === myId)
+    // แท็บซัพ = เฉพาะผู้ติดต่อที่ติดป้ายซัพพลายเออร์ · แท็บ LINE ลูกค้า = ที่เหลือ (FB ไม่มีป้าย)
+    && (isFb ? true : isSup ? c.kind === "supplier" : (c.kind || "customer") !== "supplier")
     && (matchText(q, c.display_name, c.customerName, c.last_message) || matchPhone(q, c.phone)))
     // ห้องที่ยังไม่อ่านลอยขึ้นบนสุดเสมอ · ที่เหลือเรียงตามข้อความล่าสุด
     .sort((a, b) => {
@@ -474,8 +502,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         {/* conversation list */}
         <div className="chat-list">
           <div className="chat-channel-tabs">
-            <button className={"chat-ch" + (!isFb ? " on line" : "")} onClick={() => setChannel("line")}>LINE</button>
+            <button className={"chat-ch" + (channel === "line" ? " on line" : "")} onClick={() => setChannel("line")}>LINE</button>
             <button className={"chat-ch" + (isFb ? " on fb" : "")} onClick={() => setChannel("fb")}>Facebook</button>
+            <button className={"chat-ch" + (isSup ? " on sup" : "")} title="แชตซัพพลายเออร์ (LINE เดียวกัน แยกกระดาน)" onClick={() => setChannel("sup")}>🏭 ซัพฯ</button>
           </div>
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -580,6 +609,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               {canSend ? (
                 <div className="chat-composer">
                   <div className="chat-tools">
+                    {selContact.kind === "supplier" && <button className="chat-tool primary" disabled={sending} title="เลือกใบสั่งซื้อ ส่งเป็นรูป/PDF เข้าแชตซัพ" onClick={openPoPicker}>🛒 ส่ง PO</button>}
                     {selContact.customer_id && <button className="chat-tool primary" onClick={openConfirm} disabled={sending}>🧾 ส่งคอนเฟิม</button>}
                     <label className={"chat-tool" + (sending ? " disabled" : "")}>📷 รูป
                       <input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
@@ -588,7 +618,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       <input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} />
                     </label>}
                     {!isFb && <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => setStickerOpen((o) => !o)}>😊 สติกเกอร์</button>}
-                    <button className="chat-tool" disabled={sending} onClick={openAcPicker}>❄️ ส่งแอร์</button>
+                    {selContact.kind !== "supplier" && <button className="chat-tool" disabled={sending} onClick={openAcPicker}>❄️ ส่งแอร์</button>}
                     {quickReplies.map((qr) => {
                       const label = qr.title || qr.text;
                       const nImg = (qr.images || []).length;
@@ -665,9 +695,30 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
           const scountBySite = (siteId) => infoDocs.filter((e) => e.site_id === siteId).length;
           return (
             <div className={"chat-info" + (showInfo ? " open" : "")}>
-              <div className="ci-head"><span>ข้อมูลลูกค้า</span>
+              <div className="ci-head"><span>{selContact.kind === "supplier" ? "ข้อมูลซัพพลายเออร์" : "ข้อมูลลูกค้า"}</span>
                 <button className="ci-close" onClick={() => setShowInfo(false)}><UIcon name="x" size={16} /></button></div>
               <div className="ci-body">
+                {/* ── ซัพพลายเออร์: ผูกทะเบียนผู้ขาย / ย้ายกระดาน (เฉพาะแชต LINE) ── */}
+                {!isFb && canSend && (selContact.kind === "supplier" ? (
+                  <div className="ci-crm" style={{ marginBottom: 10 }}>
+                    <label className="ci-field"><span>🏭 ผูกกับทะเบียนผู้ขาย</span>
+                      <Combo className="inp" value={selContact.supplier_id || ""} onChange={(e) => setSupplierLink(e.target.value || null)}>
+                        <option value="">— ยังไม่ผูกผู้ขาย —</option>
+                        {sups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </Combo>
+                    </label>
+                    {selContact.supplier_id && (() => { const sp = sups.find((s) => String(s.id) === String(selContact.supplier_id)); return sp ? (
+                      <div className="jo-dim" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                        {sp.contacts?.[0]?.phone && <div>📞 {sp.contacts[0].phone}</div>}
+                        {sp.address && <div>📍 {sp.address}</div>}
+                      </div>
+                    ) : null; })()}
+                    <button className="btn-ghost sm" style={{ marginTop: 6 }} onClick={moveToCustomer}>↩ ย้ายกลับกระดานลูกค้า</button>
+                  </div>
+                ) : (
+                  <button className="btn-ghost sm" style={{ marginBottom: 10, width: "100%", justifyContent: "center" }}
+                    title="แชตนี้เป็นซัพพลายเออร์ — แยกไปกระดาน 🏭 ไม่ปนกับลูกค้า" onClick={moveToSupplier}>🏭 ย้ายไปกระดานซัพพลายเออร์</button>
+                ))}
                 <div className="ci-queue">
                   <button className="ci-queue-head" onClick={() => setShowQueue((v) => !v)}>
                     <span>🗓 คิวช่าง · ตารางว่าง</span>
@@ -885,6 +936,18 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
           </div>
         </div>
       )}
+      {poPicker && (
+        <div className="modal-overlay" onClick={() => setPoPicker(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
+            <div className="modal-head"><div className="modal-title">🛒 ส่งใบสั่งซื้อเข้าแชต</div>
+              <button className="drawer-close" onClick={() => setPoPicker(false)}><UIcon name="x" size={20} /></button></div>
+            <div className="modal-body">
+              <PoPickerBody pos={pos} sups={sups} contact={selContact}
+                onPick={(p) => { setPoPicker(false); setSendMenuFor({ type: "po", no: p.po_no, title: p.supplier || "" }); }} />
+            </div>
+          </div>
+        </div>
+      )}
       {sendMenuFor && (
         <div className="modal-overlay" onClick={() => setSendMenuFor(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 400 }}>
@@ -1024,12 +1087,34 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       {capJob && <DocCapture type={capJob.type} no={capJob.no}
         onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
         onReady={async (node) => {
-          try { await sendDocFromNode(node, capJob.to, capJob.mode, capJob.label); flash(capJob.mode === "image" ? "ส่งรูปเอกสารให้ลูกค้าแล้ว ✓" : "ส่งลิงก์ PDF ให้ลูกค้าแล้ว ✓"); }
+          try { await sendDocFromNode(node, capJob.to, capJob.mode, capJob.label); flash(capJob.mode === "image" ? "ส่งรูปเอกสารเข้าแชตแล้ว ✓" : "ส่งลิงก์ PDF เข้าแชตแล้ว ✓"); }
           catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
           setCapJob(null);
         }} />}
       {peekEl}
       {toast && <div className={"chat-toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
+  );
+}
+
+/* ─── เลือกใบสั่งซื้อ ส่งเข้าแชตซัพพลายเออร์ — ผูกผู้ขายไว้จะกรองให้ก่อน ─── */
+function PoPickerBody({ pos, sups, contact, onPick }) {
+  const linked = contact?.supplier_id ? sups.find((s) => String(s.id) === String(contact.supplier_id)) : null;
+  const [q, setQ] = React.useState(linked?.name || "");
+  const list = pos.filter((p) => p.status !== "cancelled" && matchText(q, p.po_no, p.supplier, p.quote_no)).slice(0, 60);
+  return (
+    <>
+      <input className="inp" placeholder="ค้นหาเลข PO / ชื่อผู้ขาย / ใบเสนอราคา…" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 8 }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 380, overflowY: "auto" }}>
+        {pos.length === 0 && <div className="empty sm">กำลังโหลดใบสั่งซื้อ…</div>}
+        {pos.length > 0 && list.length === 0 && <div className="empty sm">ไม่พบใบสั่งซื้อ{q ? " — ลองล้างคำค้น" : ""}</div>}
+        {list.map((p) => (
+          <button key={p.po_no} className="confirm-job" onClick={() => onPick(p)}>
+            <div><b>{p.po_no}</b> · {p.supplier || "—"}{p.vat ? " · VAT" : ""}</div>
+            <small>{p.issue_date ? new Date(p.issue_date).toLocaleDateString("th-TH") : ""} · {(p.items || []).length} รายการ · รวม {fmtBaht(p.total)}</small>
+          </button>
+        ))}
+      </div>
+    </>
   );
 }

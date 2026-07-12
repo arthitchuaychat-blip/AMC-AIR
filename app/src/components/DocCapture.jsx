@@ -1,7 +1,7 @@
 import React from "react";
 import DocSlip from "./DocSlip";
-import { listQuotations, listInvoices, listReceipts, getCompanies } from "../lib/api";
-import { fmtBaht, fmtBaht2, custCode } from "../lib/format";
+import { listQuotations, listInvoices, listReceipts, listPurchaseOrders, listSuppliers, listMaterialsLite, getCompanies } from "../lib/api";
+import { fmtBaht, fmtBaht2, fmtNum, custCode, fmtDocDate } from "../lib/format";
 
 // Renders a single document (quotation/invoice/receipt) off-screen at A4 size so it can be captured
 // to an image/PDF and sent — WITHOUT navigating to the document page. Calls onReady(node) when painted.
@@ -26,6 +26,11 @@ export default function DocCapture({ type, no, onReady, onError }) {
           const [rc, iv, qs] = await Promise.all([listReceipts(), listInvoices(), listQuotations()]);
           const x = rc.find((r) => r.receipt_no === no); if (!x) throw new Error("ไม่พบใบเสร็จ " + no);
           alive && setData({ companies, x, inv: iv.find((r) => r.invoice_no === x.invoice_no), q: qs.find((r) => r.quote_no === x.quote_no) });
+        } else if (type === "po") {
+          // ใบสั่งซื้อ — ส่งเข้าแชตซัพพลายเออร์ (โครงเดียวกับหน้าพิมพ์ในเมนูใบสั่งซื้อ)
+          const [pos, sups, mats] = await Promise.all([listPurchaseOrders(), listSuppliers().catch(() => []), listMaterialsLite()]);
+          const x = pos.find((r) => r.po_no === no); if (!x) throw new Error("ไม่พบใบสั่งซื้อ " + no);
+          alive && setData({ companies, x, sup: sups.find((s) => (s.name || "").trim() === (x.supplier || "").trim()) || null, matMap: Object.fromEntries(mats.map((m) => [m.code, m])) });
         } else throw new Error("ชนิดเอกสารไม่รองรับ");
       } catch (e) { onError && onError(e.message || String(e)); }
     })();
@@ -52,7 +57,28 @@ export default function DocCapture({ type, no, onReady, onError }) {
 function slip(type, d) {
   if (type === "quote") return quoteSlip(d.q, d.companies);
   if (type === "invoice") return invoiceSlip(d.x, d.q, d.companies);
+  if (type === "po") return poSlip(d.x, d.sup, d.matMap, d.companies);
   return receiptSlip(d.x, d.q, d.inv, d.companies);
+}
+
+function poSlip(po, sup, matMap, companies) {
+  const co = po.vat ? companies.vat : companies.novat;
+  const c0 = sup?.contacts?.[0];
+  return (
+    <DocSlip company={co} titleTh="ใบสั่งซื้อ" titleEn="PURCHASE ORDER" docNo={po.po_no} partyLabel="ผู้ขาย"
+      metaRows={[{ label: "วันที่", value: fmtDocDate(po.issue_date || po.created_at) }, ...(po.quote_no ? [{ label: "อ้างอิงใบเสนอราคา", value: po.quote_no }] : [])]}
+      customer={{ name: po.supplier || "-", taxId: sup?.tax_id, address: sup?.address, contactName: c0?.name, contactPhone: c0?.phone }}
+      terms={po.note} signLabels={["ผู้สั่งซื้อ", "ผู้อนุมัติ"]}
+      totals={<div className="doc-totals">
+        <div><span>รวมเป็นเงิน</span><b>{fmtBaht(po.subtotal)}</b></div>
+        {po.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(po.vatAmt)}</b></div> : null}
+        <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(po.total)}</b></div>
+      </div>}>
+      {(po.items || []).map((it, i) => { const m = matMap[it.material_code]; return (
+        <tr key={i}><td>{i + 1}</td><td>{it.material_code}</td><td>{m?.th || it.material_code}</td><td className="r">{fmtNum(it.qty)} {it.unit || m?.unit || ""}</td><td className="r">{fmtBaht(it.price)}</td><td className="r">{fmtBaht(it.qty * it.price)}</td></tr>
+      ); })}
+    </DocSlip>
+  );
 }
 
 function quoteSlip(q, companies) {
