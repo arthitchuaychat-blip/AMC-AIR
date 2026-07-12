@@ -2807,13 +2807,14 @@ export async function uploadAvatar(file) {
   if (error) throw error;
   return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
+const avatarErr = (e) => /set_my_avatar|set_room_avatar|schema cache/i.test(e?.message || "") ? new Error("ต้องรัน migration 083 (chat_avatars) ใน Supabase ก่อน") : e;
 export async function setMyAvatar(url) {
   const { error } = await supabase.rpc("set_my_avatar", { p_url: url || "" });
-  if (error) throw error;
+  if (error) throw avatarErr(error);
 }
 export async function setRoomAvatar(roomId, url) {
   const { error } = await supabase.rpc("set_room_avatar", { p_room: roomId, p_url: url || "" });
-  if (error) throw error;
+  if (error) throw avatarErr(error);
 }
 
 // send a reply via the serverless function (LINE push). payload = { text } or { imageUrl }.
