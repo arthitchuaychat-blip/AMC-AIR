@@ -584,6 +584,18 @@ export async function listAllJobs() {
   }).sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
+// ข้อมูลใบงานแบบย่อสำหรับหน้า "วัสดุที่ใช้ในงาน" — สถานะงาน + ลูกค้า + ชื่องาน ต่อเลขงาน
+export async function listJobBriefs() {
+  const [j, cu] = await Promise.all([
+    supabase.from("job_orders").select("job_no,status,title,customer_id,contact_name,contact_phone"),
+    supabase.from("customers").select("id,name"),
+  ]);
+  if (j.error) throw j.error;
+  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  return Object.fromEntries((j.data || []).map((x) => [x.job_no,
+    { status: x.status, title: x.title || null, customerName: cn[x.customer_id] || null, contact: x.contact_name || null, phone: x.contact_phone || null }]));
+}
+
 export async function closeJob(job_no, team, usedValue) {
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from("jobs").upsert(
