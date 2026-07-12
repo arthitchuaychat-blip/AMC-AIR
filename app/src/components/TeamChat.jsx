@@ -1,7 +1,7 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
 import { confirmDialog } from "./ConfirmDialog";
-import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, renameChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar } from "../lib/api";
+import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, renameChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar, listChatNotes, saveChatNote, deleteChatNote } from "../lib/api";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
@@ -439,6 +439,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                     {selRoom.ref_no ? ` · งาน ${selRoom.ref_no}` : ""}
                   </div>
                 </div>
+                <button className="btn-ghost sm" title="โน้ตประจำห้อง — ปักข้อมูลสำคัญ แนบรูปได้ไม่จำกัด" onClick={() => setModal("notes")}>📝 โน้ต</button>
                 {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") &&
                   <button className="btn-ghost sm" onClick={() => setModal("members")}>
                     <UIcon name="user" size={14} /> สมาชิก
@@ -560,6 +561,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           catch (e) { flash("สร้างกลุ่มไม่สำเร็จ: " + (e?.message || e)); }
         }} onClose={() => setModal(null)} />}
       {modal === "members" && selRoom && <MembersModal room={selRoom} staff={staff} onClose={() => setModal(null)} onChanged={loadRooms} flash={flash} />}
+      {modal === "notes" && selRoom && <NotesModal room={selRoom} me={me} staffById={staffById} flash={flash} onClose={() => setModal(null)} onPosted={() => loadMsgs(sel)} />}
       {modal === "joblink" && <JobPickerModal jobs={jobs} onPick={sendJobCard} onClose={() => setModal(null)} />}
       {toast && <div className="tc-toast">{toast}</div>}
     </div>
@@ -740,6 +742,126 @@ function MembersModal({ room, staff, onClose, onChanged, flash }) {
               </div>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Notes Modal — โน้ตประจำห้อง (แบบ Note ของ LINE): ข้อความ + รูปแนบไม่จำกัด ─── */
+function NotesModal({ room, me, staffById, flash, onClose, onPosted }) {
+  const OFFICE_ROLES = ["admin", "exec", "finance", "sales"];
+  const [notes, setNotes] = React.useState(null);
+  const [ed, setEd] = React.useState(null);          // { id|null, text, images[] } — กำลังสร้าง/แก้
+  const [busy, setBusy] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+
+  async function load() {
+    try { setNotes(await listChatNotes(room.id)); }
+    catch (e) { flash("โหลดโน้ตไม่สำเร็จ: " + (e?.message || e)); setNotes([]); }
+  }
+  React.useEffect(() => { load(); }, [room.id]);
+
+  const canEdit = (n) => n.author === me?.id || OFFICE_ROLES.includes(me?.role);
+  const fmtWhen = (s) => new Date(s).toLocaleString("th-TH", { day: "numeric", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  async function onPics(e) {
+    const files = Array.from(e.target.files || []); e.target.value = "";
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const urls = [];
+      for (const f of files) urls.push(await uploadChatImage(f));   // ย่อรูป + แปลง HEIC ให้อัตโนมัติ · ไม่จำกัดจำนวน
+      setEd((s) => (s ? { ...s, images: [...s.images, ...urls] } : s));
+    } catch (ex) { flash("อัปโหลดรูปไม่สำเร็จ: " + (ex?.message || ex)); }
+    setUploading(false);
+  }
+  async function save() {
+    if (!ed || (!ed.text.trim() && !ed.images.length)) return flash("พิมพ์ข้อความหรือแนบรูปก่อน");
+    setBusy(true);
+    try {
+      const isNew = !ed.id;
+      await saveChatNote({ id: ed.id, room_id: room.id, text: ed.text, images: ed.images });
+      if (isNew) {   // แจ้งในห้องให้สมาชิกเห็นว่ามีโน้ตใหม่ (ขึ้นแชต + push ตามระบบเดิม)
+        try { await sendChatMessage(room.id, `📝 โน้ตใหม่: ${ed.text.trim().slice(0, 80) || "(รูปภาพ)"}${ed.images.length ? ` · ${ed.images.length} รูป` : ""}`); onPosted && onPosted(); } catch (_) {}
+      }
+      setEd(null); await load(); flash(isNew ? "สร้างโน้ตแล้ว ✓" : "บันทึกโน้ตแล้ว ✓");
+    } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e?.message || e)); }
+    setBusy(false);
+  }
+  async function remove(n) {
+    if (!await confirmDialog("ลบโน้ตนี้?")) return;
+    try { await deleteChatNote(n.id); await load(); flash("ลบโน้ตแล้ว"); }
+    catch (e) { flash("ลบไม่สำเร็จ: " + (e?.message || e)); }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 560, maxWidth: "95vw" }}>
+        <div className="modal-head">
+          <div className="modal-title">📝 โน้ต · {room.title}</div>
+          <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
+        </div>
+        <div className="modal-body" style={{ maxHeight: "72vh", overflowY: "auto" }}>
+          {/* ── ฟอร์มสร้าง/แก้โน้ต ── */}
+          {ed ? (
+            <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+              <textarea className="inp" rows={4} autoFocus value={ed.text} placeholder="พิมพ์โน้ต… (นัดหมาย กติกา ข้อมูลสำคัญของห้อง)"
+                onChange={(e) => setEd((s) => ({ ...s, text: e.target.value }))} style={{ resize: "vertical" }} />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                {ed.images.map((u, i) => (
+                  <span key={u + i} style={{ position: "relative", display: "inline-block" }}>
+                    <img src={u} alt="" style={{ width: 62, height: 62, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line-2)", cursor: "zoom-in" }} onClick={() => window.open(u, "_blank")} />
+                    <button type="button" onClick={() => setEd((s) => ({ ...s, images: s.images.filter((_, j) => j !== i) }))}
+                      style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: 99, border: 0, background: "#dc2626", color: "#fff", fontSize: 11, lineHeight: "18px", padding: 0, cursor: "pointer" }}>✕</button>
+                  </span>
+                ))}
+                <label className="btn-ghost sm" style={{ cursor: "pointer", height: 62, width: 62, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2, borderStyle: "dashed" }}>
+                  <span style={{ fontSize: 18 }}>{uploading ? "…" : "📷"}</span><span style={{ fontSize: 10.5 }}>{uploading ? "กำลังอัป" : "เพิ่มรูป"}</span>
+                  <input type="file" accept="image/*" multiple hidden disabled={uploading} onChange={onPics} />
+                </label>
+                <span className="jo-dim" style={{ fontSize: 11 }}>แนบได้ไม่จำกัด ({ed.images.length} รูป)</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
+                <button className="btn-ghost sm" disabled={busy} onClick={() => setEd(null)}>ยกเลิก</button>
+                <button className="btn-primary sm" disabled={busy || uploading} onClick={save}>{busy ? "กำลังบันทึก…" : ed.id ? "บันทึกการแก้ไข" : "สร้างโน้ต"}</button>
+              </div>
+            </div>
+          ) : (
+            <button className="btn-primary" style={{ width: "100%", justifyContent: "center", marginBottom: 12 }} onClick={() => setEd({ id: null, text: "", images: [] })}>
+              <UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> สร้างโน้ตใหม่
+            </button>
+          )}
+
+          {/* ── รายการโน้ต (ใหม่สุดอยู่บน) ── */}
+          {notes === null && <div className="empty sm">กำลังโหลด…</div>}
+          {notes && notes.length === 0 && <div className="empty" style={{ padding: 26 }}>ยังไม่มีโน้ตในห้องนี้ — ปักนัดหมาย กติกา หรือข้อมูลสำคัญไว้ให้ทุกคนเห็น</div>}
+          {(notes || []).map((n) => {
+            const a = staffById[n.author] || {};
+            return (
+              <div key={n.id} className="card" style={{ padding: "10px 12px", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Avatar url={a.avatar_url} name={a.name || "ทีมงาน"} id={n.author} size={26} />
+                  <b style={{ fontSize: 12.5 }}>{a.name || "ทีมงาน"}</b>
+                  <span className="jo-dim" style={{ fontSize: 11 }}>{fmtWhen(n.created_at)}{n.updated_at && n.updated_at !== n.created_at ? " · แก้ไขแล้ว" : ""}</span>
+                  {canEdit(n) && (
+                    <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+                      <button className="btn-ghost sm" style={{ padding: "1px 7px" }} title="แก้ไข" onClick={() => setEd({ id: n.id, text: n.text || "", images: Array.isArray(n.images) ? n.images : [] })}><UIcon name="edit" size={13} /></button>
+                      <button className="btn-ghost sm danger" style={{ padding: "1px 7px" }} title="ลบ" onClick={() => remove(n)}><UIcon name="trash" size={13} /></button>
+                    </span>
+                  )}
+                </div>
+                {n.text && <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap", wordBreak: "break-word", marginTop: 6, lineHeight: 1.65 }}>{renderRich(n.text)}</div>}
+                {Array.isArray(n.images) && n.images.length > 0 && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                    {n.images.map((u, i) => (
+                      <img key={u + i} src={u} alt="" loading="lazy" style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 9, border: "1px solid var(--line-2)", cursor: "zoom-in" }} onClick={() => window.open(u, "_blank")} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

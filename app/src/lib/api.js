@@ -3564,6 +3564,29 @@ export async function renameChatRoom(roomId, name) {
   if (error) throw /chat_rename_room|schema cache/i.test(error.message || "") ? new Error("ต้องรัน migration 136 ใน Supabase ก่อน") : error;
 }
 
+// ---------- โน้ตประจำห้องแชต (มิเกรชัน 137) — ข้อความ + รูปแนบไม่จำกัด ----------
+const noteErr = (e) => /chat_notes|schema cache/i.test(e?.message || "") ? new Error("ต้องรัน migration 137 ใน Supabase ก่อน") : e;
+export async function listChatNotes(roomId) {
+  const { data, error } = await supabase.from("chat_notes").select("*").eq("room_id", roomId).order("created_at", { ascending: false });
+  if (error) throw noteErr(error);
+  return data || [];
+}
+export async function saveChatNote({ id, room_id, text, images }) {
+  const row = { text: (text || "").trim(), images: images || [] };
+  if (id) {
+    const { error } = await supabase.from("chat_notes").update({ ...row, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw noteErr(error);
+  } else {
+    const uid = await _uid();
+    const { error } = await supabase.from("chat_notes").insert({ ...row, room_id, author: uid });
+    if (error) throw noteErr(error);
+  }
+}
+export async function deleteChatNote(id) {
+  const { error } = await supabase.from("chat_notes").delete().eq("id", id);
+  if (error) throw noteErr(error);
+}
+
 // mark a room read up to now (creates my membership row for the company room on first open)
 export async function markChatRead(roomId) {
   const uid = await _uid();
