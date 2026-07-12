@@ -1,7 +1,7 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
 import { confirmDialog } from "./ConfirmDialog";
-import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, renameChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar, listChatNotes, saveChatNote, deleteChatNote } from "../lib/api";
+import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, renameChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar, listChatNotes, saveChatNote, deleteChatNote, listAllChatNotes } from "../lib/api";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
@@ -143,6 +143,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   const [mentionAnchor, setMentionAnchor] = React.useState(0);
   const [hasMore, setHasMore] = React.useState(false);   // ห้องนี้ยังมีข้อความเก่ากว่าที่โหลดมา
   const [rename, setRename] = React.useState(null);      // string = กำลังแก้ชื่อกลุ่ม · null = ปกติ
+  const [noteIdx, setNoteIdx] = React.useState(null);     // room_id → [ข้อความโน้ต] — โหลดครั้งแรกที่เริ่มค้นหา
   const endRef  = React.useRef(null);
   const selRef  = React.useRef(null);
   const taRef   = React.useRef(null);
@@ -221,6 +222,16 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     } catch { keepScrollRef.current = null; flash("โหลดข้อความเก่าไม่สำเร็จ"); }
   }
   async function ensureJobs() { if (!jobs.length) { try { setJobs(await listJobOrders()); } catch { } } }
+  // ดัชนีโน้ตไว้ให้ช่องค้นหาห้องหาเนื้อโน้ตเจอ — โหลดเมื่อเริ่มพิมพ์ค้นหาครั้งแรก (force = รีเฟรชหลังโน้ตเปลี่ยน)
+  async function ensureNoteIdx(force) {
+    if (noteIdx !== null && !force) return;
+    try {
+      const rows = await listAllChatNotes();
+      const m = {};
+      rows.forEach((n) => { if (n.text) (m[n.room_id] = m[n.room_id] || []).push(n.text); });
+      setNoteIdx(m);
+    } catch { if (noteIdx === null) setNoteIdx({}); }
+  }
 
   React.useEffect(() => {
     (async () => {
@@ -318,8 +329,10 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     rooms.forEach((r) => { c[r.kind] = (c[r.kind] || 0) + 1; });
     return c;
   }, [rooms]);
+  // ค้นหาห้อง: ชื่อห้อง / ข้อความล่าสุด / เนื้อโน้ตในห้อง — เจอจากโน้ตจะโชว์บรรทัดโน้ตนั้นแทนข้อความล่าสุด
+  const noteHitOf = (r) => (q && noteIdx ? (noteIdx[r.id] || []).find((t) => matchText(q, t)) : null);
   const shown = rooms.filter((r) =>
-    matchText(q, r.title, r.lastText) && (kindF === "all" || r.kind === kindF)
+    (matchText(q, r.title, r.lastText) || !!noteHitOf(r)) && (kindF === "all" || r.kind === kindF)
   );
 
   const accentColor = selRoom
@@ -349,7 +362,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           <div className="tc-rooms-top">
             <div className="cat-search" style={{ flex: 1 }}>
               <UIcon name="search" size={16} color="var(--ink-3)" />
-              <input placeholder="ค้นหาห้อง" value={q} onChange={(e) => setQ(e.target.value)} />
+              <input placeholder="ค้นหาห้อง / โน้ต" value={q} onChange={(e) => { setQ(e.target.value); if (e.target.value) ensureNoteIdx(); }} />
             </div>
           </div>
 
@@ -375,20 +388,23 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
 
           <div className="tc-room-list">
             {shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ยังไม่มีห้องแชต</div>}
-            {shown.map((r) => (
-              <button key={r.id} className={"tc-room" + (sel === r.id ? " on" : "")} onClick={() => setSel(r.id)}>
-                <RoomIcon room={r} size={40} staffById={staffById} />
-                <span className="tc-room-mid">
-                  <span className="tc-room-title">
-                    {r.title}
-                    {r.kind !== "dm" && r.memberCount
-                      ? <span className="tc-room-cnt"> · {r.memberCount} คน</span> : null}
+            {shown.map((r) => {
+              const nh = noteHitOf(r);
+              return (
+                <button key={r.id} className={"tc-room" + (sel === r.id ? " on" : "")} onClick={() => setSel(r.id)}>
+                  <RoomIcon room={r} size={40} staffById={staffById} />
+                  <span className="tc-room-mid">
+                    <span className="tc-room-title">
+                      {r.title}
+                      {r.kind !== "dm" && r.memberCount
+                        ? <span className="tc-room-cnt"> · {r.memberCount} คน</span> : null}
+                    </span>
+                    <span className="tc-room-last">{nh ? `📝 ${nh.slice(0, 70)}` : (r.lastText || "—")}</span>
                   </span>
-                  <span className="tc-room-last">{r.lastText || "—"}</span>
-                </span>
-                {r.unread > 0 && <span className="chat-unread">{r.unread}</span>}
-              </button>
-            ))}
+                  {r.unread > 0 && <span className="chat-unread">{r.unread}</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -561,7 +577,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           catch (e) { flash("สร้างกลุ่มไม่สำเร็จ: " + (e?.message || e)); }
         }} onClose={() => setModal(null)} />}
       {modal === "members" && selRoom && <MembersModal room={selRoom} staff={staff} onClose={() => setModal(null)} onChanged={loadRooms} flash={flash} />}
-      {modal === "notes" && selRoom && <NotesModal room={selRoom} me={me} staffById={staffById} flash={flash} onClose={() => setModal(null)} onPosted={() => loadMsgs(sel)} />}
+      {modal === "notes" && selRoom && <NotesModal room={selRoom} me={me} staffById={staffById} flash={flash} onClose={() => setModal(null)} onPosted={() => loadMsgs(sel)} onChanged={() => { if (noteIdx !== null) ensureNoteIdx(true); }} />}
       {modal === "joblink" && <JobPickerModal jobs={jobs} onPick={sendJobCard} onClose={() => setModal(null)} />}
       {toast && <div className="tc-toast">{toast}</div>}
     </div>
@@ -749,10 +765,11 @@ function MembersModal({ room, staff, onClose, onChanged, flash }) {
 }
 
 /* ─── Notes Modal — โน้ตประจำห้อง (แบบ Note ของ LINE): ข้อความ + รูปแนบไม่จำกัด ─── */
-function NotesModal({ room, me, staffById, flash, onClose, onPosted }) {
+function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }) {
   const OFFICE_ROLES = ["admin", "exec", "finance", "sales"];
   const [notes, setNotes] = React.useState(null);
   const [ed, setEd] = React.useState(null);          // { id|null, text, images[] } — กำลังสร้าง/แก้
+  const [nq, setNq] = React.useState("");            // ค้นหาโน้ตในห้องนี้
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
 
@@ -785,15 +802,16 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted }) {
       if (isNew) {   // แจ้งในห้องให้สมาชิกเห็นว่ามีโน้ตใหม่ (ขึ้นแชต + push ตามระบบเดิม)
         try { await sendChatMessage(room.id, `📝 โน้ตใหม่: ${ed.text.trim().slice(0, 80) || "(รูปภาพ)"}${ed.images.length ? ` · ${ed.images.length} รูป` : ""}`); onPosted && onPosted(); } catch (_) {}
       }
-      setEd(null); await load(); flash(isNew ? "สร้างโน้ตแล้ว ✓" : "บันทึกโน้ตแล้ว ✓");
+      setEd(null); await load(); onChanged && onChanged(); flash(isNew ? "สร้างโน้ตแล้ว ✓" : "บันทึกโน้ตแล้ว ✓");
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e?.message || e)); }
     setBusy(false);
   }
   async function remove(n) {
     if (!await confirmDialog("ลบโน้ตนี้?")) return;
-    try { await deleteChatNote(n.id); await load(); flash("ลบโน้ตแล้ว"); }
+    try { await deleteChatNote(n.id); await load(); onChanged && onChanged(); flash("ลบโน้ตแล้ว"); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e?.message || e)); }
   }
+  const shownNotes = (notes || []).filter((n) => matchText(nq, n.text, (staffById[n.author] || {}).name));
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -803,6 +821,14 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted }) {
           <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
         </div>
         <div className="modal-body" style={{ maxHeight: "72vh", overflowY: "auto" }}>
+          {/* ── ค้นหาโน้ต ── */}
+          {(notes || []).length > 0 && (
+            <div className="cat-search" style={{ marginBottom: 10 }}>
+              <UIcon name="search" size={15} color="var(--ink-3)" />
+              <input placeholder="ค้นหาโน้ต / ชื่อคนเขียน…" value={nq} onChange={(e) => setNq(e.target.value)} />
+              {nq && <button className="cat-search-x" onClick={() => setNq("")}><UIcon name="x" size={14} /></button>}
+            </div>
+          )}
           {/* ── ฟอร์มสร้าง/แก้โน้ต ── */}
           {ed ? (
             <div className="card" style={{ padding: 12, marginBottom: 12 }}>
@@ -836,7 +862,8 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted }) {
           {/* ── รายการโน้ต (ใหม่สุดอยู่บน) ── */}
           {notes === null && <div className="empty sm">กำลังโหลด…</div>}
           {notes && notes.length === 0 && <div className="empty" style={{ padding: 26 }}>ยังไม่มีโน้ตในห้องนี้ — ปักนัดหมาย กติกา หรือข้อมูลสำคัญไว้ให้ทุกคนเห็น</div>}
-          {(notes || []).map((n) => {
+          {notes && notes.length > 0 && shownNotes.length === 0 && <div className="empty sm">ไม่พบโน้ตตามที่ค้นหา</div>}
+          {shownNotes.map((n) => {
             const a = staffById[n.author] || {};
             return (
               <div key={n.id} className="card" style={{ padding: "10px 12px", marginBottom: 10 }}>

@@ -3586,6 +3586,12 @@ export async function deleteChatNote(id) {
   const { error } = await supabase.from("chat_notes").delete().eq("id", id);
   if (error) throw noteErr(error);
 }
+// ดัชนีโน้ตทุกห้องที่ฉันเห็น (RLS กรองให้) — ใช้ให้ช่องค้นหาห้องหาเนื้อโน้ตเจอด้วย
+export async function listAllChatNotes() {
+  const { data, error } = await supabase.from("chat_notes").select("room_id,text").limit(2000);
+  if (error) throw noteErr(error);
+  return data || [];
+}
 
 // mark a room read up to now (creates my membership row for the company room on first open)
 export async function markChatRead(roomId) {
