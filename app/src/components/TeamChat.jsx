@@ -316,12 +316,32 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   }
   // ── แปลภาษา ไทย↔พม่า (ทิศทางตามภาษา UI ของฉัน) ──
   // แปลข้อความที่ได้รับ → เป็นภาษาของฉัน (ไทยเห็นไทย · พม่าเห็นพม่า)
-  async function translateMsg(m) {
-    if (!m.text || trMap[m.id]) return;
+  const trDoneRef = React.useRef(new Set());   // กันแปลซ้ำ/ยิงถี่ระหว่าง state ยังไม่อัปเดต
+  async function translateMsg(m, quiet) {
+    if (!m.text || trDoneRef.current.has(m.id)) return;
+    trDoneRef.current.add(m.id);
     setTrMap((s) => ({ ...s, [m.id]: "…" }));
     try { const out = await translateText(m.text, lang === "my" ? "my" : "th"); setTrMap((s) => ({ ...s, [m.id]: out })); }
-    catch (e) { setTrMap((s) => { const n = { ...s }; delete n[m.id]; return n; }); flash("แปลไม่สำเร็จ: " + (e?.message || e)); }
+    catch (e) {
+      trDoneRef.current.delete(m.id);
+      setTrMap((s) => { const n = { ...s }; delete n[m.id]; return n; });
+      if (!quiet) flash("แปลไม่สำเร็จ: " + (e?.message || e));
+    }
   }
+  // แปลอัตโนมัติ: ข้อความที่เป็นภาษาอีกฝั่งล้วน ๆ (พม่าเข้ามา → ไทยเห็นคำแปลทันที และกลับกัน)
+  // เฉพาะ 20 ข้อความล่าสุด กันยิง API ถล่มตอนเปิดประวัติยาว ๆ · ข้อความที่มีสองภาษาอยู่แล้วไม่แปลซ้ำ
+  const MY_RE = /[က-႟]/, TH_RE = /[฀-๿]/;   // อักษรพม่า / อักษรไทย
+  const needsAutoTr = (m) => {
+    if (!m.text || parseJobCard(m.text)) return false;
+    const hasMy = MY_RE.test(m.text), hasTh = TH_RE.test(m.text);
+    if (hasMy && hasTh) return false;
+    return lang === "my" ? hasTh : hasMy;
+  };
+  React.useEffect(() => {
+    const targets = msgs.filter((m) => needsAutoTr(m) && !trDoneRef.current.has(m.id)).slice(-20);
+    if (!targets.length) return;
+    (async () => { for (const m of targets) await translateMsg(m, true); })();   // ทีละข้อความ กันโดนจำกัด
+  }, [msgs]);
   // แปลข้อความที่พิมพ์ → เป็นภาษาอีกฝั่ง แล้วต่อท้ายให้ตรวจก่อนส่ง (ส่งทั้งสองภาษาในข้อความเดียว)
   async function translateCompose() {
     const t = text.trim(); if (!t || trBusy) return;
