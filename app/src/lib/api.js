@@ -3558,6 +3558,12 @@ export async function deleteChatRoom(roomId) {
   if (error) throw /chat_delete_room|schema cache/i.test(error.message || "") ? new Error("ต้องรัน migration 135 ใน Supabase ก่อน") : error;
 }
 
+// แก้ชื่อห้องกลุ่ม/ห้องงาน (ทีมหลังบ้าน) — RPC มิเกรชัน 136
+export async function renameChatRoom(roomId, name) {
+  const { error } = await supabase.rpc("chat_rename_room", { p_room: roomId, p_name: name });
+  if (error) throw /chat_rename_room|schema cache/i.test(error.message || "") ? new Error("ต้องรัน migration 136 ใน Supabase ก่อน") : error;
+}
+
 // mark a room read up to now (creates my membership row for the company room on first open)
 export async function markChatRead(roomId) {
   const uid = await _uid();

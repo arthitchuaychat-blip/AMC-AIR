@@ -1,7 +1,7 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
 import { confirmDialog } from "./ConfirmDialog";
-import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar } from "../lib/api";
+import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, renameChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar } from "../lib/api";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
@@ -142,6 +142,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   const [mentionQ, setMentionQ]         = React.useState(null); // null = closed
   const [mentionAnchor, setMentionAnchor] = React.useState(0);
   const [hasMore, setHasMore] = React.useState(false);   // ห้องนี้ยังมีข้อความเก่ากว่าที่โหลดมา
+  const [rename, setRename] = React.useState(null);      // string = กำลังแก้ชื่อกลุ่ม · null = ปกติ
   const endRef  = React.useRef(null);
   const selRef  = React.useRef(null);
   const taRef   = React.useRef(null);
@@ -242,6 +243,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   React.useEffect(() => { if (focus == null) return; setSel(Number(focus)); onFocusConsumed && onFocusConsumed(); }, [focus]);
   React.useEffect(() => {
     if (!sel) return;
+    setRename(null);   // สลับห้อง — ปิดโหมดแก้ชื่อค้าง
     loadMsgs(sel);
     markChatRead(sel).then(loadRooms).catch(() => {});
   }, [sel]);
@@ -295,6 +297,12 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   async function openDm(otherId) {
     try { const id = await createDmRoom(otherId); setModal(null); await loadRooms(); setSel(id); }
     catch (e) { flash("เปิดแชตไม่สำเร็จ: " + (e?.message || e)); }
+  }
+  // แก้ชื่อห้องกลุ่ม/ห้องงาน (ทีมหลังบ้าน)
+  async function saveRename() {
+    const nm = (rename || "").trim(); if (!nm || !selRoom) return;
+    try { await renameChatRoom(selRoom.id, nm); setRename(null); await loadRooms(); flash("แก้ชื่อกลุ่มแล้ว ✓"); }
+    catch (e) { flash("แก้ชื่อไม่สำเร็จ: " + (e?.message || e)); }
   }
   // ธุรการ/ผู้บริหาร ลบห้องกลุ่ม/ห้องงานถาวร (ข้อความ+สมาชิกหายทั้งชุด)
   async function delRoom() {
@@ -405,7 +413,25 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                   </label>
                 ) : <RoomIcon room={selRoom} size={42} staffById={staffById} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="tc-main-title">{selRoom.title}</div>
+                  {rename !== null ? (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                      <input className="inp sm" autoFocus value={rename} placeholder="ชื่อกลุ่ม"
+                        style={{ maxWidth: 240 }} onChange={(e) => setRename(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveRename(); if (e.key === "Escape") setRename(null); }} />
+                      <button className="btn-primary sm" disabled={!(rename || "").trim()} onClick={saveRename}>บันทึก</button>
+                      <button className="btn-ghost sm" onClick={() => setRename(null)}>ยกเลิก</button>
+                    </div>
+                  ) : (
+                    <div className="tc-main-title">
+                      {selRoom.title}
+                      {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") && (
+                        <button className="btn-ghost sm" title="แก้ชื่อกลุ่ม" style={{ marginLeft: 6, padding: "1px 6px", verticalAlign: "middle" }}
+                          onClick={() => setRename(selRoom.name || selRoom.title || "")}>
+                          <UIcon name="edit" size={13} />
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="tc-main-sub">
                     {selRoom.kind === "company" ? "ทุกคนในองค์กร"
                       : selRoom.kind === "dm" ? "แชตส่วนตัว"
