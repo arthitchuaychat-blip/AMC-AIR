@@ -6,6 +6,22 @@ import { fmtBaht } from "../lib/format";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
 
+// หัวข้อพับเก็บ — หน้า ตั้งค่า มีหลายหมวด เปิดมาให้หุบทั้งหมด กดหัวข้อเพื่อขยายเข้าไปตั้งค่า
+// (เนื้อหาข้างในโหลดข้อมูลตอนถูกขยายเท่านั้น → หน้าเปิดเร็วขึ้นด้วย)
+function Fold({ icon, title, sub, children, defaultOpen = false }) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div className="set-fold">
+      <button type="button" className={"card set-fold-head" + (open ? " open" : "")} onClick={() => setOpen((v) => !v)}>
+        <span className="set-fold-ic">{icon}</span>
+        <span className="set-fold-t">{title}{sub ? <small>{sub}</small> : null}</span>
+        <UIcon name="chevD" size={17} style={{ transform: open ? "rotate(180deg)" : "none", transition: ".15s", color: "var(--ink-3)", flex: "none" }} />
+      </button>
+      {open && <div className="set-fold-body">{children}</div>}
+    </div>
+  );
+}
+
 // editable role → module permission matrix. ธุรการ/ผู้บริหาร can adjust who sees/edits each menu.
 function PermissionsCard({ flash }) {
   const [perms, setP] = React.useState(null);
@@ -555,16 +571,19 @@ export default function Settings({ role }) {
 
       {!loading && (
         <>
-        {can(role, "settings", "edit") && <PermissionsCard flash={flash} />}
-        {can(role, "settings", "edit") && <AuditCard flash={flash} />}
-        {can(role, "settings", "edit") && <NotifyCard flash={flash} />}
-        {can(role, "settings", "edit") && <AutoReplyCard flash={flash} />}
-        {can(role, "settings", "edit") && <ChatGroupsCard flash={flash} />}
-        {can(role, "settings", "edit") && <FlowAccountCard />}
-        <div className="damage-layout" style={{ marginBottom: 16 }}>
-          <CompanyCard kind="vat" title="หัวกระดาษ — แบบมี VAT" sub="ใช้กับใบที่คิด VAT · บัญชีธนาคารชุด VAT" flash={flash} />
-          <CompanyCard kind="novat" title="หัวกระดาษ — แบบไม่มี VAT" sub="ใช้กับใบที่ไม่คิด VAT · บัญชีธนาคารชุดไม่มี VAT" flash={flash} />
-        </div>
+        {can(role, "settings", "edit") && <Fold icon="🔐" title="สิทธิ์การใช้งานตามตำแหน่ง" sub="แก้ไข / ดู / ไม่เห็น รายเมนู รายตำแหน่ง"><PermissionsCard flash={flash} /></Fold>}
+        {can(role, "settings", "edit") && <Fold icon="🧾" title="ประวัติการลบ / ยกเลิกเอกสาร (Audit)" sub="ตรวจย้อนหลังว่าใครลบ/ยกเลิกอะไร + กู้คืนเอกสาร"><AuditCard flash={flash} /></Fold>}
+        {can(role, "settings", "edit") && <Fold icon="🔔" title="การแจ้งเตือน" sub="เปิด/ปิดแจ้งเตือนแต่ละกลุ่มกิจกรรม ตามตำแหน่ง"><NotifyCard flash={flash} /></Fold>}
+        {can(role, "settings", "edit") && <Fold icon="🤖" title="ตอบแชต LINE อัตโนมัติ" sub="ข้อความตอบกลับลูกค้าอัตโนมัติ"><AutoReplyCard flash={flash} /></Fold>}
+        {can(role, "settings", "edit") && <Fold icon="👥" title="กลุ่มแชต “พนักงานประจำ”" sub="ซิงก์สมาชิกห้องแชตพนักงานอัตโนมัติ"><ChatGroupsCard flash={flash} /></Fold>}
+        {can(role, "settings", "edit") && <Fold icon="🧪" title="FlowAccount (ทดสอบ Sandbox)" sub="ทดสอบการเชื่อมต่อระบบบัญชี"><FlowAccountCard /></Fold>}
+        <Fold icon="📄" title="หัวกระดาษเอกสาร" sub="ข้อมูลบริษัท + บัญชีธนาคาร (ชุด VAT / ไม่มี VAT)">
+          <div className="damage-layout" style={{ marginBottom: 16 }}>
+            <CompanyCard kind="vat" title="หัวกระดาษ — แบบมี VAT" sub="ใช้กับใบที่คิด VAT · บัญชีธนาคารชุด VAT" flash={flash} />
+            <CompanyCard kind="novat" title="หัวกระดาษ — แบบไม่มี VAT" sub="ใช้กับใบที่ไม่คิด VAT · บัญชีธนาคารชุดไม่มี VAT" flash={flash} />
+          </div>
+        </Fold>
+        <Fold icon="🛠️" title="ทีมช่าง & ผู้ใช้งาน" sub={`${teams.length} ทีม · ${profiles.length} คน — เพิ่ม/แก้ทีม บัญชีพนักงาน รหัสผ่าน`}>
         <div className="damage-layout">
           {/* TEAMS */}
           <div className="card">
@@ -601,6 +620,7 @@ export default function Settings({ role }) {
             </div>
           </div>
         </div>
+        </Fold>
 
         {/* หมวดวัสดุ · ยี่ห้อแอร์ · BTU — สร้างอัตโนมัติเมื่ออัปโหลดสินค้า (ไม่ต้องจัดการเอง) */}
         {/* เขตอันตราย (ล้างข้อมูลทดลอง) ถูกถอดออกแล้ว — ระบบใช้งานจริง ห้ามมีปุ่มล้างทั้งฐานค้างไว้ */}
