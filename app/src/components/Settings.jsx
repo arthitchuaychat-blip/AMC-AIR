@@ -181,7 +181,9 @@ function CompanyCard({ kind, title, sub, flash }) {
 const ROLES = PERM_ROLES.map((v) => ({ v, l: PERM_ROLE_LABEL[v] || v }));
 const roleLabel = (v) => (ROLES.find((r) => r.v === v) || {}).l || v;
 
+// แถวทีม: ปกติเป็นโหมดอ่าน (สรุปบรรทัดเดียว) — กด "แก้ไข" ถึงเปิดฟอร์มของแถวนั้น
 function TeamRow({ team, onChanged, flash }) {
+  const [edit, setEdit] = React.useState(false);
   const [name, setName] = React.useState(team.name);
   const [lead, setLead] = React.useState(team.lead || "");
   const [type, setType] = React.useState(team.type || "permanent");
@@ -190,10 +192,15 @@ function TeamRow({ team, onChanged, flash }) {
   const [bank, setBank] = React.useState(team.bank_info || "");
   const [rate, setRate] = React.useState(team.payout_rate ?? 80);
   const [busy, setBusy] = React.useState(false);
+  function startEdit() {
+    setName(team.name); setLead(team.lead || ""); setType(team.type || "permanent");
+    setPhone(team.phone || ""); setTaxId(team.tax_id || ""); setBank(team.bank_info || ""); setRate(team.payout_rate ?? 80);
+    setEdit(true);
+  }
   async function save() {
     if (!await confirmDialog(`ยืนยันบันทึกการแก้ไขทีม ${team.id} ?`)) return;
     setBusy(true);
-    try { await saveTeam({ id: team.id, name, lead, type, phone, tax_id: taxId, bank_info: bank, payout_rate: rate }); flash(`บันทึกทีม ${team.id} แล้ว`); onChanged(); }
+    try { await saveTeam({ id: team.id, name, lead, type, phone, tax_id: taxId, bank_info: bank, payout_rate: rate }); flash(`บันทึกทีม ${team.id} แล้ว`); setEdit(false); onChanged(); }
     catch (e) { flash("ผิดพลาด: " + (e.message || e) + " (รัน 042_subcontractor.sql แล้วหรือยัง?)", true); }
     setBusy(false);
   }
@@ -202,8 +209,22 @@ function TeamRow({ team, onChanged, flash }) {
     try { await deleteTeam(team.id); flash(`ลบทีม ${team.id} แล้ว`); onChanged(); }
     catch (e) { flash("ลบไม่ได้ — มีข้อมูลผูกอยู่", true); }
   }
+  if (!edit) return (
+    <div className="set-item">
+      <span className="code-chip" style={{ background: team.color, color: "#fff", borderColor: team.color }}>{team.id}</span>
+      <span className="set-item-main">
+        <b>{team.name}</b>
+        <small>
+          {team.type === "sub" ? `ช่างซัพ · ค่าแรง ${team.payout_rate ?? 80}% ขาย` : "ทีมประจำ"}
+          {team.lead ? ` · หัวหน้า ${team.lead}` : ""}{team.phone ? ` · 📞 ${team.phone}` : ""}
+        </small>
+      </span>
+      <button className="btn-ghost sm" onClick={startEdit}><UIcon name="edit" size={13} /> แก้ไข</button>
+      <button className="btn-ghost sm danger" onClick={del}><UIcon name="trash" size={13} /></button>
+    </div>
+  );
   return (
-    <div className="set-team-card">
+    <div className="set-item-edit">
       <div className="set-row set-row-team">
         <span className="code-chip" style={{ background: team.color, color: "#fff", borderColor: team.color }}>{team.id}</span>
         <input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อทีม" />
@@ -211,8 +232,6 @@ function TeamRow({ team, onChanged, flash }) {
           <option value="permanent">ทีมประจำ</option><option value="sub">ช่างซัพ</option>
         </select>
         <input className="inp" value={lead} onChange={(e) => setLead(e.target.value)} placeholder="หัวหน้า" />
-        <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
-        <button className="btn-ghost sm danger" onClick={del}><UIcon name="trash" size={14} /></button>
       </div>
       {type === "sub" && (
         <div className="set-row set-sub-detail">
@@ -224,24 +243,33 @@ function TeamRow({ team, onChanged, flash }) {
           </span>
         </div>
       )}
+      <div className="set-edit-acts">
+        <button className="btn-ghost sm" onClick={() => setEdit(false)}>ยกเลิก</button>
+        <button className="btn-primary sm" disabled={busy} onClick={save}><UIcon name="check" size={14} color="#fff" /> บันทึก</button>
+      </div>
     </div>
   );
 }
 
+// แถวผู้ใช้: ปกติเป็นโหมดอ่าน (ชื่อ · ตำแหน่ง · ทีม · อีเมล) — กด "แก้ไข" ถึงเปิดฟอร์ม+ตั้งรหัสใหม่
 function UserRow({ p, teams, onChanged, flash }) {
+  const [edit, setEdit] = React.useState(false);
   const [name, setName] = React.useState(p.name || "");
   const [email, setEmail] = React.useState(p.email || "");
   const [role, setRole] = React.useState(p.role || "tech");
   const [team, setTeam] = React.useState(p.team || "");
   const [pw, setPw] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const roleLabel = ROLES.find((r) => r.v === p.role)?.l || p.role || "-";
+  const teamLabel = teams.find((t) => t.id === p.team)?.name || null;
+  function startEdit() { setName(p.name || ""); setEmail(p.email || ""); setRole(p.role || "tech"); setTeam(p.team || ""); setPw(""); setEdit(true); }
   async function save() {
     setBusy(true);
     try {
       await updateProfile(p.id, { name, role, team });
       if (email.trim() && email.trim() !== p.email) await adminSetUserEmail(p.id, email.trim());
       if (pw.trim()) { await adminSetUserPassword(p.id, pw.trim()); setPw(""); }
-      flash(`บันทึก ${email.trim() || p.email} แล้ว`); onChanged();
+      flash(`บันทึก ${email.trim() || p.email} แล้ว`); setEdit(false); onChanged();
     } catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -252,20 +280,35 @@ function UserRow({ p, teams, onChanged, flash }) {
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
+  if (!edit) return (
+    <div className="set-item">
+      <span className="set-user-av">{((p.name || p.email || "?").trim()[0] || "?").toUpperCase()}</span>
+      <span className="set-item-main">
+        <b>{p.name || "(ไม่มีชื่อ)"}</b>
+        <small>{roleLabel}{teamLabel ? ` · ${teamLabel}` : ""} · {p.email}</small>
+      </span>
+      <button className="btn-ghost sm" onClick={startEdit}><UIcon name="edit" size={13} /> แก้ไข</button>
+      <button className="btn-ghost sm danger" disabled={busy} onClick={del} title="ลบผู้ใช้"><UIcon name="trash" size={13} /></button>
+    </div>
+  );
   return (
-    <div className="set-row set-row-user">
-      <input className="inp" style={{ flex: "1.4", minWidth: 150 }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="อีเมล" />
-      <input className="inp" style={{ flex: "1", minWidth: 90 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อ" />
-      <Combo className="inp" value={role} onChange={(e) => setRole(e.target.value)}>
-        {ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
-      </Combo>
-      <Combo className="inp" value={team} onChange={(e) => setTeam(e.target.value)} disabled={role !== "tech"}>
-        <option value="">— ทีม —</option>
-        {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-      </Combo>
-      <input className="inp" style={{ flex: "1", minWidth: 110 }} type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="ตั้งรหัสใหม่ (เว้นว่าง=ไม่เปลี่ยน)" />
-      <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
-      <button className="btn-ghost sm danger" disabled={busy} onClick={del} title="ลบผู้ใช้"><UIcon name="trash" size={14} /></button>
+    <div className="set-item-edit">
+      <div className="set-row set-row-user">
+        <input className="inp" style={{ flex: "1.4", minWidth: 150 }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="อีเมล" />
+        <input className="inp" style={{ flex: "1", minWidth: 90 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อ" />
+        <Combo className="inp" value={role} onChange={(e) => setRole(e.target.value)}>
+          {ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+        </Combo>
+        <Combo className="inp" value={team} onChange={(e) => setTeam(e.target.value)} disabled={role !== "tech"}>
+          <option value="">— ทีม —</option>
+          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </Combo>
+        <input className="inp" style={{ flex: "1", minWidth: 110 }} type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="ตั้งรหัสใหม่ (เว้นว่าง=ไม่เปลี่ยน)" />
+      </div>
+      <div className="set-edit-acts">
+        <button className="btn-ghost sm" onClick={() => setEdit(false)}>ยกเลิก</button>
+        <button className="btn-primary sm" disabled={busy} onClick={save}><UIcon name="check" size={14} color="#fff" /> บันทึก</button>
+      </div>
     </div>
   );
 }
@@ -499,6 +542,8 @@ export default function Settings({ role }) {
 
   // add-team form
   const [nt, setNt] = React.useState({ id: "", name: "", lead: "" });
+  const [showAddTeam, setShowAddTeam] = React.useState(false);   // ฟอร์มเพิ่มทีม/ผู้ใช้ พับไว้ กดปุ่ม + ถึงเปิด
+  const [showAddUser, setShowAddUser] = React.useState(false);
   // add-user form
   const [nu, setNu] = React.useState({ email: "", password: "", name: "", role: "tech", team: "" });
   // add-category form
@@ -587,13 +632,16 @@ export default function Settings({ role }) {
         <div className="damage-layout">
           {/* TEAMS */}
           <div className="card">
-            <div className="sec-head"><div><div className="sec-title">ทีมช่าง</div><div className="sec-sub">{teams.length} ทีม</div></div></div>
-            <div className="set-add">
+            <div className="sec-head"><div><div className="sec-title">ทีมช่าง</div><div className="sec-sub">{teams.length} ทีม</div></div>
+              <button className={showAddTeam ? "btn-ghost sm" : "btn-primary sm"} onClick={() => setShowAddTeam((v) => !v)}>
+                {showAddTeam ? "ปิดฟอร์ม" : <><UIcon name="plus" size={14} color="#fff" strokeWidth={2.4} /> เพิ่มทีม</>}
+              </button></div>
+            {showAddTeam && <div className="set-add">
               <input className="inp" value={nt.id} onChange={(e) => setNt({ ...nt, id: e.target.value })} placeholder="รหัส (เช่น MIKE)" />
               <input className="inp" value={nt.name} onChange={(e) => setNt({ ...nt, name: e.target.value })} placeholder="ชื่อทีม (เช่น Team MIKE)" />
               <input className="inp" value={nt.lead} onChange={(e) => setNt({ ...nt, lead: e.target.value })} placeholder="หัวหน้า" />
               <button className="btn-primary" disabled={addingT} onClick={addTeam}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม</button>
-            </div>
+            </div>}
             <div className="set-list">
               {teams.map((t) => <TeamRow key={t.id} team={t} onChanged={load} flash={flash} />)}
             </div>
@@ -601,8 +649,11 @@ export default function Settings({ role }) {
 
           {/* USERS */}
           <div className="card">
-            <div className="sec-head"><div><div className="sec-title">ผู้ใช้งาน</div><div className="sec-sub">{profiles.length} คน</div></div></div>
-            <div className="set-add set-add-user">
+            <div className="sec-head"><div><div className="sec-title">ผู้ใช้งาน</div><div className="sec-sub">{profiles.length} คน</div></div>
+              <button className={showAddUser ? "btn-ghost sm" : "btn-primary sm"} onClick={() => setShowAddUser((v) => !v)}>
+                {showAddUser ? "ปิดฟอร์ม" : <><UIcon name="plus" size={14} color="#fff" strokeWidth={2.4} /> เพิ่มผู้ใช้</>}
+              </button></div>
+            {showAddUser && <div className="set-add set-add-user">
               <input className="inp" value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} placeholder="อีเมล" />
               <input className="inp" type="text" value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} placeholder="รหัสผ่าน (≥6)" />
               <input className="inp" value={nu.name} onChange={(e) => setNu({ ...nu, name: e.target.value })} placeholder="ชื่อ" />
@@ -614,7 +665,7 @@ export default function Settings({ role }) {
                 {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Combo>
               <button className="btn-primary" disabled={addingU} onClick={addUser}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มผู้ใช้</button>
-            </div>
+            </div>}
             <div className="set-list">
               {profiles.map((p) => <UserRow key={p.id} p={p} teams={teams} onChanged={load} flash={flash} />)}
             </div>
