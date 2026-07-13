@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, clearAllTransactions, deleteAllMaterials, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -283,32 +283,6 @@ function CategoryRow({ c, onChanged, flash }) {
       <input className="inp" value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="English" />
       <button className="btn-ghost sm" disabled={busy} onClick={save}><UIcon name="check" size={14} /> บันทึก</button>
       <button className="btn-ghost sm danger" onClick={del}><UIcon name="trash" size={14} /></button>
-    </div>
-  );
-}
-
-function DangerAction({ label, desc, phrase, onRun, flash }) {
-  const [armed, setArmed] = React.useState(false);
-  const [val, setVal] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
-  async function run() {
-    setBusy(true);
-    try { await onRun(); flash(`${label} สำเร็จ`); setArmed(false); setVal(""); }
-    catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
-    setBusy(false);
-  }
-  return (
-    <div className="danger-row">
-      <div className="danger-info"><div className="danger-label">{label}</div><div className="danger-desc">{desc}</div></div>
-      {!armed ? (
-        <button className="btn-danger-sm" onClick={() => setArmed(true)}>{label}</button>
-      ) : (
-        <div className="danger-confirm">
-          <input className="inp" placeholder={`พิมพ์ "${phrase}" เพื่อยืนยัน`} value={val} onChange={(e) => setVal(e.target.value)} autoFocus />
-          <button className="btn-ghost sm" onClick={() => { setArmed(false); setVal(""); }}>ยกเลิก</button>
-          <button className="btn-danger-sm" disabled={val.trim() !== phrase || busy} onClick={run}>{busy ? "กำลังลบ…" : "ยืนยันลบ"}</button>
-        </div>
-      )}
     </div>
   );
 }
@@ -629,19 +603,7 @@ export default function Settings({ role }) {
         </div>
 
         {/* หมวดวัสดุ · ยี่ห้อแอร์ · BTU — สร้างอัตโนมัติเมื่ออัปโหลดสินค้า (ไม่ต้องจัดการเอง) */}
-
-        {/* DANGER ZONE */}
-        <div className="card danger-card" style={{ marginTop: 16 }}>
-          <div className="sec-head"><div><div className="sec-title" style={{ color: "var(--down)" }}>เขตอันตราย · เตรียมเริ่มใช้จริง</div><div className="sec-sub">ลบข้อมูลทดลองก่อนใช้จริง · ทำแล้วย้อนไม่ได้ · ต้องพิมพ์ยืนยัน</div></div></div>
-          <DangerAction flash={flash}
-            label="ล้างประวัติธุรกรรม + งาน" phrase="ล้างประวัติ"
-            desc="ลบเบิก/คืน/ซื้อ/ตัดเสีย และงานทั้งหมด · คงเหลือกลับเป็นค่าตั้งต้น · เก็บรายการวัสดุไว้"
-            onRun={clearAllTransactions} />
-          <DangerAction flash={flash}
-            label="ลบรายการวัสดุทั้งหมด" phrase="ลบวัสดุ"
-            desc="ลบวัสดุทุกรายการ + ประวัติธุรกรรม + งาน (เริ่มต้นใหม่หมด แล้วค่อยนำเข้าวัสดุจริง)"
-            onRun={deleteAllMaterials} />
-        </div>
+        {/* เขตอันตราย (ล้างข้อมูลทดลอง) ถูกถอดออกแล้ว — ระบบใช้งานจริง ห้ามมีปุ่มล้างทั้งฐานค้างไว้ */}
         </>
       )}
 
