@@ -11,6 +11,7 @@ import { UIcon } from "../icons";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { useDocPeek } from "./DocPeek";
+import DocCardHead from "./DocCard";
 
 // ใบเตรียมวัสดุ — ประตูก่อนการสั่งซื้อ/เบิก (mig 109)
 // ดึงรายการจากใบเสนอราคา (หรือเพิ่มเอง) → แบ่งจำนวน "ซื้อ / เบิกจากคลัง" ต่อรายการ (เห็นคงเหลือช่วยตัดสิน)
@@ -340,20 +341,18 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
               const st = STATUS[p.status] || STATUS.draft;
               const nb = buyItems(p).length, nw = wdItems(p).length;
               return (
-                <div className={"card job-card" + (p.status === "cancelled" ? " closed" : "")} key={p.prep_no}>
-                  <div className="job-card-head" style={{ cursor: "default" }}>
-                    <div className="job-card-id"><span className="job-no">{p.prep_no}</span><span className={"job-badge " + st.cls}>{st.th}</span>
+                <div className={"card job-card doc2" + (p.status === "cancelled" ? " closed" : "")} key={p.prep_no}>
+                  <DocCardHead no={p.prep_no} partyIcon="👤" titleFallback="ใบเตรียมวัสดุ"
+                    badges={<>
+                      <span className={"job-badge " + st.cls}>{st.th}</span>
                       {p.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} onClick={() => openPeek("quote", p.quote_no)}>อ้างอิง {p.quote_no} ↗</button>}
                       {p.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} onClick={() => openPeek("job", p.jobNo)}>งาน {p.jobNo} ↗</button>}
-                    </div>
-                    <div className="job-card-meta">{p.title || p.quoteTitle || "—"}
-                      {(p.customerName || p.teamName) && <div style={{ marginTop: 2 }}>
-                        {p.customerName ? <span>👤 ลูกค้า <b>{p.customerName}</b></span> : null}
-                        {p.teamName ? <span>{p.customerName ? " · " : ""}🔧 ช่าง <b>{p.teamName}</b></span> : null}
-                      </div>}
-                      <div style={{ marginTop: 2, fontSize: 12.5 }}>🛒 สั่งซื้อ {nb} รายการ · 📦 เบิก {nw} รายการ{p.approvedByName ? ` · อนุมัติโดย ${p.approvedByName}` : ""}</div>
-                    </div>
-                  </div>
+                    </>}
+                    title={p.title || p.quoteTitle}
+                    sub={`${p.teamName ? "🔧 " + p.teamName : ""}${p.approvedByName ? (p.teamName ? " · " : "") + "อนุมัติ " + p.approvedByName : ""}` || null}
+                    date={p.issue_date || p.created_at}
+                    amountNode={<div className="dch-amt"><span>เตรียมวัสดุ</span><b style={{ fontSize: 15 }}>🛒 {nb} · 📦 {nw}</b></div>}
+                    customer={p.customerName ? { name: p.customerName } : null} />
                   <div className="jo-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "10px 14px" }}>
                     {p.status === "draft" && canEdit && <button className="btn-ghost sm" onClick={() => startEdit(p)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                     {p.status === "draft" && canConfirm && <button className="btn-primary sm" onClick={() => confirm(p)}>✓ ยืนยัน</button>}

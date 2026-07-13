@@ -11,6 +11,7 @@ import ItemBrowser from "./ItemBrowser";
 import UnitPick, { unitFactor } from "./UnitPick";
 import Combo from "./Combo";
 import DocSlip from "./DocSlip";
+import DocCardHead from "./DocCard";
 import NumIn from "./NumIn";
 import { useDocPeek } from "./DocPeek";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
@@ -318,21 +319,19 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
         {shown.map((po) => {
           const st = STATUS[po.status] || STATUS.open;
           return (
-            <div className={"card job-card" + (po.status !== "open" ? " closed" : "")} key={po.po_no}>
-              <div className="job-card-head" style={{ cursor: "default" }}>
-                <div className="job-card-id"><span className="job-no">{po.po_no}</span><span className={"job-badge " + st.cls}>{st.th}</span>
+            <div className={"card job-card doc2" + (po.status !== "open" ? " closed" : "")} key={po.po_no}>
+              <DocCardHead no={po.po_no} onClick={() => openPeek("po", po.po_no)} partyIcon="🏭"
+                badges={<>
+                  <span className={"job-badge " + st.cls}>{st.th}</span>
                   {(() => { const ps = PAY_STATUS[po.paymentStatus] || PAY_STATUS.unpaid; return <span className={"job-badge " + ps.cls}>💳 {ps.th}{po.paymentStatus === "paid" && po.paid_at ? " " + new Date(po.paid_at).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : ""}</span>; })()}
-                  {po.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} title="ดูใบเสนอราคาที่อ้างอิง (พรีวิวด้านขวา)" onClick={() => openPeek("quote", po.quote_no)}>อ้างอิง {po.quote_no} ↗</button>}
-                  {po.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} title="พรีวิวใบงานที่เชื่อมกัน" onClick={() => openPeek("job", po.jobNo)}>งาน {po.jobNo} ↗</button>}
-                </div>
-                <div className="job-card-meta">{po.supplier || "ไม่ระบุร้าน"} · {po.items.length} รายการ{po.note ? ` · ${po.note}` : ""}
-                  {(po.customerName || po.teamName) && <div style={{ marginTop: 2 }}>
-                    {po.customerName ? <span>👤 ลูกค้า <b>{po.customerName}</b></span> : null}
-                    {po.teamName ? <span>{po.customerName ? " · " : ""}🔧 ช่าง <b>{po.teamName}</b></span> : null}
-                  </div>}
-                </div>
-                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(po.issue_date || po.created_at)}</span><span>มูลค่ารวม{po.vat ? " (รวม VAT)" : ""}</span><b>{fmtBaht(po.total)}</b></div>
-              </div>
+                  {po.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} title="ดูใบเสนอราคาที่อ้างอิง (พรีวิวด้านขวา)" onClick={(e) => { e.stopPropagation(); openPeek("quote", po.quote_no); }}>อ้างอิง {po.quote_no} ↗</button>}
+                  {po.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} title="พรีวิวใบงานที่เชื่อมกัน" onClick={(e) => { e.stopPropagation(); openPeek("job", po.jobNo); }}>งาน {po.jobNo} ↗</button>}
+                </>}
+                title={po.note || `สั่งซื้อสินค้า ${po.items.length} รายการ`}
+                sub={(po.customerName || po.teamName) ? `${po.customerName ? "👤 " + po.customerName : ""}${po.teamName ? (po.customerName ? " · " : "") + "🔧 " + po.teamName : ""}` : `${po.items.length} รายการ`}
+                date={po.issue_date || po.created_at}
+                amountLabel={"มูลค่ารวม" + (po.vat ? " (รวม VAT)" : "")} amount={po.total}
+                customer={{ name: po.supplier || "ไม่ระบุร้าน" }} />
               <InternalNoteTag note={po.internal_note} role={role} />
               <div className="job-lines">
                 {(expanded.has(po.po_no) ? po.items : po.items.slice(0, 3)).map((it) => { const m = matMap[it.material_code]; return (

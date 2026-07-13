@@ -4,7 +4,8 @@ import { fmtBaht, fmtDocDate } from "../lib/format";
 // หัวการ์ดเอกสารขายมาตรฐาน — ทุกเมนู (BOQ/ใบเสนอราคา/ใบแจ้งหนี้/ใบวางบิล/ใบเสร็จ) หน้าตาเดียวกัน:
 //   ช่อง 1 เลขที่+สถานะ · ช่อง 2 ชื่องาน · ช่อง 3 แถบข้อมูลลูกค้า · ช่อง 4 ผู้สร้าง+วันที่+ยอด
 // ใช้คู่กับคลาส .doc2 บนการ์ด: <div className="card job-card doc2"><DocCardHead …/>…chips/actions…</div>
-export default function DocCardHead({ no, badges, title, sub, by, date, amountLabel, amount, amountNode, customer, onClick }) {
+// partyIcon: ไอคอนแถบคู่ค้า (ค่าเริ่ม 🏢 ลูกค้า · ใช้ 🏭 ผู้ขาย สำหรับใบสั่งซื้อ ฯลฯ) · titleFallback: ข้อความชื่องานเมื่อว่าง
+export default function DocCardHead({ no, badges, title, sub, by, date, amountLabel, amount, amountNode, customer, onClick, partyIcon = "🏢", titleFallback = "— ไม่ระบุชื่องาน —" }) {
   const c = customer || {};
   const addr = c.siteAddress || c.addr;
   const showContact = c.contactName && c.contactName !== c.name;
@@ -16,7 +17,7 @@ export default function DocCardHead({ no, badges, title, sub, by, date, amountLa
         {badges ? <div className="dch-badges">{badges}</div> : null}
       </div>
       <div className="dch-mid">
-        <div className={"dch-title" + (title ? "" : " none")}>{title || "— ไม่ระบุชื่องาน —"}</div>
+        <div className={"dch-title" + (title ? "" : " none")}>{title || titleFallback}</div>
         {sub ? <div className="dch-sub">{sub}</div> : null}
       </div>
       <div className="dch-right">
@@ -28,7 +29,7 @@ export default function DocCardHead({ no, badges, title, sub, by, date, amountLa
     {(c.name || addr) && (
       <div className="dch-cust">
         <div className="dch-cust-row">
-          <span className="dch-ic">🏢</span><b>{c.name || "ไม่ระบุลูกค้า"}</b>
+          <span className="dch-ic">{partyIcon}</span><b>{c.name || "ไม่ระบุลูกค้า"}</b>
           {c.code ? <span className="dch-code">{c.code}</span> : null}
           {showContact ? <span className="dch-dim">👤 {c.contactName}</span> : null}
           {c.phone ? <a className="ref-link" href={`tel:${c.phone}`} onClick={(e) => e.stopPropagation()}>📞 {c.phone}</a> : null}
