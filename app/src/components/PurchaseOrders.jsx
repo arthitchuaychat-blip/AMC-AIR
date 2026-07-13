@@ -76,10 +76,18 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   React.useEffect(() => { if (!printPo) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintPo(null); }, 120); return () => clearTimeout(t); }, [printPo]);
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
-  const shown = pos.filter((po) => (statusF === "all" || po.status === statusF)
-    && (payF === "all" || po.paymentStatus === payF)
-    && inDateRange(po.created_at, dateR)
+  // ประเภทสินค้าของใบ: คอลัมน์ po_type (mig 139) · ใบเก่าที่ยังไม่มี → เดาจากรายการ (มีแอร์ = ac)
+  const poTypeOf = (po) => po.po_type || ((po.items || []).some((it) => matMap[it.material_code]?.kind === "ac") ? "ac" : "material");
+  const [typeF, setTypeF] = React.useState("all");
+  // base หลังค้นหา+วันที่ — ใช้นับจำนวนบนชิปตัวกรอง
+  const fl0 = pos.filter((po) => inDateRange(po.created_at, dateR)
     && (matchText(q, po.po_no, po.supplier, po.note, po.quote_no, po.customerName, po.jobNo, po.teamName) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
+  const nStatus = (v) => fl0.filter((po) => v === "all" || po.status === v).length;
+  const nPay = (v) => fl0.filter((po) => v === "all" || po.paymentStatus === v).length;
+  const nType = (v) => fl0.filter((po) => v === "all" || poTypeOf(po) === v).length;
+  const shown = fl0.filter((po) => (statusF === "all" || po.status === statusF)
+    && (payF === "all" || po.paymentStatus === payF)
+    && (typeF === "all" || poTypeOf(po) === typeF));
 
   async function load() {
     setLoading(true);
@@ -106,6 +114,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     const quoteNo = Array.isArray(prefill) ? "" : (prefill.quoteNo || "");
     if (!src.length && !quoteNo) { onPrefillConsumed && onPrefillConsumed(); return; }
     setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: quoteNo, prep_no: (Array.isArray(prefill) ? "" : prefill.prepNo) || "", issue_date: todayStr(),
+      // ประเภทสินค้า: มากับ prefill (สั่งซื้อแอร์ = "ac") หรือเดาจากรายการ (มีแอร์ → ac) — ผู้ใช้เปลี่ยนได้ก่อนบันทึก
+      po_type: (!Array.isArray(prefill) && prefill.poType) || (src.some((p) => matMap[p.code]?.kind === "ac") ? "ac" : "material"),
       // จำนวนจากใบเสนอราคาเป็น "หน่วยหลัก" (เมตร/ชุด) → ตั้งหน่วยบรรทัดเป็นหน่วยหลัก + ราคา = ต้นทุน/หน่วยหลัก
       // (อยากสั่งเป็นม้วน ค่อยสลับหน่วยที่บรรทัด ระบบแปลงราคาให้) · ข้ามรหัสที่ไม่มีในแคตตาล็อก
       // หน่วยจากใบเตรียมวัสดุ (p.unit) มาก่อน — ถ้าเป็นหน่วยซื้อ (ม้วน) ราคา/หน่วย = ต้นทุนต่อหน่วยหลัก × แฟกเตอร์
@@ -113,10 +123,10 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
 
-  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", issue_date: todayStr(), items: [] }); }
+  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", po_type: "", issue_date: todayStr(), items: [] }); }
   function startEdit(po) {
     const incl = !!po.vat && !!po.price_incl;   // stored price is pre-VAT → show gross in the field when incl mode
-    setEditing({ _edit: true, po_no: po.po_no, status: po.status, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10),
+    setEditing({ _edit: true, po_no: po.po_no, status: po.status, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", po_type: po.po_type || po.poType || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10),
       items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0), unit: i.unit || null })) });
   }
 
@@ -165,6 +175,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
 
   async function save() {
     if (!editing.po_no.trim()) return flash("ใส่เลขใบสั่งซื้อ", true);
+    if (!editing.po_type) return flash("เลือก 'ประเภทสินค้า' ก่อนบันทึก — เครื่องปรับอากาศ หรือ วัสดุและอะไหล่", true);
     if (!editing.items.length) return flash("เพิ่มวัสดุอย่างน้อย 1 รายการ", true);
     // กติกาธุรกิจ: สั่งแอร์เมื่อมีออเดอร์เท่านั้น → ใบที่มีแอร์ต้องอ้างใบเสนอราคาที่อนุมัติแล้ว (วัสดุล้วนไม่บังคับ)
     if (editing.items.some((it) => matMap[it.code]?.kind === "ac") && !editing.quote_no)
@@ -172,7 +183,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     if (editing._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
     const incl = !!editing.vat && !!editing.priceIncl;
     const items = editing.items.map((it) => ({ ...it, price: incl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0) })); // store pre-VAT price
-    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, issue_date: editing.issue_date || null, status: editing.status || "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
+    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, status: editing.status || "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   // ส่งขออนุมัติจ่ายเงิน → โผล่ในเมนูเบิกจ่าย (อนุมัติ → จ่าย+เลือกบัญชี → PO ขึ้น "จ่ายแล้ว" อัตโนมัติ)
@@ -219,6 +230,13 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             <label className="fld"><span>เลขใบสั่งซื้อ · PO No.</span><input className="inp" value={editing.po_no} onChange={(e) => setEditing({ ...editing, po_no: e.target.value })} /></label>
             <label className="fld"><span>วันที่</span><input className="inp" type="date" value={editing.issue_date || ""} onChange={(e) => setEditing({ ...editing, issue_date: e.target.value })} /></label>
             <label className="fld"><span>ซัพพลายเออร์ · Supplier</span><SupplierPicker value={editing.supplier} onChange={(v) => setEditing((e) => ({ ...e, supplier: v }))} /></label>
+          </div>
+          <div className="fld"><span>ประเภทสินค้า <b style={{ color: "#dc2626" }}>*</b></span>
+            <div className="seg" style={{ marginTop: 4 }}>
+              {[["ac", "❄️ เครื่องปรับอากาศ"], ["material", "🧰 วัสดุและอะไหล่"]].map(([v, l]) => (
+                <button key={v} type="button" className={"seg-btn" + (editing.po_type === v ? " on" : "")} onClick={() => setEditing((e) => ({ ...e, po_type: v }))}>{l}</button>
+              ))}
+            </div>
           </div>
           <label className="fld"><span>อ้างอิงใบเสนอราคา (อนุมัติแล้ว) <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>— สั่งแอร์ต้องอ้างอิง · วัสดุจะอ้างอิงหรือไม่ก็ได้ · ถ้าอ้างอิง ต้นทุนจะเข้างานนั้นตอนรับของ</span></span>
             <Combo className="inp" value={editing.quote_no} onChange={(e) => setEditing((s) => ({ ...s, quote_no: e.target.value }))}>
@@ -295,12 +313,17 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {PO_FILTERS.map((f) => (
             <button key={f.id} className={"cat-chip" + (statusF === f.id ? " on" : "")} onClick={() => setStatusF(f.id)}
-              style={statusF === f.id ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{f.label}</button>
+              style={statusF === f.id ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{f.label} ({nStatus(f.id)})</button>
           ))}
           <span style={{ color: "var(--line)", alignSelf: "center" }}>|</span>
           {PAY_FILTERS.map((f) => (
             <button key={f.id} className={"cat-chip" + (payF === f.id ? " on" : "")} onClick={() => setPayF(f.id)}
-              style={payF === f.id ? { background: "#1d4ed8", color: "#fff", borderColor: "#1d4ed8" } : {}}>{f.label}</button>
+              style={payF === f.id ? { background: "#1d4ed8", color: "#fff", borderColor: "#1d4ed8" } : {}}>{f.label} ({nPay(f.id)})</button>
+          ))}
+          <span style={{ color: "var(--line)", alignSelf: "center" }}>|</span>
+          {[["all", "ทุกประเภท"], ["ac", "❄️ เครื่องปรับอากาศ"], ["material", "🧰 วัสดุและอะไหล่"]].map(([v, l]) => (
+            <button key={v} className={"cat-chip" + (typeF === v ? " on" : "")} onClick={() => setTypeF(v)}
+              style={typeF === v ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>{l} ({nType(v)})</button>
           ))}
           <DateRangeBar value={dateR} onChange={setDateR} />
         </div>
@@ -323,6 +346,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               <DocCardHead no={po.po_no} onClick={() => openPeek("po", po.po_no)} partyIcon="🏭"
                 badges={<>
                   <span className={"job-badge " + st.cls}>{st.th}</span>
+                  <span className={"vat-badge " + (poTypeOf(po) === "ac" ? "vat-on" : "vat-off")}>{poTypeOf(po) === "ac" ? "❄️ เครื่องปรับอากาศ" : "🧰 วัสดุและอะไหล่"}</span>
                   {(() => { const ps = PAY_STATUS[po.paymentStatus] || PAY_STATUS.unpaid; return <span className={"job-badge " + ps.cls}>💳 {ps.th}{po.paymentStatus === "paid" && po.paid_at ? " " + new Date(po.paid_at).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : ""}</span>; })()}
                   {po.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} title="ดูใบเสนอราคาที่อ้างอิง (พรีวิวด้านขวา)" onClick={(e) => { e.stopPropagation(); openPeek("quote", po.quote_no); }}>อ้างอิง {po.quote_no} ↗</button>}
                   {po.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} title="พรีวิวใบงานที่เชื่อมกัน" onClick={(e) => { e.stopPropagation(); openPeek("job", po.jobNo); }}>งาน {po.jobNo} ↗</button>}

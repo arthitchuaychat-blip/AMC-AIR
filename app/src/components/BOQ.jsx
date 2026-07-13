@@ -20,6 +20,7 @@ import DocTerms from "./DocTerms";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
+import { JOB_TYPES, jobTypeDef } from "../lib/schedule";
 
 const SECTION_LABEL = { ac: "เครื่องปรับอากาศ", free: "วัสดุแถม (ไม่คิดเงิน)", charged: "วัสดุคิดเงิน", service: "ค่าบริการ" };
 
@@ -73,6 +74,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null); // {boq_no, customer_id, site_id, title, note, items{}}
   const [search, setSearch] = React.useState("");
+  const [typeF, setTypeF] = React.useState("all"); // กรองตามประเภทงาน (CRM)
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [printB, setPrintB] = React.useState(null);
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
@@ -90,8 +92,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
-  function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", issue_date: today(), note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
-  function startNewFor(customerId) { setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", issue_date: today(), note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
+  function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", job_type: "", issue_date: today(), note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
+  function startNewFor(customerId) { setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", job_type: "", issue_date: today(), note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
   // open a fresh BOQ pre-filled with this customer (e.g. launched from the chat panel)
   React.useEffect(() => { if (newForCustomer) { startNewFor(newForCustomer); onNewConsumed && onNewConsumed(); } }, [newForCustomer]);
   // chain lock: can't edit/delete a BOQ that already has a quotation downstream
@@ -103,13 +105,13 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     const lk = editLockMsg(bo); if (lk) return alert(lk);
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
-    setEd({ _edit: true, _wasCancelled: bo.status === "cancelled", boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", issue_date: bo.issue_date || (bo.created_at || "").slice(0, 10), note: bo.note || "", internal_note: bo.internal_note || "", sign_on: !!bo.sign_url, terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
+    setEd({ _edit: true, _wasCancelled: bo.status === "cancelled", boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", job_type: bo.job_type || "", issue_date: bo.issue_date || (bo.created_at || "").slice(0, 10), note: bo.note || "", internal_note: bo.internal_note || "", sign_on: !!bo.sign_url, terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
   }
   // duplicate: copy items/details into a brand-new BOQ (new number, not _edit) — for similar jobs
   function duplicate(bo) {
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
-    setEd({ boq_no: genNo(), customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title ? bo.title + " (สำเนา)" : "", issue_date: today(), note: bo.note || "", sign_on: defaultSignOn(), terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
+    setEd({ boq_no: genNo(), customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title ? bo.title + " (สำเนา)" : "", job_type: bo.job_type || "", issue_date: today(), note: bo.note || "", sign_on: defaultSignOn(), terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
     flash("คัดลอกเป็น BOQ ใหม่แล้ว — แก้ไขลูกค้า/รายการได้ แล้วกดบันทึก");
   }
 
@@ -131,6 +133,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const delItem = (sec, i) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: e.items[sec].filter((_, j) => j !== i) } }));
 
   async function save() {
+    // กติกา CRM: BOQ ทุกใบต้องระบุประเภทงาน — ติดไปใบเสนอราคา/ใบงานทั้งสาย
+    if (!ed.job_type) return flash("เลือก 'ประเภทงาน' ก่อนบันทึก — ใช้ติดตามงาน (CRM) และติดไปทุกเอกสารที่สร้างต่อจากใบนี้", true);
     // นับรายการในแต่ละหมวด (รวมทุก qty) — ไว้บอกชัดถ้ายังไม่มีรายการเข้า state
     const inState = Object.values(ed.items).reduce((a, arr) => a + arr.length, 0);
     const flat = Object.entries(ed.items).flatMap(([sec, arr]) => arr.filter((x) => Number(x.qty) > 0).map((x) => ({ ...x, section: sec })));
@@ -175,6 +179,11 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           <div className="fld-row">
             <label className="fld"><span>เลขที่ BOQ</span><input className="inp" value={ed.boq_no} onChange={(e) => setEd({ ...ed, boq_no: e.target.value })} /></label>
             <label className="fld"><span>วันที่</span><input className="inp" type="date" value={ed.issue_date || ""} onChange={(e) => setEd({ ...ed, issue_date: e.target.value })} /></label>
+            <label className="fld"><span>ประเภทงาน <b style={{ color: "#dc2626" }}>*</b> <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(ติดไปทุกเอกสารในสาย)</span></span>
+              <Combo className="inp" value={ed.job_type || ""} onChange={(e) => setEd({ ...ed, job_type: e.target.value })}>
+                <option value="">— เลือกประเภทงาน —</option>
+                {JOB_TYPES.map(([v, l, ic]) => <option key={v} value={v}>{ic} {l}</option>)}
+              </Combo></label>
             <label className="fld"><span>ชื่องาน</span><input className="inp" value={ed.title} onChange={(e) => setEd({ ...ed, title: e.target.value })} placeholder="เช่น ติดตั้งแอร์ออฟฟิศ" /></label>
           </div>
           <div className="fld-row">
@@ -242,17 +251,29 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้าง BOQ</button>}
         </div>
       </div>
-      <div className="cat-filter"><DateRangeBar value={dateR} onChange={setDateR} /></div>
-      {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
-        const fl = list.filter((bo) => inDateRange(bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title) || matchPhone(search, bo.contactPhone)));
+        // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรองประเภทงาน (CRM)
+        const fl0 = list.filter((bo) => inDateRange(bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title) || matchPhone(search, bo.contactPhone)));
+        const nType = (v) => fl0.filter((bo) => v === "all" || bo.job_type === v).length;
+        const fl = fl0.filter((bo) => typeF === "all" || bo.job_type === typeF);
         return (<>
+      <div className="cat-filter">
+        {[["all", "ทุกประเภทงาน"], ...JOB_TYPES.map(([v, l, ic]) => [v, `${ic} ${l}`])].map(([v, l]) => (
+          <button key={v} className={"cat-chip" + (typeF === v ? " on" : "")} onClick={() => setTypeF(v)}
+            style={typeF === v ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>{l} ({nType(v)})</button>
+        ))}
+        <DateRangeBar value={dateR} onChange={setDateR} />
+      </div>
+      {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">
         {fl.map((bo) => (
           <div className="card job-card doc2" key={bo.boq_no}>
-            <DocCardHead no={bo.boq_no}
-              badges={bo.status === "cancelled" ? <span className="job-badge b-red">ยกเลิกแล้ว</span> : null}
+            <DocCardHead no={bo.boq_no} onClick={() => openPeek("boq", bo.boq_no)}
+              badges={<>
+                {bo.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
+                {bo.job_type && (() => { const d = jobTypeDef(bo.job_type); return <span className="job-badge" style={{ background: d[3] }}>{d[2]} {d[1]}</span>; })()}
+              </>}
               title={bo.title} sub={`${bo.items.length} รายการ`} by={bo.createdByName}
               date={bo.issue_date || bo.created_at} amountLabel="ต้นทุนรวม" amount={bo.total}
               customer={{ name: bo.customerName, contactName: bo.contactName || bo.mainContactName, phone: bo.contactPhone || bo.mainContactPhone, addr: bo.customerAddr, siteAddress: bo.siteAddress, mapUrl: bo.mapUrl }} />

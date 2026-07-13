@@ -45,6 +45,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   const [billIncomplete, setBillIncomplete] = React.useState(false); // เฉพาะงานที่วางบิลยังไม่ครบ 100%
+  const [noReceiptF, setNoReceiptF] = React.useState(false);         // เฉพาะใบที่ยังไม่ออกใบเสร็จ (ยังไม่รับเงิน)
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
@@ -268,11 +269,17 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const invVat = (x) => !!quoteByNo[x.quote_no]?.vat;
   // งานที่วางบิลยังไม่ครบเต็มสัญญา (ยอดวางบิลรวม < ยอดทั้งใบเสนอราคา)
   const notFullyBilled = (x) => { const q = quoteByNo[x.quote_no]; const grand = q?.grand || 0; return grand > 0 && round2((billed[x.quote_no] || 0)) < round2(grand) - 0.01; };
-  const shown = list.filter((x) => (statusF === "all" || x.status === statusF)
-    && (vatF === "all" || (vatF === "vat" ? invVat(x) : !invVat(x)))
-    && inDateRange(x.issue_date, dateR)
-    && (!billIncomplete || notFullyBilled(x))
+  // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรอง
+  const fl0 = list.filter((x) => inDateRange(x.issue_date, dateR)
     && (matchText(search, x.invoice_no, x.customerName, x.quote_no, x.createdByName) || matchPhone(search, x.contactPhone)));
+  const nStatus = (v) => fl0.filter((x) => v === "all" || x.status === v).length;
+  const nVat = (v) => fl0.filter((x) => v === "all" || (v === "vat" ? invVat(x) : !invVat(x))).length;
+  const nBillInc = fl0.filter(notFullyBilled).length;
+  const nNoReceipt = fl0.filter((x) => x.status !== "cancelled" && !x.hasReceipt).length;
+  const shown = fl0.filter((x) => (statusF === "all" || x.status === statusF)
+    && (vatF === "all" || (vatF === "vat" ? invVat(x) : !invVat(x)))
+    && (!billIncomplete || notFullyBilled(x))
+    && (!noReceiptF || (x.status !== "cancelled" && !x.hasReceipt)));
   return (
     <div className="adm">
       <div className="adm-head">
@@ -288,16 +295,18 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["unpaid", "ค้างชำระ"], ["paid", "ชำระแล้ว"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
-            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({nStatus(v)})</button>
         ))}
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
         {[["all", "VAT / ไม่ VAT"], ["vat", "รับ VAT"], ["novat", "ไม่ VAT"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
-            style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l}</button>
+            style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l} ({nVat(v)})</button>
         ))}
+        <button className={"cat-chip" + (noReceiptF ? " on" : "")} onClick={() => setNoReceiptF((v) => !v)}
+          style={noReceiptF ? { background: "#16a34a", color: "#fff", borderColor: "#16a34a" } : {}}>ยังไม่ออกใบเสร็จ ({nNoReceipt})</button>
         <button className={"cat-chip" + (billIncomplete ? " on" : "")} onClick={() => setBillIncomplete((v) => !v)}
-          style={billIncomplete ? { background: "#d97706", color: "#fff", borderColor: "#d97706" } : {}}>วางบิลยังไม่ครบ 100%</button>
+          style={billIncomplete ? { background: "#d97706", color: "#fff", borderColor: "#d97706" } : {}}>วางบิลยังไม่ครบ 100% ({nBillInc})</button>
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}

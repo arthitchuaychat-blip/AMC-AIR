@@ -721,11 +721,11 @@ export async function deleteMaterialPrep(prep_no, cascade) {
 
 export async function savePurchaseOrder(po, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, prep_no: po.prep_no || null, issue_date: po.issue_date || null, created_by: user?.id || null };
+  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, prep_no: po.prep_no || null, issue_date: po.issue_date || null, po_type: po.po_type || null, created_by: user?.id || null };
   let e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
-  // pre-096/097/100/115/119 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
+  // pre-096/097/100/115/119/139 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
   // ห้ามเหมารวม: เคยตัด vat ทิ้งไปด้วยตอน price_incl ยังไม่รัน migration → ใบสั่งซื้อโหมดรวม VAT ถูกเก็บเป็นไม่มี VAT
-  for (const c of ["price_incl", "vat", "quote_no", "prep_no", "issue_date"]) {
+  for (const c of ["price_incl", "vat", "quote_no", "prep_no", "issue_date", "po_type"]) {
     if (e1 && c in head && (e1.message || "").includes(c)) {
       delete head[c];
       e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
@@ -1150,10 +1150,13 @@ export async function saveBoq(boq, items) {
   const { data: { user } } = await supabase.auth.getUser();
   const bHead = {
     boq_no: boq.boq_no, customer_id: boq.customer_id || null, site_id: boq.site_id || null, issue_date: boq.issue_date || null,
+    job_type: boq.job_type || null,
     title: boq.title?.trim() || null, note: boq.note?.trim() || null, internal_note: boq.internal_note?.trim() || null, ..._termCols(boq), ..._signCols(boq), status: boq.status || "open", created_by: user?.id || null,
   };
   let e1 = (await supabase.from("boqs").upsert(bHead, { onConflict: "boq_no" })).error;
-  if (e1 && /issue_date/i.test(e1.message || "")) { delete bHead.issue_date; e1 = (await supabase.from("boqs").upsert(bHead, { onConflict: "boq_no" })).error; } // pre-119 fallback
+  for (const c of ["issue_date", "job_type"]) { // pre-119/139 fallback
+    if (e1 && (e1.message || "").includes(c)) { delete bHead[c]; e1 = (await supabase.from("boqs").upsert(bHead, { onConflict: "boq_no" })).error; }
+  }
   if (e1) throw e1;
   const e2 = (await supabase.from("boq_items").delete().eq("boq_no", boq.boq_no)).error;
   if (e2) throw e2;
@@ -1281,7 +1284,7 @@ export async function saveQuotation(q, items) {
   const { data: { user } } = await supabase.auth.getUser();
   const head = {
     quote_no: q.quote_no, customer_id: q.customer_id || null, site_id: q.site_id || null, boq_no: q.boq_no || null,
-    title: q.title?.trim() || null, status: q.status || "draft",
+    title: q.title?.trim() || null, status: q.status || "draft", job_type: q.job_type || null,
     issue_date: q.issue_date || null, valid_until: q.valid_until || null,
     discount_type: q.discount_type || "amount", discount_value: Number(q.discount_value) || 0,
     vat: !!q.vat, wht: !!q.wht, wht_rate: Number(q.wht_rate) || 3, note: q.note?.trim() || null, internal_note: q.internal_note?.trim() || null, ..._termCols(q), ..._signCols(q),
@@ -1290,10 +1293,12 @@ export async function saveQuotation(q, items) {
     created_by: user?.id || null,
   };
   let e1 = (await supabase.from("quotations").upsert(head, { onConflict: "quote_no" })).error;
-  // ยังไม่รัน migration 105 → บันทึกต่อได้ (แค่ยังไม่เก็บวิธีการรับเงิน)
-  if (e1 && /pay_method/i.test(e1.message || "")) {
-    delete head.pay_method;
-    e1 = (await supabase.from("quotations").upsert(head, { onConflict: "quote_no" })).error;
+  // ยังไม่รัน migration 105/139 → บันทึกต่อได้ (แค่ยังไม่เก็บคอลัมน์นั้น)
+  for (const c of ["pay_method", "job_type"]) {
+    if (e1 && c in head && (e1.message || "").includes(c)) {
+      delete head[c];
+      e1 = (await supabase.from("quotations").upsert(head, { onConflict: "quote_no" })).error;
+    }
   }
   if (e1) throw e1;
   const e2 = (await supabase.from("quotation_items").delete().eq("quote_no", q.quote_no)).error;

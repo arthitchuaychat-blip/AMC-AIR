@@ -13,6 +13,7 @@ import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
+import { jobTypeDef } from "../lib/schedule";
 import { fmtBaht, custCode, matchText, matchPhone, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -64,7 +65,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
-  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
+  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
   // create a new quotation prefilled from a BOQ (customer/site + pulled items)
   function startFromBoq(boqNo) {
     const b = boqs.find((x) => x.boq_no === boqNo); if (!b) return;
@@ -73,7 +74,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       const m = matMap[x.item_code];
       return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
     });
-    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: b.internal_note || "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
+    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, job_type: b.job_type || "", title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: b.internal_note || "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
   }
   React.useEffect(() => { if (!fromBoq || !boqs.length) return; startFromBoq(fromBoq); onFromBoqConsumed && onFromBoqConsumed(); }, [fromBoq, boqs]);
   // chain lock: can't edit/delete a quotation that already has an invoice or job order downstream
@@ -82,7 +83,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     : null;
   function startEdit(q) {
     const lk = lockMsg(q); if (lk) return alert(lk);
-    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at,
+    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", job_type: q.job_type || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind, description: x.description || "" })) });
   }
   // ไม่มี "สร้างซ้ำ" ในใบเสนอราคา — กติกาบริษัท: เอกสารขายเริ่มจาก BOQ เสมอ (อยากได้ใบคล้ายกัน → สร้างซ้ำที่ BOQ แล้วออกใบเสนอจากตรงนั้น)
@@ -227,7 +228,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           {/* pull from BOQ */}
           <div className="fld"><span>ดึงรายการจาก BOQ (เพิ่มเฉพาะรายการใหม่ · ไม่ทับของเดิม)</span>
             <div className="line-add">
-              <Combo className="inp" value={ed.boq_no} onChange={(e) => setQ("boq_no", e.target.value)}>
+              <Combo className="inp" value={ed.boq_no} onChange={(e) => { const v = e.target.value; const b = boqs.find((x) => x.boq_no === v); setEd((s) => ({ ...s, boq_no: v, job_type: b?.job_type || s.job_type || "" })); }}>
                 <option value="">{ed._edit ? "— ไม่อ้าง BOQ —" : "— เลือก BOQ (จำเป็น) —"}</option>{custBoqs.map((b) => <option key={b.boq_no} value={b.boq_no}>{b.boq_no}{b.title ? ` · ${b.title}` : ""}</option>)}
               </Combo>
               <button className="btn-ghost sm" onClick={pullFromBoq} disabled={!ed.boq_no}><UIcon name="box" size={14} /> ดึงรายการ</button>
@@ -336,6 +337,15 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   }
 
   // ---------- LIST ----------
+  // base หลังค้นหา+ช่วงวันที่ — ใช้ทั้งนับจำนวนบนชิปตัวกรองและกรองแสดงผล
+  const fl0 = list.filter((q) => inDateRange(q.issue_date, dateR)
+    && (matchText(search, q.quote_no, q.customerName, q.contactName, q.title, q.boq_no) || matchPhone(search, q.contactPhone)));
+  const hasAc = (q) => (q.items || []).some((it) => it.kind === "ac");
+  const noAcPo = (q) => hasAc(q) && q.status !== "cancelled" && !(docLinks.byQuote[q.quote_no]?.poNos || []).length; // มีแอร์แต่ยังไม่เปิดใบสั่งซื้อ
+  const docPred = (q, f) => f === "all" ? true : f === "no_invoice" ? !q.hasInvoice : f === "no_job" ? !q.hasJob : noAcPo(q);
+  const nStatus = (v) => fl0.filter((q) => v === "all" || q.status === v).length;
+  const nVat = (v) => fl0.filter((q) => v === "all" || (v === "vat" ? !!q.vat : !q.vat)).length;
+  const nDoc = (v) => fl0.filter((q) => docPred(q, v)).length;
   return (
     <div className="adm">
       <div className="adm-head">
@@ -352,30 +362,28 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ...STATUS_OPTS, ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
-            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({nStatus(v)})</button>
         ))}
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
         {[["all", "VAT / ไม่ VAT"], ["vat", "รับ VAT"], ["novat", "ไม่ VAT"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
-            style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l}</button>
+            style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l} ({nVat(v)})</button>
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
-        {[["all", "ทุกใบ"], ["no_invoice", "ยังไม่สร้างใบส่งของ/ใบแจ้งหนี้"], ["no_job", "ยังไม่สร้างใบงาน"]].map(([v, l]) => (
+        {[["all", "ทุกใบ"], ["no_invoice", "ยังไม่สร้างใบส่งของ/ใบแจ้งหนี้"], ["no_job", "ยังไม่สร้างใบงาน"], ["no_ac_po", "ยังไม่สั่งซื้อแอร์"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (docF === v ? " on" : "")} onClick={() => setDocF(v)}
-            style={docF === v ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>{l}</button>
+            style={docF === v ? { background: v === "no_ac_po" ? "#7c3aed" : "#0891b2", color: "#fff", borderColor: v === "no_ac_po" ? "#7c3aed" : "#0891b2" } : {}}>{l} ({nDoc(v)})</button>
         ))}
       </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
-        const fl = list.filter((q) => (statusF === "all" || q.status === statusF)
+        const fl = fl0.filter((q) => (statusF === "all" || q.status === statusF)
           && (vatF === "all" || (vatF === "vat" ? !!q.vat : !q.vat))
-          && (docF === "all" || (docF === "no_invoice" ? !q.hasInvoice : !q.hasJob))
-          && inDateRange(q.issue_date, dateR)
-          && (matchText(search, q.quote_no, q.customerName, q.contactName, q.title, q.boq_no) || matchPhone(search, q.contactPhone)));
+          && docPred(q, docF));
         return (<>
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสนอราคา" : "ไม่พบใบเสนอราคาที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">
@@ -384,7 +392,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           return (
             <div className={"card job-card doc2" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
               <DocCardHead no={q.quote_no} onClick={() => openPeek("quote", q.quote_no)}
-                badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q.vat ? "vat-on" : "vat-off")}>{q.vat ? "VAT" : "NO VAT"}</span></>}
+                badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q.vat ? "vat-on" : "vat-off")}>{q.vat ? "VAT" : "NO VAT"}</span>{q.job_type && (() => { const d = jobTypeDef(q.job_type); return <span className="job-badge" style={{ background: d[3] }}>{d[2]} {d[1]}</span>; })()}</>}
                 title={q.title} sub={`${q.items.length} รายการ`} by={q.createdByName}
                 date={q.issue_date || q.created_at} amountLabel="ยอดสุทธิ" amount={q.grand}
                 customer={{ name: q.customerName, contactName: q.contactName, phone: q.contactPhone, addr: q.customerAddr, siteAddress: q.siteAddress, mapUrl: q.map_url }} />
@@ -401,11 +409,11 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                   : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบส่งของ/ใบแจ้งหนี้</button>))}
                 {q.status === "approved" && q.hasJob && <span className="job-badge b-green">✓ สร้างใบงานแล้ว</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
-                {q.status === "approved" && onCreatePo && can(role, "po", "edit") && (() => {
+                {q.status === "approved" && onCreatePo && can(role, "po", "edit") && hasAc(q) && (() => {
                   const poCount = (docLinks.byQuote[q.quote_no]?.poNos || []).length;
                   return (<>
                     {poCount > 0 && <span className="job-badge b-green" title="กดชิป 'สั่งซื้อ PO-…' ด้านบนเพื่อเปิดใบสั่งซื้อ">✓ สั่งซื้อแล้ว {poCount} ใบ</span>}
-                    <button className="btn-ghost sm" style={{ color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} title="เปิดใบสั่งซื้อจากรายการในใบเสนอราคานี้ (ผูกใบเสนอราคาให้อัตโนมัติ)" onClick={() => onCreatePo(q)}>🛒 {poCount > 0 ? "สร้างใบสั่งซื้อเพิ่ม" : "สร้างใบสั่งซื้อ"}</button>
+                    <button className="btn-ghost sm" style={{ color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} title="เปิดใบสั่งซื้อ ดึงเฉพาะรายการแอร์จากใบเสนอราคานี้ (ผูกใบเสนอราคาให้อัตโนมัติ)" onClick={() => onCreatePo(q)}>🛒 {poCount > 0 ? "สั่งซื้อแอร์เพิ่ม" : "สั่งซื้อแอร์"}</button>
                   </>);
                 })()}
                 {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={!!cancelLockMsg(q)} title={cancelLockMsg(q) || ""} onClick={() => cancel(q)}>ยกเลิก</button>}

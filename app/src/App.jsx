@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-15·การ์ดเอกสารแนวเดียวกัน: ใบสั่งซื้อ (🏭 ผู้ขาย) + ใบเตรียมวัสดุ ใช้โครงหัวการ์ดเดียวกับเอกสารขาย v393";
+const BUILD = "2026-07-15·ตัวกรองนับจำนวนทุกเมนูเอกสาร · BOQ ประเภทงานบังคับ (ติดทั้งสาย CRM) · สั่งซื้อแอร์จากใบเสนอ+กรองยังไม่สั่ง · PO แยกประเภทแอร์/วัสดุ (mig 139) v394";
 
 function SetupNotice() {
   return (
@@ -451,7 +451,7 @@ export default function App() {
           fromBoq={quoteFromBoq} onFromBoqConsumed={() => setQuoteFromBoq(null)}
           onCreateInvoice={(quoteNo) => { setInvoiceFromQuote(quoteNo); go("invoice"); }}
           onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }}
-          onCreatePo={(q) => { setPoPrefill({ quoteNo: q.quote_no, items: (q.items || []).filter((it) => it.item_code && it.kind !== "service").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })) }); go("po"); }}
+          onCreatePo={(q) => { setPoPrefill({ quoteNo: q.quote_no, poType: "ac", items: (q.items || []).filter((it) => it.item_code && it.kind === "ac").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })) }); go("po"); }}
           onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "invoice" && <Invoices role={role} focus={invoiceFocus} onFocusConsumed={() => setInvoiceFocus(null)} fromQuote={invoiceFromQuote} onFromQuoteConsumed={() => setInvoiceFromQuote(null)}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }}

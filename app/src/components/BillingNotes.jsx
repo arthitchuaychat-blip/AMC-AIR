@@ -77,19 +77,22 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
         </div>
       </div>
 
+      {(() => {
+        // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรองและกรองแสดงผล
+        const fl0 = list.filter((b) => inDateRange(b.issue_date, dateR)
+          && (matchText(search, b.billing_no, b.customerName, ...(b.invoice_nos || [])) || matchPhone(search, b.contactPhone)));
+        const stPred = (b, v) => v === "all" ? true
+          : v === "unpaid" ? (b.status !== "cancelled" && b.invoices.some((iv) => iv.status === "unpaid"))
+          : bnStatus(b) === v;
+        const shown = fl0.filter((b) => stPred(b, statusF));
+        return (<>
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["open", "วางบิล"], ["unpaid", "ค้างชำระ"], ["done", "ออกใบเสร็จครบ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
-            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({fl0.filter((b) => stPred(b, v)).length})</button>
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
-      {(() => { const shown = list.filter((b) => (statusF === "all" ? true
-          : statusF === "unpaid" ? (b.status !== "cancelled" && b.invoices.some((iv) => iv.status === "unpaid"))
-          : bnStatus(b) === statusF)
-        && inDateRange(b.issue_date, dateR)
-        && (matchText(search, b.billing_no, b.customerName, ...(b.invoice_nos || [])) || matchPhone(search, b.contactPhone)));
-        return (<>
       {shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบวางบิล" : "ไม่พบใบวางบิล"}</div>}
       <div className="job-cards">
         {shown.map((b) => (

@@ -103,6 +103,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     const address = q.siteAddress || site?.address || q.customerAddr || cust?.address || "";
     setEd({
       ...blankEd(), quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "",
+      job_type: q.job_type || "install",   // ประเภทงานติดมาจาก BOQ → ใบเสนอราคา → ใบงาน (CRM)
       title: q.title || "", internal_note: q.internal_note || "",
       contact_name: q.contactName || contact?.name || "",
       contact_phone: q.contactPhone || contact?.phone || "",

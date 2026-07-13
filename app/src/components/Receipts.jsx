@@ -191,10 +191,13 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
 
   // ---------- LIST ----------
   const recVat = (x) => !!quoteByNo[x.quote_no]?.vat;
-  const shown = list.filter((x) => (statusF === "all" || x.status === statusF)
-    && (vatF === "all" || (vatF === "vat" ? recVat(x) : !recVat(x)))
-    && inDateRange(x.issue_date, dateR)
+  // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรอง
+  const fl0 = list.filter((x) => inDateRange(x.issue_date, dateR)
     && matchText(search, x.receipt_no, x.customerName, x.quote_no, x.job_no, x.createdByName));
+  const nStatus = (v) => fl0.filter((x) => v === "all" || x.status === v).length;
+  const nVat = (v) => fl0.filter((x) => v === "all" || (v === "vat" ? recVat(x) : !recVat(x))).length;
+  const shown = fl0.filter((x) => (statusF === "all" || x.status === statusF)
+    && (vatF === "all" || (vatF === "vat" ? recVat(x) : !recVat(x))));
   return (
     <div className="adm">
       <div className="adm-head">
@@ -210,14 +213,14 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["pending", "รอชำระเงิน"], ["paid", "ชำระเงินแล้ว"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
-            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+            style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({nStatus(v)})</button>
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
         {[["all", "VAT / ไม่ VAT"], ["vat", "รับ VAT"], ["novat", "ไม่ VAT"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
-            style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l}</button>
+            style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l} ({nVat(v)})</button>
         ))}
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
