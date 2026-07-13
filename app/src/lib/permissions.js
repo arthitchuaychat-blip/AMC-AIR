@@ -32,7 +32,7 @@ export const MODULES = [
   { id: "hr", label: "HR (จัดการพนักงาน)", editable: true },
   { id: "boq", label: "BOQ", editable: true },
   { id: "quote", label: "ใบเสนอราคา", editable: true },
-  { id: "invoice", label: "ใบแจ้งหนี้", editable: true },
+  { id: "invoice", label: "ใบส่งของ/ใบแจ้งหนี้", editable: true },
   { id: "billing", label: "ใบวางบิล", editable: true },
   { id: "receipt", label: "ใบเสร็จ/ใบกำกับ", editable: true },
   { id: "receivables", label: "เงินค้างรับ", editable: false },

@@ -63,7 +63,7 @@ const NAV = {
   catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
   boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
   quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
-  invoice: { th: "ใบแจ้งหนี้", en: "Invoices", icon: "clipboard" },
+  invoice: { th: "ใบส่งของ/ใบแจ้งหนี้", en: "Delivery / Invoice", icon: "clipboard" },
   receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
   billing: { th: "ใบวางบิล", en: "Billing Notes", icon: "clipboard" },
   receivables: { th: "เงินค้างรับ", en: "Receivables", icon: "trend" },
@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-14·ใบเสนอราคา: เอาปุ่มสร้างซ้ำออก — เอกสารขายเริ่มจาก BOQ เสมอ (สร้างซ้ำได้ที่ BOQ) v391";
+const BUILD = "2026-07-15·เอกสารขาย: พรีวิวขวาทุกใบ (กดหัวการ์ด) · ใบแจ้งหนี้→ใบส่งของ/ใบแจ้งหนี้ + ปุ่มรับเงินตรง · วางบิลเฉพาะใบยังไม่รับเงิน · ยกเลิก/ลบกระทบเงินสดอัตโนมัติ v392";
 
 function SetupNotice() {
   return (

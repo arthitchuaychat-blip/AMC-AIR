@@ -1220,6 +1220,7 @@ export async function setJobStatus(job_no, status, reason) {
   const { error } = await supabase.from("job_orders").update({ status }).eq("job_no", job_no);
   if (error) throw error;
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "job_order", target_no: job_no, reason });
+  syncCashEntriesFromDocs().catch(() => {}); // job's linked PO/labor projections → refresh cash flow
 }
 
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
@@ -1323,6 +1324,7 @@ export async function deleteQuotation(quote_no, reason) {
   const { error } = await supabase.from("quotations").delete().eq("quote_no", quote_no);
   if (error) throw error;
   await logAudit({ action: "delete", target_type: "quotation", target_no: quote_no, reason, snapshot: head ? { ...head, items: items || [] } : null });
+  syncCashEntriesFromDocs().catch(() => {}); // refresh cash flow after quote delete
 }
 
 export async function setQuotationStatus(quote_no, status, reason) {
@@ -1332,6 +1334,7 @@ export async function setQuotationStatus(quote_no, status, reason) {
   if (error) throw error;
   if (status === "cancelled" || status === "approved")
     await logAudit({ action: status === "approved" ? "approve" : "cancel", target_type: "quotation", target_no: quote_no, reason });
+  syncCashEntriesFromDocs().catch(() => {}); // cancel/approve → refresh projected receivables in cash flow
 }
 
 // id → name map of document creators (for the "ผู้สร้างเอกสาร" audit line)
@@ -1529,12 +1532,14 @@ export async function setBillingNoteStatus(billing_no, status, reason) {
   const { error } = await supabase.from("billing_notes").update({ status }).eq("billing_no", billing_no);
   if (error) throw error;
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "billing_note", target_no: billing_no, reason });
+  syncCashEntriesFromDocs().catch(() => {}); // reconcile cash flow after any status change
 }
 export async function deleteBillingNote(billing_no, reason) {
   const { data: snap } = await supabase.from("billing_notes").select("*").eq("billing_no", billing_no).maybeSingle();
   const { error } = await supabase.from("billing_notes").delete().eq("billing_no", billing_no);
   if (error) throw error;
   await logAudit({ action: "delete", target_type: "billing_note", target_no: billing_no, reason, snapshot: snap });
+  syncCashEntriesFromDocs().catch(() => {}); // reconcile cash flow after delete
 }
 
 export async function setReceiptStatus(receipt_no, status, invoice_no, reason) {
@@ -1938,6 +1943,7 @@ export async function deleteJobOrder(job_no, reason) {
   const { error } = await supabase.from("job_orders").delete().eq("job_no", job_no);
   if (error) throw error;
   await logAudit({ action: "delete", target_type: "job_order", target_no: job_no, reason, snapshot: head ? { ...head, visits: visits || [] } : null });
+  syncCashEntriesFromDocs().catch(() => {}); // refresh cash flow after job delete
 }
 
 // ใบงานเชื่อม: แตกใบใหม่จากใบหนึ่ง (เลขราก + A/B/C) คัดลอกข้อมูลลูกค้า/งาน · ทีม+รอบให้ออฟฟิศกำหนดเอง

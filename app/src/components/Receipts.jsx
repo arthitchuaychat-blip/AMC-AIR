@@ -227,9 +227,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           const st = RSTATUS[x.status] || RSTATUS.paid;
           return (
           <div className={"card job-card doc2" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
-            <DocCardHead no={x.receipt_no} onClick={() => setView(x)}
+            <DocCardHead no={x.receipt_no} onClick={() => openPeek("receipt", x.receipt_no)}
               badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span>{x.flowaccount_no && <span className="fa-no-badge" title="เลขที่เอกสารใน FlowAccount"><b>FlowAccount</b> {x.flowaccount_no}</span>}</>}
-              title={x.title} sub={<span className="dch-more">ดูรายการ ›</span>} by={x.createdByName}
+              title={x.title} sub={<span className="dch-more">ดูตัวอย่าง ›</span>} by={x.createdByName}
               date={x.issue_date || x.created_at}
               amountNode={x.wht_amt > 0 ? (
                 <div className="rec-amt-bd">
@@ -246,6 +246,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               {x.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
               <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
               {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
+              <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> รายการ / หัก ณ ที่จ่าย</button>
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintR(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canSendFlow && recVat(x) && x.status !== "cancelled" && <button className={"btn-ghost sm" + (x.flowaccount_no ? " fa-sent" : "")} disabled={faBusy === x.receipt_no} title={x.flowaccount_no ? `ส่งแล้ว เลขที่ ${x.flowaccount_no} · กดเพื่อส่งซ้ำ` : "ส่งใบกำกับภาษีเข้า FlowAccount"} onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : x.flowaccount_no ? "✓ FlowAccount" : "↗ FlowAccount"}</button>}
               {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}

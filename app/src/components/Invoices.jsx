@@ -133,25 +133,25 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       note: ed.note, internal_note: ed.internal_note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty, status: "unpaid",
       ...(() => { const sig = ed.sign_on ? mySignature() : null; return { sign_url: sig?.url || null, sign_name: sig?.name || null }; })(),
     };
-    try { await saveInvoice(inv); flash(`สร้างใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load(); }
+    try { await saveInvoice(inv); flash(`สร้างใบส่งของ/ใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   // chain lock: can't edit/delete/cancel an invoice that already has a receipt downstream
   // ลำดับการยกเลิก: ใบเสร็จก่อน → ใบวางบิล → แล้วจึงใบแจ้งหนี้ (ยกเลิกจากเอกสารล่าสุดย้อนกลับ)
   const lockMsg = (x) => x.hasReceipt ? "แก้ไข/ลบ/ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว\nต้องยกเลิก/ลบใบเสร็จก่อน"
     : x.billingNo ? `แก้ไข/ลบ/ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — อยู่ในใบวางบิล ${x.billingNo}\nต้องยกเลิกใบวางบิลก่อน (ยกเลิกจากเอกสารล่าสุดย้อนกลับ)` : null;
-  async function del(x) { const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบแจ้งหนี้ ${x.invoice_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ออกผิด · ลูกค้ายกเลิก", required: true } }); if (reason === false) return; try { await deleteInvoice(x.invoice_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
-  async function cancel(x) { const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบแจ้งหนี้ ${x.invoice_no}?`, message: "ยอดจะคืนกลับไปคงเหลือ", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น แก้ไขยอด · ลูกค้าเปลี่ยนใจ", required: true } }); if (reason === false) return; try { await setInvoiceStatus(x.invoice_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(x) { const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบส่งของ/ใบแจ้งหนี้ ${x.invoice_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ออกผิด · ลูกค้ายกเลิก", required: true } }); if (reason === false) return; try { await deleteInvoice(x.invoice_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancel(x) { const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบส่งของ/ใบแจ้งหนี้ ${x.invoice_no}?`, message: "ยอดจะคืนกลับไปคงเหลือ", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น แก้ไขยอด · ลูกค้าเปลี่ยนใจ", required: true } }); if (reason === false) return; try { await setInvoiceStatus(x.invoice_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
 
   // ---------- EDITOR ----------
   if (ed) {
     return (
       <div className="adm">
-        <div className="adm-head"><div><h1 className="page-title">ใบแจ้งหนี้ <span className="page-title-en">Invoice</span></h1>
+        <div className="adm-head"><div><h1 className="page-title">ใบส่งของ/ใบแจ้งหนี้ <span className="page-title-en">Delivery / Invoice</span></h1>
           <p className="page-sub">อ้างอิงใบเสนอราคา · แบ่งงวดตาม % หรือยอดเงิน จนครบ 100%</p></div></div>
         <div className="card" style={{ maxWidth: 720 }}>
           <div className="fld-row">
-            <label className="fld"><span>เลขที่ใบแจ้งหนี้</span><input className="inp" value={ed.invoice_no} onChange={(e) => setF("invoice_no", e.target.value)} /></label>
+            <label className="fld"><span>เลขที่เอกสาร</span><input className="inp" value={ed.invoice_no} onChange={(e) => setF("invoice_no", e.target.value)} /></label>
             <label className="fld"><span>อ้างอิงใบเสนอราคา (อนุมัติแล้ว)</span>
               <Combo className="inp" value={ed.quote_no} onChange={(e) => pickQuote(e.target.value)}>
                 <option value="">— เลือกใบเสนอราคา —</option>
@@ -256,7 +256,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
-            <button className="btn-primary" style={{ flex: 1 }} disabled={!selQ || newTotal <= 0} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบแจ้งหนี้</button>
+            <button className="btn-primary" style={{ flex: 1 }} disabled={!selQ || newTotal <= 0} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบส่งของ/ใบแจ้งหนี้</button>
           </div>
         </div>
         {toast && <Toast t={toast} />}
@@ -276,13 +276,13 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   return (
     <div className="adm">
       <div className="adm-head">
-        <div><h1 className="page-title">ใบแจ้งหนี้ <span className="page-title-en">Invoices</span></h1><p className="page-sub">{list.length} ใบ · แบ่งงวดจากใบเสนอราคา</p></div>
+        <div><h1 className="page-title">ใบส่งของ/ใบแจ้งหนี้ <span className="page-title-en">Delivery / Invoice</span></h1><p className="page-sub">{list.length} ใบ · แบ่งงวดจากใบเสนอราคา · กดรับเงินออกใบเสร็จได้เลย</p></div>
         <div className="cat-head-actions">
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
             <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบเสนอ" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
-          {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบแจ้งหนี้</button>}
+          {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบส่งของ/ใบแจ้งหนี้</button>}
         </div>
       </div>
       <div className="cat-filter">
@@ -301,7 +301,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบแจ้งหนี้" : "ไม่พบใบแจ้งหนี้"}</div>}
+      {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบส่งของ/ใบแจ้งหนี้" : "ไม่พบใบส่งของ/ใบแจ้งหนี้"}</div>}
       <div className="job-cards">
         {shown.map((x) => {
           const st = STATUS[x.status] || STATUS.unpaid;
@@ -309,9 +309,9 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           const grand = q?.grand || 0; const bl = billed[x.quote_no] || 0;
           return (
             <div className={"card job-card doc2" + (x.status !== "unpaid" ? " closed" : "")} key={x.invoice_no}>
-              <DocCardHead no={x.invoice_no} onClick={() => setView(x)}
+              <DocCardHead no={x.invoice_no} onClick={() => openPeek("invoice", x.invoice_no)}
                 badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q?.vat ? "vat-on" : "vat-off")}>{q?.vat ? "VAT" : "NO VAT"}</span></>}
-                title={x.title} sub={<>งวดที่ {x.installment} · {Math.round(x.pct)}% <span className="dch-more">ดูรายการ ›</span></>} by={x.createdByName}
+                title={x.title} sub={<>งวดที่ {x.installment} · {Math.round(x.pct)}% <span className="dch-more">ดูตัวอย่าง ›</span></>} by={x.createdByName}
                 date={x.issue_date || x.created_at} amountLabel="ยอดงวดนี้" amount={x.total}
                 customer={{ name: x.customerName, contactName: x.mainContactName, phone: x.contactPhone || x.mainContactPhone, addr: x.customerAddr, siteAddress: x.siteAddress, mapUrl: x.mapUrl }} />
               {grand > 0 && x.status !== "cancelled" && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
@@ -320,7 +320,10 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
               <div className="job-lines"><div className="job-actions">
                 <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
                 {x.hasReceipt && <span className="job-badge b-green">✓ ออกใบเสร็จแล้ว</span>}
+                {/* ลูกค้าส่วนใหญ่ไม่ต้องวางบิล → กดรับเงิน/ออกใบเสร็จจากใบส่งของได้เลย */}
+                {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงิน / ออกใบเสร็จ</button>}
                 {canEdit && x.status !== "cancelled" && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
+                <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> รายการ / หัก ณ ที่จ่าย</button>
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintI(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" disabled={x.hasReceipt} title={lockMsg(x) || ""} onClick={() => cancel(x)}>ยกเลิก</button>}
                 {canDelete && <button className="btn-ghost sm danger" disabled={x.hasReceipt} title={x.hasReceipt ? (lockMsg(x) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
@@ -338,7 +341,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         const svcAmtP = whtItems.reduce((a, i) => a + (Number(i.amount) || 0), 0);
         const whtBaseP = allAmtP > 0 ? round2((printI.base || 0) * svcAmtP / allAmtP) : 0;
         return (
-        <DocSlip company={co} titleTh="ใบแจ้งหนี้" titleEn="INVOICE" docNo={printI.invoice_no}
+        <DocSlip company={co} titleTh="ใบส่งของ / ใบแจ้งหนี้" titleEn="DELIVERY NOTE / INVOICE" docNo={printI.invoice_no}
           metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, { label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }]}
           projectTitle={printI.title}
           customer={{ name: printI.customerName, code: custCode(printI.customerCode), taxId: printI.customerTaxId, address: printI.customerAddr, contactName: printI.mainContactName, contactPhone: printI.mainContactPhone, siteName: printI.siteName, siteAddress: printI.siteAddress, siteContactName: printI.siteContactName, siteContactPhone: printI.siteContactPhone, mapUrl: printI.mapUrl }}
@@ -362,7 +365,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
       {view && (
         <LineWhtModal
-          title={`ใบแจ้งหนี้ ${view.invoice_no}`}
+          title={`ใบส่งของ/ใบแจ้งหนี้ ${view.invoice_no}`}
           subtitle={`งวด ${view.installment} (${Math.round(view.pct)}%) · ${view.customerName || "-"}`}
           items={view.items?.length ? view.items : snapshotItems(quoteByNo[view.quote_no])}
           rate={view.wht_rate || 3} docBase={view.base} docTotal={view.total} canEdit={canEdit && !view.hasReceipt && view.status !== "cancelled"}

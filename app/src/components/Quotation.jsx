@@ -363,7 +363,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
-        {[["all", "ทุกใบ"], ["no_invoice", "ยังไม่สร้างใบแจ้งหนี้"], ["no_job", "ยังไม่สร้างใบงาน"]].map(([v, l]) => (
+        {[["all", "ทุกใบ"], ["no_invoice", "ยังไม่สร้างใบส่งของ/ใบแจ้งหนี้"], ["no_job", "ยังไม่สร้างใบงาน"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (docF === v ? " on" : "")} onClick={() => setDocF(v)}
             style={docF === v ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>{l}</button>
         ))}
@@ -383,7 +383,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           const st = STATUS[q.status] || STATUS.draft;
           return (
             <div className={"card job-card doc2" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
-              <DocCardHead no={q.quote_no}
+              <DocCardHead no={q.quote_no} onClick={() => openPeek("quote", q.quote_no)}
                 badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q.vat ? "vat-on" : "vat-off")}>{q.vat ? "VAT" : "NO VAT"}</span></>}
                 title={q.title} sub={`${q.items.length} รายการ`} by={q.createdByName}
                 date={q.issue_date || q.created_at} amountLabel="ยอดสุทธิ" amount={q.grand}
@@ -397,8 +397,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {q.status === "approved" && onCreateInvoice && (q.hasInvoice
-                  ? <span className="job-badge b-green" title="วางบิลงวดถัดไปได้ที่เมนูใบแจ้งหนี้">✓ ออกใบแจ้งหนี้แล้ว · วางบิล {Math.round(q.billedPct)}%</span>
-                  : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบแจ้งหนี้</button>))}
+                  ? <span className="job-badge b-green" title="วางบิลงวดถัดไปได้ที่เมนูใบส่งของ/ใบแจ้งหนี้">✓ ออกใบส่งของ/ใบแจ้งหนี้แล้ว · วางบิล {Math.round(q.billedPct)}%</span>
+                  : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบส่งของ/ใบแจ้งหนี้</button>))}
                 {q.status === "approved" && q.hasJob && <span className="job-badge b-green">✓ สร้างใบงานแล้ว</span>}
                 {canEdit && q.status === "approved" && !q.hasJob && onCreateJob && <button className="btn-primary" onClick={() => onCreateJob(q)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบงาน</button>}
                 {q.status === "approved" && onCreatePo && can(role, "po", "edit") && (() => {

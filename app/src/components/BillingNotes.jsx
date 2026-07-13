@@ -94,7 +94,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
       <div className="job-cards">
         {shown.map((b) => (
           <div className={"card job-card doc2" + (b.status === "cancelled" ? " closed" : "")} key={b.billing_no}>
-            <DocCardHead no={b.billing_no}
+            <DocCardHead no={b.billing_no} onClick={() => openPeek("billing", b.billing_no)}
               badges={<>
                 {b.status === "cancelled" ? <span className="job-badge b-red">ยกเลิกแล้ว</span> : <span className="job-badge b-blue">วางบิล</span>}
                 {b.status !== "cancelled" && (() => { const n = b.invoices.length, r = b.invoices.filter((iv) => iv.hasReceipt).length;
@@ -205,7 +205,8 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
 
 function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash }) {
   const billed = billedInvNos || new Set();
-  const isBillable = (x) => x.status === "unpaid" && !billed.has(x.invoice_no); // ค้างชำระ + ยังไม่ถูกวางบิล
+  // วางบิลได้เฉพาะ "ใบส่งของ/ใบแจ้งหนี้" ที่ยังไม่รับเงิน: ค้างชำระ + ยังไม่มีใบเสร็จ + ยังไม่ถูกวางบิลใบอื่น
+  const isBillable = (x) => x.status === "unpaid" && !x.hasReceipt && !billed.has(x.invoice_no);
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   // only customers that actually have unpaid invoices show in the picker
