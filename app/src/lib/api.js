@@ -744,10 +744,19 @@ export async function savePurchaseOrder(po, items) {
   syncInternalNote({ quoteNo: po.quote_no }, po.internal_note).catch(() => {});
 }
 
-export async function deletePurchaseOrder(po_no) {
+export async function deletePurchaseOrder(po_no, reason) {
   const { error } = await supabase.from("purchase_orders").delete().eq("po_no", po_no);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "purchase_order", target_no: po_no, reason });
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
+}
+
+// ยกเลิกใบสั่งซื้อ (เก็บประวัติ ไม่ลบ) — UI เปิดให้เฉพาะใบที่ยังไม่รับของและยังไม่ผูกการจ่าย
+export async function cancelPurchaseOrder(po_no, reason) {
+  const { error } = await supabase.from("purchase_orders").update({ status: "cancelled" }).eq("po_no", po_no);
+  if (error) throw error;
+  await logAudit({ action: "cancel", target_type: "purchase_order", target_no: po_no, reason });
+  syncCashEntriesFromDocs().catch(() => {});
 }
 
 export async function markPoReceived(po_no) {
@@ -1202,13 +1211,15 @@ export async function deleteBoq(boq_no, reason) {
   if (error) throw error;
   await logAudit({ action: "delete", target_type: "boq", target_no: boq_no, reason, snapshot: head ? { ...head, items: items || [] } : null });
 }
-export async function setBoqStatus(boq_no, status) {
+export async function setBoqStatus(boq_no, status, reason) {
   const { error } = await supabase.from("boqs").update({ status }).eq("boq_no", boq_no);
   if (error) throw error;
+  if (status === "cancelled") await logAudit({ action: "cancel", target_type: "boq", target_no: boq_no, reason });
 }
-export async function setJobStatus(job_no, status) {
+export async function setJobStatus(job_no, status, reason) {
   const { error } = await supabase.from("job_orders").update({ status }).eq("job_no", job_no);
   if (error) throw error;
+  if (status === "cancelled") await logAudit({ action: "cancel", target_type: "job_order", target_no: job_no, reason });
 }
 
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
@@ -1331,13 +1342,14 @@ async function _creators() {
 
 // ---------- INVOICES (ใบแจ้งหนี้ · แบ่งงวดได้) ----------
 export async function listInvoices() {
-  const [iv, cu, si, ct, qt, rc] = await Promise.all([
+  const [iv, cu, si, ct, qt, rc, bn] = await Promise.all([
     supabase.from("invoices").select("*").order("created_at", { ascending: false }),
     supabase.from("customers").select("id,name,address,tax_id"),
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no,title"),
     supabase.from("receipts").select("invoice_no,status"),
+    supabase.from("billing_notes").select("billing_no,invoice_nos,status").then((r) => (r.error ? { data: [] } : r)), // pre-050 → ไม่มีตาราง
   ]);
   if (iv.error) throw iv.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
@@ -1348,6 +1360,9 @@ export async function listInvoices() {
   const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
   const titleByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.title]));
   const receiptedInv = new Set((rc.data || []).filter((r) => r.status !== "cancelled").map((r) => r.invoice_no));
+  // ใบวางบิลที่ยังไม่ยกเลิกที่มีใบแจ้งหนี้นี้อยู่ — ล็อกลำดับการยกเลิก (ต้องยกเลิกใบวางบิลก่อน)
+  const billingByInv = {};
+  (bn.data || []).forEach((b) => { if (b.status !== "cancelled") (b.invoice_nos || []).forEach((n) => { if (!billingByInv[n]) billingByInv[n] = b.billing_no; }); });
   const cb = await _creators();
   return (iv.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
@@ -1358,7 +1373,8 @@ export async function listInvoices() {
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
       createdByName: cb[x.created_by] || null,
       mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
-      contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null, hasReceipt: receiptedInv.has(x.invoice_no) };
+      contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
+      hasReceipt: receiptedInv.has(x.invoice_no), billingNo: billingByInv[x.invoice_no] || null };
   });
 }
 // billed total (non-cancelled) per quote_no — used to compute remaining

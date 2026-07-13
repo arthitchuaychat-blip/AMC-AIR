@@ -6,13 +6,19 @@ import React from "react";
 // Optional reason capture — resolves to the entered string ("" if blank) on confirm, or false on cancel:
 //   const reason = await confirmDialog({ title, message, prompt: { label, placeholder } });
 //   if (reason === false) return;   // cancelled
+// prompt.required: true → ปุ่มยืนยันกดไม่ได้จนกว่าจะพิมพ์เหตุผล (ใช้กับยกเลิก/ลบเอกสาร — กติกาบริษัท: ต้องระบุเหตุผลเสมอ)
 // Mount <ConfirmHost/> once at the app root. Falls back to window.confirm/prompt if the host isn't mounted.
 let _open = null;
 export function confirmDialog(opts) {
   const o = typeof opts === "string" ? { message: opts } : (opts || {});
   return new Promise((resolve) => {
     if (!_open) {
-      if (o.prompt) { const r = window.prompt(o.message || o.title || "", ""); resolve(r === null ? false : r); return; }
+      if (o.prompt) {
+        const r = window.prompt(o.message || o.title || "", "");
+        if (r === null) { resolve(false); return; }
+        if (o.prompt.required && !r.trim()) { window.alert("ต้องระบุเหตุผลก่อนทำรายการ"); resolve(false); return; }
+        resolve(r); return;
+      }
       resolve(window.confirm(o.message || o.title || "ยืนยัน?")); return;
     }
     _open({
@@ -44,7 +50,8 @@ export function ConfirmHost() {
   }, [st]);
   if (!st) return null;
   const done = (v) => { st.resolve(v); setSt(null); };
-  const confirm = () => done(st.prompt ? reason.trim() : true);   // prompt mode → resolve the reason string
+  const needReason = !!(st.prompt && st.prompt.required && !reason.trim());
+  const confirm = () => { if (needReason) return; done(st.prompt ? reason.trim() : true); };   // prompt mode → resolve the reason string
   return (
     <div className="confirm-overlay" onMouseDown={() => done(false)}>
       <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()}>
@@ -53,15 +60,16 @@ export function ConfirmHost() {
         {st.message && <div className="confirm-msg">{st.message}</div>}
         {st.prompt && (
           <div className="confirm-prompt">
-            {st.prompt.label && <label className="confirm-prompt-label">{st.prompt.label}</label>}
+            {st.prompt.label && <label className="confirm-prompt-label">{st.prompt.label}{st.prompt.required ? <span style={{ color: "#dc2626" }}> *</span> : null}</label>}
             <textarea className="inp" rows={2} autoFocus value={reason}
               placeholder={st.prompt.placeholder || "ระบุเหตุผล…"}
               onChange={(e) => setReason(e.target.value)} />
+            {needReason && <div style={{ fontSize: 11.5, color: "#dc2626", marginTop: 4 }}>ต้องระบุเหตุผลก่อน จึงจะกดยืนยันได้</div>}
           </div>
         )}
         <div className="confirm-acts">
           <button className="btn-ghost" onClick={() => done(false)}>{st.cancelText}</button>
-          <button className={st.danger ? "btn-danger" : "btn-primary"} onClick={confirm} autoFocus={!st.prompt}>{st.confirmText}</button>
+          <button className={st.danger ? "btn-danger" : "btn-primary"} onClick={confirm} disabled={needReason} style={needReason ? { opacity: .45, cursor: "not-allowed" } : undefined} autoFocus={!st.prompt}>{st.confirmText}</button>
         </div>
       </div>
     </div>

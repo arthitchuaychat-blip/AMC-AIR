@@ -103,7 +103,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     const lk = editLockMsg(bo); if (lk) return alert(lk);
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
-    setEd({ _edit: true, boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", issue_date: bo.issue_date || (bo.created_at || "").slice(0, 10), note: bo.note || "", internal_note: bo.internal_note || "", sign_on: !!bo.sign_url, terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
+    setEd({ _edit: true, _wasCancelled: bo.status === "cancelled", boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", issue_date: bo.issue_date || (bo.created_at || "").slice(0, 10), note: bo.note || "", internal_note: bo.internal_note || "", sign_on: !!bo.sign_url, terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
   }
   // duplicate: copy items/details into a brand-new BOQ (new number, not _edit) — for similar jobs
   function duplicate(bo) {
@@ -142,20 +142,25 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     }
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไข BOQ ${ed.boq_no} ?`)) return;
     const sig = ed.sign_on ? mySignature() : null;
-    try { await saveBoq({ ...ed, sign_url: sig?.url || null, sign_name: sig?.name || null }, flat); flash(`บันทึก BOQ แล้ว (${flat.length} รายการ)`); setEd(null); await load(); }
+    try {
+      await saveBoq({ ...ed, sign_url: sig?.url || null, sign_name: sig?.name || null }, flat);
+      // กติกา: BOQ ที่ยกเลิกแล้วกลับมาแก้ไขได้ — บันทึกสำเร็จ = ปลดสถานะยกเลิก กลับมาใช้งานต่อ
+      if (ed._wasCancelled) { try { await setBoqStatus(ed.boq_no, null); } catch { /* non-fatal */ } }
+      flash(ed._wasCancelled ? `บันทึก BOQ แล้ว — ใบนี้พ้นสถานะยกเลิก กลับมาใช้งานได้ (${flat.length} รายการ)` : `บันทึก BOQ แล้ว (${flat.length} รายการ)`); setEd(null); await load(); }
     catch (e) { console.error("saveBoq failed:", e); window.alert("❌ บันทึก BOQ ไม่สำเร็จ\n\nสาเหตุจริงจากฐานข้อมูล:\n" + (e.message || String(e)) + "\n\n(กรุณาถ่ายรูปหน้าต่างนี้ส่งให้ผู้ดูแลระบบ)"); }
   }
   async function del(bo) {
     const lk = lockMsg(bo); if (lk) return alert(lk);
-    const reason = await confirmDialog({ title: `ลบ BOQ ${bo.boq_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ (ไม่บังคับ)", placeholder: "เช่น ทำผิด · ซ้ำ" } });
+    const reason = await confirmDialog({ title: `ลบ BOQ ${bo.boq_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } });
     if (reason === false) return;
     try { await deleteBoq(bo.boq_no, reason); flash("ลบแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function cancel(bo) {
     const lk = lockMsg(bo); if (lk) return alert(lk);
-    if (!await confirmDialog(`ยกเลิก ${bo.boq_no}? (เก็บประวัติไว้ ไม่ลบทิ้ง)`)) return;
-    try { await setBoqStatus(bo.boq_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); }
+    const reason = await confirmDialog({ title: `ยกเลิก ${bo.boq_no}?`, message: "เก็บประวัติไว้ ไม่ลบทิ้ง — กลับมาแก้ไขเพื่อใช้งานใหม่ได้", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น ลูกค้าเปลี่ยนสเปก · เสนอใหม่", required: true } });
+    if (reason === false) return;
+    try { await setBoqStatus(bo.boq_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
 
@@ -254,14 +259,14 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
             {(() => { const ch = docLinks.byQuote[bo.quoteNo] || {}; return <DocChips quoteNo={bo.quoteNo} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "boq", no: bo.boq_no }} onOpen={openPeek} />; })()}
             <InternalNoteTag note={bo.internal_note} role={role} />
             <div className="job-lines"><div className="job-actions">
-              {bo.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
+              {bo.status === "cancelled" && <span className="job-badge b-red" title="แก้ไขแล้วบันทึก เพื่อนำใบนี้กลับมาใช้งาน">ยกเลิกแล้ว</span>}
               <ChatCustomerLink role={role} customerId={bo.customer_id} onGoChat={onGoChat} />
-              {onCreateQuote && (bo.hasQuote
+              {onCreateQuote && bo.status !== "cancelled" && (bo.hasQuote
                 ? <span className="job-badge b-green">✓ ออกใบเสนอราคาแล้ว</span>
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(bo); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-              {canEdit && <button className="btn-ghost sm" onClick={() => duplicate(bo)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
-              {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" disabled={bo.quoteApproved} title={editLockMsg(bo) || ""} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+              {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => duplicate(bo)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
+              {canEdit && <button className="btn-ghost sm" disabled={bo.quoteApproved} title={editLockMsg(bo) || (bo.status === "cancelled" ? "แก้ไขแล้วบันทึก — ใบจะกลับมาใช้งานได้" : "")} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
               {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => cancel(bo)}>ยกเลิก</button>}
               {canDelete && <button className="btn-ghost sm danger" disabled={bo.hasQuote} title={bo.hasQuote ? (lockMsg(bo) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
             </div></div>

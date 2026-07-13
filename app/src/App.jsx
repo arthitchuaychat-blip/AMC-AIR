@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-14·การ์ดเอกสาร: ปุ่มแผนที่เป็นชิปเล็ก ไม่ยืดเต็มช่อง · ใบแจ้งหนี้ที่ยกเลิกไม่โชว์แถบวางบิล ฿0 v389";
+const BUILD = "2026-07-14·กติกาเอกสาร: ยกเลิก/ลบต้องมีเหตุผล+ไล่จากใบล่าสุด · ใบยกเลิกล็อกปุ่มสร้างต่อ (BOQ แก้กลับมาใช้ได้) · ใบเสนอต้องเริ่มจาก BOQ v390";
 
 function SetupNotice() {
   return (

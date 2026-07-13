@@ -53,8 +53,13 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
   React.useEffect(() => { load(); }, []);
   React.useEffect(() => { if (!printB) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintB(null); }, 120); return () => clearTimeout(t); }, [printB]);
 
-  async function cancel(b) { const reason = await confirmDialog({ title: `ยกเลิกใบวางบิล ${b.billing_no}?`, message: "เก็บประวัติไว้", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก (ไม่บังคับ)", placeholder: "เช่น แก้ไขรายการ" } }); if (reason === false) return; try { await setBillingNoteStatus(b.billing_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
-  async function del(b) { const reason = await confirmDialog({ title: `ลบใบวางบิล ${b.billing_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ (ไม่บังคับ)", placeholder: "เช่น ทำผิด · ซ้ำ" } }); if (reason === false) return; try { await deleteBillingNote(b.billing_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  // ลำดับการยกเลิก: มีใบเสร็จออกจากใบแจ้งหนี้ในใบวางบิลนี้แล้ว → ต้องยกเลิกใบเสร็จก่อน
+  const lockMsg = (b) => {
+    const rc = b.invoices.filter((iv) => iv.hasReceipt).map((iv) => iv.invoice_no);
+    return rc.length ? `ยกเลิก/ลบใบวางบิลนี้ไม่ได้ — ใบแจ้งหนี้ ${rc.join(", ")} ออกใบเสร็จแล้ว\nต้องยกเลิกใบเสร็จก่อน (ยกเลิกจากเอกสารล่าสุดย้อนกลับ)` : null;
+  };
+  async function cancel(b) { const lk = lockMsg(b); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบวางบิล ${b.billing_no}?`, message: "เก็บประวัติไว้", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น แก้ไขรายการ · วางบิลใหม่", required: true } }); if (reason === false) return; try { await setBillingNoteStatus(b.billing_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(b) { const lk = lockMsg(b); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบวางบิล ${b.billing_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } }); if (reason === false) return; try { await deleteBillingNote(b.billing_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
   if (loading) return <div className="adm"><div className="empty">กำลังโหลด…</div></div>;
 
@@ -154,7 +159,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
                     <b style={{ flex: 1, textAlign: "right" }}>{fmtBaht(iv.total)}</b>
                     {iv.hasReceipt
                       ? <span className="job-badge b-green">✓ ออกใบเสร็จแล้ว</span>
-                      : (canEdit && iv.status === "unpaid" && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(iv.invoice_no)}><UIcon name="clipboard" size={13} color="#fff" /> ออกใบเสร็จ</button>)}
+                      : (canEdit && b.status !== "cancelled" && iv.status === "unpaid" && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(iv.invoice_no)}><UIcon name="clipboard" size={13} color="#fff" /> ออกใบเสร็จ</button>)}
                   </div>
                 ))}
               </div>

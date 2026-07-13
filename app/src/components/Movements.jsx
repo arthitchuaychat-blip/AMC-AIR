@@ -330,7 +330,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
       title: `ยกเลิก${TYPE_BY[g.type].th}ทั้งชุด (${g.rows.length} รายการ)?`,
       message: `สต๊อกจะคืนค่าทุกรายการ${poNo ? ` · ใบสั่งซื้อ ${poNo} จะกลับเป็น "รอรับของ" ให้รับใหม่ได้` : ""}`,
       confirmText: "ยกเลิกทั้งชุด",
-      prompt: { label: "เหตุผลที่ยกเลิก (ไม่บังคับ)", placeholder: "เช่น รับผิดใบ / จำนวนผิด" },
+      prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น รับผิดใบ / จำนวนผิด", required: true },
     });
     if (reason === false) return;
     try {

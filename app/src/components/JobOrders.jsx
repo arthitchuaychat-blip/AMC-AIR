@@ -225,8 +225,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(jo) { if (!await confirmDialog(`ลบถาวรใบงาน ${jo.job_no}? (กู้คืนไม่ได้)`)) return; try { await deleteJobOrder(jo.job_no); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
-  async function cancelJob(jo) { if (!await confirmDialog(`ยกเลิกใบงาน ${jo.job_no}? (เก็บประวัติไว้)`)) return; try { await setJobStatus(jo.job_no, "cancelled"); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(jo) { const reason = await confirmDialog({ title: `ลบถาวรใบงาน ${jo.job_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } }); if (reason === false) return; try { await deleteJobOrder(jo.job_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancelJob(jo) { const reason = await confirmDialog({ title: `ยกเลิกใบงาน ${jo.job_no}?`, message: "เก็บประวัติไว้", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น ลูกค้าเลื่อนงาน · เสนอใหม่", required: true } }); if (reason === false) return; try { await setJobStatus(jo.job_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   async function markQuoteDone(jo) {
     try { await updateJobStatus(jo.job_no, "done", me); flash(`${jo.job_no} · ทำใบเสนอราคาเสร็จแล้ว ✓`); await load(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
@@ -598,8 +598,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                   <button className="btn-ghost sm" style={{ color: "#16a34a" }} title="คืนวัสดุที่เบิกไปสำหรับงานนี้กลับเข้าคลัง" onClick={() => onMovement(jo, "return")}>↩️ คืนวัสดุ</button>}
                 {onMovement && can(role, "movements", "edit") && !["tech", "lead_tech"].includes(role) && jo.status !== "cancelled" &&
                   <button className="btn-ghost sm" style={{ color: "#dc2626" }} title="บันทึกวัสดุตัดเสีย/เสียหายของงานนี้" onClick={() => onMovement(jo, "damage")}>⚠️ ตัดเสีย</button>}
-                {canEditJob(jo) && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
-                {canEditJob(jo) && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
+                {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancelJob(jo)}>ยกเลิก</button>}
                 {jo.locked && canOverrideLock && <button className="btn-ghost sm" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
                 {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(jo)}><UIcon name="trash" size={14} /> ลบ</button>}

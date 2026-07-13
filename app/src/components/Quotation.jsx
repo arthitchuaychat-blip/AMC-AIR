@@ -87,13 +87,15 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   }
   // duplicate: copy a quote's items/details into a brand-new quotation (new number, not _edit) — for repeat/similar quotes
   function duplicate(q) {
-    setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", title: q.title ? q.title + " (สำเนา)" : "", status: "draft", issue_date: today(), valid_until: "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", sign_on: defaultSignOn(), terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "",
+    setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", title: q.title ? q.title + " (สำเนา)" : "", status: "draft", issue_date: today(), valid_until: "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", sign_on: defaultSignOn(), terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "",
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind, description: x.description || "" })) });
     flash("คัดลอกเป็นใบเสนอราคาใหม่แล้ว — แก้ไขแล้วกดบันทึก");
   }
 
   const cust = custs.find((c) => String(c.id) === String(ed?.customer_id));
-  const custBoqs = boqs.filter((b) => !ed?.customer_id || String(b.customer_id) === String(ed?.customer_id));
+  // BOQ ให้เลือกอ้าง: ของลูกค้าคนนี้ + ไม่นับใบที่ยกเลิก (ยกเว้นใบที่เลือกค้างไว้อยู่แล้ว — เอกสารเก่า)
+  const custBoqs = boqs.filter((b) => (!ed?.customer_id || String(b.customer_id) === String(ed?.customer_id))
+    && (b.status !== "cancelled" || b.boq_no === ed?.boq_no));
 
   function setQ(k, v) { setEd((e) => ({ ...e, [k]: v })); }
   function onCustomer(id) {
@@ -147,6 +149,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
   async function save() {
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
+    // กติกาบริษัท: เอกสารขายทุกใบต้องเริ่มจาก BOQ — ใบใหม่ต้องอ้าง BOQ เสมอ (ใบเก่าที่ไม่มีแก้ไขต่อได้)
+    if (!ed._edit && !ed.boq_no) return flash("ใบเสนอราคาต้องเริ่มจาก BOQ — เลือก BOQ ที่ช่อง 'อ้างอิง BOQ' หรือไปสร้างจากเมนู BOQ (ปุ่ม 'สร้างใบเสนอราคา' บนการ์ด)", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
     try {
       const sig = ed.sign_on ? mySignature() : null;
@@ -166,8 +170,14 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
-  async function del(q) { const lk = lockMsg(q); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบเสนอราคา ${q.quote_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ (ไม่บังคับ)", placeholder: "เช่น ทำผิด · ซ้ำ" } }); if (reason === false) return; try { await deleteQuotation(q.quote_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
-  async function cancel(q) { const lk = lockMsg(q); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบเสนอราคา ${q.quote_no}?`, message: "เก็บประวัติไว้ · ตัดออกจากกำไร", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก (ไม่บังคับ)", placeholder: "เช่น ลูกค้าไม่อนุมัติ" } }); if (reason === false) return; try { await setQuotationStatus(q.quote_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  // ลำดับการยกเลิก: ใบสั่งซื้อที่ยังไม่ยกเลิกก็ล็อกใบเสนอราคาด้วย (ยกเลิกจากเอกสารล่าสุดย้อนกลับ)
+  const cancelLockMsg = (q) => {
+    const lk = lockMsg(q); if (lk) return lk;
+    const pos = docLinks.byQuote[q.quote_no]?.poNos || [];
+    return pos.length ? `ยกเลิก/ลบใบเสนอราคานี้ไม่ได้ — มีใบสั่งซื้อ ${pos.join(", ")} ผูกอยู่\nต้องยกเลิกใบสั่งซื้อก่อน (ยกเลิกจากเอกสารล่าสุดย้อนกลับ)` : null;
+  };
+  async function del(q) { const lk = cancelLockMsg(q); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบเสนอราคา ${q.quote_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } }); if (reason === false) return; try { await deleteQuotation(q.quote_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancel(q) { const lk = cancelLockMsg(q); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบเสนอราคา ${q.quote_no}?`, message: "เก็บประวัติไว้ · ตัดออกจากกำไร", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น ลูกค้าไม่อนุมัติ · เสนอใหม่", required: true } }); if (reason === false) return; try { await setQuotationStatus(q.quote_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   async function approve(q) {
     if (!await confirmDialog(`ยืนยันอนุมัติใบเสนอราคา ${q.quote_no} ?`)) return;
     try { await setQuotationStatus(q.quote_no, "approved"); flash(`อนุมัติ ${q.quote_no} แล้ว ✓`); await load(); }
@@ -223,7 +233,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           <div className="fld"><span>ดึงรายการจาก BOQ (เพิ่มเฉพาะรายการใหม่ · ไม่ทับของเดิม)</span>
             <div className="line-add">
               <Combo className="inp" value={ed.boq_no} onChange={(e) => setQ("boq_no", e.target.value)}>
-                <option value="">— ไม่อ้าง BOQ —</option>{custBoqs.map((b) => <option key={b.boq_no} value={b.boq_no}>{b.boq_no}{b.title ? ` · ${b.title}` : ""}</option>)}
+                <option value="">{ed._edit ? "— ไม่อ้าง BOQ —" : "— เลือก BOQ (จำเป็น) —"}</option>{custBoqs.map((b) => <option key={b.boq_no} value={b.boq_no}>{b.boq_no}{b.title ? ` · ${b.title}` : ""}</option>)}
               </Combo>
               <button className="btn-ghost sm" onClick={pullFromBoq} disabled={!ed.boq_no}><UIcon name="box" size={14} /> ดึงรายการ</button>
             </div>
@@ -389,8 +399,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 {q.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
                 <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-                {canEdit && <button className="btn-ghost sm" onClick={() => duplicate(q)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
-                {canEdit && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => duplicate(q)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
+                {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {q.status === "approved" && onCreateInvoice && (q.hasInvoice
                   ? <span className="job-badge b-green" title="วางบิลงวดถัดไปได้ที่เมนูใบแจ้งหนี้">✓ ออกใบแจ้งหนี้แล้ว · วางบิล {Math.round(q.billedPct)}%</span>
@@ -404,8 +414,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                     <button className="btn-ghost sm" style={{ color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} title="เปิดใบสั่งซื้อจากรายการในใบเสนอราคานี้ (ผูกใบเสนอราคาให้อัตโนมัติ)" onClick={() => onCreatePo(q)}>🛒 {poCount > 0 ? "สร้างใบสั่งซื้อเพิ่ม" : "สร้างใบสั่งซื้อ"}</button>
                   </>);
                 })()}
-                {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => cancel(q)}>ยกเลิก</button>}
-                {canDelete && <button className="btn-ghost sm danger" disabled={q.hasInvoice || q.hasJob} title={(q.hasInvoice || q.hasJob) ? (lockMsg(q) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
+                {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={!!cancelLockMsg(q)} title={cancelLockMsg(q) || ""} onClick={() => cancel(q)}>ยกเลิก</button>}
+                {canDelete && <button className="btn-ghost sm danger" disabled={!!cancelLockMsg(q)} title={cancelLockMsg(q) || "ลบถาวร (ธุรการ)"} onClick={() => del(q)}><UIcon name="trash" size={14} /></button>}
               </div></div>
             </div>
           );

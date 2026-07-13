@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies } from "../lib/api";
+import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies } from "../lib/api";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -181,9 +181,19 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(po) {
-    if (!await confirmDialog(`ลบใบสั่งซื้อ ${po.po_no}?`)) return;
-    try { await deletePurchaseOrder(po.po_no); flash("ลบใบสั่งซื้อแล้ว"); await load(); }
+    const reason = await confirmDialog({ title: `ลบใบสั่งซื้อ ${po.po_no}?`, message: "ลบถาวร (บันทึกเหตุผลไว้ในประวัติ)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } });
+    if (reason === false) return;
+    try { await deletePurchaseOrder(po.po_no, reason); flash("ลบใบสั่งซื้อแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // ยกเลิกใบสั่งซื้อ: เฉพาะใบที่ยังไม่รับของและยังไม่ผูกการจ่าย — ปลดล็อกให้ยกเลิกใบเสนอราคาต้นทางต่อได้
+  async function cancelPo(po) {
+    if (po.status !== "open") return alert("ยกเลิกได้เฉพาะใบที่ยังไม่รับของ");
+    if (po.paymentStatus && po.paymentStatus !== "unpaid") return alert("ใบนี้ผูกการจ่ายเงินแล้ว — จัดการรายการเบิกจ่ายก่อน");
+    const reason = await confirmDialog({ title: `ยกเลิกใบสั่งซื้อ ${po.po_no}?`, message: "เก็บประวัติไว้ ไม่ลบทิ้ง", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น เปลี่ยนร้าน · งานยกเลิก", required: true } });
+    if (reason === false) return;
+    try { await cancelPurchaseOrder(po.po_no, reason); flash("ยกเลิกใบสั่งซื้อแล้ว"); await load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   function copyPo(po) {
     const text = `ใบสั่งซื้อ ${po.po_no}${po.supplier ? ` · ${po.supplier}` : ""}\n`
@@ -346,6 +356,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                   {po.status === "open" && isAdmin && <>
                     <button className="btn-ghost sm" onClick={() => startEdit(po)}><UIcon name="edit" size={14} /> แก้ไข</button>
                     <button className="btn-primary" onClick={() => onReceive && onReceive(po)}><UIcon name="purchase" size={15} color="#fff" /> รับสินค้าเข้าสต๊อก{po.quote_no ? " → เข้างาน" : ""}</button>
+                    <button className="btn-ghost sm" disabled={po.paymentStatus && po.paymentStatus !== "unpaid"} title={po.paymentStatus && po.paymentStatus !== "unpaid" ? "ผูกการจ่ายเงินแล้ว — จัดการรายการเบิกจ่ายก่อน" : "ยกเลิกใบสั่งซื้อ (เก็บประวัติ)"} onClick={() => cancelPo(po)}>ยกเลิก</button>
                     <button className="btn-ghost sm danger" onClick={() => del(po)}><UIcon name="trash" size={14} /></button>
                   </>}
                   {/* รับของแล้วแต่บิลซัพฯ มาทีหลัง → ยังแก้ราคาได้จนกว่าจะส่งขออนุมัติจ่าย */}
