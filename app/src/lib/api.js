@@ -810,21 +810,39 @@ export async function listPayables() {
   const cb = await _creators();
   const teamName = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
   const poTotal = {}; (poi.data || []).forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
+  const money = (n) => "฿" + (Math.round(n * 100) / 100).toLocaleString("en-US");
+  const expById = Object.fromEntries((exp.data || []).map((x) => [x.id, x]));
   const rows = [];
   // PO เข้าค้างจ่ายเมื่อ "รับของแล้ว" หรือ "ส่งอนุมัติจ่ายแล้ว" เท่านั้น — แค่สั่งไว้ (ยังไม่รับ/ยังไม่ตั้งเบิก) ยังไม่เป็นหนี้
-  (po.data || []).filter((x) => !x.paid_at && (x.status === "received" || x.expense_id)).forEach((x) => rows.push({
-    type: "po", refNo: x.po_no, name: x.supplier || "(ไม่ระบุผู้ขาย)",
-    title: x.quote_no ? `อ้างอิง ${x.quote_no}` : null,
-    amount: (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1),
-    date: (x.created_at || "").slice(0, 10),
-    status: x.expense_id ? "ส่งเบิกแล้ว · รอจ่าย" : "รับของแล้ว · ยังไม่ตั้งเบิกจ่าย",
-  }));
+  // จ่ายบางส่วนผ่านใบเบิกที่ผูกไว้แล้ว → หักออก เหลือเท่าไหร่คือหนี้จริง (จ่ายครบ = ไม่ขึ้นรายการ)
+  (po.data || []).filter((x) => !x.paid_at && (x.status === "received" || x.expense_id)).forEach((x) => {
+    const gross = (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1);
+    const paid = x.expense_id ? Math.min(gross, Number(expById[x.expense_id]?.paid_amount) || 0) : 0;
+    const owed = Math.round((gross - paid) * 100) / 100;
+    if (owed <= 0.005) return;
+    rows.push({
+      type: "po", refNo: x.po_no, name: x.supplier || "(ไม่ระบุผู้ขาย)",
+      title: x.quote_no ? `อ้างอิง ${x.quote_no}` : null,
+      amount: owed,
+      date: (x.created_at || "").slice(0, 10),
+      status: paid > 0 ? `จ่ายแล้ว ${money(paid)} · ค้างจริง ${money(owed)}`
+        : x.expense_id ? "ส่งเบิกแล้ว · รอจ่าย" : "รับของแล้ว · ยังไม่ตั้งเบิกจ่าย",
+    });
+  });
   const poExpIds = new Set((po.data || []).map((x) => x.expense_id).filter(Boolean));
-  (exp.data || []).filter((x) => !poExpIds.has(x.id)).forEach((x) => rows.push({
-    type: "expense", refNo: `เบิก #${x.id}`, name: cb[x.requester] || cb[x.created_by] || "(ไม่ระบุผู้ขอ)",
-    title: x.title || x.category || null, amount: Number(x.amount) || 0,
-    date: (x.created_at || "").slice(0, 10), status: "อนุมัติแล้ว · รอจ่าย", expenseId: x.id,
-  }));
+  // ใบเบิกทั่วไปก็เช่นกัน — โชว์เฉพาะยอดที่ยังค้างจริงหลังหักงวดที่จ่ายไปแล้ว
+  (exp.data || []).filter((x) => !poExpIds.has(x.id)).forEach((x) => {
+    const total = Number(x.amount) || 0;
+    const paid = Math.min(total, Number(x.paid_amount) || 0);
+    const owed = Math.round((total - paid) * 100) / 100;
+    if (owed <= 0.005) return;
+    rows.push({
+      type: "expense", refNo: `เบิก #${x.id}`, name: cb[x.requester] || cb[x.created_by] || "(ไม่ระบุผู้ขอ)",
+      title: x.title || x.category || null, amount: owed,
+      date: (x.created_at || "").slice(0, 10),
+      status: paid > 0 ? `จ่ายแล้ว ${money(paid)} · ค้างจริง ${money(owed)}` : "อนุมัติแล้ว · รอจ่าย", expenseId: x.id,
+    });
+  });
   (sp.data || []).forEach((x) => rows.push({
     type: "payout", refNo: `ใบจ่ายซัพ ${(x.id || "").slice(0, 6)}`, name: teamName[x.team] || x.team || "ทีมช่างซัพ",
     title: (x.job_nos || []).join(", ") || null, amount: Number(x.net) || 0,
