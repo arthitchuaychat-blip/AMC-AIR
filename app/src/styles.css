@@ -846,6 +846,8 @@ select.inp{cursor:pointer}
 .dch-code{font-family:var(--mono);font-size:11px;color:var(--ink-3);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 7px}
 .dch-dim{color:var(--ink-3)}
 .dch-addr{flex:1;min-width:180px}
+.dch-cust .btn-ghost.sm{flex:none;padding:2px 12px;font-size:11.5px;border-radius:8px;color:var(--primary);border-color:#cfe0f5;background:#e9f3fd;text-decoration:none}
+.dch-cust .btn-ghost.sm:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
 .doc2>.doc-links{margin:10px 16px 2px;border-top:0;padding-top:0}
 .doc2>.int-note-tag{margin:8px 16px 2px}
 .doc2>.job-lines{margin-top:10px}
