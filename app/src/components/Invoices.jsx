@@ -9,6 +9,7 @@ import DocSlip from "./DocSlip";
 import NumIn from "./NumIn";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
+import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
@@ -305,17 +306,12 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           const q = quoteByNo[x.quote_no];
           const grand = q?.grand || 0; const bl = billed[x.quote_no] || 0;
           return (
-            <div className={"card job-card" + (x.status !== "unpaid" ? " closed" : "")} key={x.invoice_no}>
-              <div className="job-card-head clickable-card" onClick={() => setView(x)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setView(x)}>
-                <div className="job-card-id"><span className="job-no">{x.invoice_no}</span><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q?.vat ? "vat-on" : "vat-off")}>{q?.vat ? "VAT" : "NO VAT"}</span></div>
-                <div className="job-card-meta inv-meta">
-                  <span className="inv-period">งวดที่ {x.installment} · {Math.round(x.pct)}%</span>
-                  <span className="inv-cust">{x.customerName || "-"}</span>
-                  {x.createdByName && <span className="inv-by">👤 {x.createdByName}</span>}
-                  <span className="inv-hint">ดูรายการ ›</span>
-                </div>
-                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(x.issue_date || x.created_at)}</span><span>ยอดงวดนี้</span><b>{fmtBaht(x.total)}</b></div>
-              </div>
+            <div className={"card job-card doc2" + (x.status !== "unpaid" ? " closed" : "")} key={x.invoice_no}>
+              <DocCardHead no={x.invoice_no} onClick={() => setView(x)}
+                badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q?.vat ? "vat-on" : "vat-off")}>{q?.vat ? "VAT" : "NO VAT"}</span></>}
+                title={x.title} sub={<>งวดที่ {x.installment} · {Math.round(x.pct)}% <span className="dch-more">ดูรายการ ›</span></>} by={x.createdByName}
+                date={x.issue_date || x.created_at} amountLabel="ยอดงวดนี้" amount={x.total}
+                customer={{ name: x.customerName, contactName: x.mainContactName, phone: x.contactPhone || x.mainContactPhone, addr: x.customerAddr, siteAddress: x.siteAddress, mapUrl: x.mapUrl }} />
               {grand > 0 && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
               {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "invoice", no: x.invoice_no }} onOpen={openPeek} />; })()}
               <InternalNoteTag note={x.internal_note} role={role} />

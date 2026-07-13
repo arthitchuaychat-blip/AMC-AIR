@@ -821,6 +821,50 @@ select.inp{cursor:pointer}
   .job-lines{padding:0 14px 12px}
 }
 
+/* ── การ์ดเอกสารขายมาตรฐาน (.doc2 + DocCardHead): BOQ/ใบเสนอ/ใบแจ้งหนี้/ใบวางบิล/ใบเสร็จ ─────
+   ช่อง 1 เลขที่+สถานะ · ช่อง 2 ชื่องาน · ช่อง 4 ผู้สร้าง/วันที่/ยอด · แถบข้อมูลลูกค้า (ช่อง 3) เต็มความกว้าง */
+.dch{display:grid;grid-template-columns:minmax(170px,auto) minmax(0,1fr) auto;gap:4px 18px;align-items:center;padding:14px 16px}
+.dch.dch-click{cursor:pointer;transition:background .15s}
+.dch.dch-click:hover{background:var(--surface-2)}
+.dch-id{display:flex;flex-direction:column;gap:6px;min-width:0}
+.dch-no{font-family:var(--mono);font-size:14.5px;font-weight:800;letter-spacing:-.2px;overflow-wrap:anywhere}
+.dch-badges{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.dch-mid{border-left:1px solid var(--line-2);padding-left:18px;align-self:stretch;display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0}
+.dch-title{font-size:14.5px;font-weight:800;color:var(--ink);line-height:1.4;overflow-wrap:anywhere}
+.dch-title.none{color:var(--ink-3);font-weight:500;font-size:12.5px}
+.dch-sub{font-size:11.5px;color:var(--ink-3);font-weight:600}
+.dch-more{color:var(--primary);font-weight:700}
+.dch-right{border-left:1px solid var(--line-2);padding-left:18px;align-self:stretch;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:3px;text-align:right}
+.dch-by{font-size:11.5px;color:#0a6b3d;background:#e3f6ec;border:1px solid #b7e6cb;border-radius:7px;padding:1px 8px;font-weight:700;white-space:nowrap}
+.dch-date{font-size:11px;color:var(--ink-3);white-space:nowrap}
+.dch-amt span{display:block;font-size:10.5px;color:var(--ink-3)}
+.dch-amt b{font-size:19px;font-weight:800;letter-spacing:-.3px}
+.dch-cust{background:var(--surface-2);border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);padding:8px 16px;display:flex;flex-direction:column;gap:4px}
+.dch-cust-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12.6px;color:var(--ink-2);line-height:1.5}
+.dch-cust-row b{color:var(--ink);font-weight:800}
+.dch-ic{flex:none}
+.dch-code{font-family:var(--mono);font-size:11px;color:var(--ink-3);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 7px}
+.dch-dim{color:var(--ink-3)}
+.dch-addr{flex:1;min-width:180px}
+.doc2>.doc-links{margin:10px 16px 2px;border-top:0;padding-top:0}
+.doc2>.int-note-tag{margin:8px 16px 2px}
+.doc2>.job-lines{margin-top:10px}
+.doc2>.inv-progress{padding:8px 16px 0}
+.doc2>.doc2-extra{padding:8px 16px 0}
+.doc2 .bn-invsummary{margin-top:0}
+@media(max-width:760px){
+  .dch{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:12px 14px}
+  .dch-mid,.dch-right{border-left:0;padding-left:0}
+  .dch-right{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:4px 12px;text-align:left}
+  .dch-right .rec-amt-bd{width:100%;min-width:0}
+  .dch-amt{display:flex;align-items:baseline;gap:8px;margin-left:auto}
+  .dch-amt b{font-size:18px}
+  .dch-cust{padding:8px 14px}
+  .doc2>.doc-links{margin:9px 14px 2px}
+  .doc2>.int-note-tag{margin:8px 14px 2px}
+  .doc2>.inv-progress,.doc2>.doc2-extra{padding:8px 14px 0}
+}
+
 /* line-add inputs with unit adornments */
 .inp-unit{display:flex;align-items:center;gap:5px;padding:0 11px}
 .inp-unit input{border:none;background:none;outline:none;width:100%;min-width:0;font:inherit;color:inherit;text-align:right;padding:9px 0;-moz-appearance:textfield}

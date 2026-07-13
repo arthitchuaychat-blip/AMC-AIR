@@ -8,6 +8,7 @@ import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
+import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
@@ -225,24 +226,20 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
         {shown.map((x) => {
           const st = RSTATUS[x.status] || RSTATUS.paid;
           return (
-          <div className={"card job-card" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
-            <div className="job-card-head clickable-card" onClick={() => setView(x)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setView(x)}>
-              <div className="job-card-id"><span className="job-no">{x.receipt_no}</span><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span>{x.flowaccount_no && <span className="fa-no-badge" title="เลขที่เอกสารใน FlowAccount"><b>FlowAccount</b> {x.flowaccount_no}</span>}</div>
-              <div className="job-card-meta inv-meta">
-                <span className="inv-cust">{x.customerName || "-"}</span>
-                {x.createdByName && <span className="inv-by">👤 {x.createdByName}</span>}
-                <span className="inv-hint">ดูรายการ ›</span>
-              </div>
-              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(x.issue_date || x.created_at)}</span>
-                {x.wht_amt > 0 ? (
-                  <div className="rec-amt-bd">
-                    <div className="rab-row"><span>ก่อนหัก ณ ที่จ่าย</span><b>{fmtBaht(x.total)}</b></div>
-                    <div className="rab-row rab-wht"><span>หัก ณ ที่จ่าย {Number(x.wht_rate) || 3}%</span><b>− {fmtBaht(x.wht_amt)}</b></div>
-                    <div className="rab-row rab-net"><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
-                  </div>
-                ) : (<><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></>)}
-              </div>
-            </div>
+          <div className={"card job-card doc2" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
+            <DocCardHead no={x.receipt_no} onClick={() => setView(x)}
+              badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span>{x.flowaccount_no && <span className="fa-no-badge" title="เลขที่เอกสารใน FlowAccount"><b>FlowAccount</b> {x.flowaccount_no}</span>}</>}
+              title={x.title} sub={<span className="dch-more">ดูรายการ ›</span>} by={x.createdByName}
+              date={x.issue_date || x.created_at}
+              amountNode={x.wht_amt > 0 ? (
+                <div className="rec-amt-bd">
+                  <div className="rab-row"><span>ก่อนหัก ณ ที่จ่าย</span><b>{fmtBaht(x.total)}</b></div>
+                  <div className="rab-row rab-wht"><span>หัก ณ ที่จ่าย {Number(x.wht_rate) || 3}%</span><b>− {fmtBaht(x.wht_amt)}</b></div>
+                  <div className="rab-row rab-net"><span>ยอดรับสุทธิ</span><b>{fmtBaht(x.net)}</b></div>
+                </div>
+              ) : null}
+              amountLabel="ยอดรับสุทธิ" amount={x.net}
+              customer={{ name: x.customerName, contactName: x.mainContactName, phone: x.contactPhone || x.mainContactPhone, addr: x.customerAddr, siteAddress: x.siteAddress, mapUrl: x.mapUrl }} />
             {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={openPeek} />; })()}
             <InternalNoteTag note={x.internal_note} role={role} />
             <div className="job-lines"><div className="job-actions">

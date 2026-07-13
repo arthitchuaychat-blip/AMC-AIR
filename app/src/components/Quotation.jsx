@@ -8,6 +8,7 @@ import DocTerms from "./DocTerms";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import DocChips from "./DocChips";
+import DocCardHead from "./DocCard";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import GrowArea from "./GrowArea";
@@ -376,20 +377,12 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         {fl.map((q) => {
           const st = STATUS[q.status] || STATUS.draft;
           return (
-            <div className={"card job-card" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
-              <div className="job-card-head" style={{ cursor: "default" }}>
-                <div className="job-card-id"><span className="job-no">{q.quote_no}</span><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q.vat ? "vat-on" : "vat-off")}>{q.vat ? "VAT" : "NO VAT"}</span></div>
-                <div className="job-card-meta inv-meta">
-                  <span className="inv-cust">{q.title || "ใบเสนอราคา"}</span>
-                  <span className="inv-hint">{q.items.length} รายการ</span>
-                </div>
-                <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(q.issue_date || q.created_at)}</span><span>ยอดสุทธิ</span><b>{fmtBaht(q.grand)}</b></div>
-              </div>
-              <div className="jo-info">
-                <div className="jo-info-row"><span className="jo-ic">🏢</span><b>{q.customerName || "ไม่ระบุลูกค้า"}</b>{q.customerAddr ? <span className="jo-dim"> · {q.customerAddr}</span> : null}{q.createdByName ? <span className="jo-dim"> · 👤 สร้างโดย {q.createdByName}</span> : null}</div>
-                {(q.contactName || q.contactPhone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{q.contactName || "ผู้ติดต่อ"}{q.contactPhone && <a href={`tel:${q.contactPhone}`} className="jo-tel">📞 {q.contactPhone}</a>}</div>}
-                {q.siteAddress && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{q.siteAddress}</span>{q.map_url && <a href={q.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
-              </div>
+            <div className={"card job-card doc2" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
+              <DocCardHead no={q.quote_no}
+                badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q.vat ? "vat-on" : "vat-off")}>{q.vat ? "VAT" : "NO VAT"}</span></>}
+                title={q.title} sub={`${q.items.length} รายการ`} by={q.createdByName}
+                date={q.issue_date || q.created_at} amountLabel="ยอดสุทธิ" amount={q.grand}
+                customer={{ name: q.customerName, contactName: q.contactName, phone: q.contactPhone, addr: q.customerAddr, siteAddress: q.siteAddress, mapUrl: q.map_url }} />
               {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "quote", no: q.quote_no }} onOpen={openPeek} />; })()}
               <InternalNoteTag note={q.internal_note} role={role} />
               <div className="job-lines"><div className="job-actions">

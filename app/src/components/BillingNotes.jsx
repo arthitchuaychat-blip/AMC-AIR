@@ -6,6 +6,7 @@ import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
+import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
@@ -87,38 +88,35 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
       {shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบวางบิล" : "ไม่พบใบวางบิล"}</div>}
       <div className="job-cards">
         {shown.map((b) => (
-          <div className={"card job-card" + (b.status === "cancelled" ? " closed" : "")} key={b.billing_no}>
-            <div className="job-card-head">
-              <div className="job-card-id"><span className="job-no">{b.billing_no}</span>
+          <div className={"card job-card doc2" + (b.status === "cancelled" ? " closed" : "")} key={b.billing_no}>
+            <DocCardHead no={b.billing_no}
+              badges={<>
                 {b.status === "cancelled" ? <span className="job-badge b-red">ยกเลิกแล้ว</span> : <span className="job-badge b-blue">วางบิล</span>}
                 {b.status !== "cancelled" && (() => { const n = b.invoices.length, r = b.invoices.filter((iv) => iv.hasReceipt).length;
                   if (n > 0 && r >= n) return <span className="job-badge b-green">✓ ออกใบเสร็จครบแล้ว</span>;
                   if (r > 0) return <span className="job-badge b-amber">ออกใบเสร็จ {r}/{n}</span>;
-                  return <span className="job-badge b-grey">ยังไม่ออกใบเสร็จ</span>; })()}</div>
-              <div className="job-card-meta inv-meta">
-                <span className="inv-cust">{b.customerName || "-"} · {custCode(b.customerCode)}</span>
-                <span className="inv-period">{b.invoices.length} ใบแจ้งหนี้{b.missing ? ` · (${b.missing} ใบถูกลบ)` : ""}</span>
-                <span className="inv-period">{b.issue_date || ""}</span>
-                <div className="bn-invsummary">
-                  {b.invoices.map((iv) => (
-                    <span className="bn-invchip" key={iv.invoice_no}>
-                      <b>{iv.invoice_no}</b>
-                      <span className="jo-dim">งวด {iv.installment} · {Math.round(iv.pct)}%</span>
-                      <span className={"job-badge " + (iv.status === "paid" ? "b-green" : iv.status === "cancelled" ? "b-red" : "b-amber")}>{iv.status === "paid" ? "จ่ายแล้ว" : iv.status === "cancelled" ? "ยกเลิก" : "ค้างชำระ"}</span>
-                      {iv.hasReceipt && <span className="job-badge b-green">✓ ออกใบเสร็จแล้ว</span>}
-                    </span>
-                  ))}
+                  return <span className="job-badge b-grey">ยังไม่ออกใบเสร็จ</span>; })()}
+              </>}
+              title={`วางบิล ${b.invoices.length} ใบแจ้งหนี้`} sub={b.missing ? `${b.missing} ใบถูกลบ` : null} by={b.createdByName}
+              date={b.issue_date || b.created_at}
+              amountNode={b.wht > 0 ? (
+                <div className="rec-amt-bd">
+                  <div className="rab-row"><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></div>
+                  <div className="rab-row rab-wht"><span>หัก ณ ที่จ่าย</span><b>− {fmtBaht(b.wht)}</b></div>
+                  <div className="rab-row rab-net"><span>ยอดสุทธิที่ต้องชำระ</span><b>{fmtBaht(b.net)}</b></div>
                 </div>
-              </div>
-              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(b.issue_date || b.created_at)}</span>
-                {b.wht > 0 ? (
-                  <div className="rec-amt-bd">
-                    <div className="rab-row"><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></div>
-                    <div className="rab-row rab-wht"><span>หัก ณ ที่จ่าย</span><b>− {fmtBaht(b.wht)}</b></div>
-                    <div className="rab-row rab-net"><span>ยอดสุทธิที่ต้องชำระ</span><b>{fmtBaht(b.net)}</b></div>
-                  </div>
-                ) : (<><span>ยอดวางบิลรวม</span><b>{fmtBaht(b.total)}</b></>)}
-              </div>
+              ) : null}
+              amountLabel="ยอดวางบิลรวม" amount={b.total}
+              customer={{ name: b.customerName, code: custCode(b.customerCode), contactName: b.mainContactName, phone: b.contactPhone || b.mainContactPhone, addr: b.customerAddr, siteAddress: b.siteAddress, mapUrl: b.mapUrl }} />
+            <div className="doc2-extra bn-invsummary">
+              {b.invoices.map((iv) => (
+                <span className="bn-invchip" key={iv.invoice_no}>
+                  <b>{iv.invoice_no}</b>
+                  <span className="jo-dim">งวด {iv.installment} · {Math.round(iv.pct)}%</span>
+                  <span className={"job-badge " + (iv.status === "paid" ? "b-green" : iv.status === "cancelled" ? "b-red" : "b-amber")}>{iv.status === "paid" ? "จ่ายแล้ว" : iv.status === "cancelled" ? "ยกเลิก" : "ค้างชำระ"}</span>
+                  {iv.hasReceipt && <span className="job-badge b-green">✓ ออกใบเสร็จแล้ว</span>}
+                </span>
+              ))}
             </div>
             {/* แถวเชื่อมโยงเอกสาร: รวมทุกใบแจ้งหนี้ในใบวางบิลนี้ → BOQ / ใบเสนอราคา / งาน / ใบเสร็จ ทั้งสายงาน */}
             {(() => {

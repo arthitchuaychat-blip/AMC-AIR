@@ -9,6 +9,7 @@ import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
 import UnitPick, { unitFactor } from "./UnitPick";
 import DocChips from "./DocChips";
+import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
@@ -244,18 +245,12 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">
         {fl.map((bo) => (
-          <div className="card job-card" key={bo.boq_no}>
-            <div className="job-card-head" style={{ cursor: "default" }}>
-              <div className="job-card-id"><span className="job-no">{bo.boq_no}</span></div>
-              <div className="job-card-meta inv-meta">
-                <span className="inv-cust">🏢 {bo.customerName || "ไม่ระบุลูกค้า"}</span>
-                {bo.contactPhone && <a className="ref-link" href={`tel:${bo.contactPhone}`}>📞 {bo.contactPhone}</a>}
-                {bo.title && <span>{bo.title}</span>}
-                {bo.createdByName && <span className="inv-by">👤 {bo.createdByName}</span>}
-                <span className="inv-hint">{bo.items.length} รายการ</span>
-              </div>
-              <div className="job-card-cost"><span className="doc-date">📅 {fmtDocDate(bo.issue_date || bo.created_at)}</span><span>ต้นทุนรวม</span><b>{fmtBaht(bo.total)}</b></div>
-            </div>
+          <div className="card job-card doc2" key={bo.boq_no}>
+            <DocCardHead no={bo.boq_no}
+              badges={bo.status === "cancelled" ? <span className="job-badge b-red">ยกเลิกแล้ว</span> : null}
+              title={bo.title} sub={`${bo.items.length} รายการ`} by={bo.createdByName}
+              date={bo.issue_date || bo.created_at} amountLabel="ต้นทุนรวม" amount={bo.total}
+              customer={{ name: bo.customerName, contactName: bo.contactName || bo.mainContactName, phone: bo.contactPhone || bo.mainContactPhone, addr: bo.customerAddr, siteAddress: bo.siteAddress, mapUrl: bo.mapUrl }} />
             {(() => { const ch = docLinks.byQuote[bo.quoteNo] || {}; return <DocChips quoteNo={bo.quoteNo} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "boq", no: bo.boq_no }} onOpen={openPeek} />; })()}
             <InternalNoteTag note={bo.internal_note} role={role} />
             <div className="job-lines"><div className="job-actions">
