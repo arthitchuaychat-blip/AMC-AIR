@@ -2633,9 +2633,16 @@ async function _enrichExpenseJobs(rows) {
   if (!rows.length) return rows;
   const ids = rows.map((x) => x.id).filter(Boolean);
   let poByExp = {};   // ใบเบิก 1 ใบผูกได้หลาย PO (จ่ายเจ้าหนี้รวมหลายใบ) — เก็บเป็น array
+  const poTotals = {};
   try {
-    const { data } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id").in("expense_id", ids.length ? ids : ["_"]);
+    const { data } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id,vat").in("expense_id", ids.length ? ids : ["_"]);
     (data || []).forEach((p) => { if (p.expense_id) (poByExp[p.expense_id] = poByExp[p.expense_id] || []).push(p); });
+    // ยอดต่อใบ (รวม VAT) — ไว้กางดูรายการ PO ในใบเบิกรวมหลายใบ
+    const linkedPoNos = Object.values(poByExp).flat().map((p) => p.po_no);
+    if (linkedPoNos.length) {
+      const { data: items } = await supabase.from("po_items").select("po_no,qty,price").in("po_no", linkedPoNos);
+      (items || []).forEach((it) => { poTotals[it.po_no] = (poTotals[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
+    }
   } catch (_) { /* pre-100: ไม่มี expense_id — ข้าม */ }
   const [joRes, quRes, cuRes] = await Promise.all([
     supabase.from("job_orders").select("job_no,quote_no,customer_id,title,status"),
@@ -2654,8 +2661,14 @@ async function _enrichExpenseJobs(rows) {
     if (!job && po?.quote_no) { quoteNo = po.quote_no; job = jobByQuote[po.quote_no] || null; }
     const qi = quoteNo ? quoteInfo[quoteNo] : null;
     const custId = job?.customer_id ?? qi?.customer_id ?? null;
+    // รายละเอียดต่อ PO (ยอดรวม VAT + ลูกค้าจากใบเสนอที่ผูก) — ใบเบิกรวมหลายใบใช้กางดูรายการ
+    const poDetails = poList.map((p) => ({
+      po_no: p.po_no, quote_no: p.quote_no || null,
+      total: Math.round((poTotals[p.po_no] || 0) * (p.vat ? 1.07 : 1) * 100) / 100,
+      customerName: p.quote_no ? (custName[quoteInfo[p.quote_no]?.customer_id] ?? null) : null,
+    }));
     return { ...x, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null,
-      customerName: custId != null ? custName[custId] || null : null, poNo: po?.po_no || null, poNos: poList.map((p) => p.po_no), quoteNo };
+      customerName: custId != null ? custName[custId] || null : null, poNo: po?.po_no || null, poNos: poList.map((p) => p.po_no), poDetails, quoteNo };
   });
 }
 export async function listMyExpenses() {

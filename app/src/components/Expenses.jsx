@@ -1,6 +1,7 @@
 import React from "react";
 import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders, listPurchaseOrders, requestPoPaymentBatch } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
+import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import AttachThumb from "./AttachThumb";
 import { fmtBaht, ATTACH_ACCEPT, matchText } from "../lib/format";
@@ -97,34 +98,56 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
   const paid = Math.round((Number(x.paid_amount) || 0) * 100) / 100;
   const total = Math.round((Number(x.amount) || 0) * 100) / 100;
   const partial = x.status !== "paid" && paid > 0 && paid < total;   // จ่ายแล้วบางส่วน
-  const chip = (label, on, color) => <button type="button" className="vat-badge" title="เปิดเอกสารที่เกี่ยวข้อง"
-    style={{ cursor: onOpenDoc ? "pointer" : "default", border: "1px solid transparent", background: color.bg, color: color.fg }}
-    onClick={() => onOpenDoc && on()}>{label} ↗</button>;
+  const [poOpen, setPoOpen] = React.useState(false);
+  const pos = x.poDetails?.length ? x.poDetails : (x.poNos?.length ? x.poNos : x.poNo ? [x.poNo] : []).map((n) => ({ po_no: n }));
   return (
-    <div className="card job-card">
-      <div className="job-card-head" style={{ cursor: "default" }}>
-        <div className="job-card-id"><span className="job-no">{x.title}</span><span className={"job-badge " + st.c}>{st.t}</span>
+    <div className="card job-card doc2">
+      <DocCardHead no={"เบิก #" + String(x.id || "").slice(0, 8).toUpperCase()}
+        badges={<>
+          <span className={"job-badge " + st.c}>{st.t}</span>
           {partial && <span className="job-badge b-amber">จ่ายบางส่วน</span>}
           {needReceipt(x) && <span className="job-badge b-amber">📎 ค้างแนบใบเสร็จ</span>}
-          {(x.poNos?.length ? x.poNos : x.poNo ? [x.poNo] : []).map((n) => (
-            <React.Fragment key={n}>{chip("PO " + n, () => onOpenDoc("po", n), { bg: "#fff7ed", fg: "#c2410c" })}</React.Fragment>
+        </>}
+        title={x.title} titleFallback="— ไม่ระบุรายการ —"
+        sub={[x.category, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? `รวม ${pos.length} ใบสั่งซื้อ` : null].filter(Boolean).join(" · ") || null}
+        by={x.requesterName} date={x.created_at}
+        amountNode={partial ? (
+          <div className="rec-amt-bd">
+            <div className="rab-row"><span>ยอดเบิก</span><b>{fmtBaht(total)}</b></div>
+            <div className="rab-row rab-wht"><span>จ่ายแล้ว</span><b>− {fmtBaht(paid)}</b></div>
+            <div className="rab-row rab-net"><span>คงเหลือ</span><b>{fmtBaht(total - paid)}</b></div>
+          </div>
+        ) : null}
+        amountLabel="ยอดเบิก" amount={x.amount}
+        partyIcon="👤" customer={x.customerName ? { name: x.customerName } : null} />
+      {(pos.length > 0 || x.jobNo || x.job_no || x.quoteNo) && (
+        <div className="doc-links"><span className="doc-links-l">🔗 เชื่อมโยง</span>
+          {pos.map((p) => <button key={p.po_no} type="button" className="doclink dl-po" title="ดูใบสั่งซื้อ (พรีวิวด้านขวา)" onClick={() => onOpenDoc && onOpenDoc("po", p.po_no)}>สั่งซื้อ {p.po_no}</button>)}
+          {(x.jobNo || x.job_no) && <button type="button" className="doclink dl-job" onClick={() => onOpenDoc && onOpenDoc("job", x.jobNo || x.job_no)}>งาน {x.jobNo || x.job_no}</button>}
+          {x.quoteNo && <button type="button" className="doclink dl-quote" onClick={() => onOpenDoc && onOpenDoc("quote", x.quoteNo)}>{x.quoteNo}</button>}
+          {pos.length > 1 && <button type="button" className="btn-ghost sm" style={{ marginLeft: "auto" }} onClick={() => setPoOpen((v) => !v)}>{poOpen ? "ซ่อนรายการ ▲" : `กางดูรายการ PO (${pos.length}) ▼`}</button>}
+        </div>
+      )}
+      {poOpen && pos.length > 1 && (
+        <div className="doc2-extra bn-invlist" style={{ borderTop: 0, marginTop: 0 }}>
+          {pos.map((p, i) => (
+            <div className="bn-invrow" key={p.po_no}>
+              <span className="jo-dim" style={{ width: 18, textAlign: "right" }}>{i + 1}.</span>
+              <button type="button" className="sub-job-link" onClick={() => onOpenDoc && onOpenDoc("po", p.po_no)}>{p.po_no}</button>
+              {p.customerName && <span className="jo-dim">👤 {p.customerName}</span>}
+              {p.quote_no && <span className="jo-dim">อ้างอิง {p.quote_no}</span>}
+              <b style={{ flex: 1, textAlign: "right" }}>{p.total > 0 ? fmtBaht(p.total) : ""}</b>
+              <button type="button" className="btn-ghost sm" onClick={() => onOpenDoc && onOpenDoc("po", p.po_no)}>ดูใบ ›</button>
+            </div>
           ))}
-          {(x.jobNo || x.job_no) && chip("งาน " + (x.jobNo || x.job_no), () => onOpenDoc("job", x.jobNo || x.job_no), { bg: "#f3e8ff", fg: "#7c3aed" })}
-          {x.quoteNo && chip("อ้างอิง " + x.quoteNo, () => onOpenDoc("quote", x.quoteNo), { bg: "#eff6ff", fg: "#1d4ed8" })}
         </div>
-        <div className="job-card-meta inv-meta">
-          {x.customerName && <span className="inv-cust">👤 ลูกค้า {x.customerName}</span>}
-          {x.jobTitle && <span className="inv-period">📋 {x.jobTitle}</span>}
-          {x.requesterName && <span className="inv-period">ผู้ขอเบิก {x.requesterName}</span>}
-          {x.category && <span className="inv-period">{x.category}</span>}
-          <span className="inv-period">{fmtD(x.created_at)}</span>
-          {x.note && <span className="jo-dim">{x.note}</span>}
-          {x.decide_note && <span className="jo-dim">หมายเหตุ: {x.decide_note}</span>}
+      )}
+      {(x.decide_note || (x.note && pos.length <= 1)) && (
+        <div className="doc2-extra jo-dim" style={{ fontSize: 12.5 }}>
+          {x.note && pos.length <= 1 ? <div>{x.note}</div> : null}
+          {x.decide_note ? <div>หมายเหตุ: {x.decide_note}</div> : null}
         </div>
-        <div className="job-card-cost"><span>ยอดเบิก</span><b>{fmtBaht(x.amount)}</b>
-          {partial && <small style={{ color: "#d97706", fontWeight: 700 }}>จ่ายแล้ว {fmtBaht(paid)} · เหลือ {fmtBaht(total - paid)}</small>}
-        </div>
-      </div>
+      )}
       {partial && onSetExpected && (
         <div className="job-lines"><div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--ink-2)", padding: "2px 0" }}>
           📅 ยอดค้าง {fmtBaht(total - paid)} ตั้งประมาณการจ่ายในกระแสเงินสดวันที่:
@@ -304,6 +327,7 @@ function PayVendorModal({ onClose, onDone, flash }) {
   const [pos, setPos] = React.useState(null);
   const [sup, setSup] = React.useState("");
   const [sel, setSel] = React.useState({});
+  const [q2, setQ2] = React.useState("");   // กรองในรายการ PO: เลขใบ / ลูกค้า / ใบเสนอ
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => {
     // ค้างจ่าย = ยังไม่จ่ายเงินจริง: ทั้งใบที่ยังไม่ตั้งเบิก และใบที่ตั้งเบิกรายใบค้างอยู่ (ใบเบิกยังไม่จ่ายสักบาท → ยุบรวมได้)
@@ -326,7 +350,8 @@ function PayVendorModal({ onClose, onDone, flash }) {
     (pos || []).forEach((x) => { const s = m[supName(x)] || (m[supName(x)] = { n: 0, sum: 0 }); s.n += 1; s.sum += Number(x.total) || 0; });
     return Object.entries(m).sort((a, b) => b[1].sum - a[1].sum);
   }, [pos]);
-  const list = (pos || []).filter((x) => supName(x) === sup);
+  const list = (pos || []).filter((x) => supName(x) === sup
+    && matchText(q2, x.po_no, x.quote_no, x.customerName, x.jobNo, x.teamName));
   const chosen = list.filter((x) => sel[x.po_no]);
   const total = chosen.reduce((a, x) => a + (Number(x.total) || 0), 0);
   const allOn = list.length > 0 && chosen.length === list.length;
@@ -354,22 +379,30 @@ function PayVendorModal({ onClose, onDone, flash }) {
               {sups.map(([name, s]) => <option key={name} value={name}>{name} · ค้าง {s.n} ใบ ({fmtBaht(s.sum)})</option>)}
             </select></label>
           {sup && (
+            <>
+            <div className="cat-search" style={{ marginTop: 8 }}>
+              <UIcon name="search" size={15} color="var(--ink-3)" />
+              <input value={q2} onChange={(e) => setQ2(e.target.value)} placeholder="กรองในรายการ: เลข PO / ลูกค้า / ใบเสนอ / ทีมช่าง…" />
+              {q2 && <button className="cat-search-x" onClick={() => setQ2("")}><UIcon name="x" size={14} /></button>}
+            </div>
             <div style={{ border: "1px solid var(--line)", borderRadius: 11, marginTop: 8, overflow: "hidden" }}>
               <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", background: "var(--surface-2)", borderBottom: "1px solid var(--line-2)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
                 <input type="checkbox" checked={allOn} onChange={() => setSel(allOn ? {} : Object.fromEntries(list.map((x) => [x.po_no, true])))} />
-                เลือกทั้งหมด ({list.length} ใบ)
+                เลือกทั้งหมดที่แสดง ({list.length} ใบ)
               </label>
+              {list.length === 0 && <div className="empty sm" style={{ padding: 14 }}>ไม่พบใบสั่งซื้อที่ตรงคำค้น</div>}
               {list.map((x) => (
                 <label key={x.po_no} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", borderBottom: "1px solid var(--line-2)", cursor: "pointer", fontSize: 13 }}>
                   <input type="checkbox" checked={!!sel[x.po_no]} onChange={() => setSel((s) => ({ ...s, [x.po_no]: !s[x.po_no] }))} />
                   <b style={{ fontFamily: "var(--mono)" }}>{x.po_no}</b>
                   <span className={"job-badge " + (x.status === "received" ? "b-green" : "b-amber")}>{x.status === "received" ? "รับของแล้ว" : "รอรับของ"}</span>
                   {x.expense_id && <span className="job-badge b-blue" title="ใบนี้ตั้งเบิกรายใบไว้แล้ว (ยังไม่จ่ายเงิน) — เลือกแล้วระบบจะปิดใบเบิกเดิม ยุบรวมเข้าใบใหม่ให้">ตั้งเบิกไว้แล้ว · ยุบรวมได้</span>}
-                  <span className="jo-dim" style={{ flex: 1 }}>{fmtD(x.issue_date || x.created_at)}{x.quote_no ? ` · อ้างอิง ${x.quote_no}` : ""}</span>
+                  <span className="jo-dim" style={{ flex: 1 }}>{fmtD(x.issue_date || x.created_at)}{x.customerName ? ` · 👤 ${x.customerName}` : ""}{x.quote_no ? ` · อ้างอิง ${x.quote_no}` : ""}</span>
                   <b>{fmtBaht(x.total)}</b>
                 </label>
               ))}
             </div>
+            </>
           )}
             </>)}
         </div>
