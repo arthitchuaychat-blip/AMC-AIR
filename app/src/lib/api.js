@@ -806,7 +806,7 @@ export async function dashboardActionLite() {
 // รายการค้างจ่ายแจกแจงรายใบ (เมนู "ค้างจ่าย") — แหล่ง/สูตรเดียวกับยอดค้างจ่ายบนแดชบอร์ด
 // 4 ประเภทไม่ทับกัน: PO ยังไม่จ่าย (เฉพาะรับของแล้ว/ส่งเบิกแล้ว — แค่สั่งไว้ยังไม่นับ) · เบิกอนุมัติรอจ่าย (ไม่รวมใบเบิกของ PO) · ใบจ่ายซัพรอจ่าย · ค่าแรงยืนยันแล้วยังไม่ตั้งเบิก
 export async function listPayables() {
-  const [po, poi, exp, sp, lj, tm] = await Promise.all([
+  const [po, poi, exp, sp, lj, tm, qt, cu] = await Promise.all([
     supabase.from("purchase_orders").select("*").neq("status", "cancelled").order("created_at", { ascending: false }),
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("expense_requests").select("*").eq("status", "approved").order("created_at", { ascending: false }),
@@ -814,10 +814,14 @@ export async function listPayables() {
     supabase.from("job_orders").select("job_no,team,labor_total,labor_paid_amt,scheduled_at").eq("labor_confirmed", true).gt("labor_total", 0)
       .then((r) => (r.error ? { data: [] } : r)),
     supabase.from("teams").select("id,name"),
+    supabase.from("quotations").select("quote_no,customer_id,title"),   // PO → ใบเสนอ → ลูกค้า + ชื่องาน
+    supabase.from("customers").select("id,name"),
   ]);
   if (po.error) throw po.error;
   const cb = await _creators();
   const teamName = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
+  const qInfo = Object.fromEntries((qt.data || []).map((q) => [q.quote_no, q]));
+  const cName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const poTotal = {}; (poi.data || []).forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
   const money = (n) => "฿" + (Math.round(n * 100) / 100).toLocaleString("en-US");
   const expById = Object.fromEntries((exp.data || []).map((x) => [x.id, x]));
@@ -835,9 +839,14 @@ export async function listPayables() {
     }
     const owed = Math.round((gross - paid) * 100) / 100;
     if (owed <= 0.005) return;
+    const qi = x.quote_no ? qInfo[x.quote_no] : null;
     rows.push({
       type: "po", refNo: x.po_no, name: x.supplier || "(ไม่ระบุผู้ขาย)",
-      title: x.quote_no ? `อ้างอิง ${x.quote_no}` : null,
+      title: x.quote_no ? [
+        qi?.customer_id != null && cName[qi.customer_id] ? `👤 ${cName[qi.customer_id]}` : null,
+        qi?.title ? `📋 ${qi.title}` : null,
+        `อ้างอิง ${x.quote_no}`,
+      ].filter(Boolean).join(" · ") : null,
       amount: owed,
       date: (x.created_at || "").slice(0, 10),
       status: paid > 0 ? `จ่ายแล้ว ${money(paid)} · ค้างจริง ${money(owed)}`
