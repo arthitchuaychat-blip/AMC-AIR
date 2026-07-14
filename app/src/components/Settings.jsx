@@ -476,13 +476,19 @@ const AR_DEFAULT = {
   open_time: "08:00",
   close_time: "18:00",
   cooldown_min: 120,
+  ai_enabled: false,   // บอท AI ตอบคำถามสินค้า/ราคานอกเวลาทำการ (Claude Sonnet 5 — ต้องตั้ง ANTHROPIC_API_KEY บน Vercel)
+  ai_extra: "",        // ข้อมูล/นโยบายเพิ่มเติมที่อยากให้บอทรู้ เช่น เงื่อนไขรับประกัน พื้นที่ให้บริการ
 };
 const DOW = [["อา", 0], ["จ", 1], ["อ", 2], ["พ", 3], ["พฤ", 4], ["ศ", 5], ["ส", 6]];
 
 function AutoReplyCard({ flash }) {
   const [c, setC] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
+  const [keyOk, setKeyOk] = React.useState(null);   // ANTHROPIC_API_KEY ตั้งบน Vercel แล้วหรือยัง
   React.useEffect(() => { getAutoReply().then((v) => setC({ ...AR_DEFAULT, ...(v || {}) })).catch(() => setC({ ...AR_DEFAULT })); }, []);
+  React.useEffect(() => {
+    fetch("/api/line-webhook?check=1").then((r) => r.json()).then((j) => setKeyOk(!!j.ANTHROPIC_API_KEY)).catch(() => setKeyOk(null));
+  }, []);
   const set = (k, v) => setC((s) => ({ ...s, [k]: v }));
   const toggleDay = (d) => setC((s) => { const days = s.open_days.includes(d) ? s.open_days.filter((x) => x !== d) : [...s.open_days, d].sort(); return { ...s, open_days: days }; });
   async function save() {
@@ -496,7 +502,7 @@ function AutoReplyCard({ flash }) {
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="sec-head">
         <div><div className="sec-title">ตอบแชต LINE อัตโนมัติ</div>
-          <div className="sec-sub">ทักทายลูกค้าที่ทักครั้งแรก + ตอบนอกเวลาทำการ (ไม่ใช้ AI · ไม่มีค่าใช้จ่าย)</div></div>
+          <div className="sec-sub">ทักทายลูกค้าครั้งแรก + ตอบนอกเวลาทำการ (ข้อความตายตัว ฟรี · หรือเปิดบอท AI ตอบจากแคตตาล็อกจริง)</div></div>
         <label className="ar-switch"><input type="checkbox" checked={!!c.enabled} onChange={(e) => set("enabled", e.target.checked)} /> เปิดใช้งาน</label>
       </div>
       <div style={{ opacity: c.enabled ? 1 : 0.5, pointerEvents: c.enabled ? "auto" : "none" }}>
@@ -507,6 +513,18 @@ function AutoReplyCard({ flash }) {
         <div className="fld">
           <label className="ar-row"><input type="checkbox" checked={!!c.afterhours_enabled} onChange={(e) => set("afterhours_enabled", e.target.checked)} /> <b>ข้อความนอกเวลาทำการ</b></label>
           <textarea className="inp" rows={3} value={c.afterhours_text} onChange={(e) => set("afterhours_text", e.target.value)} />
+        </div>
+        <div className="fld" style={{ marginTop: 12, padding: "12px 14px", background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 11 }}>
+          <label className="ar-row"><input type="checkbox" checked={!!c.ai_enabled} onChange={(e) => set("ai_enabled", e.target.checked)} /> <b>🤖 บอท AI ตอบนอกเวลาทำการ</b> (Claude Sonnet 5)</label>
+          <div className="jo-dim" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+            ตอบคำถามสินค้า ราคา และบริการจากแคตตาล็อกหน้าเว็บ amcair.net จริง — ตอบทุกข้อความช่วงนอกเวลาทำการ คุยโต้ตอบต่อเนื่องได้
+            ไม่แต่งราคาเอง ไม่รับยืนยันนัด และขึ้นต้นด้วย 🤖 ให้ลูกค้ารู้ว่าเป็นบอท · ถ้าบอทตอบไม่ได้จะส่งข้อความนอกเวลาปกติแทน
+            {keyOk === true && <b style={{ color: "#16a34a" }}> · ✓ ตั้งค่า API Key แล้ว พร้อมใช้งาน</b>}
+            {keyOk === false && <b style={{ color: "#dc2626" }}> · ⚠️ ยังไม่ได้ตั้ง ANTHROPIC_API_KEY บน Vercel — บอทจะยังไม่ทำงาน</b>}
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700 }}>ข้อมูลเพิ่มเติมที่อยากให้บอทรู้ (ไม่บังคับ)</span>
+          <textarea className="inp" rows={3} value={c.ai_extra || ""} onChange={(e) => set("ai_extra", e.target.value)}
+            placeholder={"เช่น รับประกันงานติดตั้ง 1 ปี · พื้นที่บริการ กรุงเทพฯ-สมุทรปราการ · ล้างแอร์เริ่มต้น 500 บาท/เครื่อง"} />
         </div>
         <div className="ar-hours">
           <span>วันทำการ:</span>

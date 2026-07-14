@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/line-webhook.js": { "maxDuration": 60 }
+  },
   "crons": [
     { "path": "/api/mentor-cron", "schedule": "0 2 * * *" },
     { "path": "/api/hr-cron", "schedule": "15 2 * * *" }

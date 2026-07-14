@@ -121,23 +121,90 @@ function isOpenNow(cfg) {
   const toMin = (s) => { const p = String(s || "").split(":"); return (Number(p[0]) || 0) * 60 + (Number(p[1]) || 0); };
   return mins >= toMin(cfg.open_time || "08:00") && mins < toMin(cfg.close_time || "18:00");
 }
+// ---------- AI bot (นอกเวลาทำการ): ตอบคำถามสินค้า/ราคา/บริการจากแคตตาล็อกจริง ----------
+// ใช้ Claude Sonnet 5 · ข้อมูล = web_products (ชุดเดียวกับหน้าเว็บ amcair.net — ราคาขายสาธารณะ ไม่มีต้นทุนภายใน)
+// เงื่อนไข: เปิดใน ตั้งค่า→ตอบอัตโนมัติ + ตั้ง ANTHROPIC_API_KEY บน Vercel · ตอบเฉพาะแชต 1:1 ที่ไม่ใช่ซัพพลายเออร์
+async function aiAnswer(convId, question, cfg) {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) return null;
+    // ไม่ตอบซัพพลายเออร์ด้วยแคตตาล็อกลูกค้า
+    const kr = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=kind`, { headers: sbH() });
+    if (kr.ok && ((await kr.json())[0]?.kind === "supplier")) return null;
+
+    // แคตตาล็อกสาธารณะ (แอร์ + บริการ) — ย่อเป็นบรรทัดละรายการ ประหยัดโทเคน
+    const pr = await tfetch(`${SB()}/rest/v1/web_products?select=kind,brand,name_th,ac_type,btu,sale_price,seer&order=kind.asc,brand.asc,btu.asc&limit=500`, { headers: sbH() });
+    const prods = pr.ok ? await pr.json() : [];
+    if (!prods.length) return null;
+    const line = (p) => [p.brand, p.name_th, p.ac_type, p.btu ? `${p.btu} BTU` : null, p.seer ? `SEER ${p.seer}` : null,
+      p.sale_price != null ? `${Number(p.sale_price).toLocaleString("en-US")} บาท` : "สอบถามราคา"].filter(Boolean).join(" | ");
+    const catalog = prods.map(line).join("\n");
+
+    // ประวัติแชตล่าสุด → บอทตอบต่อเนื่องได้ (ข้อความปัจจุบันถูกบันทึกไปแล้ว จึงอยู่ในนี้ด้วย)
+    const hr = await tfetch(`${SB()}/rest/v1/line_messages?line_user_id=eq.${encodeURIComponent(convId)}&type=eq.text&select=direction,text&order=created_at.desc&limit=10`, { headers: sbH() });
+    let hist = hr.ok ? (await hr.json()).reverse() : [];
+    let messages = hist.filter((m) => (m.text || "").trim())
+      .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", content: m.text }));
+    while (messages.length && messages[0].role !== "user") messages.shift();   // ต้องเริ่มด้วย user
+    if (!messages.length) messages = [{ role: "user", content: question }];
+
+    const days = (Array.isArray(cfg.open_days) && cfg.open_days.length ? cfg.open_days : [1, 2, 3, 4, 5, 6])
+      .map((d) => ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"][d]).join(", ");
+    const rules = `คุณคือผู้ช่วย AI ของ AMC AIR ร้านขาย-ติดตั้ง-ล้าง-ซ่อมแอร์ ตอนนี้อยู่นอกเวลาทำการ คุณตอบลูกค้าทางไลน์แทนทีมงาน
+
+กติกาสำคัญ (ต้องทำตามเคร่งครัด):
+- ตอบจาก "รายการสินค้าและบริการ" ที่ให้ไว้เท่านั้น ห้ามเดาหรือแต่งราคา รุ่น ส่วนลด หรือโปรโมชั่นที่ไม่มีในข้อมูลเด็ดขาด
+- ถ้าข้อมูลไม่พอ บอกตรง ๆ ว่าทีมงานจะตอบในเวลาทำการ (${days} ${cfg.open_time || "08:00"}–${cfg.close_time || "18:00"} น.) และชวนลูกค้าฝากชื่อ เบอร์โทร และรายละเอียดหน้างานไว้
+- ห้ามยืนยันนัดหมายหรือการจอง — รับเรื่องไว้ได้ แต่บอกว่าทีมงานจะโทรยืนยันอีกครั้ง
+- แนะนำขนาดแอร์ได้: 9,000 BTU ≈ ห้อง 12–15 ตร.ม. · 12,000 ≈ 16–20 · 18,000 ≈ 24–30 · 24,000 ≈ 32–40 แล้วเลือกรุ่นที่ตรงจากรายการ
+- ตอบภาษาไทย สุภาพ กระชับ ไม่เกิน 6 บรรทัด ใช้อีโมจิพอประมาณ
+- เว็บไซต์ www.amcair.net · โทร 099-262-9090 (แจ้งเมื่อเกี่ยวข้อง)${(cfg.ai_extra || "").trim() ? "\n\nข้อมูลเพิ่มเติมจากร้าน:\n" + cfg.ai_extra.trim() : ""}`;
+
+    const r = await tfetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 1200,                   // Sonnet 5 คิด (adaptive thinking) รวมในงบนี้ด้วย — เผื่อไว้ไม่ให้คำตอบขาด
+        output_config: { effort: "low" },   // ตอบไว เหมาะกับแชต
+        system: [
+          { type: "text", text: rules },
+          { type: "text", text: "รายการสินค้าและบริการ (ราคาหน้าร้านจริง):\n" + catalog, cache_control: { type: "ephemeral" } },
+        ],
+        messages,
+      }),
+    }, 25000);
+    if (!r.ok) { console.error("ai-bot api error:", r.status, (await r.text()).slice(0, 300)); return null; }
+    const data = await r.json();
+    if (data.stop_reason === "refusal") return null;
+    const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+    return text || null;
+  } catch (e) { console.error("ai-bot error:", e?.message || String(e)); return null; }
+}
+
 // store the auto-reply as an outbound message + stamp last_autoreply_at (for cooldown)
 async function recordAutoReply(convId, text) {
   await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ line_user_id: convId, direction: "out", type: "text", text, sent_by: null }) });
   await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ last_autoreply_at: new Date().toISOString() }) });
 }
-async function autoReply(replyToken, convId, isNew, isUser) {
+async function autoReply(replyToken, convId, isNew, isUser, msgRow) {
   try {
     if (!replyToken || !isUser) return;        // only 1-on-1 user chats
     const cfg = await getAutoReplyCfg();
     if (!cfg || !cfg.enabled) return;
+    const afterHours = !isOpenNow(cfg);
+    // 0) นอกเวลาทำการ + เปิดบอท AI: ตอบคำถามจริงจากแคตตาล็อกทุกข้อความ (ไม่มี cooldown — คุยต่อเนื่องได้)
+    //    ตอบเฉพาะข้อความตัวอักษร · ถ้า AI ล้มเหลว/ปิด/ไม่มี key จะไหลลงข้อความตายตัวเดิมตามปกติ
+    if (afterHours && cfg.ai_enabled && msgRow?.type === "text" && (msgRow.text || "").trim()) {
+      const answer = await aiAnswer(convId, msgRow.text.trim(), cfg);
+      if (answer) { await sendAuto(replyToken, convId, "🤖 " + answer); return; }
+    }
     // 1) welcome a brand-new contact (their first message)
     if (isNew && cfg.welcome_enabled && (cfg.welcome_text || "").trim()) {
       await sendAuto(replyToken, convId, cfg.welcome_text);
       return;                                   // don't also send after-hours on the first message
     }
     // 2) after-hours auto-reply (with cooldown so we don't reply to every message)
-    if (cfg.afterhours_enabled && (cfg.afterhours_text || "").trim() && !isOpenNow(cfg)) {
+    if (cfg.afterhours_enabled && (cfg.afterhours_text || "").trim() && afterHours) {
       const cd = Number(cfg.cooldown_min) || 120;
       const r = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=last_autoreply_at`, { headers: sbH() });
       const last = r.ok ? (await r.json())[0]?.last_autoreply_at : null;
@@ -204,6 +271,7 @@ export default async function handler(req, res) {
         LINE_CHANNEL_ACCESS_TOKEN: !!process.env.LINE_CHANNEL_ACCESS_TOKEN,
         SUPABASE_URL: !!process.env.SUPABASE_URL,
         SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,   // บอท AI นอกเวลาทำการ
       });
     }
     // ?arsend=<lineUserId> — actually tries to push the after-hours text to that user and shows LINE's response
@@ -294,7 +362,7 @@ export default async function handler(req, res) {
         await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
         await tfetch(`${SB()}/rest/v1/rpc/line_bump_unread`, { method: "POST", headers: sbH(), body: JSON.stringify({ p_uid: convId, p_msg: row.text || "[ข้อความ]" }) });
         await notifyCustomerChat("💬 ข้อความใหม่จากลูกค้า (LINE)", row.text || "[ข้อความ]", convId);
-        await autoReply(ev.replyToken, convId, isNewContact, src.type === "user");
+        await autoReply(ev.replyToken, convId, isNewContact, src.type === "user", row);
       }
     }
   } catch (e) {

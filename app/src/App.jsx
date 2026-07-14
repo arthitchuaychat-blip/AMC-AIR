@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-15·แจ้งเตือนมือถือ: กด push แล้วเด้งเข้าเมนู/แชตลูกค้าคนนั้นเลย (hash deep-link ทุกหมวด + แชตทีม + ไลน์ลูกค้า) v400";
+const BUILD = "2026-07-15·บอท AI ตอบไลน์ลูกค้านอกเวลาทำการ (Claude Sonnet 5) — ตอบสินค้า/ราคา/บริการจากแคตตาล็อกจริง เปิด-ปิดใน ตั้งค่า→ตอบอัตโนมัติ v401";
 
 function SetupNotice() {
   return (
