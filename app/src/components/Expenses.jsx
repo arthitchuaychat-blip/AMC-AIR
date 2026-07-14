@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders, listPurchaseOrders, requestPoPaymentBatch } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { useDocPeek } from "./DocPeek";
 import AttachThumb from "./AttachThumb";
@@ -106,7 +106,9 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
         <div className="job-card-id"><span className="job-no">{x.title}</span><span className={"job-badge " + st.c}>{st.t}</span>
           {partial && <span className="job-badge b-amber">จ่ายบางส่วน</span>}
           {needReceipt(x) && <span className="job-badge b-amber">📎 ค้างแนบใบเสร็จ</span>}
-          {x.poNo && chip("PO " + x.poNo, () => onOpenDoc("po", x.poNo), { bg: "#fff7ed", fg: "#c2410c" })}
+          {(x.poNos?.length ? x.poNos : x.poNo ? [x.poNo] : []).map((n) => (
+            <React.Fragment key={n}>{chip("PO " + n, () => onOpenDoc("po", n), { bg: "#fff7ed", fg: "#c2410c" })}</React.Fragment>
+          ))}
           {(x.jobNo || x.job_no) && chip("งาน " + (x.jobNo || x.job_no), () => onOpenDoc("job", x.jobNo || x.job_no), { bg: "#f3e8ff", fg: "#7c3aed" })}
           {x.quoteNo && chip("อ้างอิง " + x.quoteNo, () => onOpenDoc("quote", x.quoteNo), { bg: "#eff6ff", fg: "#1d4ed8" })}
         </div>
@@ -142,7 +144,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
 
 // ค้นหาใบเบิก: ชื่อรายการ / เลข PO / ลูกค้า / พนักงานผู้ขอ / งาน / QT / หมวด + ช่วงวันที่สร้าง
 const expMatch = (x, q, dateR) =>
-  matchText(q, x.title, x.poNo, x.customerName, x.requesterName, x.jobNo || x.job_no, x.quoteNo, x.category, x.jobTitle, x.note)
+  matchText(q, x.title, x.poNo, ...(x.poNos || []), x.customerName, x.requesterName, x.jobNo || x.job_no, x.quoteNo, x.category, x.jobTitle, x.note)
   && inDateRange(x.created_at, dateR);
 
 function MineTab({ flash, onOpenDoc }) {
@@ -248,6 +250,7 @@ function ApproveTab({ flash, onOpenDoc }) {
   const [list, setList] = React.useState(null);
   const [statusF, setStatusF] = React.useState("pending");
   const [payFor, setPayFor] = React.useState(null);
+  const [vendorPay, setVendorPay] = React.useState(false);   // จ่ายเจ้าหนี้หลายใบในคราวเดียว
   const [rcptFor, setRcptFor] = React.useState(null);   // แนบใบเสร็จแทนพนักงาน (ออฟฟิศ)
   const [q, setQ] = React.useState("");
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
@@ -264,7 +267,8 @@ function ApproveTab({ flash, onOpenDoc }) {
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">อนุมัติ / จ่ายเงินเบิก</div>
-        <div className="sec-sub">รออนุมัติ {cnt("pending")} · รอจ่าย {cnt("approved")}{nRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 ค้างแนบใบเสร็จ {nRcpt}</b>}</div></div></div>
+        <div className="sec-sub">รออนุมัติ {cnt("pending")} · รอจ่าย {cnt("approved")}{nRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 ค้างแนบใบเสร็จ {nRcpt}</b>}</div></div>
+        <button className="btn-primary" onClick={() => setVendorPay(true)} title="เลือกใบสั่งซื้อค้างจ่ายของร้านเดียวกันหลายใบ ตั้งเบิกจ่ายครั้งเดียว (เหมือนใบวางบิลฝั่งซื้อ)">🏭 จ่ายเจ้าหนี้หลายใบ</button></div>
       <div className="cat-filter">
         {[["pending", "รออนุมัติ"], ["approved", "รอจ่าย"], ["paid", "จ่ายแล้ว"], ["needReceipt", `📎 ค้างแนบใบเสร็จ${nRcpt ? ` (${nRcpt})` : ""}`], ["rejected", "ไม่อนุมัติ"], ["all", "ทั้งหมด"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)} style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
@@ -288,7 +292,81 @@ function ApproveTab({ flash, onOpenDoc }) {
         ))}
       </div>
       {payFor && <PayModal x={payFor} onClose={() => setPayFor(null)} onPaid={() => { setPayFor(null); load(); }} flash={flash} />}
+      {vendorPay && <PayVendorModal onClose={() => setVendorPay(false)} onDone={() => { setVendorPay(false); setStatusF("pending"); load(); }} flash={flash} />}
       {rcptFor && <ReceiptModal x={rcptFor} onClose={() => setRcptFor(null)} onSaved={() => { setRcptFor(null); load(); }} flash={flash} />}
+    </div>
+  );
+}
+
+// จ่ายเจ้าหนี้หลายใบในคราวเดียว — เหมือนใบวางบิลฝั่งซื้อ: เลือกผู้ขาย → ติ๊ก PO ค้างจ่ายหลายใบ → ตั้งเบิกจ่าย 1 ใบ
+// อนุมัติ + จ่ายครบแล้ว ทุก PO ที่เลือกจะขึ้น "จ่ายแล้ว" พร้อมกัน (ไม่อนุมัติ = ทุกใบกลับเป็นยังไม่จ่าย)
+function PayVendorModal({ onClose, onDone, flash }) {
+  const [pos, setPos] = React.useState(null);
+  const [sup, setSup] = React.useState("");
+  const [sel, setSel] = React.useState({});
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => {
+    listPurchaseOrders()
+      .then((p) => setPos(p.filter((x) => x.status !== "cancelled" && x.paymentStatus === "unpaid" && x.total > 0)))
+      .catch((e) => { flash("โหลดใบสั่งซื้อไม่สำเร็จ: " + (e.message || e), true); setPos([]); });
+  }, []);
+  const supName = (x) => x.supplier?.trim() || "(ไม่ระบุผู้ขาย)";
+  const sups = React.useMemo(() => {
+    const m = {};
+    (pos || []).forEach((x) => { const s = m[supName(x)] || (m[supName(x)] = { n: 0, sum: 0 }); s.n += 1; s.sum += Number(x.total) || 0; });
+    return Object.entries(m).sort((a, b) => b[1].sum - a[1].sum);
+  }, [pos]);
+  const list = (pos || []).filter((x) => supName(x) === sup);
+  const chosen = list.filter((x) => sel[x.po_no]);
+  const total = chosen.reduce((a, x) => a + (Number(x.total) || 0), 0);
+  const allOn = list.length > 0 && chosen.length === list.length;
+  async function save() {
+    if (!chosen.length) return;
+    if (!await confirmDialog({ title: `ตั้งเบิกจ่ายเจ้าหนี้ ${sup}?`, message: `รวม ${chosen.length} ใบ · ${fmtBaht(total)}\nอนุมัติ + จ่ายครบแล้ว ทุกใบจะขึ้น "จ่ายแล้ว" พร้อมกัน`, confirmText: "ตั้งเบิกจ่าย", danger: false })) return;
+    setBusy(true);
+    try { await requestPoPaymentBatch(chosen); flash(`ตั้งเบิกจ่ายเจ้าหนี้ ${chosen.length} ใบ · ${fmtBaht(total)} แล้ว — รออนุมัติ ✓`); onDone(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 620, maxWidth: "94vw" }}>
+        <div className="modal-head"><div className="modal-title">🏭 จ่ายเจ้าหนี้หลายใบในคราวเดียว</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="jo-dim" style={{ marginBottom: 10 }}>เลือกผู้ขาย → ติ๊กใบสั่งซื้อที่ค้างจ่าย → ระบบตั้งเบิกจ่ายให้เป็นใบเดียว (เหมือนใบวางบิลฝั่งซื้อ)</div>
+          {pos === null ? <div className="empty">กำลังโหลดใบสั่งซื้อ…</div>
+            : pos.length === 0 ? <div className="empty">🎉 ไม่มีใบสั่งซื้อค้างจ่าย</div>
+            : (<>
+          <label className="fld"><span>ผู้ขาย / เจ้าหนี้</span>
+            <select className="inp" value={sup} onChange={(e) => { setSup(e.target.value); setSel({}); }}>
+              <option value="">— เลือกผู้ขาย —</option>
+              {sups.map(([name, s]) => <option key={name} value={name}>{name} · ค้าง {s.n} ใบ ({fmtBaht(s.sum)})</option>)}
+            </select></label>
+          {sup && (
+            <div style={{ border: "1px solid var(--line)", borderRadius: 11, marginTop: 8, overflow: "hidden" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", background: "var(--surface-2)", borderBottom: "1px solid var(--line-2)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+                <input type="checkbox" checked={allOn} onChange={() => setSel(allOn ? {} : Object.fromEntries(list.map((x) => [x.po_no, true])))} />
+                เลือกทั้งหมด ({list.length} ใบ)
+              </label>
+              {list.map((x) => (
+                <label key={x.po_no} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", borderBottom: "1px solid var(--line-2)", cursor: "pointer", fontSize: 13 }}>
+                  <input type="checkbox" checked={!!sel[x.po_no]} onChange={() => setSel((s) => ({ ...s, [x.po_no]: !s[x.po_no] }))} />
+                  <b style={{ fontFamily: "var(--mono)" }}>{x.po_no}</b>
+                  <span className={"job-badge " + (x.status === "received" ? "b-green" : "b-amber")}>{x.status === "received" ? "รับของแล้ว" : "รอรับของ"}</span>
+                  <span className="jo-dim" style={{ flex: 1 }}>{fmtD(x.issue_date || x.created_at)}{x.quote_no ? ` · อ้างอิง ${x.quote_no}` : ""}</span>
+                  <b>{fmtBaht(x.total)}</b>
+                </label>
+              ))}
+            </div>
+          )}
+            </>)}
+        </div>
+        <div className="modal-foot">
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: chosen.length ? "var(--ink)" : "var(--ink-3)" }}>{chosen.length ? `เลือก ${chosen.length} ใบ · รวม ${fmtBaht(total)}` : "ยังไม่ได้เลือกใบสั่งซื้อ"}</span>
+          <button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy || !chosen.length} onClick={save}>ตั้งเบิกจ่าย {chosen.length > 0 ? `${chosen.length} ใบ` : ""}</button>
+        </div>
+      </div>
     </div>
   );
 }

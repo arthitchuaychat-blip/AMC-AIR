@@ -824,9 +824,15 @@ export async function listPayables() {
   const rows = [];
   // PO เข้าค้างจ่ายเมื่อ "รับของแล้ว" หรือ "ส่งอนุมัติจ่ายแล้ว" เท่านั้น — แค่สั่งไว้ (ยังไม่รับ/ยังไม่ตั้งเบิก) ยังไม่เป็นหนี้
   // จ่ายบางส่วนผ่านใบเบิกที่ผูกไว้แล้ว → หักออก เหลือเท่าไหร่คือหนี้จริง (จ่ายครบ = ไม่ขึ้นรายการ)
+  const expPaidLeft = {};   // ใบเบิก 1 ใบจ่ายได้หลาย PO — ปันยอดที่จ่ายแล้วให้ทีละใบตามลำดับ ไม่หักซ้ำ
   (po.data || []).filter((x) => !x.paid_at && (x.status === "received" || x.expense_id)).forEach((x) => {
     const gross = (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1);
-    const paid = x.expense_id ? Math.min(gross, Number(expById[x.expense_id]?.paid_amount) || 0) : 0;
+    let paid = 0;
+    if (x.expense_id) {
+      if (!(x.expense_id in expPaidLeft)) expPaidLeft[x.expense_id] = Number(expById[x.expense_id]?.paid_amount) || 0;
+      paid = Math.min(gross, expPaidLeft[x.expense_id]);
+      expPaidLeft[x.expense_id] = Math.round((expPaidLeft[x.expense_id] - paid) * 100) / 100;
+    }
     const owed = Math.round((gross - paid) * 100) / 100;
     if (owed <= 0.005) return;
     rows.push({
@@ -895,6 +901,31 @@ export async function requestPoPayment(po) {
   if (e2) throw new Error(/expense_id|column|PGRST204/i.test(e2.message || "") ? "ยังไม่ได้รัน migration 100 (PO ↔ เบิกจ่าย) ใน Supabase" : (e2.message || e2));
   const me = await getProfile();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🛒 ${me?.name || "พนักงาน"} ขออนุมัติจ่ายค่าสินค้า ${po.po_no} · ${Number(po.total) || 0} บาท`, body: po.supplier || "", url: "expenses", ref_type: "expense" });
+  return ex.id;
+}
+
+// จ่ายเจ้าหนี้หลายใบในคราวเดียว (เหมือนใบวางบิลฝั่งซื้อ): เลือก PO ค้างจ่ายของร้านเดียวกันหลายใบ → ตั้งเบิกจ่าย 1 ใบ
+// จ่ายครบ = payExpense ประทับ paid_at ทุก PO ที่ผูก (.eq expense_id) · ไม่อนุมัติ = ปลดทุกใบกลับเป็นยังไม่จ่าย — รองรับอยู่แล้วทั้งคู่
+export async function requestPoPaymentBatch(pos) {
+  const list = (pos || []).filter(Boolean);
+  if (!list.length) throw new Error("เลือกใบสั่งซื้ออย่างน้อย 1 ใบ");
+  const uid = await _uid();
+  const supplier = list[0].supplier || "";
+  const total = Math.round(list.reduce((a, p) => a + (Number(p.total) || 0), 0) * 100) / 100;
+  const { data: ex, error } = await supabase.from("expense_requests").insert({
+    requester: uid, job_no: null, category: "ซื้อสินค้า (PO)",
+    title: list.length === 1
+      ? `ชำระค่าสินค้า ${list[0].po_no}${supplier ? " · " + supplier : ""}`
+      : `ชำระค่าสินค้า ${list.length} ใบ${supplier ? " · " + supplier : ""}`,
+    amount: total,
+    note: "รวมใบสั่งซื้อ: " + list.map((p) => `${p.po_no} (${(Number(p.total) || 0).toLocaleString("en-US")})`).join(" · "),
+    attachments: [], created_by: uid,
+  }).select("id").single();
+  if (error) throw error;
+  const { error: e2 } = await supabase.from("purchase_orders").update({ expense_id: ex.id }).in("po_no", list.map((p) => p.po_no));
+  if (e2) throw new Error(/expense_id|column|PGRST204/i.test(e2.message || "") ? "ยังไม่ได้รัน migration 100 (PO ↔ เบิกจ่าย) ใน Supabase" : (e2.message || e2));
+  const me = await getProfile();
+  notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🏭 ${me?.name || "พนักงาน"} ตั้งเบิกจ่ายเจ้าหนี้ ${list.length} ใบ · ${total.toLocaleString("en-US")} บาท`, body: supplier, url: "expenses", ref_type: "expense" });
   return ex.id;
 }
 
@@ -2590,10 +2621,10 @@ export async function submitExpense(e) {
 async function _enrichExpenseJobs(rows) {
   if (!rows.length) return rows;
   const ids = rows.map((x) => x.id).filter(Boolean);
-  let poByExp = {};
+  let poByExp = {};   // ใบเบิก 1 ใบผูกได้หลาย PO (จ่ายเจ้าหนี้รวมหลายใบ) — เก็บเป็น array
   try {
     const { data } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id").in("expense_id", ids.length ? ids : ["_"]);
-    (data || []).forEach((p) => { if (p.expense_id) poByExp[p.expense_id] = p; });
+    (data || []).forEach((p) => { if (p.expense_id) (poByExp[p.expense_id] = poByExp[p.expense_id] || []).push(p); });
   } catch (_) { /* pre-100: ไม่มี expense_id — ข้าม */ }
   const [joRes, quRes, cuRes] = await Promise.all([
     supabase.from("job_orders").select("job_no,quote_no,customer_id,title,status"),
@@ -2607,12 +2638,13 @@ async function _enrichExpenseJobs(rows) {
   return rows.map((x) => {
     let job = x.job_no ? jobByNo[x.job_no] : null;
     let quoteNo = job?.quote_no || null;
-    const po = poByExp[x.id] || null;
+    const poList = poByExp[x.id] || [];
+    const po = poList[0] || null;
     if (!job && po?.quote_no) { quoteNo = po.quote_no; job = jobByQuote[po.quote_no] || null; }
     const qi = quoteNo ? quoteInfo[quoteNo] : null;
     const custId = job?.customer_id ?? qi?.customer_id ?? null;
     return { ...x, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null,
-      customerName: custId != null ? custName[custId] || null : null, poNo: po?.po_no || null, quoteNo };
+      customerName: custId != null ? custName[custId] || null : null, poNo: po?.po_no || null, poNos: poList.map((p) => p.po_no), quoteNo };
   });
 }
 export async function listMyExpenses() {
