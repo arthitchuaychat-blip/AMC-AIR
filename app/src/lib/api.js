@@ -2341,7 +2341,9 @@ export async function notify(recipientIds, { category, title, body, url, ref_typ
     await supabase.from("notifications").insert(allowed.map((id) => ({ user_id: id, category, title, body: body || null, url: url || null, ref_type: ref_type || null, ref_no: ref_no || null, actor: uid })));
     if (push) {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ userIds: allowed, title, body: (body || "").slice(0, 180), url: "/" }) }).catch(() => {});
+      // กดแจ้งเตือนบนมือถือแล้วเด้งเข้าเมนูที่เกี่ยวเลย (hash deep-link เช่น /#expenses) — เหมือน LINE กดแล้วเข้าห้องแชต
+      const pushUrl = url ? (String(url).startsWith("/") ? url : "/#" + url + (ref_no ? "/" + encodeURIComponent(ref_no) : "")) : "/";
+      if (session) fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ userIds: allowed, title, body: (body || "").slice(0, 180), url: pushUrl }) }).catch(() => {});
     }
   } catch (_) { /* notifications must never break the underlying action */ }
 }
@@ -3619,7 +3621,7 @@ async function _firePush(roomId, body) {
     fetch("/api/push-send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ roomId, title: "แชตทีม · " + name, body, url: "/" }),
+      body: JSON.stringify({ roomId, title: "แชตทีม · " + name, body, url: "/#teamchat" }),
     }).catch(() => {});
   } catch (_) {}
 }

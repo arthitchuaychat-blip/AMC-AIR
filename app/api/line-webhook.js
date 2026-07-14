@@ -188,7 +188,8 @@ async function notifyCustomerChat(title, body, convId) {
     const subs = sr.ok ? await sr.json() : [];
     if (!subs.length) return;
     webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:admin@amcair.net", pub, priv);
-    const payload = JSON.stringify({ title, body: (body || "").slice(0, 180), url: "/", tag: "notif" });
+    // กดแจ้งเตือนแล้วเปิดกระดานแชตโฟกัสลูกค้าคนนั้นเลย (hash deep-link: /#chat/<convId>) — เหมือน LINE กดแล้วเข้าห้อง
+    const payload = JSON.stringify({ title, body: (body || "").slice(0, 180), url: convId ? "/#chat/" + encodeURIComponent(convId) : "/#chat", tag: "notif" });
     await Promise.all(subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 1800 }).catch(() => {})));
   } catch (_) { /* ignore */ }
 }
