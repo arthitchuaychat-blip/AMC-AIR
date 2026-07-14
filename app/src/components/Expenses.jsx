@@ -306,8 +306,18 @@ function PayVendorModal({ onClose, onDone, flash }) {
   const [sel, setSel] = React.useState({});
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => {
-    listPurchaseOrders()
-      .then((p) => setPos(p.filter((x) => x.status !== "cancelled" && x.paymentStatus === "unpaid" && x.total > 0)))
+    // ค้างจ่าย = ยังไม่จ่ายเงินจริง: ทั้งใบที่ยังไม่ตั้งเบิก และใบที่ตั้งเบิกรายใบค้างอยู่ (ใบเบิกยังไม่จ่ายสักบาท → ยุบรวมได้)
+    Promise.all([listPurchaseOrders(), listExpenses().catch(() => [])])
+      .then(([p, ex]) => {
+        const exById = Object.fromEntries((ex || []).map((e) => [e.id, e]));
+        setPos(p.filter((x) => {
+          if (x.status === "cancelled" || !(x.total > 0) || x.paymentStatus === "paid") return false;
+          if (!x.expense_id) return true;
+          const e = exById[x.expense_id];
+          if (!e) return true;   // ใบเบิกเดิมถูกลบไปแล้ว — ถือว่ายังไม่ตั้งเบิก
+          return (e.status === "pending" || e.status === "approved") && !(Number(e.paid_amount) > 0);
+        }));
+      })
       .catch((e) => { flash("โหลดใบสั่งซื้อไม่สำเร็จ: " + (e.message || e), true); setPos([]); });
   }, []);
   const supName = (x) => x.supplier?.trim() || "(ไม่ระบุผู้ขาย)";
@@ -322,7 +332,8 @@ function PayVendorModal({ onClose, onDone, flash }) {
   const allOn = list.length > 0 && chosen.length === list.length;
   async function save() {
     if (!chosen.length) return;
-    if (!await confirmDialog({ title: `ตั้งเบิกจ่ายเจ้าหนี้ ${sup}?`, message: `รวม ${chosen.length} ใบ · ${fmtBaht(total)}\nอนุมัติ + จ่ายครบแล้ว ทุกใบจะขึ้น "จ่ายแล้ว" พร้อมกัน`, confirmText: "ตั้งเบิกจ่าย", danger: false })) return;
+    const merges = chosen.filter((x) => x.expense_id).length;
+    if (!await confirmDialog({ title: `ตั้งเบิกจ่ายเจ้าหนี้ ${sup}?`, message: `รวม ${chosen.length} ใบ · ${fmtBaht(total)}${merges ? `\nใบเบิกรายใบเดิม ${merges} ใบจะถูกยุบรวมเข้าใบใหม่ (ปิดใบเก่าอัตโนมัติ)` : ""}\nอนุมัติ + จ่ายครบแล้ว ทุกใบจะขึ้น "จ่ายแล้ว" พร้อมกัน`, confirmText: "ตั้งเบิกจ่าย", danger: false })) return;
     setBusy(true);
     try { await requestPoPaymentBatch(chosen); flash(`ตั้งเบิกจ่ายเจ้าหนี้ ${chosen.length} ใบ · ${fmtBaht(total)} แล้ว — รออนุมัติ ✓`); onDone(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
@@ -335,7 +346,7 @@ function PayVendorModal({ onClose, onDone, flash }) {
         <div className="modal-body">
           <div className="jo-dim" style={{ marginBottom: 10 }}>เลือกผู้ขาย → ติ๊กใบสั่งซื้อที่ค้างจ่าย → ระบบตั้งเบิกจ่ายให้เป็นใบเดียว (เหมือนใบวางบิลฝั่งซื้อ)</div>
           {pos === null ? <div className="empty">กำลังโหลดใบสั่งซื้อ…</div>
-            : pos.length === 0 ? <div className="empty">🎉 ไม่มีใบสั่งซื้อค้างจ่าย</div>
+            : pos.length === 0 ? <div className="empty">🎉 ไม่มีใบสั่งซื้อค้างจ่าย<br /><small style={{ color: "var(--ink-3)" }}>(ใบที่จ่ายเงินไปแล้วบางส่วน จะไม่แสดงที่นี่ — จ่ายต่อที่ใบเบิกเดิม)</small></div>
             : (<>
           <label className="fld"><span>ผู้ขาย / เจ้าหนี้</span>
             <select className="inp" value={sup} onChange={(e) => { setSup(e.target.value); setSel({}); }}>
@@ -353,6 +364,7 @@ function PayVendorModal({ onClose, onDone, flash }) {
                   <input type="checkbox" checked={!!sel[x.po_no]} onChange={() => setSel((s) => ({ ...s, [x.po_no]: !s[x.po_no] }))} />
                   <b style={{ fontFamily: "var(--mono)" }}>{x.po_no}</b>
                   <span className={"job-badge " + (x.status === "received" ? "b-green" : "b-amber")}>{x.status === "received" ? "รับของแล้ว" : "รอรับของ"}</span>
+                  {x.expense_id && <span className="job-badge b-blue" title="ใบนี้ตั้งเบิกรายใบไว้แล้ว (ยังไม่จ่ายเงิน) — เลือกแล้วระบบจะปิดใบเบิกเดิม ยุบรวมเข้าใบใหม่ให้">ตั้งเบิกไว้แล้ว · ยุบรวมได้</span>}
                   <span className="jo-dim" style={{ flex: 1 }}>{fmtD(x.issue_date || x.created_at)}{x.quote_no ? ` · อ้างอิง ${x.quote_no}` : ""}</span>
                   <b>{fmtBaht(x.total)}</b>
                 </label>

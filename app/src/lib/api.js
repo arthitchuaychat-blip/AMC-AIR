@@ -906,10 +906,21 @@ export async function requestPoPayment(po) {
 
 // จ่ายเจ้าหนี้หลายใบในคราวเดียว (เหมือนใบวางบิลฝั่งซื้อ): เลือก PO ค้างจ่ายของร้านเดียวกันหลายใบ → ตั้งเบิกจ่าย 1 ใบ
 // จ่ายครบ = payExpense ประทับ paid_at ทุก PO ที่ผูก (.eq expense_id) · ไม่อนุมัติ = ปลดทุกใบกลับเป็นยังไม่จ่าย — รองรับอยู่แล้วทั้งคู่
+// PO ที่ตั้งเบิกรายใบค้างอยู่ (ยังไม่จ่ายเงินสักบาท) เลือกยุบรวมได้ — ใบเบิกเดี่ยวเดิมถูกปิดเป็น "ไม่อนุมัติ" พร้อมหมายเหตุ
 export async function requestPoPaymentBatch(pos) {
   const list = (pos || []).filter(Boolean);
   if (!list.length) throw new Error("เลือกใบสั่งซื้ออย่างน้อย 1 ใบ");
   const uid = await _uid();
+  // ยุบใบเบิกรายใบเดิม: ต้องยังไม่มีการจ่ายเงินเลยเท่านั้น (จ่ายไปแล้วบางส่วน = ห้ามยุ่ง)
+  const oldIds = [...new Set(list.map((p) => p.expense_id).filter(Boolean))];
+  if (oldIds.length) {
+    const { data: olds } = await supabase.from("expense_requests").select("id,status,paid_amount,title").in("id", oldIds);
+    const bad = (olds || []).find((x) => x.status === "paid" || Number(x.paid_amount) > 0);
+    if (bad) throw new Error(`ใบเบิกเดิม "${bad.title || "#" + bad.id}" มีการจ่ายเงินไปแล้ว — ยุบรวมไม่ได้ เอาใบสั่งซื้อใบนั้นออกจากรายการก่อน`);
+    const { error: eOld } = await supabase.from("expense_requests").update({ status: "rejected", decide_note: "ยุบรวมเข้าใบเบิกจ่ายเจ้าหนี้ใบใหม่ (จ่ายรวมหลาย PO)" }).in("id", oldIds);
+    if (eOld) throw eOld;
+    await supabase.from("purchase_orders").update({ expense_id: null }).in("expense_id", oldIds);
+  }
   const supplier = list[0].supplier || "";
   const total = Math.round(list.reduce((a, p) => a + (Number(p.total) || 0), 0) * 100) / 100;
   const { data: ex, error } = await supabase.from("expense_requests").insert({
