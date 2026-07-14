@@ -81,13 +81,14 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
       <div className="ar-row">
         <div className="ar-row-main">
           {showType && <span className="ar-dot" style={{ background: t.color }} />}
+          {r.date && <span className="ar-due" style={{ minWidth: 82, whiteSpace: "nowrap" }} title="วันที่สั่ง/วันที่เอกสาร">📅 {thDate(r.date)}</span>}
           <b className="ar-inv">{r.refNo}</b>
           <span className="ar-cust">{r.name}{r.title ? <span style={{ color: "var(--ink-3)", fontWeight: 400 }}> · {r.title}</span> : null}</span>
           <span className="ar-owed">{fmtBaht(r.amount)}</span>
         </div>
         <div className="ar-row-sub">
           <span className="ar-due">
-            {r.date ? <>{thDate(r.date)}{r.days > 0 ? <b style={{ color: r.days > 30 ? "#dc2626" : t.color }}> · ค้างมา {r.days} วัน</b> : null}</> : "ไม่ระบุวันที่"}
+            {r.date ? (r.days > 0 ? <b style={{ color: r.days > 30 ? "#dc2626" : t.color }}>ค้างมา {r.days} วัน</b> : "สั่งวันนี้") : "ไม่ระบุวันที่"}
             <span style={{ marginLeft: 8, fontSize: 11.5, fontWeight: 700, color: t.color, background: t.bg, borderRadius: 8, padding: "2px 8px" }}>{r.status}</span>
           </span>
           <span className="ar-acts">
