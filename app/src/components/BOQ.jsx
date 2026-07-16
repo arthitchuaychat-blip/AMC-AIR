@@ -220,7 +220,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           ))}
 
           <div className="line-total" style={{ fontSize: 15 }}><span>ต้นทุนรวมทั้งสิ้น</span><b style={{ fontSize: 20 }}>{fmtBaht(total)}</b></div>
-          <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setEd((e) => ({ ...e, [k]: v }))} />
+          <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} docItems={ed.items} onChange={(k, v) => setEd((e) => ({ ...e, [k]: v }))} />
           <InternalNoteField value={ed.internal_note} onChange={(v) => setEd((e) => ({ ...e, internal_note: v }))} />
           <SignToggle on={ed.sign_on} onChange={(v) => setEd((e) => ({ ...e, sign_on: v }))} />
           {(() => { const n = Object.values(ed.items).reduce((a, arr) => a + arr.length, 0); return (
@@ -277,7 +277,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
               title={bo.title} sub={`${bo.items.length} รายการ`} by={bo.createdByName}
               date={bo.issue_date || bo.created_at} amountLabel="ต้นทุนรวม" amount={bo.total}
               customer={{ name: bo.customerName, contactName: bo.contactName || bo.mainContactName, phone: bo.contactPhone || bo.mainContactPhone, addr: bo.customerAddr, siteAddress: bo.siteAddress, mapUrl: bo.mapUrl }} />
-            {(() => { const ch = docLinks.byQuote[bo.quoteNo] || {}; return <DocChips quoteNo={bo.quoteNo} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "boq", no: bo.boq_no }} onOpen={openPeek} />; })()}
+            {(() => { const ch = docLinks.byQuote[bo.quoteNo] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} quoteNo={bo.quoteNo} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "boq", no: bo.boq_no }} onOpen={openPeek} />; })()}
             <InternalNoteTag note={bo.internal_note} role={role} />
             <div className="job-lines"><div className="job-actions">
               {bo.status === "cancelled" && <span className="job-badge b-red" title="แก้ไขแล้วบันทึก เพื่อนำใบนี้กลับมาใช้งาน">ยกเลิกแล้ว</span>}
