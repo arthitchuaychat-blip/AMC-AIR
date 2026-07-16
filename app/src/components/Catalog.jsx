@@ -396,7 +396,8 @@ export default function Catalog({ role }) {
           <button className="cat-bulkbar-x" onClick={clearSel} title="ล้างที่เลือก">ล้าง</button>
         </div>
       )}
-      {openMat && <MaterialDrawer mat={openMat} onClose={() => setOpenMat(null)} />}
+      {openMat && <MaterialDrawer mat={openMat} onClose={() => setOpenMat(null)}
+        onEdit={canEdit ? () => { const m = openMat; setOpenMat(null); setEditing(m); } : null} />}
       {editing !== undefined && (
         <MaterialModal initial={editing} categories={cats.filter((c) => !String(c.id).startsWith("sv-"))} brands={brands} btus={btus} acTypes={acTypes} seriesList={seriesAll} onAddCategory={addProductCategory}
           defaultKind={kind === "all" ? "material" : kind}
