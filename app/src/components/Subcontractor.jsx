@@ -6,8 +6,11 @@ import { confirmDialog } from "./ConfirmDialog";
 import { Linkify } from "./JobTimeline";
 import { fmtBaht, round2 } from "../lib/format";
 import { UIcon } from "../icons";
+import { JOB_STATUSES } from "../lib/schedule";
 
 const TABS = [["labor", "ค่าแรง/งาน"], ["pay", "ค่าแรงรอจ่าย"], ["score", "สกอร์การ์ดทีม"]];
+// ป้ายสถานะใบงาน — ดึงจากชุดกลาง (lib/schedule.js) ให้ชื่อตรงกับเมนูใบงานเสมอ
+const JOB_ST = Object.fromEntries(JOB_STATUSES.map(([v, t, c]) => [v, { t, c }]));
 const WHT_RATE = 3;
 const PAY_ROLES = ["admin", "exec", "finance"];        // who can create/confirm payments (money out)
 const LABOR_ROLES = ["admin", "exec", "finance", "sales"]; // who can fill + confirm labor
@@ -87,7 +90,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
   const [statusF, setStatusF] = React.useState("all");
   const [laborF, setLaborF] = React.useState("all");   // กรองตามสถานะการกรอกค่าแรง
   const [jobPreview, setJobPreview] = React.useState(null);
-  const STATUS = { done: { t: "เสร็จ", c: "b-green" }, in_progress: { t: "กำลังทำ", c: "b-amber" }, scheduled: { t: "นัดแล้ว", c: "b-blue" }, pending: { t: "รอจ่ายงาน", c: "b-grey" }, awaiting_approval: { t: "รออนุมัติ", c: "b-purple" }, reschedule: { t: "นัดเพิ่ม", c: "b-orange" } };
+  const STATUS = JOB_ST;
   // only show team / status options that actually appear in the current job list
   const teamOpts = (subTeams || []).filter((t) => jobs.some((j) => j.assigned_team === t.id));
   const statusOpts = [["all", "ทุกสถานะ"], ...Object.entries(STATUS).filter(([k]) => jobs.some((j) => j.status === k)).map(([k, v]) => [k, v.t])];
@@ -162,7 +165,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
       </div>
       {edit && <LaborEditor job={edit} quote={quoteBy[edit.quote_no]} rate={teamById[edit.assigned_team]?.payout_rate ?? 80} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onReload(); }} flash={flash} />}
       {jobPreview && (() => {
-        const jp = jobPreview; const st2 = { done: { t: "เสร็จ", c: "b-green" }, in_progress: { t: "กำลังทำ", c: "b-amber" }, scheduled: { t: "นัดแล้ว", c: "b-blue" }, pending: { t: "รอจ่ายงาน", c: "b-grey" }, awaiting_approval: { t: "รออนุมัติ", c: "b-purple" }, reschedule: { t: "นัดเพิ่ม", c: "b-orange" }, cancelled: { t: "ยกเลิก", c: "b-red" } };
+        const jp = jobPreview; const st2 = JOB_ST;
         const jst = st2[jp.status] || { t: jp.status, c: "b-grey" }; const team = teamById[jp.assigned_team];
         return (
           <div className="confirm-overlay" onMouseDown={() => setJobPreview(null)}>
@@ -520,7 +523,7 @@ function PayTeam({ team, list, quoteBy, flash, onCreated }) {
         </div>
       )}
       {jobPreview && (() => {
-        const jp = jobPreview; const ST = { done: { t: "เสร็จ", c: "b-green" }, in_progress: { t: "กำลังทำ", c: "b-amber" }, scheduled: { t: "นัดแล้ว", c: "b-blue" }, pending: { t: "รอจ่ายงาน", c: "b-grey" }, awaiting_approval: { t: "รออนุมัติ", c: "b-purple" }, reschedule: { t: "นัดเพิ่ม", c: "b-orange" }, cancelled: { t: "ยกเลิก", c: "b-red" } };
+        const jp = jobPreview; const ST = JOB_ST;
         const jst = ST[jp.status] || { t: jp.status, c: "b-grey" };
         return (
           <div className="confirm-overlay" onMouseDown={() => setJobPreview(null)}>
