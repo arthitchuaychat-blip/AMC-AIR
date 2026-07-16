@@ -7,6 +7,8 @@ import { Linkify } from "./JobTimeline";
 import { fmtBaht, round2 } from "../lib/format";
 import { UIcon } from "../icons";
 import { JOB_STATUSES } from "../lib/schedule";
+import DocChips from "./DocChips";
+import { useDocPeek } from "./DocPeek";
 
 const TABS = [["labor", "ค่าแรง/งาน"], ["pay", "ค่าแรงรอจ่าย"], ["score", "สกอร์การ์ดทีม"]];
 // ป้ายสถานะใบงาน — ดึงจากชุดกลาง (lib/schedule.js) ให้ชื่อตรงกับเมนูใบงานเสมอ
@@ -91,6 +93,8 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
   const [laborF, setLaborF] = React.useState("all");   // กรองตามสถานะการกรอกค่าแรง
   const [jobPreview, setJobPreview] = React.useState(null);
   const STATUS = JOB_ST;
+  // ชิปเชื่อมโยงใบเสนอราคา/ใบงาน → พรีวิวแผงขวาก่อน (เหมือนเมนูเอกสารอื่น)
+  const [peekEl, openPeek] = useDocPeek();
   // only show team / status options that actually appear in the current job list
   const teamOpts = (subTeams || []).filter((t) => jobs.some((j) => j.assigned_team === t.id));
   const statusOpts = [["all", "ทุกสถานะ"], ...Object.entries(STATUS).filter(([k]) => jobs.some((j) => j.status === k)).map(([k, v]) => [k, v.t])];
@@ -148,6 +152,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
                   {q?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}
                   {j.is_claim && <span className="vat-badge vat-off">เคลม</span>}</div>
                 <div className="jo-dim">{j.customerName || "-"} · ทีม {teamById[j.assigned_team]?.name || j.assigned_team} · {j.title || "งาน"}</div>
+                <DocChips quoteNo={j.quote_no} jobNos={[j.job_no]} jobStatusBy={{ [j.job_no]: j.status }} onOpen={openPeek} />
               </div>
               <div className="sub-job-state"><span className={"job-badge " + ls.c}>{ls.t}</span></div>
               <div className="sub-job-amt">
@@ -164,6 +169,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
         })}
       </div>
       {edit && <LaborEditor job={edit} quote={quoteBy[edit.quote_no]} rate={teamById[edit.assigned_team]?.payout_rate ?? 80} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onReload(); }} flash={flash} />}
+      {peekEl}
       {jobPreview && (() => {
         const jp = jobPreview; const st2 = JOB_ST;
         const jst = st2[jp.status] || { t: jp.status, c: "b-grey" }; const team = teamById[jp.assigned_team];
