@@ -57,7 +57,8 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
     return arr.map((it) => {
       const qty = Number(it.qty) || 0;
       const price = Number(it.price_show ?? it.unit_price ?? it.price ?? it.unit_cost) || 0;   // price_show = ราคาตามวิธีชำระ (ใบเสนอราคาแบบบัตร)
-      return { name: it.name || it.item_code || it.material_code || "-", qty, unit: it.unit || "", price, amount: qty * price, free: it.section === "free" };
+      const disc = Number(it.discount) || 0;   // ส่วนลดรายรายการ (mig 142)
+      return { name: it.name || it.item_code || it.material_code || "-", qty, unit: it.unit || "", price, amount: qty * price - disc, disc, free: it.section === "free" };
     });
   }, [doc, type]);
 
@@ -120,7 +121,7 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
                   {lines.map((l, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: "1px dashed var(--line-2)", fontSize: 12.5 }}>
                       <span style={{ flex: 1 }}>{l.name}</span>
-                      <span style={{ color: "var(--ink-3)", whiteSpace: "nowrap" }}>{fmtNum(l.qty)} {l.unit} × {fmtBaht(l.price)}</span>
+                      <span style={{ color: "var(--ink-3)", whiteSpace: "nowrap" }}>{fmtNum(l.qty)} {l.unit} × {fmtBaht(l.price)}{l.disc > 0 && <span style={{ color: "var(--down)" }}> −{fmtBaht(l.disc)}</span>}</span>
                       <span style={{ fontWeight: 700, whiteSpace: "nowrap", minWidth: 78, textAlign: "right" }}>{l.free ? "แถม" : fmtBaht(l.amount)}</span>
                     </div>
                   ))}

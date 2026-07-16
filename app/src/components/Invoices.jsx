@@ -350,7 +350,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         const svcAmtP = whtItems.reduce((a, i) => a + (Number(i.amount) || 0), 0);
         const whtBaseP = allAmtP > 0 ? round2((printI.base || 0) * svcAmtP / allAmtP) : 0;
         return (
-        <DocSlip company={co} titleTh="ใบส่งของ / ใบแจ้งหนี้" titleEn="DELIVERY NOTE / INVOICE" docNo={printI.invoice_no}
+        <DocSlip company={co} titleTh="ใบส่งของ / ใบแจ้งหนี้" titleEn="DELIVERY NOTE / INVOICE" docNo={printI.invoice_no} discountCol={(q?.items || []).some((x) => Number(x.discount) > 0)}
           metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, { label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }]}
           projectTitle={printI.title}
           customer={{ name: printI.customerName, code: custCode(printI.customerCode), taxId: printI.customerTaxId, address: printI.customerAddr, contactName: printI.mainContactName, contactPhone: printI.mainContactPhone, siteName: printI.siteName, siteAddress: printI.siteAddress, siteContactName: printI.siteContactName, siteContactPhone: printI.siteContactPhone, mapUrl: printI.mapUrl }}
@@ -366,9 +366,9 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(printI.wht_rate) || 3}% (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
             {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtBaht(printI.total - printI.wht_amt)}</b></div>}
           </div>}>
-          {(q?.items || []).map((it, i) => (
-            <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(Number(it.qty) * Number(it.unit_price))}</td></tr>
-          ))}
+          {(() => { const its = q?.items || []; const hasD = its.some((x) => Number(x.discount) > 0); return its.map((it, i) => (
+            <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.unit_price) - (Number(it.discount) || 0))}</td></tr>
+          )); })()}
         </DocSlip>
       ); })()}
 

@@ -1314,13 +1314,14 @@ export async function listQuotations() {
     const payRate = payMethod === "card_full" ? 0.04 : payMethod === "card_inst10" ? 0.14 : 0;
     const adjU = (u) => payRate ? Math.ceil(Math.round((Number(u) || 0) * (1 + payRate) * 100) / 100) : Number(u) || 0;
     const itemsX = items.map((x) => ({ ...x, price_show: adjU(x.unit_price) }));
-    const subtotal = itemsX.reduce((a, x) => a + Number(x.qty) * x.price_show, 0);
+    const lineDisc = (x) => Number(x.discount) || 0;   // ส่วนลดรายรายการ (mig 142) — หักในบรรทัดก่อนส่วนลดรวมท้ายบิล
+    const subtotal = itemsX.reduce((a, x) => a + Number(x.qty) * x.price_show - lineDisc(x), 0);
     const discount = qo.discount_type === "percent" ? subtotal * Number(qo.discount_value || 0) / 100 : Number(qo.discount_value || 0);
     const afterDisc = subtotal - discount;
     const vatAmt = qo.vat ? afterDisc * 0.07 : 0;
     const grand = afterDisc + vatAmt;
     // หัก ณ ที่จ่าย: คิดเฉพาะ "ค่าบริการ" ก่อน VAT (ค่าสินค้าไม่โดนหัก) — เฉลี่ยส่วนลดตามสัดส่วน เหมือนใบแจ้งหนี้
-    const svcSum = itemsX.reduce((a, x) => a + (x.kind === "service" ? Number(x.qty) * x.price_show : 0), 0);
+    const svcSum = itemsX.reduce((a, x) => a + (x.kind === "service" ? Number(x.qty) * x.price_show - lineDisc(x) : 0), 0);
     const whtAmt = qo.wht && subtotal > 0 ? afterDisc * (svcSum / subtotal) * (Number(qo.wht_rate) || 3) / 100 : 0;
     const s = qo.site_id ? sm[qo.site_id] : null;
     const siteAddress = (s && s.address) || null;
@@ -1362,11 +1363,17 @@ export async function saveQuotation(q, items) {
   const e2 = (await supabase.from("quotation_items").delete().eq("quote_no", q.quote_no)).error;
   if (e2) throw e2;
   if (items.length) {
-    const e3 = (await supabase.from("quotation_items").insert(items.map((x) => ({
+    const rows = items.map((x) => ({
       quote_no: q.quote_no, item_code: x.code || null, name: x.name || null, kind: x.kind || null,
       description: x.description?.trim() || null,
       unit: x.unit || null, qty: Number(x.qty) || 0, unit_price: Number(x.unit_price) || 0,
-    })))).error;
+      discount: Number(x.discount) || 0,   // ส่วนลดรายรายการ (mig 142)
+    }));
+    let e3 = (await supabase.from("quotation_items").insert(rows)).error;
+    // pre-142 fallback: ยังไม่มีคอลัมน์ discount — บันทึกโดยไม่มีส่วนลดรายตัวไปก่อน
+    if (e3 && /discount/i.test(e3.message || "")) {
+      e3 = (await supabase.from("quotation_items").insert(rows.map(({ discount, ...r }) => r))).error;
+    }
     if (e3) throw e3;
   }
   syncInternalNote({ quoteNo: q.quote_no, boqNo: q.boq_no }, q.internal_note).catch(() => {});
@@ -1661,7 +1668,7 @@ export async function listJobOrders() {
     supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
     supabase.from("customer_contacts").select("customer_id,name,phone"),
     supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat,created_by"),
-    _fetchAll((f, t) => supabase.from("quotation_items").select("quote_no,name,unit,qty,unit_price,kind", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
+    _fetchAll((f, t) => supabase.from("quotation_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว · select * เผื่อคอลัมน์ discount (mig 142) ยังไม่ได้รัน
     supabase.from("job_visits").select("*").order("visit_date", { ascending: true }),
   ]);
   if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error; if (qit.error) throw qit.error;
@@ -1677,7 +1684,7 @@ export async function listJobOrders() {
   // grand total per quote + confirmation item list (AC + service only, no materials) for the order-confirmation copy
   const subByQuote = {}, confirmByQuote = {};
   (qit.data || []).forEach((x) => {
-    subByQuote[x.quote_no] = (subByQuote[x.quote_no] || 0) + Number(x.qty) * Number(x.unit_price);
+    subByQuote[x.quote_no] = (subByQuote[x.quote_no] || 0) + Number(x.qty) * Number(x.unit_price) - (Number(x.discount) || 0);
     if (x.kind === "ac" || x.kind === "service") (confirmByQuote[x.quote_no] = confirmByQuote[x.quote_no] || []).push({ name: x.name, qty: Number(x.qty), unit: x.unit });
   });
   const grandByQuote = {}; (qt.data || []).forEach((x) => { const sub = subByQuote[x.quote_no] || 0; const disc = x.discount_type === "percent" ? sub * Number(x.discount_value || 0) / 100 : Number(x.discount_value || 0); const after = sub - disc; grandByQuote[x.quote_no] = after + (x.vat ? after * 0.07 : 0); });

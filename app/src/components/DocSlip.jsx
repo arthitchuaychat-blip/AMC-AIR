@@ -17,8 +17,10 @@ import React from "react";
 // ปล่อย col รายการ เป็น auto ไม่ได้ เพราะ table-layout:fixed ใน Chrome ใช้ "แถวแรก" ช่วยคำนวณคอลัมน์ auto —
 // เอกสารที่แถวแรกเป็นหัวหมวด colSpan=6 (BOQ) จะทำให้คอลัมน์รายการแคบผิดปกติ (ชื่อสินค้าห่อคำละบรรทัด)
 const COL_W = ["8mm", "30mm", "83mm", "15mm", "23mm", "27mm"];   // รวม 186mm พอดี
-const ColGroup = () => (
-  <colgroup>{COL_W.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>
+// มีส่วนลดรายรายการ → แทรกคอลัมน์ "ส่วนลด" ก่อนจำนวนเงิน (บีบช่องรหัส/รายการลงให้ยังรวม 186mm)
+const COL_W_DISC = ["8mm", "26mm", "68mm", "14mm", "22mm", "21mm", "27mm"];
+const ColGroup = ({ discountCol }) => (
+  <colgroup>{(discountCol ? COL_W_DISC : COL_W).map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>
 );
 
 // the issuing officer's signature is opt-in per device: set + toggled on the Attendance page,
@@ -31,7 +33,7 @@ function officerSign() {
   } catch { return null; }
 }
 
-export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, partyLabel = "ลูกค้า", projectTitle, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], signUrl, signName, children, totals }) {
+export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, partyLabel = "ลูกค้า", projectTitle, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], signUrl, signName, children, totals, discountCol = false }) {
   const co = company || {};
   // explicit per-document signature (saved on the doc) wins; otherwise fall back to the device toggle
   const sign = signUrl !== undefined ? (signUrl ? { url: signUrl, name: signName || "" } : null) : officerSign();
@@ -89,18 +91,18 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
           {projectTitle && <div className="doc-project"><span>ชื่องาน</span> {projectTitle}</div>}
 
           {/* column-header strip — shares the colgroup with the body so columns align */}
-          <table className="doc-colstrip"><ColGroup /><tbody>
+          <table className="doc-colstrip"><ColGroup discountCol={discountCol} /><tbody>
             <tr className="doc-colhead">
-              <th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th><th className="r">จำนวนเงิน</th>
+              <th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">หน่วยละ</th>{discountCol && <th className="r">ส่วนลด</th>}<th className="r">จำนวนเงิน</th>
             </tr>
           </tbody></table>
         </div>
 
         {/* body: line items + totals + terms */}
-        <table className="doc-sheet"><ColGroup /><tbody>
+        <table className="doc-sheet"><ColGroup discountCol={discountCol} /><tbody>
           {children}
-          {totals && <tr className="ds-full ds-totals"><td colSpan={6}>{totals}</td></tr>}
-          <tr className="ds-full"><td colSpan={6}>
+          {totals && <tr className="ds-full ds-totals"><td colSpan={discountCol ? 7 : 6}>{totals}</td></tr>}
+          <tr className="ds-full"><td colSpan={discountCol ? 7 : 6}>
             <div className="doc-terms">
               {paymentInfo && <div className="doc-terms-box"><div className="doc-terms-title">การชำระเงิน</div><div className="doc-terms-body">{paymentInfo}</div></div>}
               {termsPayment && <div className="doc-terms-box"><div className="doc-terms-title">เงื่อนไขการชำระเงิน</div><div className="doc-terms-body">{termsPayment}</div></div>}
