@@ -93,8 +93,8 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
   const [laborF, setLaborF] = React.useState("all");   // กรองตามสถานะการกรอกค่าแรง
   const [jobPreview, setJobPreview] = React.useState(null);
   const STATUS = JOB_ST;
-  // ชิปเชื่อมโยงใบเสนอราคา/ใบงาน → พรีวิวแผงขวาก่อน (เหมือนเมนูเอกสารอื่น)
-  const [peekEl, openPeek] = useDocPeek();
+  // ชิปเชื่อมโยงใบเสนอราคา/ใบงาน → พรีวิวแผงขวาก่อน · "เปิดหน้าเต็ม" เด้งไปเมนูจริงผ่าน onOpenDoc
+  const [peekEl, openPeek] = useDocPeek(onOpenDoc);
   // only show team / status options that actually appear in the current job list
   const teamOpts = (subTeams || []).filter((t) => jobs.some((j) => j.assigned_team === t.id));
   const statusOpts = [["all", "ทุกสถานะ"], ...Object.entries(STATUS).filter(([k]) => jobs.some((j) => j.status === k)).map(([k, v]) => [k, v.t])];
