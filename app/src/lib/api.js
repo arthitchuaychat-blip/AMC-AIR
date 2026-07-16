@@ -140,12 +140,17 @@ export async function listMaterialsLite() {
   const catMap = Object.fromEntries(cats.map((c) => [c.id, c]));
   const PAGE = 1000;
   const all = [];
-  const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty,btu_min,btu_max,series,voltage,refrigerant,seer,pipe_size,energy_label";
+  const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty,btu_min,btu_max,series,voltage,refrigerant,seer,pipe_size,energy_label,warranty";
   let cols = FULL;
   // ต้องมี order เสมอ — แบ่งหน้าโดยไม่มี order อาจได้แถวซ้ำ/หายระหว่างหน้า (ลำดับไม่การันตี)
   const page = (from) => supabase.from("materials").select(cols).eq("active", true).order("code").range(from, from + PAGE - 1);
   for (let from = 0; ; from += PAGE) {
     let { data, error } = await page(from);
+    // pre-140 fallback: retry without the warranty column
+    if (error && /warranty/i.test(error.message || "")) {
+      cols = cols.replace(",warranty", "");
+      ({ data, error } = await page(from));
+    }
     // pre-106 fallback: retry without the AC series/spec columns
     if (error && /series|voltage|refrigerant|seer|pipe_size|energy_label/i.test(error.message || "")) {
       cols = cols.replace(",series,voltage,refrigerant,seer,pipe_size,energy_label", "");
@@ -197,6 +202,7 @@ export async function saveMaterial(row, isNew) {
     seer: kind === "ac" && row.seer ? Number(row.seer) : null,
     pipe_size: kind === "ac" ? (row.pipe_size?.trim() || null) : null,
     energy_label: kind === "ac" ? (row.energy_label || null) : null,
+    warranty: kind === "ac" ? (row.warranty?.trim() || null) : null,   // การรับประกัน (mig 140) — แสดงต่อลูกค้า/บอทได้
     tracked: kind === "service" ? false : (row.tracked !== false),
     unit: row.unit,
     cost: Number(row.cost) || 0,
@@ -217,10 +223,11 @@ export async function saveMaterial(row, isNew) {
   let { error } = await supabase.from("materials").upsert(payload, { onConflict: "code" });
   // graceful fallback: if migration 087/098 (new columns) hasn't been run yet, the schema
   // cache rejects those columns and blocks EVERY save — retry without them so the catalog still works
-  if (error && /power_cost_year|features|purchase_unit|purchase_qty|btu_min|btu_max|series|voltage|refrigerant|seer|pipe_size|energy_label/i.test(error.message || "")) {
+  if (error && /power_cost_year|features|purchase_unit|purchase_qty|btu_min|btu_max|series|voltage|refrigerant|seer|pipe_size|energy_label|warranty/i.test(error.message || "")) {
     delete payload.power_cost_year; delete payload.features; delete payload.purchase_unit; delete payload.purchase_qty;
     delete payload.btu_min; delete payload.btu_max;
     delete payload.series; delete payload.voltage; delete payload.refrigerant; delete payload.seer; delete payload.pipe_size; delete payload.energy_label;
+    delete payload.warranty;
     ({ error } = await supabase.from("materials").upsert(payload, { onConflict: "code" }));
   }
   if (error) throw error;

@@ -135,12 +135,14 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
     // แอร์+บริการทั้งหมดในระบบ (เฉพาะ active · ไม่รวมวัสดุ/อุปกรณ์ภายใน) — เลือกเฉพาะฟิลด์ปลอดภัย: มีแค่ sale_price ไม่มี cost/สต๊อก
     // ต้องแยกดึงตามหมวด: แอร์มี 800+ รุ่น ถ้าดึงรวมกันบริการจะโดนเบียดหลุด limit (บทเรียนเดียวกับ Supabase 1000-row cap)
     // ฟิลด์ที่ลูกค้าเห็นได้เท่านั้น — ห้ามมี cost/สต๊อก/ข้อมูลซื้อ/ผู้ขายเด็ดขาด (วัดขนาดแล้ว: desc≤139 ตัวอักษร/รุ่น รวม ~60k ไหว)
-    const AC_FIELDS = "kind,brand,series,name_th,name_en,ac_type,btu,unit,sale_price,seer,energy_label,refrigerant,voltage,pipe_size,power_cost_year,description,features";
+    const AC_FIELDS = "kind,brand,series,name_th,name_en,ac_type,btu,unit,sale_price,seer,energy_label,refrigerant,voltage,pipe_size,power_cost_year,description,features,warranty";
     const SVC_FIELDS = "kind,name_th,btu_min,btu_max,unit,sale_price,description";
-    const [pa, ps] = await Promise.all([
-      tfetch(`${SB()}/rest/v1/materials?select=${AC_FIELDS}&active=eq.true&kind=eq.ac&order=brand.asc,btu.asc,name_th.asc&limit=1000`, { headers: sbH() }),
+    const acFetch = (fields) => tfetch(`${SB()}/rest/v1/materials?select=${fields}&active=eq.true&kind=eq.ac&order=brand.asc,btu.asc,name_th.asc&limit=1000`, { headers: sbH() });
+    let [pa, ps] = await Promise.all([
+      acFetch(AC_FIELDS),
       tfetch(`${SB()}/rest/v1/materials?select=${SVC_FIELDS}&active=eq.true&kind=eq.service&order=name_th.asc&limit=200`, { headers: sbH() }),
     ]);
+    if (!pa.ok) pa = await acFetch(AC_FIELDS.replace(",warranty", "")); // ยังไม่รัน migration 140 — ดึงแบบไม่มีคอลัมน์รับประกัน
     const prods = [...(pa.ok ? await pa.json() : []), ...(ps.ok ? await ps.json() : [])];
     if (!prods.length) return { text: null, err: `catalog empty (status ${pa.status}/${ps.status})` };
     const money = (v) => (Number(v) > 0 ? `${Number(v).toLocaleString("en-US")} บาท` : "สอบถามราคา");
@@ -151,6 +153,7 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
       p.seer ? `SEER ${p.seer}` : null, p.energy_label, p.refrigerant, p.voltage,
       p.pipe_size ? `ท่อ ${p.pipe_size}` : null,
       Number(p.power_cost_year) > 0 ? `ค่าไฟ~${Number(p.power_cost_year).toLocaleString("en-US")} บาท/ปี` : null,
+      p.warranty ? `ประกัน: ${clip(p.warranty, 120)}` : null,
       money(p.sale_price), clip(p.description, 200), clip(p.features, 300)].filter(Boolean).join(" | ");
     const svcLine = (p) => [p.name_th, (p.btu_min || p.btu_max) ? `สำหรับแอร์ ${p.btu_min || ""}–${p.btu_max || ""} BTU` : null,
       money(p.sale_price) + (p.unit ? `/${p.unit}` : ""), clip(p.description, 250)].filter(Boolean).join(" | ");

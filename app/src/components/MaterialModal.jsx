@@ -58,6 +58,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     seer: initial?.seer ?? "",
     pipe_size: initial?.pipe_size ?? "",
     energy_label: initial?.energy_label ?? "",
+    warranty: initial?.warranty ?? "",
   }));
   // ข้อมูลระดับ "รุ่น" (คุณสมบัติ + โบรชัวร์ — ใช้ร่วมทุกขนาดในรุ่น) โหลด/บันทึกที่ตาราง ac_series
   const [srsFeat, setSrsFeat] = React.useState("");
@@ -299,6 +300,11 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
             <label className="fld"><span>⚡ ประมาณค่าไฟ/ปี (บาท) · แสดงบนเว็บ</span>
               <input className="inp" type="number" value={f.power_cost_year} onChange={set("power_cost_year")} placeholder="เว้นว่าง = คำนวณจาก SEER อัตโนมัติ" />
               <span style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 3 }}>คำนวณอัตโนมัติจาก BTU ÷ SEER · ใช้งาน 8 ชม./วัน · ค่าไฟ 5 บาท/หน่วย — พิมพ์ทับเองได้</span>
+            </label>
+          )}
+          {isAc && (
+            <label className="fld"><span>🛡️ การรับประกัน · แสดงต่อลูกค้า/บอทนำไปตอบได้</span>
+              <input className="inp" value={f.warranty} onChange={set("warranty")} placeholder="เช่น คอมเพรสเซอร์ 5 ปี · อะไหล่ 1 ปี (รัน migration 140 ก่อนใช้)" />
             </label>
           )}
           {isAc && (f.series || "").trim() !== "" && (
