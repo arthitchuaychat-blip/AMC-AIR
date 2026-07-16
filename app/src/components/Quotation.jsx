@@ -84,7 +84,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   function startEdit(q) {
     const lk = lockMsg(q); if (lk) return alert(lk);
     setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", job_type: q.job_type || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at,
-      items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), kind: x.kind, description: x.description || "" })) });
+      items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), discount: Number(x.discount) || 0, kind: x.kind, description: x.description || "" })) });
   }
   // ไม่มี "สร้างซ้ำ" ในใบเสนอราคา — กติกาบริษัท: เอกสารขายเริ่มจาก BOQ เสมอ (อยากได้ใบคล้ายกัน → สร้างซ้ำที่ BOQ แล้วออกใบเสนอจากตรงนั้น)
 
@@ -401,7 +401,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 title={q.title} sub={`${q.items.length} รายการ`} by={q.createdByName}
                 date={q.issue_date || q.created_at} amountLabel="ยอดสุทธิ" amount={q.grand}
                 customer={{ name: q.customerName, contactName: q.contactName, phone: q.contactPhone, addr: q.customerAddr, siteAddress: q.siteAddress, mapUrl: q.map_url }} />
-              {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "quote", no: q.quote_no }} onOpen={openPeek} />; })()}
+              {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "quote", no: q.quote_no }} onOpen={openPeek} />; })()}
               <InternalNoteTag note={q.internal_note} role={role} />
               <div className="job-lines"><div className="job-actions">
                 {q.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}

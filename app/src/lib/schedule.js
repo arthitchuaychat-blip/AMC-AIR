@@ -34,7 +34,7 @@ export const JOB_STATUSES = [
   ["in_progress", "กำลังทำงาน", "b-amber", "#ea8a04"],
   ["awaiting_approval", "รออนุมัติ", "b-purple", "#7c3aed"],
   ["reschedule", "นัดหมายเพิ่ม", "b-orange", "#ea580c"],
-  ["done", "เสร็จ", "b-green", "#16a34a"],
+  ["done", "เสร็จปิดงาน", "b-green", "#16a34a"],
   ["cancelled", "ยกเลิกแล้ว", "b-red", "#dc2626"],
 ];
 export const jobStatusColor = (s) => (JOB_STATUSES.find((x) => x[0] === s) || JOB_STATUSES[0])[3];

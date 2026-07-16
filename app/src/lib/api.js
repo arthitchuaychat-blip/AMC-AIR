@@ -3794,10 +3794,12 @@ export async function listDocLinks() {
     supabase.from("quotations").select("quote_no,boq_no"),
     supabase.from("invoices").select("invoice_no,quote_no").neq("status", "cancelled"),
     supabase.from("receipts").select("receipt_no,invoice_no,quote_no,job_no,boq_no"),
-    supabase.from("job_orders").select("job_no,quote_no"),
+    supabase.from("job_orders").select("job_no,quote_no,status"),
     supabase.from("purchase_orders").select("po_no,quote_no,status").then((r) => (r.error ? { data: [] } : r)), // pre-100 → ยังไม่มี quote_no
   ]);
   const byQuote = {};
+  // สถานะใบงานรายใบ — เอกสารทุกใบในสายใช้ติดป้าย "✓ เสร็จปิดงาน" บนชิปงาน
+  const jobStatusBy = Object.fromEntries((jo.data || []).map((x) => [x.job_no, x.status]));
   const ensure = (qn) => (byQuote[qn] = byQuote[qn] || { boqNo: null, jobNos: [], invoiceNos: [], receiptNos: [], poNos: [], poOpen: 0 });
   (q.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).boqNo = x.boq_no || null; });
   (jo.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).jobNos.push(x.job_no); });
@@ -3811,7 +3813,7 @@ export async function listDocLinks() {
   (inv.data || []).forEach((x) => { if (x.quote_no) invToQuote[x.invoice_no] = x.quote_no; });
   (rc.data || []).forEach((x) => { if (x.quote_no) rcToQuote[x.receipt_no] = x.quote_no; });
   (po.data || []).forEach((x) => { if (x.quote_no) poToQuote[x.po_no] = x.quote_no; });
-  return { byQuote, boqToQuote, jobToQuote, invToQuote, rcToQuote, poToQuote };
+  return { byQuote, boqToQuote, jobToQuote, invToQuote, rcToQuote, poToQuote, jobStatusBy };
 }
 
 // ---------- เครื่องมือช่าง (mig 122): ทะเบียน + เบิก/คืน/แจ้งชำรุด ----------

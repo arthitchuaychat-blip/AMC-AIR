@@ -4,7 +4,7 @@ import React from "react";
 // Pass the doc numbers you want to show; `self` ({type,no}) is excluded. onOpen(type, no) handles navigation.
 const LABEL = { boq: (n) => "BOQ " + n, quote: (n) => n, job: (n) => "งาน " + n, invoice: (n) => "บิล " + n, receipt: (n) => "ใบเสร็จ " + n, po: (n) => "สั่งซื้อ " + n };
 
-export default function DocChips({ boqNo, quoteNo, jobNos = [], invoiceNos = [], receiptNos = [], poNos = [], self, onOpen }) {
+export default function DocChips({ boqNo, quoteNo, jobNos = [], invoiceNos = [], receiptNos = [], poNos = [], self, onOpen, jobStatusBy = {} }) {
   const items = [];
   if (boqNo) items.push(["boq", boqNo]);
   if (quoteNo) items.push(["quote", quoteNo]);
@@ -17,9 +17,16 @@ export default function DocChips({ boqNo, quoteNo, jobNos = [], invoiceNos = [],
   return (
     <div className="doc-links">
       <span className="doc-links-l">🔗 เชื่อมโยง</span>
-      {shown.map(([t, n], i) => (
-        <button key={t + n + i} className={"doclink dl-" + t} onClick={(e) => { e.stopPropagation(); onOpen && onOpen(t, n); }}>{LABEL[t](n)}</button>
-      ))}
+      {shown.map(([t, n], i) => {
+        // ใบงานที่ "เสร็จปิดงาน" แล้ว → ติ๊กเขียวบนชิปงานในเอกสารทุกใบที่เชื่อมกัน
+        const done = t === "job" && jobStatusBy[n] === "done";
+        return (
+          <button key={t + n + i} className={"doclink dl-" + t} onClick={(e) => { e.stopPropagation(); onOpen && onOpen(t, n); }}
+            style={done ? { background: "#f0fdf4", borderColor: "#86efac", color: "#15803d", fontWeight: 700 } : {}}>
+            {LABEL[t](n)}{done ? " · ✓ เสร็จปิดงาน" : ""}
+          </button>
+        );
+      })}
     </div>
   );
 }

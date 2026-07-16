@@ -243,7 +243,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               ) : null}
               amountLabel="ยอดรับสุทธิ" amount={x.net}
               customer={{ name: x.customerName, contactName: x.mainContactName, phone: x.contactPhone || x.mainContactPhone, addr: x.customerAddr, siteAddress: x.siteAddress, mapUrl: x.mapUrl }} />
-            {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={openPeek} />; })()}
+            {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={openPeek} />; })()}
             <InternalNoteTag note={x.internal_note} role={role} />
             <div className="job-lines"><div className="job-actions">
               {x.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}

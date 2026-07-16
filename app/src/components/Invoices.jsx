@@ -324,7 +324,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 date={x.issue_date || x.created_at} amountLabel="ยอดงวดนี้" amount={x.total}
                 customer={{ name: x.customerName, contactName: x.mainContactName, phone: x.contactPhone || x.mainContactPhone, addr: x.customerAddr, siteAddress: x.siteAddress, mapUrl: x.mapUrl }} />
               {grand > 0 && x.status !== "cancelled" && <div className="inv-progress"><div className="inv-bar"><div style={{ width: Math.min(100, bl / grand * 100) + "%" }} /></div><span>วางบิลรวม {fmtBaht(bl)} / {fmtBaht(grand)}{bl >= grand - 0.01 ? " · ครบ 100% ✓" : ""}</span></div>}
-              {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "invoice", no: x.invoice_no }} onOpen={openPeek} />; })()}
+              {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "invoice", no: x.invoice_no }} onOpen={openPeek} />; })()}
               <InternalNoteTag note={x.internal_note} role={role} />
               <div className="job-lines"><div className="job-actions">
                 <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
