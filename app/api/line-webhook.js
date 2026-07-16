@@ -301,6 +301,10 @@ export default async function handler(req, res) {
         thai_day: th.getUTCDay(),
         isOpenNow: cfg ? isOpenNow(cfg) : null,
         wouldSendAfterHours: cfg ? (!!cfg.enabled && !!cfg.afterhours_enabled && (cfg.afterhours_text || "").trim().length > 0 && !isOpenNow(cfg)) : null,
+        // สถานะบอท AI: จะตอบจริงต้อง enabled + ai_enabled + มี key + นอกเวลาทำการ
+        ai_enabled: cfg ? !!cfg.ai_enabled : null,
+        anthropic_key: !!process.env.ANTHROPIC_API_KEY,
+        aiWouldReplyNow: cfg ? (!!cfg.enabled && !!cfg.ai_enabled && !!process.env.ANTHROPIC_API_KEY && !isOpenNow(cfg)) : null,
       });
     }
     if (params.get("dbcheck") === "1") {
