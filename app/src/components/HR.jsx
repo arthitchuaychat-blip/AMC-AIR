@@ -8,7 +8,7 @@ import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 
-const TABS = [["today", "วันนี้"], ["leaves", "อนุมัติลา"], ["advances", "เบิกล่วงหน้า"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
+const TABS = [["today", "วันนี้"], ["calendar", "ปฏิทิน"], ["leaves", "อนุมัติลา"], ["advances", "เบิกล่วงหน้า"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
@@ -41,6 +41,7 @@ export default function HR({ role }) {
       </div>
 
       {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
+      {tab === "calendar" && <CalendarTab staff={staff} settings={settings} holidays={holidays} holSet={holSet} flash={flash} />}
       {tab === "leaves" && <LeavesTab staff={staff} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "advances" && <AdvancesTab canManage={canManage} flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
@@ -147,6 +148,128 @@ function AttEditModal({ day, row, onClose, onSaved, flash }) {
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
           <button className="btn-primary" disabled={busy} onClick={save}>บันทึก</button></div>
       </div>
+    </div>
+  );
+}
+
+// ---------- CALENDAR (ปฏิทินภาพรวม: มา/สาย/ลา/ขาด/วันหยุดบริษัท) ----------
+function CalendarTab({ staff, settings, holidays, holSet, flash }) {
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const [ym, setYm] = React.useState(() => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; });
+  const [att, setAtt] = React.useState([]);
+  const [leaves, setLeaves] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  // ตัวกรอง: รายบุคคล · ประเภทการลา · มาสาย · ขาด · วันหยุดบริษัท
+  const [person, setPerson] = React.useState("all");
+  const [lvTypes, setLvTypes] = React.useState(() => new Set(LEAVE_TYPES.map((t) => t.id)));
+  const [showLate, setShowLate] = React.useState(true);
+  const [showAbsent, setShowAbsent] = React.useState(true);
+  const [showHol, setShowHol] = React.useState(true);
+  const [sel, setSel] = React.useState(null);   // วันที่กดดูรายชื่อ
+  const [y, m] = ym.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const from = `${ym}-01`, to = `${ym}-${pad2(daysInMonth)}`;
+  React.useEffect(() => {
+    let dead = false; setLoading(true); setSel(null);
+    Promise.all([listAttendance(from, to), listLeaves("approved")])
+      .then(([a, l]) => { if (!dead) { setAtt(a); setLeaves(l); } })
+      .catch((e) => flash("โหลดไม่สำเร็จ: " + (e.message || e), true))
+      .finally(() => !dead && setLoading(false));
+    return () => { dead = true; };
+  }, [ym]);
+  const today = todayYmd();
+  const holByDay = React.useMemo(() => Object.fromEntries(holidays.map((h) => [h.day, h.name])), [holidays]);
+  const leaveDaySet = React.useMemo(() => buildLeaveDaySet(leaves, from, to), [leaves, from, to]);
+  const attBy = React.useMemo(() => { const o = {}; att.forEach((a) => { (o[a.user_id] = o[a.user_id] || {})[a.work_date] = a; }); return o; }, [att]);
+  const people = person === "all" ? staff : staff.filter((p) => String(p.id) === String(person));
+  const one = people.length === 1 ? people[0] : null;
+  const toggleLv = (id) => setLvTypes((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // สรุปของวันหนึ่ง (ตามตัวกรอง)
+  const dayInfo = (k) => {
+    const out = { leave: [], late: [], absent: [], present: [] };
+    for (const p of people) {
+      const lv = leaveDaySet[p.id]?.[k];
+      if (lv && lvTypes.has(lv.t)) out.leave.push({ p, lv });
+      const a = attBy[p.id]?.[k];
+      if (a?.check_in_at) { const s = dayStat(a, settings); (s.isLate ? out.late : out.present).push({ p, s }); }
+      else if (!lv && k <= today && !holByDay[k] && isWorkday(k, p.work_pattern || "mon_sat", p.sat_group, holSet)) out.absent.push({ p });
+    }
+    return out;
+  };
+  const cells = [];
+  const lead = new Date(y, m - 1, 1).getDay();               // 0=อาทิตย์
+  for (let i = 0; i < lead; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(`${ym}-${pad2(d)}`);
+  const chip = (bg, fg, txt, key) => <span key={key} style={{ background: bg, color: fg, borderRadius: 7, padding: "1px 6px", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>{txt}</span>;
+  const selInfo = sel ? dayInfo(sel) : null;
+  const monthNav = (d) => { const x = new Date(y, m - 1 + d, 1); setYm(`${x.getFullYear()}-${pad2(x.getMonth() + 1)}`); };
+  return (
+    <div className="card">
+      <div className="sec-head" style={{ flexWrap: "wrap", gap: 8 }}>
+        <div><div className="sec-title">ปฏิทินภาพรวม</div><div className="sec-sub">มาทำงาน · มาสาย · ลา · ขาด · วันหยุดบริษัท — กดที่วันเพื่อดูรายชื่อ</div></div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <button className="btn-ghost sm" onClick={() => monthNav(-1)}>←</button>
+          <input type="month" className="inp" style={{ width: 150 }} value={ym} onChange={(e) => e.target.value && setYm(e.target.value)} />
+          <button className="btn-ghost sm" onClick={() => monthNav(1)}>→</button>
+        </div>
+      </div>
+      <div className="cat-filter" style={{ marginBottom: 10, gap: 6, flexWrap: "wrap" }}>
+        <select className="inp" style={{ width: 180 }} value={person} onChange={(e) => setPerson(e.target.value)}>
+          <option value="all">👥 ทุกคน ({staff.length})</option>
+          {staff.map((p) => <option key={p.id} value={p.id}>{p.name || p.email}</option>)}
+        </select>
+        {LEAVE_TYPES.map((t) => (
+          <button key={t.id} className={"cat-chip" + (lvTypes.has(t.id) ? " on" : "")} onClick={() => toggleLv(t.id)}
+            style={lvTypes.has(t.id) ? { background: "#2563eb", color: "#fff", borderColor: "#2563eb" } : {}}>{t.label}</button>
+        ))}
+        <button className={"cat-chip" + (showLate ? " on" : "")} onClick={() => setShowLate(!showLate)} style={showLate ? { background: "#d97706", color: "#fff", borderColor: "#d97706" } : {}}>มาสาย</button>
+        <button className={"cat-chip" + (showAbsent ? " on" : "")} onClick={() => setShowAbsent(!showAbsent)} style={showAbsent ? { background: "#dc2626", color: "#fff", borderColor: "#dc2626" } : {}}>ขาด</button>
+        <button className={"cat-chip" + (showHol ? " on" : "")} onClick={() => setShowHol(!showHol)} style={showHol ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>วันหยุดบริษัท</button>
+      </div>
+      {loading ? <div className="empty sm">กำลังโหลด…</div> : (
+      <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+        {["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"].map((d, i) => <div key={d} style={{ textAlign: "center", fontSize: 11.5, fontWeight: 800, color: i === 0 ? "#dc2626" : "var(--ink-3)", padding: "2px 0" }}>{d}</div>)}
+        {cells.map((k, i) => {
+          if (!k) return <div key={"b" + i} />;
+          const hol = holByDay[k];
+          const inf = dayInfo(k);
+          const isToday = k === today;
+          return (
+            <button key={k} type="button" onClick={() => setSel(sel === k ? null : k)}
+              style={{ minHeight: 74, textAlign: "left", border: "1.5px solid " + (sel === k ? "#2563eb" : isToday ? "#93c5fd" : "var(--line)"), borderRadius: 10, padding: "4px 6px", background: hol && showHol ? "#ecfeff" : "#fff", display: "flex", flexDirection: "column", gap: 3, cursor: "pointer" }}>
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: isToday ? "#2563eb" : "var(--ink-2)" }}>{Number(k.slice(8))}{isToday ? " · วันนี้" : ""}</span>
+              {hol && showHol && <span style={{ fontSize: 10, color: "#0e7490", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>🏖 {hol}</span>}
+              <span style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                {one ? <>
+                  {inf.present.length > 0 && chip("#dcfce7", "#15803d", "มาทำงาน", "p")}
+                  {showLate && inf.late.length > 0 && chip("#fef3c7", "#b45309", `สาย ${fmtMin(inf.late[0].s.lateMin)}`, "l")}
+                  {inf.leave.map((x, j) => chip("#dbeafe", "#1d4ed8", leaveLabel(x.lv.t) + (x.lv.h ? ` ${x.lv.h} ชม.` : ""), "v" + j))}
+                  {showAbsent && inf.absent.length > 0 && chip("#fee2e2", "#b91c1c", "ขาด", "a")}
+                </> : <>
+                  {inf.leave.length > 0 && chip("#dbeafe", "#1d4ed8", `ลา ${inf.leave.length}`, "v")}
+                  {showLate && inf.late.length > 0 && chip("#fef3c7", "#b45309", `สาย ${inf.late.length}`, "l")}
+                  {showAbsent && inf.absent.length > 0 && chip("#fee2e2", "#b91c1c", `ขาด ${inf.absent.length}`, "a")}
+                  {inf.present.length > 0 && chip("#dcfce7", "#15803d", `มา ${inf.present.length + inf.late.length}`, "p")}
+                </>}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {sel && selInfo && (
+        <div style={{ marginTop: 10, border: "1.5px solid var(--line)", borderRadius: 12, padding: "10px 12px" }}>
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>{thDate(sel)} {holByDay[sel] ? `· 🏖 ${holByDay[sel]}` : ""}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, fontSize: 12.5 }}>
+            <div><b style={{ color: "#1d4ed8" }}>ลา ({selInfo.leave.length})</b>{selInfo.leave.map((x, i) => <div key={i}>• {x.p.name} — {leaveLabel(x.lv.t)}{x.lv.h ? ` ${x.lv.h} ชม.` : ""}</div>)}</div>
+            {showLate && <div><b style={{ color: "#b45309" }}>มาสาย ({selInfo.late.length})</b>{selInfo.late.map((x, i) => <div key={i}>• {x.p.name} — สาย {fmtMin(x.s.lateMin)}</div>)}</div>}
+            {showAbsent && <div><b style={{ color: "#b91c1c" }}>ขาด ({selInfo.absent.length})</b>{selInfo.absent.map((x, i) => <div key={i}>• {x.p.name}</div>)}</div>}
+            <div><b style={{ color: "#15803d" }}>มาทำงาน ({selInfo.present.length + selInfo.late.length})</b>{selInfo.present.map((x, i) => <div key={i}>• {x.p.name}</div>)}</div>
+          </div>
+        </div>
+      )}
+      </>
+      )}
     </div>
   );
 }

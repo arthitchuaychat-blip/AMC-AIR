@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-16·ช่างซัพ: ปุ่ม 'เปิดหน้าเต็ม' จากพรีวิวเด้งไปเมนูจริงแล้ว (ต่อ onOpenDoc เข้า DocPeek) v417";
+const BUILD = "2026-07-16·HR: แท็บปฏิทินภาพรวม — มา/สาย/ลา/ขาด/วันหยุดบริษัทรายเดือน + กรองรายคน/ประเภทลา/สาย/ขาด/วันหยุด กดวันดูรายชื่อ v418";
 
 function SetupNotice() {
   return (
