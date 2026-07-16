@@ -134,18 +134,21 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
 
     // แอร์+บริการทั้งหมดในระบบ (เฉพาะ active · ไม่รวมวัสดุ/อุปกรณ์ภายใน) — เลือกเฉพาะฟิลด์ปลอดภัย: มีแค่ sale_price ไม่มี cost/สต๊อก
     // ต้องแยกดึงตามหมวด: แอร์มี 800+ รุ่น ถ้าดึงรวมกันบริการจะโดนเบียดหลุด limit (บทเรียนเดียวกับ Supabase 1000-row cap)
-    const FIELDS = "kind,brand,series,name_th,ac_type,btu,btu_min,btu_max,unit,sale_price,seer,energy_label";
+    // แยกชุดฟิลด์: แอร์ไม่ดึง description (855 รายการ ข้อความยาวจะบวมเกิน) · บริการดึงมาให้บอทอธิบายขอบเขตงานได้
+    const AC_FIELDS = "kind,brand,series,name_th,ac_type,btu,unit,sale_price,seer,energy_label,refrigerant,voltage";
+    const SVC_FIELDS = "kind,name_th,btu_min,btu_max,unit,sale_price,description";
     const [pa, ps] = await Promise.all([
-      tfetch(`${SB()}/rest/v1/materials?select=${FIELDS}&active=eq.true&kind=eq.ac&order=brand.asc,btu.asc,name_th.asc&limit=900`, { headers: sbH() }),
-      tfetch(`${SB()}/rest/v1/materials?select=${FIELDS}&active=eq.true&kind=eq.service&order=name_th.asc&limit=200`, { headers: sbH() }),
+      tfetch(`${SB()}/rest/v1/materials?select=${AC_FIELDS}&active=eq.true&kind=eq.ac&order=brand.asc,btu.asc,name_th.asc&limit=1000`, { headers: sbH() }),
+      tfetch(`${SB()}/rest/v1/materials?select=${SVC_FIELDS}&active=eq.true&kind=eq.service&order=name_th.asc&limit=200`, { headers: sbH() }),
     ]);
     const prods = [...(pa.ok ? await pa.json() : []), ...(ps.ok ? await ps.json() : [])];
     if (!prods.length) return { text: null, err: `catalog empty (status ${pa.status}/${ps.status})` };
     const money = (v) => (Number(v) > 0 ? `${Number(v).toLocaleString("en-US")} บาท` : "สอบถามราคา");
     const acLine = (p) => [p.brand, p.series, p.name_th, p.ac_type, p.btu ? `${p.btu} BTU` : null,
-      p.seer ? `SEER ${p.seer}` : null, p.energy_label, money(p.sale_price)].filter(Boolean).join(" | ");
+      p.seer ? `SEER ${p.seer}` : null, p.energy_label, p.refrigerant, p.voltage, money(p.sale_price)].filter(Boolean).join(" | ");
+    const desc = (p) => { const d = (p.description || "").replace(/\s+/g, " ").trim(); return d ? d.slice(0, 160) : null; };
     const svcLine = (p) => [p.name_th, (p.btu_min || p.btu_max) ? `สำหรับแอร์ ${p.btu_min || ""}–${p.btu_max || ""} BTU` : null,
-      money(p.sale_price) + (p.unit ? `/${p.unit}` : "")].filter(Boolean).join(" | ");
+      money(p.sale_price) + (p.unit ? `/${p.unit}` : ""), desc(p)].filter(Boolean).join(" | ");
     const sec = (title, kind, fn) => { const a = prods.filter((p) => p.kind === kind); return a.length ? `## ${title}\n` + a.map(fn).join("\n") : ""; };
     const catalog = [sec("แอร์", "ac", acLine), sec("ค่าบริการ (ล้าง/ติดตั้ง/ซ่อม)", "service", svcLine)]
       .filter(Boolean).join("\n\n");
