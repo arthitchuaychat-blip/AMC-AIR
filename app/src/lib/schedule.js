@@ -33,7 +33,7 @@ export const JOB_STATUSES = [
   ["scheduled", "นัดแล้ว", "b-blue", "#2563eb"],
   ["in_progress", "กำลังทำงาน", "b-amber", "#ea8a04"],
   ["awaiting_approval", "รออนุมัติ", "b-purple", "#7c3aed"],
-  ["reschedule", "นัดหมายเพิ่ม", "b-orange", "#ea580c"],
+  ["reschedule", "รอนัดหมายเพิ่ม", "b-orange", "#ea580c"],
   ["done", "เสร็จปิดงาน", "b-green", "#16a34a"],
   ["cancelled", "ยกเลิกแล้ว", "b-red", "#dc2626"],
 ];
