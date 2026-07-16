@@ -605,7 +605,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 {jo.locked && canOverrideLock && <button className="btn-ghost sm" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
                 {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(jo)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div></div>
-              {openTl === jo.job_no && <JobTimeline jobNo={jo.job_no} groupNo={groupKey(jo)} linked={!!jo.group_no} canPost={canEdit} author={me} flash={flash} />}
+              {/* หัวหน้าช่าง: ดูใบงาน + คอมเมนต์ในความเคลื่อนไหวได้ แต่แก้สถานะ/แก้ไขใบงานไม่ได้ (ปุ่มพวกนั้น gate ด้วย canEdit) */}
+              {openTl === jo.job_no && <JobTimeline jobNo={jo.job_no} groupNo={groupKey(jo)} linked={!!jo.group_no} canPost={canEdit || role === "lead_tech"} author={me} flash={flash} />}
             </div>
           );
         })}
