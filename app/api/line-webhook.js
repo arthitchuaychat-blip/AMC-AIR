@@ -132,8 +132,8 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
     const kr = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=kind`, { headers: sbH() });
     if (kr.ok && ((await kr.json())[0]?.kind === "supplier")) return { text: null, err: "supplier-skip" };
 
-    // สินค้า+บริการทั้งหมดในระบบ (เฉพาะ active) — เลือกเฉพาะฟิลด์ปลอดภัย: มีแค่ sale_price ไม่มี cost/สต๊อก
-    const pr = await tfetch(`${SB()}/rest/v1/materials?select=kind,brand,series,name_th,ac_type,btu,btu_min,btu_max,unit,sale_price,seer,energy_label&active=eq.true&order=kind.asc,brand.asc,btu.asc,name_th.asc&limit=800`, { headers: sbH() });
+    // แอร์+บริการทั้งหมดในระบบ (เฉพาะ active · ไม่รวมวัสดุ/อุปกรณ์ภายใน) — เลือกเฉพาะฟิลด์ปลอดภัย: มีแค่ sale_price ไม่มี cost/สต๊อก
+    const pr = await tfetch(`${SB()}/rest/v1/materials?select=kind,brand,series,name_th,ac_type,btu,btu_min,btu_max,unit,sale_price,seer,energy_label&active=eq.true&kind=in.(ac,service)&order=kind.asc,brand.asc,btu.asc,name_th.asc&limit=800`, { headers: sbH() });
     const prods = pr.ok ? await pr.json() : [];
     if (!prods.length) return { text: null, err: `catalog empty (status ${pr.status})` };
     const money = (v) => (Number(v) > 0 ? `${Number(v).toLocaleString("en-US")} บาท` : "สอบถามราคา");
@@ -141,10 +141,8 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
       p.seer ? `SEER ${p.seer}` : null, p.energy_label, money(p.sale_price)].filter(Boolean).join(" | ");
     const svcLine = (p) => [p.name_th, (p.btu_min || p.btu_max) ? `สำหรับแอร์ ${p.btu_min || ""}–${p.btu_max || ""} BTU` : null,
       money(p.sale_price) + (p.unit ? `/${p.unit}` : "")].filter(Boolean).join(" | ");
-    const matLine = (p) => [[p.brand, p.name_th].filter(Boolean).join(" "),
-      money(p.sale_price) + (p.unit ? `/${p.unit}` : "")].filter(Boolean).join(" | ");
     const sec = (title, kind, fn) => { const a = prods.filter((p) => p.kind === kind); return a.length ? `## ${title}\n` + a.map(fn).join("\n") : ""; };
-    const catalog = [sec("แอร์", "ac", acLine), sec("ค่าบริการ (ล้าง/ติดตั้ง/ซ่อม)", "service", svcLine), sec("วัสดุ/อุปกรณ์", "material", matLine)]
+    const catalog = [sec("แอร์", "ac", acLine), sec("ค่าบริการ (ล้าง/ติดตั้ง/ซ่อม)", "service", svcLine)]
       .filter(Boolean).join("\n\n");
 
     // ประวัติแชตล่าสุด → บอทตอบต่อเนื่องได้ (ข้อความปัจจุบันถูกบันทึกไปแล้ว จึงอยู่ในนี้ด้วย)
@@ -366,7 +364,7 @@ export default async function handler(req, res) {
     }
     // ?aicat=1 — ดูว่าบอทเห็นแคตตาล็อกกี่รายการ แยกหมวด + รายการบริการพร้อมราคา (ไม่มีข้อมูลต้นทุน)
     if (params.get("aicat") === "1") {
-      const r = await tfetch(`${SB()}/rest/v1/materials?select=kind,name_th,sale_price,unit&active=eq.true&order=kind.asc,name_th.asc&limit=800`, { headers: sbH() });
+      const r = await tfetch(`${SB()}/rest/v1/materials?select=kind,name_th,sale_price,unit&active=eq.true&kind=in.(ac,service)&order=kind.asc,name_th.asc&limit=800`, { headers: sbH() });
       const rows = r.ok ? await r.json() : [];
       const byKind = {}; rows.forEach((x) => { byKind[x.kind] = (byKind[x.kind] || 0) + 1; });
       const services = rows.filter((x) => x.kind === "service")
