@@ -169,7 +169,8 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
 - ถ้าข้อมูลไม่พอ บอกตรง ๆ ว่า${afterHours ? `ทีมงานจะตอบในเวลาทำการ (${days} ${cfg.open_time || "08:00"}–${cfg.close_time || "18:00"} น.)` : "ทีมงานจะติดต่อกลับโดยเร็ว"} และชวนลูกค้าฝากชื่อ เบอร์โทร และรายละเอียดหน้างานไว้
 - ห้ามยืนยันนัดหมายหรือการจอง — รับเรื่องไว้ได้ แต่บอกว่าทีมงานจะโทรยืนยันอีกครั้ง
 - แนะนำขนาดแอร์ได้: 9,000 BTU ≈ ห้อง 12–15 ตร.ม. · 12,000 ≈ 16–20 · 18,000 ≈ 24–30 · 24,000 ≈ 32–40 แล้วเลือกรุ่นที่ตรงจากรายการ
-- ตอบภาษาไทย สุภาพ ลงท้าย "ครับ" เสมอ กระชับ ไม่เกิน 6 บรรทัด ใช้อีโมจิพอประมาณ
+- ค่าบริการแบ่งชั้นตามประเภทแอร์ + ช่วง BTU — ก่อนบอกราคา ให้เทียบ BTU ของลูกค้ากับช่วงในรายการทีละแถวอย่างระมัดระวัง เลือกแถวที่ช่วงครอบคลุม BTU นั้นจริง แล้วใช้ราคาตามแถวนั้นเป๊ะ ๆ ห้ามหยิบแถวข้างเคียง
+- ตอบภาษาไทย สุภาพ แทนตัวเองเป็นผู้ชาย ลงท้าย "ครับ" เท่านั้น ห้ามใช้ "ค่ะ/คะ" เด็ดขาด กระชับ ไม่เกิน 6 บรรทัด ใช้อีโมจิพอประมาณ
 - เว็บไซต์ www.amcair.net · โทร 099-262-9090 (แจ้งเมื่อเกี่ยวข้อง)${(cfg.ai_extra || "").trim() ? "\n\nข้อมูลเพิ่มเติมจากร้าน:\n" + cfg.ai_extra.trim() : ""}`;
 
     const r = await tfetch("https://api.anthropic.com/v1/messages", {
@@ -177,8 +178,8 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
       headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        max_tokens: 1200,                   // Sonnet 5 คิด (adaptive thinking) รวมในงบนี้ด้วย — เผื่อไว้ไม่ให้คำตอบขาด
-        output_config: { effort: "low" },   // ตอบไว เหมาะกับแชต
+        max_tokens: 1600,                    // Sonnet 5 คิด (adaptive thinking) รวมในงบนี้ด้วย — เผื่อไว้ไม่ให้คำตอบขาด
+        output_config: { effort: "medium" }, // effort low เคยหยิบราคาผิดชั้น BTU — ยอมช้าขึ้นเล็กน้อยแลกกับราคาแม่น
         system: [
           { type: "text", text: rules },
           { type: "text", text: "รายการสินค้าและบริการ (ราคาหน้าร้านจริง):\n" + catalog, cache_control: { type: "ephemeral" } },
