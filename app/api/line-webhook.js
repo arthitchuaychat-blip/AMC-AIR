@@ -317,6 +317,14 @@ export default async function handler(req, res) {
       }
       return res.status(200).json(out);
     }
+    // ?aitest=1&q=<คำถาม> — ยิงบอท AI ตรง ๆ (ไม่ส่งเข้าไลน์) เพื่อดูคำตอบ/สาเหตุที่พังจริงจากเซิร์ฟเวอร์
+    if (params.get("aitest") === "1") {
+      const q = params.get("q") || "แอร์ 12000 BTU ราคาเท่าไหร่";
+      const cfg = (await getAutoReplyCfg()) || {};
+      const t0 = Date.now();
+      const answer = await aiAnswer("__aitest__", q, cfg, !isOpenNow(cfg));
+      return res.status(200).json({ ok: !!answer, ms: Date.now() - t0, question: q, answer: answer || null, hint: answer ? null : "ดู error จริงใน Vercel → Deployments → Functions log (ai-bot ...)" });
+    }
     if (params.get("linetest") === "1") {
       const t0 = Date.now();
       try { const r = await tfetch(`https://api.line.me/v2/bot/profile/Udummy`, { headers: { Authorization: `Bearer ${TOKEN()}` } }); return res.status(200).json({ reached: true, status: r.status, ms: Date.now() - t0, body: (await r.text()).slice(0, 160) }); }
