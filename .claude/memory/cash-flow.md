@@ -1,0 +1,34 @@
+---
+name: cash-flow
+description: "Cash-flow ledger page — money in/out by day, projected vs actual, seeded from docs + manual lines"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 85b6d010-27bd-419a-ad75-1ac380626a9a
+---
+
+Cash Flow page (built 2026-06-19, v84 — **needs migration `046_cash_flow.sql`**). Nav key `cashflow`, permission module `cashflow` (admin/exec/finance = E; **+ sales & hr = E as of v225**; others none). `CashFlow.jsx` has **no internal role gate** — whoever can open the page gets all edit controls, so the level (V vs E) barely matters; RLS is the real boundary. See [[subcontractor-system]] / [[vatsadu-os-app]].
+
+**Sales/HR access (v225, migration `085_cashflow_sales_hr.sql`):** UI perm cashflow N→E for sales+hr, plus RLS: `cash_entries_rw` widened to admin/exec/finance/**sales/hr** (read+write). **Gotcha that forced a second grant:** the on-open reconcile derives `desired` from ALL doc tables and deletes managed doc-lines not in `desired`. Every sync-source table is `using(true)` EXCEPT `sub_payouts` (was admin/exec/finance only) — so a sales/hr user with cash_entries write but no sub_payouts read would sync with an *empty* payout list and **delete every จ่ายช่างซัพ cash line**. Migration 085 adds `sub_payouts_read` (SELECT for the 5 roles; write stays admin/exec/finance) in the SAME file so the two grants are atomic. General lesson: before granting a role cash_entries write, confirm it can READ every table `syncCashEntriesFromDocs` queries, or the reconcile will wrongly delete lines.
+
+**Model:** one editable ledger table `cash_entries` (id, direction in/out, status projected/actual, entry_date, amount, note, source_type manual|invoice|receipt|payout|po|opening|expense|salary, source_ref, edited bool). RLS admin/exec/finance. Partial unique index on (source_type, source_ref) where source_type<>'manual' → idempotent doc sync. (`salary`+`expense` added to the check constraint in migration `076_cash_salary.sql`.)
+
+**Salary → Cash Flow:** `syncCashEntriesFromDocs` also seeds projected `salary` outflows for the rolling 12 months from `profiles` (pay_type='monthly', base_pay>0), source_ref `salary-YYYY-MM` (estimate, 1st of month). When a payroll run is **paid** (HR เงินเดือน → ทำจ่ายทั้งรอบ), `upsertPayrollCashEntry` overrides that month's row with the ACTUAL run total, dated month-end (วันสิ้นเดือน), `edited=true` so the estimate sync won't revert it. **ยกเลิกจ่าย** calls `removePayrollCashEntry` (deletes the row → estimate regenerates) + `unsettleAdvances` + setPayslipPaid(false). See [[hr-system]]. SRC label map in CashFlow.jsx now includes salary/expense.
+
+**Seeding (`syncCashEntriesFromDocs`, insert-or-update-if-not-edited, never overwrites user-edited rows):**
+- projected IN ← **unpaid** invoices only (by due_date, amount = total−wht; paid invoices excluded so no double-count with receipts)
+- actual IN ← paid receipts (by issue_date = วันที่รับเงิน, net)
+- OUT ← sub_payouts (paid=actual by paid_at / unpaid=projected by created_at, net) + purchase_orders (received=actual by received_at / open=projected by created_at, total from po_items)
+Once a user edits a seeded row (`edited=true`), sync leaves it alone.
+
+**Subcontractor labor owed (v239, 2026-07-02, migration `088_labor_owed_cashflow.sql`):** created payout batches (`sub_payouts`) already showed (unpaid→projected by created_at, paid→actual by paid_at). Added source_type **`labor_owed`** for labor that's `labor_confirmed` but not yet batched: sync pulls `job_orders` where `labor_confirmed && labor_total−labor_paid_amt>0` as a projected outflow per job (source_ref=job_no, dated by labor_confirmed_at). Creating a payout bumps `labor_paid_amt` → remaining→0 → the reconcile removes the owed line and the payout line (net, after WHT) takes over → no double-count. `confirmJobLabor`/`saveJobLabor` fire the background sync. `labor_owed` is in MANAGED + the CashFlow SRC label ("ค่าแรงช่างซัพ (รอเบิก)"). Constraint widened via DO-block (same '%source_type%' matcher).
+
+**Doc-lifecycle triggers (v224, 2026-06-29):** every cash-affecting doc mutation fires a background best-effort `syncCashEntriesFromDocs().catch(()=>{})` so the ledger reconciles the moment a doc is created/cancelled/deleted/paid — not just on Cash Flow open. Hooked in: `saveInvoice`, `setInvoiceStatus`, `deleteInvoice`, `saveReceipt`/`setReceiptStatus`/`deleteReceipt` (these 3 pre-existed), `savePurchaseOrder`, `markPoReceived`, `deletePurchaseOrder`, `createSubPayout`, `paySubPayout`, `cancelSubPayout`, `deleteSubPayout`. Fire-and-forget (not awaited) so it never breaks the mutation; a user without cash_entries write (RLS admin/exec/finance) just falls back to the on-open reconcile. Amount-only edits (updateSubPayout, setInvoiceWht/setReceiptWht) are NOT hooked — caught on next open.
+
+**Auto-sync + reconcile (v223, 2026-06-29):** the sync now **runs automatically on opening the Cash Flow page** (`CashFlow.jsx` mount effect: `load()` → `syncCashEntriesFromDocs()` → silent `load(true)`), not just the manual "ซิงค์จากเอกสาร" button — so ใบแจ้งหนี้→คาดว่าจะรับ / ใบเสร็จ→ได้รับจริง appear without pressing sync. It also now **deletes stale lines** (returns `{added,updated,removed}`): existing rows whose `source_type ∈ {invoice,receipt,payout,po,salary}` and whose `source_type:source_ref` is no longer in `desired` **and** `edited=false` are removed — this fixes the old double-count where a paid invoice's projected line lingered next to its receipt's actual line. The `!edited` guard preserves the payroll salary override (`upsertPayrollCashEntry` sets edited=true) and any hand-edited row; `manual`/`opening`/`expense` source types aren't in the managed set so are never deleted. Deletes are chunked at 100 ids.
+
+**UI (`CashFlow.jsx`):** month nav + toggle "จริง / จริง+คาดการณ์" + "ซิงค์จากเอกสาร" + "เพิ่มรายการ" + "เงินสดยกมา" field. KPIs (รับจริง/จ่ายจริง/สุทธิ/ค้างรับ/ค้างจ่าย). Per-day rows split into **2 columns: ประมาณการ | รับ-จ่ายจริง**; each line shows ±amount, note, source badge, edit/delete. Two running balances walked day-by-day: **เงินจริงสะสม** (opening + Σ actual) and **คาดการณ์** (opening + Σ actual+projected). Every line editable (date/amount/note) via modal; unlimited manual lines.
+
+**Opening balance** ("เงินสดยกมา") stored as a special `cash_entries` row source_type='opening' (date 2000-01-01) via getOpeningBalance/setOpeningBalance — avoids app_config write RLS (which is admin/exec only, but finance needs cashflow). Excluded from the day list; folded into the starting balance.
+
+api.js: listCashEntries / addCashEntry / updateCashEntry / deleteCashEntry / getOpeningBalance / setOpeningBalance / syncCashEntriesFromDocs.

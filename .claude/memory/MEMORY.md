@@ -1,0 +1,32 @@
+# Memory index
+
+- [Git BOQ case](git-boq-case.md) — git add ต้องก็อปพาธจาก git status เป๊ะ ๆ (BOQ.jsx ตัวใหญ่) ไม่งั้นหลุดเงียบ; ความจำอยู่บน Google Drive ผ่าน junction
+
+- [The Top Mentor](the-top-mentor.md) — แอปติดตาม Mentoring 8 สัปดาห์ + Happiness Survey, live ที่ amc-air.vercel.app/mentor/ (Supabase tm_* mig 108, สำเนาคู่ the-top-mentor/ ↔ app/public/mentor/); ค้าง = LINE auto-send + แบบสอบถามจริง
+
+- [วัสดุOS app](vatsadu-os-app.md) — what this project is; index.html is precompiled single-file React, runs by double-click (no Node/Python here).
+- [Company website](company-website.md) — live storefront www.amcair.net (company-website/, Vercel amc-air-497i): Supabase-wired catalog+cart, SSR /a/:id article + /p/:code product pages, sitemap/SEO; content managed via app's จัดการเว็บไซต์.
+- [Air shop site](air-shop-site.md) — single-file e-commerce site air-shop/index.html; catalog+prices scraped from แอร์บ้านราคาถูก.com; LINE-checkout cart.
+- [Production plan](production-plan.md) — going live via Cloud + CODE (React/Vite + Supabase, reusing the prototype UI). supabase/schema.sql done. Needs Node installed + user's Supabase account. (Earlier No-code/AppSheet attempt set aside.)
+- [LINE OA chat](line-oa-chat.md) — in-app chat board via Vercel edge functions + Supabase Realtime; env vars + activation steps + migration 023.
+- [AI LINE bot](ai-line-bot.md) — บอท Claude Sonnet 5 ตอบลูกค้านอกเวลาทำการใน line-webhook.js (aiAnswer, แคตตาล็อก web_products, ai_enabled/ai_extra ใน app_config.autoreply); ต้องมี ANTHROPIC_API_KEY บน Vercel, maxDuration 60.
+- [Stale-cache deploys](stale-cache-deploys.md) — "broken" filters/search are usually a cached old bundle; how to verify the live bundle; cache headers in app/vercel.json.
+- [Print pagination](print-pagination.md) — printed docs repeat the letterhead via JS pagination in printDoc.js (NOT thead/fixed — both fail in Chrome); verify print changes in a browser harness.
+- [Permissions system](permissions-system.md) — role access via lib/permissions.js (can()/navForRole + editable matrix in Settings, app_config + migration 039); ธุรการ on top.
+- [Team chat push](team-chat-push.md) — team-chat unread badges + Web Push/PWA (sw.js, push-send.js, migration 040); needs VAPID env on Vercel + Add-to-Home-Screen.
+- [HR system](hr-system.md) — attendance (selfie+GPS check-in/out), leave, holidays, monthly stats; lib/hr.js schedules, migration 041; set staff work_pattern in HR settings.
+- [Subcontractor system](subcontractor-system.md) — sub teams: per-job labor (80% default), payouts with WHT-on-VAT, team scorecard; migration 042; feeds Profit.
+- [Google Calendar feed](gcal-feed.md) — job schedule → Google Calendar via token-gated ICS feed (api/calendar.js); needs CALENDAR_FEED_TOKEN env; subscribe UI in Schedule.
+- [Cash flow](cash-flow.md) — money in/out by day, projected vs actual; cash_entries ledger seeded from docs + manual lines; migration 046; CashFlow.jsx.
+- [Doc lifecycle](doc-lifecycle.md) — OWNER RULES v390: ยกเลิก/ลบไล่จากใบล่าสุด+เหตุผลบังคับ (confirmDialog prompt.required), ใบยกเลิกล็อกปุ่มสร้างต่อ (BOQ แก้แล้ว revive), ใบเสนอใหม่ต้องอ้าง BOQ; + billing notes (mig 050), date filters.
+- [Internal note](internal-note.md) — back-office-only internal_note on 7 docs (mig 055); never printed for customers; shared InternalNote.jsx.
+- [Task board](task-board.md) — internal Kanban กระดานสั่งงาน (assign/attach/comment/status); module "tasks", TaskBoard.jsx, mig 056.
+- [Notifications](notifications.md) — app-wide bell + web push, 5 categories, per-role on/off; notify() in api.js, NotificationBell.jsx, mig 058.
+- [Expenses system](expenses-system.md) — เบิกจ่าย: requests/approve/pay+proof, 3 wallets (VAT/NoVAT/petty)+transfers+report; Expenses.jsx, mig 063; feeds Cash Flow + job cost.
+- [Audit trail](audit-trail.md) — financial-doc audit log + recoverable hard-deletes (snapshot before delete); logAudit() in api.js, viewer in Settings, mig 067 (run manually).
+- [Stock count](stock-count.md) — นับสต๊อก: compare system vs counted, adjust on-hand (adjust_in/out movements), keep per-round audit; module "stockcount", StockCount.jsx, mig 086.
+- [Handover system](handover-system.md) — ใบส่งมอบงาน: technician fills in-app (multi-form builder per machine + draw-on-screen signatures), prints/PDFs saved data; mig 077, module "handover", from งานของฉัน/ใบงาน.
+- [Suppliers system](suppliers-system.md) — ข้อมูลผู้ขาย (Suppliers) CRM mirroring customers (contacts+sites), module "suppliers", mig 092; write = admin/exec/finance/stock.
+- [PO procurement](po-procurement.md) — order-driven purchasing (mig 100): PO↔quote link (AC must link), receive→auto-withdraw actual cost to job, payment via expense approval (no cash mirror double-count), 2-axis status, cash flow actual-on-paid.
+- [Supabase 1000-row cap](supabase-1000-row-cap.md) — every select capped at 1000 rows; page growing tables with _fetchAll or new docs' lines silently vanish on read (v324 BOQ incident)
+- [Tools system](tools-system.md) — เครื่องมือช่าง: registry สต๊อก/ประจำรถ/ประจำตัว + เบิก-คืน-แจ้งชำรุดแบบรออนุมัติ; Tools.jsx, mig 122

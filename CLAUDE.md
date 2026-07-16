@@ -6,10 +6,16 @@ ERP ของร้านแอร์ AMC AIR + เว็บขายหน้�
 - `company-website/` — เว็บสาธารณะ www.amcair.net (Vercel โปรเจกต์แยก amc-air-497i) — SSR หน้า `/p/:code`, `/a/:id` อยู่ใน `api/`
 - `supabase/` — schema + migrations (Postgres/RLS/Realtime โปรเจกต์ tpyrlxhoyghawqvsphfj)
 - `app/api/` — Vercel serverless (line-webhook.js = แชต LINE + บอท AI, push-send, calendar ฯลฯ)
+- `the-top-mentor/` + `app/public/mentor/` — แอป The Top Mentor (BNI Chapter) → amc-air.vercel.app/mentor/ (สำเนาคู่ ต้องแก้ให้ตรงกันทั้ง 2 ที่)
+- **`.claude/memory/` — ความจำสะสมของ Claude (อ่านก่อนเริ่มงานเสมอ)** เริ่มที่ `.claude/memory/MEMORY.md` = สารบัญ แล้วเปิดไฟล์ที่เกี่ยวกับงานที่จะทำ
 
 ## กฎเหล็ก (ห้ามละเมิด)
 
 0. **เจ้าของทำงานสลับ คอม ↔ แท็บเล็ต (claude.ai/code)** — บนคอม: `git pull origin main` ก่อนเริ่มแก้โค้ดทุกเซสชัน (แท็บเล็ต clone ใหม่เสมอจึงล่าสุดอยู่แล้ว) และ push ทันทีที่จบงานทุกครั้ง อย่าปล่อยงานค้างไม่ push
+
+0.1 **ความจำต้องเดินทางไปกับ repo** — `.claude/memory/*.md` คือความจำที่ใช้ร่วมทุกเครื่อง
+   - **ทุกเครื่อง**: อ่าน `.claude/memory/MEMORY.md` ก่อนเริ่มงาน · เขียน/แก้ความจำแล้ว **commit `.claude/memory/` ไปกับงานด้วยเสมอ**
+   - **เฉพาะบนคอมเครื่องเจ้าของ** (มีความจำ local ที่ `~/.claude/projects/.../memory` → junction ไป Google Drive): หลัง `git pull` รัน `.\.claude\sync-memory.ps1 -Pull` · ก่อน push รัน `.\.claude\sync-memory.ps1 -Push` เพื่อให้ 2 ที่ตรงกัน
 
 1. **ห้ามจับ secrets/API keys** ในโค้ดหรือแชตเด็ดขาด — เจ้าของตั้ง env ใน Vercel dashboard เอง (ยกเว้น Supabase anon key = public, commit ได้)
 2. **Migration รันเองไม่ได้** — เขียนไฟล์ใน `supabase/migrations/` แล้ว**วาง SQL ในแชต**ให้เจ้าของไปรันใน Supabase SQL Editor เสมอ (ล่าสุด: 143)
