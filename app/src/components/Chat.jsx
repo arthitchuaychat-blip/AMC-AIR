@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile, getAcSeries } from "../lib/api";
+import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -157,8 +157,19 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const selRef = React.useRef(null);
   const endRef = React.useRef(null);
   const pendingOpenRef = React.useRef(null); // line_user_id/psid to open once contacts (re)load after a channel switch
+  const [botCfg, setBotCfg] = React.useState(null);   // สวิตช์บอท AI นอกเวลาทำการ (app_config.autoreply)
 
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
+  React.useEffect(() => { getAutoReply().then((v) => setBotCfg(v || {})).catch(() => setBotCfg(null)); }, []);
+  // เปิด-ปิดบอท AI จากหน้าแชตได้เลย — เปิดบอทจะเปิดสวิตช์แม่ของระบบตอบอัตโนมัติให้ด้วย (ไม่งั้นบอทไม่ทำงาน)
+  async function toggleBot() {
+    if (!botCfg) return;
+    const on = !botCfg.ai_enabled;
+    const next = { ...botCfg, ai_enabled: on, ...(on ? { enabled: true } : {}) };
+    setBotCfg(next);
+    try { await saveAutoReply(next); flash(on ? "เปิดบอท AI แล้ว 🤖 — ตอบลูกค้าอัตโนมัตินอกเวลาทำการ" : "ปิดบอท AI แล้ว — นอกเวลาทำการจะส่งข้อความปกติแทน"); }
+    catch (e) { setBotCfg(botCfg); flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+  }
   // โหลดทั้ง LINE และ FB พร้อมกัน — แท็บที่ไม่ได้เปิดอยู่จะได้โชว์ตัวเลขค้างอ่านถูกต้อง
   async function loadContacts() {
     try {
@@ -510,6 +521,22 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       <div className="adm-head">
         <div><h1 className="page-title">แชต <span className="page-title-en">LINE OA</span></h1>
           <p className="page-sub">{contacts.length} ผู้ติดต่อ · คุยกับลูกค้า · เชื่อมกับ CRM</p></div>
+        {botCfg !== null && (
+          <button type="button" onClick={toggleBot}
+            title={botCfg.ai_enabled
+              ? "บอท AI กำลังตอบลูกค้าอัตโนมัติช่วงนอกเวลาทำการ — กดเพื่อปิด"
+              : "กดเพื่อเปิดบอท AI ตอบลูกค้าอัตโนมัติช่วงนอกเวลาทำการ (ตั้งค่าละเอียดที่ ตั้งค่า → ตอบอัตโนมัติ)"}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 999,
+              fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", transition: ".15s",
+              border: "1px solid " + (botCfg.ai_enabled ? "#86efac" : "var(--line)"),
+              background: botCfg.ai_enabled ? "#ecfdf5" : "var(--surface)",
+              color: botCfg.ai_enabled ? "#0a6b3d" : "var(--ink-3)",
+            }}>
+            <span style={{ width: 9, height: 9, borderRadius: 99, background: botCfg.ai_enabled ? "#16a34a" : "#cbd5e1", boxShadow: botCfg.ai_enabled ? "0 0 0 3px #bbf7d0" : "none" }} />
+            🤖 บอท AI {botCfg.ai_enabled ? "เปิดอยู่" : "ปิดอยู่"}
+          </button>
+        )}
       </div>
 
       <div className={"chat-wrap" + (showThread ? " show-thread" : "") + (showInfo ? " show-info" : "")}>
