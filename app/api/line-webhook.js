@@ -188,27 +188,34 @@ async function recordAutoReply(convId, text) {
   await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ line_user_id: convId, direction: "out", type: "text", text, sent_by: null }) });
   await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ last_autoreply_at: new Date().toISOString() }) });
 }
+// กล่องดำบอท: บันทึกการตัดสินใจล่าสุดลง app_config.ai_bot_last (ดูผ่าน ?autoreply=1) — ต้อง await เสมอ
+async function aiBlackbox(convId, q, extra) {
+  try {
+    await tfetch(`${SB()}/rest/v1/app_config?on_conflict=key`, {
+      method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ key: "ai_bot_last", value: { at: new Date().toISOString(), conv: String(convId).slice(-8), q: String(q || "").slice(0, 80), ...extra } }),
+    });
+  } catch (_) { /* กล่องดำห้ามพังงานหลัก */ }
+}
+
 async function autoReply(replyToken, convId, isNew, isUser, msgRow) {
   try {
-    if (!replyToken || !isUser) return;        // only 1-on-1 user chats
+    const isText = msgRow?.type === "text" && (msgRow.text || "").trim();
+    if (!replyToken || !isUser) { if (isText) await aiBlackbox(convId, msgRow.text, { skip: !replyToken ? "no-reply-token" : "not-1to1-user-chat" }); return; }
     const cfg = await getAutoReplyCfg();
-    if (!cfg || !cfg.enabled) return;
+    if (!cfg || !cfg.enabled) { if (isText) await aiBlackbox(convId, msgRow?.text, { skip: "autoreply-master-disabled" }); return; }
     const afterHours = !isOpenNow(cfg);
     // 0) บอท AI: ตอบคำถามจริงจากแคตตาล็อกทุกข้อความ (ไม่มี cooldown — คุยต่อเนื่องได้)
     //    ปกติตอบเฉพาะนอกเวลาทำการ · ติ๊ก "ตอบทุกเวลา" (ai_always) = ตอบตลอดรวมเวลาทำการ (โหมดทดสอบ/ช่วยทีม)
-    //    ตอบเฉพาะข้อความตัวอักษร · ถ้า AI ล้มเหลว/ปิด/ไม่มี key จะไหลลงข้อความตายตัวเดิมตามปกติ
-    if (cfg.ai_enabled && (afterHours || cfg.ai_always) && msgRow?.type === "text" && (msgRow.text || "").trim()) {
+    if (isText && cfg.ai_enabled && (afterHours || cfg.ai_always)) {
       const t0 = Date.now();
       const out = await aiAnswer(convId, msgRow.text.trim(), cfg, afterHours);
       let sent = false;
       if (out.text) sent = await sendAuto(replyToken, convId, "🤖 " + out.text);
-      // กล่องดำ: เก็บผลรอบล่าสุดไว้ที่ app_config.ai_bot_last — เปิดดูได้ที่ ?autoreply=1
-      // ต้อง await — Vercel แช่แข็งฟังก์ชันทันทีที่ตอบเสร็จ งานที่ไม่ await จะถูกทิ้ง
-      await tfetch(`${SB()}/rest/v1/app_config?on_conflict=key`, {
-        method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" },
-        body: JSON.stringify({ key: "ai_bot_last", value: { at: new Date().toISOString(), conv: String(convId).slice(-8), q: msgRow.text.slice(0, 80), ok: !!out.text && sent, ms: Date.now() - t0, err: out.err || (out.text && !sent ? "line-send-failed" : null) } }),
-      }).catch(() => {});
-      if (out.text) return;   // ได้คำตอบแล้ว (ส่งสำเร็จหรือไม่ก็ตาม อย่าส่งข้อความตายตัวซ้ำ)
+      await aiBlackbox(convId, msgRow.text, { ok: !!out.text && sent, ms: Date.now() - t0, err: out.err || (out.text && !sent ? "line-send-failed" : null) });
+      if (out.text) return;   // ได้คำตอบแล้ว (อย่าส่งข้อความตายตัวซ้ำ)
+    } else if (isText) {
+      await aiBlackbox(convId, msgRow.text, { skip: !cfg.ai_enabled ? "ai-disabled" : "in-business-hours(ai_always off)" });
     }
     // 1) welcome a brand-new contact (their first message)
     if (isNew && cfg.welcome_enabled && (cfg.welcome_text || "").trim()) {
