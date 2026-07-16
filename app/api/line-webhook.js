@@ -203,7 +203,8 @@ async function autoReply(replyToken, convId, isNew, isUser, msgRow) {
       let sent = false;
       if (out.text) sent = await sendAuto(replyToken, convId, "🤖 " + out.text);
       // กล่องดำ: เก็บผลรอบล่าสุดไว้ที่ app_config.ai_bot_last — เปิดดูได้ที่ ?autoreply=1
-      tfetch(`${SB()}/rest/v1/app_config?on_conflict=key`, {
+      // ต้อง await — Vercel แช่แข็งฟังก์ชันทันทีที่ตอบเสร็จ งานที่ไม่ await จะถูกทิ้ง
+      await tfetch(`${SB()}/rest/v1/app_config?on_conflict=key`, {
         method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" },
         body: JSON.stringify({ key: "ai_bot_last", value: { at: new Date().toISOString(), conv: String(convId).slice(-8), q: msgRow.text.slice(0, 80), ok: !!out.text && sent, ms: Date.now() - t0, err: out.err || (out.text && !sent ? "line-send-failed" : null) } }),
       }).catch(() => {});
@@ -329,14 +330,22 @@ export default async function handler(req, res) {
       }
       return res.status(200).json(out);
     }
-    // ?aitest=1&q=<คำถาม>[&conv=<line_user_id>] — ยิงบอท AI ตรง ๆ (ไม่ส่งเข้าไลน์) เพื่อดูคำตอบ/สาเหตุที่พังจริง
+    // ?aitest=1&q=<คำถาม>[&conv=<line_user_id>|&find=<ชื่อผู้ติดต่อ>] — ยิงบอท AI ตรง ๆ (ไม่ส่งเข้าไลน์) เพื่อดูคำตอบ/สาเหตุที่พังจริง
+    // &find= จะค้นหา line_contacts ด้วยชื่อ แล้วเล่นซ้ำด้วยประวัติแชตจริงของคนนั้น
     if (params.get("aitest") === "1") {
       const q = params.get("q") || "แอร์ 12000 BTU ราคาเท่าไหร่";
-      const conv = params.get("conv") || "__aitest__";
+      let conv = params.get("conv") || "__aitest__";
+      let found = null;
+      if (params.get("find")) {
+        const fr = await tfetch(`${SB()}/rest/v1/line_contacts?display_name=ilike.*${encodeURIComponent(params.get("find"))}*&select=line_user_id,display_name,kind&limit=3`, { headers: sbH() });
+        const rows = fr.ok ? await fr.json() : [];
+        found = rows.map((x) => ({ name: x.display_name, kind: x.kind || "customer", conv_tail: String(x.line_user_id).slice(-8) }));
+        if (rows[0]) conv = rows[0].line_user_id;
+      }
       const cfg = (await getAutoReplyCfg()) || {};
       const t0 = Date.now();
       const out = await aiAnswer(conv, q, cfg, !isOpenNow(cfg));
-      return res.status(200).json({ ok: !!out.text, ms: Date.now() - t0, question: q, answer: out.text, err: out.err });
+      return res.status(200).json({ ok: !!out.text, ms: Date.now() - t0, question: q, matched: found, answer: out.text, err: out.err });
     }
     if (params.get("linetest") === "1") {
       const t0 = Date.now();
