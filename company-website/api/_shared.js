@@ -59,7 +59,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <meta property="og:url" content="${esc(canonical)}" />
 ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}" />` : ""}
 <meta name="twitter:card" content="summary_large_image" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230ea5e9'/%3E%3Cg fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round'%3E%3Crect x='4' y='6' width='16' height='8' rx='1.5'/%3E%3Cpath d='M7 14v2M11 14v3M15 14v2'/%3E%3C/g%3E%3C/svg%3E" />
+<link rel="icon" type="image/png" href="/logo.png" />
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>` : ""}
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -75,8 +75,9 @@ img{max-width:100%;display:block}
 header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(12px);box-shadow:var(--shadow-sm)}
 header .bar{display:flex;align-items:center;justify-content:space-between;height:64px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
-.logo .mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));display:flex;align-items:center;justify-content:center;color:#fff}
-.logo .mark svg{width:22px;height:22px}
+/* โลโก้จริง (logo.png) แทนไอคอน SVG เดิม — กล่องขาวเหมือนหน้าแรก */
+.logo .mark{width:38px;height:38px;border-radius:11px;background:#fff;box-shadow:0 2px 8px rgba(13,71,181,.12);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.logo .mark img{width:100%;height:100%;object-fit:contain}
 .logo b span{color:var(--primary)}
 nav{display:flex;gap:4px;font-weight:600;font-size:14px;color:var(--ink-2)}
 nav a{padding:8px 12px;border-radius:9px}
@@ -153,7 +154,7 @@ footer a{color:#cbd5e1;font-weight:700}
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 <header><div class="wrap bar">
-  <a href="/" class="logo"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h18M3 12h18M3 16h12"/><circle cx="19" cy="16" r="2"/></svg></span><b>AMC<span> AIR</span></b></a>
+  <a href="/" class="logo"><span class="mark"><img src="/logo.png" alt="AMC AIR"></span><b>AMC<span> AIR</span></b></a>
   <nav>
     <a href="/#services" class="hide-m">บริการ</a>
     <a href="/products">สินค้า</a>
