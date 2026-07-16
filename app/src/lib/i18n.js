@@ -23,7 +23,7 @@ export const MYJOB_TAB_MY = {
 };
 
 // leave types + statuses (data-driven labels)
-export const LEAVE_MY = { vacation: "အနားယူခွင့်", personal: "ကိုယ်ရေးကိစ္စခွင့်", sick: "ဖျားနာခွင့်" };
+export const LEAVE_MY = { vacation: "အနားယူခွင့်", personal: "ကိုယ်ရေးကိစ္စခွင့်", sick: "ဖျားနာခွင့်", unpaid: "လစာမဲ့ခွင့်" };
 export const LV_STATUS_MY = { pending: "အတည်ပြုရန် စောင့်ဆိုင်း", approved: "အတည်ပြုပြီး", rejected: "ပယ်ချ" };
 
 // nav key → Burmese label (keys match NAV in App.jsx)

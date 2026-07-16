@@ -1,5 +1,5 @@
 // Payroll math — pure functions. Pay cycle cut-off 25th: period = 26th prev month → 25th this month.
-import { hrParseYmd, hrYmd, isWorkday, dayStat } from "./hr";
+import { hrParseYmd, hrYmd, isWorkday, dayStat, leaveFrac } from "./hr";
 
 const pad = (n) => String(n).padStart(2, "0");
 // the [from,to] dates for a pay month 'YYYY-MM' (paid that month): 26th of prev month → 25th of this month
@@ -11,11 +11,18 @@ export function payPeriod(ym) {
 }
 
 // attendance/leave stats for one person over [from,to]
+// leaveDaySet values are { t: type, h: hours|null } (see buildLeaveDaySet) — ลาราย ชม. นับเป็นเศษวัน และวันนั้นยังนับเข้างานตามปกติ
 export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, settings) {
-  let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveDays = 0;
+  let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveDays = 0, unpaidLeave = 0;
   for (let d = hrParseYmd(from); d <= hrParseYmd(to); d.setDate(d.getDate() + 1)) {
     const k = hrYmd(d);
-    if (leaveDaySet[emp.id]?.[k]) { leaveDays++; continue; }
+    const lv = leaveDaySet[emp.id]?.[k];
+    if (lv) {
+      const frac = leaveFrac(lv);
+      leaveDays += frac;
+      if (lv.t === "unpaid") unpaidLeave += frac;   // ลาไม่รับค่าแรง → หักเงินเสมอ (ผ่าน overLeave)
+      if (!lv.h) continue;                           // ลาเต็มวัน — ไม่นับเข้างาน/ขาดของวันนั้น
+    }
     if (!isWorkday(k, emp.work_pattern || "mon_sat", emp.sat_group, holSet)) continue;
     workdays++;
     const a = attByUserDay[emp.id]?.[k];
@@ -23,7 +30,8 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
     if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } otMin += s.otMin; otHours += s.otHours; }
     else absent++;
   }
-  return { present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveDays };
+  const r2 = (n) => Math.round(n * 100) / 100;
+  return { present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveDays: r2(leaveDays), unpaidLeave: r2(unpaidLeave) };
 }
 
 const r0 = (n) => Math.round(Number(n) || 0);

@@ -1,7 +1,7 @@
 import React from "react";
 import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance } from "../lib/api";
 import { fmtBaht } from "../lib/format";
-import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveLabel, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveLabel, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { useLang, LEAVE_MY, LV_STATUS_MY } from "../lib/i18n";
 import { UIcon } from "../icons";
 
@@ -136,9 +136,10 @@ export default function Attendance({ me }) {
         <div className="card">
           <div className="sec-head"><div><div className="sec-title">{L("วันลาคงเหลือ", "ကျန်ရှိသော ခွင့်ရက်")} ({L("ปี", "နှစ်")} {lang === "my" ? year : year + 543})</div></div></div>
           <div className="att-bal">
-            {LEAVE_TYPES.map((t) => { const q = quota[t.id] ?? 0, used = usedByType[t.id] || 0; return (
+            {LEAVE_TYPES.filter((t) => t.id !== "unpaid").map((t) => { const q = quota[t.id] ?? 0, used = usedByType[t.id] || 0; return (
               <div className="att-bal-item" key={t.id}><span>{lvType(t.id)}</span><b>{Math.max(0, q - used)}</b><small>/ {q} {L("วัน", "ရက်")}</small></div>
             ); })}
+            {usedByType.unpaid > 0 && <div className="att-bal-item"><span>{lvType("unpaid")}</span><b>{usedByType.unpaid}</b><small>{L("วัน (ไม่มีโควตา)", "ရက်")}</small></div>}
           </div>
           <LeaveForm pattern={pattern} satGroup={satGroup} holidays={holidays} onDone={(m) => { flash(m); load(); }} flash={flash} L={L} lvType={lvType} />
         </div>
@@ -149,7 +150,7 @@ export default function Attendance({ me }) {
             {leaves.length === 0 && <div className="empty sm">{L("ยังไม่มีใบลา", "ခွင့်လျှောက်လွှာ မရှိသေးပါ")}</div>}
             {leaves.map((l) => { const b = LV_BADGE[l.status] || LV_BADGE.pending; return (
               <div className="att-leave-row" key={l.id}>
-                <div><b>{lvType(l.type)}</b> · {thDate(l.start_date)}{l.end_date !== l.start_date ? ` – ${thDate(l.end_date)}` : ""} <span className="att-days">{l.days} {L("วัน", "ရက်")}</span>
+                <div><b>{lvType(l.type)}</b> · {thDate(l.start_date)}{l.end_date !== l.start_date ? ` – ${thDate(l.end_date)}` : ""} <span className="att-days">{Number(l.hours) > 0 ? `${Number(l.hours)} ${L("ชม.", "နာရီ")}${l.time_from && l.time_to ? ` (${String(l.time_from).slice(0, 5)}–${String(l.time_to).slice(0, 5)})` : ""}` : `${l.days} ${L("วัน", "ရက်")}`}</span>
                   {l.reason && <div className="jo-dim">{l.reason}</div>}</div>
                 <span className={"job-badge " + b.cls}>{lang === "my" ? (LV_STATUS_MY[l.status] || b.th) : b.th}</span>
               </div>
@@ -255,11 +256,25 @@ function LeaveForm({ pattern, satGroup, holidays, onDone, flash, L, lvType }) {
   const [end, setEnd] = React.useState(todayYmd());
   const [reason, setReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const days = (start && end && end >= start) ? leaveDays(start, end, pattern, satGroup, holidays) : 0;
+  // ลาราย ชม. (mig 141): เลือกวันเดียว + ช่วงเวลา — คิดโควตา/หักเงินเป็นเศษวัน (8 ชม. = 1 วัน)
+  const [mode, setMode] = React.useState("day");   // day | hour
+  const [tFrom, setTFrom] = React.useState("08:00");
+  const [tTo, setTTo] = React.useState("12:00");
+  const hours = mode === "hour" ? Math.max(0, Math.round(((minutesOf(tTo) ?? 0) - (minutesOf(tFrom) ?? 0)) / 30) / 2) : 0; // ปัดเป็นครึ่งชั่วโมง
+  const days = mode === "hour"
+    ? Math.round(hours / LEAVE_HOURS_PER_DAY * 100) / 100
+    : ((start && end && end >= start) ? leaveDays(start, end, pattern, satGroup, holidays) : 0);
   async function submit() {
-    if (!start || !end || end < start) return flash("เลือกช่วงวันที่ให้ถูกต้อง", true);
+    if (mode === "hour") {
+      if (!start) return flash(L("เลือกวันที่ลา", "ခွင့်ရက် ရွေးပါ"), true);
+      if (hours <= 0) return flash(L("ช่วงเวลาไม่ถูกต้อง (เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม)", "အချိန် မမှန်ပါ"), true);
+    } else if (!start || !end || end < start) return flash("เลือกช่วงวันที่ให้ถูกต้อง", true);
     setBusy(true);
-    try { await submitLeave({ type, start_date: start, end_date: end, days, reason }); setReason(""); onDone(L("ส่งใบลาแล้ว รออนุมัติ ✓", "ခွင့်လျှောက်လွှာ ပို့ပြီး · အတည်ပြုရန် စောင့်ဆိုင်း ✓")); }
+    try {
+      await submitLeave({ type, start_date: start, end_date: mode === "hour" ? start : end, days,
+        reason, hours: mode === "hour" ? hours : null, time_from: mode === "hour" ? tFrom : null, time_to: mode === "hour" ? tTo : null });
+      setReason(""); onDone(L("ส่งใบลาแล้ว รออนุมัติ ✓", "ခွင့်လျှောက်လွှာ ပို့ပြီး · အတည်ပြုရန် စောင့်ဆိုင်း ✓"));
+    }
     catch (e) { flash(L("ส่งใบลาไม่สำเร็จ: ", "ခွင့်လျှောက်၍ မရပါ: ") + (e.message || e), true); }
     setBusy(false);
   }
@@ -268,14 +283,27 @@ function LeaveForm({ pattern, satGroup, holidays, onDone, flash, L, lvType }) {
       <div className="fld-row">
         <label className="fld"><span>{L("ประเภท", "အမျိုးအစား")}</span>
           <select className="inp" value={type} onChange={(e) => setType(e.target.value)}>{LEAVE_TYPES.map((t) => <option key={t.id} value={t.id}>{lvType ? lvType(t.id) : t.label}</option>)}</select></label>
-        <label className="fld"><span>{L("จำนวน (วันทำงาน)", "ရက်အရေအတွက် (အလုပ်ရက်)")}</span><div className="inp" style={{ display: "flex", alignItems: "center", fontWeight: 700 }}>{days} {L("วัน", "ရက်")}</div></label>
+        <label className="fld"><span>{L("ช่วงการลา", "ခွင့်ပုံစံ")}</span>
+          <select className="inp" value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="day">{L("เต็มวัน", "တစ်နေ့လုံး")}</option>
+            <option value="hour">{L("ราย ชม.", "နာရီအလိုက်")}</option>
+          </select></label>
+        <label className="fld"><span>{L("จำนวน", "အရေအတွက်")}</span><div className="inp" style={{ display: "flex", alignItems: "center", fontWeight: 700, whiteSpace: "nowrap" }}>
+          {mode === "hour" ? `${hours} ${L("ชม.", "နာရီ")} (${days} ${L("วัน", "ရက်")})` : `${days} ${L("วัน", "ရက်")}`}</div></label>
       </div>
-      <div className="fld-row">
+      {mode === "hour" && (
+        <div className="fld-row">
+          <label className="fld"><span>{L("วันที่ลา", "ခွင့်ရက်")}</span><input className="inp" type="date" value={start} onChange={(e) => { setStart(e.target.value); setEnd(e.target.value); }} /></label>
+          <label className="fld"><span>{L("ตั้งแต่เวลา", "စချိန်")}</span><input className="inp" type="time" value={tFrom} onChange={(e) => setTFrom(e.target.value)} /></label>
+          <label className="fld"><span>{L("ถึงเวลา", "ဆုံးချိန်")}</span><input className="inp" type="time" value={tTo} onChange={(e) => setTTo(e.target.value)} /></label>
+        </div>
+      )}
+      {mode !== "hour" && <div className="fld-row">
         <label className="fld"><span>{L("ตั้งแต่", "မှ")}</span><input className="inp" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
         <label className="fld"><span>{L("ถึง", "အထိ")}</span><input className="inp" type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} /></label>
-      </div>
+      </div>}
       <label className="fld"><span>{L("เหตุผล", "အကြောင်းပြချက်")}</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={L("เช่น ไปธุระ / ป่วย", "ဥပမာ - ကိစ္စရှိ / ဖျားနာ")} /></label>
-      <button className="btn-primary" disabled={busy || days < 1} onClick={submit}>{L("ส่งใบลา", "ခွင့်တင်ရန်")}</button>
+      <button className="btn-primary" disabled={busy || (mode === "hour" ? hours <= 0 : days < 1)} onClick={submit}>{L("ส่งใบลา", "ခွင့်တင်ရန်")}</button>
     </div>
   );
 }

@@ -3082,12 +3082,20 @@ export async function listAttendance(fromDay, toDay) {
   return (att.data || []).map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]), work_pattern: pm[a.user_id]?.work_pattern, sat_group: pm[a.user_id]?.sat_group }));
 }
 
-export async function submitLeave({ type, start_date, end_date, days, reason }) {
+export async function submitLeave({ type, start_date, end_date, days, reason, hours, time_from, time_to }) {
   const uid = await _uid();
-  const { error } = await supabase.from("hr_leaves").insert({ user_id: uid, type, start_date, end_date, days, reason: reason || null });
+  const row = { user_id: uid, type, start_date, end_date, days, reason: reason || null,
+    hours: Number(hours) > 0 ? Number(hours) : null, time_from: time_from || null, time_to: time_to || null };
+  let { error } = await supabase.from("hr_leaves").insert(row);
+  // pre-141 fallback: ยังไม่มีคอลัมน์ลาราย ชม. — ส่งแบบเต็มวันไปก่อน ไม่ให้ฟอร์มพังทั้งเมนู
+  if (error && /hours|time_from|time_to|unpaid|check/i.test(error.message || "")) {
+    const { hours: _h, time_from: _f, time_to: _t, ...basic } = row;
+    ({ error } = await supabase.from("hr_leaves").insert(basic));
+  }
   if (error) throw error;
   const me = await getProfile();
-  notify(await _usersByRole(["admin", "exec"]), { category: "hr", title: `📝 ${me?.name || "พนักงาน"} ขอลา (${days} วัน)`, body: reason || "", url: "hr", ref_type: "leave" });
+  const amount = Number(hours) > 0 ? `${Number(hours)} ชม.` : `${days} วัน`;
+  notify(await _usersByRole(["admin", "exec"]), { category: "hr", title: `📝 ${me?.name || "พนักงาน"} ขอลา (${amount})`, body: reason || "", url: "hr", ref_type: "leave" });
 }
 export async function listMyLeaves() {
   const uid = await _uid();
@@ -3112,8 +3120,13 @@ export async function decideLeave(id, status, note) {
 }
 // HR/admin edit a leave request (type/dates/days/reason)
 export async function updateLeave(id, fields) {
-  const patch = { type: fields.type, start_date: fields.start_date, end_date: fields.end_date, days: Number(fields.days) || 1, reason: fields.reason || null };
-  const { error } = await supabase.from("hr_leaves").update(patch).eq("id", id);
+  const patch = { type: fields.type, start_date: fields.start_date, end_date: fields.end_date, days: Number(fields.days) || 1, reason: fields.reason || null,
+    hours: Number(fields.hours) > 0 ? Number(fields.hours) : null, time_from: fields.time_from || null, time_to: fields.time_to || null };
+  let { error } = await supabase.from("hr_leaves").update(patch).eq("id", id);
+  if (error && /hours|time_from|time_to/i.test(error.message || "")) {
+    const { hours: _h, time_from: _f, time_to: _t, ...basic } = patch;
+    ({ error } = await supabase.from("hr_leaves").update(basic).eq("id", id));
+  }
   if (error) throw error;
 }
 // HR/admin delete a leave request

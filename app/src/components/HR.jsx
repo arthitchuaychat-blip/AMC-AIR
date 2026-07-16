@@ -3,7 +3,7 @@ import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, dele
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
-import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -64,7 +64,7 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
     try {
       const [a, lv] = await Promise.all([listAttendance(day, day), listLeaves("approved")]);
       setAtt(a);
-      const m = {}; lv.forEach((l) => { if (l.start_date <= day && l.end_date >= day) m[l.user_id] = l.type; }); setOnLeave(m);
+      const m = {}; lv.forEach((l) => { if (l.start_date <= day && l.end_date >= day) m[l.user_id] = { t: l.type, h: Number(l.hours) > 0 ? Number(l.hours) : null }; }); setOnLeave(m);
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -79,7 +79,7 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
     const a = attBy[p.id], s = a ? dayStat(a, settings) : null;
     const work = isWorkday(day, p.work_pattern || "mon_sat", p.sat_group, holSet);
     let status = "off";
-    if (onLeave[p.id]) status = "leave";
+    if (onLeave[p.id] && !onLeave[p.id].h) status = "leave";   // ลาราย ชม. — วันนั้นยังต้องเข้างาน จึงนับสถานะตามปกติ
     else if (a?.check_in_at) status = a?.check_out_at ? "out" : (s.isLate ? "late" : "in");
     else if (work) status = "absent";
     return { p, a, s, status };
@@ -106,7 +106,8 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
               <span>เข้า <b>{fmtTime(a?.check_in_at)}</b>{s?.isLate && <span className="att-tag late sm">+{fmtMin(s.lateMin)}</span>}</span>
               <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otHours > 0 && <span className="att-tag ot sm">OT {s.otHours} ชม.</span>}</span>
             </div>
-            <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]) : b.t}</span>
+            <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]?.t) : b.t}</span>
+            {status !== "leave" && onLeave[p.id]?.h > 0 && <span className="job-badge b-blue">{leaveLabel(onLeave[p.id].t)} {onLeave[p.id].h} ชม.</span>}
             {rowManage && <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>}
             {rowManage && a && <button className="btn-ghost sm danger" title="ลบเวลาเข้า-ออก" onClick={() => delAtt(p)}><UIcon name="trash" size={13} /></button>}
             {canManage && !rowManage && <span className="jo-dim" title="ฝ่ายบุคคลแก้เวลาของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารแก้ให้" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span>}
@@ -179,7 +180,7 @@ function LeavesTab({ staff, holSet, canManage, flash }) {
         {list.map((l) => { const b = B[l.status]; return (
           <div className="hr-leave-row" key={l.id}>
             <div><b>{l.name}</b> <span className="jo-dim">{l.department}</span><br />
-              {leaveLabel(l.type)} · {thDate(l.start_date)}{l.end_date !== l.start_date ? ` – ${thDate(l.end_date)}` : ""} <span className="att-days">{l.days} วัน</span>
+              {leaveLabel(l.type)} · {thDate(l.start_date)}{l.end_date !== l.start_date ? ` – ${thDate(l.end_date)}` : ""} <span className="att-days">{leaveAmountText(l)}</span>
               {l.reason && <div className="jo-dim">เหตุผล: {l.reason}</div>}</div>
             <div className="hr-leave-act">
               <span className={"job-badge " + b.c}>{b.t}</span>
@@ -204,12 +205,24 @@ function LeaveEditModal({ leave, staff, holSet, onClose, onSaved, flash }) {
   const [end, setEnd] = React.useState(leave.end_date);
   const [reason, setReason] = React.useState(leave.reason || "");
   const [busy, setBusy] = React.useState(false);
+  // ลาราย ชม. — แก้ช่วงเวลาได้ (8 ชม. = 1 วัน)
+  const [mode, setMode] = React.useState(Number(leave.hours) > 0 ? "hour" : "day");
+  const [tFrom, setTFrom] = React.useState(String(leave.time_from || "08:00").slice(0, 5));
+  const [tTo, setTTo] = React.useState(String(leave.time_to || "12:00").slice(0, 5));
+  const hours = mode === "hour" ? Math.max(0, Math.round(((minutesOf(tTo) ?? 0) - (minutesOf(tFrom) ?? 0)) / 30) / 2) : 0;
   const person = staff.find((p) => p.id === leave.user_id);
-  const days = (start && end && end >= start) ? leaveDays(start, end, person?.work_pattern || "mon_sat", person?.sat_group, holSet) : 1;
+  const days = mode === "hour"
+    ? Math.round(hours / LEAVE_HOURS_PER_DAY * 100) / 100
+    : ((start && end && end >= start) ? leaveDays(start, end, person?.work_pattern || "mon_sat", person?.sat_group, holSet) : 1);
   async function save() {
+    if (mode === "hour" && hours <= 0) { flash("ช่วงเวลาไม่ถูกต้อง", true); return; }
     if (!start || !end || end < start) { flash("ช่วงวันที่ไม่ถูกต้อง", true); return; }
     setBusy(true);
-    try { await updateLeave(leave.id, { type, start_date: start, end_date: end, days, reason }); flash("บันทึกใบลาแล้ว ✓"); onSaved(); }
+    try {
+      await updateLeave(leave.id, { type, start_date: start, end_date: mode === "hour" ? start : end, days, reason,
+        hours: mode === "hour" ? hours : null, time_from: mode === "hour" ? tFrom : null, time_to: mode === "hour" ? tTo : null });
+      flash("บันทึกใบลาแล้ว ✓"); onSaved();
+    }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -219,14 +232,30 @@ function LeaveEditModal({ leave, staff, holSet, onClose, onSaved, flash }) {
         <div className="modal-head"><div className="modal-title">แก้ไขใบลา · {leave.name}</div>
           <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
-          <label className="fld"><span>ประเภทการลา</span>
-            <select className="inp" value={type} onChange={(e) => setType(e.target.value)}>{LEAVE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
-          <div className="fld-row" style={{ marginTop: 8 }}>
-            <label className="fld"><span>วันเริ่ม</span><input className="inp" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-            <label className="fld"><span>วันสิ้นสุด</span><input className="inp" type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+          <div className="fld-row">
+            <label className="fld"><span>ประเภทการลา</span>
+              <select className="inp" value={type} onChange={(e) => setType(e.target.value)}>{LEAVE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
+            <label className="fld"><span>ช่วงการลา</span>
+              <select className="inp" value={mode} onChange={(e) => setMode(e.target.value)}>
+                <option value="day">เต็มวัน</option><option value="hour">ราย ชม.</option>
+              </select></label>
           </div>
+          {mode === "hour" ? (
+            <div className="fld-row" style={{ marginTop: 8 }}>
+              <label className="fld"><span>วันที่ลา</span><input className="inp" type="date" value={start} onChange={(e) => { setStart(e.target.value); setEnd(e.target.value); }} /></label>
+              <label className="fld"><span>ตั้งแต่เวลา</span><input className="inp" type="time" value={tFrom} onChange={(e) => setTFrom(e.target.value)} /></label>
+              <label className="fld"><span>ถึงเวลา</span><input className="inp" type="time" value={tTo} onChange={(e) => setTTo(e.target.value)} /></label>
+            </div>
+          ) : (
+            <div className="fld-row" style={{ marginTop: 8 }}>
+              <label className="fld"><span>วันเริ่ม</span><input className="inp" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+              <label className="fld"><span>วันสิ้นสุด</span><input className="inp" type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+            </div>
+          )}
           <label className="fld" style={{ marginTop: 8 }}><span>เหตุผล</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} /></label>
-          <p className="page-sub" style={{ marginTop: 6 }}>รวม <b>{days}</b> วันทำงาน (คำนวณจากกะของพนักงาน · ไม่นับวันหยุด)</p>
+          <p className="page-sub" style={{ marginTop: 6 }}>{mode === "hour"
+            ? <>รวม <b>{hours}</b> ชม. (= {days} วัน · คิด {LEAVE_HOURS_PER_DAY} ชม. = 1 วัน)</>
+            : <>รวม <b>{days}</b> วันทำงาน (คำนวณจากกะของพนักงาน · ไม่นับวันหยุด)</>}</p>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
           <button className="btn-primary" disabled={busy} onClick={save}>บันทึก</button></div>
@@ -446,19 +475,20 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
       const calcTo = to < today ? to : today;     // don't count future days as absent
       const [att, leaves] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved")]);
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
-      const leaveDaySet = {}; leaves.forEach((l) => { for (let d = hrParseYmd(l.start_date); d <= hrParseYmd(l.end_date); d.setDate(d.getDate() + 1)) { const k = hrYmd(d); if (k >= from && k <= calcTo) (leaveDaySet[l.user_id] = leaveDaySet[l.user_id] || {})[k] = l.type; } });
+      const leaveDaySet = buildLeaveDaySet(leaves, from, calcTo);
       const result = staff.map((p) => {
         let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveCnt = 0;
         for (let d = hrParseYmd(from); d <= hrParseYmd(calcTo); d.setDate(d.getDate() + 1)) {
           const k = hrYmd(d);
           const onLeave = leaveDaySet[p.id]?.[k];
-          if (onLeave) { leaveCnt++; continue; }
+          if (onLeave) { leaveCnt += leaveFrac(onLeave); if (!onLeave.h) continue; }   // ลาราย ชม. = เศษวัน และวันนั้นยังนับเข้า/ขาดตามปกติ
           if (!isWorkday(k, p.work_pattern || "mon_sat", p.sat_group, holSet)) continue;
           workdays++;
           const a = attByUserDay[p.id]?.[k];
           if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } otMin += s.otMin; otHours += s.otHours; }
           else absent++;
         }
+        leaveCnt = Math.round(leaveCnt * 100) / 100;
         return { p, present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveCnt };
       });
       result.sort((a, b) => b.absent - a.absent || b.lateCnt - a.lateCnt); // worst first (for review)
@@ -488,10 +518,11 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
       if (!onLeave && !work) continue; // skip plain days off
       const a = raw.attByUserDay[p.id]?.[k];
       let kind = "off", s = null;
-      if (onLeave) kind = "leave";
+      if (onLeave && !onLeave.h) kind = "leave";   // ลาเต็มวัน — ลาราย ชม. วันนั้นแสดงสถานะเข้างานตามจริง + ป้ายชั่วโมงลา
       else if (a?.check_in_at) { s = dayStat(a, settings); kind = s.isLate ? "late" : "present"; }
-      else kind = "absent";
-      out.push({ k, kind, leaveType: onLeave, a, s });
+      else if (work) kind = "absent";
+      else kind = "off";
+      out.push({ k, kind, leaveType: onLeave?.t, leaveHours: onLeave?.h, a, s });
     }
     return out;
   }
@@ -564,6 +595,7 @@ function PersonDetail({ row, days, onClose, canManage, flash, onChanged }) {
                       {d.s?.isLate && <span className="att-tag late sm">สาย {fmtMin(d.s.lateMin)}</span>}
                       {d.s?.otHours > 0 && <span className="att-tag ot sm">OT {d.s.otHours} ชม.</span>}</>
                     : "—"}
+                  {d.kind !== "leave" && d.leaveHours > 0 && <span className="att-tag sm" style={{ color: "#2563eb" }}>{leaveLabel(d.leaveType)} {d.leaveHours} ชม.</span>}
                 </span>
                 <span className={"job-badge " + b.c}>{d.kind === "leave" ? leaveLabel(d.leaveType) : b.t}</span>
                 {canManage && <button className="btn-ghost sm" title="แก้เวลาเข้า-ออกย้อนหลัง" onClick={() => setEditDay(d)}><UIcon name="edit" size={13} /></button>}
@@ -592,7 +624,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
       const today = todayYmd(); const calcTo = to < today ? to : today;
       const [att, leaves, jobs, teams] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved"), listJobOrders(), listTeams()]);
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
-      const leaveDaySet = {}; leaves.forEach((l) => { for (let d = hrParseYmd(l.start_date); d <= hrParseYmd(l.end_date); d.setDate(d.getDate() + 1)) { const k = hrYmd(d); if (k >= from && k <= calcTo) (leaveDaySet[l.user_id] = leaveDaySet[l.user_id] || {})[k] = l.type; } });
+      const leaveDaySet = buildLeaveDaySet(leaves, from, calcTo);
       const teamName = Object.fromEntries(teams.map((t) => [t.id, (t.name || "").replace("Team ", "")]));
       const jm = {};
       jobs.forEach((j) => { if (!j.assigned_team) return; const d = j.scheduled_at ? hrYmd(new Date(j.scheduled_at)) : null; if (!d || d < from || d > to) return; const m = jm[j.assigned_team] || (jm[j.assigned_team] = { done: 0, ratingSum: 0, ratingN: 0, claims: 0, resched: 0 }); if (j.status === "done") m.done++; if (j.rating > 0) { m.ratingSum += j.rating; m.ratingN++; } if (j.is_claim) m.claims++; if (j.status === "reschedule") m.resched++; });
@@ -683,9 +715,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       advs.filter((a) => !a.period).forEach((a) => { advSum[a.user_id] = (advSum[a.user_id] || 0) + (Number(a.amount) || 0); (advIds[a.user_id] = advIds[a.user_id] || []).push(a.id); });
       setAdvByUser(advSum); setAdvIdsByUser(advIds);
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
-      const leaveDaySet = {}, yearUsed = {}; const yr = ym.slice(0, 4);
+      const leaveDaySet = buildLeaveDaySet(leaves, from, to); const yearUsed = {}; const yr = ym.slice(0, 4);
       leaves.forEach((l) => {
-        for (let d = hrParseYmd(l.start_date); d <= hrParseYmd(l.end_date); d.setDate(d.getDate() + 1)) { const k = hrYmd(d); if (k >= from && k <= to) (leaveDaySet[l.user_id] = leaveDaySet[l.user_id] || {})[k] = l.type; }
         if (String(l.start_date).startsWith(yr)) { (yearUsed[l.user_id] = yearUsed[l.user_id] || {}); yearUsed[l.user_id][l.type] = (yearUsed[l.user_id][l.type] || 0) + Number(l.days || 0); }
       });
       const quota = settings.quota || DEFAULT_HR_SETTINGS.quota;
@@ -696,7 +727,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         const st = periodStats(p, attByUserDay, leaveDaySet, from, to, holSet, settings);
         const yu = yearUsed[p.id] || {}; let over = 0;
         ["vacation", "personal", "sick"].forEach((t) => { over += Math.max(0, (yu[t] || 0) - (quota[t] ?? 0)); });
-        st.overLeave = Math.min(st.leaveDays, over);
+        // หักค่าแรง = ลาเกินโควตา (เฉพาะประเภทมีโควตา) + ลาไม่รับค่าแรงทั้งหมดในรอบ (เต็มวัน/ราย ชม. คิดเศษวัน)
+        st.overLeave = Math.round((Math.min(st.leaveDays - (st.unpaidLeave || 0), over) + (st.unpaidLeave || 0)) * 100) / 100;
         const slip = slipBy[p.id];
         initAdj[p.id] = { bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0 };
         return { p, st, slip };
@@ -735,7 +767,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         ${line(r.p.pay_type === "daily" ? `ค่าแรง (${r.st.present} วัน)` : "เงินเดือน", c.base)}
         ${line(`ค่าล่วงเวลา OT (${c.otHours.toFixed(1)} ชม.)`, c.otPay)}
         ${line("โบนัส/เบี้ยเลี้ยง", c.bonus)}
-        ${line("หักมาสาย", c.dLate, 1)}${line("หักขาดงาน", c.dAbsent, 1)}${line("หักลาเกินโควต้า", c.dLeave, 1)}
+        ${line("หักมาสาย", c.dLate, 1)}${line("หักขาดงาน", c.dAbsent, 1)}${line("หักลาเกินโควต้า/ลาไม่รับค่าแรง", c.dLeave, 1)}
         ${line("ประกันสังคม", c.dSso, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
         <tr><td style="padding:8px 10px;border-top:2px solid #0ea5e9;font-weight:800">รับสุทธิ</td><td style="padding:8px 12px;border-top:2px solid #0ea5e9;text-align:right;font-weight:800;font-size:16px;color:#0a6b3d">${fmtBaht(c.net)}</td></tr>
       </table></div>`;
@@ -874,7 +906,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
               <tr className="ps-h"><td colSpan={2}>รายการหัก</td></tr>
               {c.dLate > 0 && <tr><td>หักมาสาย</td><td className="r">−{fmtBaht(c.dLate)}</td></tr>}
               {c.dAbsent > 0 && <tr><td>หักขาดงาน</td><td className="r">−{fmtBaht(c.dAbsent)}</td></tr>}
-              {c.dLeave > 0 && <tr><td>หักลาเกินสิทธิ์</td><td className="r">−{fmtBaht(c.dLeave)}</td></tr>}
+              {c.dLeave > 0 && <tr><td>หักลาเกินสิทธิ์/ลาไม่รับค่าแรง</td><td className="r">−{fmtBaht(c.dLeave)}</td></tr>}
               {c.dSso > 0 && <tr><td>ประกันสังคม 5%</td><td className="r">−{fmtBaht(c.dSso)}</td></tr>}
               {c.dAdvance > 0 && <tr><td>หักเบิกเงินล่วงหน้า</td><td className="r">−{fmtBaht(c.dAdvance)}</td></tr>}
               {c.otherDeduct > 0 && <tr><td>หักอื่นๆ</td><td className="r">−{fmtBaht(c.otherDeduct)}</td></tr>}
