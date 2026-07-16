@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, cancelTransactionGroup, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived } from "../lib/api";
-import { fmtBaht, fmtNum } from "../lib/format";
+import { fmtBaht, fmtNum, matchText } from "../lib/format";
 import { can } from "../lib/permissions";
 import { scheduleLabel } from "../lib/schedule";
 import { MaterialThumb, UIcon } from "../icons";
@@ -306,6 +306,12 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     }
     return [...map.values()];
   }, [recent]);
+  // ค้นหาในรายการล่าสุด: เลข PO / ใบงาน / เลขเอกสาร (WD/PC/RT) / ทีม / รหัส-ชื่อวัสดุ
+  const [refQ, setRefQ] = React.useState("");
+  const shownGroups = refQ.trim()
+    ? groups.filter((g) => matchText(refQ, g.ref_no, g.job_no, g.team)
+        || g.rows.some((r) => matchText(refQ, r.material_code, matMap[r.material_code]?.th)))
+    : groups;
   const toggle = (key) => setExpanded((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   function printGroup(g) {
@@ -542,11 +548,17 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
 
         {/* RECENT */}
         <div className="card">
-          <div className="sec-head"><div className="sec-title">รายการล่าสุด <span className="sec-sub">{recent.length} รายการ · กดพิมพ์/ยกเลิกได้</span></div></div>
+          <div className="sec-head"><div className="sec-title">รายการล่าสุด <span className="sec-sub">{refQ.trim() ? `พบ ${shownGroups.length}/${groups.length} ชุด` : `${recent.length} รายการ`} · กดพิมพ์/ยกเลิกได้</span></div></div>
+          <div className="cat-search" style={{ marginBottom: 8 }}>
+            <UIcon name="search" size={16} color="var(--ink-3)" />
+            <input placeholder="ค้นหาเลข PO / ใบงาน / เลขเอกสาร / วัสดุ" value={refQ} onChange={(e) => setRefQ(e.target.value)} />
+            {refQ && <button className="cat-search-x" onClick={() => setRefQ("")}><UIcon name="x" size={14} /></button>}
+          </div>
           {loading && <div className="empty sm">กำลังโหลด…</div>}
           {!loading && recent.length === 0 && <div className="empty sm">ยังไม่มีธุรกรรม</div>}
+          {!loading && recent.length > 0 && shownGroups.length === 0 && <div className="empty sm">ไม่พบรายการที่ตรงกับ "{refQ}"</div>}
           <div className="ledger">
-            {groups.map((g) => {
+            {shownGroups.map((g) => {
               const mv = TYPE_BY[g.type];
               const open = expanded.has(g.key);
               const single = g.rows.length === 1;
