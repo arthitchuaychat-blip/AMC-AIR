@@ -180,6 +180,15 @@ export const acPowerCostYear = (btu, seer) => {
   return b > 0 && s > 0 ? Math.round((b / s / 1000) * 8 * 365 * 5) : null;
 };
 
+// รุ่นแอร์ + ข้อความรับประกัน (mig 140) สำหรับ picker ในเงื่อนไขท้ายเอกสาร (DocTerms) — ดึงเบา ๆ เฉพาะฟิลด์ที่ใช้
+export async function listAcWarranties() {
+  const r = await supabase.from("materials").select("code,name_th,brand,series,ac_type,btu,warranty")
+    .eq("kind", "ac").eq("active", true).order("brand").order("btu").limit(1000);
+  if (r.error && /warranty/i.test(r.error.message || "")) return [];   // ยังไม่รัน migration 140 — ซ่อน picker ไปก่อน
+  if (r.error) throw r.error;
+  return (r.data || []).map((m) => ({ ...m, th: m.name_th }));
+}
+
 // add or update a material (admin only — enforced by RLS)
 export async function saveMaterial(row, isNew) {
   const kind = row.kind || "material";

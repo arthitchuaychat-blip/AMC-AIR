@@ -1,8 +1,9 @@
 import React from "react";
 import Combo from "./Combo";
+import ItemPicker from "./ItemPicker";
 import { confirmDialog } from "./ConfirmDialog";
 import { UIcon } from "../icons";
-import { listDocTermPresets, addDocTermPreset, updateDocTermPreset, deleteDocTermPreset } from "../lib/api";
+import { listDocTermPresets, addDocTermPreset, updateDocTermPreset, deleteDocTermPreset, listAcWarranties } from "../lib/api";
 
 // the 3 end-of-document term sections, shared by BOQ / quotation / invoice / receipt editors.
 // each has a "pick a standard template" dropdown (inserts text, still editable) + manage presets.
@@ -12,13 +13,15 @@ const CATS = [
   { key: "terms_warranty", cat: "warranty", label: "การรับประกัน" },
 ];
 
-export default function DocTerms({ payment, freebies, warranty, onChange }) {
+export default function DocTerms({ payment, freebies, warranty, onChange, docItems }) {
   const vals = { terms_payment: payment || "", terms_freebies: freebies || "", terms_warranty: warranty || "" };
   const [presets, setPresets] = React.useState([]);
   const [manageCat, setManageCat] = React.useState(null);
+  // รุ่นแอร์ + ข้อความรับประกันจากการ์ดสินค้า (mig 140) — เลือกได้หลายรุ่น ต่อท้ายช่องการรับประกัน แก้ข้อความต่อได้
+  const [acList, setAcList] = React.useState([]);
 
   async function load() { try { setPresets(await listDocTermPresets()); } catch { /* ignore */ } }
-  React.useEffect(() => { load(); }, []);
+  React.useEffect(() => { load(); listAcWarranties().then(setAcList).catch(() => {}); }, []);
 
   const byCat = (c) => presets.filter((p) => p.category === c);
   function pick(key, presetId) {
@@ -27,6 +30,23 @@ export default function DocTerms({ payment, freebies, warranty, onChange }) {
     const cur = vals[key];
     onChange(key, cur ? cur.replace(/\s+$/, "") + "\n" + p.body : p.body); // append (keep what's already typed)
   }
+
+  // ต่อท้ายบรรทัดรับประกันของรุ่นที่เลือก (ข้ามรุ่นที่มีอยู่ในข้อความแล้ว — กันซ้ำ)
+  function addWarranty(ms) {
+    const cur = (vals.terms_warranty || "").replace(/\s+$/, "");
+    const lines = [];
+    ms.forEach((m) => {
+      if (!m || (cur + lines.join("\n")).includes(m.th)) return;
+      lines.push(`• ${m.th}${m.btu && !String(m.th).includes(String(m.btu)) ? ` (${Number(m.btu).toLocaleString("en-US")} BTU)` : ""} — ${(m.warranty || "").trim() || "สอบถามเงื่อนไขรับประกันกับทางร้าน"}`);
+    });
+    if (lines.length) onChange("terms_warranty", [cur, ...lines].filter(Boolean).join("\n"));
+  }
+  // รุ่นแอร์ที่อยู่ในรายการของเอกสารนี้ (ดึงรวดเดียวได้)
+  const acByCode = React.useMemo(() => Object.fromEntries(acList.map((m) => [m.code, m])), [acList]);
+  const docAc = React.useMemo(() => {
+    const codes = [...new Set((docItems || []).map((x) => x.code || x.item_code).filter(Boolean))];
+    return codes.map((c) => acByCode[c]).filter(Boolean);
+  }, [docItems, acByCode]);
 
   return (
     <div className="docterms">
@@ -43,6 +63,12 @@ export default function DocTerms({ payment, freebies, warranty, onChange }) {
               <button type="button" className="btn-ghost sm" onClick={() => setManageCat(c.cat)} title="จัดการแบบมาตรฐาน"><UIcon name="edit" size={14} /></button>
             </div>
           </div>
+          {c.key === "terms_warranty" && acList.length > 0 && (
+            <div className="line-add" style={{ marginBottom: 6 }}>
+              <ItemPicker items={acList} placeholder="🛡️ เลือกรุ่นแอร์ → ดึงข้อมูลรับประกันมาต่อท้าย (เลือกได้หลายรุ่น)" onPick={(m) => addWarranty([m])} />
+              {docAc.length > 0 && <button type="button" className="btn-ghost sm" style={{ flex: "none" }} title="ดึงข้อมูลรับประกันของแอร์ทุกรุ่นที่อยู่ในรายการเอกสารนี้" onClick={() => addWarranty(docAc)}>ดึงทุกรุ่นในเอกสาร ({docAc.length})</button>}
+            </div>
+          )}
           <textarea className="inp" rows={3} value={vals[c.key]} placeholder={`พิมพ์${c.label}… หรือเลือกแบบมาตรฐานด้านบน`}
             onChange={(e) => onChange(c.key, e.target.value)} />
         </div>

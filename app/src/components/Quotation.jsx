@@ -325,7 +325,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             </label>
           </div>
 
-          <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setQ(k, v)} />
+          <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} docItems={ed.items} onChange={(k, v) => setQ(k, v)} />
           <InternalNoteField value={ed.internal_note} onChange={(v) => setQ("internal_note", v)} />
           <SignToggle on={ed.sign_on} onChange={(v) => setQ("sign_on", v)} />
 

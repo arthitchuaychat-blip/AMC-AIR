@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-16·เอกสารขาย: ส่วนลดรายรายการ (ใบเสนอราคา→ใบส่งของ→ใบเสร็จ, คอลัมน์ส่วนลดโผล่เมื่อมีใช้) + ยังมีส่วนลดรวมท้ายบิลเหมือนเดิม mig 142 v408";
+const BUILD = "2026-07-16·เงื่อนไขท้ายเอกสาร: ช่องการรับประกันเลือกรุ่นแอร์ดึงข้อมูลรับประกันจากการ์ดสินค้าได้หลายรุ่น + ปุ่มดึงทุกรุ่นในเอกสาร (แก้ข้อความต่อได้) v409";
 
 function SetupNotice() {
   return (
