@@ -57,6 +57,9 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   // ชิป "อ้างอิง QT-…" → พรีวิวใบเสนอราคาแผงขวาก่อน · "เปิดหน้าเต็ม" ค่อยเด้งไปเมนูใบเสนอราคา
   const [peekEl, openPeek] = useDocPeek((t, n) => { if (t === "quote" && onOpenQuote) onOpenQuote(n); else if (t === "job" && onOpenJob) onOpenJob(n); });
   const isAdmin = can(role, "po", "edit");
+  // กติกาเจ้าของ: ยกเลิก = ฝ่ายขาย/ธุรการวัสดุ (และผู้มีสิทธิ์แก้ PO) · ลบถาวร = ธุรการเท่านั้น (เหมือนเอกสารอื่นทุกใบ)
+  const canCancel = isAdmin || role === "sales" || role === "stock";
+  const canDelete = role === "admin";
   const [pos, setPos] = React.useState([]);
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -82,12 +85,16 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   // base หลังค้นหา+วันที่ — ใช้นับจำนวนบนชิปตัวกรอง
   const fl0 = pos.filter((po) => inDateRange(po.created_at, dateR)
     && (matchText(q, po.po_no, po.supplier, po.note, po.quote_no, po.customerName, po.jobNo, po.teamName) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
+  const [vatF, setVatF] = React.useState("all");   // งาน VAT / NOVAT (ตามธง vat ของใบ)
+  const isVatMatch = (po, v) => v === "all" || (v === "vat" ? !!po.vat : !po.vat);
   const nStatus = (v) => fl0.filter((po) => v === "all" || po.status === v).length;
   const nPay = (v) => fl0.filter((po) => v === "all" || po.paymentStatus === v).length;
   const nType = (v) => fl0.filter((po) => v === "all" || poTypeOf(po) === v).length;
+  const nVat = (v) => fl0.filter((po) => isVatMatch(po, v)).length;
   const shown = fl0.filter((po) => (statusF === "all" || po.status === statusF)
     && (payF === "all" || po.paymentStatus === payF)
-    && (typeF === "all" || poTypeOf(po) === typeF));
+    && (typeF === "all" || poTypeOf(po) === typeF)
+    && isVatMatch(po, vatF));
 
   async function load() {
     setLoading(true);
@@ -325,6 +332,11 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             <button key={v} className={"cat-chip" + (typeF === v ? " on" : "")} onClick={() => setTypeF(v)}
               style={typeF === v ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>{l} ({nType(v)})</button>
           ))}
+          <span style={{ color: "var(--line)", alignSelf: "center" }}>|</span>
+          {[["all", "ภาษี: ทั้งหมด"], ["vat", "งาน VAT"], ["novat", "งาน NOVAT"]].map(([v, l]) => (
+            <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
+              style={vatF === v ? { background: "#16a34a", color: "#fff", borderColor: "#16a34a" } : {}}>{l} ({nVat(v)})</button>
+          ))}
           <DateRangeBar value={dateR} onChange={setDateR} />
         </div>
         <div className="cat-search">
@@ -379,9 +391,12 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                   {po.status === "open" && isAdmin && <>
                     <button className="btn-ghost sm" onClick={() => startEdit(po)}><UIcon name="edit" size={14} /> แก้ไข</button>
                     <button className="btn-primary" onClick={() => onReceive && onReceive(po)}><UIcon name="purchase" size={15} color="#fff" /> รับสินค้าเข้าสต๊อก{po.quote_no ? " → เข้างาน" : ""}</button>
-                    <button className="btn-ghost sm" disabled={po.paymentStatus && po.paymentStatus !== "unpaid"} title={po.paymentStatus && po.paymentStatus !== "unpaid" ? "ผูกการจ่ายเงินแล้ว — จัดการรายการเบิกจ่ายก่อน" : "ยกเลิกใบสั่งซื้อ (เก็บประวัติ)"} onClick={() => cancelPo(po)}>ยกเลิก</button>
-                    <button className="btn-ghost sm danger" onClick={() => del(po)}><UIcon name="trash" size={14} /></button>
                   </>}
+                  {/* ยกเลิก: ฝ่ายขาย/ธุรการวัสดุ (+ผู้มีสิทธิ์แก้ PO) · ลบถาวร: ธุรการเท่านั้น — ใบที่รับของแล้วต้องยกเลิกการรับก่อน */}
+                  {po.status === "open" && canCancel &&
+                    <button className="btn-ghost sm" disabled={po.paymentStatus && po.paymentStatus !== "unpaid"} title={po.paymentStatus && po.paymentStatus !== "unpaid" ? "ผูกการจ่ายเงินแล้ว — จัดการรายการเบิกจ่ายก่อน" : "ยกเลิกใบสั่งซื้อ (เก็บประวัติ)"} onClick={() => cancelPo(po)}>ยกเลิก</button>}
+                  {po.status !== "received" && canDelete &&
+                    <button className="btn-ghost sm danger" disabled={po.paymentStatus && po.paymentStatus !== "unpaid"} title={po.paymentStatus && po.paymentStatus !== "unpaid" ? "ผูกการจ่ายเงินแล้ว — จัดการรายการเบิกจ่ายก่อน" : "ลบถาวร (ธุรการ)"} onClick={() => del(po)}><UIcon name="trash" size={14} /></button>}
                   {/* รับของแล้วแต่บิลซัพฯ มาทีหลัง → ยังแก้ราคาได้จนกว่าจะส่งขออนุมัติจ่าย */}
                   {po.status === "received" && isAdmin && po.paymentStatus === "unpaid" &&
                     <button className="btn-ghost sm" onClick={() => startEdit(po)}><UIcon name="edit" size={14} /> แก้ไขราคา (ตามบิลซัพฯ)</button>}
