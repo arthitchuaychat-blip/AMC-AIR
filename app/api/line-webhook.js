@@ -124,17 +124,18 @@ function isOpenNow(cfg) {
 // ---------- AI bot (นอกเวลาทำการ): ตอบคำถามสินค้า/ราคา/บริการจากแคตตาล็อกจริง ----------
 // ใช้ Claude Sonnet 5 · ข้อมูล = web_products (ชุดเดียวกับหน้าเว็บ amcair.net — ราคาขายสาธารณะ ไม่มีต้นทุนภายใน)
 // เงื่อนไข: เปิดใน ตั้งค่า→ตอบอัตโนมัติ + ตั้ง ANTHROPIC_API_KEY บน Vercel · ตอบเฉพาะแชต 1:1 ที่ไม่ใช่ซัพพลายเออร์
+// คืน { text, err } — text = คำตอบ (null ถ้าไม่สำเร็จ) · err = สาเหตุที่ไม่ตอบ (ไว้ดูในกล่องดำ ai_bot_last)
 async function aiAnswer(convId, question, cfg, afterHours = true) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) return null;
+    if (!process.env.ANTHROPIC_API_KEY) return { text: null, err: "no ANTHROPIC_API_KEY" };
     // ไม่ตอบซัพพลายเออร์ด้วยแคตตาล็อกลูกค้า
     const kr = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=kind`, { headers: sbH() });
-    if (kr.ok && ((await kr.json())[0]?.kind === "supplier")) return null;
+    if (kr.ok && ((await kr.json())[0]?.kind === "supplier")) return { text: null, err: "supplier-skip" };
 
     // แคตตาล็อกสาธารณะ (แอร์ + บริการ) — ย่อเป็นบรรทัดละรายการ ประหยัดโทเคน
     const pr = await tfetch(`${SB()}/rest/v1/web_products?select=kind,brand,name_th,ac_type,btu,sale_price,seer&order=kind.asc,brand.asc,btu.asc&limit=500`, { headers: sbH() });
     const prods = pr.ok ? await pr.json() : [];
-    if (!prods.length) return null;
+    if (!prods.length) return { text: null, err: `catalog empty (status ${pr.status})` };
     const line = (p) => [p.brand, p.name_th, p.ac_type, p.btu ? `${p.btu} BTU` : null, p.seer ? `SEER ${p.seer}` : null,
       p.sale_price != null ? `${Number(p.sale_price).toLocaleString("en-US")} บาท` : "สอบถามราคา"].filter(Boolean).join(" | ");
     const catalog = prods.map(line).join("\n");
@@ -145,7 +146,8 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
     let messages = hist.filter((m) => (m.text || "").trim())
       .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", content: m.text }));
     while (messages.length && messages[0].role !== "user") messages.shift();   // ต้องเริ่มด้วย user
-    if (!messages.length) messages = [{ role: "user", content: question }];
+    // ต้องจบด้วย user เสมอ — จบด้วย assistant = prefill ซึ่ง Sonnet 5 ปฏิเสธ (400)
+    if (!messages.length || messages[messages.length - 1].role !== "user") messages.push({ role: "user", content: question });
 
     const days = (Array.isArray(cfg.open_days) && cfg.open_days.length ? cfg.open_days : [1, 2, 3, 4, 5, 6])
       .map((d) => ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"][d]).join(", ");
@@ -173,12 +175,12 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
         messages,
       }),
     }, 25000);
-    if (!r.ok) { console.error("ai-bot api error:", r.status, (await r.text()).slice(0, 300)); return null; }
+    if (!r.ok) { const body = (await r.text()).slice(0, 250); console.error("ai-bot api error:", r.status, body); return { text: null, err: `anthropic ${r.status}: ${body}` }; }
     const data = await r.json();
-    if (data.stop_reason === "refusal") return null;
+    if (data.stop_reason === "refusal") return { text: null, err: "refusal" };
     const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
-    return text || null;
-  } catch (e) { console.error("ai-bot error:", e?.message || String(e)); return null; }
+    return text ? { text, err: null } : { text: null, err: `empty completion (stop: ${data.stop_reason})` };
+  } catch (e) { console.error("ai-bot error:", e?.message || String(e)); return { text: null, err: String(e?.message || e) }; }
 }
 
 // store the auto-reply as an outbound message + stamp last_autoreply_at (for cooldown)
@@ -196,8 +198,16 @@ async function autoReply(replyToken, convId, isNew, isUser, msgRow) {
     //    ปกติตอบเฉพาะนอกเวลาทำการ · ติ๊ก "ตอบทุกเวลา" (ai_always) = ตอบตลอดรวมเวลาทำการ (โหมดทดสอบ/ช่วยทีม)
     //    ตอบเฉพาะข้อความตัวอักษร · ถ้า AI ล้มเหลว/ปิด/ไม่มี key จะไหลลงข้อความตายตัวเดิมตามปกติ
     if (cfg.ai_enabled && (afterHours || cfg.ai_always) && msgRow?.type === "text" && (msgRow.text || "").trim()) {
-      const answer = await aiAnswer(convId, msgRow.text.trim(), cfg, afterHours);
-      if (answer) { await sendAuto(replyToken, convId, "🤖 " + answer); return; }
+      const t0 = Date.now();
+      const out = await aiAnswer(convId, msgRow.text.trim(), cfg, afterHours);
+      let sent = false;
+      if (out.text) sent = await sendAuto(replyToken, convId, "🤖 " + out.text);
+      // กล่องดำ: เก็บผลรอบล่าสุดไว้ที่ app_config.ai_bot_last — เปิดดูได้ที่ ?autoreply=1
+      tfetch(`${SB()}/rest/v1/app_config?on_conflict=key`, {
+        method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" },
+        body: JSON.stringify({ key: "ai_bot_last", value: { at: new Date().toISOString(), conv: String(convId).slice(-8), q: msgRow.text.slice(0, 80), ok: !!out.text && sent, ms: Date.now() - t0, err: out.err || (out.text && !sent ? "line-send-failed" : null) } }),
+      }).catch(() => {});
+      if (out.text) return;   // ได้คำตอบแล้ว (ส่งสำเร็จหรือไม่ก็ตาม อย่าส่งข้อความตายตัวซ้ำ)
     }
     // 1) welcome a brand-new contact (their first message)
     if (isNew && cfg.welcome_enabled && (cfg.welcome_text || "").trim()) {
@@ -307,6 +317,8 @@ export default async function handler(req, res) {
         ai_always: cfg ? !!cfg.ai_always : null,
         anthropic_key: !!process.env.ANTHROPIC_API_KEY,
         aiWouldReplyNow: cfg ? (!!cfg.enabled && !!cfg.ai_enabled && !!process.env.ANTHROPIC_API_KEY && (!isOpenNow(cfg) || !!cfg.ai_always)) : null,
+        // กล่องดำ: ผลการทำงานรอบล่าสุดของบอทกับข้อความจริง (at, q, ok, ms, err)
+        ai_last: await (async () => { try { const r = await tfetch(`${SB()}/rest/v1/app_config?key=eq.ai_bot_last&select=value`, { headers: sbH() }); return r.ok ? ((await r.json())[0]?.value ?? null) : null; } catch { return null; } })(),
       });
     }
     if (params.get("dbcheck") === "1") {
@@ -317,13 +329,14 @@ export default async function handler(req, res) {
       }
       return res.status(200).json(out);
     }
-    // ?aitest=1&q=<คำถาม> — ยิงบอท AI ตรง ๆ (ไม่ส่งเข้าไลน์) เพื่อดูคำตอบ/สาเหตุที่พังจริงจากเซิร์ฟเวอร์
+    // ?aitest=1&q=<คำถาม>[&conv=<line_user_id>] — ยิงบอท AI ตรง ๆ (ไม่ส่งเข้าไลน์) เพื่อดูคำตอบ/สาเหตุที่พังจริง
     if (params.get("aitest") === "1") {
       const q = params.get("q") || "แอร์ 12000 BTU ราคาเท่าไหร่";
+      const conv = params.get("conv") || "__aitest__";
       const cfg = (await getAutoReplyCfg()) || {};
       const t0 = Date.now();
-      const answer = await aiAnswer("__aitest__", q, cfg, !isOpenNow(cfg));
-      return res.status(200).json({ ok: !!answer, ms: Date.now() - t0, question: q, answer: answer || null, hint: answer ? null : "ดู error จริงใน Vercel → Deployments → Functions log (ai-bot ...)" });
+      const out = await aiAnswer(conv, q, cfg, !isOpenNow(cfg));
+      return res.status(200).json({ ok: !!out.text, ms: Date.now() - t0, question: q, answer: out.text, err: out.err });
     }
     if (params.get("linetest") === "1") {
       const t0 = Date.now();
