@@ -92,6 +92,7 @@ module.exports = async (req, res) => {
               ["ชนิดน้ำยา", p.refrigerant], ["ค่า SEER", p.seer], ["ขนาดท่อน้ำยา", p.pipe_size], ["ฉลากประหยัดไฟ", p.energy_label]].filter(([, v]) => v);
             return rows.length > 2 ? `<div class="spectable">${rows.map(([l, v]) => `<div class="srow"><span>${l}</span><b>${esc(String(v))}</b></div>`).join("")}</div>` : "";
           })()}
+          ${p.warranty ? `<div class="pwarr">🛡️ <b>การรับประกัน:</b> ${esc(p.warranty)}</div>` : ""}
           ${siblings.length > 1 ? `<div style="font-size:13.5px;font-weight:800;margin-top:6px">ขนาดอื่นในรุ่น ${esc(p.series)}:</div>
           <div class="sizes">${siblings.map((s) => `<a class="${s.code === p.code ? "on" : ""}" href="/p/${encodeURIComponent(s.code)}">${nfmt(s.btu)} BTU</a>`).join("")}</div>` : ""}
           ${feats ? `<div class="feats">${feats}</div>` : ""}

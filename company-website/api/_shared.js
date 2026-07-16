@@ -133,6 +133,8 @@ h1{font-size:clamp(24px,4vw,36px);font-weight:800;line-height:1.25;letter-spacin
 .spectable .srow{display:flex;justify-content:space-between;gap:12px;padding:8px 14px;border-bottom:1px solid var(--line)}
 .spectable .srow:last-child{border-bottom:none}
 .spectable .srow span{color:var(--ink-2);font-weight:600}
+.pwarr{margin:10px 0 4px;padding:10px 14px;border:1.5px solid #bbf7d0;background:#f0fdf4;border-radius:13px;font-size:14px;color:#14532d}
+.pwarr b{color:#166534}
 .sizes{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
 .sizes a{font-size:13px;font-weight:700;padding:7px 14px;border-radius:99px;border:1.5px solid var(--line)}
 .sizes a:hover{border-color:var(--primary)}
