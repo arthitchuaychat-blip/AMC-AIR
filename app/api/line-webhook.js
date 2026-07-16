@@ -133,9 +133,14 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
     if (kr.ok && ((await kr.json())[0]?.kind === "supplier")) return { text: null, err: "supplier-skip" };
 
     // แอร์+บริการทั้งหมดในระบบ (เฉพาะ active · ไม่รวมวัสดุ/อุปกรณ์ภายใน) — เลือกเฉพาะฟิลด์ปลอดภัย: มีแค่ sale_price ไม่มี cost/สต๊อก
-    const pr = await tfetch(`${SB()}/rest/v1/materials?select=kind,brand,series,name_th,ac_type,btu,btu_min,btu_max,unit,sale_price,seer,energy_label&active=eq.true&kind=in.(ac,service)&order=kind.asc,brand.asc,btu.asc,name_th.asc&limit=800`, { headers: sbH() });
-    const prods = pr.ok ? await pr.json() : [];
-    if (!prods.length) return { text: null, err: `catalog empty (status ${pr.status})` };
+    // ต้องแยกดึงตามหมวด: แอร์มี 800+ รุ่น ถ้าดึงรวมกันบริการจะโดนเบียดหลุด limit (บทเรียนเดียวกับ Supabase 1000-row cap)
+    const FIELDS = "kind,brand,series,name_th,ac_type,btu,btu_min,btu_max,unit,sale_price,seer,energy_label";
+    const [pa, ps] = await Promise.all([
+      tfetch(`${SB()}/rest/v1/materials?select=${FIELDS}&active=eq.true&kind=eq.ac&order=brand.asc,btu.asc,name_th.asc&limit=900`, { headers: sbH() }),
+      tfetch(`${SB()}/rest/v1/materials?select=${FIELDS}&active=eq.true&kind=eq.service&order=name_th.asc&limit=200`, { headers: sbH() }),
+    ]);
+    const prods = [...(pa.ok ? await pa.json() : []), ...(ps.ok ? await ps.json() : [])];
+    if (!prods.length) return { text: null, err: `catalog empty (status ${pa.status}/${ps.status})` };
     const money = (v) => (Number(v) > 0 ? `${Number(v).toLocaleString("en-US")} บาท` : "สอบถามราคา");
     const acLine = (p) => [p.brand, p.series, p.name_th, p.ac_type, p.btu ? `${p.btu} BTU` : null,
       p.seer ? `SEER ${p.seer}` : null, p.energy_label, money(p.sale_price)].filter(Boolean).join(" | ");
@@ -362,15 +367,17 @@ export default async function handler(req, res) {
       const out = await aiAnswer(conv, q, cfg, !isOpenNow(cfg));
       return res.status(200).json({ ok: !!out.text, ms: Date.now() - t0, question: q, matched: found, answer: out.text, err: out.err });
     }
-    // ?aicat=1 — ดูว่าบอทเห็นแคตตาล็อกกี่รายการ แยกหมวด + รายการบริการพร้อมราคา (ไม่มีข้อมูลต้นทุน)
+    // ?aicat=1 — ดูว่าบอทเห็นแคตตาล็อกกี่รายการ (นับจริงต่อหมวด) + รายการบริการพร้อมราคา (ไม่มีข้อมูลต้นทุน)
     if (params.get("aicat") === "1") {
-      const r = await tfetch(`${SB()}/rest/v1/materials?select=kind,name_th,sale_price,unit&active=eq.true&kind=in.(ac,service)&order=kind.asc,name_th.asc&limit=800`, { headers: sbH() });
-      const rows = r.ok ? await r.json() : [];
-      const byKind = {}; rows.forEach((x) => { byKind[x.kind] = (byKind[x.kind] || 0) + 1; });
-      const services = rows.filter((x) => x.kind === "service")
+      const cnt = async (k) => {
+        const r = await tfetch(`${SB()}/rest/v1/materials?select=code&kind=eq.${k}&active=eq.true&limit=1`, { headers: { ...sbH(), Prefer: "count=exact", Range: "0-0" } });
+        return Number((r.headers.get("content-range") || "").split("/")[1]) || 0;
+      };
+      const [ac, service, material] = await Promise.all([cnt("ac"), cnt("service"), cnt("material")]);
+      const sr = await tfetch(`${SB()}/rest/v1/materials?select=name_th,sale_price,unit&active=eq.true&kind=eq.service&order=name_th.asc&limit=200`, { headers: sbH() });
+      const services = (sr.ok ? await sr.json() : [])
         .map((x) => `${x.name_th} = ${Number(x.sale_price) > 0 ? Number(x.sale_price).toLocaleString("en-US") + " บาท" + (x.unit ? "/" + x.unit : "") : "ยังไม่ตั้งราคา"}`);
-      const noPrice = rows.filter((x) => !(Number(x.sale_price) > 0)).length;
-      return res.status(200).json({ status: r.status, total: rows.length, byKind, noPriceCount: noPrice, services });
+      return res.status(200).json({ activeByKind: { ac, service, material: `${material} (บอทไม่เห็น)` }, botSees: { ac: Math.min(ac, 900), service: services.length }, services });
     }
     if (params.get("linetest") === "1") {
       const t0 = Date.now();
