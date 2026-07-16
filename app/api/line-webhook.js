@@ -134,8 +134,8 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
 
     // แอร์+บริการทั้งหมดในระบบ (เฉพาะ active · ไม่รวมวัสดุ/อุปกรณ์ภายใน) — เลือกเฉพาะฟิลด์ปลอดภัย: มีแค่ sale_price ไม่มี cost/สต๊อก
     // ต้องแยกดึงตามหมวด: แอร์มี 800+ รุ่น ถ้าดึงรวมกันบริการจะโดนเบียดหลุด limit (บทเรียนเดียวกับ Supabase 1000-row cap)
-    // แยกชุดฟิลด์: แอร์ไม่ดึง description (855 รายการ ข้อความยาวจะบวมเกิน) · บริการดึงมาให้บอทอธิบายขอบเขตงานได้
-    const AC_FIELDS = "kind,brand,series,name_th,ac_type,btu,unit,sale_price,seer,energy_label,refrigerant,voltage";
+    // ฟิลด์ที่ลูกค้าเห็นได้เท่านั้น — ห้ามมี cost/สต๊อก/ข้อมูลซื้อ/ผู้ขายเด็ดขาด (วัดขนาดแล้ว: desc≤139 ตัวอักษร/รุ่น รวม ~60k ไหว)
+    const AC_FIELDS = "kind,brand,series,name_th,name_en,ac_type,btu,unit,sale_price,seer,energy_label,refrigerant,voltage,pipe_size,power_cost_year,description,features";
     const SVC_FIELDS = "kind,name_th,btu_min,btu_max,unit,sale_price,description";
     const [pa, ps] = await Promise.all([
       tfetch(`${SB()}/rest/v1/materials?select=${AC_FIELDS}&active=eq.true&kind=eq.ac&order=brand.asc,btu.asc,name_th.asc&limit=1000`, { headers: sbH() }),
@@ -144,11 +144,16 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
     const prods = [...(pa.ok ? await pa.json() : []), ...(ps.ok ? await ps.json() : [])];
     if (!prods.length) return { text: null, err: `catalog empty (status ${pa.status}/${ps.status})` };
     const money = (v) => (Number(v) > 0 ? `${Number(v).toLocaleString("en-US")} บาท` : "สอบถามราคา");
-    const acLine = (p) => [p.brand, p.series, p.name_th, p.ac_type, p.btu ? `${p.btu} BTU` : null,
-      p.seer ? `SEER ${p.seer}` : null, p.energy_label, p.refrigerant, p.voltage, money(p.sale_price)].filter(Boolean).join(" | ");
-    const desc = (p) => { const d = (p.description || "").replace(/\s+/g, " ").trim(); return d ? d.slice(0, 160) : null; };
+    const clip = (t, n) => { const d = (t == null ? "" : String(t)).replace(/\s+/g, " ").trim(); return d ? d.slice(0, n) : null; };
+    // ชื่ออังกฤษ/รหัสรุ่น ใส่เฉพาะที่ไม่ซ้ำกับชื่อไทย (ลูกค้าค้นด้วยรหัสรุ่นอังกฤษได้)
+    const nameEn = (p) => { const e = (p.name_en || "").trim(); return e && !(p.name_th || "").toLowerCase().includes(e.toLowerCase()) ? e : null; };
+    const acLine = (p) => [p.brand, p.series, p.name_th, nameEn(p), p.ac_type, p.btu ? `${p.btu} BTU` : null,
+      p.seer ? `SEER ${p.seer}` : null, p.energy_label, p.refrigerant, p.voltage,
+      p.pipe_size ? `ท่อ ${p.pipe_size}` : null,
+      Number(p.power_cost_year) > 0 ? `ค่าไฟ~${Number(p.power_cost_year).toLocaleString("en-US")} บาท/ปี` : null,
+      money(p.sale_price), clip(p.description, 200), clip(p.features, 300)].filter(Boolean).join(" | ");
     const svcLine = (p) => [p.name_th, (p.btu_min || p.btu_max) ? `สำหรับแอร์ ${p.btu_min || ""}–${p.btu_max || ""} BTU` : null,
-      money(p.sale_price) + (p.unit ? `/${p.unit}` : ""), desc(p)].filter(Boolean).join(" | ");
+      money(p.sale_price) + (p.unit ? `/${p.unit}` : ""), clip(p.description, 250)].filter(Boolean).join(" | ");
     const sec = (title, kind, fn) => { const a = prods.filter((p) => p.kind === kind); return a.length ? `## ${title}\n` + a.map(fn).join("\n") : ""; };
     const catalog = [sec("แอร์", "ac", acLine), sec("ค่าบริการ (ล้าง/ติดตั้ง/ซ่อม)", "service", svcLine)]
       .filter(Boolean).join("\n\n");
@@ -173,6 +178,7 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
 - ห้ามยืนยันนัดหมายหรือการจอง — รับเรื่องไว้ได้ แต่บอกว่าทีมงานจะโทรยืนยันอีกครั้ง
 - แนะนำขนาดแอร์ได้: 9,000 BTU ≈ ห้อง 12–15 ตร.ม. · 12,000 ≈ 16–20 · 18,000 ≈ 24–30 · 24,000 ≈ 32–40 แล้วเลือกรุ่นที่ตรงจากรายการ
 - ค่าบริการแบ่งชั้นตามประเภทแอร์ + ช่วง BTU — ก่อนบอกราคา ให้เทียบ BTU ของลูกค้ากับช่วงในรายการทีละแถวอย่างระมัดระวัง เลือกแถวที่ช่วงครอบคลุม BTU นั้นจริง แล้วใช้ราคาตามแถวนั้นเป๊ะ ๆ ห้ามหยิบแถวข้างเคียง
+- ข้อมูลรุ่นแอร์อาจมีค่าไฟโดยประมาณต่อปี (ค่าไฟ~x บาท/ปี) ขนาดท่อ ชนิดน้ำยา และคุณสมบัติ — ใช้ช่วยลูกค้าเปรียบเทียบความประหยัด/ความเหมาะสมได้
 - ตอบภาษาไทย สุภาพ แทนตัวเองเป็นผู้ชาย ลงท้าย "ครับ" เท่านั้น ห้ามใช้ "ค่ะ/คะ" เด็ดขาด กระชับ ไม่เกิน 6 บรรทัด ใช้อีโมจิพอประมาณ
 - เว็บไซต์ www.amcair.net · โทร 099-262-9090 (แจ้งเมื่อเกี่ยวข้อง)${(cfg.ai_extra || "").trim() ? "\n\nข้อมูลเพิ่มเติมจากร้าน:\n" + cfg.ai_extra.trim() : ""}`;
 
@@ -189,7 +195,7 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
         ],
         messages,
       }),
-    }, 25000);
+    }, 40000); // แคตตาล็อกใหญ่ขึ้น (สเปก+รายละเอียดครบ 855 รุ่น) — เผื่อเวลาอ่าน prompt รอบ cache เย็น
     if (!r.ok) { const body = (await r.text()).slice(0, 250); console.error("ai-bot api error:", r.status, body); return { text: null, err: `anthropic ${r.status}: ${body}` }; }
     const data = await r.json();
     if (data.stop_reason === "refusal") return { text: null, err: "refusal" };
