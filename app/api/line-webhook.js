@@ -198,10 +198,12 @@ async function aiBlackbox(convId, q, extra) {
   } catch (_) { /* กล่องดำห้ามพังงานหลัก */ }
 }
 
-async function autoReply(replyToken, convId, isNew, isUser, msgRow) {
+async function autoReply(replyToken, convId, isNew, isUser, msgRow, meta = {}) {
   try {
     const isText = msgRow?.type === "text" && (msgRow.text || "").trim();
-    if (!replyToken || !isUser) { if (isText) await aiBlackbox(convId, msgRow.text, { skip: !replyToken ? "no-reply-token" : "not-1to1-user-chat" }); return; }
+    // ไม่ง้อ reply token — บางเหตุการณ์ของ LINE มาแบบไม่มีโทเคน (เจอจริงจากกล่องดำ): sendAuto จะ fallback ไปใช้ push เอง
+    if (!isUser) { if (isText) await aiBlackbox(convId, msgRow.text, { skip: "not-1to1-user-chat", ...meta }); return; }
+    if (meta.redeliv) { if (isText) await aiBlackbox(convId, msgRow.text, { skip: "line-redelivery(กันตอบซ้ำ)", ...meta }); return; }
     const cfg = await getAutoReplyCfg();
     if (!cfg || !cfg.enabled) { if (isText) await aiBlackbox(convId, msgRow?.text, { skip: "autoreply-master-disabled" }); return; }
     const afterHours = !isOpenNow(cfg);
@@ -212,7 +214,7 @@ async function autoReply(replyToken, convId, isNew, isUser, msgRow) {
       const out = await aiAnswer(convId, msgRow.text.trim(), cfg, afterHours);
       let sent = false;
       if (out.text) sent = await sendAuto(replyToken, convId, "🤖 " + out.text);
-      await aiBlackbox(convId, msgRow.text, { ok: !!out.text && sent, ms: Date.now() - t0, err: out.err || (out.text && !sent ? "line-send-failed" : null) });
+      await aiBlackbox(convId, msgRow.text, { ok: !!out.text && sent, ms: Date.now() - t0, err: out.err || (out.text && !sent ? "line-send-failed" : null), ...meta });
       if (out.text) return;   // ได้คำตอบแล้ว (อย่าส่งข้อความตายตัวซ้ำ)
     } else if (isText) {
       await aiBlackbox(convId, msgRow.text, { skip: !cfg.ai_enabled ? "ai-disabled" : "in-business-hours(ai_always off)" });
@@ -405,7 +407,7 @@ export default async function handler(req, res) {
         await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify(row) });
         await tfetch(`${SB()}/rest/v1/rpc/line_bump_unread`, { method: "POST", headers: sbH(), body: JSON.stringify({ p_uid: convId, p_msg: row.text || "[ข้อความ]" }) });
         await notifyCustomerChat("💬 ข้อความใหม่จากลูกค้า (LINE)", row.text || "[ข้อความ]", convId);
-        await autoReply(ev.replyToken, convId, isNewContact, src.type === "user", row);
+        await autoReply(ev.replyToken, convId, isNewContact, src.type === "user", row, { tok: !!ev.replyToken, redeliv: !!ev.deliveryContext?.isRedelivery });
       }
     }
   } catch (e) {
