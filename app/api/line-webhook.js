@@ -124,7 +124,7 @@ function isOpenNow(cfg) {
 // ---------- AI bot (นอกเวลาทำการ): ตอบคำถามสินค้า/ราคา/บริการจากแคตตาล็อกจริง ----------
 // ใช้ Claude Sonnet 5 · ข้อมูล = web_products (ชุดเดียวกับหน้าเว็บ amcair.net — ราคาขายสาธารณะ ไม่มีต้นทุนภายใน)
 // เงื่อนไข: เปิดใน ตั้งค่า→ตอบอัตโนมัติ + ตั้ง ANTHROPIC_API_KEY บน Vercel · ตอบเฉพาะแชต 1:1 ที่ไม่ใช่ซัพพลายเออร์
-async function aiAnswer(convId, question, cfg) {
+async function aiAnswer(convId, question, cfg, afterHours = true) {
   try {
     if (!process.env.ANTHROPIC_API_KEY) return null;
     // ไม่ตอบซัพพลายเออร์ด้วยแคตตาล็อกลูกค้า
@@ -149,11 +149,11 @@ async function aiAnswer(convId, question, cfg) {
 
     const days = (Array.isArray(cfg.open_days) && cfg.open_days.length ? cfg.open_days : [1, 2, 3, 4, 5, 6])
       .map((d) => ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"][d]).join(", ");
-    const rules = `คุณคือผู้ช่วย AI ของ AMC AIR ร้านขาย-ติดตั้ง-ล้าง-ซ่อมแอร์ ตอนนี้อยู่นอกเวลาทำการ คุณตอบลูกค้าทางไลน์แทนทีมงาน
+    const rules = `คุณคือผู้ช่วย AI ของ AMC AIR ร้านขาย-ติดตั้ง-ล้าง-ซ่อมแอร์ ${afterHours ? "ตอนนี้อยู่นอกเวลาทำการ คุณตอบลูกค้าทางไลน์แทนทีมงาน" : "คุณช่วยตอบลูกค้าทางไลน์เบื้องต้น ระหว่างที่ทีมงานอาจยังไม่ว่างตอบทันที"}
 
 กติกาสำคัญ (ต้องทำตามเคร่งครัด):
 - ตอบจาก "รายการสินค้าและบริการ" ที่ให้ไว้เท่านั้น ห้ามเดาหรือแต่งราคา รุ่น ส่วนลด หรือโปรโมชั่นที่ไม่มีในข้อมูลเด็ดขาด
-- ถ้าข้อมูลไม่พอ บอกตรง ๆ ว่าทีมงานจะตอบในเวลาทำการ (${days} ${cfg.open_time || "08:00"}–${cfg.close_time || "18:00"} น.) และชวนลูกค้าฝากชื่อ เบอร์โทร และรายละเอียดหน้างานไว้
+- ถ้าข้อมูลไม่พอ บอกตรง ๆ ว่า${afterHours ? `ทีมงานจะตอบในเวลาทำการ (${days} ${cfg.open_time || "08:00"}–${cfg.close_time || "18:00"} น.)` : "ทีมงานจะติดต่อกลับโดยเร็ว"} และชวนลูกค้าฝากชื่อ เบอร์โทร และรายละเอียดหน้างานไว้
 - ห้ามยืนยันนัดหมายหรือการจอง — รับเรื่องไว้ได้ แต่บอกว่าทีมงานจะโทรยืนยันอีกครั้ง
 - แนะนำขนาดแอร์ได้: 9,000 BTU ≈ ห้อง 12–15 ตร.ม. · 12,000 ≈ 16–20 · 18,000 ≈ 24–30 · 24,000 ≈ 32–40 แล้วเลือกรุ่นที่ตรงจากรายการ
 - ตอบภาษาไทย สุภาพ กระชับ ไม่เกิน 6 บรรทัด ใช้อีโมจิพอประมาณ
@@ -192,10 +192,11 @@ async function autoReply(replyToken, convId, isNew, isUser, msgRow) {
     const cfg = await getAutoReplyCfg();
     if (!cfg || !cfg.enabled) return;
     const afterHours = !isOpenNow(cfg);
-    // 0) นอกเวลาทำการ + เปิดบอท AI: ตอบคำถามจริงจากแคตตาล็อกทุกข้อความ (ไม่มี cooldown — คุยต่อเนื่องได้)
+    // 0) บอท AI: ตอบคำถามจริงจากแคตตาล็อกทุกข้อความ (ไม่มี cooldown — คุยต่อเนื่องได้)
+    //    ปกติตอบเฉพาะนอกเวลาทำการ · ติ๊ก "ตอบทุกเวลา" (ai_always) = ตอบตลอดรวมเวลาทำการ (โหมดทดสอบ/ช่วยทีม)
     //    ตอบเฉพาะข้อความตัวอักษร · ถ้า AI ล้มเหลว/ปิด/ไม่มี key จะไหลลงข้อความตายตัวเดิมตามปกติ
-    if (afterHours && cfg.ai_enabled && msgRow?.type === "text" && (msgRow.text || "").trim()) {
-      const answer = await aiAnswer(convId, msgRow.text.trim(), cfg);
+    if (cfg.ai_enabled && (afterHours || cfg.ai_always) && msgRow?.type === "text" && (msgRow.text || "").trim()) {
+      const answer = await aiAnswer(convId, msgRow.text.trim(), cfg, afterHours);
       if (answer) { await sendAuto(replyToken, convId, "🤖 " + answer); return; }
     }
     // 1) welcome a brand-new contact (their first message)
@@ -301,10 +302,11 @@ export default async function handler(req, res) {
         thai_day: th.getUTCDay(),
         isOpenNow: cfg ? isOpenNow(cfg) : null,
         wouldSendAfterHours: cfg ? (!!cfg.enabled && !!cfg.afterhours_enabled && (cfg.afterhours_text || "").trim().length > 0 && !isOpenNow(cfg)) : null,
-        // สถานะบอท AI: จะตอบจริงต้อง enabled + ai_enabled + มี key + นอกเวลาทำการ
+        // สถานะบอท AI: จะตอบจริงต้อง enabled + ai_enabled + มี key + (นอกเวลาทำการ หรือติ๊กตอบทุกเวลา)
         ai_enabled: cfg ? !!cfg.ai_enabled : null,
+        ai_always: cfg ? !!cfg.ai_always : null,
         anthropic_key: !!process.env.ANTHROPIC_API_KEY,
-        aiWouldReplyNow: cfg ? (!!cfg.enabled && !!cfg.ai_enabled && !!process.env.ANTHROPIC_API_KEY && !isOpenNow(cfg)) : null,
+        aiWouldReplyNow: cfg ? (!!cfg.enabled && !!cfg.ai_enabled && !!process.env.ANTHROPIC_API_KEY && (!isOpenNow(cfg) || !!cfg.ai_always)) : null,
       });
     }
     if (params.get("dbcheck") === "1") {

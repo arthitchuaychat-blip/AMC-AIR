@@ -477,6 +477,7 @@ const AR_DEFAULT = {
   close_time: "18:00",
   cooldown_min: 120,
   ai_enabled: false,   // บอท AI ตอบคำถามสินค้า/ราคานอกเวลาทำการ (Claude Sonnet 5 — ต้องตั้ง ANTHROPIC_API_KEY บน Vercel)
+  ai_always: false,    // ตอบทุกเวลา (รวมเวลาทำการ) — โหมดทดสอบ หรือให้บอทช่วยตอบตอนทีมไม่ว่าง
   ai_extra: "",        // ข้อมูล/นโยบายเพิ่มเติมที่อยากให้บอทรู้ เช่น เงื่อนไขรับประกัน พื้นที่ให้บริการ
 };
 const DOW = [["อา", 0], ["จ", 1], ["อ", 2], ["พ", 3], ["พฤ", 4], ["ศ", 5], ["ส", 6]];
@@ -522,6 +523,10 @@ function AutoReplyCard({ flash }) {
             {keyOk === true && <b style={{ color: "#16a34a" }}> · ✓ ตั้งค่า API Key แล้ว พร้อมใช้งาน</b>}
             {keyOk === false && <b style={{ color: "#dc2626" }}> · ⚠️ ยังไม่ได้ตั้ง ANTHROPIC_API_KEY บน Vercel — บอทจะยังไม่ทำงาน</b>}
           </div>
+          <label className="ar-row" style={{ marginBottom: 8 }}>
+            <input type="checkbox" checked={!!c.ai_always} onChange={(e) => set("ai_always", e.target.checked)} />
+            <b>ตอบทุกเวลา</b>&nbsp;<span className="jo-dim" style={{ fontSize: 12 }}>(รวมช่วงเวลาทำการด้วย — เหมาะกับช่วงทดสอบบอท หรือให้บอทช่วยตอบตอนทีมไม่ว่าง · ไม่ติ๊ก = ตอบเฉพาะนอกเวลาทำการ)</span>
+          </label>
           <span style={{ fontSize: 12, fontWeight: 700 }}>ข้อมูลเพิ่มเติมที่อยากให้บอทรู้ (ไม่บังคับ)</span>
           <textarea className="inp" rows={3} value={c.ai_extra || ""} onChange={(e) => set("ai_extra", e.target.value)}
             placeholder={"เช่น รับประกันงานติดตั้ง 1 ปี · พื้นที่บริการ กรุงเทพฯ-สมุทรปราการ · ล้างแอร์เริ่มต้น 500 บาท/เครื่อง"} />
