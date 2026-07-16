@@ -122,7 +122,7 @@ function isOpenNow(cfg) {
   return mins >= toMin(cfg.open_time || "08:00") && mins < toMin(cfg.close_time || "18:00");
 }
 // ---------- AI bot (นอกเวลาทำการ): ตอบคำถามสินค้า/ราคา/บริการจากแคตตาล็อกจริง ----------
-// ใช้ Claude Sonnet 5 · ข้อมูล = web_products (ชุดเดียวกับหน้าเว็บ amcair.net — ราคาขายสาธารณะ ไม่มีต้นทุนภายใน)
+// ใช้ Claude Sonnet 5 · ข้อมูล = materials ทั้งหมดที่ active (แอร์+บริการ+วัสดุ) — ดึงเฉพาะราคาขาย (sale_price) เท่านั้น ห้ามดึง cost/สต๊อก/ผู้ขายเด็ดขาด
 // เงื่อนไข: เปิดใน ตั้งค่า→ตอบอัตโนมัติ + ตั้ง ANTHROPIC_API_KEY บน Vercel · ตอบเฉพาะแชต 1:1 ที่ไม่ใช่ซัพพลายเออร์
 // คืน { text, err } — text = คำตอบ (null ถ้าไม่สำเร็จ) · err = สาเหตุที่ไม่ตอบ (ไว้ดูในกล่องดำ ai_bot_last)
 async function aiAnswer(convId, question, cfg, afterHours = true) {
@@ -132,13 +132,20 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
     const kr = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=kind`, { headers: sbH() });
     if (kr.ok && ((await kr.json())[0]?.kind === "supplier")) return { text: null, err: "supplier-skip" };
 
-    // แคตตาล็อกสาธารณะ (แอร์ + บริการ) — ย่อเป็นบรรทัดละรายการ ประหยัดโทเคน
-    const pr = await tfetch(`${SB()}/rest/v1/web_products?select=kind,brand,name_th,ac_type,btu,sale_price,seer&order=kind.asc,brand.asc,btu.asc&limit=500`, { headers: sbH() });
+    // สินค้า+บริการทั้งหมดในระบบ (เฉพาะ active) — เลือกเฉพาะฟิลด์ปลอดภัย: มีแค่ sale_price ไม่มี cost/สต๊อก
+    const pr = await tfetch(`${SB()}/rest/v1/materials?select=kind,brand,series,name_th,ac_type,btu,btu_min,btu_max,unit,sale_price,seer,energy_label&active=eq.true&order=kind.asc,brand.asc,btu.asc,name_th.asc&limit=800`, { headers: sbH() });
     const prods = pr.ok ? await pr.json() : [];
     if (!prods.length) return { text: null, err: `catalog empty (status ${pr.status})` };
-    const line = (p) => [p.brand, p.name_th, p.ac_type, p.btu ? `${p.btu} BTU` : null, p.seer ? `SEER ${p.seer}` : null,
-      p.sale_price != null ? `${Number(p.sale_price).toLocaleString("en-US")} บาท` : "สอบถามราคา"].filter(Boolean).join(" | ");
-    const catalog = prods.map(line).join("\n");
+    const money = (v) => (Number(v) > 0 ? `${Number(v).toLocaleString("en-US")} บาท` : "สอบถามราคา");
+    const acLine = (p) => [p.brand, p.series, p.name_th, p.ac_type, p.btu ? `${p.btu} BTU` : null,
+      p.seer ? `SEER ${p.seer}` : null, p.energy_label, money(p.sale_price)].filter(Boolean).join(" | ");
+    const svcLine = (p) => [p.name_th, (p.btu_min || p.btu_max) ? `สำหรับแอร์ ${p.btu_min || ""}–${p.btu_max || ""} BTU` : null,
+      money(p.sale_price) + (p.unit ? `/${p.unit}` : "")].filter(Boolean).join(" | ");
+    const matLine = (p) => [[p.brand, p.name_th].filter(Boolean).join(" "),
+      money(p.sale_price) + (p.unit ? `/${p.unit}` : "")].filter(Boolean).join(" | ");
+    const sec = (title, kind, fn) => { const a = prods.filter((p) => p.kind === kind); return a.length ? `## ${title}\n` + a.map(fn).join("\n") : ""; };
+    const catalog = [sec("แอร์", "ac", acLine), sec("ค่าบริการ (ล้าง/ติดตั้ง/ซ่อม)", "service", svcLine), sec("วัสดุ/อุปกรณ์", "material", matLine)]
+      .filter(Boolean).join("\n\n");
 
     // ประวัติแชตล่าสุด → บอทตอบต่อเนื่องได้ (ข้อความปัจจุบันถูกบันทึกไปแล้ว จึงอยู่ในนี้ด้วย)
     const hr = await tfetch(`${SB()}/rest/v1/line_messages?line_user_id=eq.${encodeURIComponent(convId)}&type=eq.text&select=direction,text&order=created_at.desc&limit=10`, { headers: sbH() });
@@ -155,6 +162,7 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
 
 กติกาสำคัญ (ต้องทำตามเคร่งครัด):
 - ตอบจาก "รายการสินค้าและบริการ" ที่ให้ไว้เท่านั้น ห้ามเดาหรือแต่งราคา รุ่น ส่วนลด หรือโปรโมชั่นที่ไม่มีในข้อมูลเด็ดขาด
+- ราคาที่ให้คือราคาขายต่อหน่วย (ถ้ามี /หน่วย ต่อท้าย) — รายการที่เขียนว่า "สอบถามราคา" คือยังไม่ตั้งราคาในระบบ ให้บอกลูกค้าว่าทีมงานจะแจ้งราคาให้ ห้ามประเมินเอง
 - ถ้าข้อมูลไม่พอ บอกตรง ๆ ว่า${afterHours ? `ทีมงานจะตอบในเวลาทำการ (${days} ${cfg.open_time || "08:00"}–${cfg.close_time || "18:00"} น.)` : "ทีมงานจะติดต่อกลับโดยเร็ว"} และชวนลูกค้าฝากชื่อ เบอร์โทร และรายละเอียดหน้างานไว้
 - ห้ามยืนยันนัดหมายหรือการจอง — รับเรื่องไว้ได้ แต่บอกว่าทีมงานจะโทรยืนยันอีกครั้ง
 - แนะนำขนาดแอร์ได้: 9,000 BTU ≈ ห้อง 12–15 ตร.ม. · 12,000 ≈ 16–20 · 18,000 ≈ 24–30 · 24,000 ≈ 32–40 แล้วเลือกรุ่นที่ตรงจากรายการ
