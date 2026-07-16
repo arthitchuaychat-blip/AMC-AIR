@@ -381,7 +381,12 @@ export default async function handler(req, res) {
       const sr = await tfetch(`${SB()}/rest/v1/materials?select=name_th,sale_price,unit&active=eq.true&kind=eq.service&order=name_th.asc&limit=200`, { headers: sbH() });
       const services = (sr.ok ? await sr.json() : [])
         .map((x) => `${x.name_th} = ${Number(x.sale_price) > 0 ? Number(x.sale_price).toLocaleString("en-US") + " บาท" + (x.unit ? "/" + x.unit : "") : "ยังไม่ตั้งราคา"}`);
-      return res.status(200).json({ activeByKind: { ac, service, material: `${material} (บอทไม่เห็น)` }, botSees: { ac: Math.min(ac, 900), service: services.length }, services });
+      // วัดขนาดฟิลด์ยาวของแอร์ (features/description) เพื่อคุมขนาด prompt
+      const mr = await tfetch(`${SB()}/rest/v1/materials?select=features,description,power_cost_year,pipe_size,name_en&active=eq.true&kind=eq.ac&limit=1000`, { headers: sbH() });
+      const mrows = mr.ok ? await mr.json() : [];
+      const stat = (f) => { const a = mrows.map((x) => (x[f] == null ? "" : String(x[f])).trim()).filter(Boolean); return { filled: a.length, chars: a.reduce((s, t) => s + t.length, 0), maxLen: a.reduce((m, t) => Math.max(m, t.length), 0) }; };
+      const acFieldStats = { features: stat("features"), description: stat("description"), power_cost_year: stat("power_cost_year"), pipe_size: stat("pipe_size"), name_en: stat("name_en") };
+      return res.status(200).json({ activeByKind: { ac, service, material: `${material} (บอทไม่เห็น)` }, botSees: { ac: Math.min(ac, 1000), service: services.length }, acFieldStats, services });
     }
     if (params.get("linetest") === "1") {
       const t0 = Date.now();
