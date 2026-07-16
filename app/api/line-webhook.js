@@ -364,6 +364,16 @@ export default async function handler(req, res) {
       const out = await aiAnswer(conv, q, cfg, !isOpenNow(cfg));
       return res.status(200).json({ ok: !!out.text, ms: Date.now() - t0, question: q, matched: found, answer: out.text, err: out.err });
     }
+    // ?aicat=1 — ดูว่าบอทเห็นแคตตาล็อกกี่รายการ แยกหมวด + รายการบริการพร้อมราคา (ไม่มีข้อมูลต้นทุน)
+    if (params.get("aicat") === "1") {
+      const r = await tfetch(`${SB()}/rest/v1/materials?select=kind,name_th,sale_price,unit&active=eq.true&order=kind.asc,name_th.asc&limit=800`, { headers: sbH() });
+      const rows = r.ok ? await r.json() : [];
+      const byKind = {}; rows.forEach((x) => { byKind[x.kind] = (byKind[x.kind] || 0) + 1; });
+      const services = rows.filter((x) => x.kind === "service")
+        .map((x) => `${x.name_th} = ${Number(x.sale_price) > 0 ? Number(x.sale_price).toLocaleString("en-US") + " บาท" + (x.unit ? "/" + x.unit : "") : "ยังไม่ตั้งราคา"}`);
+      const noPrice = rows.filter((x) => !(Number(x.sale_price) > 0)).length;
+      return res.status(200).json({ status: r.status, total: rows.length, byKind, noPriceCount: noPrice, services });
+    }
     if (params.get("linetest") === "1") {
       const t0 = Date.now();
       try { const r = await tfetch(`https://api.line.me/v2/bot/profile/Udummy`, { headers: { Authorization: `Bearer ${TOKEN()}` } }); return res.status(200).json({ reached: true, status: r.status, ms: Date.now() - t0, body: (await r.text()).slice(0, 160) }); }
