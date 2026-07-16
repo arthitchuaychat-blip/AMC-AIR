@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, deleteTransaction, cancelTransactionGroup, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived } from "../lib/api";
+import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, searchTransactions, deleteTransaction, cancelTransactionGroup, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived } from "../lib/api";
 import { fmtBaht, fmtNum, matchText } from "../lib/format";
 import { can } from "../lib/permissions";
 import { scheduleLabel } from "../lib/schedule";
@@ -24,6 +24,18 @@ const TYPE_BY = Object.fromEntries([...TYPES,
   { id: "adjust_out", th: "ปรับยอด (ลด)",    icon: "damage",   color: "#ea580c", dir: -1 },
 ].map((t) => [t.id, t]));
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
+
+// จัดกลุ่มธุรกรรมตามชุดที่บันทึก (ref_no) — แถวเก่าไม่มี ref ใช้วินาทีที่สร้างแทน (ใช้ทั้งรายการล่าสุด + ผลค้นหา)
+function buildGroups(rows) {
+  const map = new Map();
+  for (const r of rows || []) {
+    const key = r.ref_no || (r.created_at ? `t${String(r.created_at).slice(0, 19)}` : `id${r.id}`);
+    let g = map.get(key);
+    if (!g) { g = { key, ref_no: r.ref_no, type: r.type, job_no: r.job_no, team: r.team, date: r.txn_date, rows: [] }; map.set(key, g); }
+    g.rows.push(r);
+  }
+  return [...map.values()];
+}
 
 export default function Movements({ role, myTeam, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
   // ซื้อเข้า/ตัดเสีย = สิทธิ์ระดับสโตร์ (ต้องมีสิทธิ์แก้ไข movements และไม่ใช่ช่างภาคสนาม)
@@ -296,22 +308,30 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   }
   // group the recent ledger by recording batch (ref_no) → one record action = one line,
   // even for the same job. Fallback key for legacy rows without a ref: created-at second.
-  const groups = React.useMemo(() => {
-    const map = new Map();
-    for (const r of recent) {
-      const key = r.ref_no || (r.created_at ? `t${String(r.created_at).slice(0, 19)}` : `id${r.id}`);
-      let g = map.get(key);
-      if (!g) { g = { key, ref_no: r.ref_no, type: r.type, job_no: r.job_no, team: r.team, date: r.txn_date, rows: [] }; map.set(key, g); }
-      g.rows.push(r);
-    }
-    return [...map.values()];
-  }, [recent]);
+  const groups = React.useMemo(() => buildGroups(recent), [recent]);
   // ค้นหาในรายการล่าสุด: เลข PO / ใบงาน / เลขเอกสาร (WD/PC/RT) / ทีม / รหัส-ชื่อวัสดุ
+  // พิมพ์ค้นแล้วยิงถามฐานข้อมูลทั้งประวัติ (debounce) — ไม่จำกัดแค่ 60 รายการล่าสุดที่โหลดมา
   const [refQ, setRefQ] = React.useState("");
+  const [searchRows, setSearchRows] = React.useState(null);   // null = ไม่ได้ค้น → ใช้รายการล่าสุดตามปกติ
+  React.useEffect(() => {
+    const t = refQ.trim();
+    if (t.length < 2) { setSearchRows(null); return; }
+    let dead = false;
+    const h = setTimeout(async () => {
+      try {
+        const codeHits = mats.filter((m) => matchText(t, m.code, m.th)).slice(0, 50).map((m) => m.code);
+        const rows = await searchTransactions(t, codeHits);
+        if (!dead) setSearchRows(rows);
+      } catch { if (!dead) setSearchRows([]); }
+    }, 350);
+    return () => { dead = true; clearTimeout(h); };
+  }, [refQ, mats]);
+  const searchGroups = React.useMemo(() => (searchRows == null ? null : buildGroups(searchRows)), [searchRows]);
+  const baseGroups = searchGroups ?? groups;
   const shownGroups = refQ.trim()
-    ? groups.filter((g) => matchText(refQ, g.ref_no, g.job_no, g.team)
+    ? baseGroups.filter((g) => matchText(refQ, g.ref_no, g.job_no, g.team)
         || g.rows.some((r) => matchText(refQ, r.material_code, matMap[r.material_code]?.th)))
-    : groups;
+    : baseGroups;
   const toggle = (key) => setExpanded((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   function printGroup(g) {
@@ -548,7 +568,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
 
         {/* RECENT */}
         <div className="card">
-          <div className="sec-head"><div className="sec-title">รายการล่าสุด <span className="sec-sub">{refQ.trim() ? `พบ ${shownGroups.length}/${groups.length} ชุด` : `${recent.length} รายการ`} · กดพิมพ์/ยกเลิกได้</span></div></div>
+          <div className="sec-head"><div className="sec-title">รายการล่าสุด <span className="sec-sub">{refQ.trim() ? `พบ ${shownGroups.length} ชุด (ค้นทั้งประวัติ)` : `${recent.length} รายการ`} · กดพิมพ์/ยกเลิกได้</span></div></div>
           <div className="cat-search" style={{ marginBottom: 8 }}>
             <UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาเลข PO / ใบงาน / เลขเอกสาร / วัสดุ" value={refQ} onChange={(e) => setRefQ(e.target.value)} />

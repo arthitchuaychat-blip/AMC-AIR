@@ -2080,6 +2080,27 @@ export async function listRecentTransactions(limit = 60) {
   if (error) throw error;
   return data || [];
 }
+// ค้นธุรกรรมทั้งฐาน (ไม่ใช่แค่ 60 รายการล่าสุด) — จับ เลขเอกสาร (WD/PC/RT) / เลขงาน หรือ PO / รหัสวัสดุ
+// codes = รหัสวัสดุที่ชื่อตรงคำค้น (คัดจากฝั่งแอป) → ค้นด้วยชื่อวัสดุได้ด้วย
+export async function searchTransactions(q, codes = [], limit = 400) {
+  const t = String(q || "").trim().replace(/[%,()]/g, "");
+  if (!t) return [];
+  const ors = [`ref_no.ilike.%${t}%`, `job_no.ilike.%${t}%`, `material_code.ilike.%${t}%`];
+  if (codes.length) ors.push(`material_code.in.(${codes.map((c) => `"${String(c).replace(/[",]/g, "")}"`).join(",")})`);
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .or(ors.join(","))
+    .order("id", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  // ดึง "ทั้งชุด" ของ ref_no ที่เจอ — ชุดต้องครบทุกแถว ไม่งั้นยอดรวม/ปุ่มยกเลิกทั้งชุดทำงานกับชุดไม่ครบ
+  const refs = [...new Set((data || []).map((r) => r.ref_no).filter(Boolean))].slice(0, 100);
+  if (!refs.length) return data || [];
+  const full = await supabase.from("transactions").select("*").in("ref_no", refs).order("id", { ascending: false }).limit(1000);
+  if (full.error) return data || [];
+  return [...(full.data || []), ...(data || []).filter((r) => !r.ref_no)];
+}
 
 // transactions since a date (YYYY-MM-DD); null = all-time. For dashboards.
 export async function listTransactionsSince(startDate) {
