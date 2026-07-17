@@ -71,7 +71,12 @@ export default function BulkImportModal({ categories, existingCodes, onDone, onC
   function onFile(e) {
     const f = e.target.files?.[0]; if (!f) return;
     const r = new FileReader();
-    r.onload = () => setText(String(r.result || ""));
+    r.onload = () => {
+      const txt = String(r.result || "");
+      // ไฟล์ที่เซฟจาก Excel ไทยเป็น TIS-620 จะอ่านเป็นตัวยึกยือ (\uFFFD) — เตือนก่อนพนักงานรีบกดนำเข้าชื่อพัง
+      if (txt.includes("\uFFFD")) alert("⚠️ ไฟล์นี้ไม่ใช่ UTF-8 (ตัวอักษรไทยจะเพี้ยน)\nวิธีแก้: เปิดใน Google Sheets แล้วดาวน์โหลดเป็น CSV ใหม่ หรือ Excel → Save As → CSV UTF-8");
+      setText(txt);
+    };
     r.readAsText(f, "utf-8");
   }
 

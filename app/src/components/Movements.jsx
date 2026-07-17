@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, searchTransactions, deleteTransaction, cancelTransactionGroup, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived } from "../lib/api";
+import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, searchTransactions, deleteTransaction, cancelTransactionGroup, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived, unmarkPoReceived, getStockByCodes } from "../lib/api";
 import { fmtBaht, fmtNum, matchText } from "../lib/format";
 import { can } from "../lib/permissions";
 import { scheduleLabel } from "../lib/schedule";
@@ -159,6 +159,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   // prefill the purchase cart when receiving a PO ({ poNo, quoteNo, items:[{code,qty,price,unit}] })
   // สินค้าที่สั่งเป็น "หน่วยซื้อ" (เช่น ม้วน) → แปลงเข้าสต๊อกเป็นหน่วยหลัก: จำนวน ×แฟกเตอร์ · ราคา/หน่วย ÷แฟกเตอร์
   // PO ที่อ้างใบเสนอราคา → จำงานปลายทางไว้ เพื่อบันทึก "เบิกเข้างาน" ต่อท้ายการซื้อเข้าอัตโนมัติ (ต้นทุนจริงเข้างาน)
+  const [poLines0, setPoLines0] = React.useState(null); // รายการตามใบสั่งซื้อ (หน่วยหลัก) — ไว้เทียบว่ารับครบ/บางส่วน
   React.useEffect(() => {
     if (!prefill || !prefill.items?.length || !mats.length) return;
     setType("purchase");
@@ -168,12 +169,14 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     setReceiveJob(rj ? { job_no: rj.job_no, team: rj.assigned_team || null } : null);
     // กันต้นทุนตกหล่นแบบเงียบ: PO อ้างใบเสนอราคาแต่ยังไม่มีใบงาน → เตือนชัด ๆ (ของจะเข้าสต๊อกเฉย ๆ ไม่เข้างาน)
     if (prefill.quoteNo && !rj) flash(`⚠️ ${prefill.quoteNo} ยังไม่มีใบงาน — รับรอบนี้ของจะเข้าสต๊อกอย่างเดียว ต้นทุนยังไม่เข้างาน · สร้างใบงานก่อนแล้วค่อยรับ ถ้าต้องการต้นทุนเข้างานอัตโนมัติ`, true);
-    setLines(prefill.items.map((p) => {
+    const mapped = prefill.items.map((p) => {
       const m = matMap[p.code];
       const f = (p.unit && m?.purchaseUnit && p.unit === m.purchaseUnit && Number(m.purchaseQty) > 1) ? Number(m.purchaseQty) : 1;
       const price = p.price ?? m?.cost ?? 0;
       return { code: p.code, qty: (Number(p.qty) || 1) * f, price: Math.round(((Number(price) || 0) / f) * 100) / 100, unit: m?.unit || null };
-    }));
+    });
+    setLines(mapped);
+    setPoLines0(mapped.map((l) => ({ code: l.code, qty: l.qty })));   // ยอดสั่งตามใบ (หน่วยหลัก)
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats, jobOrders]);
   const printWin = React.useRef(null);
@@ -184,7 +187,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   }, [printData]);
 
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
-  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); setReceiveJob(null); setPrepNo(null); setTxnDate(new Date().toISOString().slice(0, 10)); }
+  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); setReceiveJob(null); setPrepNo(null); setPoLines0(null); setTxnDate(new Date().toISOString().slice(0, 10)); }
 
   // ----- cart helpers -----
   // สินค้า 2 หน่วย: บรรทัดถือ l.unit (เมตร/ม้วน) · สต๊อก/ต้นทุนคิดเป็นหน่วยหลักเสมอ (แปลงด้วย unitFactor)
@@ -236,44 +239,64 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
 
   async function submitCart() {
     if (!cartValid || busy) return;
+    // แปลงทุกบรรทัดเข้าหน่วยหลักก่อนบันทึก (สต๊อก/ต้นทุนเก็บเป็นหน่วยหลักเสมอ เช่น 2 ม้วน → 30 เมตร · ราคา/ม้วน ÷15)
+    const norm = lines.map((l) => {
+      const m = matMap[l.code];
+      const f = unitFactor(m, lineUnit(l, m));
+      return { code: l.code, qty: l.qty * f, unitCost: type === "purchase" ? R2((Number(l.price) || 0) / f) : (m?.cost || 0) };
+    });
+    // เบิก/ตัดเสียเกินคงเหลือ → เตือนก่อนเสมอ (สต๊อกจะติดลบ) — เดิมปล่อยผ่านเงียบ
+    if (type === "withdraw" || type === "damage") {
+      const over = norm.filter((l) => { const m = matMap[l.code]; return m && m.tracked !== false && l.qty > (Number(m.stock) || 0) + 0.001; });
+      if (over.length && !await confirmDialog(`⚠️ เกินคงเหลือ ${over.length} รายการ:\n${over.slice(0, 5).map((l) => `· ${matMap[l.code]?.th || l.code} (เหลือ ${fmtNum(matMap[l.code]?.stock || 0)} จะ${T.th} ${fmtNum(l.qty)})`).join("\n")}\n\nสต๊อกจะติดลบ — ยืนยันบันทึก?`)) return;
+    }
+    // รับของตามใบสั่งซื้อ: เทียบยอดกับใบ → ครบ = ปิดใบ (จองใบก่อนกันรับซ้ำ) · ไม่ครบ = รับบางส่วน ใบคง "รอรับของ" ไว้รับต่อ
+    let fullReceive = true;
+    if (type === "purchase" && receivePo && poLines0) {
+      const orig = {}; poLines0.forEach((l) => { orig[l.code] = (orig[l.code] || 0) + Number(l.qty || 0); });
+      const cur = {}; norm.forEach((l) => { cur[l.code] = (cur[l.code] || 0) + l.qty; });
+      fullReceive = Object.entries(orig).every(([c, q]) => (cur[c] || 0) >= q - 0.001);
+      const overRecv = Object.entries(cur).some(([c, q]) => q > (orig[c] || 0) + 0.001);
+      if (!fullReceive && !await confirmDialog("จำนวนที่รับไม่ครบตามใบสั่งซื้อ\n\n· ยืนยัน = รับบางส่วน — ใบยังค้างสถานะ \"รอรับของ\" ไว้กดรับส่วนที่เหลือทีหลัง\n· ยกเลิก = กลับไปแก้จำนวน")) return;
+      if (overRecv && !await confirmDialog("⚠️ มีรายการที่รับ \"เกิน\" จำนวนในใบสั่งซื้อ — ยืนยันบันทึกตามนี้?")) return;
+    }
     setBusy(true);
+    let claimedPo = false;
     try {
-      // แปลงทุกบรรทัดเข้าหน่วยหลักก่อนบันทึก (สต๊อก/ต้นทุนเก็บเป็นหน่วยหลักเสมอ เช่น 2 ม้วน → 30 เมตร · ราคา/ม้วน ÷15)
-      const norm = lines.map((l) => {
-        const m = matMap[l.code];
-        const f = unitFactor(m, lineUnit(l, m));
-        return { code: l.code, qty: l.qty * f, unitCost: type === "purchase" ? R2((Number(l.price) || 0) / f) : (m?.cost || 0) };
-      });
-      await recordTransactions(norm.map((l) => ({
-        type, job_no: jobNo, team: type === "damage" ? null : team,
-        material_code: l.code, qty: l.qty,
-        unit_cost: l.unitCost, reason, txn_date: txnDate || undefined,
-        prep_no: type === "withdraw" ? prepNo : null,   // ผูกกลับใบเตรียมวัสดุ (เฉพาะรายการเบิก)
-      })));
-      // weighted moving average: recompute each purchased material's unit cost (ทั้งคู่เป็นหน่วยหลักแล้ว)
-      // รวมยอดต่อรหัสก่อน เผื่อสินค้าเดียวกันมี 2 บรรทัดคนละหน่วย (เช่น 1 ม้วน + 5 เมตร)
+      // จองใบก่อนลงของ (กัน 2 คนรับพร้อมกัน = สต๊อกเบิ้ล) — ลงของพังกลางทางค่อยคืนสถานะใบ
+      if (type === "purchase" && receivePo && fullReceive) { await markPoReceived(receivePo); claimedPo = true; }
+      try {
+        await recordTransactions(norm.map((l) => ({
+          type, job_no: jobNo, team: type === "damage" ? null : team,
+          material_code: l.code, qty: l.qty,
+          unit_cost: l.unitCost, reason, txn_date: txnDate || undefined,
+          prep_no: type === "withdraw" ? prepNo : null,   // ผูกกลับใบเตรียมวัสดุ (เฉพาะรายการเบิก)
+          po_no: type === "purchase" ? (receivePo || null) : null,   // ตราใบสั่งซื้อ (mig 151) — ยกเลิกรับเข้าลบครบชุด
+        })));
+      } catch (e) { if (claimedPo) await unmarkPoReceived(receivePo).catch(() => {}); throw e; }
+      // weighted moving average: คิดจาก "สต๊อกสดหลังรับ" (อ่านใหม่จาก DB — เดิมใช้สต๊อก ณ ตอนเปิดหน้า แท็บค้างทั้งวันต้นทุนเพี้ยน)
       if (type === "purchase") {
         const byCode = {};
         norm.forEach((l) => { const b = byCode[l.code] || (byCode[l.code] = { qty: 0, val: 0 }); b.qty += l.qty; b.val += l.qty * l.unitCost; });
+        const freshStock = await getStockByCodes(Object.keys(byCode)).catch(() => null);
         for (const [code, b] of Object.entries(byCode)) {
           const m = matMap[code]; if (!m) continue;
-          const denom = m.stock + b.qty;
-          if (denom > 0) await updateMaterialCost(code, Math.round(((m.stock * m.cost + b.val) / denom) * 100) / 100);
+          const after = freshStock ? (Number(freshStock[code]) || 0) : (m.stock + b.qty);   // สต๊อกหลังรับ (รวมล็อตนี้แล้ว)
+          const before = after - b.qty;
+          if (after > 0) await updateMaterialCost(code, Math.round(((Math.max(0, before) * m.cost + b.val) / after) * 100) / 100);
         }
-        if (receivePo) {
-          await markPoReceived(receivePo);
+        if (receivePo && receiveJob?.job_no) {
           // PO อ้างใบเสนอราคา → เบิกออกเข้างานนั้นทันทีด้วย "ราคาซื้อจริง" (ต้นทุนจริงของออเดอร์เข้ากำไรงาน · สต๊อกไม่ค้าง)
-          if (receiveJob?.job_no) {
-            await recordTransactions(norm.map((l) => ({
-              type: "withdraw", job_no: receiveJob.job_no, team: receiveJob.team,
-              material_code: l.code, qty: l.qty, unit_cost: l.unitCost, txn_date: txnDate || undefined,
-            })));
-          }
-          setReceivePo(null);
+          await recordTransactions(norm.map((l) => ({
+            type: "withdraw", job_no: receiveJob.job_no, team: receiveJob.team,
+            material_code: l.code, qty: l.qty, unit_cost: l.unitCost, txn_date: txnDate || undefined,
+            po_no: receivePo,   // ตราคู่กับชุดซื้อ — ยกเลิกรับเข้าแล้วชุดเบิกอัตโนมัติถูกลบตาม ไม่ทิ้งสต๊อกติดลบ
+          })));
         }
+        if (receivePo && fullReceive) setReceivePo(null);
       }
-      flash(`${T.th} ${lines.length} รายการ สำเร็จ${receivePo ? (receiveJob?.job_no ? ` · ปิดใบสั่งซื้อ + เบิกเข้างาน ${receiveJob.job_no} แล้ว` : " · ปิดใบสั่งซื้อแล้ว") : ""}`);
-      setReceiveJob(null);
+      flash(`${T.th} ${lines.length} รายการ สำเร็จ${type === "purchase" && receivePo ? (fullReceive ? (receiveJob?.job_no ? ` · ปิดใบสั่งซื้อ + เบิกเข้างาน ${receiveJob.job_no} แล้ว` : " · ปิดใบสั่งซื้อแล้ว") : " · รับบางส่วน — ใบยังค้าง \"รอรับของ\" ไว้รับส่วนที่เหลือ") : ""}`);
+      if (fullReceive) { setReceiveJob(null); setPoLines0(null); }
       setLines([]); setJobNo("");
       await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
@@ -302,8 +325,11 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   }
 
   async function cancel(r) {
-    if (!await confirmDialog(`ยกเลิกรายการนี้? (${TYPE_BY[r.type].th} ${matMap[r.material_code]?.th || r.material_code} ${r.qty}) — สต๊อกจะคืนค่าให้`)) return;
-    try { await deleteTransaction(r.id); flash("ยกเลิกรายการแล้ว"); await load(); }
+    // กติกาบ้าน: ยกเลิก/ลบ ต้องระบุเหตุผลเสมอ (ลง audit) — เดิมช่องนี้หลุด
+    const rs = await confirmDialog({ title: `ยกเลิกรายการนี้? (${TYPE_BY[r.type].th} ${matMap[r.material_code]?.th || r.material_code} ${r.qty})`,
+      message: "สต๊อกจะคืนค่าให้", confirmText: "ยกเลิกรายการ", prompt: { label: "เหตุผล", placeholder: "เช่น คีย์ผิด · ซ้ำ", required: true } });
+    if (rs === false) return;
+    try { await deleteTransaction(r.id, rs); flash("ยกเลิกรายการแล้ว"); await load(); }
     catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
   }
   // group the recent ledger by recording batch (ref_no) → one record action = one line,

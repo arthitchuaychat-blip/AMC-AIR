@@ -192,6 +192,12 @@ export async function listAcWarranties() {
 // add or update a material (admin only — enforced by RLS)
 export async function saveMaterial(row, isNew) {
   const kind = row.kind || "material";
+  // สร้างใหม่ด้วยรหัสที่มีอยู่แล้ว = upsert จะทับสินค้าเดิมทั้งตัว (รวม stock ตั้งต้น) — กันไว้ก่อน
+  if (isNew) {
+    const { data: dup, error: de } = await supabase.from("materials").select("code").eq("code", row.code).maybeSingle();
+    if (de) throw de;
+    if (dup) throw new Error(`รหัส ${row.code} มีอยู่แล้ว — ใช้รหัสอื่น หรือเปิดสินค้าเดิมมาแก้ไขแทน`);
+  }
   const payload = {
     code: row.code,
     name_th: row.name_th,
@@ -350,6 +356,9 @@ export async function setMaterialsWebPublished(codes, published) {
 // writing back the exported on-hand would double-count). Only genuinely new codes get init_stock.
 export async function bulkUpsertMaterials(rows) {
   if (!rows || !rows.length) return { inserted: 0, updated: 0 };
+  // รหัสซ้ำในไฟล์เดียวกัน → เก็บแถวล่าสุด (upsert ก้อนเดียวที่มีรหัสซ้ำจะพังทั้งก้อน "cannot affect row a second time")
+  const byCode = new Map(); rows.forEach((r) => { if (r.code) byCode.set(r.code, r); });
+  rows = [...byCode.values()];
   const codes = [...new Set(rows.map((r) => r.code).filter(Boolean))];
   const existing = new Set();
   for (let i = 0; i < codes.length; i += 300) {
@@ -434,12 +443,30 @@ export async function recordTransactions(rows) {
     unit_cost: Number(t.unit_cost) || 0,
     reason: t.type === "damage" ? (t.reason || null) : null,
     prep_no: t.prep_no || null,   // ผูกกลับใบเตรียมวัสดุ (mig 115) — ไว้ลบตามกันได้
+    po_no: t.po_no || null,       // ผูกใบสั่งซื้อ (mig 151) — ยกเลิกรับเข้าลบครบทั้งชุดซื้อ+เบิกอัตโนมัติ
     ref_no: ref,
     recorded_by: user?.id || null,
   }));
   let { error } = await supabase.from("transactions").insert(payload);
+  if (error && /po_no/i.test(error.message || "")) { payload.forEach((r) => delete r.po_no); ({ error } = await supabase.from("transactions").insert(payload)); }   // pre-151 fallback
   if (error && /prep_no/i.test(error.message || "")) { payload.forEach((r) => delete r.prep_no); ({ error } = await supabase.from("transactions").insert(payload)); } // pre-115 fallback
   if (error) throw error;
+}
+
+// ยอดคงเหลือสด ๆ รายรหัส (ใช้คิดต้นทุนเฉลี่ยตอนรับของ — สต๊อกในหน้าอาจค้างจากตอนเปิด)
+export async function getStockByCodes(codes) {
+  const out = {};
+  for (let i = 0; i < codes.length; i += 300) {
+    const { data, error } = await supabase.from("material_stock").select("code,current_stock").in("code", codes.slice(i, i + 300));
+    if (error) throw error;
+    (data || []).forEach((m) => { out[m.code] = Number(m.current_stock) || 0; });
+  }
+  return out;
+}
+// ราคาซื้อครั้งล่าสุดของสินค้า (โชว์เป็น hint ในฟอร์ม PO — ต้นทุนเฉลี่ยมักเพี้ยนจากราคาซื้อจริง)
+export async function lastPurchaseOf(code) {
+  const { data } = await supabase.from("transactions").select("unit_cost,txn_date,po_no").eq("material_code", code).eq("type", "purchase").order("id", { ascending: false }).limit(1).maybeSingle();
+  return data || null;
 }
 
 // ---------- STOCK COUNT (นับสต๊อก) ----------
@@ -494,6 +521,10 @@ export async function getStockCountItems(id) {
 }
 // save typed "counted" quantities on a draft (null = not counted yet)
 export async function saveStockCountCounts(id, counts) {
+  // กันแท็บค้างเขียนทับรอบที่อัพเดทสต๊อกไปแล้ว — ตัวเลขนับต้องนิ่งเป็นหลักฐานคู่กับ system_qty/diff ที่ freeze ไว้
+  const { data: sc0, error: e00 } = await supabase.from("stock_counts").select("status").eq("id", id).single();
+  if (e00) throw e00;
+  if (sc0.status === "applied") throw new Error("รอบนี้อัพเดทสต๊อกไปแล้ว — แก้ยอดนับไม่ได้ (เริ่มรอบนับใหม่แทน)");
   const rows = Object.entries(counts || {}).map(([code, qty]) => ({
     count_id: id, material_code: code,
     counted_qty: (qty === "" || qty == null) ? null : Number(qty),
@@ -510,6 +541,15 @@ export async function applyStockCount(id) {
   const { data: sc, error: e0 } = await supabase.from("stock_counts").select("id,count_no,status").eq("id", id).single();
   if (e0) throw e0;
   if (sc.status === "applied") throw new Error("รอบนี้อัพเดทสต๊อกไปแล้ว");
+  // จองรอบก่อนทำ (optimistic lock) — กดซ้ำ/สองเครื่อง apply พร้อมกัน = ปรับสองเด้ง สต๊อกเพี้ยนเท่าส่วนต่างทั้งรอบ
+  const nowClaim = new Date().toISOString();
+  const { data: claim, error: eClaim } = await supabase.from("stock_counts")
+    .update({ status: "applied", applied_by: uid, applied_at: nowClaim, updated_at: nowClaim })
+    .eq("id", id).eq("status", "draft").select("id");
+  if (eClaim) throw eClaim;
+  if (!claim?.length) throw new Error("มีคนกดอัพเดทรอบนี้พร้อมกัน — รีเฟรชดูผลก่อน");
+  const revert = async () => { await supabase.from("stock_counts").update({ status: "draft", applied_by: null, applied_at: null }).eq("id", id); };
+  try {
   // อ่านเป็นช่วงให้ครบทุกรายการ — เพดาน 1,000 แถวเคยทำให้ปรับยอดได้ไม่ครบรอบ
   const items = await _fetchAll((f, t) => supabase.from("stock_count_items").select("id,material_code,counted_qty,unit_cost", { count: "exact" }).eq("count_id", id).order("id").range(f, t));
   const counted = (items || []).filter((it) => it.counted_qty != null);
@@ -540,13 +580,16 @@ export async function applyStockCount(id) {
     }
   }
   if (txns.length) { const { error: e2 } = await supabase.from("transactions").insert(txns); if (e2) throw e2; }
-  const { error: e3 } = await supabase.from("stock_counts").update({ status: "applied", applied_by: uid, applied_at: now, updated_at: now }).eq("id", id);
-  if (e3) throw e3;
   return { adjusted, counted: counted.length };
+  } catch (err) { await revert(); throw err; }   // พลาดกลางทาง → คืนสถานะร่าง ให้กดใหม่ได้ (ยังไม่มี txn ไหนถูกเขียนถ้าพังก่อน insert)
 }
-export async function deleteStockCount(id) {
+export async function deleteStockCount(id, reason) {
+  // รอบที่อัพเดทสต๊อกแล้ว = หลักฐานคู่กับรายการปรับยอด — ห้ามลบ (RLS mig 151 กันอีกชั้น)
+  const { data: sc } = await supabase.from("stock_counts").select("count_no,status").eq("id", id).maybeSingle();
+  if (sc?.status === "applied") throw new Error("รอบนี้อัพเดทสต๊อกไปแล้ว — ลบไม่ได้ (เก็บเป็นหลักฐานคู่รายการปรับยอด)");
   const { error } = await supabase.from("stock_counts").delete().eq("id", id); // cascades items
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "stock_count", target_no: sc?.count_no || String(id), reason: reason || null }).catch(() => {});
 }
 
 // aggregate all job_no'd movements + the jobs (status) table
@@ -671,12 +714,13 @@ export async function getQuoteItems(quote_no) {
 
 // ---------- ใบเตรียมวัสดุ (mig 109) — ประตูก่อนสั่งซื้อ/เบิก: แบ่งจำนวน ซื้อ/เบิก ต่อรายการ + ขั้นอนุมัติ ----------
 export async function listMaterialPreps() {
+  const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows })); // กันเพดาน 1000 แถวทุกก้อน — เหมือน listPurchaseOrders (เดิมกันแค่รายการ ใบ/ลูกค้า/งานหลุดเมื่อเกินพัน)
   const [pRes, iRes, qRes, cuRes, joRes, tmRes] = await Promise.all([
-    supabase.from("material_preps").select("*").order("created_at", { ascending: false }),
-    _fetchAll((f, t) => supabase.from("material_prep_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
-    supabase.from("quotations").select("quote_no,customer_id,title"),
-    supabase.from("customers").select("id,name"),
-    supabase.from("job_orders").select("job_no,quote_no,assigned_team,status"),
+    _rows((f, t) => supabase.from("material_preps").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("prep_no").range(f, t)),
+    _rows((f, t) => supabase.from("material_prep_items").select("*", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),
+    _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("job_orders").select("job_no,quote_no,assigned_team,status", { count: "exact" }).order("job_no").range(f, t)),
     supabase.from("teams").select("id,name"),
   ]);
   if (pRes.error) throw pRes.error;
@@ -714,29 +758,40 @@ export async function saveMaterialPrep(head, items) {
     .map((it) => ({ prep_no: head.prep_no, material_code: it.code || null, name: it.name || null, unit: it.unit || null, qty_buy: Number(it.qty_buy) || 0, qty_withdraw: Number(it.qty_withdraw) || 0 }));
   if (rows.length) { const e3 = (await supabase.from("material_prep_items").insert(rows)).error; if (e3) throw e3; }
 }
-export async function setPrepStatus(prep_no, status) {
+export async function setPrepStatus(prep_no, status, prevStatus) {
   const patch = { status };
   if (status === "approved") { const { data: { user } } = await supabase.auth.getUser(); patch.approved_by = user?.id || null; patch.approved_at = new Date().toISOString(); }
-  const { error } = await supabase.from("material_preps").update(patch).eq("prep_no", prep_no);
+  // กันแท็บค้างเปลี่ยนสถานะทับ (เช่น อนุมัติซ้ำใบที่ถูกยกเลิกไปแล้ว) — ผู้เรียกส่งสถานะเดิมมาเทียบ
+  let q = supabase.from("material_preps").update(patch).eq("prep_no", prep_no);
+  if (prevStatus) q = q.eq("status", prevStatus);
+  const { data, error } = await q.select("prep_no");
   if (error) throw error;
+  if (prevStatus && !data?.length) throw new Error("สถานะใบนี้เปลี่ยนไปแล้ว (มีคนแก้พร้อมกัน) — รีเฟรชก่อน");
 }
 // ลบใบเตรียมวัสดุ · cascade=true → ลบใบสั่งซื้อ + รายการเบิก ที่แตกออกมาจากใบนี้ด้วย (mig 115)
-export async function deleteMaterialPrep(prep_no, cascade) {
+export async function deleteMaterialPrep(prep_no, cascade, reason) {
   if (cascade) {
-    try {
-      const { data: pos } = await supabase.from("purchase_orders").select("po_no").eq("prep_no", prep_no);
-      const poNos = (pos || []).map((x) => x.po_no);
-      if (poNos.length) {
-        await supabase.from("po_items").delete().in("po_no", poNos);
-        await supabase.from("purchase_orders").delete().in("po_no", poNos);
-      }
-      // ลบรายการเบิกที่ผูกใบนี้ → สต๊อกคืนค่าอัตโนมัติ (current_stock คิดจาก transactions)
-      await supabase.from("transactions").delete().eq("prep_no", prep_no);
-      syncCashEntriesFromDocs().catch(() => {});
-    } catch (e) { throw new Error("ลบเอกสารที่ผูกไม่สำเร็จ: " + (e.message || e) + " (รัน migration 115 หรือยัง?)"); }
+    const { data: pos, error: eP } = await supabase.from("purchase_orders").select("po_no,status,expense_id,paid_at").eq("prep_no", prep_no);
+    if (eP) throw eP;
+    // การ์ด: PO ลูกที่รับของแล้ว/ตั้งเบิก-จ่ายแล้ว ห้ามลบพ่วง — ของเข้าสต๊อก/หนี้เกิดแล้ว ต้องไล่ยกเลิกจากปลายทางก่อน (กติกาบ้าน)
+    const blocked = (pos || []).filter((x) => x.status === "received" || x.expense_id || x.paid_at);
+    if (blocked.length) throw new Error(`ลบไม่ได้ — ใบสั่งซื้อที่แตกจากใบนี้ ${blocked.map((x) => x.po_no).join(", ")} รับของ/ตั้งเบิกไปแล้ว ให้ยกเลิกรับเข้า/ใบเบิกก่อน`);
+    const poNos = (pos || []).map((x) => x.po_no);
+    if (poNos.length) {
+      const d1 = await supabase.from("po_items").delete().in("po_no", poNos);
+      if (d1.error) throw d1.error;
+      const d2 = await supabase.from("purchase_orders").delete().in("po_no", poNos);
+      if (d2.error) throw d2.error;
+    }
+    // ลบรายการเบิกที่ผูกใบนี้ → สต๊อกคืนค่าอัตโนมัติ (current_stock คิดจาก transactions) — เช็คผลจริง (RLS เงียบ = 0 แถว)
+    const d3 = await supabase.from("transactions").delete().eq("prep_no", prep_no).select("id");
+    if (d3.error) throw d3.error;
+    syncCashEntriesFromDocs().catch(() => {});
   }
+  const { data: snap } = await supabase.from("material_preps").select("*").eq("prep_no", prep_no).maybeSingle();
   const { error } = await supabase.from("material_preps").delete().eq("prep_no", prep_no);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "material_prep", target_no: prep_no, reason: reason || null, snapshot: snap }).catch(() => {});
 }
 
 export async function savePurchaseOrder(po, items) {
@@ -765,6 +820,11 @@ export async function savePurchaseOrder(po, items) {
 }
 
 export async function deletePurchaseOrder(po_no, reason) {
+  // การ์ดฝั่ง server (UI ซ่อนปุ่มอยู่แล้ว แต่ API ต้องกันเอง): ใบที่รับของ/ตั้งเบิก/จ่ายแล้ว ห้ามลบ — ไล่ยกเลิกจากปลายทางก่อน
+  const { data: cur, error: ce } = await supabase.from("purchase_orders").select("status,expense_id,paid_at").eq("po_no", po_no).maybeSingle();
+  if (ce) throw ce;
+  if (cur && (cur.status === "received" || cur.expense_id || cur.paid_at))
+    throw new Error("ใบนี้รับของ/ตั้งเบิกจ่ายไปแล้ว — ต้องยกเลิกรับเข้า/ใบเบิกก่อนถึงจะลบได้");
   const { error } = await supabase.from("purchase_orders").delete().eq("po_no", po_no);
   if (error) throw error;
   await logAudit({ action: "delete", target_type: "purchase_order", target_no: po_no, reason });
@@ -780,9 +840,17 @@ export async function cancelPurchaseOrder(po_no, reason) {
 }
 
 export async function markPoReceived(po_no) {
-  const { error } = await supabase.from("purchase_orders").update({ status: "received", received_at: new Date().toISOString() }).eq("po_no", po_no);
+  // จองใบก่อนรับ (optimistic lock) — 2 คนเห็น "รอรับของ" พร้อมกันแล้วกดรับทั้งคู่ = สต๊อก/ต้นทุน/เบิกงานซ้ำสองเด้ง
+  const { data, error } = await supabase.from("purchase_orders")
+    .update({ status: "received", received_at: new Date().toISOString() })
+    .eq("po_no", po_no).eq("status", "open").select("po_no");
   if (error) throw error;
+  if (!data?.length) throw new Error(`ใบ ${po_no} ถูกรับของ/ยกเลิกไปแล้ว (มีคนทำพร้อมกัน) — รีเฟรชก่อน`);
   syncCashEntriesFromDocs().catch(() => {}); // อัปเดตกระแสเงินสด (จ่ายจริงอิงการจ่ายเงิน ไม่ใช่การรับของ)
+}
+// คืนสถานะใบเป็น "รอรับของ" — ใช้ตอนรับของล้มเหลวกลางทาง (จองใบไว้แล้วแต่ยังไม่มีของเข้า)
+export async function unmarkPoReceived(po_no) {
+  await supabase.from("purchase_orders").update({ status: "open", received_at: null }).eq("po_no", po_no).eq("status", "received");
 }
 
 // ตัวเลขเบา ๆ สำหรับแท็บ "ภาพรวม" ของแดชบอร์ด (นับ/รวมอย่างเดียว ไม่ join อะไรหนัก)
@@ -929,8 +997,13 @@ export async function requestPoPayment(po) {
     attachments: [], created_by: uid,
   }).select("id").single();
   if (error) throw error;
-  const { error: e2 } = await supabase.from("purchase_orders").update({ expense_id: ex.id }).eq("po_no", po.po_no);
+  // ผูกใบเบิกกับ PO เฉพาะเมื่อยังไม่มีใบเบิกค้าง (optimistic lock) — 2 คนกดพร้อมกันได้ใบเบิกกำพร้าโผล่ค้างจ่าย = เสี่ยงจ่ายซ้ำ
+  const { data: u2, error: e2 } = await supabase.from("purchase_orders").update({ expense_id: ex.id }).eq("po_no", po.po_no).is("expense_id", null).select("po_no");
   if (e2) throw new Error(/expense_id|column|PGRST204/i.test(e2.message || "") ? "ยังไม่ได้รัน migration 100 (PO ↔ เบิกจ่าย) ใน Supabase" : (e2.message || e2));
+  if (!u2?.length) {
+    await supabase.from("expense_requests").delete().eq("id", ex.id);   // ถอนใบเบิกที่เพิ่งสร้าง — ใบนี้มีคนตั้งเบิกไปแล้ว
+    throw new Error(`ใบ ${po.po_no} ถูกตั้งเบิกไปแล้ว (มีคนทำพร้อมกัน) — รีเฟรชดูสถานะก่อน`);
+  }
   const me = await getProfile();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🛒 ${me?.name || "พนักงาน"} ขออนุมัติจ่ายค่าสินค้า ${po.po_no} · ${Number(po.total) || 0} บาท`, body: po.supplier || "", url: "expenses", ref_type: "expense" });
   return ex.id;
@@ -965,8 +1038,14 @@ export async function requestPoPaymentBatch(pos) {
     attachments: [], created_by: uid,
   }).select("id").single();
   if (error) throw error;
-  const { error: e2 } = await supabase.from("purchase_orders").update({ expense_id: ex.id }).in("po_no", list.map((p) => p.po_no));
+  // ผูกเฉพาะใบที่ยังว่าง (กันตั้งเบิกซ้ำพร้อมกัน) — ถ้ามีใบไหนถูกชิงตั้งไปแล้ว ถอนใบเบิกใหม่ทิ้งทันที
+  const { data: u2, error: e2 } = await supabase.from("purchase_orders").update({ expense_id: ex.id }).in("po_no", list.map((p) => p.po_no)).is("expense_id", null).select("po_no");
   if (e2) throw new Error(/expense_id|column|PGRST204/i.test(e2.message || "") ? "ยังไม่ได้รัน migration 100 (PO ↔ เบิกจ่าย) ใน Supabase" : (e2.message || e2));
+  if ((u2 || []).length !== list.length) {
+    await supabase.from("purchase_orders").update({ expense_id: null }).eq("expense_id", ex.id);
+    await supabase.from("expense_requests").delete().eq("id", ex.id);
+    throw new Error("มีใบสั่งซื้อบางใบถูกตั้งเบิกไปแล้ว (มีคนทำพร้อมกัน) — รีเฟรชแล้วเลือกใหม่");
+  }
   const me = await getProfile();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🏭 ${me?.name || "พนักงาน"} ตั้งเบิกจ่ายเจ้าหนี้ ${list.length} ใบ · ${total.toLocaleString("en-US")} บาท`, body: supplier, url: "expenses", ref_type: "expense" });
   return ex.id;
@@ -1075,9 +1154,11 @@ export async function saveSupplier(sup, contacts, sites) {
   if (sRows.length) { const e = (await supabase.from("supplier_sites").insert(sRows)).error; if (e) throw e; }
   return id;
 }
-export async function deleteSupplier(id) {
+export async function deleteSupplier(id, reason) {
+  const { data: snap } = await supabase.from("suppliers").select("*").eq("id", id).maybeSingle();
   const { error } = await supabase.from("suppliers").delete().eq("id", id);
   if (error) throw error;
+  await logAudit({ action: "delete", target_type: "supplier", target_no: snap?.name || String(id), reason: reason || null, snapshot: snap }).catch(() => {});
 }
 
 // ---------- BOQ (ใบประมาณการต้นทุน) ----------
@@ -1086,7 +1167,7 @@ const _allRows = (build) => _fetchAll(build).then((rows) => ({ data: rows }));
 
 // เลขเอกสารซ้ำไหม — ต้องเช็คก่อนบันทึกใบใหม่ทุกครั้ง เพราะ save เป็น upsert ที่ "ทับใบเดิมเงียบ ๆ" ถ้าเลขชนกัน
 // (เลขจาก genNo ละเอียดระดับวินาที แต่ 2 เครื่องกดพร้อมกัน หรือพิมพ์เลขมือซ้ำ ก็ยังชนได้)
-const _DOC_NO_COL = { boqs: "boq_no", quotations: "quote_no", invoices: "invoice_no", receipts: "receipt_no", billing_notes: "billing_no" };
+const _DOC_NO_COL = { boqs: "boq_no", quotations: "quote_no", invoices: "invoice_no", receipts: "receipt_no", billing_notes: "billing_no", purchase_orders: "po_no", material_preps: "prep_no" };
 export async function docNoTaken(table, no) {
   const col = _DOC_NO_COL[table];
   if (!col || !no) return false;
@@ -2204,28 +2285,40 @@ export async function createLinkedJob(base) {
 // cancel/void a confirmed transaction (admin only — RLS). Stock recomputes automatically.
 export async function deleteTransaction(id, reason) {
   const { data: snap } = await supabase.from("transactions").select("*").eq("id", id).maybeSingle();
-  const { error } = await supabase.from("transactions").delete().eq("id", id);
+  // เช็คว่าลบได้จริง — RLS ไม่มีสิทธิ์ = 0 แถวแบบเงียบ (ก่อน mig 151 ตารางนี้ไม่มีนโยบายลบเลย)
+  const { data: gone, error } = await supabase.from("transactions").delete().eq("id", id).select("id");
   if (error) throw error;
+  if (!gone?.length) throw new Error("ลบไม่สำเร็จ — ไม่มีสิทธิ์ลบรายการสต๊อก (รัน migration 151 ใน Supabase ก่อน)");
   await logAudit({ action: "delete", target_type: "transaction", target_no: id, reason, snapshot: snap });
 }
 // ยกเลิกการบันทึกทั้งชุด (batch) — ใช้กับ "ยกเลิกรับเข้าทั้งใบ PO": ลบทุกรายการในชุด (สต๊อกคืนอัตโนมัติ)
-// และถ้าชุดนี้อ้างใบสั่งซื้อ → คืนสถานะ PO เป็น "รอรับของ" + อัปเดตกระแสเงินสด (actual → projected)
+// และถ้าชุดนี้อ้างใบสั่งซื้อ → ลบชุด "เบิกเข้างานอัตโนมัติ" คู่กัน (ผูกด้วยคอลัมน์ po_no, mig 151) + คืนสถานะ PO เป็น "รอรับของ"
 export async function cancelTransactionGroup({ ids, ref_no, po_no }, reason) {
   if (!ids?.length) throw new Error("ไม่มีรายการในชุดนี้");
   const { data: snap } = await supabase.from("transactions").select("*").in("id", ids);
-  const { error } = await supabase.from("transactions").delete().in("id", ids);
+  // ต้องลบได้จริงก่อนถึงจะเด้ง PO กลับ "รอรับของ" — เดิม RLS ไม่มีนโยบายลบ: แถวอยู่ครบแต่ใบเด้งกลับ → กดรับใหม่ = สต๊อกเบิ้ลสองเท่า
+  const { data: gone, error } = await supabase.from("transactions").delete().in("id", ids).select("id");
   if (error) throw error;
-  await logAudit({ action: "delete", target_type: "transaction_batch", target_no: ref_no || String(ids[0]), reason, snapshot: { po_no: po_no || null, rows: snap || [] } });
+  if (!gone?.length) throw new Error("ยกเลิกไม่สำเร็จ — ไม่มีสิทธิ์ลบรายการสต๊อก (รัน migration 151 ใน Supabase ก่อน) ใบยังคงสถานะเดิม");
   if (po_no) {
+    // ลบชุดเบิกอัตโนมัติที่เกิดตอนรับของใบนี้ด้วย (เฉพาะชุดที่ประทับ po_no ไว้ — ของเก่าก่อน mig 151 ไม่มีตรา ต้องลบมือ)
+    const { data: twin } = await supabase.from("transactions").delete().eq("po_no", po_no).select("id");
     const { error: e2 } = await supabase.from("purchase_orders").update({ status: "open", received_at: null }).eq("po_no", po_no).eq("status", "received");
     if (e2) throw e2;
+    await logAudit({ action: "delete", target_type: "transaction_batch", target_no: ref_no || String(ids[0]), reason, snapshot: { po_no, rows: snap || [], twin_deleted: (twin || []).length } });
     syncCashEntriesFromDocs().catch(() => {});  // PO เด้งกลับ "คาดว่าจะจ่าย"
+    return;
   }
+  await logAudit({ action: "delete", target_type: "transaction_batch", target_no: ref_no || String(ids[0]), reason, snapshot: { po_no: null, rows: snap || [] } });
 }
 // edit a movement's quantity (stock + value recompute automatically from the transactions table)
-export async function updateTransaction(id, qty) {
-  const { error } = await supabase.from("transactions").update({ qty: Number(qty) }).eq("id", id);
+export async function updateTransaction(id, qty, reason) {
+  const { data: snap } = await supabase.from("transactions").select("*").eq("id", id).maybeSingle();
+  const { data: upd, error } = await supabase.from("transactions").update({ qty: Number(qty) }).eq("id", id).select("id");
   if (error) throw error;
+  if (!upd?.length) throw new Error("แก้ไขไม่สำเร็จ — ไม่มีสิทธิ์แก้รายการสต๊อก");
+  // กติกาบ้าน: แก้ตัวเลขย้อนหลังต้องมีร่องรอย — เก็บค่าเดิมทั้งแถวไว้ใน audit
+  await logAudit({ action: "update", target_type: "transaction", target_no: id, reason: reason || `แก้จำนวน ${snap?.qty} → ${qty}`, snapshot: snap }).catch(() => {});
 }
 
 export async function listRecentTransactions(limit = 60) {
@@ -2286,13 +2379,8 @@ export async function jobMaterialCost() {
 
 // all movements for one material (for the detail drawer)
 export async function listMaterialMovements(code) {
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("material_code", code)
-    .order("id", { ascending: false })
-    .limit(300);
-  if (error) throw error;
+  // ครบทุกแถวจริง (เดิม limit 300 แต่หัวข้อบอก "ตลอดอายุ" — ของหมุนเร็วยอดสรุปขาด) · กรองรายรหัส ไม่หนัก
+  const data = await _fetchAll((f, t) => supabase.from("transactions").select("*", { count: "exact" }).eq("material_code", code).order("id", { ascending: false }).range(f, t));
   return data || [];
 }
 

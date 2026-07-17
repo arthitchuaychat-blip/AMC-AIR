@@ -52,8 +52,9 @@ export default function StockCount({ role }) {
 function SessionCard({ s, onOpen, canEdit, onDeleted, flash }) {
   async function del(e) {
     e.stopPropagation();
-    if (!await confirmDialog(`ลบรอบนับ ${s.count_no}?`)) return;
-    try { await deleteStockCount(s.id); flash("ลบแล้ว"); onDeleted(); } catch (err) { flash("ลบไม่สำเร็จ: " + (err.message || err), true); }
+    const reason = await confirmDialog({ title: `ลบรอบนับ ${s.count_no}?`, confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น เริ่มรอบผิด · ซ้ำ", required: true } });
+    if (reason === false) return;
+    try { await deleteStockCount(s.id, reason); flash("ลบแล้ว"); onDeleted(); } catch (err) { flash("ลบไม่สำเร็จ: " + (err.message || err), true); }
   }
   return (
     <div className="card job-card">
@@ -130,6 +131,7 @@ function CountSession({ id, canEdit, matByCode, onBack, flash, toast }) {
   const [sess, setSess] = React.useState(null);
   const [items, setItems] = React.useState([]);
   const [counts, setCounts] = React.useState({});
+  const dirty = React.useRef(new Set());   // ส่งเซฟเฉพาะช่องที่แตะจริง — 2 เครื่องนับคนละโซนพร้อมกันจะได้ไม่เซฟทับกันทั้งชุด
   const [q, setQ] = React.useState("");
   const [catF, setCatF] = React.useState("all");
   const [busy, setBusy] = React.useState(false);
@@ -164,7 +166,7 @@ function CountSession({ id, canEdit, matByCode, onBack, flash, toast }) {
 
   async function saveDraft() {
     setBusy(true);
-    try { await saveStockCountCounts(id, counts); flash("บันทึกร่างแล้ว ✓"); await load(); }
+    try { await saveStockCountCounts(id, Object.fromEntries(Object.entries(counts).filter(([k]) => dirty.current.has(k)))); dirty.current.clear(); flash("บันทึกร่างแล้ว ✓"); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -173,7 +175,7 @@ function CountSession({ id, canEdit, matByCode, onBack, flash, toast }) {
     const nz = countedRows.filter((r) => r.diff !== 0).length;
     if (!await confirmDialog({ title: "อัพเดทสต๊อกตามที่นับ?", message: `จะปรับยอด ${nz} รายการที่มีส่วนต่าง ให้ตรงกับที่นับได้จริง\n(บันทึกเป็นรายการ "ปรับยอด" ในคลัง · ตรวจย้อนหลังได้ · รอบนี้จะถูกล็อก)`, danger: true, confirmText: "อัพเดทสต๊อก" })) return;
     setBusy(true);
-    try { await saveStockCountCounts(id, counts); const r = await applyStockCount(id); flash(`อัพเดทสต๊อกแล้ว ✓ ปรับ ${r.adjusted} รายการ`); await load(); }
+    try { await saveStockCountCounts(id, Object.fromEntries(Object.entries(counts).filter(([k]) => dirty.current.has(k)))); dirty.current.clear(); const r = await applyStockCount(id); flash(`อัพเดทสต๊อกแล้ว ✓ ปรับ ${r.adjusted} รายการ`); await load(); }
     catch (e) { flash("อัพเดทไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -215,7 +217,7 @@ function CountSession({ id, canEdit, matByCode, onBack, flash, toast }) {
                 <td className="num">
                   {editable
                     ? <input className="inp sc-inp" type="number" inputMode="decimal" value={r.countedStr} placeholder="—"
-                        onChange={(e) => setCounts((c) => ({ ...c, [r.code]: e.target.value }))} />
+                        onChange={(e) => { dirty.current.add(r.code); setCounts((c) => ({ ...c, [r.code]: e.target.value })); }} />
                     : (r.counted == null ? <span className="jo-dim">—</span> : fmtNum(r.counted))}
                 </td>
                 <td className="num">

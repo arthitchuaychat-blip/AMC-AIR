@@ -61,6 +61,7 @@ const stockValue = (m) => (m.tracked && m.stock > 0 ? m.stock * m.cost : 0);
 export default function Catalog({ role }) {
   const canEdit = can(role, "catalog", "edit");
   const [mats, setMats] = React.useState([]);
+  const [stockReady, setStockReady] = React.useState(false); // ยอดคงเหลือจริง merge เสร็จหรือยัง (โหลดสองจังหวะ)
   const [cats, setCats] = React.useState([]);
   const [brands, setBrands] = React.useState([]);
   const [btus, setBtus] = React.useState([]);
@@ -99,6 +100,7 @@ export default function Catalog({ role }) {
         const stockByCode = {};
         full.forEach((m) => { if (m.code != null) stockByCode[m.code] = m.stock; });
         setMats((cur) => cur.map((m) => (m.code in stockByCode ? { ...m, stock: stockByCode[m.code] } : m)));
+        setStockReady(true);   // ยอดคงเหลือจริงมาแล้ว — เปิดปุ่มดาวน์โหลด CSV ได้ (กันส่งออกเลขตั้งต้นไปใช้นับของ)
       }).catch(() => {});
     } catch (e) { setErr(e.message || String(e)); setLoading(false); }
   }
@@ -242,7 +244,7 @@ export default function Catalog({ role }) {
             <button className={"seg-btn" + (viewMode === "grid" ? " on" : "")} onClick={() => setViewMode("grid")} title="กริด"><UIcon name="dashboard" size={16} /></button>
             <button className={"seg-btn" + (viewMode === "list" ? " on" : "")} onClick={() => setViewMode("list")} title="ตาราง"><UIcon name="catalog" size={16} /></button>
           </div>
-          {canEdit && <button className="btn-ghost" onClick={exportCsv} disabled={!mats.length}><UIcon name="withdraw" size={15} /> ดาวน์โหลดรายการ</button>}
+          {canEdit && <button className="btn-ghost" onClick={exportCsv} disabled={!mats.length || !stockReady} title={stockReady ? "" : "รอโหลดยอดคงเหลือจริงก่อน (กันได้เลขตั้งต้นไปใช้นับของ)"}><UIcon name="withdraw" size={15} /> {stockReady ? "ดาวน์โหลดรายการ" : "รอยอดคงเหลือ…"}</button>}
           {canEdit && <button className="btn-ghost" onClick={() => setImporting(true)}><UIcon name="box" size={15} /> นำเข้าหลายรายการ</button>}
           {canEdit && <button className="btn-primary" onClick={() => setEditing(null)}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มรายการ</button>}
         </div>

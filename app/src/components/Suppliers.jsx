@@ -68,8 +68,10 @@ export default function Suppliers({ role }) {
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(c) {
-    if (!await confirmDialog(`ลบผู้ขาย "${c.name}"?`)) return;
-    try { await deleteSupplier(c.id); flash("ลบผู้ขายแล้ว"); await load(); }
+    const reason = await confirmDialog({ title: `ลบผู้ขาย "${c.name}"?`, message: "PO เก่าที่พิมพ์ซ้ำจะไม่มีที่อยู่/เลขภาษีของผู้ขายรายนี้แล้ว · ข้อมูลเก็บในประวัติการลบ",
+      confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น เลิกค้าขาย · ซ้ำ", required: true } });
+    if (reason === false) return;
+    try { await deleteSupplier(c.id, reason); flash("ลบผู้ขายแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
 

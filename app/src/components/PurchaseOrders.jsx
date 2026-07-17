@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies } from "../lib/api";
+import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies, docNoTaken, markPoReceived, lastPurchaseOf } from "../lib/api";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -24,7 +24,8 @@ const PAY_FILTERS = [{ id: "all", label: "การจ่าย: ทั้งห
 
 function genPoNo() {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
-  return `PO-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+  // ละเอียดถึงวินาที — เดิมแค่นาที 2 คนสร้างพร้อมกันเลขชน แล้ว upsert ทับใบเดิมเงียบ ๆ
+  return `PO-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const R2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -133,7 +134,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", po_type: "", issue_date: todayStr(), items: [] }); }
   function startEdit(po) {
     const incl = !!po.vat && !!po.price_incl;   // stored price is pre-VAT → show gross in the field when incl mode
-    setEditing({ _edit: true, po_no: po.po_no, status: po.status, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", po_type: po.po_type || po.poType || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10),
+    setEditing({ _edit: true, _paymentStatus: po.paymentStatus || "unpaid", po_no: po.po_no, status: po.status, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", po_type: po.po_type || po.poType || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10),
       items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0), unit: i.unit || null })) });
   }
 
@@ -144,15 +145,22 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const lineUnit = (it, m) => it.unit || m?.purchaseUnit || m?.unit || "";
   // add from ItemPicker/ItemBrowser (same UX as sales docs) — price defaults to the material cost
   // per PURCHASE unit (cost × factor); in "รวม VAT" mode the field holds the gross price (× 1.07)
-  const addLinePO = (m, _target, qty = 1) => setEditing((e) => {
-    const add = Math.max(1, Number(qty) || 1);
-    const incl = !!e.vat && !!e.priceIncl;
-    const base = (Number(m.cost) || 0) * puFactor(m);
-    const unitPrice = incl ? R2(base * 1.07) : R2(base);
-    const i = e.items.findIndex((x) => x.code === m.code);
-    if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + add }; return { ...e, items }; }
-    return { ...e, items: [...e.items, { code: m.code, qty: add, price: unitPrice, unit: m.purchaseUnit || m.unit || null }] };
-  });
+  const addLinePO = (m, _target, qty = 1) => {
+    setEditing((e) => {
+      const add = Math.max(1, Number(qty) || 1);
+      const incl = !!e.vat && !!e.priceIncl;
+      const base = (Number(m.cost) || 0) * puFactor(m);
+      const unitPrice = incl ? R2(base * 1.07) : R2(base);
+      const i = e.items.findIndex((x) => x.code === m.code);
+      if (i >= 0) { const items = [...e.items]; items[i] = { ...items[i], qty: items[i].qty + add }; return { ...e, items }; }
+      return { ...e, items: [...e.items, { code: m.code, qty: add, price: unitPrice, unit: m.purchaseUnit || m.unit || null }] };
+    });
+    // hint ราคาซื้อครั้งล่าสุด (ต้นทุนเฉลี่ยที่เติมให้มักเพี้ยนจากราคาหน้าร้านจริง) — โหลดเบื้องหลัง โชว์ใต้บรรทัด
+    lastPurchaseOf(m.code).then((lp) => {
+      if (!lp) return;
+      setEditing((e) => e ? { ...e, items: e.items.map((x) => x.code === m.code && x._last === undefined ? { ...x, _last: lp } : x) } : e);
+    }).catch(() => {});
+  };
   // เปลี่ยนหน่วยนับของบรรทัด (เมตร ↔ ม้วน) → แปลงราคา/หน่วยตามสัดส่วน (ราคา/หน่วยหลักคงเดิม)
   const changeLineUnit = (code, m, nu) => setEditing((e) => ({ ...e, items: e.items.map((x) => {
     if (x.code !== code) return x;
@@ -188,10 +196,26 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     if (editing.items.some((it) => matMap[it.code]?.kind === "ac") && !editing.quote_no)
       return flash("ใบสั่งซื้อที่มีเครื่องปรับอากาศ ต้องอ้างอิงใบเสนอราคาที่อนุมัติแล้ว (สั่งตามออเดอร์เท่านั้น)", true);
     if (editing._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบสั่งซื้อ ${editing.po_no} ?`)) return;
+    // การ์ดใบที่ตั้งเบิกจ่ายแล้ว: ยอดใบเบิกถูก freeze ตอนส่งขอ — แก้รายการแล้วยอดจะไม่ตรงกัน ต้องรู้ตัว
+    if (editing._edit && editing._paymentStatus && editing._paymentStatus !== "unpaid"
+      && !await confirmDialog("⚠️ ใบนี้ส่งขออนุมัติจ่าย/จ่ายแล้ว — ยอดในใบเบิกจะ \"ไม่\" อัปเดตตามที่แก้\nถ้ายอดเปลี่ยน ให้ยกเลิกใบเบิกเดิมแล้วตั้งเบิกใหม่\n\nยืนยันบันทึกการแก้ไข?")) return;
+    let poNo = editing.po_no.trim();
+    // ใบใหม่: เช็คเลขซ้ำก่อน (save เป็น upsert — เลขชนแล้วทับใบเดิมเงียบ ๆ) → ชนก็ออกเลขใหม่ให้อัตโนมัติ
+    if (!editing._edit && await docNoTaken("purchase_orders", poNo).catch(() => false)) {
+      const renum = genPoNo();
+      if (renum === poNo || await docNoTaken("purchase_orders", renum).catch(() => false)) return flash(`เลขที่ ${poNo} ถูกใช้แล้ว — เปลี่ยนเลขใบก่อนบันทึก`, true);
+      poNo = renum; flash(`เลขที่ใบซ้ำกับใบเดิม — ออกเลขใหม่ให้เป็น ${renum}`);
+    }
     const incl = !!editing.vat && !!editing.priceIncl;
     const items = editing.items.map((it) => ({ ...it, price: incl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0) })); // store pre-VAT price
-    try { await savePurchaseOrder({ po_no: editing.po_no.trim(), supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, status: editing.status || "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
+    try { await savePurchaseOrder({ po_no: poNo, supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, status: editing.status || "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // ปิดใบเอง (รับของครบนอกระบบ/รับบางส่วนจนครบแล้ว) — ไม่บันทึกของเข้าสต๊อกเพิ่ม
+  async function closePoManual(po) {
+    if (!await confirmDialog(`ปิดใบ ${po.po_no} เป็น "รับแล้ว" โดยไม่บันทึกของเข้าเพิ่ม?\nใช้เมื่อทยอยรับของครบแล้ว (ของที่รับไปแล้วอยู่ในสต๊อกเรียบร้อย)`)) return;
+    try { await markPoReceived(po.po_no); flash(`ปิดใบ ${po.po_no} แล้ว ✓`); await load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   // ส่งขออนุมัติจ่ายเงิน → โผล่ในเมนูเบิกจ่าย (อนุมัติ → จ่าย+เลือกบัญชี → PO ขึ้น "จ่ายแล้ว" อัตโนมัติ)
   async function requestPay(po) {
@@ -275,7 +299,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 <div className="po-edit-row" key={it.code}>
                   <MaterialThumb mat={m || { color: "#888" }} size={32} radius={8} />
                   <div className="line-info"><div className="line-name">{m?.th || it.code}</div>
-                    <div className="line-sub">{conv ? `1 ${m.purchaseUnit} = ${fmtNum(m.purchaseQty)} ${m.unit} · ราคา/${m.purchaseUnit}` : m?.unit}</div></div>
+                    <div className="line-sub">{conv ? `1 ${m.purchaseUnit} = ${fmtNum(m.purchaseQty)} ${m.unit} · ราคา/${m.purchaseUnit}` : m?.unit}
+                      {it._last ? <span style={{ color: "#b45309" }}> · ซื้อล่าสุด ฿{fmtNum(it._last.unit_cost)}/{m?.unit || "หน่วย"}{it._last.txn_date ? ` (${new Date(it._last.txn_date + "T00:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short" })})` : ""}</span> : null}</div></div>
                   <div className="inp inp-unit po-edit-in"><span className="unit-pre">฿</span><NumIn className="" autoWidth min="0" step="0.01" value={it.price} onChange={(n) => setItem(it.code, "price", n)} /></div>
                   {editIncl && <div className="inp inp-unit po-edit-in" style={{ opacity: 0.7 }} title="ราคาก่อน VAT (คำนวณให้)"><span className="unit-pre">฿</span><input type="number" value={R2(netUnit(it))} disabled /></div>}
                   <div className="inp inp-unit po-edit-in"><NumIn className="" autoWidth min="0" value={it.qty} onChange={(n) => setItem(it.code, "qty", Math.max(0, n))} /><UnitPick m={m} value={u} onChange={(nu) => changeLineUnit(it.code, m, nu)} /></div>
@@ -391,6 +416,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                   {po.status === "open" && isAdmin && <>
                     <button className="btn-ghost sm" onClick={() => startEdit(po)}><UIcon name="edit" size={14} /> แก้ไข</button>
                     <button className="btn-primary" onClick={() => onReceive && onReceive(po)}><UIcon name="purchase" size={15} color="#fff" /> รับสินค้าเข้าสต๊อก{po.quote_no ? " → เข้างาน" : ""}</button>
+                    <button className="btn-ghost sm" title="ปิดใบเป็น 'รับแล้ว' โดยไม่บันทึกของเพิ่ม — ใช้เมื่อทยอยรับบางส่วนจนครบแล้ว" onClick={() => closePoManual(po)}>✓ ปิดใบ (รับครบแล้ว)</button>
                   </>}
                   {/* ยกเลิก: ฝ่ายขาย/ธุรการวัสดุ (+ผู้มีสิทธิ์แก้ PO) · ลบถาวร: ธุรการเท่านั้น — ใบที่รับของแล้วต้องยกเลิกการรับก่อน */}
                   {po.status === "open" && canCancel &&

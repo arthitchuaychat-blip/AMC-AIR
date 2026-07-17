@@ -126,23 +126,25 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
   }
   async function confirm(p) {
     if (!await confirmDialog(`ยืนยันใบเตรียมวัสดุ ${p.prep_no} ?\nหลังยืนยันจะกดสร้างใบสั่งซื้อ/ใบเบิกได้`)) return;
-    try { await setPrepStatus(p.prep_no, "approved"); await load(); flash("ยืนยันแล้ว ✓ — กดสร้างใบสั่งซื้อ/ใบเบิกได้เลย"); }
+    try { await setPrepStatus(p.prep_no, "approved", p.status); await load(); flash("ยืนยันแล้ว ✓ — กดสร้างใบสั่งซื้อ/ใบเบิกได้เลย"); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function backToDraft(p) {
-    try { await setPrepStatus(p.prep_no, "draft"); await load(); flash("กลับเป็นร่าง — แก้ไขได้"); }
+    try { await setPrepStatus(p.prep_no, "draft", p.status); await load(); flash("กลับเป็นร่าง — แก้ไขได้"); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function markDone(p) {
     if (!await confirmDialog(`ปิดใบ ${p.prep_no} (ดำเนินการครบแล้ว)?`)) return;
-    try { await setPrepStatus(p.prep_no, "done"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    try { await setPrepStatus(p.prep_no, "done", p.status); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function remove(p) {
     const confirmed = p.status !== "draft";
-    if (!await confirmDialog(confirmed
-      ? `ลบใบเตรียมวัสดุ ${p.prep_no} ที่ยืนยันแล้ว?\n⚠️ ใบสั่งซื้อและรายการเบิกที่แตกจากใบนี้จะถูกลบตามไปด้วย (สต๊อกที่เบิกจะคืนกลับ)`
-      : `ลบใบเตรียมวัสดุ ${p.prep_no} ?`)) return;
-    try { await deleteMaterialPrep(p.prep_no, confirmed); await load(); flash(confirmed ? "ลบใบเตรียมวัสดุ + PO/เบิกที่ผูกแล้ว ✓" : "ลบแล้ว"); }
+    // กติกาบ้าน: ลบต้องระบุเหตุผลเสมอ (ลง audit พร้อม snapshot) — PO ลูกที่รับของ/ตั้งเบิกแล้ว ระบบจะไม่ยอมให้ลบพ่วง
+    const reason = await confirmDialog({ title: confirmed ? `ลบใบเตรียมวัสดุ ${p.prep_no} ที่ยืนยันแล้ว?` : `ลบใบเตรียมวัสดุ ${p.prep_no} ?`,
+      message: confirmed ? "⚠️ ใบสั่งซื้อและรายการเบิกที่ผูกจะถูกลบตาม (สต๊อกที่เบิกคืนกลับ) — ใบที่รับของ/ตั้งเบิกแล้วลบไม่ได้" : "ข้อมูลเก็บในประวัติการลบ",
+      confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } });
+    if (reason === false) return;
+    try { await deleteMaterialPrep(p.prep_no, confirmed, reason); await load(); flash(confirmed ? "ลบใบเตรียมวัสดุ + PO/เบิกที่ผูกแล้ว ✓" : "ลบแล้ว"); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
   // พิมพ์รายการเตรียมวัสดุ (แยก 🛒 สั่งซื้อ / 📦 เบิกจากสต๊อก) — mode "image" | "pdf"
