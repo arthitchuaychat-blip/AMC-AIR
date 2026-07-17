@@ -19,6 +19,12 @@
    ⚙️ ตั้งค่าร้าน — แก้ตรงนี้ได้เลย
 ===================================================== */
 window.CFG = {
+  /* เชื่อมกับ AMC Management — ค่าเดียวกับ amcair.net (คีย์ anon เปิดเผยได้ ปลอดภัย)
+     สินค้าดึงจากตาราง materials ที่ติ๊ก "🌐 แสดงบนเว็บ" ในแอป (ผ่าน view web_products)
+     ออเดอร์ที่ลูกค้าสั่ง จะลงตาราง web_orders → เด้งแจ้งเตือนในแอป */
+  SUPABASE_URL  : "https://tpyrlxhoyghawqvsphfj.supabase.co",
+  SUPABASE_ANON : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRweXJseGhveWdoYXdxdnNwaGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk3NzYsImV4cCI6MjA5NjU2NTc3Nn0.OnfQ4VipqPlEpg5PfBGXhx44oSpqY1ifW1AlnY52p0Q",
+
   SHOP_NAME : "แอร์ถูกกว่าห้าง",
   TAGLINE   : "จำหน่ายแอร์ทุกยี่ห้อ · ราคาโรงงาน · พร้อมติดตั้ง",
   PHONE     : "061-961-5423",
@@ -47,117 +53,11 @@ window.BRAND_COLORS = {
   "Central Air":"#eef3f8","Casper":"#f3f1f9","Frio":"#ecf6fb",
 };
 
-/* ข้อมูลสินค้าแบบ compact: [ยี่ห้อ, รุ่น, BTU, อินเวอร์เตอร์(1/0), ราคา(บาท หรือ null=สอบถาม)] */
-window._RAW = [
-  // ── Mitsubishi Electric ──
-  ["Mitsubishi","MS-GY09VF",9212,0,13000],["Mitsubishi","MS-GY12VF",11601,0,16100],["Mitsubishi","MS-GY18VF",18048,0,24800],
-  ["Mitsubishi","MSY-KA09VF",9212,1,12300],["Mitsubishi","MSY-KA13VF",12283,1,12900],["Mitsubishi","MSY-KA15VF",15013,1,17900],["Mitsubishi","MSY-KA18VF",17742,1,20900],["Mitsubishi","MSY-KA24VF",21154,1,28900],
-  ["Mitsubishi","MSZ-MZ09VF",9212,1,15700],["Mitsubishi","MSZ-MZ13VF",12283,1,18400],["Mitsubishi","MSZ-MZ18VF",17742,1,27900],
-  ["Mitsubishi","MSY-JZ09VF",9554,1,16800],["Mitsubishi","MSY-JZ13VF",12624,1,20200],["Mitsubishi","MSY-JZ15VF",14330,1,23900],["Mitsubishi","MSY-JZ18VF",17742,1,43500],["Mitsubishi","MSY-JZ24VF",22519,1,56600],
-  ["Mitsubishi","MSY-GZ09VF",9554,1,17900],["Mitsubishi","MSY-GZ13VF",12624,1,21500],["Mitsubishi","MSY-GZ15VF",14330,1,25600],["Mitsubishi","MSY-GZ18VF",17742,1,29200],["Mitsubishi","MSY-GZ24VF",22519,1,45200],["Mitsubishi","MSY-GZ30VF",27978,1,56900],
-  ["Mitsubishi","MSY-XY09VF",9554,1,18300],["Mitsubishi","MSY-XY13VF",12624,1,22300],["Mitsubishi","MSY-XY18VF",17742,1,29900],
-  ["Mitsubishi","MSY-JY09VF",9212,1,14900],["Mitsubishi","MSY-JY13VF",12283,1,18200],["Mitsubishi","MSY-JY15VF",15013,1,21800],["Mitsubishi","MSY-JY18VF",17742,1,26900],["Mitsubishi","MSY-JY24VF",22519,1,41000],["Mitsubishi","MSY-JY36VF",36167,1,54000],
-  ["Mitsubishi","MSY-GY09VF",9554,1,15900],["Mitsubishi","MSY-GY13VF",12624,1,18900],["Mitsubishi","MSY-GY15VF",14330,1,23000],["Mitsubishi","MSY-GY18VF",17742,1,26500],["Mitsubishi","MSY-GY24VF",22519,1,42500],["Mitsubishi","MSY-GY30VF",27978,1,53500],
-  // ── Mitsubishi Heavy Duty ──
-  ["Mitsubishi Heavy","SRK10CYV-W1",9175,0,11500],["Mitsubishi Heavy","SRK13CYV-W1",12262,0,13500],["Mitsubishi Heavy","SRK15CYV-W1",14580,0,16300],["Mitsubishi Heavy","SRK18CYV-W1",18447,0,20300],["Mitsubishi Heavy","SRK24CYV-W1",25300,0,28400],
-  ["Mitsubishi Heavy","SRK10YYP-W1",9429,1,12500],["Mitsubishi Heavy","SRK13YYP-W1",12369,1,14400],["Mitsubishi Heavy","SRK15YYP-W1",15297,1,18000],["Mitsubishi Heavy","SRK18YYP2-W1",18600,1,21600],
-  ["Mitsubishi Heavy","SRK10YYM-W1",9575,1,13600],["Mitsubishi Heavy","SRK13YYM-W1",12171,1,15900],["Mitsubishi Heavy","SRK15YYM-W1",15385,1,19000],["Mitsubishi Heavy","SRK18YYM-W1",18086,1,22900],["Mitsubishi Heavy","SRK24YYM-W1",24225,1,31200],
-  ["Mitsubishi Heavy","SRK10YYS-W1",9633,1,14600],["Mitsubishi Heavy","SRK13YYS-W1",12406,1,17100],["Mitsubishi Heavy","SRK15YYS-W1",15640,1,21900],["Mitsubishi Heavy","SRK18YYS-W1",18244,1,25300],["Mitsubishi Heavy","SRK24YYS-W1",24215,1,34100],
-  // ── Daikin ──
-  ["Daikin","FTM09PV2S",9200,0,11800],["Daikin","FTM13PV2S",13000,0,14300],["Daikin","FTM15PV2S",14400,0,17700],["Daikin","FTM18PV2S",18090,0,22100],
-  ["Daikin","FTKB09AV2S",9200,1,10500],["Daikin","FTKB12AV2S",12300,1,11300],["Daikin","FTKB15ZV2S",15000,1,15400],["Daikin","FTKB18ZV2S",18100,1,16600],["Daikin","FTKB24ZV2S",20500,1,21600],
-  ["Daikin","FTKQ09YV2S",9200,1,11700],["Daikin","FTKQ12YV2S",12300,1,14500],["Daikin","FTKQ15YV2S",15000,1,17900],["Daikin","FTKQ18YV2S",18100,1,22200],["Daikin","FTKQ24YV2S",20500,1,31600],
-  ["Daikin","FTKF09YV2S",9200,1,15300],["Daikin","FTKF12YV2S",12300,1,18300],["Daikin","FTKF15YV2S",15000,1,22900],["Daikin","FTKF18YV2S",18100,1,26200],["Daikin","FTKF24YV2S",20500,1,37800],
-  ["Daikin","FTKM09YV2S",9200,1,20700],["Daikin","FTKM12YV2S",12300,1,24300],["Daikin","FTKM15YV2S",15000,1,28200],["Daikin","FTKM18YV2S",18100,1,32200],["Daikin","FTKM24YV2S",24200,1,45500],
-  ["Daikin","FTKZ09YV2S",9200,1,27600],["Daikin","FTKZ12YV2S",12300,1,31300],["Daikin","FTKZ15YV2S",15000,1,36500],["Daikin","FTKZ18YV2S",18100,1,40500],["Daikin","FTKZ24YV2S",24200,1,53200],
-  ["Daikin","FAVF30XV2S",30000,1,40600],["Daikin","FAVF36XV2S",36200,1,45000],
-  // ── Carrier ──
-  ["Carrier","42NSAA010",9000,0,9100],["Carrier","42NSAA013",12000,0,9500],["Carrier","42NSAA018",18000,0,14100],["Carrier","42NSAA024",24500,0,19600],
-  ["Carrier","42TSAA010A",9200,0,10100],["Carrier","42TSAA013A",12500,0,10700],["Carrier","42TSAA018A",18000,0,17200],["Carrier","42TSAA025A",25250,0,22900],
-  ["Carrier","42TVDB010",9200,1,9400],["Carrier","42TVDB013",12000,1,10300],["Carrier","42TVDB016",15000,1,14100],["Carrier","42TVDB018",18000,1,15200],["Carrier","42TVDB022",21000,1,20100],["Carrier","42TVDB026",24000,1,25000],
-  ["Carrier","42TVEB010",9200,1,10300],["Carrier","42TVEB013",12000,1,11200],["Carrier","42TVEB016",15000,1,15100],["Carrier","42TVEB018",18000,1,16100],["Carrier","42TVEB022",21000,1,21000],["Carrier","42TVEB026",24000,1,25900],
-  ["Carrier","42TVAB010A-W-I",9200,1,16200],["Carrier","42TVAB013A-W-I",12200,1,18200],["Carrier","42TVAB016-W-I",15000,1,22000],["Carrier","42TVAB018-W-I",18000,1,24000],["Carrier","42TVAB024-W-I",20400,1,27800],["Carrier","42TVAB028A-W-I",25200,1,31800],["Carrier","42TVAB030B-W-I",27200,1,36500],["Carrier","42TVAB033B-W-I",30000,1,38500],["Carrier","42TVAB036B-I",36000,1,40500],
-  ["Carrier","42TVDA010B",9200,1,9600],["Carrier","42TVDA013B",12100,1,10400],["Carrier","42TVDA016B",15000,1,14300],["Carrier","42TVDA018B",18000,1,15400],["Carrier","42TVDA024B",20400,1,20300],["Carrier","42TVDA028B",25200,1,25200],
-  ["Carrier","42TVEA010B",9200,1,10500],["Carrier","42TVEA013B",12100,1,11300],["Carrier","42TVEA016B",15000,1,15800],["Carrier","42TVEA018B",18000,1,16900],["Carrier","42TVEA024B",20400,1,21700],["Carrier","42TVEA028B",25200,1,26700],
-  // ── Haier ──
-  ["Haier","HSU10CQRC",9200,0,8900],["Haier","HSU13CQRC",12000,0,9300],["Haier","HSU18CQRC",18000,0,13900],["Haier","HSU24CQRC",24200,0,18600],
-  ["Haier","HSU09VQAC",9200,1,9000],["Haier","HSU12VQAC",12300,1,9800],["Haier","HSU15VQAC",14700,1,13200],["Haier","HSU18VQAC",18000,1,14400],["Haier","HSU24VQAC",23200,1,19400],["Haier","HSU30VQAC",30700,1,32200],["Haier","HSU36VQAC",36000,1,36300],
-  ["Haier","HSU10VRRA03T",9200,1,9800],["Haier","HSU12VRRA03T",12000,1,11400],["Haier","HSU18VRRA03T",18000,1,16800],["Haier","HSU24VRRA03T",24200,1,21000],
-  // ── TCL ──
-  ["TCL","TAC-MFS10",9000,0,8100],["TCL","TAC-MFS13",12520,0,9100],["TCL","TAC-MFS19",18603,0,13700],["TCL","TAC-MFS26",24500,0,17200],
-  ["TCL","T-WDX10C",9500,1,8800],["TCL","T-WDX13C",12510,1,9600],["TCL","T-WDX19C",18940,1,12200],["TCL","T-WDX25C",24200,1,15000],
-  ["TCL","TAC-SA13CSV",12300,1,9000],["TCL","TAC-SA19CSV",18100,1,12600],
-  ["TCL","TAC-BR10CSV",9200,1,8700],["TCL","TAC-BR13CSV",12300,1,9500],["TCL","TAC-BR19CSV",18400,1,14200],["TCL","TAC-BR25CSV",24200,1,18200],
-  ["TCL","TAC-PRO09PE",9895,1,10400],["TCL","TAC-PRO12PE",12283,1,11200],["TCL","TAC-PRO18PE",18425,1,15700],["TCL","TAC-PRO24PE",23884,1,18800],
-  ["TCL","T-VoxIN10S",9212,1,12900],["TCL","T-VoxIN13S",12283,1,13800],["TCL","T-VoxIN19S",18425,1,18100],["TCL","T-VoxIN25S",24225,1,20100],
-  ["TCL","T-PROWD10C",9530,1,9000],["TCL","T-PROWD13C",12560,1,9800],["TCL","T-PROWD19C",19050,1,14200],["TCL","T-PROWD25C",24230,1,17700],
-  ["TCL","T-PROS10C",10350,1,10900],["TCL","T-PROS13C",12410,1,11500],["TCL","T-PROS19C",18500,1,15900],["TCL","T-PROS25C",24010,1,18500],["TCL","TAC-PRO19PI",17438,1,12900],
-  // ── Midea ──
-  ["Midea","MSAG-09CRN8",9300,0,7700],["Midea","MSAG-12CRN8",12300,0,8700],["Midea","MSAG-18CRN8",18250,0,12700],["Midea","MSAG-24CRN8",25000,0,16400],
-  ["Midea","MSNE-10CRFN8",9360,1,7500],["Midea","MSNE-13CRFN8",12000,1,8500],["Midea","MSNE-19CRFN8",18000,1,13000],["Midea","MSNE-22CRFN8",22000,1,15900],["Midea","MSNE-25CRFN8",24566,1,17300],
-  ["Midea","MSEPB-09CRFN8",8800,1,11000],["Midea","MSEPB-12CRFN8",12000,1,12500],["Midea","MSEPC-18CRFN8",18100,1,18300],["Midea","MSEPC-24CRFN8",24000,1,20200],
-  ["Midea","MSVG-09CRN8",9500,0,7900],["Midea","MSVG-12CRN8",12600,0,8900],["Midea","MSVG-18CRN8",18000,0,13900],["Midea","MSVG-24CRN8",24000,0,16700],
-  ["Midea","MSAF-09CRN8",9040,1,8500],["Midea","MSAF-12CRN8",12350,1,9500],["Midea","MSAF-17CRN8",17500,1,14900],["Midea","MSAF-24CRN8",22000,1,18800],
-  // ── Hisense ──
-  ["Hisense","AS10TRKC2T",9500,1,6900],["Hisense","AS13TRKC2T",12800,1,7900],["Hisense","AS18TRKC2T",18000,1,10500],["Hisense","AS24TRKC2T",23500,1,12900],
-  ["Hisense","AS10TRLB2T",9500,1,7900],["Hisense","AS13TRLB2T",12000,1,8500],["Hisense","AS18TRLB2T",18000,1,12900],["Hisense","AS24TRLB2T",24000,1,16500],
-  // ── AUX ──
-  ["AUX","ASW-09/DIMA",9000,1,7300],["AUX","ASW-13/DIMA",12000,1,8500],["AUX","ASW-18/DIMA",18000,1,11300],["AUX","ASW-24/DIMA",24000,1,15500],
-  ["AUX","ASW-09/DIMA-3S",9000,1,10200],["AUX","ASW-13/DIMA-3S",12000,1,11400],["AUX","ASW-18/DIMA-3S",18000,1,16200],["AUX","ASW-14/DIMA-3S",23900,1,21200],
-  // ── Gree ──
-  ["Gree","GWC09AGB2",9066,1,10200],["Gree","GWC12AGB2",12052,1,11300],["Gree","GWC15AGD2",15040,1,14300],["Gree","GWC18AGD2",18098,1,15900],["Gree","GWC24AGE2",24239,1,19800],
-  ["Gree","GWC09ATBXB",9100,1,10700],["Gree","GWC12ATCXB",12000,1,11800],["Gree","GWC15ATDXB",15500,1,15000],["Gree","GWC18ATDXD",18500,1,16700],["Gree","GWC24ATEXE",24500,1,20700],
-  ["Gree","GWC09AGB2-S",9165,1,12400],["Gree","GWC12AGB2-S",12057,1,13300],["Gree","GWC15AGD2-S",15167,1,15700],["Gree","GWC18AGD2-S",18723,1,19900],["Gree","GWC24AGE2-S",24242,1,23900],
-  ["Gree","GWC30AAEV3",30551,1,28200],["Gree","GWC36QFXV4",36799,1,33700],
-  // ── Samsung ──
-  ["Samsung","AR10DYHZB",9000,1,9300],["Samsung","AR13DYHZB",12000,1,10700],["Samsung","AR15DYHZB",14500,1,14000],["Samsung","AR18DYHZB",18000,1,15200],["Samsung","AR24DYHZB",21500,1,18000],
-  ["Samsung","AR10TYHYBWKNST",9400,1,9990],["Samsung","AR13TYHYBWKNST",12000,1,11400],["Samsung","AR15TYHYBWKNST",15000,1,13400],["Samsung","AR18TYHYBWKNST",18000,1,14900],["Samsung","AR24TYHYBWKNST",21500,1,19500],
-  ["Samsung","AR09AGHQA",9000,0,9200],["Samsung","AR12AGHQA",12000,0,9800],["Samsung","AR18AGHQA",18000,0,13400],["Samsung","AR24AGHQA",21500,0,19800],
-  // ── Panasonic ──
-  ["Panasonic","CS-PN9YKY",9220,0,9200],["Panasonic","CS-PN12YKT",12162,0,10200],["Panasonic","CS-PN18YKT",18094,0,14700],["Panasonic","CS-PN24YKT",23985,0,19500],
-  ["Panasonic","CS-YU9ZKT",9080,1,10900],["Panasonic","CS-YU13ZKT",12297,1,12100],["Panasonic","CS-YU18ZKT",18094,1,18200],["Panasonic","CS-YU24ZKT",24322,1,25500],["Panasonic","CS-YU28ZKT",28005,1,33800],
-  // ── Sharp ──
-  ["Sharp","AH-X10ZB",9000,1,9200],["Sharp","AH-X13ZB",12300,1,10000],["Sharp","AH-X18ZB",18000,1,16300],["Sharp","AH-X24ZB",22200,1,20500],
-  // ── LG (ราคาเป็นรูปในเว็บต้นทาง — ใส่ราคาเองภายหลัง) ──
-  ["LG","ISC10EN (Inverter 2024)",9000,1,null],["LG","ISC13EN (Inverter 2024)",12000,1,null],["LG","ISC18EN (Inverter 2024)",18000,1,null],["LG","ISC24EN (Inverter 2024)",24000,1,null],
-  // ── Eminent ──
-  ["Eminent","WFH09F",9200,0,9700],["Eminent","WFH12F",12000,0,10700],["Eminent","WFH18F",18000,0,16100],["Eminent","WFH24F",24200,0,21000],
-  ["Eminent","WVH 09F",9200,1,10300],["Eminent","WVH 12F",12300,1,11100],["Eminent","WVH 15F",14700,1,15000],["Eminent","WVH 18F",18000,1,16400],["Eminent","WVH 24F",23200,1,23000],
-  ["Eminent","WVG 09F1",9500,1,14600],["Eminent","WVG 12F1",12500,1,16000],["Eminent","WVG 18F1",18500,1,23400],["Eminent","WVG 24F1",24500,1,28900],
-  // ── Saijo Denki ──
-  ["Saijo Denki","SWG R32-09",9442,0,8000],["Saijo Denki","SWG R32-12",12775,0,8900],["Saijo Denki","SWG R32-18",19052,0,14500],["Saijo Denki","SWG R32-25",25201,0,19500],
-  ["Saijo Denki","TURBO A.P.S. 10",9442,0,9700],["Saijo Denki","TURBO A.P.S. 13",12775,0,10500],["Saijo Denki","TURBO A.P.S. 19",19052,0,17200],["Saijo Denki","TURBO A.P.S. 25",25201,0,22800],["Saijo Denki","TURBO A.P.S. 30",30993,0,27500],["Saijo Denki","TURBO A.P.S. 30T",31314,0,30900],["Saijo Denki","TURBO A.P.S. 36",36597,0,37500],["Saijo Denki","TURBO A.P.S. 36T",36134,0,42900],["Saijo Denki","TURBO A.P.S. 40",40880,0,42800],["Saijo Denki","TURBO A.P.S. 40T",40200,0,48800],
-  ["Saijo Denki","INVERTER SURE R32-10",9806,1,10300],["Saijo Denki","INVERTER SURE R32-12",12369,1,11300],["Saijo Denki","INVERTER SURE R32-18",18375,1,17900],["Saijo Denki","INVERTER SURE R32-25",25526,1,25500],["Saijo Denki","INVERTER SURE R32-30",30652,1,35300],
-  // ── Tasaki ──
-  ["Tasaki","FWDE09-AF2",9000,0,8800],["Tasaki","FWDE13-AF2",12000,0,9800],["Tasaki","FWDE18-AF2",18000,0,14800],["Tasaki","FWDE25-AF2",24000,0,19800],
-  ["Tasaki","FWDE09I-AF1",9212,1,10800],["Tasaki","FWDE13I-AF1",13307,1,11800],["Tasaki","FWDE19I-AF1",19448,1,16500],["Tasaki","FWDE25I-AF1",25249,1,21500],
-  // ── Mavell ──
-  ["Mavell","MVF10FA21FS",10014,0,8200],["Mavell","MVF13FA21FS",13153,0,9300],["Mavell","MVF19FA21FS",19180,0,13500],["Mavell","MVF25FA21FS",25101,0,17900],
-  ["Mavell","MWF-09A21INV",9709,1,9900],["Mavell","MTF-12INV22",12045,1,9800],["Mavell","MTF-18INV22",17915,1,13800],["Mavell","MTF-25INV22",24146,1,18500],
-  ["Mavell","MVIF-12A22",13500,1,9500],["Mavell","MVIF-15A22",16800,1,12000],["Mavell","MVIF-18A22",19700,1,13900],["Mavell","MVIF-25A22",25000,1,18500],
-  // ── Central Air ──
-  ["Central Air","CFW-MFE09",9300,0,8300],["Central Air","CFW-MFE13",12300,0,9300],["Central Air","CFW-MFE18",18200,0,13300],["Central Air","CFW-MFE25",25000,0,17300],
-  ["Central Air","CFW-2JSFE09-1",9600,0,8500],["Central Air","CFW-2JSFE13-1",12300,0,9500],["Central Air","CFW-2JSFE18-1",18300,0,13800],["Central Air","CFW-2JSFE25-1",25100,0,18200],
-  ["Central Air","CFW-IVM09",9300,1,8100],["Central Air","CFW-IVM13",12100,1,9100],["Central Air","CFW-IVM18",18400,1,13100],["Central Air","CFW-IVM25",25000,1,17100],
-  ["Central Air","CFW-IVJS09-1",9500,1,8600],["Central Air","CFW-IVJS13-1",13000,1,9600],["Central Air","CFW-IVJS18-1",18500,1,13500],["Central Air","CFW-IVJS25-1",26000,1,18500],
-  ["Central Air","CFW-IVGE30",30700,1,29200],["Central Air","CFW-IVGE36",38200,1,32200],
-  // ── Casper ──
-  ["Casper","SC-09FS35",9370,0,8200],["Casper","SC-12FS32",12535,0,9200],["Casper","SC-18FS35",18660,0,13800],["Casper","SC-24FS35",24566,0,17800],
-  ["Casper","GC-09IS35",9554,1,8600],["Casper","GC-12IS32",12289,1,9700],["Casper","GC-18IS32",19107,1,15000],["Casper","GC-24IS35",25000,1,18400],
-  // ── Frio ──
-  ["Frio","SMFC09V",9200,0,8200],["Frio","SMFC12V",12200,0,9300],["Frio","SMFC18V",18800,0,14300],["Frio","SMFC24V",24800,0,17400],
-];
-
-/* สร้าง window.PRODUCTS จากข้อมูล compact + ติดป้าย "ถูกสุด" ให้รุ่นถูกสุดของแต่ละยี่ห้อ */
-window.PRODUCTS = window._RAW.map((r,i)=>({
-  id:i+1, brand:r[0], model:r[1], btu:r[2], inverter:!!r[3], price:r[4],
-  badge:"", color:(window.BRAND_COLORS[r[0]]||"#eef3fb"),
-}));
-(function tagCheapest(){
-  const min = {};
-  window.PRODUCTS.forEach(p=>{ if(p.price!=null && (min[p.brand]==null || p.price<min[p.brand].price)) min[p.brand]=p; });
-  Object.values(min).forEach(p=>{ p.badge="ถูกสุด"; });
-})();
+/* ═══ สินค้าดึงสดจาก AMC Management ═══
+   ไม่มีข้อมูลสินค้าฝังในไฟล์นี้แล้ว — ดึงจาก view web_products ตอนเปิดเว็บ (ดู loadProducts() ท้ายไฟล์)
+   วิธีจัดการ: เปิดแอป AMC Management → สินค้า → ติ๊ก "🌐 แสดงบนเว็บ" ที่แอร์ที่ต้องการขาย
+   ราคาที่โชว์ = sale_price ในแอป (ต้นทุน cost ไม่หลุดออกเว็บ เพราะ view ไม่ได้ส่งมา) */
+window.PRODUCTS = [];
 
 /* ค่าแรงติดตั้งตามขนาด BTU — คำนวณอัตโนมัติให้แต่ละเครื่อง */
 window.installFee = function(btu){
@@ -328,6 +228,9 @@ nav.menu a:hover{color:var(--pri);background:var(--soft)}
 .prod .pr{font-size:20px;font-weight:800;color:var(--ink)}
 .prod .pr small{font-size:12px;color:var(--ink3);font-weight:500}
 .prod .pr.ask{font-size:15px;color:var(--ink2)}
+/* รูปสินค้าจริงจากแอป (photo_url) — ไม่มีรูปจะ fallback เป็นไอคอน SVG */
+.prod .ph img{width:100%;height:100%;object-fit:contain;padding:8px}
+.ci-icon img{width:100%;height:100%;object-fit:contain;border-radius:8px}
 .prod .install-note{font-size:11.5px;color:var(--ink3);margin-top:2px}
 .prod .add{margin-top:10px;width:100%;justify-content:center;font-size:14px;padding:10px}
 .prod-empty{grid-column:1/-1;text-align:center;color:var(--ink3);padding:50px;font-size:15px}
@@ -423,6 +326,16 @@ footer{background:#0f1729;color:#cbd5e1;padding:60px 0 28px}
 .cart-total{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;font-weight:800;font-size:17px}
 .cart-total span:last-child{color:var(--pri)}
 .cart-sub{font-size:12.5px;color:var(--ink3);margin-bottom:14px;line-height:1.6}
+/* ฟอร์มสั่งซื้อ (ส่งเข้า web_orders) */
+.order-form{display:flex;flex-direction:column;gap:9px}
+.order-form input,.order-form textarea{width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-family:var(--font);font-size:14px;color:var(--ink);background:#fff;resize:vertical}
+.order-form input:focus,.order-form textarea:focus{outline:none;border-color:var(--pri)}
+.order-form input::placeholder,.order-form textarea::placeholder{color:var(--ink3)}
+/* หน้าจอหลังส่งออเดอร์สำเร็จ */
+.order-ok{text-align:center;padding:34px 22px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.order-ok .ok-ic{font-size:44px}
+.order-ok b{font-size:17px}
+.order-ok p{font-size:13.5px;color:var(--ink2);line-height:1.7;margin-bottom:8px}
 
 /* ── Mobile nav ── */
 .mob-menu{position:fixed;inset:70px 0 0 0;background:#fff;z-index:45;transform:translateY(-110%);transition:.3s;padding:22px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--sh)}
@@ -692,19 +605,31 @@ footer{background:#0f1729;color:#cbd5e1;padding:60px 0 28px}
   <div class="drawer-body" id="cart-body"></div>
   <div class="drawer-ft" id="cart-ft" style="display:none">
     <div class="cart-total"><span>รวมทั้งสิ้น</span><span id="cart-total-val"></span></div>
-    <p class="cart-sub">ราคารวมค่าสินค้า + ค่าแรงติดตั้ง (เบื้องต้น)<br>ทีมงานจะติดต่อกลับเพื่อยืนยันวันนัดและที่อยู่</p>
-    <button class="btn btn-line" style="width:100%;justify-content:center;font-size:15px;padding:14px" onclick="checkoutLINE()">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.630 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
-      สั่งซื้อผ่าน LINE
-    </button>
+    <p class="cart-sub">ราคารวมค่าสินค้า + ค่าแรงติดตั้ง (เบื้องต้น) — ทีมงานจะติดต่อกลับเพื่อยืนยันวันนัดและที่อยู่</p>
+    <!-- ส่งเข้าระบบหลังบ้าน (ตาราง web_orders) แล้วเสนอปุ่มส่งเข้า LINE ต่อ -->
+    <form class="order-form" onsubmit="return submitOrder(event)">
+      <input name="name" required placeholder="ชื่อ-นามสกุล *" autocomplete="name">
+      <input name="phone" required placeholder="เบอร์โทร *" inputmode="tel" autocomplete="tel">
+      <textarea name="address" rows="2" placeholder="ที่อยู่ติดตั้ง" autocomplete="street-address"></textarea>
+      <textarea name="note" rows="2" placeholder="หมายเหตุ (เช่น วันที่สะดวกให้ช่างเข้าติดตั้ง)"></textarea>
+      <button type="submit" class="btn btn-pri" style="width:100%;justify-content:center;font-size:15px;padding:14px">ส่งคำสั่งซื้อ</button>
+    </form>
     <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:10px;font-size:14px" onclick="clearCart()">ล้างตะกร้า</button>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* state — must be declared before the INIT IIFE calls renderProds()/renderCart() */
 let _btu = 'all', _brand = 'all';
-let cart = JSON.parse(localStorage.getItem('air_cart')||'[]');
+/* cart เก็บด้วย code ของสินค้า (คีย์เดียวกับในแอป) — ใช้ key ใหม่ กันตะกร้าเก่าที่เก็บ id ตัวเลขค้าง */
+let cart = JSON.parse(localStorage.getItem('air_cart2')||'[]');
+
+/* ── Supabase client (เชื่อม AMC Management) ──
+   ถ้าตั้งค่าไม่ครบ/CDN โหลดไม่ได้ → sb = null แล้วเว็บจะขึ้นข้อความแทน (ไม่พัง) */
+const _C = window.CFG || {};
+const hasSb = !!(_C.SUPABASE_URL && _C.SUPABASE_ANON && window.supabase);
+const sb = hasSb ? window.supabase.createClient(_C.SUPABASE_URL, _C.SUPABASE_ANON) : null;
 
 /* ───────────────────────────────────────────────
    INIT — render everything from config
@@ -735,13 +660,10 @@ let cart = JSON.parse(localStorage.getItem('air_cart')||'[]');
     trustEl.insertAdjacentHTML('beforeend',`<div class="t"><b>${n}</b><span>${l}</span></div>`);
   });
 
-  // products — populate brand dropdown from data, then render
-  const brandSel = document.getElementById('brand-select');
-  const brands = [...new Set(window.PRODUCTS.map(p=>p.brand))];
-  brandSel.innerHTML = `<option value="all">ทุกยี่ห้อ (${window.PRODUCTS.length} รุ่น)</option>` +
-    brands.map(b=>`<option value="${b}">${b} (${window.PRODUCTS.filter(p=>p.brand===b).length})</option>`).join('');
-  brandSel.addEventListener('change', ()=>renderProds(_btu, brandSel.value));
-  renderProds('all','all');
+  // products — โหลดจาก AMC Management (async) แล้วค่อยเติม dropdown + วาดการ์ด
+  document.getElementById('brand-select')
+    .addEventListener('change', e=>renderProds(_btu, e.target.value));
+  loadProducts();
 
   // install + cleaning
   const iw = document.getElementById('install-wrap');
@@ -838,6 +760,80 @@ let cart = JSON.parse(localStorage.getItem('air_cart')||'[]');
 /* ───────────────────────────────────────────────
    PRODUCTS RENDER + FILTER
 ─────────────────────────────────────────────── */
+/* ต้องเป็น function declaration (ไม่ใช่ const) — INIT IIFE ด้านบนเรียก loadProducts() ซึ่งใช้ esc()
+   ถ้าใช้ const จะติด TDZ แล้ว throw เงียบ ๆ ใน async function (unhandled rejection ไม่ขึ้น error) */
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ดึงแอร์ทั้งหมดจาก view web_products
+   ⚠️ Supabase ตัดผลลัพธ์ที่ 1000 แถวทุก select — ต้องไล่ดึงเป็นหน้า ๆ ไม่งั้นรุ่นท้าย ๆ หายเงียบ
+   และกรอง kind='ac' ฝั่ง server ไม่ให้ service/material มาเบียดโควตา */
+async function fetchAllAc(){
+  const COLS = "code,name_th,name_en,kind,brand,btu,ac_type,sale_price,photo_url,series,warranty,features";
+  const SIZE = 1000, out = [];
+  for(let from=0; ; from+=SIZE){
+    const { data, error } = await sb.from('web_products').select(COLS)
+      .eq('kind','ac').order('code').range(from, from+SIZE-1);
+    if(error) throw error;
+    out.push(...(data||[]));
+    if(!data || data.length < SIZE) break;
+  }
+  return out;
+}
+
+async function loadProducts(){
+  const grid = document.getElementById('prod-grid');
+  const phone = esc(window.CFG.PHONE);
+  if(!hasSb){ grid.innerHTML = `<div class="prod-empty">ยังไม่ได้เชื่อมระบบสินค้า — โทรสอบถามได้ที่ ${phone}</div>`; return; }
+  grid.innerHTML = '<div class="prod-empty">กำลังโหลดสินค้า…</div>';
+  try{
+    const rows = await fetchAllAc();
+    window.PRODUCTS = rows.map(r=>{
+      const txt = [r.name_th, r.name_en, r.series, r.features].filter(Boolean).join(' ');
+      const price = Number(r.sale_price);
+      const brand = r.brand || 'อื่นๆ';
+      // ชื่อสินค้าในแอปมักขึ้นต้นด้วยยี่ห้ออยู่แล้ว (เช่น "Carrier Floor & Ceiling…")
+      // ตัดยี่ห้อนำหน้าออก กันโชว์ซ้ำกับบรรทัดยี่ห้อบนการ์ด/ในออเดอร์
+      const rawName = r.name_th || r.name_en || r.code;
+      const model = rawName.replace(
+        new RegExp('^\\s*' + brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '') || rawName;
+      return {
+        code    : r.code,
+        brand   : brand,
+        model   : model,
+        series  : r.series || '',
+        btu     : Number(r.btu) || 0,
+        inverter: /inverter|อินเวอร์เตอร์/i.test(txt),
+        price   : price > 0 ? price : null,      // ไม่ได้ตั้งราคาในแอป = ให้ลูกค้าสอบถาม
+        photo   : r.photo_url || '',
+        warranty: r.warranty || '',
+        badge   : '',
+        color   : window.BRAND_COLORS[brand] || '#eef3fb',
+      };
+    });
+    // ติดป้าย "ถูกสุด" ให้รุ่นถูกสุดของแต่ละยี่ห้อ
+    const min = {};
+    window.PRODUCTS.forEach(p=>{ if(p.price!=null && (min[p.brand]==null || p.price<min[p.brand].price)) min[p.brand]=p; });
+    Object.values(min).forEach(p=>{ p.badge = 'ถูกสุด'; });
+
+    fillBrands();
+    renderProds(_btu, _brand);
+    renderCart();   // ตะกร้าที่ค้างใน localStorage ต้องวาดใหม่หลังรู้จักสินค้าแล้ว
+    if(!window.PRODUCTS.length)
+      grid.innerHTML = '<div class="prod-empty">ยังไม่มีสินค้าที่เผยแพร่ — เปิดแอป AMC Management → สินค้า → ติ๊ก “🌐 แสดงบนเว็บ” ที่แอร์ที่ต้องการขาย</div>';
+  }catch(e){
+    grid.innerHTML = `<div class="prod-empty">โหลดสินค้าไม่สำเร็จ ลองใหม่ภายหลัง หรือโทร ${phone}</div>`;
+  }
+}
+
+function fillBrands(){
+  const sel = document.getElementById('brand-select');
+  const brands = [...new Set(window.PRODUCTS.map(p=>p.brand))].sort((a,b)=>a.localeCompare(b,'th'));
+  sel.innerHTML = `<option value="all">ทุกยี่ห้อ (${window.PRODUCTS.length} รุ่น)</option>` +
+    brands.map(b=>`<option value="${esc(b)}">${esc(b)} (${window.PRODUCTS.filter(p=>p.brand===b).length})</option>`).join('');
+}
+
 // จับ BTU เข้ากลุ่ม (ช่วงครอบคลุมต่อเนื่อง)
 function btuMatch(bucket, btu){
   if(bucket==='all') return true;
@@ -859,28 +855,29 @@ function renderProds(btu, brand){
   if(countEl) countEl.textContent = `แสดง ${prods.length} รุ่น`;
   if(!prods.length){ grid.innerHTML='<div class="prod-empty">ไม่พบสินค้าในหมวดที่เลือก</div>'; return; }
   grid.innerHTML = prods.map(p=>`
-    <div class="prod" data-id="${p.id}">
+    <div class="prod" data-code="${esc(p.code)}">
       <div class="ph" style="background:${p.color}">
+        ${p.photo ? `<img src="${esc(p.photo)}" alt="${esc(p.model)}" loading="lazy">` : `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round">
           <rect x="2" y="6" width="20" height="10" rx="2"/>
           <path d="M5 16v2M9 16v3M13 16v2M17 16v2"/>
           <path d="M6 10h12M6 13h6" stroke-width=".8" opacity=".4"/>
-        </svg>
-        ${p.badge?`<div class="badge-tag">${p.badge}</div>`:''}
+        </svg>`}
+        ${p.badge?`<div class="badge-tag">${esc(p.badge)}</div>`:''}
         ${p.inverter?'<div class="inv-tag">Inverter</div>':''}
       </div>
       <div class="body">
-        <div class="brand">${p.brand}</div>
-        <div class="nm">${p.model}</div>
-        <div class="btu">${p.btu.toLocaleString()} BTU · ${p.inverter?'อินเวอร์เตอร์':'ธรรมดา'}</div>
+        <div class="brand">${esc(p.brand)}${p.series?' · '+esc(p.series):''}</div>
+        <div class="nm">${esc(p.model)}</div>
+        <div class="btu">${p.btu?p.btu.toLocaleString()+' BTU · ':''}${p.inverter?'อินเวอร์เตอร์':'ธรรมดา'}</div>
         ${p.price==null ? `
         <div class="pr-row"><div class="pr ask">สอบถามราคา</div></div>
         <div class="install-note">+ ค่าแรงติดตั้ง ฿${window.installFee(p.btu).toLocaleString()}</div>
-        <a href="${window.CFG.LINE_URL}" target="_blank" class="btn btn-ghost add" style="text-align:center">สอบถามราคาทาง LINE</a>
+        <a href="${esc(window.CFG.LINE_URL)}" target="_blank" class="btn btn-ghost add" style="text-align:center">สอบถามราคาทาง LINE</a>
         ` : `
         <div class="pr-row"><div class="pr">฿${p.price.toLocaleString()}<small> /เครื่อง</small></div></div>
         <div class="install-note">+ ค่าแรงติดตั้ง ฿${window.installFee(p.btu).toLocaleString()}</div>
-        <button class="btn btn-pri add" onclick="addToCart(${p.id})">
+        <button class="btn btn-pri add" onclick="addToCart('${esc(p.code).replace(/'/g,"\\'")}')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
           ใส่ตะกร้า
         </button>`}
@@ -900,21 +897,21 @@ document.querySelectorAll('[data-btu]').forEach(btn=>{
 /* ───────────────────────────────────────────────
    CART
 ─────────────────────────────────────────────── */
-function saveCart(){ localStorage.setItem('air_cart', JSON.stringify(cart)); }
+function saveCart(){ localStorage.setItem('air_cart2', JSON.stringify(cart)); }
 
-function addToCart(id){
-  const p = window.PRODUCTS.find(x=>x.id===id);
+function addToCart(code){
+  const p = window.PRODUCTS.find(x=>x.code===code);
   if(!p || p.price==null) return;
-  const ex = cart.find(x=>x.id===id);
-  if(ex){ ex.qty++; } else { cart.push({id, qty:1}); }
+  const ex = cart.find(x=>x.code===code);
+  if(ex){ ex.qty++; } else { cart.push({code, qty:1}); }
   saveCart(); renderCart();
   // flash animation on button
-  const btn = document.querySelector(`.prod[data-id="${id}"] .add`);
+  const btn = document.querySelector(`.prod[data-code="${CSS.escape(code)}"] .add`);
   if(btn){ btn.textContent='✓ เพิ่มแล้ว'; btn.style.background='var(--grn)'; setTimeout(()=>{ btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> ใส่ตะกร้า'; btn.style.background=''; },1200); }
 }
 
-function removeFromCart(id){
-  cart = cart.filter(x=>x.id!==id);
+function removeFromCart(code){
+  cart = cart.filter(x=>x.code!==code);
   saveCart(); renderCart();
 }
 
@@ -941,19 +938,19 @@ function renderCart(){
 
   let total=0;
   body.innerHTML = cart.map(ci=>{
-    const p = window.PRODUCTS.find(x=>x.id===ci.id);
+    const p = window.PRODUCTS.find(x=>x.code===ci.code);
     if(!p) return '';
     const sub = (p.price + window.installFee(p.btu)) * ci.qty;
     total += sub;
     return `<div class="cart-item">
-      <div class="ci-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><rect x="2" y="6" width="20" height="10" rx="2"/><path d="M5 16v2M9 16v3M13 16v2M17 16v2"/></svg></div>
+      <div class="ci-icon">${p.photo?`<img src="${esc(p.photo)}" alt="">`:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><rect x="2" y="6" width="20" height="10" rx="2"/><path d="M5 16v2M9 16v3M13 16v2M17 16v2"/></svg>`}</div>
       <div class="ci-info">
-        <div class="ci-nm">${p.brand} ${p.model}</div>
-        <div class="ci-btu">${p.btu.toLocaleString()} BTU · จำนวน ${ci.qty} เครื่อง</div>
+        <div class="ci-nm">${esc(p.brand)} ${esc(p.model)}</div>
+        <div class="ci-btu">${p.btu?p.btu.toLocaleString()+' BTU · ':''}จำนวน ${ci.qty} เครื่อง</div>
         <div class="ci-row">
           <span class="ci-pr">฿${sub.toLocaleString()}</span>
           <small style="color:var(--ink3);font-size:11.5px">(รวมค่าแรง)</small>
-          <button class="ci-rm" onclick="removeFromCart(${p.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+          <button class="ci-rm" onclick="removeFromCart('${esc(p.code).replace(/'/g,"\\'")}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
       </div>
     </div>`;
@@ -962,14 +959,66 @@ function renderCart(){
   total_el.textContent = '฿'+total.toLocaleString();
 }
 
-function checkoutLINE(){
-  const lines = cart.map(ci=>{
-    const p = window.PRODUCTS.find(x=>x.id===ci.id);
-    return `• ${p.brand} ${p.model} (${p.btu.toLocaleString()} BTU) x${ci.qty} = ฿${((p.price+window.installFee(p.btu))*ci.qty).toLocaleString()}`;
+/* ประกอบ payload ให้ตรงกับตาราง web_orders — items เป็น jsonb [{code,name,qty,price}]
+   ค่าแรงติดตั้งแตกเป็นบรรทัด "↳ …" ต่อท้ายแอร์แต่ละตัว (รูปแบบเดียวกับ amcair.net) */
+function orderPayload(f){
+  const items = cart.flatMap(ci=>{
+    const p = window.PRODUCTS.find(x=>x.code===ci.code);
+    if(!p) return [];
+    return [
+      { code:p.code, name:`${p.brand} ${p.model}${p.btu?' ('+p.btu.toLocaleString()+' BTU)':''}`, qty:ci.qty, price:p.price },
+      { code:'INSTALL', name:`↳ ค่าแรงติดตั้ง${p.btu?' '+p.btu.toLocaleString()+' BTU':''}`, qty:ci.qty, price:window.installFee(p.btu) },
+    ];
   });
-  const total = cart.reduce((s,ci)=>{ const p=window.PRODUCTS.find(x=>x.id===ci.id); return s+(p.price+window.installFee(p.btu))*ci.qty; },0);
-  const msg = `สวัสดีครับ ขอสั่งซื้อแอร์ดังนี้ครับ\n\n${lines.join('\n')}\n\nรวม: ฿${total.toLocaleString()} (รวมค่าแรงเริ่มต้น)\n\nกรุณาแจ้งที่อยู่และวันนัดติดตั้งด้วยครับ ขอบคุณครับ`;
-  window.open(window.CFG.LINE_URL + '?text=' + encodeURIComponent(msg), '_blank');
+  return {
+    name   : f.name.value.trim(),
+    phone  : f.phone.value.trim(),
+    address: f.address.value.trim(),
+    note   : f.note.value.trim(),
+    items,
+    total  : items.reduce((s,it)=>s + Number(it.price||0)*it.qty, 0),
+  };
+}
+
+function lineOrderMsg(p){
+  let n = 0;
+  const rows = p.items.map(it=>{
+    const amt = Number(it.price) ? ' = ฿'+(Number(it.price)*it.qty).toLocaleString() : '';
+    return it.name.startsWith('↳') ? `    ${it.name} ×${it.qty}${amt}` : `${++n}. ${it.name} ×${it.qty}${amt}`;
+  });
+  const tail = ['', 'รวมโดยประมาณ: ฿'+p.total.toLocaleString(), '', 'ชื่อ: '+p.name, 'โทร: '+p.phone];
+  if(p.address) tail.push('ที่อยู่: '+p.address);
+  if(p.note) tail.push('หมายเหตุ: '+p.note);
+  return ['🛒 คำสั่งซื้อจากเว็บ '+window.CFG.SHOP_NAME, ''].concat(rows, tail).join('\n');
+}
+
+async function submitOrder(e){
+  e.preventDefault();
+  if(!cart.length) return false;
+  const f = e.target;
+  const payload = orderPayload(f);
+  if(!hasSb){ alert('เว็บยังไม่ได้เชื่อมระบบ — โทร '+window.CFG.PHONE+' ได้เลยครับ'); return false; }
+  const btn = f.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = 'กำลังส่ง…';
+  try{
+    const { error } = await sb.from('web_orders').insert(payload);
+    if(error) throw error;
+    // ปุ่มให้ลูกค้ากดเอง — เปิดอัตโนมัติจะโดน popup blocker
+    const lineUrl = window.CFG.LINE_ID
+      ? 'https://line.me/R/oaMessage/'+encodeURIComponent(window.CFG.LINE_ID)+'/?'+encodeURIComponent(lineOrderMsg(payload))
+      : window.CFG.LINE_URL;
+    cart = []; saveCart(); renderCart(); f.reset();
+    document.getElementById('cart-body').innerHTML = `<div class="order-ok">
+      <div class="ok-ic">✅</div>
+      <b>ส่งคำสั่งซื้อเรียบร้อย</b>
+      <p>ทีมงานได้รับรายการของคุณแล้ว จะติดต่อกลับโดยเร็วครับ<br>อยากคุยกับร้านทันที กดส่งรายการเข้า LINE ได้เลย</p>
+      <a class="btn btn-line" style="justify-content:center" target="_blank" rel="noreferrer" href="${esc(lineUrl)}">📲 ส่งรายการเข้า LINE ${esc(window.CFG.LINE_ID||'')}</a>
+    </div>`;
+  }catch(err){
+    alert('ส่งไม่สำเร็จ ลองใหม่อีกครั้ง หรือโทร '+window.CFG.PHONE);
+  }
+  btn.disabled = false; btn.textContent = 'ส่งคำสั่งซื้อ';
+  return false;
 }
 
 function toggleCart(){
