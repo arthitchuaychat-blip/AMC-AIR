@@ -3699,9 +3699,11 @@ export async function syncCashEntriesFromDocs() {
   }
   if (toInsert.length) { const { error } = await supabase.from("cash_entries").insert(toInsert); if (error) throw error; }
   // remove stale doc-sourced lines — e.g. an invoice's "คาดว่าจะรับ" line once it's paid (money then shows as its
-  // receipt's "ได้รับจริง") or cancelled. Only touch the source types this sync manages; keep user-edited + manual/opening/expense.
+  // receipt's "ได้รับจริง") or cancelled. Only touch the source types this sync manages; manual/opening lines never touched.
+  // หมายเหตุ edited: flag นี้ปกป้องแค่ "ค่าที่แก้มือ" (วัน/ยอด) ไม่ให้ sync เขียนทับตอนเอกสารยังมีชีวิต —
+  // แต่พอเอกสารต้นทางถูกยกเลิก/ลบ/จ่ายแล้ว เส้นเงินต้องถูกลบตามเสมอ (เคยเว้น edited ไว้ → ใบแจ้งหนี้ยกเลิกแล้วยอดค้างในประมาณการตลอดกาล)
   const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary", "labor_owed", "expense_paid", "expense_due"]);
-  const staleIds = (existing.data || []).filter((e) => MANAGED.has(e.source_type) && !e.edited && !desiredKeys.has(`${e.source_type}:${e.source_ref}`)).map((e) => e.id);
+  const staleIds = (existing.data || []).filter((e) => MANAGED.has(e.source_type) && !desiredKeys.has(`${e.source_type}:${e.source_ref}`)).map((e) => e.id);
   for (let i = 0; i < staleIds.length; i += 100) {
     const { error } = await supabase.from("cash_entries").delete().in("id", staleIds.slice(i, i + 100));
     if (error) throw error;

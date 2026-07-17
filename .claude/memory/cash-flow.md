@@ -32,3 +32,5 @@ Once a user edits a seeded row (`edited=true`), sync leaves it alone.
 **Opening balance** ("เงินสดยกมา") stored as a special `cash_entries` row source_type='opening' (date 2000-01-01) via getOpeningBalance/setOpeningBalance — avoids app_config write RLS (which is admin/exec only, but finance needs cashflow). Excluded from the day list; folded into the starting balance.
 
 api.js: listCashEntries / addCashEntry / updateCashEntry / deleteCashEntry / getOpeningBalance / setOpeningBalance / syncCashEntriesFromDocs.
+
+**v431 (2026-07-17): stale-delete ignores `edited`.** Real-world case: an invoice's "คาดว่าจะรับ" line was hand-edited (expected date moved) → `edited=true` → when the invoice was later CANCELLED the sync's stale-delete skipped it (`!e.edited` in the filter) and the projection sat in cash flow forever. Fixed: `edited` only shields the row's values from being overwritten while the source doc is alive; once the doc leaves `desired` (paid/cancelled/deleted) the row is deleted regardless. MANAGED source types only; manual/opening rows still untouched.
