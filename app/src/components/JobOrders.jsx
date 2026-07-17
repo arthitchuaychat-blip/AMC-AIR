@@ -179,7 +179,10 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   function onSite(id) {
     const s = cust?.sites?.find((x) => String(x.id) === String(id));
     const addr = s?.address || cust?.address || "";
-    setEd((e) => ({ ...e, site_id: id, address: addr || e.address, map_url: s?.map_url || mapLink(addr) || e.map_url }));
+    // เลือกไซต์แล้ว ชื่อผู้ติดต่อ/เบอร์/ที่อยู่ ตามไซต์นั้น — ไซต์ไม่มีผู้ติดต่อค่อยถอยไปผู้ติดต่อหลักของลูกค้า
+    const ct0 = cust?.contacts?.[0];
+    setEd((e) => ({ ...e, site_id: id, address: addr || e.address, map_url: s?.map_url || mapLink(addr) || e.map_url,
+      contact_name: s?.contact_name || ct0?.name || e.contact_name, contact_phone: s?.phone || ct0?.phone || e.contact_phone }));
   }
 
   async function save() {
