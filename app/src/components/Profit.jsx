@@ -1,6 +1,7 @@
 import React from "react";
 import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost, listPurchaseOrders } from "../lib/api";
-import { fmtBaht } from "../lib/format";
+import { fmtBaht, matchText, inRange } from "../lib/format";
+import { UIcon } from "../icons";
 
 // กำไร/งาน — 1 ใบเสนอราคา = 1 งาน (รวมทุกใบงานที่อยู่ใต้ใบเสนอราคานั้น รวมใบงานเชื่อม)
 // ยอดขาย/ต้นทุน BOQ นับครั้งเดียวต่อใบเสนอราคา (ไม่ซ้ำซ้อน)
@@ -14,6 +15,10 @@ export default function Profit() {
   const [open, setOpen] = React.useState({});       // quote_no → expanded breakdown
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState(null);
+  // ตัวกรอง: ค้นหา (ลูกค้า/ทีมช่าง/เลขใบงาน/เลขใบเสนอ) + ช่วงวันที่ (วันอนุมัติใบเสนอ หรือวันนัดงานของใบงานใดใบหนึ่ง)
+  const [query, setQuery] = React.useState("");
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
 
   async function load() {
     setLoading(true); setErr(null);
@@ -81,14 +86,24 @@ export default function Profit() {
   }
   React.useEffect(() => { load(); }, []);
 
-  const withEst = rows.filter((r) => r.gross != null);
+  // กรองก่อนคิดยอดรวม — การ์ดสรุปสะท้อนเฉพาะรายการที่ผ่านตัวกรอง
+  const shown = rows.filter((r) => {
+    const inDate = (!from && !to)
+      || inRange(r.q.approved_at || r.q.issue_date, from, to)
+      || r.jobs.some((j) => j.scheduled_at && inRange(j.scheduled_at, from, to));
+    if (!inDate) return false;
+    return matchText(query, r.q.quote_no, r.q.customerName, r.q.title,
+      ...r.jobs.flatMap((j) => [j.job_no, j.teamName]));
+  });
+  const withEst = shown.filter((r) => r.gross != null);
   const sumGross = withEst.reduce((a, r) => a + r.gross, 0);           // กำไรประมาณการรวม (BOQ)
-  const withNet = rows.filter((r) => r.net != null);                   // เฉพาะงานที่มีต้นทุนจริงบันทึกแล้ว
+  const withNet = shown.filter((r) => r.net != null);                  // เฉพาะงานที่มีต้นทุนจริงบันทึกแล้ว
   const sumSaleNet = withNet.reduce((a, r) => a + r.sale, 0);
   const sumNet = withNet.reduce((a, r) => a + r.net, 0);
-  const sumMat = rows.reduce((a, r) => a + r.matNet, 0);
-  const sumLabor = rows.reduce((a, r) => a + r.labor, 0);
+  const sumMat = shown.reduce((a, r) => a + r.matNet, 0);
+  const sumLabor = shown.reduce((a, r) => a + r.labor, 0);
   const margin = sumSaleNet > 0 ? (sumNet / sumSaleNet) * 100 : 0;
+  const filtered = !!(query || from || to);
   const toggle = (qn) => setOpen((o) => ({ ...o, [qn]: !o[qn] }));
 
   return (
@@ -103,8 +118,21 @@ export default function Profit() {
 
       {!loading && !err && (
         <>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+            <div className="cat-search" style={{ maxWidth: 400, marginBottom: 0 }}>
+              <UIcon name="search" size={16} color="var(--ink-3)" />
+              <input placeholder="ค้นหา ลูกค้า / ทีมช่าง / เลขใบงาน / เลขใบเสนอ / ชื่องาน" value={query} onChange={(e) => setQuery(e.target.value)} />
+            </div>
+            <div className="tc-range">
+              <span>จาก</span><input className="inp" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <span>ถึง</span><input className="inp" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+            {filtered && <button className="btn-ghost sm" onClick={() => { setQuery(""); setFrom(""); setTo(""); }}>✕ ล้างตัวกรอง</button>}
+            {filtered && <span className="page-sub" style={{ margin: 0 }}>แสดง {shown.length} จาก {rows.length} งาน</span>}
+          </div>
+
           <div className="kpi-grid">
-            <div className="stat-card"><div className="stat-val">{fmtBaht(sumGross)}</div><div className="stat-label">กำไรประมาณการรวม (BOQ)</div><div className="stat-sub">{rows.length} งานที่เสร็จ</div></div>
+            <div className="stat-card"><div className="stat-val">{fmtBaht(sumGross)}</div><div className="stat-label">กำไรประมาณการรวม (BOQ)</div><div className="stat-sub">{shown.length} งานที่เสร็จ{filtered ? ` (กรองจาก ${rows.length})` : ""}</div></div>
             <div className="stat-card"><div className="stat-val" style={{ color: "var(--down)" }}>−{fmtBaht(sumMat)}</div><div className="stat-label">วัสดุ/แอร์ที่เบิกใช้จริง (สุทธิ)</div></div>
             <div className="stat-card"><div className="stat-val" style={{ color: "var(--down)" }}>−{fmtBaht(sumLabor)}</div><div className="stat-label">ค่าแรงช่างซัพรวม</div></div>
             <div className="stat-card"><div className="stat-val" style={{ color: sumNet >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(sumNet)}</div><div className="stat-label">กำไรสุทธิรวม (ต้นทุนจริง)</div><div className="stat-sub">{withNet.length} งานที่มีต้นทุนจริง</div></div>
@@ -126,10 +154,11 @@ export default function Profit() {
           )}
 
           {rows.length === 0 && <div className="empty">ยังไม่มีงานที่ทำเสร็จ (ใบงานสถานะ “เสร็จ” ทุกใบของงานนั้น)</div>}
-          {rows.length > 0 && (
+          {rows.length > 0 && shown.length === 0 && <div className="empty">ไม่พบงานตามตัวกรอง — ลองแก้คำค้น/ช่วงวันที่ หรือกด “ล้างตัวกรอง”</div>}
+          {shown.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ (ประมาณ)</span><span className="r">กำไรประมาณการ</span><span className="r">วัสดุ/แอร์เบิกจริง</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ (จริง)</span><span className="r">%</span></div>
-              {rows.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin }) => {
+              {shown.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin }) => {
                 const isOpen = !!open[q.quote_no];
                 return (
                   <React.Fragment key={q.quote_no}>
