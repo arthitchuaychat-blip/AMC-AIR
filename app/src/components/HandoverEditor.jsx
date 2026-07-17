@@ -56,6 +56,15 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
   const removeForm = async (i) => { if (!await confirmDialog("ลบแบบฟอร์มนี้?")) return; setH((s) => ({ ...s, forms: s.forms.filter((_, j) => j !== i) })); };
 
   async function persist(status) {
+    // ก่อน "บันทึก & ส่ง": เตือนเมื่อยังไม่มีแบบฟอร์ม/ลายเซ็นลูกค้า — กันมือลั่นส่งใบเปล่า (ส่งได้ถ้าตั้งใจ เช่น ลูกค้าไม่สะดวกเซ็น)
+    if (status === "submitted") {
+      const miss = [];
+      if (!(h.forms || []).length) miss.push("ยังไม่มีแบบฟอร์มสักแผ่น");
+      if (!h.cust_sign_url) miss.push("ยังไม่มีลายเซ็นลูกค้า");
+      if (!h.tech_sign_url) miss.push("ยังไม่มีลายเซ็นช่าง");
+      const msg = miss.length ? `⚠️ ${miss.join(" · ")}\n\nยืนยันส่งใบส่งมอบงานเลยหรือไม่?` : "ยืนยันส่งใบส่งมอบงาน? (ส่งแล้วช่างแก้ไขเองไม่ได้ — ต้องให้ออฟฟิศแก้)";
+      if (!await confirmDialog(msg)) return;
+    }
     setBusy(true);
     try {
       const out = { ...h, status };

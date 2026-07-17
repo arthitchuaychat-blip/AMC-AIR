@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listJobOrders, updateJobStatus, updateVisitStatus } from "../lib/api";
+import { listJobOrders, updateJobStatus, updateVisitStatus, addJobLog } from "../lib/api";
 import { UIcon } from "../icons";
 import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel, JOB_STATUSES, ymd } from "../lib/schedule";
 import JobTimeline, { Linkify } from "./JobTimeline";
@@ -23,6 +23,7 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
   const [toast, setToast] = React.useState(null);
   const [tab, setTab] = React.useState("todo"); // todo | doing | done
   const [expanded, setExpanded] = React.useState({}); // job_no → show full details/brief/timeline
+  const [busy, setBusy] = React.useState(null); // job_no/visit id ที่กำลังอัปเดต — กันกดรัวตอนเน็ตช้า (log ซ้ำ)
   const toggle = (no) => setExpanded((e) => ({ ...e, [no]: !e[no] }));
 
   async function load() {
@@ -38,19 +39,39 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
     setLoading(false);
   }
   React.useEffect(() => { load(); }, [team, allTeams]);
+  // ช่างเปิดแอปค้างทั้งวัน — กลับมาที่แอป (สลับจากไลน์/กล้อง) ให้โหลดงานใหม่เอง จะได้เห็นงานใหม่/เลื่อนนัด/ผลอนุมัติ
+  React.useEffect(() => {
+    const onVis = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [team, allTeams]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); }
 
   async function setStatus(jo, status) {
     const label = STATUS[status]?.th || status;
     if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะงาน ${jo.job_no} เป็น "${label}" ?`)) return;
+    setBusy(jo.job_no);
     try { await updateJobStatus(jo.job_no, status, me); flash("อัปเดตสถานะแล้ว"); await load(); }
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(null);
   }
   async function setVStatus(jobNo, v, status) {
     const label = STATUS[status]?.th || status;
-    if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะรอบนี้เป็น "${label}" ?`)) return;
-    try { await updateVisitStatus(v.id, jobNo, status, me); flash("อัปเดตรอบงานแล้ว"); await load(); }
+    // ขอนัดหมายเพิ่ม: ต้องบอกเหตุผลเสมอ (ของขาด/ลูกค้าไม่อยู่ ฯลฯ) — ออฟฟิศจะได้นัดใหม่ถูก · ลงไทม์ไลน์ให้อัตโนมัติ
+    let reason = null;
+    if (status === "reschedule") {
+      reason = await confirmDialog({ title: t("ขอนัดหมายเพิ่มรอบนี้?", "ချိန်းဆိုမှု ထပ်တောင်းမလား?"), confirmText: t("ขอนัดเพิ่ม", "တောင်းဆို"),
+        prompt: { label: t("เหตุผล (ออฟฟิศจะได้นัดใหม่ถูก)", "အကြောင်းပြချက်"), placeholder: t("เช่น ของไม่ครบ · ลูกค้าไม่อยู่ · งานเกินเวลา", "ဥပမာ ပစ္စည်းမပြည့်"), required: true } });
+      if (reason === false) return;
+    } else if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะรอบนี้เป็น "${label}" ?`)) return;
+    setBusy(v.id);
+    try {
+      await updateVisitStatus(v.id, jobNo, status, me);
+      if (reason) await addJobLog(jobNo, { note: `📅 เหตุผลขอนัดหมายเพิ่ม: ${reason}`, photos: [], author: me }).catch(() => {});
+      flash("อัปเดตรอบงานแล้ว"); await load();
+    }
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(null);
   }
 
   // the job's relevant scheduled datetime for THIS tech: earliest still-to-do visit (for my team), else any visit, else the job
@@ -71,7 +92,8 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
     doing: list.filter((j) => j.status === "in_progress").sort(sortAsc),
     awaiting: list.filter((j) => j.status === "awaiting_approval").sort(sortAsc),
     reschedule: list.filter((j) => j.status === "reschedule").sort(sortAsc),
-    done: list.filter((j) => j.status === "done"),
+    // quote_pending (งานเสร็จ รอออฟฟิศทำใบเสนอ) — ฝั่งช่างถือว่าจบงานแล้ว โชว์ในถังเสร็จ (เดิมงานหายจากทุกถัง)
+    done: list.filter((j) => j.status === "done" || j.status === "quote_pending"),
     cancelled: list.filter((j) => j.status === "cancelled"),
   };
   const shown = byStatus[tab] || byStatus.todo;
@@ -91,6 +113,7 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
             <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
               style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{lang === "my" ? (MYJOB_TAB_MY[v] || l) : l} ({byStatus[v].length})</button>
           ))}
+          <button className="cat-chip" onClick={load} disabled={loading} title={t("โหลดงานล่าสุด", "အသစ်ဖွင့်")}>🔄 {t("รีเฟรช", "ပြန်ဖွင့်")}</button>
         </div>
       </div>
 
@@ -142,6 +165,18 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
                 </div>
               )}
 
+              {/* รายการเครื่อง/บริการจากใบเสนอราคา (ไม่มีราคา) — ช่างเห็นชัดว่าต้องติดรุ่นไหนกี่ตัว ไม่ต้องเดาจากบรีฟ */}
+              {expanded[jo.job_no] && jo.confirmItems && jo.confirmItems.length > 0 && (
+                <div className="myjob-brief">
+                  <div className="myjob-brief-title">❄️ {t("รายการเครื่อง/บริการของงานนี้", "ဒီအလုပ်၏ စက်/ဝန်ဆောင်မှု စာရင်း")}</div>
+                  {jo.confirmItems.map((it, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13, padding: "3px 0", borderBottom: i < jo.confirmItems.length - 1 ? "1px dashed var(--line-2)" : "none" }}>
+                      <span>{it.name}</span><b style={{ whiteSpace: "nowrap" }}>{it.qty} {it.unit || t("ชุด", "စုံ")}</b>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {expanded[jo.job_no] && lang === "my" && (
                 <div className="myjob-brief">
                   <div className="myjob-brief-title">🇲🇲 ใบงาน (ภาษาพม่า)
@@ -160,38 +195,44 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
                       <div className="myjob-visit" key={v.id}>
                         <div className="myjob-visit-info">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}{allTeams && v.teamName ? ` · ${t("ทีม", "အဖွဲ့")} ${v.teamName}` : ""} <span className={"job-badge " + vst.cls}>{stLbl(v.status)}</span></div>
                         <div className="myjob-visit-acts">
-                          {/* read-only when the whole job is นัดหมายเพิ่ม/เสร็จ/ยกเลิก — show status text only */}
-                          {!TECH_READONLY.includes(jo.status) && (v.status === "pending" || v.status === "scheduled") && <button className="btn-primary sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>{t("เริ่มทำรอบนี้", "ဒီအကြိမ် စတင်")}</button>}
+                          {/* read-only when the whole job is เสร็จ/ยกเลิก — show status text only */}
+                          {!TECH_READONLY.includes(jo.status) && (v.status === "pending" || v.status === "scheduled") && <button className="btn-primary sm" disabled={busy === v.id} onClick={() => setVStatus(jo.job_no, v, "in_progress")}>{t("เริ่มทำรอบนี้", "ဒီအကြိမ် စတင်")}</button>}
                           {!TECH_READONLY.includes(jo.status) && v.status === "in_progress" && <>
-                            <button className="btn-primary sm ok" onClick={() => setVStatus(jo.job_no, v, "awaiting_approval")}>{t("ส่งอนุมัติ ✓", "အတည်ပြုရန် ပို့ ✓")}</button>
-                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "reschedule")}>{t("ขอนัดหมายเพิ่ม", "ချိန်းဆိုမှု ထပ်တောင်း")}</button>
+                            <button className="btn-primary sm ok" disabled={busy === v.id} onClick={() => setVStatus(jo.job_no, v, "awaiting_approval")}>{t("ส่งอนุมัติ ✓", "အတည်ပြုရန် ပို့ ✓")}</button>
+                            <button className="btn-ghost sm" disabled={busy === v.id} onClick={() => setVStatus(jo.job_no, v, "reschedule")}>{t("ขอนัดหมายเพิ่ม", "ချိန်းဆိုမှု ထပ်တောင်း")}</button>
                           </>}
                           {!TECH_READONLY.includes(jo.status) && v.status === "awaiting_approval" && <>
                             <span className="myjob-await">⏳ {t("รอออฟฟิศอนุมัติ", "ရုံးခန်း အတည်ပြုရန် စောင့်")}</span>
-                            <button className="btn-ghost sm" onClick={() => setVStatus(jo.job_no, v, "in_progress")}>{t("แก้ไข/ทำต่อ", "ပြင်ဆင်/ဆက်လုပ်")}</button>
+                            <button className="btn-ghost sm" disabled={busy === v.id} onClick={() => setVStatus(jo.job_no, v, "in_progress")}>{t("แก้ไข/ทำต่อ", "ပြင်ဆင်/ဆက်လုပ်")}</button>
                           </>}
                           {(TECH_READONLY.includes(jo.status) && v.status === "awaiting_approval") && <span className="myjob-await">⏳ {t("รอออฟฟิศอนุมัติ", "ရုံးခန်း အတည်ပြုရန် စောင့်")}</span>}
-                          {v.status === "reschedule" && <span className="myjob-await">📅 {t("รอออฟฟิศนัดหมายเพิ่ม", "ရုံးခန်း ချိန်းဆိုပေးရန် စောင့်")}</span>}
+                          {v.status === "reschedule" && <>
+                            <span className="myjob-await">📅 {t("รอออฟฟิศนัดหมายเพิ่ม", "ရုံးခန်း ချိန်းဆိုပေးရန် စောင့်")}</span>
+                            {/* กดพลาด/สถานการณ์เปลี่ยน — ถอยกลับมาทำต่อเองได้ ไม่ต้องรอออฟฟิศช่วย (เดิมค้างจนออฟฟิศแก้) */}
+                            {!["done", "cancelled"].includes(jo.status) && <button className="btn-ghost sm" disabled={busy === v.id} onClick={() => setVStatus(jo.job_no, v, "in_progress")}>{t("กลับไปทำต่อ", "ပြန်ဆက်လုပ်")}</button>}
+                          </>}
                           {v.status === "done" && <span className="myjob-await">🔒 {t("อนุมัติแล้ว · ปิดงาน", "အတည်ပြုပြီး · အလုပ်ပိတ်")}</span>}
                         </div>
                       </div>
                     );
                   })}
                   {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> {t("เบิกวัสดุงานนี้", "ဒီအလုပ်အတွက် ပစ္စည်းထုတ်")}</button>}
-                  {jo.status === "in_progress" && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 {t("ใบส่งมอบงาน", "အလုပ်လွှဲပြောင်း စာရွက်")}</button>}
+                  {/* ใบส่งมอบใช้ได้ตั้งแต่ก่อนเริ่ม (กรอกค่า "ก่อน") จนถึงหลังส่งอนุมัติ (เก็บลายเซ็นลูกค้า) — เดิมโผล่เฉพาะตอนกำลังทำ */}
+                  {!TECH_READONLY.includes(jo.status) && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 {t("ใบส่งมอบงาน", "အလုပ်လွှဲပြောင်း စာရွက်")}</button>}
                 </div>
               ) : (
                 <div className="myjob-actions">
-                  {(jo.status === "pending" || jo.status === "scheduled") && <button className="btn-primary" onClick={() => setStatus(jo, "in_progress")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> {t("รับงาน / เริ่มทำ", "အလုပ်လက်ခံ / စတင်")}</button>}
+                  {(jo.status === "pending" || jo.status === "scheduled") && <button className="btn-primary" disabled={busy === jo.job_no} onClick={() => setStatus(jo, "in_progress")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> {t("รับงาน / เริ่มทำ", "အလုပ်လက်ခံ / စတင်")}</button>}
                   {jo.status === "in_progress" && <>
-                    <button className="btn-primary ok" onClick={() => setStatus(jo, "awaiting_approval")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> {t("ส่งอนุมัติ", "အတည်ပြုရန် ပို့")}</button>
-                    <button className="btn-ghost" onClick={() => setStatus(jo, "reschedule")}>{t("ขอนัดหมายเพิ่ม", "ချိန်းဆိုမှု ထပ်တောင်း")}</button>
+                    <button className="btn-primary ok" disabled={busy === jo.job_no} onClick={() => setStatus(jo, "awaiting_approval")}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> {t("ส่งอนุมัติ", "အတည်ပြုရန် ပို့")}</button>
+                    <button className="btn-ghost" disabled={busy === jo.job_no} onClick={() => setStatus(jo, "reschedule")}>{t("ขอนัดหมายเพิ่ม", "ချိန်းဆိုမှု ထပ်တောင်း")}</button>
                   </>}
-                  {jo.status === "awaiting_approval" && <><span className="myjob-await">⏳ {t("รอออฟฟิศอนุมัติ", "ရုံးခန်း အတည်ပြုရန် စောင့်")}</span><button className="btn-ghost" onClick={() => setStatus(jo, "in_progress")}>{t("แก้ไข/ทำต่อ", "ပြင်ဆင်/ဆက်လုပ်")}</button></>}
-                  {jo.status === "reschedule" && <span className="myjob-await">📅 {t("รอออฟฟิศนัดหมายเพิ่ม", "ရုံးခန်း ချိန်းဆိုပေးရန် စောင့်")}</span>}
+                  {jo.status === "awaiting_approval" && <><span className="myjob-await">⏳ {t("รอออฟฟิศอนุมัติ", "ရုံးခန်း အတည်ပြုရန် စောင့်")}</span><button className="btn-ghost" disabled={busy === jo.job_no} onClick={() => setStatus(jo, "in_progress")}>{t("แก้ไข/ทำต่อ", "ပြင်ဆင်/ဆက်လုပ်")}</button></>}
+                  {jo.status === "reschedule" && <><span className="myjob-await">📅 {t("รอออฟฟิศนัดหมายเพิ่ม", "ရုံးခန်း ချိန်းဆိုပေးရန် စောင့်")}</span>
+                    <button className="btn-ghost" disabled={busy === jo.job_no} onClick={() => setStatus(jo, "in_progress")}>{t("กลับไปทำต่อ", "ပြန်ဆက်လုပ်")}</button></>}
                   {jo.status === "done" && <span className="myjob-await">🔒 {t("อนุมัติแล้ว · ปิดงาน", "အတည်ပြုပြီး · အလုပ်ပိတ်")}</span>}
                   {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> {t("เบิกวัสดุงานนี้", "ဒီအလုပ်အတွက် ပစ္စည်းထုတ်")}</button>}
-                  {jo.status === "in_progress" && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 {t("ใบส่งมอบงาน", "အလုပ်လွှဲပြောင်း စာရွက်")}</button>}
+                  {!TECH_READONLY.includes(jo.status) && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 {t("ใบส่งมอบงาน", "အလုပ်လွှဲပြောင်း စာရွက်")}</button>}
                 </div>
               )}
               {jo.status === "in_progress" && expanded[jo.job_no] && <div className="myjob-hint">{t("เข้าหน้างานได้หลายครั้ง · เบิกวัสดุเพิ่มได้ไม่จำกัด · แนบรูป/คอมเมนต์ลงไทม์ไลน์ด้านล่าง", "လုပ်ငန်းခွင်သို့ အကြိမ်များစွာ ဝင်နိုင် · ပစ္စည်း ထပ်ထုတ်နိုင် · ဓာတ်ပုံ/မှတ်ချက် တင်ပါ")}</div>}

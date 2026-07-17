@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-17·เข้างาน/ลา: การ์ด 'เงินเดือนของฉัน (ละเอียด)' — พนักงานดูสถานะ เข้างาน/ขาด/ลา/สาย/OT/ค่าวันหยุด/เบิกล่วงหน้า ของตัวเองรายวันแบบสลิป (mig 149) v445";
+const BUILD = "2026-07-17·งานช่างหน้างาน: เก็บแข็งทั้งโซน — กันงานยกเลิกคืนชีพ/กันทับสถานะช่าง/อนุมัติจบจังหวะเดียว (mig 150) + ใบส่งมอบตรวจก่อนส่ง+แจ้งออฟฟิศ + รีเฟรช/เหตุผลนัดเพิ่ม/รายการเครื่อง ในงานของฉัน v446";
 
 function SetupNotice() {
   return (
@@ -479,7 +479,7 @@ export default function App() {
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "handover" && <Handover role={role} me={profile?.name || profile?.email} startJob={hoStartJob} onStartConsumed={() => setHoStartJob(null)} focusJob={hoFocusJob} onFocusConsumed={() => setHoFocusJob(null)} />}
         {view === "schedule" && <Schedule role={role} team={profile?.team} me={profile?.name || profile?.email} onOpenJob={(jn) => { if (can(role, "joborders")) { setJobFocus(jn); go("joborders"); } else { go("myjobs"); } }} onNewJob={(s) => { setJoSchedule(s); go("joborders"); }} />}
-        {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || profile?.team }); go("movements"); }} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }} />}
+        {view === "myjobs" && <MyJobs role={role} team={profile?.team} me={profile?.name || profile?.email} onWithdraw={(jo) => { setWithdrawCtx({ jobNo: jo.job_no, team: jo.assigned_team || jo.visits?.find((v) => v.assigned_team)?.assigned_team || profile?.team }); go("movements"); }} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }} />}
         {view === "movements" && <Movements role={role} myTeam={profile?.team} prefill={purchasePrefill} onPrefillConsumed={() => setPurchasePrefill(null)} withdrawCtx={withdrawCtx} onWithdrawCtxConsumed={() => setWithdrawCtx(null)} />}
         {view === "stockcount" && <StockCount role={role} />}
         {view === "prep" && <MaterialPrep role={role} prefill={prepPrefill} onPrefillConsumed={() => setPrepPrefill(null)}

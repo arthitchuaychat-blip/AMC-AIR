@@ -61,9 +61,18 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
 
   async function onSaved() { setEditing(null); await load(); }
   async function del(h) {
-    if (!await confirmDialog(`ลบใบส่งมอบงานนี้? (${h.customer_name || h.job_no || "ไม่ระบุ"})`)) return;
-    try { await deleteHandover(h.id); flash("ลบแล้ว"); await load(); }
+    // กติกาบ้าน: ลบต้องมีเหตุผลเสมอ (ลง audit พร้อม snapshot — ใบที่ส่งแล้วมีลายเซ็นลูกค้าเป็นหลักฐานงาน)
+    const reason = await confirmDialog({ title: `ลบใบส่งมอบงานนี้? (${h.customer_name || h.job_no || "ไม่ระบุ"})`,
+      message: h.status === "submitted" ? "⚠️ ใบนี้ส่งแล้ว (มีลายเซ็น) — ข้อมูลจะถูกเก็บในประวัติการลบ" : "ข้อมูลจะถูกเก็บในประวัติการลบ",
+      confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิดใบ · ซ้ำ", required: true } });
+    if (reason === false) return;
+    try { await deleteHandover(h.id, reason); flash("ลบแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // แก้ใบที่ส่งแล้ว (มีลายเซ็นลูกค้า) — ให้ตั้งใจจริง ๆ ค่อยเปิด
+  async function startEdit(h) {
+    if (h.status === "submitted" && !await confirmDialog("ใบนี้ส่งแล้ว (มีลายเซ็นลูกค้า) — ยืนยันเปิดแก้ไข?")) return;
+    setEditing(h);
   }
 
   const shown = list.filter((h) =>
@@ -111,7 +120,7 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
               </div>
               <div className="ho-card-acts">
                 <button className="btn-ghost sm" onClick={() => print(h)}><UIcon name="catalog" size={14} /> พิมพ์/PDF</button>
-                {canEdit && <button className="btn-ghost sm" onClick={() => setEditing(h)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(h)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canDelete && <button className="btn-ghost sm danger" onClick={() => del(h)}><UIcon name="trash" size={14} /></button>}
               </div>
             </div>

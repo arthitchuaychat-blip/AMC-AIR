@@ -134,7 +134,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   function visitFromRow(v) {
     const dt = (v.slot === "custom" && v.scheduled_at) ? new Date(v.scheduled_at) : null;
     const p = (n) => String(n).padStart(2, "0");
-    return { assigned_team: v.assigned_team || "", date: v.visit_date || "", end_date: v.end_date || "", slot: v.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: v.status || "scheduled" };
+    // เก็บ id ของรอบไว้ด้วย — ตอนบันทึก saveJobOrder จะใช้จับคู่กับสถานะสดจาก DB (กันฟอร์มค้างทับสถานะที่ช่างเพิ่งกด)
+    return { id: v.id, assigned_team: v.assigned_team || "", date: v.visit_date || "", end_date: v.end_date || "", slot: v.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: v.status || "scheduled" };
   }
   function startNew() { setEd(blankEd()); }
   function startEdit(jo) {
@@ -194,7 +195,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       const slot = v.slot || "custom";
       const time = slot === "custom" ? (v.time || "08:00") : slotStartTime(slot);
       const team = v.status === "done" ? (v.assigned_team || ed.assigned_team || null) : (ed.assigned_team || null);
-      return { visit_date: v.date, end_date: (v.end_date && v.end_date > v.date) ? v.end_date : null, slot, scheduled_at: new Date(`${v.date}T${time}:00`).toISOString(), assigned_team: team, status: v.status || "scheduled" };
+      return { id: v.id || null, visit_date: v.date, end_date: (v.end_date && v.end_date > v.date) ? v.end_date : null, slot, scheduled_at: new Date(`${v.date}T${time}:00`).toISOString(), assigned_team: team, status: v.status || "scheduled" };
     });
     // double-booking: each scheduled visit vs every other job's visits (same team, overlapping day+slot)
     for (const vr of visitRows) {
@@ -247,11 +248,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   async function doVisitStatus(jo, v, status, jobOverride, shouldLock) {
     setApproveCtx(null);
     try {
-      await updateVisitStatus(v.id, jo.job_no, status, me);
-      // some outcomes approve the round (done) but route the whole job to a different stage (e.g. รอทำใบเสนอราคา)
-      if (jobOverride) await updateJobStatus(jo.job_no, jobOverride, me);
-      if (shouldLock === true) await lockJob(jo.job_no);
-      else if (shouldLock === false) await unlockJob(jo.job_no).catch(() => {});
+      // จบใน RPC เดียว (mig 150): เปลี่ยนรอบ + override สถานะใบ (เช่น รอทำใบเสนอราคา) + ล็อก — เน็ตสะดุดก็ไม่ค้างครึ่งทาง
+      await updateVisitStatus(v.id, jo.job_no, status, me, { jobOverride: jobOverride || null, lock: shouldLock === true ? true : shouldLock === false ? false : null });
       flash(shouldLock ? "อนุมัติ · ปิดงานแล้ว (ล็อก) ✓"
         : jobOverride === "quote_pending" ? "อนุมัติรอบนี้ · ส่งไปรอทำใบเสนอราคา ✓"
         : status === "done" ? "อนุมัติ · ปิดงานรอบนี้แล้ว ✓" : "ส่งรอบนี้ไปนัดหมายเพิ่มแล้ว");
@@ -657,12 +655,13 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                     <div className="cd-site" key={v.id || i} style={{ borderLeft: `3px solid ${col}`, background: col + "18", paddingLeft: 9, borderRadius: 8 }}>
                       <div className="cd-site-top"><span>📍 รอบ {i + 1} · {v.teamName || "ยังไม่มอบทีม"}</span><span className={"job-badge " + vst.cls}>{vst.th}</span></div>
                       <div className="cd-site-addr">🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}</div>
-                      {canEditJob(jo) && v.status === "awaiting_approval" && (
+                      {/* งานยกเลิกแล้ว ห้ามมีปุ่มอนุมัติ/นัดต่อ — กติกาบ้าน: เอกสารยกเลิกล็อกทุกการกระทำ */}
+                      {canEditJob(jo) && jo.status !== "cancelled" && v.status === "awaiting_approval" && (
                         <div className="myjob-visit-acts" style={{ marginTop: 7 }}>
                           <button className="btn-primary sm ok" onClick={() => setApproveCtx({ jo, v })}>✓ อนุมัติรอบนี้</button>
                         </div>
                       )}
-                      {canEditJob(jo) && v.status === "reschedule" && (
+                      {canEditJob(jo) && jo.status !== "cancelled" && v.status === "reschedule" && (
                         <div className="myjob-visit-acts" style={{ marginTop: 7 }}>
                           <button className="btn-primary sm" onClick={() => { setViewing(null); startReschedule(jo, i); }}>📅 ตั้งวันนัดหมายเพิ่ม</button>
                         </div>

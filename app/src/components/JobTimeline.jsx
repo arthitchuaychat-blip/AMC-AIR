@@ -1,11 +1,13 @@
 import React from "react";
 import { listJobLogs, listJobLogsByGroup, addJobLog, uploadMaterialPhoto } from "../lib/api";
 import { ATTACH_ACCEPT, isImageUrl } from "../lib/format";
+import { JOB_STATUSES } from "../lib/schedule";
 import AttachThumb from "./AttachThumb";
 import Lightbox from "./Lightbox";
 
-const STATUS_TH = { pending: "รอเริ่มงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", awaiting_approval: "รออนุมัติ", reschedule: "นัดหมายเพิ่ม", done: "เสร็จแล้ว", cancelled: "ยกเลิก" };
-const STATUS_ACTION = { pending: "🕒 รอจ่ายงาน", scheduled: "📌 นัดหมายแล้ว", in_progress: "🔧 เริ่ม/กำลังทำงาน", awaiting_approval: "📤 ส่งอนุมัติ", reschedule: "📅 ส่งไปนัดหมายเพิ่ม", done: "✅ อนุมัติงานเสร็จ", cancelled: "❌ ยกเลิกงาน" };
+// ป้ายสถานะดึงจากชุดกลาง (lib/schedule.js) — กติกาบ้าน: ทุกเมนูใช้ชุดเดียวกัน (เดิม hardcode แล้ว quote_pending โชว์เป็นอังกฤษดิบ)
+const STATUS_TH = Object.fromEntries(JOB_STATUSES.map(([v, l]) => [v, l]));
+const STATUS_ACTION = { pending: "🕒 รอจ่ายงาน", scheduled: "📌 นัดหมายแล้ว", in_progress: "🔧 เริ่ม/กำลังทำงาน", awaiting_approval: "📤 ส่งอนุมัติ", reschedule: "📅 ส่งไปนัดหมายเพิ่ม", quote_pending: "📝 เสร็จ · ส่งไปรอทำใบเสนอราคา", done: "✅ อนุมัติงานเสร็จ", cancelled: "❌ ยกเลิกงาน" };
 const fmtWhen = (s) => { const d = new Date(s); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."; };
 
 // ลิงก์ในข้อความกดได้ — เว็บไซต์ (http/https/www.) และลิงก์แผนที่ (maps.app.goo.gl / goo.gl/maps) เปิดแท็บใหม่
