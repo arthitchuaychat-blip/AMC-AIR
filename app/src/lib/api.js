@@ -633,7 +633,7 @@ export async function listPurchaseOrders() {
     _rows((f, t) => supabase.from("po_items").select("*", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),
     _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
-    _rows((f, t) => supabase.from("job_orders").select("job_no,quote_no,team,status", { count: "exact" }).order("job_no").range(f, t)),
+    _rows((f, t) => supabase.from("job_orders").select("job_no,quote_no,assigned_team,status", { count: "exact" }).order("job_no").range(f, t)),
     supabase.from("teams").select("id,name"),
   ]);
   if (poRes.error) throw poRes.error;
@@ -656,7 +656,7 @@ export async function listPurchaseOrders() {
     const job = po.quote_no ? jobByQuote[po.quote_no] : null;
     return { ...po, items, subtotal, vatAmt, total: Math.round((subtotal + vatAmt) * 100) / 100, paymentStatus,
       customerName: qi ? custName[qi.customer_id] || null : null,
-      jobNo: job?.job_no || null, teamName: job ? teamName[job.team] || job.team || null : null };
+      jobNo: job?.job_no || null, teamName: job ? teamName[job.assigned_team] || job.assigned_team || null : null };
   });
 }
 
@@ -673,7 +673,7 @@ export async function listMaterialPreps() {
     _fetchAll((f, t) => supabase.from("material_prep_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("quotations").select("quote_no,customer_id,title"),
     supabase.from("customers").select("id,name"),
-    supabase.from("job_orders").select("job_no,quote_no,team,status"),
+    supabase.from("job_orders").select("job_no,quote_no,assigned_team,status"),
     supabase.from("teams").select("id,name"),
   ]);
   if (pRes.error) throw pRes.error;
@@ -690,7 +690,7 @@ export async function listMaterialPreps() {
     const job = (p.job_no && jobByNo[p.job_no]) || (p.quote_no ? jobByQuote[p.quote_no] : null);
     return { ...p, items: byPrep[p.prep_no] || [],
       customerName: qi ? custName[qi.customer_id] || null : null, quoteTitle: qi?.title || null,
-      jobNo: job?.job_no || p.job_no || null, jobTeam: job?.team || null, teamName: job ? teamName[job.team] || job.team || null : null,
+      jobNo: job?.job_no || p.job_no || null, jobTeam: job?.assigned_team || null, teamName: job ? teamName[job.assigned_team] || job.assigned_team || null : null,
       createdByName: cb[p.created_by] || null, approvedByName: cb[p.approved_by] || null };
   });
 }
@@ -831,7 +831,7 @@ export async function listPayables() {
     _rows((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("expense_requests").select("*", { count: "exact" }).eq("status", "approved").order("created_at", { ascending: false }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("sub_payouts").select("*", { count: "exact" }).neq("status", "paid").order("created_at", { ascending: false }).order("id").range(f, t)),
-    _rows((f, t) => supabase.from("job_orders").select("job_no,team,labor_total,labor_paid_amt,scheduled_at", { count: "exact" }).eq("labor_confirmed", true).gt("labor_total", 0).order("job_no").range(f, t))
+    _rows((f, t) => supabase.from("job_orders").select("job_no,assigned_team,labor_total,labor_paid_amt,scheduled_at", { count: "exact" }).eq("labor_confirmed", true).gt("labor_total", 0).order("job_no").range(f, t))
       .catch(() => ({ data: [] })),
     supabase.from("teams").select("id,name"),
     _rows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),   // PO → ใบเสนอ → ลูกค้า + ชื่องาน
@@ -895,7 +895,7 @@ export async function listPayables() {
   (lj.data || []).forEach((j) => {
     const owed = Math.max(0, (Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0));
     if (owed > 0) rows.push({
-      type: "labor", refNo: j.job_no, name: teamName[j.team] || j.team || "ทีมช่างซัพ",
+      type: "labor", refNo: j.job_no, name: teamName[j.assigned_team] || j.assigned_team || "ทีมช่างซัพ",
       title: "ค่าแรงยืนยันแล้ว · ยังไม่อยู่ในใบจ่ายซัพ", amount: owed,
       date: (j.scheduled_at || "").slice(0, 10), status: "ยังไม่ตั้งเบิกจ่าย",
     });
