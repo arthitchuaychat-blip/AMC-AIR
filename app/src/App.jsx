@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-17·เงินเดือน: ค่าทำงานวันหยุดคิดอัตโนมัติตามกฎหมาย (8 ชม.แรก รายเดือน+1เท่า/รายวัน 2เท่า · เกิน 8 ชม. OT วันหยุด 3เท่า) คอลัมน์ใหม่+ในสลิป (mig 148) v443";
+const BUILD = "2026-07-17·เงินเดือน: กดแถวดูรายละเอียดรายวัน — OT วันไหนกี่ ชม./สายวันไหนกี่นาที/ขาด/ลา/วันหยุด/เบิกล่วงหน้า/ปกส. ครบทุกช่อง v444";
 
 function SetupNotice() {
   return (
