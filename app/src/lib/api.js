@@ -3653,12 +3653,8 @@ export async function syncCashEntriesFromDocs() {
   (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entry_date: x.issue_date, amount: Number(x.net || ((Number(x.total) || 0) - (Number(x.wht_amt) || 0))) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); }); // fallback = total − WHT (เงินเข้าจริง)
   (pay.data || []).forEach((x) => { const paid = x.status === "paid"; desired.push({ source_type: "payout", source_ref: String(x.id), direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: Number(x.net) || 0, note: `จ่ายช่างซัพ${tn[x.team] ? " " + tn[x.team] : ""}` }); });
   // PO: จ่ายจริงเมื่อ "จ่ายเงินแล้ว" (paid_at ผ่านเมนูเบิกจ่าย) — ไม่ผูกกับการรับของ (รับก่อน/จ่ายก่อน เครดิตได้)
-  // pre-100 fallback: ถ้ายังไม่มีคอลัมน์ paid_at (ดึงไม่ได้ทั้งก้อน) → ดึงชุดเก่าแล้วใช้เกณฑ์รับของแบบเดิมไปก่อน
-  let poRows = po.data;
-  if (po.error && /paid_at/i.test(po.error.message || "")) {
-    const legacy = await supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat");
-    poRows = (legacy.data || []).map((x) => ({ ...x, paid_at: x.status === "received" ? x.received_at : null }));
-  }
+  // (fallback pre-100 เดิมถูกถอด — po มาจาก _fetchAll ซึ่ง throw แทนการคืน .error ทำให้ branch นั้นเป็นโค้ดตาย · DB จริงรันเกิน mig 100 ไปไกลแล้ว)
+  const poRows = po.data;
   // PO ที่ผูกใบเบิก (expense_id) → ให้ใบเบิกคุมกระแสเงินสดแทน (รองรับแบ่งจ่าย) · PO ตรงที่ไม่ผูกใบเบิก ใช้เส้นนี้ตามเดิม
   (poRows || []).forEach((x) => { if (x.status === "cancelled" || x.expense_id) return; const paid = !!x.paid_at; const amt = Math.round((poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1) * 100) / 100; desired.push({ source_type: "po", source_ref: x.po_no, direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: amt, note: `ใบสั่งซื้อ ${x.po_no}${x.supplier ? " · " + x.supplier : ""}` }); });
   // ใบเบิกจ่าย: ยอดจ่ายแล้ว = จ่ายจริง · ยอดค้าง = ประมาณการจ่าย (วันแก้ได้) — คุมทั้งเบิกทั่วไปและค่าสินค้า PO
