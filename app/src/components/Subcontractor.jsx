@@ -539,7 +539,7 @@ function PayTeam({ team, list, allJobs = [], quoteBy, flash, onCreated }) {
         <div className="sub-pay-sum" style={{ marginTop: 8 }}>ค้างจ่ายทีมนี้รวม <b>{fmtBaht(round2(list.reduce((a, j) => a + remaining(j), 0)))}</b> · {list.length} งาน
           <button className="btn-ghost sm" onClick={() => setSendOpen(true)}>📤 ส่งค้างจ่ายเข้าแชตทีม</button></div>
       )}
-      {sendOpen && <SendPendingChat team={team} list={list} allJobs={allJobs} onClose={() => setSendOpen(false)} flash={flash} />}
+      {sendOpen && <SendPendingChat team={team} list={list} allJobs={allJobs} quoteBy={quoteBy} onClose={() => setSendOpen(false)} flash={flash} />}
       {jobPreview && (() => {
         const jp = jobPreview; const ST = JOB_ST;
         const jst = ST[jp.status] || { t: jp.status, c: "b-grey" };
@@ -595,9 +595,10 @@ function PayTeam({ team, list, allJobs = [], quoteBy, flash, onCreated }) {
   );
 }
 
-// ---------- ส่งสรุปค่าแรงค้างจ่ายเข้าแชตทีมซัพ ----------
+// ---------- ส่งสรุปค่าแรงค้างจ่ายเข้าแชตทีมซัพ (รูปสลิปแบบตาราง เหมือนสลิปจ่ายเงิน) ----------
 // หัวหน้าทีมซัพอยู่ในห้องแชตทีมอยู่แล้ว → เห็น งานเสร็จปิดงาน / รายการค้างจ่าย / ยอดค้างรวม จากมือถือได้เลย
-function SendPendingChat({ team, list, allJobs, onClose, flash }) {
+function SendPendingChat({ team, list, allJobs, quoteBy = {}, onClose, flash }) {
+  const ref = React.useRef(null);
   const [rooms, setRooms] = React.useState(null);
   const [roomId, setRoomId] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -612,45 +613,73 @@ function SendPendingChat({ team, list, allJobs, onClose, flash }) {
   const totalRem = round2(list.reduce((a, j) => a + remaining(j), 0));
   const doneJobs = allJobs.filter((j) => j.status === "done");
   const paidFull = allJobs.filter((j) => j.labor_confirmed && j.labor_paid);
-  const buildText = () => {
-    const today = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
-    let t = `📋 สรุปค่าแรงทีม ${team.name} · ${today}\n`;
-    t += `✅ งานเสร็จปิดงาน ${doneJobs.length} งาน · จ่ายค่าแรงครบแล้ว ${paidFull.length} งาน\n\n`;
-    t += `⏳ ค้างจ่าย ${list.length} งาน · รวม ${fmtBaht(totalRem)}\n`;
-    list.forEach((j, i) => {
-      const rem = remaining(j); const partial = (Number(j.labor_paid_amt) || 0) > 0;
-      t += `${i + 1}. ${j.job_no}${j.scheduled_at ? ` · ${fmtDate(j.scheduled_at)}` : ""} · ${j.customerName || "-"} · ค้าง ${fmtBaht(rem)}${partial ? ` (จ่ายแล้ว ${fmtBaht(Number(j.labor_paid_amt) || 0)} จากเต็ม ${fmtBaht(j.labor_total)})` : ""}\n`;
-    });
-    t += `\n* ยอดก่อนหัก ณ ที่จ่าย 3% (หักเฉพาะงาน VAT ตอนตั้งใบจ่าย)`;
-    return t;
-  };
-  const [text, setText] = React.useState(buildText);
+  const today = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
+  const caption = `📋 ค่าแรงรอจ่าย · ทีม ${team.name} · ค้างรวม ${fmtBaht(totalRem)} (${list.length} งาน)`;
+  async function capture() {
+    return html2canvas(ref.current, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
+  }
+  async function dlPng() {
+    setBusy(true);
+    try { const c = await capture(); const a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = `pending-${team.name}-${today}.png`; document.body.appendChild(a); a.click(); a.remove(); }
+    catch (e) { flash("สร้างรูปไม่สำเร็จ: " + (e.message || e), true); } setBusy(false);
+  }
   async function send() {
     if (!roomId) return flash("เลือกห้องแชตทีมก่อน", true);
     setBusy(true);
-    try { await sendChatMessage(roomId, text); flash("ส่งสรุปค้างจ่ายเข้าแชตทีมแล้ว ✓"); onClose(); }
-    catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    try {
+      const c = await capture();
+      const blob = await new Promise((res) => c.toBlob(res, "image/png"));
+      const file = new File([blob], `pending-${team.id}-${Date.now()}.png`, { type: "image/png" });
+      const url = await uploadChatImage(file);
+      await sendChatMessage(roomId, caption);
+      await sendChatImage(roomId, url);
+      flash("ส่งสรุปค้างจ่ายเข้าแชตทีมแล้ว ✓"); onClose();
+    } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 560 }}>
         <div className="modal-head"><div className="modal-title">ส่งค่าแรงรอจ่ายเข้าแชตทีม <span>ทีม {team.name}</span></div>
           <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
-          <label className="fld"><span>ห้องแชตทีม (หัวหน้าทีมซัพต้องอยู่ในห้องนี้)</span>
+          {/* สลิปสรุป — โครงเดียวกับสลิปจ่ายเงิน (payout-slip) ถ่ายเป็นรูปส่งเข้าแชต */}
+          <div ref={ref} className="payout-slip">
+            <div className="ps-head"><b>สรุปค่าแรงรอจ่าย · ช่างซัพ</b><span>{today}</span></div>
+            <div className="ps-team">ทีม: {team.name}{team.lead ? ` · หัวหน้า ${team.lead}` : ""}{team.phone ? ` · ${team.phone}` : ""}
+              <div className="ps-bank">✅ งานเสร็จปิดงาน {doneJobs.length} งาน · จ่ายค่าแรงครบแล้ว {paidFull.length} งาน</div></div>
+            <div className="ps-jobs">
+              {list.map((j) => {
+                const rem = remaining(j); const paid = round2(Number(j.labor_paid_amt) || 0); const partial = paid > 0;
+                const vat = !!quoteBy[j.quote_no]?.vat;
+                return (
+                  <div className="ps-job" key={j.job_no}>
+                    <div className="ps-job-top">
+                      <span className="ps-job-no">{j.job_no}{vat ? <span className="ps-wht-tag">หัก ณ ที่จ่าย 3%</span> : <span className="ps-nowht-tag">ไม่หัก ณ ที่จ่าย</span>}</span>
+                      <b className="ps-job-amt">{fmtBaht(rem)}</b>
+                    </div>
+                    <div className="ps-job-sub">{j.scheduled_at && <span style={{ marginRight: 6 }}>{fmtDate(j.scheduled_at)}</span>}{j.customerName || "-"}{j.title ? ` · ${j.title}` : ""}</div>
+                    {partial && <div className="ps-job-split">จ่ายแล้ว {fmtBaht(paid)} · คงเหลือค้างจ่าย {fmtBaht(rem)} (ค่าแรงเต็ม {fmtBaht(j.labor_total)})</div>}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="ps-tot ps-net"><span>รวมค้างจ่าย ({list.length} งาน)</span><b>{fmtBaht(totalRem)}</b></div>
+            <div className="ps-status">* ยอดก่อนหัก ณ ที่จ่าย 3% (หักเฉพาะงาน VAT ตอนตั้งใบจ่าย)</div>
+          </div>
+          <div className="fld" style={{ marginTop: 14 }}><span>ห้องแชตทีม (หัวหน้าทีมซัพต้องอยู่ในห้องนี้)</span>
             {rooms === null ? <div className="jo-dim">กำลังโหลดห้องแชต…</div> :
               <select className="inp" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
                 {rooms.length === 0 && <option value="">— ไม่มีห้องแชต —</option>}
                 {rooms.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
               </select>}
-          </label>
-          <label className="fld"><span>ข้อความ (แก้ได้ก่อนส่ง)</span>
-            <textarea className="inp" rows={12} style={{ resize: "vertical", fontSize: 12.5, lineHeight: 1.5 }} value={text} onChange={(e) => setText(e.target.value)} />
-          </label>
+          </div>
         </div>
-        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
-          <button className="btn-primary" disabled={busy || !roomId || !text.trim()} onClick={send}><UIcon name="chat" size={15} color="#fff" /> ส่งเข้าแชตทีม</button></div>
+        <div className="modal-foot" style={{ flexWrap: "wrap", gap: 8 }}>
+          <button className="btn-ghost" disabled={busy} onClick={dlPng}><UIcon name="catalog" size={15} /> ดาวน์โหลดรูป</button>
+          <button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy || !roomId} onClick={send}><UIcon name="chat" size={15} color="#fff" /> ส่งเข้าแชตทีม</button>
+        </div>
       </div>
     </div>
   );
