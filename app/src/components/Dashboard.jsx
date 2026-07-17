@@ -1,5 +1,5 @@
 import React from "react";
-import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, dashboardActionLite, vatSummary } from "../lib/api";
+import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, dashboardActionLite, vatSummary } from "../lib/api";
 import { can } from "../lib/permissions";
 import { fmtBaht, fmtNum, fmtCompact, inRange } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
@@ -59,7 +59,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
   const [ov, setOv] = React.useState(null);   // {qs, bs} — ยอดขาย/กำไรประมาณการ บนแท็บภาพรวม
   const [act, setAct] = React.useState(null); // ตัวเลข "สิ่งที่ต้องทำ" (ค้างรับ/รออนุมัติ/PO ค้าง)
   React.useEffect(() => {
-    Promise.all([listQuotations(), listBoqs()]).then(([qs, bs]) => setOv({ qs, bs })).catch(() => {});
+    Promise.all([listQuotations(), listBoqs(), listReceipts().catch(() => [])]).then(([qs, bs, rcs]) => setOv({ qs, bs, rcs })).catch(() => {});
     dashboardActionLite().then(setAct).catch(() => {});
   }, []);
   const ovStat = React.useMemo(() => {
@@ -74,6 +74,21 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       if (qo.boq_no && boqCost[qo.boq_no] != null) est += (qo.afterDisc || 0) - boqCost[qo.boq_no];
     });
     return { sale, count, est, vatSale, vatCount, novatSale, novatCount };
+  }, [ov, from, to]);
+  // ยอดขายที่ออกใบเสร็จ + รับเงินแล้ว (ใบเสร็จสถานะ "ชำระเงินแล้ว" ตามวันที่รับเงิน) — ยอดก่อน VAT ให้เทียบกับการ์ดยอดขายอนุมัติได้ตรง ๆ
+  const rcStat = React.useMemo(() => {
+    const z = { sale: 0, count: 0, net: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
+    if (!ov?.rcs) return z;
+    const quoteVat = Object.fromEntries((ov.qs || []).map((q) => [q.quote_no, !!q.vat]));
+    const s = { ...z };
+    ov.rcs.forEach((r) => {
+      if (r.status !== "paid" || !inRange(r.issue_date, from, to)) return;
+      const base = Number(r.base) || ((Number(r.total) || 0) - (Number(r.vat_amt) || 0)); // ก่อน VAT (ใบเก่าไม่มี base → total−vat)
+      const isVat = r.quote_no ? !!quoteVat[r.quote_no] : (Number(r.vat_amt) || 0) > 0;
+      s.sale += base; s.count += 1; s.net += Number(r.net) || ((Number(r.total) || 0) - (Number(r.wht_amt) || 0));
+      if (isVat) { s.vatSale += base; s.vatCount += 1; } else { s.novatSale += base; s.novatCount += 1; }
+    });
+    return s;
   }, [ov, from, to]);
 
   function applyPreset(p) { const r = PRESETS.find((x) => x.id === p).range(); setPreset(p); setFrom(r.from); setTo(r.to); }
@@ -160,6 +175,9 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
             <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={fmtBaht(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setTab("sales")} />
             <StatCard icon="trend" color="#1f74e0" label="ยอดขายอนุมัติ · รับ VAT" value={fmtBaht(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setTab("sales")} />
             <StatCard icon="trend" color="#64748b" label="ยอดขายอนุมัติ · ไม่ VAT" value={fmtBaht(ovStat.novatSale)} sub={fmtNum(ovStat.novatCount) + " ใบ"} onClick={() => setTab("sales")} />
+            <StatCard icon="check" color="#0a6b3d" label={"รับเงินแล้ว (ใบเสร็จ) · " + periodLabel} value={fmtBaht(rcStat.sale)} sub={`${fmtNum(rcStat.count)} ใบเสร็จ · ก่อน VAT · รับสุทธิ ${fmtCompact(rcStat.net)}`} onClick={() => onGo && onGo("receipt")} />
+            <StatCard icon="check" color="#15803d" label="รับเงินแล้ว · รับ VAT" value={fmtBaht(rcStat.vatSale)} sub={`${fmtNum(rcStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => onGo && onGo("receipt")} />
+            <StatCard icon="check" color="#4d7c0f" label="รับเงินแล้ว · ไม่ VAT" value={fmtBaht(rcStat.novatSale)} sub={fmtNum(rcStat.novatCount) + " ใบ"} onClick={() => onGo && onGo("receipt")} />
             <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={fmtBaht(ovStat.est)} sub="กำไรจริงดูในแท็บ ขาย & กำไร" onClick={() => setTab("sales")} />
             <StatCard icon="clipboard" color="#d97706" label="เงินค้างรับ" value={fmtBaht(act?.receivable || 0)} sub={`${fmtNum(act?.unpaidCount || 0)} ใบ · เกินกำหนด ${fmtNum(act?.overdueCount || 0)} ใบ`} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
             <StatCard icon="withdraw" color="#dc2626" label="ยอดค้างจ่าย" value={fmtBaht(act?.payable || 0)} accent={act?.payable ? "#dc2626" : undefined}
