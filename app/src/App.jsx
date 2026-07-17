@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-17·BOQ: แก้ฟอร์มสร้าง/แก้ไขเปิดไม่ขึ้น — docItems ที่ส่งเข้า DocTerms ต้องแผ่เป็น array (v419 ส่ง object 4 หมวดตรง ๆ เลยพัง) v420";
+const BUILD = "2026-07-17·ใบงาน: ธุรการวัสดุ (stock) โพสต์ความเคลื่อนไหวได้ทุกใบ — แยกสิทธิ์โพสต์ timeline ออกจากสิทธิ์แก้ใบงาน v421";
 
 function SetupNotice() {
   return (
