@@ -1,9 +1,9 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
-import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -42,8 +42,8 @@ export default function HR({ role }) {
 
       {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "calendar" && <CalendarTab staff={staff} settings={settings} holidays={holidays} holSet={holSet} flash={flash} />}
-      {tab === "leaves" && <LeavesTab staff={staff} holSet={holSet} canManage={canManage} flash={flash} />}
-      {tab === "advances" && <AdvancesTab canManage={canManage} flash={flash} />}
+      {tab === "leaves" && <LeavesTab staff={staff} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
+      {tab === "advances" && <AdvancesTab canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
@@ -310,7 +310,7 @@ function CalendarTab({ staff, settings, holidays, holSet, flash }) {
 }
 
 // ---------- LEAVES ----------
-function LeavesTab({ staff, holSet, canManage, flash }) {
+function LeavesTab({ staff, holSet, canManage, lockSelfId, flash }) {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [edit, setEdit] = React.useState(null); // leave being edited
@@ -342,11 +342,14 @@ function LeavesTab({ staff, holSet, canManage, flash }) {
               {l.reason && <div className="jo-dim">เหตุผล: {l.reason}</div>}</div>
             <div className="hr-leave-act">
               <span className={"job-badge " + b.c}>{b.t}</span>
-              {l.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(l, "approved")}>อนุมัติ</button>}
-              {l.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(l, "rejected")}>ไม่อนุมัติ</button>}
-              {l.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(l, "pending")}>คืนรออนุมัติ</button>}
-              {canManage && <button className="btn-ghost sm" title="แก้ไขใบลา" onClick={() => setEdit(l)}><UIcon name="edit" size={13} /></button>}
-              {canManage && <button className="btn-ghost sm danger" title="ลบใบลา" onClick={() => del(l)}><UIcon name="trash" size={13} /></button>}
+              {/* ฝ่ายบุคคลอนุมัติ/แก้/ลบใบลาของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารเป็นคนตัดสิน (แบบเดียวกับล็อกเวลาเข้างาน) */}
+              {l.user_id === lockSelfId ? <span className="jo-dim" title="ใบลาของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span> : <>
+                {l.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(l, "approved")}>อนุมัติ</button>}
+                {l.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(l, "rejected")}>ไม่อนุมัติ</button>}
+                {l.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(l, "pending")}>คืนรออนุมัติ</button>}
+                {canManage && <button className="btn-ghost sm" title="แก้ไขใบลา" onClick={() => setEdit(l)}><UIcon name="edit" size={13} /></button>}
+                {canManage && <button className="btn-ghost sm danger" title="ลบใบลา" onClick={() => del(l)}><UIcon name="trash" size={13} /></button>}
+              </>}
             </div>
           </div>
         ); })}
@@ -423,7 +426,7 @@ function LeaveEditModal({ leave, staff, holSet, onClose, onSaved, flash }) {
 }
 
 // ---------- CASH ADVANCES (เบิกเงินล่วงหน้า) ----------
-function AdvancesTab({ canManage, flash }) {
+function AdvancesTab({ canManage, lockSelfId, flash }) {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [edit, setEdit] = React.useState(null); // advance being edited
@@ -465,11 +468,14 @@ function AdvancesTab({ canManage, flash }) {
               {canManage && a.status === "approved" && !a.paid_out_at && <button className="btn-primary sm" onClick={() => setPayFor(a)}>💸 โอนจ่าย + สลิป</button>}
               {canManage && a.pay_slip_url && <button className="btn-ghost sm" title="ส่งสลิปเข้าแชตให้พนักงาน" onClick={() => setSlipFor(a)}>📲 ส่งสลิปแชต</button>}
               {/* 🔒 โอนเงินให้พนักงานแล้ว ห้ามเปลี่ยนสถานะ/แก้/ลบ — ไม่งั้นเงินออกไปแล้วแต่ไม่ถูกหักเงินเดือน */}
-              {a.status !== "paid" && a.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
-              {!a.paid_out_at && a.status !== "paid" && a.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
-              {!a.paid_out_at && a.status !== "paid" && a.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
-              {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm" title="แก้ไขคำขอ" onClick={() => setEdit(a)}><UIcon name="edit" size={13} /></button>}
-              {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm danger" title="ลบคำขอ" onClick={() => del(a)}><UIcon name="trash" size={13} /></button>}
+              {/* ฝ่ายบุคคลอนุมัติ/แก้คำขอเบิกของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารตัดสิน */}
+              {a.user_id === lockSelfId ? <span className="jo-dim" title="คำขอของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span> : <>
+                {a.status !== "paid" && a.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
+                {!a.paid_out_at && a.status !== "paid" && a.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
+                {!a.paid_out_at && a.status !== "paid" && a.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
+                {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm" title="แก้ไขคำขอ" onClick={() => setEdit(a)}><UIcon name="edit" size={13} /></button>}
+                {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm danger" title="ลบคำขอ" onClick={() => del(a)}><UIcon name="trash" size={13} /></button>}
+              </>}
               {a.paid_out_at && a.status === "approved" && <span className="jo-dim" title="โอนเงินแล้ว — รอหักในรอบเงินเดือน">🔒</span>}
             </div>
           </div>
@@ -852,6 +858,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [adj, setAdj] = React.useState({});     // user_id → { bonus, other_deduct }
   const [advByUser, setAdvByUser] = React.useState({});   // user_id → approved-unsettled advance total
   const [advIdsByUser, setAdvIdsByUser] = React.useState({}); // user_id → [advance ids] to settle on pay
+  const [pendingOt, setPendingOt] = React.useState([]);   // โหมดรับรอง OT: วันที่มี OT แต่ยังไม่กดรับรองในรอบนี้ — กันลืมแล้วพนักงานเสีย OT เงียบ ๆ
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
   const [company, setCompany] = React.useState({});
@@ -873,9 +880,15 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       advs.filter((a) => !a.period).forEach((a) => { advSum[a.user_id] = (advSum[a.user_id] || 0) + (Number(a.amount) || 0); (advIds[a.user_id] = advIds[a.user_id] || []).push(a.id); });
       setAdvByUser(advSum); setAdvIdsByUser(advIds);
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
+      // โหมดรับรอง OT: รวบวันที่มี OT ค้างรับรองของทั้งรอบมาไว้หน้าเดียว
+      const pend = [];
+      if (settings.otNeedsApproval) att.forEach((a) => { if (!a.check_in_at || a.ot_ok) return; const s = dayStat(a, settings); if (s.otHours > 0) pend.push({ a, s }); });
+      pend.sort((x, y) => (x.a.work_date < y.a.work_date ? -1 : 1));
+      setPendingOt(pend);
       const leaveDaySet = buildLeaveDaySet(leaves, from, to); const yearUsed = {}; const yr = ym.slice(0, 4);
       leaves.forEach((l) => {
-        if (String(l.start_date).startsWith(yr)) { (yearUsed[l.user_id] = yearUsed[l.user_id] || {}); yearUsed[l.user_id][l.type] = (yearUsed[l.user_id][l.type] || 0) + Number(l.days || 0); }
+        const dY = leaveDaysInYear(l, yr);   // ใบคร่อมปีแบ่งวันตามปีจริง ไม่นับทั้งใบเข้าปีวันเริ่ม
+        if (dY > 0) { (yearUsed[l.user_id] = yearUsed[l.user_id] || {}); yearUsed[l.user_id][l.type] = (yearUsed[l.user_id][l.type] || 0) + dY; }
       });
       const quota = settings.quota || DEFAULT_HR_SETTINGS.quota;
       const slipBy = Object.fromEntries(slips.map((s) => [s.user_id, s]));
@@ -953,13 +966,15 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     setBusy(true);
     try {
       let runNet = 0;
-      for (const r of payable) {
+      // สลิปทั้งรอบบันทึกในคำสั่งเดียว (savePayslips) — กันเน็ตหลุดกลางทางแล้วได้รอบครึ่ง ๆ กลาง ๆ
+      const rows = payable.map((r) => {
         const c = calcOf(r); runNet += c.net;
-        await savePayslip({ period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
+        return { period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
           base: c.base, ot_pay: c.otPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
           late_min: r.st.lateMin, ot_min: r.st.otMin, d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
-          bonus: c.bonus, other_deduct: c.otherDeduct, net: c.net, status: markPaid ? "paid" : "draft" });
-      }
+          bonus: c.bonus, other_deduct: c.otherDeduct, net: c.net, status: markPaid ? "paid" : "draft" };
+      });
+      await savePayslips(rows);
       if (markPaid) {
         await setPayslipPaid(ym, true, meta || {});
         // settle the advances deducted this run so they aren't deducted again next month
@@ -978,9 +993,14 @@ function PayrollTab({ staff, settings, holSet, flash }) {
 
   // cancel a paid run → revert slips to draft, un-settle the advances, remove the cash-flow line; redo anytime
   async function cancelPay() {
-    if (!await confirmDialog(`ยกเลิกการจ่ายเงินเดือนรอบ ${ym}?\n• สลิปกลับเป็นฉบับร่าง (แก้ไข/คำนวณใหม่ได้)\n• ยอดเบิกล่วงหน้าที่หักไป คืนสภาพ\n• ลบรายการในกระแสเงินสด`)) return;
+    // กติกาเดียวกับเอกสารขาย: ยกเลิกต้องระบุเหตุผลเสมอ — ลง audit log ไว้ตรวจย้อนหลัง
+    const reason = await confirmDialog({ title: `ยกเลิกการจ่ายเงินเดือนรอบ ${ym}?`,
+      message: "• สลิปกลับเป็นฉบับร่าง (แก้ไข/คำนวณใหม่ได้)\n• ยอดเบิกล่วงหน้าที่หักไป คืนสภาพ\n• ลบรายการในกระแสเงินสด",
+      confirmText: "ยกเลิกจ่าย", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น เวลาเข้างานผิด · ลืมหักเบิก", required: true } });
+    if (reason === false) return;
     setBusy(true);
     try {
+      await logAudit({ action: "cancel_pay", target_type: "payroll", target_no: ym, reason }).catch(() => {});
       await setPayslipPaid(ym, false);
       await unsettleAdvances(ym);
       await removeSalaryEntry(ym).catch(() => {});        // ลบรายการเดินบัญชีของรอบ (best-effort)
@@ -1012,6 +1032,28 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           <button className="btn-ghost sm" disabled={!payable.length} title="สรุปเงินได้รอบเดือนสำหรับยื่น ภงด.1 (CSV)" onClick={exportPnd}>⬇ ภงด.1</button>
         </div>
       </div>
+      {!loading && pendingOt.length > 0 && paidStatus !== "paid" && (
+        <div style={{ border: "1.5px solid #f59e0b", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+            <span style={{ fontWeight: 800, color: "#b45309" }}>⏳ OT รอรับรอง {pendingOt.length} วัน · รวม {pendingOt.reduce((x, y) => x + y.s.otHours, 0).toFixed(1)} ชม. — วันที่ไม่รับรองจะไม่ถูกคิดเงินในรอบนี้</span>
+            <button className="btn-primary sm ok" disabled={busy} onClick={async () => {
+              if (!await confirmDialog(`รับรอง OT ทั้งหมด ${pendingOt.length} วัน?`)) return;
+              setBusy(true);
+              try { for (const x of pendingOt) await setAttendanceOtOk(x.a.user_id, x.a.work_date, true); flash("รับรอง OT ทั้งหมดแล้ว ✓"); await load(); }
+              catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน migration 144 แล้วหรือยัง?)", true); }
+              setBusy(false);
+            }}>✓ รับรองทั้งหมด</button>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {pendingOt.map((x) => (
+              <button key={x.a.id} className="btn-ghost sm" style={{ borderColor: "#f59e0b" }} disabled={busy} title="กดเพื่อรับรอง OT วันนี้วันเดียว"
+                onClick={async () => { try { await setAttendanceOtOk(x.a.user_id, x.a.work_date, true); flash(`รับรอง OT ${x.a.name} ✓`); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }}>
+                {x.a.name} · {thDate(x.a.work_date)} · {x.s.otHours} ชม.
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {loading ? <div className="empty">กำลังคำนวณ…</div> : payable.length === 0 ? <div className="empty">ยังไม่มีพนักงานที่ตั้งฐานเงินเดือน — ไปตั้งที่แท็บ “กะ & ตั้งค่า”</div> : (
         <div style={{ overflowX: "auto" }}>
           <table className="hr-table pay-table">
@@ -1019,7 +1061,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
             <tbody>
               {payable.map((r) => { const c = calcOf(r); return (
                 <tr key={r.p.id}>
-                  <td style={{ textAlign: "left" }}><b>{r.p.name || r.p.email}</b><div className="jo-dim">{r.p.pay_type === "daily" ? `รายวัน · มา ${r.st.present} วัน` : "รายเดือน"}{r.st.absent ? ` · ขาด ${r.st.absent}` : ""}{r.st.lateMin ? ` · สาย ${Math.round(r.st.lateMin)} น.` : ""}</div></td>
+                  <td style={{ textAlign: "left" }}><b>{r.p.name || r.p.email}</b><div className="jo-dim">{r.p.pay_type === "daily" ? `รายวัน · มา ${r.st.present} วัน` : "รายเดือน"}{r.st.absent ? ` · ขาด ${r.st.absent}` : ""}{r.st.lateMin ? ` · สาย ${Math.round(r.st.lateMin)} น.` : ""}{r.st.holidayDays ? <b style={{ color: "#b45309" }} title="มาทำงานในวันหยุดของเขา — ระบบยังไม่คิดเงินอัตโนมัติ ชดเชยผ่านช่องโบนัส (กฎหมาย: วันหยุด 1 แรง OT วันหยุด 3 แรง)"> · 🔶 ทำงานวันหยุด {r.st.holidayDays} วัน ({r.st.holidayHours} ชม.)</b> : ""}</div></td>
                   <td>{fmtBaht(c.base)}</td>
                   <td className="hr-ok">{c.otHours ? `${c.otHours.toFixed(1)} = ${fmtBaht(c.otPay)}` : "—"}</td>
                   <td className={c.dLate ? "hr-bad" : ""}>{c.dLate ? "−" + fmtBaht(c.dLate) : "—"}</td>
@@ -1041,7 +1083,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           </table>
         </div>
       )}
-      <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (เพดานฐาน 17,500 = สูงสุด 875) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ”</p>
+      <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (เพดานฐาน 17,500 = สูงสุด 875) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ” · 🔶 ทำงานวันหยุด = ระบบแจ้งไว้ให้จ่ายชดเชยผ่านช่องโบนัสเอง (ยังไม่คิดอัตโนมัติ)</p>
       {paidStatus === "paid" && <p className="page-sub" style={{ marginTop: 6, color: "var(--down)", fontWeight: 600 }}>🔒 รอบนี้จ่ายแล้ว — ตัวเลขในตารางอัปเดตตามข้อมูลล่าสุดเสมอ แต่สลิปที่บันทึก + รายการกระแสเงินสด ถูกล็อกไว้ ณ ตอนจ่าย · ถ้าแก้เวลาเข้างาน/ลา/เบิกล่วงหน้า แล้วต้องการให้มีผลกับสลิปและกระแสเงินสด ให้กด “ยกเลิกจ่าย” แล้ว “ทำจ่ายทั้งรอบ” ใหม่</p>}
 
       {payModal && <PayRunModal total={totalNet} count={payable.length} defaultDate={payDate}
@@ -1322,7 +1364,7 @@ function QuotaCard({ staff, settings, flash }) {
     try {
       const [q, lv] = await Promise.all([getLeaveQuotas(year), listLeaves("approved")]);
       setOver(Object.fromEntries(q.map((r) => [r.user_id, r])));
-      const u = {}; lv.filter((l) => String(l.start_date).startsWith(String(year))).forEach((l) => { (u[l.user_id] = u[l.user_id] || {})[l.type] = (u[l.user_id]?.[l.type] || 0) + Number(l.days || 0); });
+      const u = {}; lv.forEach((l) => { const dY = leaveDaysInYear(l, year); if (dY > 0) (u[l.user_id] = u[l.user_id] || {})[l.type] = (u[l.user_id]?.[l.type] || 0) + dY; });
       setUsed(u);
     } catch (e) { flash("โหลดโควต้าไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);

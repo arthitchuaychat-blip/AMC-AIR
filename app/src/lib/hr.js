@@ -95,6 +95,18 @@ export const fmtTime = (t) => { if (!t) return "-"; const d = new Date(t); const
 export const todayYmd = () => ymd(new Date());
 export { ymd as hrYmd, parseYmd as hrParseYmd };
 
+// จำนวนวันลาของใบลา l ที่ตกในปี year — ใบคร่อมปี (ธ.ค.–ม.ค.) แบ่งตามสัดส่วนวันปฏิทินของแต่ละปี
+// (เดิมนับทั้งใบเข้าปีของวันเริ่ม ทำให้โควตาปีใหม่ไม่โดนหักส่วนที่ลาจริงในปีนั้น)
+export function leaveDaysInYear(l, year) {
+  const total = Number(l?.days) || 0;
+  const sy = Number(String(l.start_date).slice(0, 4)), ey = Number(String(l.end_date || l.start_date).slice(0, 4));
+  if (sy === ey) return sy === Number(year) ? total : 0;
+  if (Number(year) < sy || Number(year) > ey) return 0;
+  let inYear = 0, all = 0;
+  for (let d = parseYmd(l.start_date); d <= parseYmd(l.end_date); d.setDate(d.getDate() + 1)) { all++; if (d.getFullYear() === Number(year)) inYear++; }
+  return all ? Math.round(total * inYear / all * 100) / 100 : 0;
+}
+
 // inclusive working-day count between two dates for a person (used to size a leave request)
 export function leaveDays(startStr, endStr, pattern, satGroup, holidaySet) {
   let n = 0; const s = parseYmd(startStr), e = parseYmd(endStr);

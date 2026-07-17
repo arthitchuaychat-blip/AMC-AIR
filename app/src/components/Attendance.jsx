@@ -1,7 +1,7 @@
 import React from "react";
 import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance } from "../lib/api";
 import { fmtBaht } from "../lib/format";
-import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveLabel, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveDaysInYear, leaveLabel, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { useLang, LEAVE_MY, LV_STATUS_MY } from "../lib/i18n";
 import { UIcon } from "../icons";
 
@@ -90,7 +90,7 @@ export default function Attendance({ me }) {
   // leave balance: quota (settings) minus approved days this year, per type
   const year = new Date().getFullYear();
   const usedByType = {};
-  leaves.filter((l) => l.status === "approved" && String(l.start_date).startsWith(String(year))).forEach((l) => { usedByType[l.type] = (usedByType[l.type] || 0) + Number(l.days || 0); });
+  leaves.filter((l) => l.status === "approved").forEach((l) => { const dY = leaveDaysInYear(l, year); if (dY > 0) usedByType[l.type] = (usedByType[l.type] || 0) + dY; });
   const baseQuota = (settings && settings.quota) || DEFAULT_HR_SETTINGS.quota;
   // per-person override (HR-set) wins over the company default
   const quota = { vacation: myQuota?.vacation ?? baseQuota.vacation, personal: myQuota?.personal ?? baseQuota.personal, sick: myQuota?.sick ?? baseQuota.sick };
@@ -121,6 +121,12 @@ export default function Attendance({ me }) {
                 <button className="btn-ghost sm" style={{ marginTop: 6 }} onClick={copyLink}>📋 {L("คัดลอกลิงก์", "Link ကူးရန်")}</button>
               </div>
             )}
+            {(() => { const missed = recent.filter((a) => a.work_date < todayYmd() && a.check_in_at && !a.check_out_at); return missed.length > 0 && (
+              <div className="att-inapp">
+                ⏰ {L(`คุณลืมเช็คเอาท์ ${missed.length} วัน (ล่าสุด ${thDate(missed[0].work_date)}) — แจ้งฝ่ายบุคคลให้แก้เวลาให้ ไม่งั้นชั่วโมงงาน/OT วันนั้นหาย`,
+                       `Check-out မမှတ်ရသေးသောရက် ${missed.length} ရက် ရှိသည် — HR ကို အကြောင်းကြားပါ`)}
+              </div>
+            ); })()}
             <div className="att-actions">
               {!today?.check_in_at && <button className="btn-primary att-big" disabled={busy} onClick={() => trigger("in")}>📸 {L("เช็คอินเข้างาน", "အလုပ်ဝင်ချိန် မှတ်တမ်းတင်")}</button>}
               {today?.check_in_at && !today?.check_out_at && <button className="btn-primary att-big ok" disabled={busy} onClick={() => trigger("out")}>📸 {L("เช็คเอาท์ออกงาน", "အလုပ်ဆင်းချိန် မှတ်တမ်းတင်")}</button>}

@@ -1,5 +1,5 @@
 // Payroll math — pure functions. Pay cycle cut-off 25th: period = 26th prev month → 25th this month.
-import { hrParseYmd, hrYmd, isWorkday, dayStat, leaveFrac } from "./hr";
+import { hrParseYmd, hrYmd, isWorkday, dayStat, leaveFrac, minutesOf } from "./hr";
 
 const pad = (n) => String(n).padStart(2, "0");
 // the [from,to] dates for a pay month 'YYYY-MM' (paid that month): 26th of prev month → 25th of this month
@@ -13,7 +13,7 @@ export function payPeriod(ym) {
 // attendance/leave stats for one person over [from,to]
 // leaveDaySet values are { t: type, h: hours|null } (see buildLeaveDaySet) — ลาราย ชม. นับเป็นเศษวัน และวันนั้นยังนับเข้างานตามปกติ
 export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, settings) {
-  let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveDays = 0, unpaidLeave = 0;
+  let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveDays = 0, unpaidLeave = 0, holidayDays = 0, holidayMin = 0;
   for (let d = hrParseYmd(from); d <= hrParseYmd(to); d.setDate(d.getDate() + 1)) {
     const k = hrYmd(d);
     const lv = leaveDaySet[emp.id]?.[k];
@@ -23,7 +23,12 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
       if (lv.t === "unpaid") unpaidLeave += frac;   // ลาไม่รับค่าแรง → หักเงินเสมอ (ผ่าน overLeave)
       if (!lv.h) continue;                           // ลาเต็มวัน — ไม่นับเข้างาน/ขาดของวันนั้น
     }
-    if (!isWorkday(k, emp.work_pattern || "mon_sat", emp.sat_group, holSet)) continue;
+    if (!isWorkday(k, emp.work_pattern || "mon_sat", emp.sat_group, holSet)) {
+      // มาทำงานวันหยุด — เดิมถูกข้ามเงียบ ๆ ไม่โผล่ที่ไหนเลย: นับวัน+ชั่วโมงไว้ให้ HR เห็นและชดเชย (ผ่านช่องโบนัส)
+      const a = attByUserDay[emp.id]?.[k];
+      if (a?.check_in_at) { holidayDays++; if (a.check_out_at) holidayMin += Math.max(0, (minutesOf(a.check_out_at) ?? 0) - (minutesOf(a.check_in_at) ?? 0)); }
+      continue;
+    }
     workdays++;
     const a = attByUserDay[emp.id]?.[k];
     // OT rounded per-day (½-hour blocks) then summed — so sub-30-min days never accumulate
@@ -32,7 +37,7 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
     else absent++;
   }
   const r2 = (n) => Math.round(n * 100) / 100;
-  return { present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveDays: r2(leaveDays), unpaidLeave: r2(unpaidLeave) };
+  return { present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveDays: r2(leaveDays), unpaidLeave: r2(unpaidLeave), holidayDays, holidayHours: r2(holidayMin / 60) };
 }
 
 const r0 = (n) => Math.round(Number(n) || 0);

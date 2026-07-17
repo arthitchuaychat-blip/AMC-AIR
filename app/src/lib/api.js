@@ -3296,17 +3296,24 @@ export async function listPayslips(period) {
   if (error) throw error; return data || [];
 }
 // upsert one payslip line (one per period+user)
+const _payslipRow = (p, uid, now) => ({
+  period: p.period, user_id: p.user_id, pay_type: p.pay_type || null,
+  base: p.base || 0, ot_pay: p.ot_pay || 0,
+  present_days: p.present_days || 0, absent_days: p.absent_days || 0, leave_days: p.leave_days || 0, over_leave_days: p.over_leave_days || 0,
+  late_min: p.late_min || 0, ot_min: p.ot_min || 0,
+  d_late: p.d_late || 0, d_absent: p.d_absent || 0, d_leave: p.d_leave || 0, d_sso: p.d_sso || 0, d_advance: p.d_advance || 0,
+  bonus: p.bonus || 0, other_deduct: p.other_deduct || 0, other_note: p.other_note || null,
+  net: p.net || 0, status: p.status || "draft", note: p.note || null, created_by: uid, updated_at: now,
+});
 export async function savePayslip(p) {
   const uid = await _uid();
-  const { error } = await supabase.from("payslips").upsert({
-    period: p.period, user_id: p.user_id, pay_type: p.pay_type || null,
-    base: p.base || 0, ot_pay: p.ot_pay || 0,
-    present_days: p.present_days || 0, absent_days: p.absent_days || 0, leave_days: p.leave_days || 0, over_leave_days: p.over_leave_days || 0,
-    late_min: p.late_min || 0, ot_min: p.ot_min || 0,
-    d_late: p.d_late || 0, d_absent: p.d_absent || 0, d_leave: p.d_leave || 0, d_sso: p.d_sso || 0, d_advance: p.d_advance || 0,
-    bonus: p.bonus || 0, other_deduct: p.other_deduct || 0, other_note: p.other_note || null,
-    net: p.net || 0, status: p.status || "draft", note: p.note || null, created_by: uid, updated_at: new Date().toISOString(),
-  }, { onConflict: "period,user_id" });
+  const { error } = await supabase.from("payslips").upsert(_payslipRow(p, uid, new Date().toISOString()), { onConflict: "period,user_id" });
+  if (error) throw error;
+}
+// บันทึกสลิปทั้งรอบใน "คำสั่งเดียว" — เดิมวนทีละคน เน็ตหลุดกลางทางแล้วได้รอบครึ่ง ๆ กลาง ๆ
+export async function savePayslips(list) {
+  const uid = await _uid(); const now = new Date().toISOString();
+  const { error } = await supabase.from("payslips").upsert(list.map((p) => _payslipRow(p, uid, now)), { onConflict: "period,user_id" });
   if (error) throw error;
 }
 export async function setPayslipPaid(period, paid, meta = {}) {
