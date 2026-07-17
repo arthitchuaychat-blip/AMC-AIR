@@ -479,6 +479,9 @@ const AR_DEFAULT = {
   ai_enabled: false,   // บอท AI ตอบคำถามสินค้า/ราคานอกเวลาทำการ (Claude Sonnet 5 — ต้องตั้ง ANTHROPIC_API_KEY บน Vercel)
   ai_always: false,    // ตอบทุกเวลา (รวมเวลาทำการ) — โหมดทดสอบ หรือให้บอทช่วยตอบตอนทีมไม่ว่าง
   ai_extra: "",        // ข้อมูล/นโยบายเพิ่มเติมที่อยากให้บอทรู้ เช่น เงื่อนไขรับประกัน พื้นที่ให้บริการ
+  lunch_enabled: true, // พักเที่ยง = นอกเวลาทำการ → บอท/ข้อความอัตโนมัติตอบแทนทีมช่วงนี้
+  lunch_from: "12:00",
+  lunch_to: "13:00",
 };
 const DOW = [["อา", 0], ["จ", 1], ["อ", 2], ["พ", 3], ["พฤ", 4], ["ศ", 5], ["ส", 6]];
 
@@ -543,6 +546,15 @@ function AutoReplyCard({ flash }) {
           <span style={{ marginLeft: 12 }}>ตอบนอกเวลาซ้ำได้ทุก</span>
           <input className="inp" type="number" min="0" value={c.cooldown_min} onChange={(e) => set("cooldown_min", Number(e.target.value) || 0)} style={{ width: 70 }} />
           <span>นาที</span>
+        </div>
+        <div className="ar-hours">
+          <label className="ar-row" style={{ marginRight: 4 }}>
+            <input type="checkbox" checked={!!c.lunch_enabled} onChange={(e) => set("lunch_enabled", e.target.checked)} /> <b>พักเที่ยง:</b>
+          </label>
+          <input className="inp" type="time" value={c.lunch_from || "12:00"} onChange={(e) => set("lunch_from", e.target.value)} style={{ width: "auto" }} disabled={!c.lunch_enabled} />
+          <span>ถึง</span>
+          <input className="inp" type="time" value={c.lunch_to || "13:00"} onChange={(e) => set("lunch_to", e.target.value)} style={{ width: "auto" }} disabled={!c.lunch_enabled} />
+          <span className="jo-dim" style={{ fontSize: 12 }}>ช่วงนี้นับเป็นนอกเวลาทำการ — บอท AI/ข้อความอัตโนมัติตอบแทนทีมตอนพักกินข้าว</span>
         </div>
       </div>
       <div style={{ marginTop: 14 }}>

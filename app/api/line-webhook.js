@@ -119,7 +119,10 @@ function isOpenNow(cfg) {
   const days = Array.isArray(cfg.open_days) && cfg.open_days.length ? cfg.open_days : [1, 2, 3, 4, 5, 6];
   if (!days.includes(day)) return false;
   const toMin = (s) => { const p = String(s || "").split(":"); return (Number(p[0]) || 0) * 60 + (Number(p[1]) || 0); };
-  return mins >= toMin(cfg.open_time || "08:00") && mins < toMin(cfg.close_time || "18:00");
+  if (!(mins >= toMin(cfg.open_time || "08:00") && mins < toMin(cfg.close_time || "18:00"))) return false;
+  // พักเที่ยง (ตั้งค่า→ตอบอัตโนมัติ): ช่วงนี้ถือเป็นนอกเวลาทำการ → บอท AI/ข้อความอัตโนมัติตอบแทนทีม
+  if (cfg.lunch_enabled && mins >= toMin(cfg.lunch_from || "12:00") && mins < toMin(cfg.lunch_to || "13:00")) return false;
+  return true;
 }
 // ---------- AI bot (นอกเวลาทำการ): ตอบคำถามสินค้า/ราคา/บริการจากแคตตาล็อกจริง ----------
 // ใช้ Claude Sonnet 5 · ข้อมูล = materials ทั้งหมดที่ active (แอร์+บริการ+วัสดุ) — ดึงเฉพาะราคาขาย (sale_price) เท่านั้น ห้ามดึง cost/สต๊อก/ผู้ขายเด็ดขาด
