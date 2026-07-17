@@ -1,4 +1,4 @@
-# sync-memory.ps1 — ซิงก์ "ความจำของ Claude" ระหว่าง repo (.claude/memory) กับความจำเครื่องนี้
+﻿# sync-memory.ps1 — ซิงก์ "ความจำของ Claude" ระหว่าง repo (.claude/memory) กับความจำเครื่องนี้
 #   ความจำเครื่องนี้: %USERPROFILE%\.claude\projects\C--Users-User-OneDrive-Desktop-Inventory-Management\memory
 #   (บนคอมเครื่องนี้เป็น junction ไป G:\My Drive\claude-memory\Inventory-Management)
 #
