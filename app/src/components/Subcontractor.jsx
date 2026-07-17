@@ -332,7 +332,7 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
         <div className="sec-head"><div><div className="sec-title">ค่าแรงรอจ่าย</div><div className="sec-sub">เฉพาะงานที่ยืนยันค่าแรงแล้ว · เลือกงาน → จ่ายเต็ม / ตาม % / ตามยอดเงิน</div></div></div>
         {Object.keys(byTeam).length === 0 && <div className="empty sm">ไม่มีค่าแรงค้างจ่าย (ต้องยืนยันค่าแรงในแท็บ “ค่าแรง/งาน” ก่อน)</div>}
         {Object.entries(byTeam).map(([teamId, list]) => (
-          <PayTeam key={teamId} team={teamById[teamId] || { id: teamId, name: teamId }} list={list} quoteBy={quoteBy} flash={flash} onCreated={onReload} />
+          <PayTeam key={teamId} team={teamById[teamId] || { id: teamId, name: teamId }} list={list} allJobs={jobs.filter((j) => j.assigned_team === teamId)} quoteBy={quoteBy} flash={flash} onCreated={onReload} />
         ))}
       </div>
 
@@ -468,13 +468,14 @@ function EditPayout({ payout, team, jobByNo = {}, onClose, onSaved, flash }) {
 }
 
 // one sub team's payable list + split-payment controls
-function PayTeam({ team, list, quoteBy, flash, onCreated }) {
+function PayTeam({ team, list, allJobs = [], quoteBy, flash, onCreated }) {
   const [sel, setSel] = React.useState({});
   const [mode, setMode] = React.useState("full"); // full | percent | amount
   const [pct, setPct] = React.useState(100);
   const [amt, setAmt] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [jobPreview, setJobPreview] = React.useState(null);
+  const [sendOpen, setSendOpen] = React.useState(false); // ส่งสรุปค้างจ่ายเข้าแชตทีมซัพ
 
   const chosen = list.filter((j) => sel[j.job_no]);
   const sumRem = round2(chosen.reduce((a, j) => a + remaining(j), 0));
@@ -529,9 +530,16 @@ function PayTeam({ team, list, quoteBy, flash, onCreated }) {
             {mode === "amount" && <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span><input type="number" min="0" max={sumRem} value={amt} placeholder={`สูงสุด ${fmtBaht(sumRem)}`} onChange={(e) => setAmt(e.target.value)} /></span>}
           </div>
           <div className="sub-pay-sum">เลือก {chosen.length} งาน · ค้างรวม {fmtBaht(sumRem)} · จ่ายงวดนี้ {fmtBaht(gross)} − หัก ณ ที่จ่าย 3% ({fmtBaht(whtAmt)}) = <b>จ่ายสุทธิ {fmtBaht(net)}</b>
-            <button className="btn-primary sm" disabled={busy || gross <= 0} onClick={create}>สร้างใบรอจ่าย</button></div>
+            <button className="btn-primary sm" disabled={busy || gross <= 0} onClick={create}>สร้างใบรอจ่าย</button>
+            <button className="btn-ghost sm" disabled={busy} onClick={() => setSendOpen(true)}>📤 ส่งค้างจ่ายเข้าแชตทีม</button></div>
         </div>
       )}
+      {/* แถบสรุปทีม — ส่งรายการค้างจ่ายให้หัวหน้าทีมซัพดูในแชตทีมได้ ไม่ต้องเลือกงานก่อน */}
+      {chosen.length === 0 && (
+        <div className="sub-pay-sum" style={{ marginTop: 8 }}>ค้างจ่ายทีมนี้รวม <b>{fmtBaht(round2(list.reduce((a, j) => a + remaining(j), 0)))}</b> · {list.length} งาน
+          <button className="btn-ghost sm" onClick={() => setSendOpen(true)}>📤 ส่งค้างจ่ายเข้าแชตทีม</button></div>
+      )}
+      {sendOpen && <SendPendingChat team={team} list={list} allJobs={allJobs} onClose={() => setSendOpen(false)} flash={flash} />}
       {jobPreview && (() => {
         const jp = jobPreview; const ST = JOB_ST;
         const jst = ST[jp.status] || { t: jp.status, c: "b-grey" };
@@ -583,6 +591,67 @@ function PayTeam({ team, list, quoteBy, flash, onCreated }) {
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+// ---------- ส่งสรุปค่าแรงค้างจ่ายเข้าแชตทีมซัพ ----------
+// หัวหน้าทีมซัพอยู่ในห้องแชตทีมอยู่แล้ว → เห็น งานเสร็จปิดงาน / รายการค้างจ่าย / ยอดค้างรวม จากมือถือได้เลย
+function SendPendingChat({ team, list, allJobs, onClose, flash }) {
+  const [rooms, setRooms] = React.useState(null);
+  const [roomId, setRoomId] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => {
+    listChatRooms().then((r) => {
+      setRooms(r);
+      // เดาห้องของทีมนี้จากชื่อห้องก่อน (เช่น ห้อง "Team แบงค์") — ไม่เจอค่อยให้เลือกเอง
+      const guess = r.find((x) => (x.title || "").toLowerCase().includes((team.name || "").toLowerCase().replace("team ", "")));
+      setRoomId((guess || r[0])?.id || "");
+    }).catch(() => setRooms([]));
+  }, []);
+  const totalRem = round2(list.reduce((a, j) => a + remaining(j), 0));
+  const doneJobs = allJobs.filter((j) => j.status === "done");
+  const paidFull = allJobs.filter((j) => j.labor_confirmed && j.labor_paid);
+  const buildText = () => {
+    const today = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
+    let t = `📋 สรุปค่าแรงทีม ${team.name} · ${today}\n`;
+    t += `✅ งานเสร็จปิดงาน ${doneJobs.length} งาน · จ่ายค่าแรงครบแล้ว ${paidFull.length} งาน\n\n`;
+    t += `⏳ ค้างจ่าย ${list.length} งาน · รวม ${fmtBaht(totalRem)}\n`;
+    list.forEach((j, i) => {
+      const rem = remaining(j); const partial = (Number(j.labor_paid_amt) || 0) > 0;
+      t += `${i + 1}. ${j.job_no}${j.scheduled_at ? ` · ${fmtDate(j.scheduled_at)}` : ""} · ${j.customerName || "-"} · ค้าง ${fmtBaht(rem)}${partial ? ` (จ่ายแล้ว ${fmtBaht(Number(j.labor_paid_amt) || 0)} จากเต็ม ${fmtBaht(j.labor_total)})` : ""}\n`;
+    });
+    t += `\n* ยอดก่อนหัก ณ ที่จ่าย 3% (หักเฉพาะงาน VAT ตอนตั้งใบจ่าย)`;
+    return t;
+  };
+  const [text, setText] = React.useState(buildText);
+  async function send() {
+    if (!roomId) return flash("เลือกห้องแชตทีมก่อน", true);
+    setBusy(true);
+    try { await sendChatMessage(roomId, text); flash("ส่งสรุปค้างจ่ายเข้าแชตทีมแล้ว ✓"); onClose(); }
+    catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
+        <div className="modal-head"><div className="modal-title">ส่งค่าแรงรอจ่ายเข้าแชตทีม <span>ทีม {team.name}</span></div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <label className="fld"><span>ห้องแชตทีม (หัวหน้าทีมซัพต้องอยู่ในห้องนี้)</span>
+            {rooms === null ? <div className="jo-dim">กำลังโหลดห้องแชต…</div> :
+              <select className="inp" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+                {rooms.length === 0 && <option value="">— ไม่มีห้องแชต —</option>}
+                {rooms.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
+              </select>}
+          </label>
+          <label className="fld"><span>ข้อความ (แก้ได้ก่อนส่ง)</span>
+            <textarea className="inp" rows={12} style={{ resize: "vertical", fontSize: 12.5, lineHeight: 1.5 }} value={text} onChange={(e) => setText(e.target.value)} />
+          </label>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy || !roomId || !text.trim()} onClick={send}><UIcon name="chat" size={15} color="#fff" /> ส่งเข้าแชตทีม</button></div>
+      </div>
     </div>
   );
 }
