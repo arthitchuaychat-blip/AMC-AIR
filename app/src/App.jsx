@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-17·แดชบอร์ด: การ์ด 'รับเงินแล้ว (ใบเสร็จชำระแล้ว)' รวม + แยก รับ VAT/ไม่ VAT (ยอดก่อน VAT + รับสุทธิ ตามช่วงเวลา) v436";
+const BUILD = "2026-07-17·แดชบอร์ด: คลิกการ์ดขาย/รับเงิน/กำไร เห็นลิสต์รายใบ กดเปิดเอกสารได้ + Export CSV v437";
 
 function SetupNotice() {
   return (
@@ -430,7 +430,7 @@ export default function App() {
         {profile?.id && can(role, "teamchat") && <ChatDock me={profile} hidden={view === "teamchat"} onOpenFull={() => go("teamchat")} />}
         <InstallBanner />
         {view === "dashboard" && <Dashboard role={role} onReorder={(items) => { setPoPrefill(items); go("po"); }}
-          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} />}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} onOpenDoc={openDoc} />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
         {view === "suppliers" && <Suppliers role={role} />}
         {view === "followup" && <CustomerFollowup role={role}

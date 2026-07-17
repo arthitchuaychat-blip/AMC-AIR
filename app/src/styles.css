@@ -380,6 +380,17 @@ select.inp{cursor:pointer}
 .drawer-sec-title{font-size:13.5px;font-weight:700;margin-bottom:13px;display:flex;align-items:baseline;gap:8px}
 .drawer-sec-title span{font-size:11px;font-weight:500;color:var(--ink-3)}
 .drawer-tbar{grid-template-columns:84px 1fr 78px 38px}
+/* dashboard doc drill-down (คลิกการ์ดขาย/รับเงิน → ลิสต์รายใบ) */
+.ddoc-row{display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:8px;cursor:pointer;transition:.13s}
+.ddoc-row:hover{border-color:var(--mc);box-shadow:0 2px 10px rgba(16,24,40,.08)}
+.ddoc-mid{flex:1;min-width:0}
+.ddoc-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ddoc-sub{font-size:11.5px;color:var(--ink-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ddoc-amt{text-align:right;flex:none}
+.ddoc-val{font-weight:700;font-size:13.5px}
+.ddoc-sm{font-size:11px;color:var(--ink-3);margin-top:1px}
+.ddoc-tag{font-size:10px;font-weight:700;border-radius:99px;padding:1px 7px;margin-left:6px;background:var(--surface-2);color:var(--ink-2)}
+.ddoc-tag.vat{background:#dbeafe;color:#1d4ed8}
 .tbar-pct{font-size:11.5px;color:var(--ink-3);font-weight:600;text-align:right}
 .matbars{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
 .matbar-row{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:11px}

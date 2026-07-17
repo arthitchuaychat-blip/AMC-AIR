@@ -4,6 +4,7 @@ import { can } from "../lib/permissions";
 import { fmtBaht, fmtNum, fmtCompact, inRange } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 import DashDrawer from "./DashDrawer";
+import DashDocDrawer from "./DashDocDrawer";
 import SalesReport from "./SalesReport";
 import BillingSummary from "./BillingSummary";
 import CrmJobsSummary from "./CrmJobsSummary";
@@ -37,7 +38,7 @@ function StatCard({ icon, color, label, value, sub, accent, onClick }) {
   );
 }
 
-export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onGo }) {
+export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onGo, onOpenDoc }) {
   // ภาษีมูลค่าเพิ่มเดือนนี้ (ขาย/ซื้อ/นำส่ง) — เฉพาะบทบาทที่เห็นเมนูรายงานภาษี
   const [vat, setVat] = React.useState(null);
   React.useEffect(() => {
@@ -49,6 +50,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
   const [from, setFrom] = React.useState(PRESETS.find((p) => p.id === "month").range().from);
   const [to, setTo] = React.useState("");
   const [detail, setDetail] = React.useState(null);
+  const [docList, setDocList] = React.useState(null); // การ์ดขาย/รับเงิน/กำไร → แผงรายการเอกสาร + Export
   const [mats, setMats] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [txns, setTxns] = React.useState([]);
@@ -172,13 +174,13 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       {tab === "overview" && (
         <>
           <div className="kpi-grid">
-            <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={fmtBaht(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setTab("sales")} />
-            <StatCard icon="trend" color="#1f74e0" label="ยอดขายอนุมัติ · รับ VAT" value={fmtBaht(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setTab("sales")} />
-            <StatCard icon="trend" color="#64748b" label="ยอดขายอนุมัติ · ไม่ VAT" value={fmtBaht(ovStat.novatSale)} sub={fmtNum(ovStat.novatCount) + " ใบ"} onClick={() => setTab("sales")} />
-            <StatCard icon="check" color="#0a6b3d" label={"รับเงินแล้ว (ใบเสร็จ) · " + periodLabel} value={fmtBaht(rcStat.sale)} sub={`${fmtNum(rcStat.count)} ใบเสร็จ · ก่อน VAT · รับสุทธิ ${fmtCompact(rcStat.net)}`} onClick={() => onGo && onGo("receipt")} />
-            <StatCard icon="check" color="#15803d" label="รับเงินแล้ว · รับ VAT" value={fmtBaht(rcStat.vatSale)} sub={`${fmtNum(rcStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => onGo && onGo("receipt")} />
-            <StatCard icon="check" color="#4d7c0f" label="รับเงินแล้ว · ไม่ VAT" value={fmtBaht(rcStat.novatSale)} sub={fmtNum(rcStat.novatCount) + " ใบ"} onClick={() => onGo && onGo("receipt")} />
-            <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={fmtBaht(ovStat.est)} sub="กำไรจริงดูในแท็บ ขาย & กำไร" onClick={() => setTab("sales")} />
+            <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={fmtBaht(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setDocList("q_all")} />
+            <StatCard icon="trend" color="#1f74e0" label="ยอดขายอนุมัติ · รับ VAT" value={fmtBaht(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("q_vat")} />
+            <StatCard icon="trend" color="#64748b" label="ยอดขายอนุมัติ · ไม่ VAT" value={fmtBaht(ovStat.novatSale)} sub={fmtNum(ovStat.novatCount) + " ใบ"} onClick={() => setDocList("q_novat")} />
+            <StatCard icon="check" color="#0a6b3d" label={"รับเงินแล้ว (ใบเสร็จ) · " + periodLabel} value={fmtBaht(rcStat.sale)} sub={`${fmtNum(rcStat.count)} ใบเสร็จ · ก่อน VAT · รับสุทธิ ${fmtCompact(rcStat.net)}`} onClick={() => setDocList("rc_all")} />
+            <StatCard icon="check" color="#15803d" label="รับเงินแล้ว · รับ VAT" value={fmtBaht(rcStat.vatSale)} sub={`${fmtNum(rcStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("rc_vat")} />
+            <StatCard icon="check" color="#4d7c0f" label="รับเงินแล้ว · ไม่ VAT" value={fmtBaht(rcStat.novatSale)} sub={fmtNum(rcStat.novatCount) + " ใบ"} onClick={() => setDocList("rc_novat")} />
+            <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={fmtBaht(ovStat.est)} sub="กำไรจริงดูในแท็บ ขาย & กำไร" onClick={() => setDocList("est")} />
             <StatCard icon="clipboard" color="#d97706" label="เงินค้างรับ" value={fmtBaht(act?.receivable || 0)} sub={`${fmtNum(act?.unpaidCount || 0)} ใบ · เกินกำหนด ${fmtNum(act?.overdueCount || 0)} ใบ`} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
             <StatCard icon="withdraw" color="#dc2626" label="ยอดค้างจ่าย" value={fmtBaht(act?.payable || 0)} accent={act?.payable ? "#dc2626" : undefined}
               sub={`PO ${fmtCompact(act?.poPayable || 0)} · ค่าแรงซัพ ${fmtCompact((act?.payoutUnpaid || 0) + (act?.laborOwed || 0))} · เบิกรอจ่าย ${fmtCompact(act?.approvedExpenseSum || 0)}`}
@@ -326,6 +328,8 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       )}
 
       {detail && <DashDrawer kind={detail} periodLabel={periodLabel} txns={rangeTxns} teams={teams} mats={mats} onClose={() => setDetail(null)} />}
+      {docList && <DashDocDrawer kind={docList} periodLabel={periodLabel} from={from} to={to}
+        quotes={ov?.qs || []} receipts={ov?.rcs || []} boqs={ov?.bs || []} onClose={() => setDocList(null)} onOpenDoc={onOpenDoc} />}
     </div>
   );
 }
