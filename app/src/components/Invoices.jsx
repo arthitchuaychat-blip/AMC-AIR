@@ -18,9 +18,9 @@ import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
-// snapshot a quote's line items with default หัก ณ ที่จ่าย flag (services only)
-// ราคา/ยอด = ราคาแสดงจริง (price_show รวมค่าบัตรแล้ว) − ส่วนลดรายบรรทัด → ฐานหัก ณ ที่จ่าย ตรงกับใบเสนอราคาเป๊ะ
-const snapshotItems = (q) => (q?.items || []).map((it) => { const p = Number(it.price_show ?? it.unit_price) || 0; return { code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: p, amount: round2(Number(it.qty) * p - (Number(it.discount) || 0)), wht: it.kind === "service" }; });
+// snapshot a quote's line items with default หัก ณ ที่จ่าย flag (services only · เฉพาะลูกค้านิติบุคคล)
+// ราคา/ยอด = ราคาแสดงจริง (price_show รวมค่าบัตรแล้ว) − ส่วนลดรายบรรทัด → ฐานหัก ณ ที่จ่าย ตรงกับใบเสนอราคาเป๊ะ · เก็บ discount ไว้ให้ DocPeek/โมดัลโชว์ถูก
+const snapshotItems = (q) => { const canW = q?.customerType === "company"; return (q?.items || []).map((it) => { const p = Number(it.price_show ?? it.unit_price) || 0; return { code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: p, discount: Number(it.discount) || 0, amount: round2(Number(it.qty) * p - (Number(it.discount) || 0)), wht: canW && it.kind === "service" }; }); };
 const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 
 const fmtBaht = fmtBaht2; // invoices show 2 decimals to avoid rounding leftovers

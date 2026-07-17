@@ -238,7 +238,8 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
         if (fresh === bnNo || await docNoTaken("billing_notes", fresh)) { flash(`เลขที่ ${bnNo} ถูกใช้แล้ว — ปิดแล้วเปิดสร้างใหม่`, true); setBusy(false); return; }
         bnNo = fresh;
       }
-      await saveBillingNote({ billing_no: bnNo, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, internal_note: ed.internal_note, sign_url: sig?.url || null, sign_name: sig?.name || null, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" }); flash("สร้างใบวางบิลแล้ว ✓"); onSaved();
+      await saveBillingNote({ billing_no: bnNo, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, internal_note: ed.internal_note, sign_url: sig?.url || null, sign_name: sig?.name || null, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" });
+      flash("สร้างใบวางบิลแล้ว ✓" + (bnNo !== ed.billing_no ? ` · ⚠️ เลขที่เดิมชนกับใบอื่น — ใบนี้ได้เลขใหม่ ${bnNo}` : "")); onSaved();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);

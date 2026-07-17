@@ -152,12 +152,13 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       if (!ed._edit && await docNoTaken("boqs", boqNo)) {
         const fresh = genNo();
         if (fresh === boqNo || await docNoTaken("boqs", fresh)) return flash(`เลขที่ ${boqNo} ถูกใช้แล้ว — แก้เลขที่ก่อนบันทึก`, true);
-        boqNo = fresh; flash(`เลขที่เดิมชนกับใบอื่น — ใช้เลขใหม่ ${fresh} ให้อัตโนมัติ`);
+        boqNo = fresh;
       }
       await saveBoq({ ...ed, boq_no: boqNo, sign_url: sig?.url || null, sign_name: sig?.name || null }, flat);
       // กติกา: BOQ ที่ยกเลิกแล้วกลับมาแก้ไขได้ — บันทึกสำเร็จ = ปลดสถานะยกเลิก กลับมาใช้งานต่อ
       if (ed._wasCancelled) { try { await setBoqStatus(ed.boq_no, null); } catch { /* non-fatal */ } }
-      flash(ed._wasCancelled ? `บันทึก BOQ แล้ว — ใบนี้พ้นสถานะยกเลิก กลับมาใช้งานได้ (${flat.length} รายการ)` : `บันทึก BOQ แล้ว (${flat.length} รายการ)`); setEd(null); await load(); }
+      const renum = boqNo !== ed.boq_no ? ` · ⚠️ เลขที่เดิมชนกับใบอื่น — ใบนี้ได้เลขใหม่ ${boqNo}` : "";
+      flash((ed._wasCancelled ? `บันทึก BOQ แล้ว — ใบนี้พ้นสถานะยกเลิก กลับมาใช้งานได้ (${flat.length} รายการ)` : `บันทึก BOQ แล้ว (${flat.length} รายการ)`) + renum); setEd(null); await load(); }
     catch (e) { console.error("saveBoq failed:", e); window.alert("❌ บันทึก BOQ ไม่สำเร็จ\n\nสาเหตุจริงจากฐานข้อมูล:\n" + (e.message || String(e)) + "\n\n(กรุณาถ่ายรูปหน้าต่างนี้ส่งให้ผู้ดูแลระบบ)"); }
   }
   async function del(bo) {

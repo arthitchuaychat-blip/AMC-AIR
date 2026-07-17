@@ -58,7 +58,8 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
       const qty = Number(it.qty) || 0;
       const price = Number(it.price_show ?? it.unit_price ?? it.price ?? it.unit_cost) || 0;   // price_show = ราคาตามวิธีชำระ (ใบเสนอราคาแบบบัตร)
       const disc = Number(it.discount) || 0;   // ส่วนลดรายรายการ (mig 142)
-      return { name: it.name || it.item_code || it.material_code || "-", qty, unit: it.unit || "", price, amount: qty * price - disc, disc, free: it.section === "free" };
+      // snapshot ของใบส่งของ/ใบเสร็จเก็บ amount สุทธิ (หักส่วนลดแล้ว) — ใช้ค่านั้นก่อน ค่อย fallback คำนวณเอง
+      return { name: it.name || it.item_code || it.material_code || "-", qty, unit: it.unit || "", price, amount: it.amount != null ? (Number(it.amount) || 0) : qty * price - disc, disc, free: it.section === "free" };
     });
   }, [doc, type]);
 
@@ -107,9 +108,9 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
                 <>
                   <div className="cd-sec">ใบส่งของ/ใบแจ้งหนี้ในใบวางบิล ({doc.invoices.length})</div>
                   {doc.invoices.map((iv) => (
-                    <div key={iv.invoice_no} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: "1px dashed var(--line-2)", fontSize: 12.5 }}>
-                      <span style={{ flex: 1 }}>{iv.invoice_no}<span className="jo-dim"> · งวด {iv.installment} · {Math.round(iv.pct)}%</span></span>
-                      <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{fmtBaht(iv.total)}</span>
+                    <div key={iv.invoice_no} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: "1px dashed var(--line-2)", fontSize: 12.5, opacity: iv.status === "cancelled" ? 0.55 : 1 }}>
+                      <span style={{ flex: 1 }}>{iv.invoice_no}<span className="jo-dim"> · งวด {iv.installment} · {Math.round(iv.pct)}%</span>{iv.status === "cancelled" && <span className="job-badge b-red" style={{ marginLeft: 6 }}>ยกเลิก · ไม่รวมยอด</span>}</span>
+                      <span style={{ fontWeight: 700, whiteSpace: "nowrap", textDecoration: iv.status === "cancelled" ? "line-through" : "none" }}>{fmtBaht(iv.total)}</span>
                     </div>
                   ))}
                 </>

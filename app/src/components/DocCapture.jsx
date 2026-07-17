@@ -89,6 +89,7 @@ function quoteSlip(q, companies) {
       projectTitle={q.title}
       customer={{ name: q.customerName, code: custCode(q.customerCode), taxId: q.customerTaxId, address: q.siteAddress || q.customerAddr, contactName: q.contactName, contactPhone: q.contactPhone, mapUrl: q.map_url }}
       termsPayment={q.terms_payment} termsFreebies={q.terms_freebies} termsWarranty={q.terms_warranty} bank={co.bank_info} signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}
+      discountCol={(q.items || []).some((it) => Number(it.discount) > 0)}
       totals={<div className="doc-totals">
         <div><span>รวมเป็นเงิน</span><b>{fmtBaht(q.subtotal)}</b></div>
         {q.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(q.discount)}</b></div>}
@@ -97,9 +98,10 @@ function quoteSlip(q, companies) {
         {q.wht ? <div><span>หัก ณ ที่จ่าย {Number(q.wht_rate) || 3}%</span><b>− {fmtBaht(q.whtAmt)}</b></div> : null}
         {q.wht ? <div className="doc-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(q.netPay)}</b></div> : null}
       </div>}>
-      {q.items.map((it, i) => (
-        <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{it.qty} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td><td className="r">{fmtBaht(it.qty * it.unit_price)}</td></tr>
-      ))}
+      {/* ราคา = price_show (รวมค่าบัตร) − ส่วนลดบรรทัด — สูตรเดียวกับหน้าพิมพ์ ให้บรรทัดบวกลงตัวกับยอดรวม */}
+      {(() => { const hasD = (q.items || []).some((x) => Number(x.discount) > 0); return q.items.map((it, i) => (
+        <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{it.qty} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(it.qty * (it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
+      )); })()}
     </DocSlip>
   );
 }
@@ -112,6 +114,7 @@ function invoiceSlip(x, q, companies) {
       projectTitle={x.title}
       customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, address: x.siteAddress || x.customerAddr, contactName: x.contactName, contactPhone: x.contactPhone, mapUrl: x.mapUrl }}
       termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}
+      discountCol={(q?.items || []).some((it) => Number(it.discount) > 0)}
       totals={<div className="doc-totals">
         <div><span>รวมเป็นเงิน</span><b>{fmtBaht2(q?.subtotal || 0)}</b></div>
         {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht2(q.discount)}</b></div>}
@@ -122,9 +125,9 @@ function invoiceSlip(x, q, companies) {
         {x.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย (ตอนชำระ)</span><b>− {fmtBaht2(x.wht_amt)}</b></div>}
         {x.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtBaht2(x.total - x.wht_amt)}</b></div>}
       </div>}>
-      {(q?.items || []).map((it, i) => (
-        <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht2(it.unit_price)}</td><td className="r">{fmtBaht2(Number(it.qty) * Number(it.unit_price))}</td></tr>
-      ))}
+      {(() => { const hasD = (q?.items || []).some((x2) => Number(x2.discount) > 0); return (q?.items || []).map((it, i) => (
+        <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht2(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht2(it.discount) : "-"}</td>}<td className="r">{fmtBaht2(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
+      )); })()}
     </DocSlip>
   );
 }
@@ -139,6 +142,7 @@ function receiptSlip(x, q, inv, companies) {
       projectTitle={x.title}
       customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, address: x.siteAddress || x.customerAddr, contactName: x.contactName, contactPhone: x.contactPhone, mapUrl: x.mapUrl }}
       termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}
+      discountCol={(q?.items || []).some((it) => Number(it.discount) > 0)}
       paymentInfo={paid ? `ได้รับชำระเงินแล้ว · วันที่ ${x.issue_date || "-"} · โดย ${x.payment_method || "-"} · จำนวน ${fmtBaht2(x.net)}` : null}
       totals={<div className="doc-totals">
         <div><span>รวมเป็นเงิน</span><b>{fmtBaht2(q?.subtotal || 0)}</b></div>
@@ -150,9 +154,9 @@ function receiptSlip(x, q, inv, companies) {
         {x.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(x.wht_rate) || 3}%</span><b>− {fmtBaht2(x.wht_amt)}</b></div>}
         <div className="doc-grand"><span>รับเงินสุทธิ</span><b>{fmtBaht2(x.net)}</b></div>
       </div>}>
-      {(q?.items || []).map((it, i) => (
-        <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht2(it.unit_price)}</td><td className="r">{fmtBaht2(Number(it.qty) * Number(it.unit_price))}</td></tr>
-      ))}
+      {(() => { const hasD = (q?.items || []).some((x2) => Number(x2.discount) > 0); return (q?.items || []).map((it, i) => (
+        <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht2(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht2(it.discount) : "-"}</td>}<td className="r">{fmtBaht2(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
+      )); })()}
     </DocSlip>
   );
 }

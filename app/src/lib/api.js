@@ -627,12 +627,13 @@ export async function reopenJob(job_no) {
 
 // ---------- PURCHASE ORDERS ----------
 export async function listPurchaseOrders() {
+  const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows })); // กันเพดาน 1000 แถวทุกก้อน (header PO ก็โตเรื่อย ๆ เหมือนใบขาย)
   const [poRes, itemRes, qRes, cuRes, joRes, tmRes] = await Promise.all([
-    supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }),
-    _fetchAll((f, t) => supabase.from("po_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
-    supabase.from("quotations").select("quote_no,customer_id,title"),
-    supabase.from("customers").select("id,name"),
-    supabase.from("job_orders").select("job_no,quote_no,team,status"),
+    _rows((f, t) => supabase.from("purchase_orders").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("po_no").range(f, t)),
+    _rows((f, t) => supabase.from("po_items").select("*", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),
+    _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("job_orders").select("job_no,quote_no,team,status", { count: "exact" }).order("job_no").range(f, t)),
     supabase.from("teams").select("id,name"),
   ]);
   if (poRes.error) throw poRes.error;
@@ -784,15 +785,17 @@ export async function markPoReceived(po_no) {
 // ตัวเลขเบา ๆ สำหรับแท็บ "ภาพรวม" ของแดชบอร์ด (นับ/รวมอย่างเดียว ไม่ join อะไรหนัก)
 export async function dashboardActionLite() {
   const today = new Date().toISOString().slice(0, 10);
+  // ทุกก้อนกันเพดาน 1000 แถว — ไม่งั้น KPI เงินค้างรับ/ค้างจ่ายบนแดชบอร์ดจะต่ำกว่าหน้าจริงเมื่อเอกสารเกินพันใบ
+  const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows }));
   const [inv, exp, po, poi, sp, lj] = await Promise.all([
-    supabase.from("invoices").select("total,wht_amt,status,due_date"),
-    supabase.from("expense_requests").select("id,status,amount"),
-    supabase.from("purchase_orders").select("po_no,status,vat,expense_id,paid_at").then(async (r) =>
-      (r.error && /expense_id|paid_at|vat/i.test(r.error.message || "")) ? await supabase.from("purchase_orders").select("po_no,status") : r), // pre-096/100 fallback
-    _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
-    supabase.from("sub_payouts").select("status,net"),
-    supabase.from("job_orders").select("labor_total,labor_paid_amt").eq("labor_confirmed", true).gt("labor_total", 0)
-      .then(async (r) => (r.error ? { data: [] } : r)), // pre-045 fallback
+    _rows((f, t) => supabase.from("invoices").select("total,wht_amt,status,due_date,invoice_no", { count: "exact" }).order("invoice_no").range(f, t)),
+    _rows((f, t) => supabase.from("expense_requests").select("id,status,amount", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("purchase_orders").select("po_no,status,vat,expense_id,paid_at", { count: "exact" }).order("po_no").range(f, t))
+      .catch(async (e) => (/expense_id|paid_at|vat/i.test(e.message || "") ? _rows((f, t) => supabase.from("purchase_orders").select("po_no,status", { count: "exact" }).order("po_no").range(f, t)) : Promise.reject(e))), // pre-096/100 fallback
+    _rows((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)), // กันเพดาน 1000 แถว
+    _rows((f, t) => supabase.from("sub_payouts").select("status,net,id", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("job_orders").select("labor_total,labor_paid_amt,job_no", { count: "exact" }).eq("labor_confirmed", true).gt("labor_total", 0).order("job_no").range(f, t))
+      .catch(() => ({ data: [] })), // pre-045 fallback
   ]);
   const unpaid = (inv.data || []).filter((x) => x.status === "unpaid");
   const pend = (exp.data || []).filter((x) => x.status === "pending");
@@ -1363,6 +1366,12 @@ export async function listQuotations() {
 
 export async function saveQuotation(q, items) {
   const { data: { user } } = await supabase.auth.getUser();
+  // guard ฝั่ง server: ใบที่อนุมัติแล้วห้ามบันทึกทับ (หน้าเก่าค้างจากอีกเครื่อง) — ต้องผ่านปุ่ม "คืนสถานะแก้ไข" (มี audit) เท่านั้น
+  {
+    const { data: cur, error: ce } = await supabase.from("quotations").select("status").eq("quote_no", q.quote_no).maybeSingle();
+    if (ce) throw ce;
+    if (cur && cur.status === "approved") throw new Error(`ใบเสนอราคา ${q.quote_no} อนุมัติแล้ว — บันทึกทับไม่ได้\nถ้าจำเป็นต้องแก้ กด "คืนสถานะแก้ไข" บนการ์ดก่อน (หน้าอาจค้าง — รีเฟรชแล้วลองใหม่)`);
+  }
   const head = {
     quote_no: q.quote_no, customer_id: q.customer_id || null, site_id: q.site_id || null, boq_no: q.boq_no || null,
     title: q.title?.trim() || null, status: q.status || "draft", job_type: q.job_type || null,
@@ -1420,14 +1429,20 @@ export async function deleteQuotation(quote_no, reason) {
 }
 
 export async function setQuotationStatus(quote_no, status, reason) {
+  // อ่านสถานะเดิมก่อนอัปเดต — ไว้แยก "unapprove" (ถอนใบอนุมัติ) ออกจากการเปลี่ยนสถานะทั่วไปใน audit log
+  let prevStatus = null;
+  if (reason && status !== "cancelled" && status !== "approved") {
+    const { data: prev } = await supabase.from("quotations").select("status").eq("quote_no", quote_no).maybeSingle();
+    prevStatus = prev?.status || null;
+  }
   const patch = { status };
   if (status === "approved") patch.approved_at = new Date().toISOString();
   const { error } = await supabase.from("quotations").update(patch).eq("quote_no", quote_no);
   if (error) throw error;
   if (status === "cancelled" || status === "approved")
     await logAudit({ action: status === "approved" ? "approve" : "cancel", target_type: "quotation", target_no: quote_no, reason });
-  else if (reason) // คืนสถานะใบอนุมัติกลับมาแก้ — ลงประวัติพร้อมเหตุผลเสมอ
-    await logAudit({ action: "unapprove", target_type: "quotation", target_no: quote_no, reason });
+  else if (reason) // มีเหตุผลแนบมากับการเปลี่ยนสถานะอื่น — ลงประวัติเสมอ (unapprove เฉพาะตอนถอนจากใบอนุมัติจริง)
+    await logAudit({ action: prevStatus === "approved" ? "unapprove" : "status_change", target_type: "quotation", target_no: quote_no, reason });
   syncCashEntriesFromDocs().catch(() => {}); // cancel/approve → refresh projected receivables in cash flow
 }
 
@@ -1498,7 +1513,8 @@ export async function saveInvoice(inv) {
   const { data: { user } } = await supabase.auth.getUser();
   // guard ฝั่ง server: ใบเสนอต้องยัง approved และยอดสะสม (คิดสดจาก DB) ต้องไม่เกินยอดทั้งใบ — กัน 2 เครื่องวางบิลพร้อมกันเกิน 100%
   if (inv.quote_no) {
-    const qg = await _quoteGrand(inv.quote_no).catch(() => null);
+    // fail-closed: อ่านใบเสนอไม่ได้ (เน็ต/สิทธิ์พัง) = หยุด ไม่ใช่ข้าม guard — _quoteGrand คืน null เฉพาะกรณีไม่พบใบจริง ๆ
+    const qg = await _quoteGrand(inv.quote_no);
     if (qg) {
       if (qg.status !== "approved") throw new Error("ใบเสนอราคานี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว — วางบิลไม่ได้");
       const { data: others, error: oe } = await supabase.from("invoices").select("invoice_no,total,status").eq("quote_no", inv.quote_no).neq("invoice_no", inv.invoice_no);
@@ -1739,15 +1755,16 @@ function _resolveJo(jo, custName, custAddr, siteMap, teamName, custContact) {
 function _firstContacts(rows) { const m = {}; (rows || []).forEach((c) => { if (!m[c.customer_id]) m[c.customer_id] = c; }); return m; }
 
 export async function listJobOrders() {
+  const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows })); // กันเพดาน 1000 แถวทุกก้อน — ใบงาน/ลูกค้า/รอบนัดโตเรื่อย ๆ
   const [j, cu, tm, si, ct, qt, qit, jv] = await Promise.all([
-    supabase.from("job_orders").select("*").order("created_at", { ascending: false }),
-    supabase.from("customers").select("id,name,address"),
+    _rows((f, t) => supabase.from("job_orders").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("job_no").range(f, t)),
+    _rows((f, t) => supabase.from("customers").select("id,name,address", { count: "exact" }).order("id").range(f, t)),
     supabase.from("teams").select("id,name"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
-    supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat,created_by"),
-    _fetchAll((f, t) => supabase.from("quotation_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว · select * เผื่อคอลัมน์ discount (mig 142) ยังไม่ได้รัน
-    supabase.from("job_visits").select("*").order("visit_date", { ascending: true }),
+    _rows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat,created_by", { count: "exact" }).order("quote_no").range(f, t)),
+    _rows((f, t) => supabase.from("quotation_items").select("*", { count: "exact" }).order("id").range(f, t)), // select * เผื่อคอลัมน์ discount (mig 142) ยังไม่ได้รัน
+    _rows((f, t) => supabase.from("job_visits").select("*", { count: "exact" }).order("visit_date", { ascending: true }).order("id").range(f, t)),
   ]);
   if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error; if (qit.error) throw qit.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
@@ -2648,29 +2665,34 @@ export async function setEntriesReconciled(ids, reconciled) {
 export async function syncBankReceipts() {
   const uid = await _uid();
   const today = new Date().toISOString().slice(0, 10);
+  // receipts/account_entries ต้องอ่าน "ครบทุกแถว" — sync นี้ลบรายการที่ไม่อยู่ใน desired ทิ้ง ถ้าอ่านโดนเพดาน 1000 แถว = ลบเงินฝากจริง/insert ซ้ำ
   const [accRes, rcRes, cuRes] = await Promise.all([
     supabase.from("accounts").select("id,code"),
-    supabase.from("receipts").select("receipt_no,issue_date,vat_amt,net,total,status,payment_method,customer_id"),
-    supabase.from("customers").select("id,name"),
+    _fetchAll((f, t) => supabase.from("receipts").select("receipt_no,issue_date,vat_amt,wht_amt,net,total,status,payment_method,customer_id", { count: "exact" }).order("receipt_no").range(f, t)).then((rows) => ({ data: rows })),
+    _fetchAll((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })),
   ]);
-  if (accRes.error) throw accRes.error; if (rcRes.error) throw rcRes.error;
+  if (accRes.error) throw accRes.error;
   const accByCode = Object.fromEntries((accRes.data || []).map((a) => [a.code, a.id]));
   const vatAcc = accByCode.vat, novatAcc = accByCode.novat, tradeAcc = accByCode.trade;
   if (!vatAcc || !novatAcc) return { added: 0, updated: 0, removed: 0 };
   const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
   const TRADE_METHODS = ["Trade Account", "Trade Baht"];   // Trade Baht = ช่องทางเดียวกัน (label เก่า/ใหม่)
 
-  // existing receipt-sourced entries — resilient to a missing `reconciled` column (pre-089)
-  let ex = await supabase.from("account_entries").select("id,ref_id,reconciled,account_id,amount,entry_date").eq("ref_type", "receipt");
-  if (ex.error && /reconciled|column|PGRST/i.test(ex.error.message || "")) ex = await supabase.from("account_entries").select("id,ref_id,account_id,amount,entry_date").eq("ref_type", "receipt");
-  if (ex.error) throw ex.error;
+  // existing receipt-sourced entries — resilient to a missing `reconciled` column (pre-089) · _fetchAll กันแถวเกินพันแล้ว insert ซ้ำ
+  let ex;
+  try { ex = { data: await _fetchAll((f, t) => supabase.from("account_entries").select("id,ref_id,reconciled,account_id,amount,entry_date", { count: "exact" }).eq("ref_type", "receipt").order("id").range(f, t)) }; }
+  catch (e) {
+    if (!/reconciled|column|PGRST/i.test(e.message || "")) throw e;
+    ex = { data: await _fetchAll((f, t) => supabase.from("account_entries").select("id,ref_id,account_id,amount,entry_date", { count: "exact" }).eq("ref_type", "receipt").order("id").range(f, t)) };
+  }
   const existing = {}; (ex.data || []).forEach((e) => { existing[e.ref_id] = e; });
 
   const desired = {};
   (rcRes.data || []).forEach((r) => {
     if (r.status !== "paid") return;
     if (r.payment_method === "เงินสด") return;                 // cash → not a bank deposit
-    const amt = Math.round((Number(r.net) || Number(r.total) || 0) * 100) / 100;
+    // เงินเข้าธนาคารจริง = ยอดหลังหัก ณ ที่จ่าย — ใบเก่าที่ net ว่างต้อง fallback เป็น total − wht_amt (สูตรเดียวกับรายงานภาษี)
+    const amt = Math.round((Number(r.net) || ((Number(r.total) || 0) - (Number(r.wht_amt) || 0))) * 100) / 100;
     if (amt <= 0) return;
     // Trade Baht (จ่ายผ่าน Trade Account) → บัญชี Trade เดียว (ไม่แยก VAT); อื่น ๆ → ธนาคาร VAT/ไม่ VAT ตามบิล
     const byVat = (Number(r.vat_amt) || 0) > 0 ? vatAcc : novatAcc;
@@ -3569,8 +3591,8 @@ export async function removeChatMember(roomId, userId) {
 
 // ===================== CASH FLOW (ledger of money in/out · projected vs actual) =====================
 export async function listCashEntries() {
-  const { data, error } = await supabase.from("cash_entries").select("*").order("entry_date", { ascending: true });
-  if (error) throw error; return data || [];
+  // cash_entries โตเร็วสุดในระบบ (ทุกใบแจ้งหนี้/ใบเสร็จ/PO/เบิกจ่าย/เงินเดือน) — ไม่กันเพดาน 1000 แถว เดือนล่าสุดจะหายจากจอทั้งเดือน
+  return _fetchAll((f, t) => supabase.from("cash_entries").select("*", { count: "exact" }).order("entry_date", { ascending: true }).order("id").range(f, t));
 }
 export async function addCashEntry(e) {
   const uid = await _uid();
@@ -3608,8 +3630,8 @@ export async function syncCashEntriesFromDocs() {
   const [inv, rec, pay, po, poItems, cust, team, existing, salaryProfiles, laborJobs, expReq] = await Promise.all([
     // ตารางเอกสารโตเรื่อย ๆ — ถ้าอ่านไม่ครบ (เพดาน 1000 แถว) sync จะลบ cash lines ของใบที่อ่านไม่ถึง
     _fetchAll((f, t) => supabase.from("invoices").select("invoice_no,due_date,issue_date,total,wht_amt,status,customer_id", { count: "exact" }).order("invoice_no").range(f, t)).then((rows) => ({ data: rows })),
-    _fetchAll((f, t) => supabase.from("receipts").select("receipt_no,issue_date,net,total,status,customer_id", { count: "exact" }).order("receipt_no").range(f, t)).then((rows) => ({ data: rows })),
-    supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at"),
+    _fetchAll((f, t) => supabase.from("receipts").select("receipt_no,issue_date,net,total,wht_amt,status,customer_id", { count: "exact" }).order("receipt_no").range(f, t)).then((rows) => ({ data: rows })),
+    _fetchAll((f, t) => supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })),
     _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat,paid_at,expense_id", { count: "exact" }).order("po_no").range(f, t)).then((rows) => ({ data: rows })),
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("customers").select("id,name"),
@@ -3617,9 +3639,9 @@ export async function syncCashEntriesFromDocs() {
     _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows })), // ถ้าอ่านไม่ครบ sync จะสร้างซ้ำ
     supabase.from("profiles").select("id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0),
     // confirmed subcontractor labor not yet fully covered by a payout = "ค่าแรงรอจ่าย"
-    supabase.from("job_orders").select("job_no,assigned_team,labor_total,labor_paid_amt,labor_confirmed_at,scheduled_at,created_at").eq("labor_confirmed", true).gt("labor_total", 0),
+    _fetchAll((f, t) => supabase.from("job_orders").select("job_no,assigned_team,labor_total,labor_paid_amt,labor_confirmed_at,scheduled_at,created_at", { count: "exact" }).eq("labor_confirmed", true).gt("labor_total", 0).order("job_no").range(f, t)).then((rows) => ({ data: rows })),
     // ใบเบิกจ่าย (เจ้าของกระแสเงินสดฝั่งจ่าย: จ่ายจริง + ประมาณการยอดค้าง) — mig 112
-    supabase.from("expense_requests").select("id,title,amount,paid_amount,status,job_no,expected_pay_date,last_paid_at,paid_at,created_at").in("status", ["pending", "approved", "paid"]),
+    _fetchAll((f, t) => supabase.from("expense_requests").select("id,title,amount,paid_amount,status,job_no,expected_pay_date,last_paid_at,paid_at,created_at", { count: "exact" }).in("status", ["pending", "approved", "paid"]).order("id").range(f, t)).then((rows) => ({ data: rows })),
   ]);
   const cn = Object.fromEntries((cust.data || []).map((c) => [c.id, c.name]));
   const tn = Object.fromEntries((team.data || []).map((t) => [t.id, (t.name || "").replace("Team ", "")]));
@@ -3628,7 +3650,7 @@ export async function syncCashEntriesFromDocs() {
   const desired = [];
   // only UNPAID invoices are "expected income" — once paid, the money shows as its receipt (no double count)
   (inv.data || []).forEach((x) => { if (x.status !== "unpaid") return; desired.push({ source_type: "invoice", source_ref: x.invoice_no, direction: "in", status: "projected", entry_date: x.due_date || x.issue_date, amount: Math.max(0, (Number(x.total) || 0) - (Number(x.wht_amt) || 0)), note: `ใบแจ้งหนี้ ${x.invoice_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
-  (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entry_date: x.issue_date, amount: Number(x.net || x.total) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
+  (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entry_date: x.issue_date, amount: Number(x.net || ((Number(x.total) || 0) - (Number(x.wht_amt) || 0))) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); }); // fallback = total − WHT (เงินเข้าจริง)
   (pay.data || []).forEach((x) => { const paid = x.status === "paid"; desired.push({ source_type: "payout", source_ref: String(x.id), direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: Number(x.net) || 0, note: `จ่ายช่างซัพ${tn[x.team] ? " " + tn[x.team] : ""}` }); });
   // PO: จ่ายจริงเมื่อ "จ่ายเงินแล้ว" (paid_at ผ่านเมนูเบิกจ่าย) — ไม่ผูกกับการรับของ (รับก่อน/จ่ายก่อน เครดิตได้)
   // pre-100 fallback: ถ้ายังไม่มีคอลัมน์ paid_at (ดึงไม่ได้ทั้งก้อน) → ดึงชุดเก่าแล้วใช้เกณฑ์รับของแบบเดิมไปก่อน
@@ -3985,11 +4007,13 @@ export async function decideToolMove(mv, approve) {
 export async function vatSummary(ym) {
   const last = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
   const from = `${ym}-01`, to = `${ym}-${String(last).padStart(2, "0")}`;
+  // PO กรองช่วงเดือนฝั่ง server (เดิมดึงทุกปีมากรองฝั่ง client — โดนเพดาน 1000 แถวก่อนกรอง ภาษีซื้อขาด)
   const [rc, po] = await Promise.all([
-    supabase.from("receipts").select("vat_amt,status,issue_date").neq("status", "cancelled").gte("issue_date", from).lte("issue_date", to),
-    supabase.from("purchase_orders").select("po_no,vat,status,issue_date,created_at").neq("status", "cancelled").eq("vat", true),
+    _fetchAll((f, t) => supabase.from("receipts").select("vat_amt,status,issue_date,receipt_no", { count: "exact" }).neq("status", "cancelled").gte("issue_date", from).lte("issue_date", to).order("receipt_no").range(f, t)).then((rows) => ({ data: rows })),
+    _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,vat,status,issue_date,created_at", { count: "exact" }).neq("status", "cancelled").eq("vat", true)
+      .or(`and(issue_date.gte.${from},issue_date.lte.${to}),and(issue_date.is.null,created_at.gte.${from},created_at.lte.${to}T23:59:59)`)
+      .order("po_no").range(f, t)).then((rows) => ({ data: rows })),
   ]);
-  if (rc.error) throw rc.error; if (po.error) throw po.error;
   const saleVat = (rc.data || []).reduce((a, r) => a + (Number(r.vat_amt) || 0), 0);
   const pos = (po.data || []).filter((x) => { const d = x.issue_date || (x.created_at || "").slice(0, 10); return d >= from && d <= to; });
   let buyVat = 0;

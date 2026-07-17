@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-17·เอกสารขายยกชุด: จ่ายบัตรพิมพ์บวกลงตัว + FlowAccount รวมส่วนลดบรรทัด + ฐานหัก ณ ที่จ่ายสูตรเดียว + กันเลขเอกสารชน/ทับ + _fetchAll ทั้งสาย + ตัวล็อกโซ่เช็คสดฝั่ง server (ใบยกเลิกไม่บล็อก) + ล็อกแก้ใบอนุมัติ (คืนสถานะได้) + กันวางบิลเกิน/ใบเสร็จซ้ำ v427";
+const BUILD = "2026-07-17·เอกสารขายรอบ 2: เอกสารส่งแชต LINE ใช้ราคา/ส่วนลดถูกต้อง + อุดเพดาน 1000 แถวชั้นเงินจริง (sync ธนาคาร/กระแสเงินสด/แดชบอร์ด/ภาษี/PO/ใบงาน) + ใบเสร็จเก่า fallback หัก WHT + กันบันทึกทับใบเสนออนุมัติฝั่ง server + พรีวิวหักส่วนลด/ป้ายใบยกเลิก v428";
 
 function SetupNotice() {
   return (

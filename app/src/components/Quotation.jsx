@@ -158,7 +158,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       if (!ed._edit && await docNoTaken("quotations", quoteNo)) {
         const fresh = genNo();
         if (fresh === quoteNo || await docNoTaken("quotations", fresh)) return flash(`เลขที่ ${quoteNo} ถูกใช้แล้ว — แก้เลขที่ก่อนบันทึก`, true);
-        quoteNo = fresh; flash(`เลขที่เดิมชนกับใบอื่น — ใช้เลขใหม่ ${fresh} ให้อัตโนมัติ`);
+        quoteNo = fresh;
       }
       // ส่วนลดรายบรรทัดห้ามเกินมูลค่าบรรทัด — กันบรรทัดติดลบไหลไปถึงยอดรวม/หัก ณ ที่จ่าย
       const items = ed.items.map((x) => ({ ...x, discount: Math.min(Number(x.discount) || 0, Math.round(Number(x.qty) * adjUnit(x.unit_price) * 100) / 100) }));
@@ -174,7 +174,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         }));
         try { synced = await syncBoqItems(ed.boq_no, rows); } catch { /* non-fatal */ }
       }
-      flash(synced > 0 ? `บันทึกแล้ว · ซิงค์ ${synced} รายการเข้า ${ed.boq_no}` : "บันทึกใบเสนอราคาแล้ว");
+      const renum = quoteNo !== ed.quote_no ? ` · ⚠️ เลขที่เดิมชนกับใบอื่น — ใบนี้ได้เลขใหม่ ${quoteNo}` : "";
+      flash((synced > 0 ? `บันทึกแล้ว · ซิงค์ ${synced} รายการเข้า ${ed.boq_no}` : "บันทึกใบเสนอราคาแล้ว") + renum);
       setEd(null); await load();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
