@@ -3702,8 +3702,11 @@ export async function syncCashEntriesFromDocs() {
   // receipt's "ได้รับจริง") or cancelled. Only touch the source types this sync manages; manual/opening lines never touched.
   // หมายเหตุ edited: flag นี้ปกป้องแค่ "ค่าที่แก้มือ" (วัน/ยอด) ไม่ให้ sync เขียนทับตอนเอกสารยังมีชีวิต —
   // แต่พอเอกสารต้นทางถูกยกเลิก/ลบ/จ่ายแล้ว เส้นเงินต้องถูกลบตามเสมอ (เคยเว้น edited ไว้ → ใบแจ้งหนี้ยกเลิกแล้วยอดค้างในประมาณการตลอดกาล)
+  // ยกเว้น "salary": desired มีแค่ 12 เดือนข้างหน้า (ไม่ใช่ snapshot ครบชุด) — แถวเงินเดือนจ่ายจริงของเดือนเก่า (edited=true จาก upsertPayrollCashEntry)
+  // อยู่นอกหน้าต่างโดยชอบธรรม ห้ามกวาดทิ้ง · ลบได้เฉพาะตัวประมาณการ (ไม่ edited) ที่หลุดหน้าต่าง
   const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary", "labor_owed", "expense_paid", "expense_due"]);
-  const staleIds = (existing.data || []).filter((e) => MANAGED.has(e.source_type) && !desiredKeys.has(`${e.source_type}:${e.source_ref}`)).map((e) => e.id);
+  const staleIds = (existing.data || []).filter((e) => MANAGED.has(e.source_type) && !desiredKeys.has(`${e.source_type}:${e.source_ref}`)
+    && (e.source_type !== "salary" || !e.edited)).map((e) => e.id);
   for (let i = 0; i < staleIds.length; i += 100) {
     const { error } = await supabase.from("cash_entries").delete().in("id", staleIds.slice(i, i + 100));
     if (error) throw error;

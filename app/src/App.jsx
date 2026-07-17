@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-17·กระแสเงินสด: เส้นเงินของใบที่ยกเลิก/ลบแล้ว ถูกลบตามเสมอแม้เคยแก้มือ (เดิม edited=true ทำให้เส้นค้างเป็นอมตะ — เคสใบแจ้งหนี้ยกเลิกแต่ยอดยังโชว์ในประมาณการ) v431";
+const BUILD = "2026-07-17·ด่วน: ยกเว้น salary จากกติกาลบแม้แก้มือ (v431) — กันประวัติเงินเดือนจ่ายจริงเดือนเก่าถูก sync กวาดทิ้ง (อยู่นอกหน้าต่าง 12 เดือนโดยชอบธรรม) v432";
 
 function SetupNotice() {
   return (
