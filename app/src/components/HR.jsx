@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslip, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
@@ -59,8 +59,9 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
   const [att, setAtt] = React.useState([]);
   const [onLeave, setOnLeave] = React.useState({});
   const [loading, setLoading] = React.useState(true);
-  const [edit, setEdit] = React.useState(null); // { p, a } row being corrected
+  const [edit, setEdit] = React.useState(null); // { p, a, day? } row being corrected (day = แก้ย้อนหลังจากแถบลืมเช็คเอาท์)
   const [day, setDay] = React.useState(todayYmd());   // เลือกดูวันไหนก็ได้ ไม่ใช่แค่วันนี้
+  const [missing, setMissing] = React.useState([]);   // 7 วันหลัง: เช็คอินแล้วแต่ไม่ได้เช็คเอาท์ — เตือนให้ HR ตามแก้
   async function load() {
     try {
       const [a, lv] = await Promise.all([listAttendance(day, day), listLeaves("approved")]);
@@ -69,7 +70,21 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
+  async function loadMissing() {
+    try {
+      const to = new Date(); to.setDate(to.getDate() - 1);
+      const from = new Date(); from.setDate(from.getDate() - 7);
+      const rows = await listAttendance(hrYmd(from), hrYmd(to));
+      setMissing(rows.filter((x) => x.check_in_at && !x.check_out_at));
+    } catch { /* ตัวเตือนอย่างเดียว โหลดพลาดไม่ต้องรบกวน */ }
+  }
   React.useEffect(() => { load(); }, [day]);
+  React.useEffect(() => { loadMissing(); }, []);
+  // รับรอง/ถอนรับรอง OT รายวัน (โหมด settings.otNeedsApproval)
+  async function otOk(p, a, ok) {
+    try { await setAttendanceOtOk(p.id, a.work_date || day, ok); flash(ok ? `รับรอง OT ของ ${p.name || p.email} แล้ว ✓` : `ถอนการรับรอง OT ของ ${p.name || p.email} แล้ว`); load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน migration 144 แล้วหรือยัง?)", true); }
+  }
   async function delAtt(p) {
     if (!await confirmDialog(`ลบเวลาเข้า-ออกของ ${p.name || p.email} วันนี้?\n(กลับเป็น “ยังไม่เข้า”)`)) return;
     try { await deleteAttendance(p.id, day); flash("ลบเวลาแล้ว"); load(); }
@@ -88,9 +103,26 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
   const order = { in: 0, late: 1, out: 2, absent: 3, leave: 4, off: 5 };
   rows.sort((x, y) => order[x.status] - order[y.status] || (x.p.name || "").localeCompare(y.p.name || "", "th"));
   const ST = { in: { t: "เข้างานแล้ว", c: "b-green" }, late: { t: "มาสาย", c: "b-amber" }, out: { t: "ออกงานแล้ว", c: "b-cyan" }, absent: { t: "ยังไม่เข้า/ขาด", c: "b-red" }, leave: { t: "ลา", c: "b-blue" }, off: { t: "วันหยุด", c: "b-grey" } };
+  // รูปเซลฟี่ (กดดูเต็ม) + หมุด GPS ตอนเช็คอิน/เอาท์ — หลักฐานที่เก็บอยู่แล้ว เอามาให้ HR เห็น
+  const thumb = (url, title) => url ? <img src={url} alt="" title={title} loading="lazy" style={{ width: 26, height: 26, objectFit: "cover", borderRadius: 6, border: "1px solid var(--line)", cursor: "zoom-in", verticalAlign: "middle" }} onClick={() => window.open(url, "_blank")} /> : null;
+  const pin = (lat, lng, title) => (lat != null && lng != null) ? <a href={`https://maps.google.com/?q=${lat},${lng}`} target="_blank" rel="noopener noreferrer" title={title} style={{ textDecoration: "none", fontSize: 13 }}>📍</a> : null;
   if (loading) return <div className="empty">กำลังโหลด…</div>;
   return (
     <div className="card">
+      {canManage && missing.length > 0 && (
+        <div style={{ border: "1.5px solid #f59e0b", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, color: "#b45309", marginBottom: 4 }}>⏰ ลืมเช็คเอาท์ {missing.length} รายการ (7 วันหลัง) — แก้เวลาให้เรียบร้อยก่อนคิดเงินเดือน</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {missing.map((x) => { const p = staff.find((s) => s.id === x.user_id) || { id: x.user_id, name: x.name };
+              return (
+                <button key={x.id} className="btn-ghost sm" style={{ borderColor: "#f59e0b" }} title="กดเพื่อแก้เวลาเข้า-ออกของวันนั้น"
+                  onClick={() => setEdit({ p, a: x, day: x.work_date })}>
+                  {x.name} · {thDate(x.work_date)} (เข้า {fmtTime(x.check_in_at)})
+                </button>
+              ); })}
+          </div>
+        </div>
+      )}
       <div className="sec-head"><div><div className="sec-title">{thDate(day)}{day === todayYmd() ? " (วันนี้)" : ""}</div>
         <div className="sec-sub">เข้าแล้ว {rows.filter((r) => r.status === "in" || r.status === "late" || r.status === "out").length} · ออกแล้ว {rows.filter((r) => r.status === "out").length} · ยังไม่เข้า {rows.filter((r) => r.status === "absent").length} · ลา {rows.filter((r) => r.status === "leave").length}</div></div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -104,18 +136,21 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
           <div className="hr-today-row" key={p.id}>
             <div className="hr-name"><b>{p.name || p.email}</b><span className="jo-dim">{p.department || "-"}</span></div>
             <div className="hr-times">
-              <span>เข้า <b>{fmtTime(a?.check_in_at)}</b>{s?.isLate && <span className="att-tag late sm">+{fmtMin(s.lateMin)}</span>}</span>
-              <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otHours > 0 && <span className="att-tag ot sm">OT {s.otHours} ชม.</span>}</span>
+              <span>เข้า <b>{fmtTime(a?.check_in_at)}</b>{s?.isLate && <span className="att-tag late sm">+{fmtMin(s.lateMin)}</span>} {thumb(a?.check_in_photo, "เซลฟี่ตอนเช็คอิน — กดดูเต็ม")}{pin(a?.check_in_lat, a?.check_in_lng, "พิกัดตอนเช็คอิน — เปิดแผนที่")}</span>
+              <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otHours > 0 && <span className="att-tag ot sm">OT {s.otHours} ชม.{settings.otNeedsApproval ? (a?.ot_ok ? " ✓" : " · รอรับรอง") : ""}</span>} {thumb(a?.check_out_photo, "เซลฟี่ตอนเช็คเอาท์ — กดดูเต็ม")}{pin(a?.check_out_lat, a?.check_out_lng, "พิกัดตอนเช็คเอาท์ — เปิดแผนที่")}</span>
             </div>
             <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]?.t) : b.t}</span>
             {status !== "leave" && onLeave[p.id]?.h > 0 && <span className="job-badge b-blue">{leaveLabel(onLeave[p.id].t)} {onLeave[p.id].h} ชม.</span>}
+            {canManage && settings.otNeedsApproval && s?.otHours > 0 && (a?.ot_ok
+              ? <button className="btn-ghost sm" title="รับรองแล้ว — กดเพื่อถอนการรับรอง OT วันนี้" onClick={() => otOk(p, a, false)}>OT ✓</button>
+              : <button className="btn-primary sm ok" title="กดรับรองให้คิด OT วันนี้เข้าเงินเดือน" onClick={() => otOk(p, a, true)}>รับรอง OT</button>)}
             {rowManage && <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>}
             {rowManage && a && <button className="btn-ghost sm danger" title="ลบเวลาเข้า-ออก" onClick={() => delAtt(p)}><UIcon name="trash" size={13} /></button>}
             {canManage && !rowManage && <span className="jo-dim" title="ฝ่ายบุคคลแก้เวลาของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารแก้ให้" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span>}
           </div>
         ); })}
       </div>
-      {edit && <AttEditModal day={day} row={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
+      {edit && <AttEditModal day={edit.day || day} row={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); loadMissing(); }} flash={flash} />}
     </div>
   );
 }
@@ -608,7 +643,7 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
           if (!isWorkday(k, p.work_pattern || "mon_sat", p.sat_group, holSet)) continue;
           workdays++;
           const a = attByUserDay[p.id]?.[k];
-          if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } otMin += s.otMin; otHours += s.otHours; }
+          if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } if (!settings.otNeedsApproval || a.ot_ok) { otMin += s.otMin; otHours += s.otHours; } } // โหมดรับรอง OT: นับเฉพาะวันที่รับรองแล้ว (ตรงกับ periodStats ฝั่งเงินเดือน)
           else absent++;
         }
         leaveCnt = Math.round(leaveCnt * 100) / 100;
@@ -683,12 +718,12 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
       )}
 
       {detail && <PersonDetail row={(rows || []).find((r) => r.p.id === detail.p.id) || detail} days={personDays(detail.p)}
-        canManage={canManage} flash={flash} onChanged={load} onClose={() => setDetail(null)} />}
+        otNeeds={!!settings.otNeedsApproval} canManage={canManage} flash={flash} onChanged={load} onClose={() => setDetail(null)} />}
     </div>
   );
 }
 
-function PersonDetail({ row, days, onClose, canManage, flash, onChanged }) {
+function PersonDetail({ row, days, onClose, canManage, flash, onChanged, otNeeds }) {
   const [editDay, setEditDay] = React.useState(null);   // แก้เวลาเข้า-ออกย้อนหลังของวันนั้น
   const KIND = {
     present: { t: "มา", c: "b-green" }, late: { t: "มาสาย", c: "b-amber" },
@@ -716,7 +751,7 @@ function PersonDetail({ row, days, onClose, canManage, flash, onChanged }) {
                   {d.kind === "leave" ? leaveLabel(d.leaveType)
                     : d.a?.check_in_at ? <>เข้า <b>{fmtTime(d.a.check_in_at)}</b> · ออก <b>{fmtTime(d.a.check_out_at)}</b>
                       {d.s?.isLate && <span className="att-tag late sm">สาย {fmtMin(d.s.lateMin)}</span>}
-                      {d.s?.otHours > 0 && <span className="att-tag ot sm">OT {d.s.otHours} ชม.</span>}</>
+                      {d.s?.otHours > 0 && <span className="att-tag ot sm">OT {d.s.otHours} ชม.{otNeeds ? (d.a?.ot_ok ? " ✓" : " · รอรับรอง") : ""}</span>}</>
                     : "—"}
                   {d.kind !== "leave" && d.leaveHours > 0 && <span className="att-tag sm" style={{ color: "#2563eb" }}>{leaveLabel(d.leaveType)} {d.leaveHours} ชม.</span>}
                 </span>
@@ -1204,6 +1239,10 @@ function StaffTab({ staff, settings, holidays, onReload, flash }) {
           <label className="fld"><span>โควต้าลากิจ/ปี</span><input className="inp" type="number" min="0" value={s.quota?.personal ?? 3} onChange={(e) => setS({ ...s, quota: { ...s.quota, personal: Number(e.target.value) || 0 } })} /></label>
           <label className="fld"><span>โควต้าลาป่วย/ปี</span><input className="inp" type="number" min="0" value={s.quota?.sick ?? 30} onChange={(e) => setS({ ...s, quota: { ...s.quota, sick: Number(e.target.value) || 0 } })} /></label>
         </div>
+        <label className="hr-sso" style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+          <input type="checkbox" checked={!!s.otNeedsApproval} onChange={(e) => setS({ ...s, otNeedsApproval: e.target.checked })} />
+          <span><b>OT ต้องรับรองก่อนคิดเงิน</b> — เปิดแล้ว OT จะเข้าเงินเดือน/รายงานเฉพาะวันที่ HR กด “รับรอง OT” ในแท็บวันนี้ (กัน OT อัตโนมัติจากการเช็คเอาท์ช้า · ต้องรัน migration 144)</span>
+        </label>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -1290,10 +1329,13 @@ function QuotaCard({ staff, settings, flash }) {
   }
   React.useEffect(() => { load(); }, []);
   const qOf = (id) => ({ vacation: over[id]?.vacation ?? def.vacation, personal: over[id]?.personal ?? def.personal, sick: over[id]?.sick ?? def.sick });
-  async function save(id, type, val) {
+  // พิมพ์ = อัปเดตหน้าจออย่างเดียว · บันทึกจริงตอนออกจากช่อง (onBlur) — เดิมยิง API ทุกตัวอักษร
+  function setLocal(id, type, val) {
     const next = { ...qOf(id), [type]: Math.max(0, Number(val) || 0) };
     setOver((o) => ({ ...o, [id]: { ...(o[id] || {}), ...next } }));
-    try { await saveLeaveQuota(id, year, next); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function persist(id) {
+    try { await saveLeaveQuota(id, year, qOf(id)); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   const COLS = [["vacation", "พักร้อน"], ["personal", "ลากิจ"], ["sick", "ลาป่วย"]];
   return (
@@ -1313,7 +1355,7 @@ function QuotaCard({ staff, settings, flash }) {
                   <td style={{ textAlign: "left" }}><b>{p.name || p.email}</b><div className="jo-dim">{p.department || "-"}</div></td>
                   {COLS.map(([k]) => { const rem = q[k] - (used[p.id]?.[k] || 0); return (
                     <React.Fragment key={k}>
-                      <td><input className="inp hr-q-inp" type="number" min="0" value={q[k]} onChange={(e) => save(p.id, k, e.target.value)} /></td>
+                      <td><input className="inp hr-q-inp" type="number" min="0" value={q[k]} onChange={(e) => setLocal(p.id, k, e.target.value)} onBlur={() => persist(p.id)} /></td>
                       <td className={rem < 0 ? "hr-bad" : rem === 0 ? "hr-warn" : "hr-ok"}>{rem}</td>
                     </React.Fragment>
                   ); })}

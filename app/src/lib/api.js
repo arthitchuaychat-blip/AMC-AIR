@@ -3110,13 +3110,12 @@ export async function listMyAttendance(fromDay) {
 }
 // manager: all attendance in a date range, joined with staff name/department
 export async function listAttendance(fromDay, toDay) {
-  const [att, profs] = await Promise.all([
-    supabase.from("hr_attendance").select("*").gte("work_date", fromDay).lte("work_date", toDay).order("work_date", { ascending: false }),
+  const [attRows, profs] = await Promise.all([
+    _fetchAll((f, t) => supabase.from("hr_attendance").select("*", { count: "exact" }).gte("work_date", fromDay).lte("work_date", toDay).order("work_date", { ascending: false }).order("id").range(f, t)), // กันเพดาน 1000 แถว (ทั้งเดือน × ทุกคน)
     supabase.from("profiles").select("id,name,role,department,work_pattern,sat_group"),
   ]);
-  if (att.error) throw att.error;
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
-  return (att.data || []).map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]), work_pattern: pm[a.user_id]?.work_pattern, sat_group: pm[a.user_id]?.sat_group }));
+  return attRows.map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]), work_pattern: pm[a.user_id]?.work_pattern, sat_group: pm[a.user_id]?.sat_group }));
 }
 
 export async function submitLeave({ type, start_date, end_date, days, reason, hours, time_from, time_to }) {
@@ -3140,12 +3139,11 @@ export async function listMyLeaves() {
   if (error) throw error; return data || [];
 }
 export async function listLeaves(status) {
-  let q = supabase.from("hr_leaves").select("*").order("created_at", { ascending: false });
-  if (status) q = q.eq("status", status);
-  const [lv, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,role,department")]);
-  if (lv.error) throw lv.error;
+  // กันเพดาน 1000 แถว — ใบลาสะสมทุกปีไม่มีตัวกรองช่วงวัน พอเกินพันใบ ใบเก่าจะหลุดเงียบ ๆ ทำรายงาน/เงินเดือนย้อนหลังเพี้ยน
+  const build = (f, t) => { let q = supabase.from("hr_leaves").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
+  const [lvRows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,role,department")]);
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
-  return (lv.data || []).map((l) => ({ ...l, name: pm[l.user_id]?.name || "-", department: posLabel(pm[l.user_id]) }));
+  return lvRows.map((l) => ({ ...l, name: pm[l.user_id]?.name || "-", department: posLabel(pm[l.user_id]) }));
 }
 export async function decideLeave(id, status, note) {
   const uid = await _uid();
@@ -3191,12 +3189,11 @@ export async function cancelMyAdvance(id) {
   if (error) throw error;
 }
 export async function listAdvances(status) {
-  let q = supabase.from("hr_advances").select("*").order("created_at", { ascending: false });
-  if (status) q = q.eq("status", status);
-  const [av, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,role,department")]);
-  if (av.error) throw av.error;
+  // กันเพดาน 1000 แถว — คำขอเบิกสะสมเรื่อย ๆ เหมือนใบลา
+  const build = (f, t) => { let q = supabase.from("hr_advances").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
+  const [avRows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,role,department")]);
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
-  return (av.data || []).map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]) }));
+  return avRows.map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]) }));
 }
 export async function decideAdvance(id, status, note) {
   const uid = await _uid();
@@ -3280,6 +3277,11 @@ export async function adminSaveAttendance(userId, workDate, checkInAt, checkOutA
   const { error } = await supabase.from("hr_attendance").upsert(
     { user_id: userId, work_date: workDate, check_in_at: checkInAt || null, check_out_at: checkOutAt || null },
     { onConflict: "user_id,work_date" });
+  if (error) throw error;
+}
+// HR รับรอง/ถอนรับรอง OT ของคน+วันนั้น (mig 144) — มีผลเมื่อเปิดตั้งค่า "OT ต้องรับรองก่อนคิดเงิน"
+export async function setAttendanceOtOk(userId, workDate, ok) {
+  const { error } = await supabase.from("hr_attendance").update({ ot_ok: !!ok }).eq("user_id", userId).eq("work_date", workDate);
   if (error) throw error;
 }
 // HR/admin delete a day's attendance record (clears it back to "ยังไม่เข้า")

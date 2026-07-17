@@ -27,7 +27,8 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
     workdays++;
     const a = attByUserDay[emp.id]?.[k];
     // OT rounded per-day (½-hour blocks) then summed — so sub-30-min days never accumulate
-    if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } otMin += s.otMin; otHours += s.otHours; }
+    // เปิดตั้งค่า "OT ต้องรับรอง" (mig 144): นับ OT เฉพาะวันที่ HR กดรับรองแล้ว (ot_ok) — กัน OT อัตโนมัติจากการเช็คเอาท์ช้า
+    if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } if (!settings?.otNeedsApproval || a.ot_ok) { otMin += s.otMin; otHours += s.otHours; } }
     else absent++;
   }
   const r2 = (n) => Math.round(n * 100) / 100;
