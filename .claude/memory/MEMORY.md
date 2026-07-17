@@ -1,6 +1,7 @@
 # Memory index
 
 - [Git BOQ case](git-boq-case.md) — git add ต้องก็อปพาธจาก git status เป๊ะ ๆ (BOQ.jsx ตัวใหญ่) ไม่งั้นหลุดเงียบ; ความจำอยู่บน Google Drive ผ่าน junction
+- [PowerShell + ภาษาไทย](ps1-thai-bom.md) — .ps1 ที่มีคอมเมนต์ไทยต้องเซฟ UTF-8 **พร้อม BOM** ไม่งั้น PS 5.1 พังด้วย error หลอกว่า "Missing closing '}'"
 
 - [The Top Mentor](the-top-mentor.md) — แอปติดตาม Mentoring 8 สัปดาห์ + Happiness Survey, live ที่ amc-air.vercel.app/mentor/ (Supabase tm_* mig 108, สำเนาคู่ the-top-mentor/ ↔ app/public/mentor/); ค้าง = LINE auto-send + แบบสอบถามจริง
 
