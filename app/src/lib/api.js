@@ -825,16 +825,17 @@ export async function dashboardActionLite() {
 // รายการค้างจ่ายแจกแจงรายใบ (เมนู "ค้างจ่าย") — แหล่ง/สูตรเดียวกับยอดค้างจ่ายบนแดชบอร์ด
 // 4 ประเภทไม่ทับกัน: PO ยังไม่จ่าย (เฉพาะรับของแล้ว/ส่งเบิกแล้ว — แค่สั่งไว้ยังไม่นับ) · เบิกอนุมัติรอจ่าย (ไม่รวมใบเบิกของ PO) · ใบจ่ายซัพรอจ่าย · ค่าแรงยืนยันแล้วยังไม่ตั้งเบิก
 export async function listPayables() {
+  const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows })); // กันเพดาน 1000 แถวทุกก้อน — PO เกินพันใบเมื่อไหร่ ใบค้างเก่าสุดจะหายจากเมนูก่อน
   const [po, poi, exp, sp, lj, tm, qt, cu] = await Promise.all([
-    supabase.from("purchase_orders").select("*").neq("status", "cancelled").order("created_at", { ascending: false }),
-    _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
-    supabase.from("expense_requests").select("*").eq("status", "approved").order("created_at", { ascending: false }),
-    supabase.from("sub_payouts").select("*").neq("status", "paid").order("created_at", { ascending: false }),
-    supabase.from("job_orders").select("job_no,team,labor_total,labor_paid_amt,scheduled_at").eq("labor_confirmed", true).gt("labor_total", 0)
-      .then((r) => (r.error ? { data: [] } : r)),
+    _rows((f, t) => supabase.from("purchase_orders").select("*", { count: "exact" }).neq("status", "cancelled").order("created_at", { ascending: false }).order("po_no").range(f, t)),
+    _rows((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("expense_requests").select("*", { count: "exact" }).eq("status", "approved").order("created_at", { ascending: false }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("sub_payouts").select("*", { count: "exact" }).neq("status", "paid").order("created_at", { ascending: false }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("job_orders").select("job_no,team,labor_total,labor_paid_amt,scheduled_at", { count: "exact" }).eq("labor_confirmed", true).gt("labor_total", 0).order("job_no").range(f, t))
+      .catch(() => ({ data: [] })),
     supabase.from("teams").select("id,name"),
-    supabase.from("quotations").select("quote_no,customer_id,title"),   // PO → ใบเสนอ → ลูกค้า + ชื่องาน
-    supabase.from("customers").select("id,name"),
+    _rows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),   // PO → ใบเสนอ → ลูกค้า + ชื่องาน
+    _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
   ]);
   if (po.error) throw po.error;
   const cb = await _creators();
@@ -2271,6 +2272,16 @@ export async function createSubPayout({ team, lines, whtRate, note }) {
   const ls = (lines || []).filter((l) => (Number(l.amount) || 0) > 0);
   if (!ls.length) throw new Error("ไม่มีรายการที่จะจ่าย");
   const jobNos = ls.map((l) => l.job_no);
+  // guard ฝั่ง server: อ่านยอดค้างสดก่อนสร้างใบ — กัน 2 เครื่องกด "จ่ายเต็มจำนวน" งานเดียวกันพร้อมกัน (ใบจ่ายซ้ำ 2 ใบยอดเต็ม)
+  const { data: jrows, error: ej } = await supabase.from("job_orders").select("job_no,labor_total,labor_paid_amt").in("job_no", jobNos);
+  if (ej) throw ej;
+  const cur = Object.fromEntries((jrows || []).map((j) => [j.job_no, j]));
+  for (const l of ls) {
+    const j = cur[l.job_no];
+    if (!j) throw new Error(`ไม่พบใบงาน ${l.job_no}`);
+    const rem = _r2((Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0));
+    if ((Number(l.amount) || 0) > rem + 0.01) throw new Error(`ยอดจ่ายของ ${l.job_no} เกินค้างจ่าย (เหลือ ${rem.toLocaleString("en-US")} บาท) — อาจมีคนตั้งจ่ายพร้อมกันจากอีกเครื่อง รีเฟรชแล้วลองใหม่`);
+  }
   const gross = _r2(ls.reduce((a, l) => a + (Number(l.amount) || 0), 0));
   const vatBase = _r2(ls.filter((l) => l.vat).reduce((a, l) => a + (Number(l.amount) || 0), 0));
   const whtAmt = _r2(vatBase * (Number(whtRate) || 0) / 100);
@@ -2280,14 +2291,19 @@ export async function createSubPayout({ team, lines, whtRate, note }) {
     net, status: "unpaid", note: note || null, created_by: uid,
   }).select("id").single();
   if (error) throw error;
-  // bump each job's cumulative allocated amount; lock the job when fully allocated
-  const { data: jrows } = await supabase.from("job_orders").select("job_no,labor_total,labor_paid_amt").in("job_no", jobNos);
-  const cur = Object.fromEntries((jrows || []).map((j) => [j.job_no, j]));
+  // bump each job's cumulative allocated amount (optimistic: อัปเดตเฉพาะเมื่อยอดยังเท่าตอนอ่าน) — ชนกันเมื่อไหร่ถอนใบจ่ายทิ้งทันที
   for (const l of ls) {
-    const j = cur[l.job_no]; if (!j) continue;
+    const j = cur[l.job_no];
     const paid = _r2((Number(j.labor_paid_amt) || 0) + (Number(l.amount) || 0));
     const done = paid >= (Number(j.labor_total) || 0) - 0.01;
-    await supabase.from("job_orders").update({ labor_paid_amt: paid, labor_paid: done, payout_id: data.id }).eq("job_no", l.job_no);
+    let q = supabase.from("job_orders").update({ labor_paid_amt: paid, labor_paid: done, payout_id: data.id });
+    q = j.labor_paid_amt == null ? q.is("labor_paid_amt", null) : q.eq("labor_paid_amt", j.labor_paid_amt);
+    const { data: ok, error: eu } = await q.eq("job_no", l.job_no).select("job_no");
+    if (eu) throw eu;
+    if (!ok || !ok.length) {
+      try { await supabase.from("sub_payouts").delete().eq("id", data.id); } catch (_) { /* best-effort rollback */ }
+      throw new Error(`ใบงาน ${l.job_no} ถูกตั้งจ่ายพร้อมกันจากอีกเครื่อง — ยกเลิกใบนี้ให้แล้ว รีเฟรชแล้วลองใหม่`);
+    }
   }
   syncCashEntriesFromDocs().catch(() => {}); // new payout → "คาดว่าจะจ่าย" in cash flow
   return data.id;
@@ -2302,7 +2318,8 @@ export async function paySubPayout(id, opts) {
   if (e0) throw e0;
   if (p.status === "paid") throw new Error("ใบนี้บันทึกจ่ายแล้ว");
   const day = payDate || new Date().toISOString().slice(0, 10);
-  const patch = { status: "paid", paid_at: new Date().toISOString(), method: method || null, paid_from: accountId || null, pay_slip_url: slipUrl || null };
+  // paid_at ใช้วันที่จ่ายที่ผู้ใช้เลือก (เที่ยง UTC = ตกวันเดียวกันตามเวลาไทยแน่นอน) — กระแสเงินสดลงวันเดียวกับเดินบัญชี ไม่ใช่วันกดปุ่ม
+  const patch = { status: "paid", paid_at: payDate ? `${payDate}T12:00:00.000Z` : new Date().toISOString(), method: method || null, paid_from: accountId || null, pay_slip_url: slipUrl || null };
   let upd = await supabase.from("sub_payouts").update(patch).eq("id", id);
   if (upd.error && /pay_slip_url/i.test(upd.error.message || "")) { delete patch.pay_slip_url; upd = await supabase.from("sub_payouts").update(patch).eq("id", id); } // pre-128 fallback
   if (upd.error && /paid_from|column|PGRST204/i.test(upd.error.message || "")) { delete patch.paid_from; upd = await supabase.from("sub_payouts").update(patch).eq("id", id); }
@@ -2314,7 +2331,7 @@ export async function paySubPayout(id, opts) {
   syncCashEntriesFromDocs().catch(() => {}); // paid → move to "จ่ายจริง" in cash flow
 }
 // cancel an unpaid payout → give the allocated amounts back so the jobs return to "รอจ่าย"
-export async function cancelSubPayout(id) {
+export async function cancelSubPayout(id, reason) {
   const { data: p, error } = await supabase.from("sub_payouts").select("id,status,lines,job_nos").eq("id", id).single();
   if (error) throw error;
   if (p.status === "paid") throw new Error("ใบนี้บันทึกจ่ายแล้ว ยกเลิกไม่ได้");
@@ -2337,6 +2354,7 @@ export async function cancelSubPayout(id) {
   await supabase.from("account_entries").delete().eq("ref_type", "payout").eq("ref_id", id); // defensive: drop any linked bank-ledger line
   const { error: delErr } = await supabase.from("sub_payouts").delete().eq("id", id);
   if (delErr) throw delErr;
+  await logAudit({ action: "cancel", target_type: "sub_payout", target_no: String(id), reason, snapshot: p }); // กติกาบ้าน: ยกเลิกลงประวัติเสมอ
   syncCashEntriesFromDocs().catch(() => {}); // removed payout → update its cash-flow line
 }
 // edit an existing payout's per-job amounts (accounting correction; works on paid ones too).
@@ -2371,10 +2389,10 @@ export async function updateSubPayout({ id, lines, whtRate }) {
   }
   return id;
 }
-// hard-delete a payout (admin/finance correction) — works on paid ones too;
+// hard-delete a payout (ธุรการเท่านั้น — กติกาบ้าน "ลบถาวร = admin") — works on paid ones too;
 // releases each job's cumulative paid amount back so the labor returns to "รอจ่าย".
-export async function deleteSubPayout(id) {
-  const { data: p, error } = await supabase.from("sub_payouts").select("id,lines,job_nos").eq("id", id).single();
+export async function deleteSubPayout(id, reason) {
+  const { data: p, error } = await supabase.from("sub_payouts").select("*").eq("id", id).single();
   if (error) throw error;
   const lines = p.lines || [];
   const jobNos = lines.length ? lines.map((l) => l.job_no) : (p.job_nos || []);
@@ -2394,6 +2412,7 @@ export async function deleteSubPayout(id) {
   await supabase.from("account_entries").delete().eq("ref_type", "payout").eq("ref_id", id); // remove the bank-ledger out line
   const { error: delErr } = await supabase.from("sub_payouts").delete().eq("id", id);
   if (delErr) throw delErr;
+  await logAudit({ action: "delete", target_type: "sub_payout", target_no: String(id), reason, snapshot: p }); // ลบถาวรลงประวัติ + snapshot กู้คืนได้
   syncCashEntriesFromDocs().catch(() => {}); // removed payout → update its cash-flow line
 }
 export async function deleteTeam(id) {
@@ -2586,7 +2605,8 @@ export async function uploadTaskFile(file) {
 export async function listAccounts() {
   const [a, e] = await Promise.all([
     supabase.from("accounts").select("*").order("sort"),
-    supabase.from("account_entries").select("account_id,direction,amount"),
+    // ยอดคงเหลือทุกบัญชีคิดจากตารางนี้ — โดนเพดาน 1000 แถวเมื่อไหร่ยอดผิดเงียบ ๆ ทั้งระบบ
+    _fetchAll((f, t) => supabase.from("account_entries").select("account_id,direction,amount", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })),
   ]);
   if (a.error) throw a.error;
   const bal = {}; (e.data || []).forEach((x) => { bal[x.account_id] = (bal[x.account_id] || 0) + (x.direction === "in" ? 1 : -1) * (Number(x.amount) || 0); });
@@ -2598,12 +2618,14 @@ export async function setAccountOpening(accountId, amount) {
   if (error) throw error;
 }
 export async function listAccountEntries({ accountId, from, to } = {}) {
-  let q = supabase.from("account_entries").select("*").order("entry_date", { ascending: false }).order("created_at", { ascending: false });
-  if (accountId) q = q.eq("account_id", accountId);
-  if (from) q = q.gte("entry_date", from);
-  if (to) q = q.lte("entry_date", to);
-  const { data, error } = await q.limit(2000);
-  if (error) throw error; return data || [];
+  // .limit(2000) เดิมโดน Supabase ตัดที่ 1000/request อยู่ดี — แถวเก่าสุดหายก่อน ทำยอดยกมาต้นเดือน/กระทบแบงค์เพี้ยน
+  return _fetchAll((f, t) => {
+    let q = supabase.from("account_entries").select("*", { count: "exact" }).order("entry_date", { ascending: false }).order("created_at", { ascending: false }).order("id");
+    if (accountId) q = q.eq("account_id", accountId);
+    if (from) q = q.gte("entry_date", from);
+    if (to) q = q.lte("entry_date", to);
+    return q.range(f, t);
+  });
 }
 // expense categories (หมวดค่าใช้จ่าย) — for expense requests + manual ledger lines, drives future analysis
 export async function listExpenseCategories() {
@@ -2635,7 +2657,15 @@ export async function addAccountEntry({ accountId, direction, amount, note, entr
   if (error && /category|column|PGRST204/i.test(error.message || "") && payload.category !== undefined) { delete payload.category; ({ error } = await supabase.from("account_entries").insert(payload)); }
   if (error) throw error;
 }
+// แถวที่กระทบแบงค์ (✓ reconciled) แล้ว ห้ามแก้/ลบ — ไม่งั้นยอดที่เคยตรงกับ statement เพี้ยนโดยธงยังติดอยู่
+async function _entryReconciledGuard(id) {
+  try {
+    const { data } = await supabase.from("account_entries").select("reconciled").eq("id", id).maybeSingle();
+    if (data?.reconciled) throw new Error("รายการนี้กระทบแบงค์ (✓) แล้ว — ปลดเครื่องหมายกระทบก่อนแก้/ลบ");
+  } catch (e) { if (/กระทบแบงค์/.test(e.message || "")) throw e; /* pre-089 ไม่มีคอลัมน์ — ผ่านได้ */ }
+}
 export async function updateAccountEntry(id, { amount, note, entry_date, direction } = {}) {
+  await _entryReconciledGuard(id);
   const patch = {};
   if (amount != null) patch.amount = Number(amount) || 0;
   if (note !== undefined) patch.note = note?.trim() || null;
@@ -2645,6 +2675,7 @@ export async function updateAccountEntry(id, { amount, note, entry_date, directi
   if (error) throw error;
 }
 export async function deleteAccountEntry(id) {
+  await _entryReconciledGuard(id);
   const { error } = await supabase.from("account_entries").delete().eq("id", id);
   if (error) throw error;
 }
@@ -2739,7 +2770,15 @@ export async function listTransfers() {
   return Object.values(byRef).filter((t) => t.fromId && t.toId).sort((a, b) => (b.entry_date || "").localeCompare(a.entry_date || "") || (b.created_at || "").localeCompare(a.created_at || ""));
 }
 // fix a mis-recorded transfer: update both legs (accounts/amount/note/date) by ref_id
+// รายการโอนที่ขาใดขาหนึ่งกระทบแบงค์แล้ว ห้ามแก้/ลบทั้งคู่
+async function _transferReconciled(ref_id) {
+  try {
+    const { data } = await supabase.from("account_entries").select("reconciled").eq("ref_id", ref_id).eq("ref_type", "transfer");
+    return (data || []).some((x) => x.reconciled);
+  } catch (_) { return false; /* pre-089 */ }
+}
 export async function updateTransfer(ref_id, { fromId, toId, amount, note, entry_date }) {
+  if (await _transferReconciled(ref_id)) throw new Error("รายการโอนนี้กระทบแบงค์ (✓) แล้ว — ปลดเครื่องหมายกระทบทั้ง 2 ขาก่อนแก้");
   const amt = Number(amount) || 0;
   if (!fromId || !toId || fromId === toId) throw new Error("เลือกบัญชีต้นทาง/ปลายทางให้ถูกต้อง");
   if (amt <= 0) throw new Error("จำนวนเงินต้องมากกว่า 0");
@@ -2751,6 +2790,7 @@ export async function updateTransfer(ref_id, { fromId, toId, amount, note, entry
   if (e2) throw e2;
 }
 export async function deleteTransfer(ref_id) {
+  if (await _transferReconciled(ref_id)) throw new Error("รายการโอนนี้กระทบแบงค์ (✓) แล้ว — ปลดเครื่องหมายกระทบทั้ง 2 ขาก่อนลบ");
   const { error } = await supabase.from("account_entries").delete().eq("ref_id", ref_id).eq("ref_type", "transfer");
   if (error) throw error;
 }
@@ -2819,21 +2859,31 @@ async function _enrichExpenseJobs(rows) {
 }
 export async function listMyExpenses() {
   const uid = await _uid();
-  const { data, error } = await supabase.from("expense_requests").select("*").eq("requester", uid).order("created_at", { ascending: false });
-  if (error) throw error;
+  const data = await _fetchAll((f, t) => supabase.from("expense_requests").select("*", { count: "exact" }).eq("requester", uid).order("created_at", { ascending: false }).order("id").range(f, t));
   return _enrichExpenseJobs(data || []);
 }
 export async function listExpenses(status) {
-  let q = supabase.from("expense_requests").select("*").order("created_at", { ascending: false });
-  if (status) q = q.eq("status", status);
-  const [ex, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,email")]);
-  if (ex.error) throw ex.error;
+  // กันเพดาน 1000 แถว — ทุกการจ่าย PO สร้างใบเบิก 1 ใบ ตารางโตเร็ว · PayVendorModal พึ่ง list นี้ตัดสินว่าใบเบิกเดิม "ถูกลบ" หรือยัง
+  const build = (f, t) => { let q = supabase.from("expense_requests").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
+  const [exRows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,email")]);
+  const ex = { data: exRows };
   const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
   const enriched = await _enrichExpenseJobs(ex.data || []);
   return enriched.map((x) => ({ ...x, requesterName: nm[x.requester] || "—", approverName: x.approver ? (nm[x.approver] || "—") : null }));
 }
 export async function decideExpense(id, status, note) {
   const uid = await _uid();
+  const { data: ex0, error: e00 } = await supabase.from("expense_requests").select("requester,status,paid_amount").eq("id", id).maybeSingle();
+  if (e00) throw e00;
+  if (!ex0) throw new Error("ไม่พบใบเบิกนี้ (อาจถูกจัดการไปแล้ว)");
+  // จ่ายบางส่วนไปแล้ว ห้ามไม่อนุมัติ — ไม่งั้นเส้นเงินที่จ่ายจริงหายจากกระแสเงินสด และ PO กลับเป็นหนี้เต็มก้อน (จ่ายซ้ำได้)
+  if (status === "rejected" && Number(ex0.paid_amount) > 0.009)
+    throw new Error(`ไม่อนุมัติไม่ได้ — ใบนี้จ่ายไปแล้ว ${Number(ex0.paid_amount).toLocaleString("en-US")} บาท (หน้าจออาจค้าง — รีเฟรชก่อน)`);
+  // กันอนุมัติใบเบิกของตัวเอง — ยกเว้นธุรการ/ผู้บริหาร (แนวเดียวกับล็อกอนุมัติใบลาฝั่ง HR)
+  if (status === "approved" && ex0.requester === uid) {
+    const { data: me } = await supabase.from("profiles").select("role").eq("id", uid).maybeSingle();
+    if (!["admin", "exec"].includes(me?.role)) throw new Error("อนุมัติใบเบิกของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารเป็นคนอนุมัติ");
+  }
   const { error } = await supabase.from("expense_requests").update({ status, approver: uid, decided_at: new Date().toISOString(), decide_note: note || null }).eq("id", id);
   if (error) throw error;
   // คำขอชำระใบสั่งซื้อถูกปฏิเสธ → ปลดลิงก์ให้ PO กลับเป็น "ยังไม่จ่าย" (ส่งขอใหม่ได้)
@@ -2860,6 +2910,8 @@ export async function payExpense(id, { accountId, proof, payDate, amount, expect
   const { data: ex, error: e0 } = await supabase.from("expense_requests").select("*").eq("id", id).single();
   if (e0) throw e0;
   if (ex.status === "paid") throw new Error("จ่ายเงินครบแล้ว");
+  // จ่ายได้เฉพาะใบที่ผ่านการอนุมัติ — ใบ pending/rejected จ่ายแล้วเงินออกจากบัญชีแต่กระแสเงินสดมองไม่เห็น (sync ข้าม)
+  if (ex.status !== "approved") throw new Error(ex.status === "rejected" ? "ใบนี้ถูกปฏิเสธแล้ว — จ่ายไม่ได้" : "ใบนี้ยังไม่ผ่านการอนุมัติ — อนุมัติก่อนจ่าย");
   const total = Math.round((Number(ex.amount) || 0) * 100) / 100;
   const already = Math.round((Number(ex.paid_amount) || 0) * 100) / 100;
   const remaining = Math.round((total - already) * 100) / 100;
@@ -2873,14 +2925,23 @@ export async function payExpense(id, { accountId, proof, payDate, amount, expect
   const upd = { payment_proof: [...(ex.payment_proof || []), ...(proof || [])], paid_amount: newPaid, last_paid_at: day };
   if (expectedPayDate !== undefined) upd.expected_pay_date = expectedPayDate || null;   // วันคาดจ่ายยอดที่เหลือ
   if (fully) { upd.status = "paid"; upd.paid_from = accountId || null; upd.paid_at = new Date().toISOString(); }
-  let uErr = (await supabase.from("expense_requests").update(upd).eq("id", id)).error;
+  // optimistic lock: อัปเดตเฉพาะเมื่อ paid_amount ยังเท่าตอนที่อ่านมา — กัน 2 ธุรการกดจ่ายใบเดียวกันพร้อมกัน (เงินออก 2 เท่าแต่บันทึกครั้งเดียว)
+  let uErr, uRows;
+  {
+    let q = supabase.from("expense_requests").update(upd).eq("id", id);
+    q = ex.paid_amount == null ? q.is("paid_amount", null) : q.eq("paid_amount", ex.paid_amount);
+    const r = await q.select("id");
+    uErr = r.error; uRows = r.data;
+  }
   // pre-111/112: ไม่มีคอลัมน์ paid_amount/last_paid_at/expected_pay_date → บังคับจ่ายเต็มจำนวน
   if (uErr && /paid_amount|last_paid_at|expected_pay_date/i.test(uErr.message || "")) {
     if (!fully) throw new Error("ยังไม่ได้รัน migration 111/112 — แบ่งจ่ายยังไม่พร้อม (จ่ายเต็มยอดก่อน)");
     delete upd.paid_amount; delete upd.last_paid_at; delete upd.expected_pay_date;
-    uErr = (await supabase.from("expense_requests").update(upd).eq("id", id)).error;
+    const r2 = await supabase.from("expense_requests").update(upd).eq("id", id).select("id");
+    uErr = r2.error; uRows = r2.data;
   }
   if (uErr) throw uErr;
+  if (!uRows || !uRows.length) throw new Error("มีคนจ่ายใบนี้พร้อมกันจากอีกเครื่อง — รีเฟรชแล้วเช็คยอดก่อนจ่ายซ้ำ");
 
   // บันทึกฝั่งบัญชีธนาคาร (รายการเดินบัญชี) เฉพาะยอดงวดนี้
   const noteTxt = `เบิกจ่าย: ${ex.title}${!fully ? ` (งวด · เหลือ ${(remaining - payAmt).toLocaleString()})` : ""}${ex.job_no ? " · งาน " + ex.job_no : ""}`;
@@ -3423,20 +3484,34 @@ export async function setPayslipPaid(period, paid, meta = {}) {
 // ลงเดินบัญชี: เงินเดือนทั้งรอบ = เงินออกก้อนเดียวจากบัญชีที่เลือก (อ้าง ref salary + รอบ ไว้ลบตอนยกเลิกจ่าย)
 export async function bookSalaryEntry(ym, accountId, amount, payDate, headcount) {
   const uid = await _uid();
-  await supabase.from("account_entries").delete().eq("ref_type", "salary").eq("ref_id", ym);   // กันซ้ำเมื่อจ่ายรอบเดิมใหม่
+  // กันซ้ำเมื่อจ่ายรอบเดิมใหม่ — แต่ห้ามลบแถวที่กระทบแบงค์ (✓) แล้ว
+  const d1 = await supabase.from("account_entries").delete().eq("ref_type", "salary").eq("ref_id", ym).or("reconciled.is.null,reconciled.eq.false");
+  if (d1.error) {
+    if (!/reconciled|column|PGRST/i.test(d1.error.message || "")) throw d1.error;
+    const d2 = await supabase.from("account_entries").delete().eq("ref_type", "salary").eq("ref_id", ym); // pre-089 ไม่มีคอลัมน์ reconciled
+    if (d2.error) throw d2.error;
+  }
+  const { count } = await supabase.from("account_entries").select("id", { count: "exact", head: true }).eq("ref_type", "salary").eq("ref_id", ym);
+  if ((count || 0) > 0) return; // ยังมีแถวของรอบนี้ที่กระทบแบงค์ค้างอยู่ — ไม่ insert ซ้ำ (ยอดถูกบันทึก+ยืนยันกับ statement ไปแล้ว)
   const { error } = await supabase.from("account_entries").insert({ account_id: accountId, direction: "out", amount: Number(amount) || 0, kind: "salary", ref_type: "salary", ref_id: ym, note: `เงินเดือนรอบ ${ym} (${headcount} คน)`, entry_date: payDate || new Date().toISOString().slice(0, 10), created_by: uid });
   if (error) throw error;
 }
 export async function removeSalaryEntry(ym) {
-  const { error } = await supabase.from("account_entries").delete().eq("ref_type", "salary").eq("ref_id", ym);
-  if (error) throw error;
+  // ลบเฉพาะแถวที่ยังไม่กระทบแบงค์ — แถว ✓ แล้วต้องปลดเครื่องหมายเองก่อน (กติกา reconciled ห้ามแตะอัตโนมัติ)
+  const d1 = await supabase.from("account_entries").delete().eq("ref_type", "salary").eq("ref_id", ym).or("reconciled.is.null,reconciled.eq.false");
+  if (d1.error) {
+    if (!/reconciled|column|PGRST/i.test(d1.error.message || "")) throw d1.error;
+    const d2 = await supabase.from("account_entries").delete().eq("ref_type", "salary").eq("ref_id", ym); // pre-089
+    if (d2.error) throw d2.error;
+  }
 }
-// link a paid payroll run to Cash Flow as a projected outflow on the month's pay date (วันสิ้นเดือน).
+// link a paid payroll run to Cash Flow as an ACTUAL outflow on the month's pay date (วันสิ้นเดือน).
 // Reuses the salary source_ref so it overrides that month's auto-estimate; edited=true stops the
-// estimate sync from reverting it.
+// estimate sync from reverting it (และ stale-delete ยกเว้น salary+edited — แถวเดือนเก่าอยู่ถาวร).
+// status ต้องเป็น actual — จ่ายจริงแล้ว ไม่งั้น "เงินจริงสะสม" ในกระแสเงินสดไม่เคยรวมเงินเดือน (ขัดกับเดินบัญชี)
 export async function upsertPayrollCashEntry(ym, amount, payDate, headcount) {
   const ref = `salary-${ym}`;
-  const fields = { direction: "out", status: "projected", entry_date: payDate, amount: Number(amount) || 0,
+  const fields = { direction: "out", status: "actual", entry_date: payDate, amount: Number(amount) || 0,
     note: `เงินเดือนพนักงาน ${headcount} คน · รอบ ${ym}`, edited: true, updated_at: new Date().toISOString() };
   const { data: ex } = await supabase.from("cash_entries").select("id").eq("source_type", "salary").eq("source_ref", ref);
   if (ex && ex.length) { const { error } = await supabase.from("cash_entries").update(fields).eq("source_type", "salary").eq("source_ref", ref); if (error) throw error; }
@@ -3616,13 +3691,24 @@ export async function deleteCashEntry(id, reason) {
   await logAudit({ action: "delete", target_type: "cash_entry", target_no: id, reason, snapshot: snap });
 }
 export async function getOpeningBalance() {
-  const { data } = await supabase.from("cash_entries").select("amount").eq("source_type", "opening").maybeSingle();
-  return Number(data?.amount) || 0;
+  // ห้าม maybeSingle — ถ้าแถว opening ซ้ำ (บันทึกชนกัน 2 เครื่อง) maybeSingle จะ error เงียบแล้วได้ 0 → ยอดสะสมทั้งจอจมลบทั้งที่รายวันถูก
+  const { data, error } = await supabase.from("cash_entries").select("id,amount").eq("source_type", "opening").order("id");
+  if (error) throw error;
+  return Number(data?.[0]?.amount) || 0;
 }
 export async function setOpeningBalance(amount) {
-  const { data } = await supabase.from("cash_entries").select("id").eq("source_type", "opening").maybeSingle();
-  if (data?.id) { await supabase.from("cash_entries").update({ amount: Number(amount) || 0, updated_at: new Date().toISOString() }).eq("id", data.id); }
-  else { const uid = await _uid(); await supabase.from("cash_entries").insert({ direction: "in", status: "actual", entry_date: "2000-01-01", amount: Number(amount) || 0, note: "เงินสดยกมา", source_type: "opening", source_ref: "opening", created_by: uid }); }
+  const { data, error } = await supabase.from("cash_entries").select("id").eq("source_type", "opening").order("id");
+  if (error) throw error;
+  if (data && data.length) {
+    const { error: e1 } = await supabase.from("cash_entries").update({ amount: Number(amount) || 0, updated_at: new Date().toISOString() }).eq("id", data[0].id);
+    if (e1) throw e1;
+    // ล้างแถวซ้ำที่เกิดจากบันทึกชนกัน (mig 147 ใส่ unique index กันเกิดใหม่)
+    if (data.length > 1) await supabase.from("cash_entries").delete().in("id", data.slice(1).map((x) => x.id));
+  } else {
+    const uid = await _uid();
+    const { error: e2 } = await supabase.from("cash_entries").insert({ direction: "in", status: "actual", entry_date: "2000-01-01", amount: Number(amount) || 0, note: "เงินสดยกมา", source_type: "opening", source_ref: "opening", created_by: uid });
+    if (e2) throw e2;
+  }
 }
 // seed/refresh ledger lines from documents (idempotent; never overwrites user-edited rows)
 export async function syncCashEntriesFromDocs() {
@@ -3686,6 +3772,18 @@ export async function syncCashEntriesFromDocs() {
     }
   }
 
+  // เบิกเงินล่วงหน้าพนักงานที่โอนแล้ว = เงินออกจริง (mig 147 เพิ่ม source_type 'advance') — เงินเดือนสุทธิหัก advance อยู่แล้ว จึงไม่นับซ้ำ (advance + net = gross)
+  // อ่านเฉพาะ role office: RLS ของ hr_advances กรองแถวเงียบ ๆ ให้ role อื่นเห็นแค่ของตัวเอง — ถ้าปล่อยผ่าน sync จะกวาดเส้นของคนอื่นทิ้ง (บทเรียนเดียวกับ mig 085)
+  let advRows = null, pnAdv = {};
+  try {
+    const { data: meRow } = await supabase.from("profiles").select("role").eq("id", await _uid()).maybeSingle();
+    if (["admin", "exec", "finance", "hr"].includes(meRow?.role)) {
+      advRows = await _fetchAll((f, t) => supabase.from("hr_advances").select("id,user_id,amount,paid_out_at", { count: "exact" }).not("paid_out_at", "is", null).order("id").range(f, t));
+      pnAdv = Object.fromEntries(((await supabase.from("profiles").select("id,name")).data || []).map((p) => [p.id, p.name]));
+    }
+  } catch (_) { advRows = null; }
+  if (advRows) advRows.forEach((x) => desired.push({ source_type: "advance", source_ref: String(x.id), direction: "out", status: "actual", entry_date: _d(x.paid_out_at), amount: Number(x.amount) || 0, note: `เบิกเงินล่วงหน้า${pnAdv[x.user_id] ? " · " + pnAdv[x.user_id] : ""}` }));
+
   const exMap = {}; (existing.data || []).forEach((e) => { exMap[`${e.source_type}:${e.source_ref}`] = e; });
   const uid = await _uid();
   const desiredKeys = new Set();
@@ -3697,14 +3795,22 @@ export async function syncCashEntriesFromDocs() {
     if (!ex) toInsert.push({ ...d, created_by: uid });
     else if (!ex.edited) { await supabase.from("cash_entries").update({ direction: d.direction, status: d.status, entry_date: d.entry_date, amount: d.amount, note: d.note, updated_at: new Date().toISOString() }).eq("id", ex.id); updated++; }
   }
-  if (toInsert.length) { const { error } = await supabase.from("cash_entries").insert(toInsert); if (error) throw error; }
+  if (toInsert.length) {
+    let { error } = await supabase.from("cash_entries").insert(toInsert);
+    // pre-147: CHECK constraint ยังไม่รับ 'advance' — insert ส่วนที่เหลือไปก่อน อย่าให้ sync ทั้งก้อนพัง
+    if (error && /source_type|check/i.test(error.message || "")) {
+      const noAdv = toInsert.filter((d) => d.source_type !== "advance");
+      error = noAdv.length ? (await supabase.from("cash_entries").insert(noAdv)).error : null;
+    }
+    if (error) throw error;
+  }
   // remove stale doc-sourced lines — e.g. an invoice's "คาดว่าจะรับ" line once it's paid (money then shows as its
   // receipt's "ได้รับจริง") or cancelled. Only touch the source types this sync manages; manual/opening lines never touched.
   // หมายเหตุ edited: flag นี้ปกป้องแค่ "ค่าที่แก้มือ" (วัน/ยอด) ไม่ให้ sync เขียนทับตอนเอกสารยังมีชีวิต —
   // แต่พอเอกสารต้นทางถูกยกเลิก/ลบ/จ่ายแล้ว เส้นเงินต้องถูกลบตามเสมอ (เคยเว้น edited ไว้ → ใบแจ้งหนี้ยกเลิกแล้วยอดค้างในประมาณการตลอดกาล)
   // ยกเว้น "salary": desired มีแค่ 12 เดือนข้างหน้า (ไม่ใช่ snapshot ครบชุด) — แถวเงินเดือนจ่ายจริงของเดือนเก่า (edited=true จาก upsertPayrollCashEntry)
   // อยู่นอกหน้าต่างโดยชอบธรรม ห้ามกวาดทิ้ง · ลบได้เฉพาะตัวประมาณการ (ไม่ edited) ที่หลุดหน้าต่าง
-  const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary", "labor_owed", "expense_paid", "expense_due"]);
+  const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary", "labor_owed", "expense_paid", "expense_due", ...(advRows ? ["advance"] : [])]); // advance จัดการเฉพาะรอบที่อ่าน hr_advances ได้ครบ
   const staleIds = (existing.data || []).filter((e) => MANAGED.has(e.source_type) && !desiredKeys.has(`${e.source_type}:${e.source_ref}`)
     && (e.source_type !== "salary" || !e.edited)).map((e) => e.id);
   for (let i = 0; i < staleIds.length; i += 100) {

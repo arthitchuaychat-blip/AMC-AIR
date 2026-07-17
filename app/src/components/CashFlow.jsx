@@ -13,7 +13,7 @@ const thShort = (s) => new Date(s + "T00:00:00").toLocaleDateString("th-TH", { d
 const thMonthKey = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("th-TH", { month: "long", year: "numeric" });
 const weekStartYmd = (s) => { const d = new Date(s + "T00:00:00"); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return ymd(d); };
 const weekEndYmd = (startYmd) => { const d = new Date(startYmd + "T00:00:00"); d.setDate(d.getDate() + 6); return ymd(d); };
-const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", labor_owed: "ค่าแรงช่างซัพ (รอเบิก)", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย" };
+const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", labor_owed: "ค่าแรงช่างซัพ (รอเบิก)", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย", expense_paid: "เบิกจ่าย (จ่ายแล้ว)", expense_due: "เบิกจ่าย (ค้างจ่าย)", advance: "เบิกเงินล่วงหน้า" };
 const GRAINS = [["day", "รายวัน"], ["week", "สัปดาห์"], ["month", "เดือน"], ["year", "ปี"]];
 
 export default function CashFlow() {
@@ -55,8 +55,14 @@ export default function CashFlow() {
     setBusy(false);
   }
   async function removeEntry(e) {
-    if (!await confirmDialog(`ลบรายการนี้? (${fmtBaht(e.amount)})`)) return;
-    try { await deleteCashEntry(e.id); flash("ลบแล้ว"); await load(); } catch (err) { flash("ลบไม่สำเร็จ: " + (err.message || err), true); }
+    // เส้นจากเอกสารลบตรงนี้ไม่ได้ — sync รอบหน้าจะสร้างกลับมาใหม่อยู่ดี ให้ไปจัดการเอกสารต้นทาง
+    if (e.source_type && e.source_type !== "manual") {
+      if (e.source_type === "opening") return alert("แถวเงินสดยกมา — แก้ที่ช่อง 'เงินสดยกมา' ด้านบนแทน");
+      return alert(`ลบตรงนี้ไม่ได้ — รายการนี้มาจาก "${SRC[e.source_type] || e.source_type}" (ลบแล้วระบบจะสร้างกลับมาเอง)\nให้ไปยกเลิก/ลบเอกสารต้นทาง แล้วรายการนี้จะหายตามอัตโนมัติ`);
+    }
+    const reason = await confirmDialog({ title: `ลบรายการนี้? (${fmtBaht(e.amount)})`, message: e.note || "", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น บันทึกผิด · ซ้ำ", required: true } });
+    if (reason === false) return;
+    try { await deleteCashEntry(e.id, reason); flash("ลบแล้ว"); await load(); } catch (err) { flash("ลบไม่สำเร็จ: " + (err.message || err), true); }
   }
 
   // bucket all entries by grain, compute running actual balance across all time, then filter to view
@@ -77,7 +83,9 @@ export default function CashFlow() {
     return arr;
   }, [ents, grain, opening]);
 
-  const viewBuckets = grain === "year" ? buckets : buckets.filter((b) => b.sort.slice(0, 4) === String(year));
+  // สัปดาห์คร่อมปีใหม่ (เริ่ม 29 ธ.ค. จบ 4 ม.ค.) ต้องโผล่ทั้ง 2 ปี — เทียบทั้งวันเริ่มและวันจบสัปดาห์
+  const viewBuckets = grain === "year" ? buckets : buckets.filter((b) => b.sort.slice(0, 4) === String(year)
+    || (grain === "week" && weekEndYmd(b.key).slice(0, 4) === String(year)));
 
   return (
     <div className="adm">
@@ -253,16 +261,19 @@ function CashEntryModal({ entry, onClose, onSaved, flash }) {
         <div className="modal-head"><div className="modal-title">{isNew ? "เพิ่มรายการเงินสด" : "แก้ไขรายการ"}{!isNew && entry.source_type !== "manual" && <span>จาก {SRC[entry.source_type] || entry.source_type}</span>}</div>
           <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
+          {/* เส้นจากเอกสาร: ล็อกทิศทาง/สถานะ — พลิกใบเสร็จเป็น "เงินออก" ได้ = ยอดสะสมเพี้ยน 2 เท่า (แก้ได้แค่วัน/ยอด/โน้ต) */}
+          {(() => { const locked = !isNew && entry?.source_type && entry.source_type !== "manual"; return (
           <div className="fld-row">
-            <label className="fld"><span>ประเภท</span>
-              <select className="inp" value={f.direction} onChange={(e) => set("direction", e.target.value)}>
+            <label className="fld"><span>ประเภท{locked ? " 🔒" : ""}</span>
+              <select className="inp" value={f.direction} disabled={locked} onChange={(e) => set("direction", e.target.value)}>
                 <option value="in">เงินเข้า (รับ)</option><option value="out">เงินออก (จ่าย)</option>
               </select></label>
-            <label className="fld"><span>สถานะ</span>
-              <select className="inp" value={f.status} onChange={(e) => set("status", e.target.value)}>
+            <label className="fld"><span>สถานะ{locked ? " 🔒" : ""}</span>
+              <select className="inp" value={f.status} disabled={locked} onChange={(e) => set("status", e.target.value)}>
                 <option value="actual">จริง (เกิดขึ้นแล้ว)</option><option value="projected">ประมาณการ</option>
               </select></label>
           </div>
+          ); })()}
           <div className="fld-row">
             <label className="fld"><span>วันที่</span><input className="inp" type="date" value={f.entry_date} onChange={(e) => set("entry_date", e.target.value)} /></label>
             <label className="fld"><span>จำนวนเงิน</span><span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" value={f.amount} onChange={(e) => set("amount", e.target.value)} /></span></label>

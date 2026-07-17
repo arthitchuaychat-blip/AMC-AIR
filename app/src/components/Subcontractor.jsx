@@ -310,15 +310,19 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
   const jobByNo = React.useMemo(() => Object.fromEntries(jobs.map((j) => [j.job_no, j])), [jobs]);
 
   async function cancel(p) {
-    if (!await confirmDialog(`ยกเลิกใบรอจ่ายนี้? ยอดที่ตัดไว้จะคืนกลับเข้า “รอจ่าย”`)) return;
+    // กติกาบ้าน: ยกเลิกต้องระบุเหตุผลเสมอ (ลง audit)
+    const reason = await confirmDialog({ title: "ยกเลิกใบรอจ่ายนี้?", message: "ยอดที่ตัดไว้จะคืนกลับเข้า “รอจ่าย”", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น ตั้งยอดผิด · แยกใบใหม่", required: true } });
+    if (reason === false) return;
     setBusy(true);
-    try { await cancelSubPayout(p.id); flash("ยกเลิกใบรอจ่ายแล้ว"); onReload(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    try { await cancelSubPayout(p.id, reason); flash("ยกเลิกใบรอจ่ายแล้ว"); onReload(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
   async function del(p) {
-    if (!await confirmDialog(`ลบใบจ่ายนี้ถาวร? (กู้คืนไม่ได้)\nยอดค่าแรงที่ตัดไว้จะคืนกลับเข้า “รอจ่าย”`)) return;
+    // กติกาบ้าน: ลบถาวร = ธุรการ (admin) เท่านั้น + ระบุเหตุผล (ลง audit พร้อม snapshot)
+    const reason = await confirmDialog({ title: "ลบใบจ่ายนี้ถาวร? (กู้คืนจากประวัติการลบได้)", message: "ยอดค่าแรงที่ตัดไว้จะคืนกลับเข้า “รอจ่าย”", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } });
+    if (reason === false) return;
     setBusy(true);
-    try { await deleteSubPayout(p.id); flash("ลบใบจ่ายแล้ว"); onReload(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+    try { await deleteSubPayout(p.id, reason); flash("ลบใบจ่ายแล้ว"); onReload(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
 
@@ -347,7 +351,7 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
                 {canEditPayout && <button className="btn-ghost sm" disabled={busy} title="แก้ไขยอดค่าแรงจ่าย (ธุรการ/บัญชี)" onClick={() => setEditPo(p)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {p.status !== "paid" && <button className="btn-primary sm ok" disabled={busy} onClick={() => setPayFor(p)}>บันทึกจ่ายเงิน</button>}
                 {p.status !== "paid" && <button className="btn-ghost sm danger" disabled={busy} onClick={() => cancel(p)}>ยกเลิก</button>}
-                {canEditPayout && <button className="btn-ghost sm danger" disabled={busy} title="ลบใบจ่ายถาวร (ธุรการ/บัญชี)" onClick={() => del(p)}><UIcon name="trash" size={14} /> ลบ</button>}
+                {role === "admin" && <button className="btn-ghost sm danger" disabled={busy} title="ลบใบจ่ายถาวร (ธุรการเท่านั้น — กติกาบ้าน)" onClick={() => del(p)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div>
             </div>
           ))}
