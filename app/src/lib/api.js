@@ -606,7 +606,8 @@ export async function listJobBriefs() {
   const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows })); // กันเพดาน 1000 แถว — เกินพันใบ ป้ายสถานะ/ชื่อลูกค้าในหน้า "วัสดุที่ใช้" จะหายเงียบ
   const [j, cu] = await Promise.all([
     _rows((f, t) => supabase.from("job_orders").select("job_no,status,title,customer_id,contact_name,contact_phone", { count: "exact" }).order("job_no").range(f, t)),
-    _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
+    // ชื่อลูกค้าโหลดไม่ได้ = โชว์ป้ายสถานะต่อโดยไม่มีชื่อ (พฤติกรรมเดิม) — ไม่พาทั้งหน้าล้ม
+    _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)).catch(() => ({ data: [] })),
   ]);
   if (j.error) throw j.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
@@ -1873,20 +1874,25 @@ const _JOB_ST_TH = { pending: "รอเริ่มงาน", scheduled: "น�
 
 export async function saveJobOrder(jo, author) {
   const { data: { user } } = await supabase.auth.getUser();
-  // การ์ดฝั่ง server: ใบที่ยกเลิกแล้วห้ามบันทึกทับ (หน้าเก่าค้างจากอีกเครื่อง) + เอาไว้คงสถานะ quote_pending
-  const { data: curHead } = await supabase.from("job_orders").select("status").eq("job_no", jo.job_no).maybeSingle();
+  // การ์ดฝั่ง server: ใบที่ยกเลิกแล้วห้ามบันทึกทับ (หน้าเก่าค้างจากอีกเครื่อง) + เอาไว้คงสถานะ quote_pending/ปลดล็อกตอนนัดรอบใหม่
+  const { data: curHead, error: chErr } = await supabase.from("job_orders").select("status,locked").eq("job_no", jo.job_no).maybeSingle();
+  if (chErr) throw chErr;   // อ่านการ์ดไม่ได้ ห้ามเดินต่อ — ไม่งั้นการ์ดทั้งชุดหลุดเงียบ
   if (curHead?.status === "cancelled") throw new Error(`ใบงาน ${jo.job_no} ถูกยกเลิกแล้ว — บันทึกทับไม่ได้ (รีเฟรชหน้าจอ)`);
-  // รอบเข้างาน: ใช้ "สถานะสดจาก DB" ของรอบเดิม (จับคู่ด้วย id) ชนะ snapshot ของฟอร์ม —
-  // กันเคสออฟฟิศเปิดฟอร์มค้างไว้ ช่างกดส่งอนุมัติระหว่างนั้น แล้วบันทึกทับสถานะช่างหาย
+  // รอบเข้างาน: รอบเดิม (มี id) ที่ "ฟอร์มไม่ได้แตะสถานะ" (status === _orig ตอนโหลด) → ใช้สถานะสดจาก DB
+  // กันเคสออฟฟิศเปิดฟอร์มค้าง ช่างกดส่งอนุมัติระหว่างนั้นแล้วโดนทับ · ฟอร์มตั้งใจแก้ (นัดหมายเพิ่ม/ปลดล็อกรอบ/dropdown) → ค่าฟอร์มชนะ
   let visitRows = null, backup = [];
   if (Array.isArray(jo.visits)) {
-    const { data: curV } = await supabase.from("job_visits").select("*").eq("job_no", jo.job_no).order("id");
+    const { data: curV, error: cvErr } = await supabase.from("job_visits").select("*").eq("job_no", jo.job_no).order("id");
+    if (cvErr) throw cvErr;
     backup = curV || [];
     const freshStat = Object.fromEntries(backup.map((v) => [v.id, v.status]));
     visitRows = jo.visits
       .filter((v) => v.visit_date)
-      .map((v) => ({ job_no: jo.job_no, visit_date: v.visit_date, end_date: v.end_date || null, slot: v.slot || null, scheduled_at: v.scheduled_at || null, assigned_team: v.assigned_team || null,
-        status: (v.id && freshStat[v.id]) || v.status || "scheduled", note: v.note || null, created_by: user?.id || null }));
+      .map((v) => {
+        const untouched = v.id && v._orig != null && v._orig === (v.status || "scheduled");
+        return { job_no: jo.job_no, visit_date: v.visit_date, end_date: v.end_date || null, slot: v.slot || null, scheduled_at: v.scheduled_at || null, assigned_team: v.assigned_team || null,
+          status: (untouched && freshStat[v.id]) || v.status || "scheduled", note: v.note || null, created_by: user?.id || null };
+      });
   }
   // สถานะหัวใบ: มีรอบ → คำนวณจากสถานะรอบ (สด) · คง "รอทำใบเสนอราคา" เมื่อรอบเสร็จหมด (เดิมโดนบันทึกทับกลับเป็น "เสร็จ" หลุดคิวทำใบเสนอ)
   const headStatus = visitRows && visitRows.length
@@ -1901,6 +1907,9 @@ export async function saveJobOrder(jo, author) {
     end_date: jo.end_date || null, slot: jo.slot || null, issue_date: jo.issue_date || null,
     status: headStatus, created_by: user?.id || null,
   };
+  // ใบที่ล็อกปิดไว้ (เช่น อนุมัติแบบ "เสร็จ รอนัดหมายเพิ่ม") พอออฟฟิศตั้งรอบนัดใหม่ → ปลดล็อกให้เอง
+  // ไม่งั้นช่างกด "เริ่มทำรอบนี้" แล้วชนการ์ด locked ใน RPC (mig 150) จนกว่าจะมีคนมากดปลดล็อกเอง
+  if (curHead?.locked && ["pending", "scheduled", "in_progress"].includes(headStatus)) jHead.locked = false;
   let { error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" });
   if (error && /issue_date/i.test(error.message || "")) { delete jHead.issue_date; ({ error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" })); } // pre-119 fallback
   if (error) throw error;
@@ -1912,13 +1921,17 @@ export async function saveJobOrder(jo, author) {
       const e2 = (await supabase.from("job_visits").insert(visitRows)).error;
       if (e2) {
         // insert พังหลังลบสำเร็จ (เน็ตสะดุด/ติด constraint) — กู้รอบเดิมกลับก่อน แล้วค่อยรายงาน error (เดิมรอบหายทั้งใบ)
-        if (backup.length) await supabase.from("job_visits").insert(backup);
+        // ต้องถอด id ออก: job_visits.id เป็น generated always — insert พร้อม id โดน Postgres ปัดตกทุกแถว
+        if (backup.length) {
+          const r = await supabase.from("job_visits").insert(backup.map(({ id: _id, ...rest }) => rest));
+          if (r.error) e2.message = (e2.message || "") + ` · ⚠️ กู้รอบเดิมคืนไม่สำเร็จ (${r.error.message}) — เปิดใบงานนี้ตรวจรอบนัดด่วน`;
+        }
         throw e2;
       }
     }
   }
   // audit trail: record who created/edited the job (best-effort)
-  await supabase.from("job_logs").insert({ job_no: jo.job_no, type: "edit", status: jo.status || null, author: author || null, created_by: user?.id || null });
+  await supabase.from("job_logs").insert({ job_no: jo.job_no, type: "edit", status: headStatus || null, author: author || null, created_by: user?.id || null });
   // handoff: notify the assigned team's members
   if (jo.assigned_team) {
     const { data: tm } = await supabase.from("profiles").select("id").eq("team", jo.assigned_team);
@@ -1990,10 +2003,12 @@ export async function saveHandover(h) {
     cust_sign_url: h.cust_sign_url || null, cust_name: h.cust_name || null,
     status: h.status || "draft", updated_at: new Date().toISOString(),
   };
-  let saved;
+  let saved, wasSubmitted = false;
   if (h.id) {
+    const { data: prev } = await supabase.from("job_handovers").select("status").eq("id", h.id).maybeSingle();
+    wasSubmitted = prev?.status === "submitted";
     const { data, error } = await supabase.from("job_handovers").update(fields).eq("id", h.id).select(HANDOVER_COLS).single();
-    if (error) throw error;
+    if (error) throw /PGRST116|coerce/i.test(error.message || "") ? new Error("บันทึกไม่ได้ — ใบนี้ส่งแล้ว ช่างแก้ไขเองไม่ได้ (ต้องให้ออฟฟิศแก้)") : error;
     saved = data;
   } else {
     fields.created_by = await _uid();
@@ -2001,8 +2016,8 @@ export async function saveHandover(h) {
     if (error) throw error;
     saved = data;
   }
-  // ส่งใบส่งมอบ (มีลายเซ็นลูกค้า) → ลงไทม์ไลน์ + แจ้งออฟฟิศ ให้คนอนุมัติงานเห็นว่ามีใบเซ็นแล้ว (best-effort)
-  if (fields.status === "submitted" && fields.job_no) {
+  // ส่งใบส่งมอบ (ครั้งแรกเท่านั้น — บันทึกซ้ำใบที่ส่งแล้วไม่แจ้งซ้ำ) → ลงไทม์ไลน์ + แจ้งออฟฟิศ (best-effort)
+  if (fields.status === "submitted" && !wasSubmitted && fields.job_no) {
     try {
       const uid = await _uid();
       await supabase.from("job_logs").insert({ job_no: fields.job_no, type: "update", note: `📝 ส่งใบส่งมอบงานแล้ว${fields.cust_sign_url ? " (ลูกค้าเซ็นรับแล้ว ✓)" : ""}`, author: h.tech_name || null, created_by: uid });
@@ -2027,18 +2042,8 @@ export async function uploadSignatureDataUrl(dataUrl) {
   return uploadSignature(blob);
 }
 
-// office quick action: move every visit of a job whose status is in fromStatuses → toStatus,
-// then recompute the job's overall status (server-side RPC so RLS on job_orders doesn't block it).
-export async function setJobVisitsStatus(jobNo, fromStatuses, toStatus, author) {
-  const { data: { user } } = await supabase.auth.getUser();
-  // no-visit job → update the job row directly
-  const { count } = await supabase.from("job_visits").select("id", { count: "exact", head: true }).eq("job_no", jobNo);
-  if (!count) { const e = (await supabase.from("job_orders").update({ status: toStatus }).eq("job_no", jobNo)).error; if (e) throw e; }
-  else { const { data, error } = await supabase.rpc("set_job_visits_status", { p_job: jobNo, p_from: fromStatuses, p_to: toStatus }); if (error) throw error; var jobStatus = data; }
-  await supabase.from("job_logs").insert({ job_no: jobNo, type: "status", status: toStatus, author: author || null, created_by: user?.id || null });
-  notify(await _jobWatchers(jobNo), { category: "job", title: `📋 งาน ${jobNo} → ${_JOB_ST_TH[toStatus] || toStatus}`, url: "joborders", ref_type: "job", ref_no: jobNo });
-  return jobStatus || toStatus;
-}
+// (setJobVisitsStatus ถูกถอดออก 2026-07-17 — ไม่มีหน้าไหนเรียกแล้ว และสาขา no-visit ของมันมีบั๊ก RLS-เงียบ
+//  แบบเดียวกับที่ mig 150 แก้ · ถ้าต้องใช้ ให้เรียกผ่าน set_job_status/set_job_visits_status RPC เท่านั้น)
 
 // update one visit's status, then recompute the job's overall status — via SECURITY DEFINER RPC
 export async function updateVisitStatus(visitId, jobNo, status, author, opts = {}) {
@@ -2514,7 +2519,7 @@ async function _usersByRole(roles) {
 async function _jobWatchers(job_no) {
   try {
     const { data: jo } = await supabase.from("job_orders").select("assigned_team").eq("job_no", job_no).maybeSingle();
-    const office = await _usersByRole(["admin", "exec", "sales"]);
+    const office = await _usersByRole(["admin", "exec", "sales", "lead_tech"]); // หัวหน้าช่างคุมทุกทีม — ต้องเห็นความเคลื่อนไหวงานด้วย
     let team = [];
     if (jo?.assigned_team) { const { data } = await supabase.from("profiles").select("id").eq("team", jo.assigned_team); team = (data || []).map((p) => p.id); }
     return [...new Set([...office, ...team])];

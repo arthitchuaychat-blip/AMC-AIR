@@ -134,8 +134,9 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   function visitFromRow(v) {
     const dt = (v.slot === "custom" && v.scheduled_at) ? new Date(v.scheduled_at) : null;
     const p = (n) => String(n).padStart(2, "0");
-    // เก็บ id ของรอบไว้ด้วย — ตอนบันทึก saveJobOrder จะใช้จับคู่กับสถานะสดจาก DB (กันฟอร์มค้างทับสถานะที่ช่างเพิ่งกด)
-    return { id: v.id, assigned_team: v.assigned_team || "", date: v.visit_date || "", end_date: v.end_date || "", slot: v.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: v.status || "scheduled" };
+    // เก็บ id + สถานะตอนโหลด (_orig) — ตอนบันทึก saveJobOrder ใช้ตัดสิน: ฟอร์มไม่ได้แตะสถานะ → ใช้สถานะสดจาก DB
+    // (กันทับสถานะที่ช่างเพิ่งกด) · ฟอร์มตั้งใจแก้ (นัดหมายเพิ่ม/ปลดล็อกรอบ/dropdown) → ค่าฟอร์มชนะ
+    return { id: v.id, _orig: v.status || "scheduled", assigned_team: v.assigned_team || "", date: v.visit_date || "", end_date: v.end_date || "", slot: v.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: v.status || "scheduled" };
   }
   function startNew() { setEd(blankEd()); }
   function startEdit(jo) {
@@ -195,7 +196,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       const slot = v.slot || "custom";
       const time = slot === "custom" ? (v.time || "08:00") : slotStartTime(slot);
       const team = v.status === "done" ? (v.assigned_team || ed.assigned_team || null) : (ed.assigned_team || null);
-      return { id: v.id || null, visit_date: v.date, end_date: (v.end_date && v.end_date > v.date) ? v.end_date : null, slot, scheduled_at: new Date(`${v.date}T${time}:00`).toISOString(), assigned_team: team, status: v.status || "scheduled" };
+      return { id: v.id || null, _orig: v._orig || null, visit_date: v.date, end_date: (v.end_date && v.end_date > v.date) ? v.end_date : null, slot, scheduled_at: new Date(`${v.date}T${time}:00`).toISOString(), assigned_team: team, status: v.status || "scheduled" };
     });
     // double-booking: each scheduled visit vs every other job's visits (same team, overlapping day+slot)
     for (const vr of visitRows) {

@@ -34,6 +34,30 @@ function MachineHead({ m = {}, onSet }) {
 export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
   const [h, setH] = React.useState(initial);
   const [busy, setBusy] = React.useState(false);
+  const wasSubmitted = initial.status === "submitted";   // ใบที่ส่งแล้ว: บันทึกซ้ำได้ แต่ห้ามหล่นกลับเป็นฉบับร่าง (ช่างจะกลับมาแก้/ลบได้)
+  // กันงานกรอกหน้างานหาย: (1) สแนปช็อตลง localStorage ทุก 1 วิ — แบตหมด/เบราว์เซอร์รีโหลดหลังเปิดกล้อง กลับมากู้ได้
+  // (2) แตะฉากหลัง/กด ✕ ตอนมีของค้าง ให้ถามก่อนปิด
+  const draftKey = `ho-draft-${initial.id || initial.job_no || "new"}`;
+  const dirty = React.useMemo(() => JSON.stringify(h) !== JSON.stringify(initial), [h, initial]);
+  React.useEffect(() => {
+    if (!dirty) return;
+    const tm = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify(h)); } catch { /* เต็ม/ปิดใช้ — ข้าม */ } }, 1000);
+    return () => clearTimeout(tm);
+  }, [h, dirty, draftKey]);
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (JSON.stringify(saved) === JSON.stringify(initial)) { localStorage.removeItem(draftKey); return; }
+      (async () => { if (await confirmDialog("พบข้อมูลที่กรอกค้างไว้ของใบนี้ (ยังไม่ได้บันทึก) — กู้กลับมาไหม?")) { setH(saved); setAddOpen(false); } else localStorage.removeItem(draftKey); })();
+    } catch { /* ignore */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const clearDraft = () => { try { localStorage.removeItem(draftKey); } catch { /* ignore */ } };
+  async function safeClose() {
+    if (dirty && !await confirmDialog("มีข้อมูลที่ยังไม่ได้บันทึก — ปิดโดยไม่บันทึก?\n(ข้อมูลที่กรอกจะถูกเก็บไว้กู้คืนได้ตอนเปิดใบนี้ครั้งหน้า)")) return;
+    onClose();
+  }
   // ใบใหม่ยังไม่มีแบบฟอร์ม → เด้งตัวเลือกแบบฟอร์ม (ติดตั้ง/ล้าง/ซ่อม/PM) ให้เลือกก่อนเลย
   const [addOpen, setAddOpen] = React.useState(!(initial.forms && initial.forms.length));
   // ขนาด BTU อ้างอิงจากสินค้าแอร์จริงในแคตตาล็อก (โหลดไม่ได้ → ใช้ชุดมาตรฐาน)
@@ -56,8 +80,8 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
   const removeForm = async (i) => { if (!await confirmDialog("ลบแบบฟอร์มนี้?")) return; setH((s) => ({ ...s, forms: s.forms.filter((_, j) => j !== i) })); };
 
   async function persist(status) {
-    // ก่อน "บันทึก & ส่ง": เตือนเมื่อยังไม่มีแบบฟอร์ม/ลายเซ็นลูกค้า — กันมือลั่นส่งใบเปล่า (ส่งได้ถ้าตั้งใจ เช่น ลูกค้าไม่สะดวกเซ็น)
-    if (status === "submitted") {
+    // ก่อน "บันทึก & ส่ง" (ครั้งแรก): เตือนเมื่อยังไม่มีแบบฟอร์ม/ลายเซ็นลูกค้า — กันมือลั่นส่งใบเปล่า (ส่งได้ถ้าตั้งใจ เช่น ลูกค้าไม่สะดวกเซ็น)
+    if (status === "submitted" && !wasSubmitted) {
       const miss = [];
       if (!(h.forms || []).length) miss.push("ยังไม่มีแบบฟอร์มสักแผ่น");
       if (!h.cust_sign_url) miss.push("ยังไม่มีลายเซ็นลูกค้า");
@@ -72,18 +96,19 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
       if (out.tech_sign_url && out.tech_sign_url.startsWith("data:")) out.tech_sign_url = await uploadSignatureDataUrl(out.tech_sign_url);
       if (out.cust_sign_url && out.cust_sign_url.startsWith("data:")) out.cust_sign_url = await uploadSignatureDataUrl(out.cust_sign_url);
       const saved = await saveHandover(out);
-      flash && flash(status === "submitted" ? "บันทึก & ส่งใบส่งมอบงานแล้ว ✓" : "บันทึกฉบับร่างแล้ว ✓");
+      clearDraft();
+      flash && flash(status === "submitted" ? (wasSubmitted ? "บันทึกแล้ว ✓" : "บันทึก & ส่งใบส่งมอบงานแล้ว ✓") : "บันทึกฉบับร่างแล้ว ✓");
       onSaved && onSaved(saved);
     } catch (e) { flash && flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={safeClose}>
       <div className="modal he" onClick={(e) => e.stopPropagation()} style={{ width: 720, maxWidth: "97vw" }}>
         <div className="modal-head">
-          <div className="modal-title">ใบส่งมอบงาน {h.id && h.status === "draft" ? <span>· ฉบับร่าง (กรอกต่อ)</span> : h.job_no ? <span>· ผูกกับ {h.job_no}</span> : <span>· ไม่ผูกใบงาน</span>}</div>
-          <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
+          <div className="modal-title">ใบส่งมอบงาน {wasSubmitted ? <span>· ส่งแล้ว (แก้ไข)</span> : h.id && h.status === "draft" ? <span>· ฉบับร่าง (กรอกต่อ)</span> : h.job_no ? <span>· ผูกกับ {h.job_no}</span> : <span>· ไม่ผูกใบงาน</span>}</div>
+          <button className="drawer-close" onClick={safeClose}><UIcon name="x" size={20} /></button>
         </div>
 
         <div className="modal-body he-body">
@@ -141,8 +166,9 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
         </div>
 
         <div className="modal-foot">
-          <button className="btn-ghost" disabled={busy} onClick={() => persist("draft")}>{busy ? "กำลังบันทึก…" : "บันทึกร่าง"}</button>
-          <button className="btn-primary" disabled={busy} onClick={() => persist("submitted")}><UIcon name="check" size={15} color="#fff" /> บันทึก & ส่ง</button>
+          {/* ใบที่ส่งแล้ว: เหลือปุ่ม "บันทึก" เดียว (คงสถานะส่งแล้ว) — กันกดผิดหล่นกลับเป็นร่างให้ช่างแก้/ลบได้อีก */}
+          {!wasSubmitted && <button className="btn-ghost" disabled={busy} onClick={() => persist("draft")}>{busy ? "กำลังบันทึก…" : "บันทึกร่าง"}</button>}
+          <button className="btn-primary" disabled={busy} onClick={() => persist("submitted")}><UIcon name="check" size={15} color="#fff" /> {wasSubmitted ? "บันทึก" : "บันทึก & ส่ง"}</button>
         </div>
 
         {addOpen && (

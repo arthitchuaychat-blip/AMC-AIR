@@ -69,7 +69,8 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
     try { await deleteHandover(h.id, reason); flash("ลบแล้ว"); await load(); }
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
-  // แก้ใบที่ส่งแล้ว (มีลายเซ็นลูกค้า) — ให้ตั้งใจจริง ๆ ค่อยเปิด
+  // แก้ใบที่ส่งแล้ว (มีลายเซ็นลูกค้า) — ช่างแก้ไม่ได้ (RLS mig 150 บล็อกอยู่แล้ว — ซ่อนปุ่มไม่ให้เสียแรงกรอกฟรี) · ออฟฟิศแก้ได้แต่ต้องยืนยัน
+  const canEditRow = (h) => canEdit && !(role === "tech" && h.status === "submitted");
   async function startEdit(h) {
     if (h.status === "submitted" && !await confirmDialog("ใบนี้ส่งแล้ว (มีลายเซ็นลูกค้า) — ยืนยันเปิดแก้ไข?")) return;
     setEditing(h);
@@ -120,7 +121,7 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
               </div>
               <div className="ho-card-acts">
                 <button className="btn-ghost sm" onClick={() => print(h)}><UIcon name="catalog" size={14} /> พิมพ์/PDF</button>
-                {canEdit && <button className="btn-ghost sm" onClick={() => startEdit(h)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEditRow(h) && <button className="btn-ghost sm" onClick={() => startEdit(h)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canDelete && <button className="btn-ghost sm danger" onClick={() => del(h)}><UIcon name="trash" size={14} /></button>}
               </div>
             </div>

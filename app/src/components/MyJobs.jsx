@@ -10,8 +10,8 @@ import { buildJobBriefMy, useLang, JOB_STATUS_MY, MYJOB_TAB_MY } from "../lib/i1
 const STATUS = Object.fromEntries(JOB_STATUSES.map(([v, l, cls]) => [v, { th: l, cls }]));
 // ช่างเห็นทุกสถานะ (รวม "นัดหมายเพิ่ม") แต่ดูได้อย่างเดียวในสถานะ read-only ด้านล่าง
 const TABS = [["todo", "ต้องทำ (วันนี้)"], ["upcoming", "งานที่กำลังจะมาถึง"], ["doing", "กำลังทำงาน"], ["awaiting", "รออนุมัติ"], ["reschedule", "นัดหมายเพิ่ม"], ["done", "เสร็จแล้ว"], ["cancelled", "ยกเลิกแล้ว"]];
-// สถานะที่ช่างดูได้อย่างเดียว — แก้ไข/โพสต์/เบิกวัสดุไม่ได้
-const TECH_READONLY = ["reschedule", "done", "cancelled"];
+// สถานะที่ช่างดูได้อย่างเดียว — แก้ไข/โพสต์/เบิกวัสดุไม่ได้ (quote_pending = งานจบแล้ว รอออฟฟิศทำใบเสนอ)
+const TECH_READONLY = ["reschedule", "quote_pending", "done", "cancelled"];
 
 export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
   const lang = useLang(); // "my" เฉพาะช่างที่เลือกภาษาพม่า (ฝั่งหลังบ้าน = "th" เสมอ)
@@ -47,27 +47,35 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
   }, [team, allTeams]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); }
 
+  // ขอนัดหมายเพิ่ม: ต้องบอกเหตุผลเสมอ (ของขาด/ลูกค้าไม่อยู่ ฯลฯ) — ออฟฟิศจะได้นัดใหม่ถูก · ลงไทม์ไลน์ให้อัตโนมัติ
+  async function askRescheduleReason() {
+    return confirmDialog({ title: t("ขอนัดหมายเพิ่ม?", "ချိန်းဆိုမှု ထပ်တောင်းမလား?"), confirmText: t("ขอนัดเพิ่ม", "တောင်းဆို"),
+      prompt: { label: t("เหตุผล (ออฟฟิศจะได้นัดใหม่ถูก)", "အကြောင်းပြချက်"), placeholder: t("เช่น ของไม่ครบ · ลูกค้าไม่อยู่ · งานเกินเวลา", "ဥပမာ ပစ္စည်းမပြည့်"), required: true } });
+  }
+  async function logReason(jobNo, reason) {
+    if (!reason) return;
+    try { await addJobLog(jobNo, { note: `📅 เหตุผลขอนัดหมายเพิ่ม: ${reason}`, photos: [], author: me }); }
+    catch { flash(t("บันทึกเหตุผลลงไทม์ไลน์ไม่สำเร็จ — ช่วยพิมพ์ลงไทม์ไลน์อีกครั้ง", "အကြောင်းပြချက် မတင်နိုင်ပါ — ထပ်ရေးပေးပါ"), true); }
+  }
   async function setStatus(jo, status) {
     const label = STATUS[status]?.th || status;
-    if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะงาน ${jo.job_no} เป็น "${label}" ?`)) return;
+    let reason = null;
+    if (status === "reschedule") { reason = await askRescheduleReason(); if (reason === false) return; }
+    else if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะงาน ${jo.job_no} เป็น "${label}" ?`)) return;
     setBusy(jo.job_no);
-    try { await updateJobStatus(jo.job_no, status, me); flash("อัปเดตสถานะแล้ว"); await load(); }
+    try { await updateJobStatus(jo.job_no, status, me); await logReason(jo.job_no, reason); flash("อัปเดตสถานะแล้ว"); await load(); }
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(null);
   }
   async function setVStatus(jobNo, v, status) {
     const label = STATUS[status]?.th || status;
-    // ขอนัดหมายเพิ่ม: ต้องบอกเหตุผลเสมอ (ของขาด/ลูกค้าไม่อยู่ ฯลฯ) — ออฟฟิศจะได้นัดใหม่ถูก · ลงไทม์ไลน์ให้อัตโนมัติ
     let reason = null;
-    if (status === "reschedule") {
-      reason = await confirmDialog({ title: t("ขอนัดหมายเพิ่มรอบนี้?", "ချိန်းဆိုမှု ထပ်တောင်းမလား?"), confirmText: t("ขอนัดเพิ่ม", "တောင်းဆို"),
-        prompt: { label: t("เหตุผล (ออฟฟิศจะได้นัดใหม่ถูก)", "အကြောင်းပြချက်"), placeholder: t("เช่น ของไม่ครบ · ลูกค้าไม่อยู่ · งานเกินเวลา", "ဥပမာ ပစ္စည်းမပြည့်"), required: true } });
-      if (reason === false) return;
-    } else if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะรอบนี้เป็น "${label}" ?`)) return;
+    if (status === "reschedule") { reason = await askRescheduleReason(); if (reason === false) return; }
+    else if (!await confirmDialog(`ยืนยันเปลี่ยนสถานะรอบนี้เป็น "${label}" ?`)) return;
     setBusy(v.id);
     try {
       await updateVisitStatus(v.id, jobNo, status, me);
-      if (reason) await addJobLog(jobNo, { note: `📅 เหตุผลขอนัดหมายเพิ่ม: ${reason}`, photos: [], author: me }).catch(() => {});
+      await logReason(jobNo, reason);
       flash("อัปเดตรอบงานแล้ว"); await load();
     }
     catch (e) { flash("อัปเดตไม่สำเร็จ: " + (e.message || e), true); }
@@ -84,16 +92,23 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
   const todayY = ymd(new Date());
   const dayOf = (at) => (at ? ymd(new Date(at)) : null);
   const sortAsc = (a, b) => (jobAt(a) || "9999").localeCompare(jobAt(b) || "9999"); // nearest time first
-  const todoAll = list.filter((j) => j.status === "pending" || j.status === "scheduled");
+  // "ทีมเราเสร็จหมดแล้ว" ในงานหลายทีม — ใบรวมยังไม่จบ (ทีมอื่นทำต่อ) แต่ฝั่งเราไม่มีอะไรต้องทำแล้ว
+  // เดิมงานพวกนี้ค้างถัง "ต้องทำ (วันนี้)" ตลอดกาลเพราะ jobAt ถอยไปใช้วันของรอบที่เสร็จไปแล้ว
+  const myTeamDone = (j) => {
+    if (allTeams) return false;
+    const vis = (j.visits || []).filter((v) => v.assigned_team === team);
+    return vis.length > 0 && vis.every((v) => v.status === "done" || v.status === "cancelled");
+  };
+  const todoAll = list.filter((j) => (j.status === "pending" || j.status === "scheduled") && !myTeamDone(j));
   const byStatus = {
     // ต้องทำ = วันนี้ หรือเลยกำหนดแล้ว (หรือยังไม่ระบุวัน) — งานวันถัดไปไปอยู่ "กำลังจะมาถึง"
     todo: todoAll.filter((j) => { const d = dayOf(jobAt(j)); return !d || d <= todayY; }).sort(sortAsc),
     upcoming: todoAll.filter((j) => { const d = dayOf(jobAt(j)); return d && d > todayY; }).sort(sortAsc),
-    doing: list.filter((j) => j.status === "in_progress").sort(sortAsc),
-    awaiting: list.filter((j) => j.status === "awaiting_approval").sort(sortAsc),
-    reschedule: list.filter((j) => j.status === "reschedule").sort(sortAsc),
+    doing: list.filter((j) => j.status === "in_progress" && !myTeamDone(j)).sort(sortAsc),
+    awaiting: list.filter((j) => j.status === "awaiting_approval" && !myTeamDone(j)).sort(sortAsc),
+    reschedule: list.filter((j) => j.status === "reschedule" && !myTeamDone(j)).sort(sortAsc),
     // quote_pending (งานเสร็จ รอออฟฟิศทำใบเสนอ) — ฝั่งช่างถือว่าจบงานแล้ว โชว์ในถังเสร็จ (เดิมงานหายจากทุกถัง)
-    done: list.filter((j) => j.status === "done" || j.status === "quote_pending"),
+    done: list.filter((j) => j.status === "done" || j.status === "quote_pending" || (j.status !== "cancelled" && myTeamDone(j))),
     cancelled: list.filter((j) => j.status === "cancelled"),
   };
   const shown = byStatus[tab] || byStatus.todo;
@@ -208,8 +223,8 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
                           {(TECH_READONLY.includes(jo.status) && v.status === "awaiting_approval") && <span className="myjob-await">⏳ {t("รอออฟฟิศอนุมัติ", "ရုံးခန်း အတည်ပြုရန် စောင့်")}</span>}
                           {v.status === "reschedule" && <>
                             <span className="myjob-await">📅 {t("รอออฟฟิศนัดหมายเพิ่ม", "ရုံးခန်း ချိန်းဆိုပေးရန် စောင့်")}</span>
-                            {/* กดพลาด/สถานการณ์เปลี่ยน — ถอยกลับมาทำต่อเองได้ ไม่ต้องรอออฟฟิศช่วย (เดิมค้างจนออฟฟิศแก้) */}
-                            {!["done", "cancelled"].includes(jo.status) && <button className="btn-ghost sm" disabled={busy === v.id} onClick={() => setVStatus(jo.job_no, v, "in_progress")}>{t("กลับไปทำต่อ", "ပြန်ဆက်လုပ်")}</button>}
+                            {/* กดพลาด/สถานการณ์เปลี่ยน — ถอยกลับมาทำต่อเองได้ (งานที่ล็อกปิดแล้วต้องให้ออฟฟิศปลดล็อกก่อน — server กันอยู่) */}
+                            {!["done", "cancelled"].includes(jo.status) && !jo.locked && <button className="btn-ghost sm" disabled={busy === v.id} onClick={() => setVStatus(jo.job_no, v, "in_progress")}>{t("กลับไปทำต่อ", "ပြန်ဆက်လုပ်")}</button>}
                           </>}
                           {v.status === "done" && <span className="myjob-await">🔒 {t("อนุมัติแล้ว · ปิดงาน", "အတည်ပြုပြီး · အလုပ်ပိတ်")}</span>}
                         </div>
@@ -229,7 +244,8 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
                   </>}
                   {jo.status === "awaiting_approval" && <><span className="myjob-await">⏳ {t("รอออฟฟิศอนุมัติ", "ရုံးခန်း အတည်ပြုရန် စောင့်")}</span><button className="btn-ghost" disabled={busy === jo.job_no} onClick={() => setStatus(jo, "in_progress")}>{t("แก้ไข/ทำต่อ", "ပြင်ဆင်/ဆက်လုပ်")}</button></>}
                   {jo.status === "reschedule" && <><span className="myjob-await">📅 {t("รอออฟฟิศนัดหมายเพิ่ม", "ရုံးခန်း ချိန်းဆိုပေးရန် စောင့်")}</span>
-                    <button className="btn-ghost" disabled={busy === jo.job_no} onClick={() => setStatus(jo, "in_progress")}>{t("กลับไปทำต่อ", "ပြန်ဆက်လုပ်")}</button></>}
+                    {!jo.locked && <button className="btn-ghost" disabled={busy === jo.job_no} onClick={() => setStatus(jo, "in_progress")}>{t("กลับไปทำต่อ", "ပြန်ဆက်လုပ်")}</button>}</>}
+                  {jo.status === "quote_pending" && <span className="myjob-await">📝 {t("งานจบแล้ว · ออฟฟิศกำลังทำใบเสนอราคา", "အလုပ်ပြီး · ရုံးခန်း စျေးနှုန်းစာရွက် လုပ်နေ")}</span>}
                   {jo.status === "done" && <span className="myjob-await">🔒 {t("อนุมัติแล้ว · ปิดงาน", "အတည်ပြုပြီး · အလုပ်ပိတ်")}</span>}
                   {!TECH_READONLY.includes(jo.status) && <button className="btn-ghost" onClick={() => onWithdraw && onWithdraw(jo)}><UIcon name="withdraw" size={15} /> {t("เบิกวัสดุงานนี้", "ဒီအလုပ်အတွက် ပစ္စည်းထုတ်")}</button>}
                   {!TECH_READONLY.includes(jo.status) && onHandover && <button className="btn-ghost" onClick={() => onHandover(jo)}><UIcon name="catalog" size={15} /> 📝 {t("ใบส่งมอบงาน", "အလုပ်လွှဲပြောင်း စာရွက်")}</button>}
