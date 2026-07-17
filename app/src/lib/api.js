@@ -3460,7 +3460,7 @@ export async function listPayslips(period) {
 // upsert one payslip line (one per period+user)
 const _payslipRow = (p, uid, now) => ({
   period: p.period, user_id: p.user_id, pay_type: p.pay_type || null,
-  base: p.base || 0, ot_pay: p.ot_pay || 0,
+  base: p.base || 0, ot_pay: p.ot_pay || 0, hol_pay: p.hol_pay || 0,   // ค่าทำงานวันหยุด (mig 148)
   present_days: p.present_days || 0, absent_days: p.absent_days || 0, leave_days: p.leave_days || 0, over_leave_days: p.over_leave_days || 0,
   late_min: p.late_min || 0, ot_min: p.ot_min || 0,
   d_late: p.d_late || 0, d_absent: p.d_absent || 0, d_leave: p.d_leave || 0, d_sso: p.d_sso || 0, d_advance: p.d_advance || 0,
@@ -3469,13 +3469,17 @@ const _payslipRow = (p, uid, now) => ({
 });
 export async function savePayslip(p) {
   const uid = await _uid();
-  const { error } = await supabase.from("payslips").upsert(_payslipRow(p, uid, new Date().toISOString()), { onConflict: "period,user_id" });
+  const row = _payslipRow(p, uid, new Date().toISOString());
+  let { error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" });
+  if (error && /hol_pay/i.test(error.message || "")) { delete row.hol_pay; ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); } // pre-148 fallback
   if (error) throw error;
 }
 // บันทึกสลิปทั้งรอบใน "คำสั่งเดียว" — เดิมวนทีละคน เน็ตหลุดกลางทางแล้วได้รอบครึ่ง ๆ กลาง ๆ
 export async function savePayslips(list) {
   const uid = await _uid(); const now = new Date().toISOString();
-  const { error } = await supabase.from("payslips").upsert(list.map((p) => _payslipRow(p, uid, now)), { onConflict: "period,user_id" });
+  const rows = list.map((p) => _payslipRow(p, uid, now));
+  let { error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" });
+  if (error && /hol_pay/i.test(error.message || "")) { rows.forEach((r) => delete r.hol_pay); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); } // pre-148 fallback
   if (error) throw error;
 }
 export async function setPayslipPaid(period, paid, meta = {}) {

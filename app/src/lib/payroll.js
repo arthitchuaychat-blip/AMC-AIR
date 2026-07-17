@@ -1,5 +1,5 @@
 // Payroll math — pure functions. Pay cycle cut-off 25th: period = 26th prev month → 25th this month.
-import { hrParseYmd, hrYmd, isWorkday, dayStat, leaveFrac, minutesOf } from "./hr";
+import { hrParseYmd, hrYmd, isWorkday, dayStat, leaveFrac, minutesOf, otCreditHours } from "./hr";
 
 const pad = (n) => String(n).padStart(2, "0");
 // the [from,to] dates for a pay month 'YYYY-MM' (paid that month): 26th of prev month → 25th of this month
@@ -13,7 +13,7 @@ export function payPeriod(ym) {
 // attendance/leave stats for one person over [from,to]
 // leaveDaySet values are { t: type, h: hours|null } (see buildLeaveDaySet) — ลาราย ชม. นับเป็นเศษวัน และวันนั้นยังนับเข้างานตามปกติ
 export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, settings) {
-  let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveDays = 0, unpaidLeave = 0, holidayDays = 0, holidayMin = 0;
+  let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveDays = 0, unpaidLeave = 0, holidayDays = 0, holidayMin = 0, holNormMin = 0, holOtHours = 0;
   for (let d = hrParseYmd(from); d <= hrParseYmd(to); d.setDate(d.getDate() + 1)) {
     const k = hrYmd(d);
     const lv = leaveDaySet[emp.id]?.[k];
@@ -24,9 +24,19 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
       if (!lv.h) continue;                           // ลาเต็มวัน — ไม่นับเข้างาน/ขาดของวันนั้น
     }
     if (!isWorkday(k, emp.work_pattern || "mon_sat", emp.sat_group, holSet)) {
-      // มาทำงานวันหยุด — เดิมถูกข้ามเงียบ ๆ ไม่โผล่ที่ไหนเลย: นับวัน+ชั่วโมงไว้ให้ HR เห็นและชดเชย (ผ่านช่องโบนัส)
+      // มาทำงานวันหยุด — คิดค่าวันหยุดตามกฎหมาย (ม.62–63): แยกชั่วโมงเป็น 8 ชม.แรก กับส่วนเกิน (OT วันหยุด)
       const a = attByUserDay[emp.id]?.[k];
-      if (a?.check_in_at) { holidayDays++; if (a.check_out_at) holidayMin += Math.max(0, (minutesOf(a.check_out_at) ?? 0) - (minutesOf(a.check_in_at) ?? 0)); }
+      if (a?.check_in_at) {
+        holidayDays++;
+        if (a.check_out_at) {
+          const span = Math.max(0, (minutesOf(a.check_out_at) ?? 0) - (minutesOf(a.check_in_at) ?? 0));
+          holidayMin += span;   // ชั่วโมงดิบไว้โชว์บนป้าย (เหมือนเดิม)
+          // ชั่วโมงงานจริง = ช่วงเวลาอยู่ − พักเที่ยง 1 ชม. เมื่ออยู่เกิน 5 ชม. (กะปกติ 08–17 = ช่วง 9 ชม. = งาน 8 ชม.)
+          const workMin = span > 300 ? span - 60 : span;
+          holNormMin += Math.min(workMin, 480);
+          holOtHours += otCreditHours(Math.max(0, workMin - 480));  // OT วันหยุด นับบล็อกครึ่ง ชม. เหมือน OT ปกติ
+        }
+      }
       continue;
     }
     workdays++;
@@ -37,7 +47,7 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
     else absent++;
   }
   const r2 = (n) => Math.round(n * 100) / 100;
-  return { present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveDays: r2(leaveDays), unpaidLeave: r2(unpaidLeave), holidayDays, holidayHours: r2(holidayMin / 60) };
+  return { present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveDays: r2(leaveDays), unpaidLeave: r2(unpaidLeave), holidayDays, holidayHours: r2(holidayMin / 60), holNormHours: r2(holNormMin / 60), holOtHours: r2(holOtHours) };
 }
 
 const r0 = (n) => Math.round(Number(n) || 0);
@@ -62,7 +72,13 @@ export function computePayslip(emp, st, opt = {}) {
   const dSso = emp.sso ? r0(Math.min(ssoBase, SSO_BASE_CAP) * 0.05) : 0;
   const bonus = Number(emp.bonus) || 0, otherDeduct = Number(emp.other_deduct) || 0;
   const dAdvance = Number(emp.advance) || 0;   // เบิกเงินล่วงหน้า ที่อนุมัติแล้ว → หักในรอบนี้
-  const gross = base + otPay + bonus;
+  // ค่าทำงานวันหยุด (พ.ร.บ.คุ้มครองแรงงาน ม.62–63 · เจ้าของเคาะ 2026-07-17 จ่ายตามกฎหมายเต็ม):
+  //   8 ชม.แรก → รายเดือนได้ "เพิ่ม 1 เท่า" ของรายชั่วโมง (เงินเดือนจ่ายฐานวันหยุดไว้แล้ว) · รายวันได้ 2 เท่า
+  //   ส่วนเกิน 8 ชม. → OT วันหยุด 3 เท่า (ทั้งรายเดือน/รายวัน)
+  const holNormHours = Number(st.holNormHours) || 0;
+  const holOtHours = Number(st.holOtHours) || 0;
+  const holPay = r0(holNormHours * hourly * (monthly ? 1 : 2) + holOtHours * hourly * 3);
+  const gross = base + otPay + holPay + bonus;
   const ded = dLate + dAbsent + dLeave + dSso + otherDeduct + dAdvance;
-  return { monthly, base, otHours, otPay, dLate, dAbsent, dLeave, dSso, dAdvance, bonus, otherDeduct, gross, ded, net: gross - ded };
+  return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso, dAdvance, bonus, otherDeduct, gross, ded, net: gross - ded };
 }

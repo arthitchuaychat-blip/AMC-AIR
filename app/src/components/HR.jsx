@@ -950,6 +950,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         ${line(r.p.pay_type === "daily" ? `ค่าแรง (${r.st.present} วัน)` : "เงินเดือน", c.base)}
         ${line(`ค่าล่วงเวลา OT (${c.otHours.toFixed(1)} ชม.)`, c.otPay)}
+        ${line(`ค่าทำงานวันหยุด (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`, c.holPay)}
         ${line("โบนัส/เบี้ยเลี้ยง", c.bonus)}
         ${line("หักมาสาย", c.dLate, 1)}${line("หักขาดงาน", c.dAbsent, 1)}${line("หักลาเกินโควต้า/ลาไม่รับค่าแรง", c.dLeave, 1)}
         ${line("ประกันสังคม", c.dSso, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
@@ -983,7 +984,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       const rows = payable.map((r) => {
         const c = calcOf(r); runNet += c.net;
         return { period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
-          base: c.base, ot_pay: c.otPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
+          base: c.base, ot_pay: c.otPay, hol_pay: c.holPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
           late_min: r.st.lateMin, ot_min: r.st.otMin, d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
           bonus: c.bonus, other_deduct: c.otherDeduct, net: c.net, status: markPaid ? "paid" : "draft" };
       });
@@ -1073,13 +1074,14 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       {loading ? <div className="empty">กำลังคำนวณ…</div> : payable.length === 0 ? <div className="empty">ยังไม่มีพนักงานที่ตั้งฐานเงินเดือน — ไปตั้งที่แท็บ “กะ & ตั้งค่า”</div> : (
         <div style={{ overflowX: "auto" }}>
           <table className="hr-table pay-table">
-            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>หักเบิกล่วงหน้า</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
+            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>ค่าวันหยุด</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>หักเบิกล่วงหน้า</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
             <tbody>
               {payable.map((r) => { const c = calcOf(r); return (
                 <tr key={r.p.id}>
-                  <td style={{ textAlign: "left" }}><b>{r.p.name || r.p.email}</b><div className="jo-dim">{r.p.pay_type === "daily" ? `รายวัน · มา ${r.st.present} วัน` : "รายเดือน"}{r.st.absent ? ` · ขาด ${r.st.absent}` : ""}{r.st.lateMin ? ` · สาย ${Math.round(r.st.lateMin)} น.` : ""}{r.st.holidayDays ? <b style={{ color: "#b45309" }} title="มาทำงานในวันหยุดของเขา — ระบบยังไม่คิดเงินอัตโนมัติ ชดเชยผ่านช่องโบนัส (กฎหมาย: วันหยุด 1 แรง OT วันหยุด 3 แรง)"> · 🔶 ทำงานวันหยุด {r.st.holidayDays} วัน ({r.st.holidayHours} ชม.)</b> : ""}</div></td>
+                  <td style={{ textAlign: "left" }}><b>{r.p.name || r.p.email}</b><div className="jo-dim">{r.p.pay_type === "daily" ? `รายวัน · มา ${r.st.present} วัน` : "รายเดือน"}{r.st.absent ? ` · ขาด ${r.st.absent}` : ""}{r.st.lateMin ? ` · สาย ${Math.round(r.st.lateMin)} น.` : ""}{r.st.holidayDays ? <b style={{ color: "#b45309" }} title="มาทำงานในวันหยุด — คิดค่าวันหยุดให้อัตโนมัติแล้ว (ดูคอลัมน์ ค่าวันหยุด)"> · 🔶 ทำงานวันหยุด {r.st.holidayDays} วัน ({r.st.holidayHours} ชม.)</b> : ""}</div></td>
                   <td>{fmtBaht(c.base)}</td>
                   <td className="hr-ok">{c.otHours ? `${c.otHours.toFixed(1)} = ${fmtBaht(c.otPay)}` : "—"}</td>
+                  <td className="hr-ok" title={c.holPay ? `${c.holNormHours} ชม.แรก × ${c.monthly ? "1 เท่า (รายเดือน)" : "2 เท่า (รายวัน)"}${c.holOtHours ? ` + OT วันหยุด ${c.holOtHours} ชม. × 3 เท่า` : ""}` : ""}>{c.holPay ? fmtBaht(c.holPay) : "—"}</td>
                   <td className={c.dLate ? "hr-bad" : ""}>{c.dLate ? "−" + fmtBaht(c.dLate) : "—"}</td>
                   <td className={c.dAbsent ? "hr-bad" : ""}>{c.dAbsent ? "−" + fmtBaht(c.dAbsent) : "—"}</td>
                   <td className={c.dLeave ? "hr-bad" : ""}>{c.dLeave ? "−" + fmtBaht(c.dLeave) : "—"}</td>
@@ -1095,11 +1097,11 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                 </tr>
               ); })}
             </tbody>
-            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={9} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td><td /></tr></tfoot>
+            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={10} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td><td /></tr></tfoot>
           </table>
         </div>
       )}
-      <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (เพดานฐาน 17,500 = สูงสุด 875) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ” · 🔶 ทำงานวันหยุด = ระบบแจ้งไว้ให้จ่ายชดเชยผ่านช่องโบนัสเอง (ยังไม่คิดอัตโนมัติ)</p>
+      <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (เพดานฐาน 17,500 = สูงสุด 875) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ” · 🔶 <b>ค่าวันหยุด</b>คิดอัตโนมัติตามกฎหมาย: 8 ชม.แรก รายเดือน +1 เท่า / รายวัน 2 เท่า · เกิน 8 ชม. = OT วันหยุด 3 เท่า (หักพักเที่ยง 1 ชม. เมื่ออยู่เกิน 5 ชม.) — เอาเมาส์ชี้ตัวเลขเพื่อดูที่มา</p>
       {paidStatus === "paid" && <p className="page-sub" style={{ marginTop: 6, color: "var(--down)", fontWeight: 600 }}>🔒 รอบนี้จ่ายแล้ว — ตัวเลขในตารางอัปเดตตามข้อมูลล่าสุดเสมอ แต่สลิปที่บันทึก + รายการกระแสเงินสด ถูกล็อกไว้ ณ ตอนจ่าย · ถ้าแก้เวลาเข้างาน/ลา/เบิกล่วงหน้า แล้วต้องการให้มีผลกับสลิปและกระแสเงินสด ให้กด “ยกเลิกจ่าย” แล้ว “ทำจ่ายทั้งรอบ” ใหม่</p>}
 
       {payModal && <PayRunModal total={totalNet} count={payable.length} defaultDate={payDate}
@@ -1117,6 +1119,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
               <tr className="ps-h"><td colSpan={2}>รายได้</td></tr>
               <tr><td>{p.pay_type === "daily" ? `ค่าแรง (${r.st.present} วัน)` : "เงินเดือน"}</td><td className="r">{fmtBaht(c.base)}</td></tr>
               {c.otPay > 0 && <tr><td>ค่าล่วงเวลา OT ({c.otHours.toFixed(1)} ชม.)</td><td className="r">{fmtBaht(c.otPay)}</td></tr>}
+              {c.holPay > 0 && <tr><td>ค่าทำงานวันหยุด ({c.holNormHours} ชม.{c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})</td><td className="r">{fmtBaht(c.holPay)}</td></tr>}
               {c.bonus > 0 && <tr><td>โบนัส/เบี้ยเลี้ยง</td><td className="r">{fmtBaht(c.bonus)}</td></tr>}
               <tr className="ps-sub"><td>รวมรายได้</td><td className="r">{fmtBaht(c.gross)}</td></tr>
               <tr className="ps-h"><td colSpan={2}>รายการหัก</td></tr>
