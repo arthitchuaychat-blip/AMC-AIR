@@ -196,9 +196,10 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     const m = matMap[l.code];
     const f = unitFactor(m, lineUnit(l, m));
     const baseQty = l.qty * f;                                             // จำนวนในหน่วยหลัก
-    const unit = type === "purchase" ? (l.price ?? R2((m?.cost || 0) * f)) : (m?.cost || 0);
-    const value = type === "purchase" ? unit * l.qty : unit * baseQty;     // ซื้อ: ราคา/หน่วยที่เลือก · อื่น ๆ: ต้นทุน/หน่วยหลัก
-    return { ...l, m, f, baseQty, unit, value };
+    // ราคา/หน่วยต้องชื่อ unitPrice — เดิมตั้งชื่อ unit แล้ว spread ทับ "หน่วยนับ" ของแถว: จอโชว์เลขราคาแทนหน่วย และปุ่ม × ลบไม่ได้ (removeLine เทียบ unit ไม่ตรง)
+    const unitPrice = type === "purchase" ? (l.price ?? R2((m?.cost || 0) * f)) : (m?.cost || 0);
+    const value = type === "purchase" ? unitPrice * l.qty : unitPrice * baseQty; // ซื้อ: ราคา/หน่วยที่เลือก · อื่น ๆ: ต้นทุน/หน่วยหลัก
+    return { ...l, m, f, baseQty, unitPrice, value };
   });
   const cartTotal = linesView.reduce((a, x) => a + x.value, 0);
   function addLine() {
@@ -571,7 +572,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                     <div className="line-row" key={l.code + "|" + (l.unit || "")}>
                       <MaterialThumb mat={l.m} size={32} radius={8} />
                       <div className="line-info"><div className="line-name">{l.m?.th}</div>
-                        <div className="line-sub">{l.qty} {lineUnit(l, l.m)}{l.f > 1 ? ` (= ${fmtNum(l.baseQty)} ${l.m?.unit})` : ""}{type === "purchase" ? ` × ${fmtBaht(l.unit)}` : ""} · {fmtBaht(l.value)}</div></div>
+                        <div className="line-sub">{l.qty} {lineUnit(l, l.m)}{l.f > 1 ? ` (= ${fmtNum(l.baseQty)} ${l.m?.unit})` : ""}{type === "purchase" ? ` × ${fmtBaht(l.unitPrice)}` : ""} · {fmtBaht(l.value)}</div></div>
                       <span className="line-dir" style={{ color: T.color }}>{T.dir > 0 ? "+" : "−"}{l.qty} {l.f > 1 ? lineUnit(l, l.m) : ""}</span>
                       <button className="line-x" onClick={() => removeLine(l)}><UIcon name="x" size={14} /></button>
                     </div>

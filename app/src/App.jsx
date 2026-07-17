@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-17·คลัง/จัดซื้อ: เก็บแข็งทั้งโซน (mig 151) — นโยบายลบ transactions/กันรับของซ้ำ/เลข PO กันชน/ตั้งเบิกซ้ำ/รับบางส่วน/เตือนเกินสต๊อก/ต้นทุนเฉลี่ยสด/เหตุผล+audit ครบ v448";
+const BUILD = "2026-07-17·fix: ตะกร้าเบิก/ซื้อ — ปุ่ม × ลบรายการไม่ได้ + หน่วยนับโชว์เป็นตัวเลขราคา (ตัวแปร unit ชนกัน) v449";
 
 function SetupNotice() {
   return (
