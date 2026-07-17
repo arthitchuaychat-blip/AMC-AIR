@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems, docNoTaken } from "../lib/api";
 import DocSlip from "./DocSlip";
 import NumIn from "./NumIn";
 import DocTerms from "./DocTerms";
@@ -27,7 +27,7 @@ const STATUS = {
   approved: { th: "อนุมัติ", cls: "b-green" }, rejected: { th: "ปฏิเสธ", cls: "b-red" }, expired: { th: "หมดอายุ", cls: "b-grey" },
 };
 const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"], ["approved", "อนุมัติ"], ["rejected", "ปฏิเสธ"], ["expired", "หมดอายุ"]];
-function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
+function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onCreatePo, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
@@ -82,6 +82,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     ? `แก้ไข/ลบใบเสนอราคานี้ไม่ได้ — มี${[q.hasInvoice && "ใบแจ้งหนี้", q.hasJob && `ใบงาน ${q.jobNo || ""}`].filter(Boolean).join(" และ ")}แล้ว\nต้องลบเอกสารถัดไป (ใบแจ้งหนี้/ใบเสร็จ/ใบงาน) ก่อน`
     : null;
   function startEdit(q) {
+    // ล็อกใบอนุมัติแล้ว — ราคา/รายการคือสัญญากับลูกค้า ถ้าจำเป็นต้องแก้ ให้ "คืนสถานะแก้ไข" ก่อน (ลงประวัติ)
+    if (q.status === "approved") return alert(`ใบเสนอราคา ${q.quote_no} อนุมัติแล้ว — แก้ไขไม่ได้\nถ้าจำเป็นต้องแก้ กดปุ่ม "คืนสถานะแก้ไข" บนการ์ดก่อน (ระบบบันทึกเหตุผลไว้ในประวัติ)`);
     const lk = lockMsg(q); if (lk) return alert(lk);
     setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", job_type: q.job_type || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), discount: Number(x.discount) || 0, kind: x.kind, description: x.description || "" })) });
@@ -151,8 +153,17 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     if (!ed._edit && !ed.boq_no) return flash("ใบเสนอราคาต้องเริ่มจาก BOQ — เลือก BOQ ที่ช่อง 'อ้างอิง BOQ' หรือไปสร้างจากเมนู BOQ (ปุ่ม 'สร้างใบเสนอราคา' บนการ์ด)", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
     try {
+      // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — ใบใหม่ต้องเช็คก่อน ชนแล้วออกเลขใหม่ให้อัตโนมัติ
+      let quoteNo = ed.quote_no;
+      if (!ed._edit && await docNoTaken("quotations", quoteNo)) {
+        const fresh = genNo();
+        if (fresh === quoteNo || await docNoTaken("quotations", fresh)) return flash(`เลขที่ ${quoteNo} ถูกใช้แล้ว — แก้เลขที่ก่อนบันทึก`, true);
+        quoteNo = fresh; flash(`เลขที่เดิมชนกับใบอื่น — ใช้เลขใหม่ ${fresh} ให้อัตโนมัติ`);
+      }
+      // ส่วนลดรายบรรทัดห้ามเกินมูลค่าบรรทัด — กันบรรทัดติดลบไหลไปถึงยอดรวม/หัก ณ ที่จ่าย
+      const items = ed.items.map((x) => ({ ...x, discount: Math.min(Number(x.discount) || 0, Math.round(Number(x.qty) * adjUnit(x.unit_price) * 100) / 100) }));
       const sig = ed.sign_on ? mySignature() : null;
-      await saveQuotation({ ...ed, sign_url: sig?.url || null, sign_name: sig?.name || null }, ed.items);
+      await saveQuotation({ ...ed, quote_no: quoteNo, sign_url: sig?.url || null, sign_name: sig?.name || null }, items);
       // sync new items back into the linked BOQ (add only — never removes BOQ items)
       let synced = 0;
       if (ed.boq_no) {
@@ -180,6 +191,13 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     if (!await confirmDialog(`ยืนยันอนุมัติใบเสนอราคา ${q.quote_no} ?`)) return;
     try { await setQuotationStatus(q.quote_no, "approved"); flash(`อนุมัติ ${q.quote_no} แล้ว ✓`); await load(); }
     catch (e) { flash("อนุมัติไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // คืนสถานะใบที่อนุมัติแล้วกลับเป็น "ส่งแล้ว" เพื่อแก้ไข — บังคับเหตุผล + ลงประวัติ (ทางเดียวที่จะแก้ใบอนุมัติ)
+  async function unapprove(q) {
+    const reason = await confirmDialog({ title: `คืนสถานะ ${q.quote_no} เป็น "ส่งแล้ว" เพื่อแก้ไข?`, message: "ใบนี้อนุมัติไปแล้ว — การคืนสถานะถูกบันทึกในประวัติพร้อมเหตุผล", confirmText: "คืนสถานะ", prompt: { label: "เหตุผลที่ขอแก้", placeholder: "เช่น แก้ราคา · เพิ่มรายการ", required: true } });
+    if (reason === false) return;
+    try { await setQuotationStatus(q.quote_no, "sent", reason); flash("คืนสถานะแล้ว — แก้ไขได้ · เสร็จแล้วอย่าลืมกดอนุมัติใหม่"); await load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
 
   // ---------- EDITOR ----------
@@ -252,8 +270,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                     <div className="inp inp-unit boq-in"><span className="unit-pre">฿</span><NumIn className="" autoWidth min="0" step="0.01"
                       value={payRate ? adjUnit(it.unit_price) : it.unit_price}
                       onChange={(n) => setLine(i, "unit_price", payRate ? n / (1 + payRate) : n)} /></div>
-                    <div className="inp inp-unit boq-in" title="ส่วนลดรายการนี้ (บาท)" style={lineDisc(it) > 0 ? { borderColor: "#fca5a5" } : {}}>
-                      <span className="unit-pre" style={{ color: "var(--down)" }}>ลด</span><NumIn className="" autoWidth min="0" step="0.01" value={it.discount || 0} onChange={(n) => setLine(i, "discount", Math.max(0, n))} /></div>
+                    <div className="inp inp-unit boq-in" title="ส่วนลดรายการนี้ (บาท) — ไม่เกินมูลค่าบรรทัด" style={lineDisc(it) > 0 ? { borderColor: "#fca5a5" } : {}}>
+                      <span className="unit-pre" style={{ color: "var(--down)" }}>ลด</span><NumIn className="" autoWidth min="0" step="0.01" value={it.discount || 0} onChange={(n) => setLine(i, "discount", Math.min(Math.max(0, n), Math.round(Number(it.qty) * adjUnit(it.unit_price) * 100) / 100))} /></div>
                     <span className="boq-amt">{fmtBaht(it.qty * adjUnit(it.unit_price) - lineDisc(it))}</span>
                     <div className="line-move">
                       <button className="line-mv" disabled={i === 0} onClick={() => moveLine(i, -1)} title="เลื่อนขึ้น"><UIcon name="chevD" size={13} style={{ transform: "rotate(180deg)" }} /></button>
@@ -320,8 +338,10 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           </div>
 
           <div className="fld-row">
-            <label className="fld"><span>สถานะ</span>
-              <Combo className="inp" value={ed.status} onChange={(e) => setQ("status", e.target.value)}>{STATUS_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Combo>
+            <label className="fld"><span>สถานะ <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(อนุมัติได้จากปุ่มบนการ์ดเท่านั้น — มีบันทึกประวัติ)</span></span>
+              <Combo className="inp" value={ed.status} onChange={(e) => setQ("status", e.target.value)}>
+                {STATUS_OPTS.filter(([v]) => v !== "approved" || ed.status === "approved").map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </Combo>
             </label>
           </div>
 
@@ -407,8 +427,10 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 {q.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
                 <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-                {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob} title={lockMsg(q) || ""} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob || q.status === "approved"} title={q.status === "approved" ? "อนุมัติแล้ว — กด 'คืนสถานะแก้ไข' ก่อน" : (lockMsg(q) || "")} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
+                {canEdit && q.status === "approved" && !q.hasInvoice && !q.hasJob && !(docLinks.byQuote[q.quote_no]?.poNos || []).length &&
+                  <button className="btn-ghost sm" title="คืนสถานะเป็น 'ส่งแล้ว' เพื่อแก้ไขใบที่อนุมัติแล้ว (บังคับเหตุผล + ลงประวัติ)" onClick={() => unapprove(q)}>คืนสถานะแก้ไข</button>}
                 {q.status === "approved" && onCreateInvoice && (q.hasInvoice
                   ? <span className="job-badge b-green" title="วางบิลงวดถัดไปได้ที่เมนูใบส่งของ/ใบแจ้งหนี้">✓ ออกใบส่งของ/ใบแจ้งหนี้แล้ว · วางบิล {Math.round(q.billedPct)}%</span>
                   : (canEdit && <button className="btn-primary" onClick={() => onCreateInvoice(q.quote_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบส่งของ/ใบแจ้งหนี้</button>))}

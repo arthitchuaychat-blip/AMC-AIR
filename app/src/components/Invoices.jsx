@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks, listCustomers } from "../lib/api";
+import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks, listCustomers, docNoTaken } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText, matchPhone, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -18,8 +18,9 @@ import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
-// snapshot a quote's line items (full amounts) with default หัก ณ ที่จ่าย flag (services only)
-const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
+// snapshot a quote's line items with default หัก ณ ที่จ่าย flag (services only)
+// ราคา/ยอด = ราคาแสดงจริง (price_show รวมค่าบัตรแล้ว) − ส่วนลดรายบรรทัด → ฐานหัก ณ ที่จ่าย ตรงกับใบเสนอราคาเป๊ะ
+const snapshotItems = (q) => (q?.items || []).map((it) => { const p = Number(it.price_show ?? it.unit_price) || 0; return { code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: p, amount: round2(Number(it.qty) * p - (Number(it.discount) || 0)), wht: it.kind === "service" }; });
 const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 
 const fmtBaht = fmtBaht2; // invoices show 2 decimals to avoid rounding leftovers
@@ -130,11 +131,15 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       invoice_no: ed.invoice_no, quote_no: selQ.quote_no, boq_no: selQ.boq_no || null,
       customer_id: selQ.customer_id || null, site_id: selQ.site_id || null,
       issue_date: ed.issue_date || null, due_date: ed.due_date || null, installment, pct: round2(f * 100),
-      base, vat_amt: round2((selQ.vatAmt || 0) * f), total: newTotal, wht_rate, items, wht_amt: useWht ? lineWhtAmt(items, base, wht_rate) : 0,
+      base, vat_amt: round2(newTotal - base), total: newTotal, wht_rate, items, wht_amt: useWht ? lineWhtAmt(items, base, wht_rate) : 0, // vat = total − base เสมอ กันเศษ 1 สตางค์จากการปัดแยกก้อน
       note: ed.note, internal_note: ed.internal_note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty, status: "unpaid",
       ...(() => { const sig = ed.sign_on ? mySignature() : null; return { sign_url: sig?.url || null, sign_name: sig?.name || null }; })(),
     };
-    try { await saveInvoice(inv); flash(`สร้างใบส่งของ/ใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load(); }
+    try {
+      // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — เช็คก่อนเสมอ (เลขแก้มือได้)
+      if (await docNoTaken("invoices", inv.invoice_no)) return flash(`เลขที่ ${inv.invoice_no} ถูกใช้แล้ว — เปลี่ยนเลขที่ก่อนบันทึก`, true);
+      await saveInvoice(inv); flash(`สร้างใบส่งของ/ใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load();
+    }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   // chain lock: can't edit/delete/cancel an invoice that already has a receipt downstream
@@ -366,8 +371,9 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(printI.wht_rate) || 3}% (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
             {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtBaht(printI.total - printI.wht_amt)}</b></div>}
           </div>}>
+          {/* ราคาบรรทัดพิมพ์ = price_show (รวมค่าบัตรแล้ว) ให้บวกลงตัวกับยอดรวมที่คิดจาก price_show — เหมือนใบเสนอราคา */}
           {(() => { const its = q?.items || []; const hasD = its.some((x) => Number(x.discount) > 0); return its.map((it, i) => (
-            <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.unit_price) - (Number(it.discount) || 0))}</td></tr>
+            <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
           )); })()}
         </DocSlip>
       ); })()}

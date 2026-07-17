@@ -1,5 +1,5 @@
 import React from "react";
-import { listBillingNotes, saveBillingNote, setBillingNoteStatus, deleteBillingNote, listInvoices, listCustomers, getCompanies, listDocLinks } from "../lib/api";
+import { listBillingNotes, saveBillingNote, setBillingNoteStatus, deleteBillingNote, listInvoices, listCustomers, getCompanies, listDocLinks, docNoTaken } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, custCode, fmtDocDate, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -15,14 +15,17 @@ import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 
 // สถานะรวมของใบวางบิล: ยกเลิก / ออกใบเสร็จครบ / วางบิล (ยังออกใบเสร็จไม่ครบ)
+// นับจากใบแจ้งหนี้ที่ยัง live เท่านั้น — ใบแจ้งหนี้ที่ยกเลิกไม่มีวันได้ใบเสร็จ ถ้านับรวมใบวางบิลจะ "ครบ" ไม่ได้ตลอดกาล
+const liveInv = (b) => b.liveInvoices || b.invoices.filter((iv) => iv.status !== "cancelled");
 const bnStatus = (b) => {
   if (b.status === "cancelled") return "cancelled";
-  const n = b.invoices.length, r = b.invoices.filter((iv) => iv.hasReceipt).length;
+  const live = liveInv(b);
+  const n = live.length, r = live.filter((iv) => iv.hasReceipt).length;
   return n > 0 && r >= n ? "done" : "open";
 };
 
 const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
-const genNo = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BN-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; };
+const genNo = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BN-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
 
 export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoChat }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
@@ -100,7 +103,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
             <DocCardHead no={b.billing_no} onClick={() => openPeek("billing", b.billing_no)}
               badges={<>
                 {b.status === "cancelled" ? <span className="job-badge b-red">ยกเลิกแล้ว</span> : <span className="job-badge b-blue">วางบิล</span>}
-                {b.status !== "cancelled" && (() => { const n = b.invoices.length, r = b.invoices.filter((iv) => iv.hasReceipt).length;
+                {b.status !== "cancelled" && (() => { const live = liveInv(b); const n = live.length, r = live.filter((iv) => iv.hasReceipt).length;
                   if (n > 0 && r >= n) return <span className="job-badge b-green">✓ ออกใบเสร็จครบแล้ว</span>;
                   if (r > 0) return <span className="job-badge b-amber">ออกใบเสร็จ {r}/{n}</span>;
                   return <span className="job-badge b-grey">ยังไม่ออกใบเสร็จ</span>; })()}
@@ -193,7 +196,8 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
                 <div className="doc-grand"><span>ยอดสุทธิที่ต้องชำระ</span><b>{fmtBaht(printB.net)}</b></div>
               </> : <div className="doc-grand"><span>ยอดวางบิลรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div>}
             </div>}>
-            {printB.invoices.map((iv, i) => (
+            {/* พิมพ์เฉพาะใบแจ้งหนี้ที่ยัง live — ใบยกเลิกห้ามโผล่ในใบวางบิลที่ส่งลูกค้า (ยอดรวมจาก api ก็ตัดออกแล้ว) */}
+            {liveInv(printB).map((iv, i) => (
               <tr key={iv.invoice_no}><td>{i + 1}</td><td>{iv.invoice_no}</td><td>ใบแจ้งหนี้ · งวดที่ {iv.installment} ({Math.round(iv.pct)}%){iv.issue_date ? ` · ${iv.issue_date}` : ""}</td><td className="r" /><td className="r" /><td className="r">{fmtBaht(iv.total)}</td></tr>
             ))}
           </DocSlip>
@@ -226,7 +230,16 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
     if (!chosen.length) return flash("เลือกใบแจ้งหนี้อย่างน้อย 1 ใบ", true);
     setBusy(true);
     const sig = ed.sign_on ? mySignature() : null;
-    try { await saveBillingNote({ billing_no: ed.billing_no, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, internal_note: ed.internal_note, sign_url: sig?.url || null, sign_name: sig?.name || null, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" }); flash("สร้างใบวางบิลแล้ว ✓"); onSaved(); }
+    try {
+      // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — ชนแล้วออกเลขใหม่ให้อัตโนมัติ
+      let bnNo = ed.billing_no;
+      if (await docNoTaken("billing_notes", bnNo)) {
+        const fresh = genNo();
+        if (fresh === bnNo || await docNoTaken("billing_notes", fresh)) { flash(`เลขที่ ${bnNo} ถูกใช้แล้ว — ปิดแล้วเปิดสร้างใหม่`, true); setBusy(false); return; }
+        bnNo = fresh;
+      }
+      await saveBillingNote({ billing_no: bnNo, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, internal_note: ed.internal_note, sign_url: sig?.url || null, sign_name: sig?.name || null, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" }); flash("สร้างใบวางบิลแล้ว ✓"); onSaved();
+    }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }

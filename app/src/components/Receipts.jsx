@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks, flowaccountSendDoc, saveReceiptFlowAccount } from "../lib/api";
+import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks, flowaccountSendDoc, saveReceiptFlowAccount, docNoTaken } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -18,7 +18,8 @@ import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 const fmtBaht = fmtBaht2; // receipts show 2 decimals
-const snapshotItems = (q) => (q?.items || []).map((it) => ({ code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: Number(it.unit_price), amount: round2(Number(it.qty) * Number(it.unit_price)), wht: it.kind === "service" }));
+// ราคา/ยอด = ราคาแสดงจริง (price_show รวมค่าบัตร) − ส่วนลดบรรทัด · หัก ณ ที่จ่ายติดธงเฉพาะลูกค้านิติบุคคล (บุคคลธรรมดาห้ามหัก)
+const snapshotItems = (q) => { const canW = q?.customerType === "company"; return (q?.items || []).map((it) => { const p = Number(it.price_show ?? it.unit_price) || 0; return { code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: p, amount: round2(Number(it.qty) * p - (Number(it.discount) || 0)), wht: canW && it.kind === "service" }; }); };
 const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 const METHODS = ["เงินสด", "โอนเงิน", "เช็ค", "บัตรเครดิต", "Trade Baht"];
 const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber" }, paid: { th: "ชำระเงินแล้ว", cls: "b-green" } };
@@ -89,7 +90,11 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
       note: ed.note, internal_note: ed.internal_note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty,
       ...(() => { const sig = ed.sign_on ? mySignature() : null; return { sign_url: sig?.url || null, sign_name: sig?.name || null }; })(),
     };
-    try { await saveReceipt(r); flash(r.status === "paid" ? `ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว` : `ออกใบเสร็จ (รอชำระเงิน) แล้ว`); setEd(null); await load(); }
+    try {
+      // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — เช็คก่อนเสมอ (เลขแก้มือได้)
+      if (await docNoTaken("receipts", r.receipt_no)) return flash(`เลขที่ ${r.receipt_no} ถูกใช้แล้ว — เปลี่ยนเลขที่ก่อนบันทึก`, true);
+      await saveReceipt(r); flash(r.status === "paid" ? `ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว` : `ออกใบเสร็จ (รอชำระเงิน) แล้ว`); setEd(null); await load();
+    }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(x) { const reason = await confirmDialog({ title: `ลบใบเสร็จ ${x.receipt_no}?`, message: "ใบแจ้งหนี้จะกลับเป็นค้างชำระ · ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ออกผิด · รับเงินผิดยอด", required: true } }); if (reason === false) return; try { await deleteReceipt(x.receipt_no, x.invoice_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
@@ -106,8 +111,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
       const isFull = q && Math.abs((Number(x.total) || 0) - (Number(q.grand) || 0)) < 1;
       let items, discountAmount;
       if (isFull) {
-        items = (q?.items || []).map((it) => ({ sku: it.item_code || "", name: it.name, kind: it.kind, quantity: Number(it.qty) || 1, unitName: it.unit || "หน่วย", pricePerUnit: Number(it.unit_price) || 0, total: round2(Number(it.qty) * Number(it.unit_price)) }));
-        discountAmount = Number(q?.discount) || 0;
+        // ราคาต่อหน่วย = price_show (ตรงกับ grand ที่ใช้เทียบ isFull) · ส่วนลดรายบรรทัดรวมเข้า discountAmount — เดิมทิ้งส่วนลดบรรทัดทำยอดใบกำกับใน FlowAccount เกินจริง
+        items = (q?.items || []).map((it) => { const p = Number(it.price_show ?? it.unit_price) || 0; return { sku: it.item_code || "", name: it.name, kind: it.kind, quantity: Number(it.qty) || 1, unitName: it.unit || "หน่วย", pricePerUnit: p, total: round2(Number(it.qty) * p) }; });
+        discountAmount = round2((Number(q?.discount) || 0) + (q?.items || []).reduce((a, it) => a + (Number(it.discount) || 0), 0));
       } else {
         const pct = q?.grand ? Math.round((Number(x.total) || 0) / q.grand * 100) : null;
         const base = round2(Number(x.base) || 0);
@@ -284,8 +290,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
             {printR.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(printR.wht_rate) || 3}%</span><b>− {fmtBaht(printR.wht_amt)}</b></div>}
             <div className="doc-grand"><span>รับเงินสุทธิ</span><b>{fmtBaht(printR.net)}</b></div>
           </div>}>
+          {/* ราคาบรรทัดพิมพ์ = price_show (รวมค่าบัตรแล้ว) ให้บวกลงตัวกับยอดรวม — เหมือนใบเสนอราคา */}
           {(() => { const its = q?.items || []; const hasD = its.some((x) => Number(x.discount) > 0); return its.map((it, i) => (
-            <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.unit_price) - (Number(it.discount) || 0))}</td></tr>
+            <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
           )); })()}
         </DocSlip>
       ); })()}
@@ -295,7 +302,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           title={`ใบเสร็จ ${view.receipt_no}`}
           subtitle={`${view.customerName || "-"} · อ้างอิง ${view.invoice_no || "-"}`}
           items={view.items?.length ? view.items : snapshotItems(quoteByNo[view.quote_no])}
-          rate={view.wht_rate || 3} docBase={view.base} docTotal={view.total} canEdit={canEdit}
+          rate={view.wht_rate || 3} docBase={view.base} docTotal={view.total} canEdit={canEdit && view.status !== "cancelled"}
           onClose={() => setView(null)}
           onSave={async ({ items, rate, whtAmt, net }) => { await setReceiptWht(view.receipt_no, items, items.some((i) => i.wht), rate, whtAmt, net); flash("บันทึกหัก ณ ที่จ่ายแล้ว ✓"); setView(null); await load(); }}
         />

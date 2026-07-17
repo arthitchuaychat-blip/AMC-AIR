@@ -59,8 +59,13 @@ export function writeAndPrint(win, selector = ".print-area") {
   let done = false;
   const fire = () => {
     if (done) return; done = true;
-    try { paginate(win.document); } catch (_) { /* leave the single-table layout as-is */ }
-    try { win.focus(); win.print(); } catch (_) {}
+    const go = () => {
+      try { paginate(win.document); } catch (_) { /* leave the single-table layout as-is */ }
+      try { win.focus(); win.print(); } catch (_) {}
+    };
+    // รอฟอนต์ไทยโหลดก่อนวัดความสูงแถว — วัดตอนฟอนต์ยังไม่มา ความสูงเพี้ยน แถวท้ายหน้าล้น margin (เพดานรอ 800ms กันค้าง)
+    try { Promise.race([win.document.fonts && win.document.fonts.ready, new Promise((r) => setTimeout(r, 800))]).then(go, go); }
+    catch (_) { go(); }
   };
   try { win.onload = () => setTimeout(fire, 450); } catch (_) {}
   setTimeout(fire, 1600); // fallback if onload never fires

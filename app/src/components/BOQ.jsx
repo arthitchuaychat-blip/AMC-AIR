@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, listDocLinks } from "../lib/api";
+import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, listDocLinks, docNoTaken } from "../lib/api";
 import { fmtBaht, fmtNum, custCode, matchText, matchPhone, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -30,7 +30,7 @@ const SECTIONS = [
   { id: "charged", label: "วัสดุคิดเงินเพิ่ม", kinds: ["material"] },
   { id: "service", label: "ค่าบริการ", kinds: ["service"] },
 ];
-function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BOQ-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
+function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BOQ-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 const blankItems = () => ({ ac: [], free: [], charged: [], service: [] });
 
@@ -147,7 +147,14 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไข BOQ ${ed.boq_no} ?`)) return;
     const sig = ed.sign_on ? mySignature() : null;
     try {
-      await saveBoq({ ...ed, sign_url: sig?.url || null, sign_name: sig?.name || null }, flat);
+      // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — ใบใหม่เช็คก่อน ชนแล้วออกเลขใหม่ให้อัตโนมัติ
+      let boqNo = ed.boq_no;
+      if (!ed._edit && await docNoTaken("boqs", boqNo)) {
+        const fresh = genNo();
+        if (fresh === boqNo || await docNoTaken("boqs", fresh)) return flash(`เลขที่ ${boqNo} ถูกใช้แล้ว — แก้เลขที่ก่อนบันทึก`, true);
+        boqNo = fresh; flash(`เลขที่เดิมชนกับใบอื่น — ใช้เลขใหม่ ${fresh} ให้อัตโนมัติ`);
+      }
+      await saveBoq({ ...ed, boq_no: boqNo, sign_url: sig?.url || null, sign_name: sig?.name || null }, flat);
       // กติกา: BOQ ที่ยกเลิกแล้วกลับมาแก้ไขได้ — บันทึกสำเร็จ = ปลดสถานะยกเลิก กลับมาใช้งานต่อ
       if (ed._wasCancelled) { try { await setBoqStatus(ed.boq_no, null); } catch { /* non-fatal */ } }
       flash(ed._wasCancelled ? `บันทึก BOQ แล้ว — ใบนี้พ้นสถานะยกเลิก กลับมาใช้งานได้ (${flat.length} รายการ)` : `บันทึก BOQ แล้ว (${flat.length} รายการ)`); setEd(null); await load(); }

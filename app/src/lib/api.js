@@ -1074,15 +1074,28 @@ export async function deleteSupplier(id) {
 }
 
 // ---------- BOQ (ใบประมาณการต้นทุน) ----------
+// ทุก select ในสายเอกสารขายต้องผ่าน _fetchAll — เกิน 1000 ใบเมื่อไหร่ ใบเก่าหาย + ตัวล็อกโซ่ (hasQuote/hasReceipt/ยอดวางบิล) คำนวณผิดเงียบ ๆ
+const _allRows = (build) => _fetchAll(build).then((rows) => ({ data: rows }));
+
+// เลขเอกสารซ้ำไหม — ต้องเช็คก่อนบันทึกใบใหม่ทุกครั้ง เพราะ save เป็น upsert ที่ "ทับใบเดิมเงียบ ๆ" ถ้าเลขชนกัน
+// (เลขจาก genNo ละเอียดระดับวินาที แต่ 2 เครื่องกดพร้อมกัน หรือพิมพ์เลขมือซ้ำ ก็ยังชนได้)
+const _DOC_NO_COL = { boqs: "boq_no", quotations: "quote_no", invoices: "invoice_no", receipts: "receipt_no", billing_notes: "billing_no" };
+export async function docNoTaken(table, no) {
+  const col = _DOC_NO_COL[table];
+  if (!col || !no) return false;
+  const { count, error } = await supabase.from(table).select(col, { count: "exact", head: true }).eq(col, no);
+  if (error) throw error;
+  return (count || 0) > 0;
+}
 export async function listBoqs() {
   const [b, it, cu, si, ct, qt] = await Promise.all([
-    supabase.from("boqs").select("*").order("created_at", { ascending: false }),
+    _allRows((f, t) => supabase.from("boqs").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("boq_no").range(f, t)),
     // ห้ามอ่านทั้งตารางตรง ๆ — Supabase ตัดที่ 1000 แถว รายการใบใหม่ (id ท้ายตาราง) จะหายทั้งที่บันทึกสำเร็จ
-    _fetchAll((f, t) => supabase.from("boq_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })),
-    supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
-    supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("quotations").select("quote_no,boq_no,status"),
+    _allRows((f, t) => supabase.from("boq_items").select("*", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("quotations").select("quote_no,boq_no,status", { count: "exact" }).order("quote_no").range(f, t)),
   ]);
   if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const byBoq = {}; (it.data || []).forEach((x) => { (byBoq[x.boq_no] = byBoq[x.boq_no] || []).push(x); });
@@ -1269,10 +1282,10 @@ export async function syncBoqItems(boq_no, items) {
 }
 
 export async function deleteBoq(boq_no, reason) {
-  // chain safety: block if a quotation was created from this BOQ (checked live, not from the UI flag)
-  const { count, error: ce } = await supabase.from("quotations").select("quote_no", { count: "exact", head: true }).eq("boq_no", boq_no);
+  // chain safety: block if a LIVE quotation was created from this BOQ — ใบเสนอที่ยกเลิกแล้วไม่บล็อก (กติกา: ใบยกเลิก = จบสาย)
+  const { count, error: ce } = await supabase.from("quotations").select("quote_no", { count: "exact", head: true }).eq("boq_no", boq_no).neq("status", "cancelled");
   if (ce) throw ce;
-  if ((count || 0) > 0) throw new Error("ลบ BOQ นี้ไม่ได้ — มีใบเสนอราคาอ้างอิงอยู่ · ต้องลบใบเสนอราคา (และเอกสารถัดไป) ก่อน");
+  if ((count || 0) > 0) throw new Error("ลบ BOQ นี้ไม่ได้ — มีใบเสนอราคาอ้างอิงอยู่ · ต้องลบ/ยกเลิกใบเสนอราคา (และเอกสารถัดไป) ก่อน");
   const [{ data: head }, { data: items }] = await Promise.all([
     supabase.from("boqs").select("*").eq("boq_no", boq_no).maybeSingle(),
     supabase.from("boq_items").select("*").eq("boq_no", boq_no),
@@ -1296,13 +1309,13 @@ export async function setJobStatus(job_no, status, reason) {
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
 export async function listQuotations() {
   const [q, it, cu, si, ct, jo, inv] = await Promise.all([
-    supabase.from("quotations").select("*").order("created_at", { ascending: false }),
-    _fetchAll((f, t) => supabase.from("quotation_items").select("*", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
-    supabase.from("customers").select("id,name,address,tax_id,type"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
-    supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status"),
-    supabase.from("invoices").select("quote_no,total,status"),
+    _allRows((f, t) => supabase.from("quotations").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("quote_no").range(f, t)),
+    _allRows((f, t) => supabase.from("quotation_items").select("*", { count: "exact" }).order("id").range(f, t)), // กันเพดาน 1000 แถว
+    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id,type", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status", { count: "exact" }).order("job_no").range(f, t)),
+    _allRows((f, t) => supabase.from("invoices").select("quote_no,total,status", { count: "exact" }).order("invoice_no").range(f, t)),
   ]);
   if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
   const byQ = {}; (it.data || []).forEach((x) => { (byQ[x.quote_no] = byQ[x.quote_no] || []).push(x); });
@@ -1389,10 +1402,10 @@ export async function saveQuotation(q, items) {
 }
 
 export async function deleteQuotation(quote_no, reason) {
-  // chain safety: block if an invoice or job order was created from this quotation
+  // chain safety: block if a LIVE invoice or job order was created from this quotation — ใบยกเลิกแล้วไม่บล็อก
   const [iv, jo] = await Promise.all([
-    supabase.from("invoices").select("invoice_no", { count: "exact", head: true }).eq("quote_no", quote_no),
-    supabase.from("job_orders").select("job_no", { count: "exact", head: true }).eq("quote_no", quote_no),
+    supabase.from("invoices").select("invoice_no", { count: "exact", head: true }).eq("quote_no", quote_no).neq("status", "cancelled"),
+    supabase.from("job_orders").select("job_no", { count: "exact", head: true }).eq("quote_no", quote_no).neq("status", "cancelled"),
   ]);
   if (iv.error) throw iv.error; if (jo.error) throw jo.error;
   if ((iv.count || 0) > 0 || (jo.count || 0) > 0) throw new Error("ลบใบเสนอราคานี้ไม่ได้ — มีใบแจ้งหนี้/ใบงานอ้างอิงอยู่ · ต้องลบเอกสารถัดไปก่อน");
@@ -1413,6 +1426,8 @@ export async function setQuotationStatus(quote_no, status, reason) {
   if (error) throw error;
   if (status === "cancelled" || status === "approved")
     await logAudit({ action: status === "approved" ? "approve" : "cancel", target_type: "quotation", target_no: quote_no, reason });
+  else if (reason) // คืนสถานะใบอนุมัติกลับมาแก้ — ลงประวัติพร้อมเหตุผลเสมอ
+    await logAudit({ action: "unapprove", target_type: "quotation", target_no: quote_no, reason });
   syncCashEntriesFromDocs().catch(() => {}); // cancel/approve → refresh projected receivables in cash flow
 }
 
@@ -1425,13 +1440,13 @@ async function _creators() {
 // ---------- INVOICES (ใบแจ้งหนี้ · แบ่งงวดได้) ----------
 export async function listInvoices() {
   const [iv, cu, si, ct, qt, rc, bn] = await Promise.all([
-    supabase.from("invoices").select("*").order("created_at", { ascending: false }),
-    supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
-    supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("quotations").select("quote_no,boq_no,title"),
-    supabase.from("receipts").select("invoice_no,status"),
-    supabase.from("billing_notes").select("billing_no,invoice_nos,status").then((r) => (r.error ? { data: [] } : r)), // pre-050 → ไม่มีตาราง
+    _allRows((f, t) => supabase.from("invoices").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("invoice_no").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("quotations").select("quote_no,boq_no,title", { count: "exact" }).order("quote_no").range(f, t)),
+    _allRows((f, t) => supabase.from("receipts").select("invoice_no,status", { count: "exact" }).order("receipt_no").range(f, t)),
+    _allRows((f, t) => supabase.from("billing_notes").select("billing_no,invoice_nos,status", { count: "exact" }).order("billing_no").range(f, t)).catch(() => ({ data: [] })), // pre-050 → ไม่มีตาราง
   ]);
   if (iv.error) throw iv.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
@@ -1465,8 +1480,34 @@ export function billedByQuote(invoices) {
   (invoices || []).forEach((x) => { if (x.status !== "cancelled") m[x.quote_no] = (m[x.quote_no] || 0) + Number(x.total || 0); });
   return m;
 }
+// ยอดรวมทั้งสิ้นของใบเสนอ คำนวณสดจาก DB — สูตรเดียวกับ listQuotations (ส่วนลดบรรทัด → ส่วนลดรวม → VAT · ราคาบัตรปรับต่อหน่วย)
+async function _quoteGrand(quote_no) {
+  const { data: qo } = await supabase.from("quotations").select("discount_type,discount_value,vat,pay_method,status").eq("quote_no", quote_no).maybeSingle();
+  if (!qo) return null;
+  let itr = await supabase.from("quotation_items").select("qty,unit_price,discount").eq("quote_no", quote_no);
+  if (itr.error) itr = await supabase.from("quotation_items").select("qty,unit_price").eq("quote_no", quote_no); // pre-142
+  if (itr.error) return null;
+  const payRate = qo.pay_method === "card_full" ? 0.04 : qo.pay_method === "card_inst10" ? 0.14 : 0;
+  const adjU = (u) => payRate ? Math.ceil(Math.round((Number(u) || 0) * (1 + payRate) * 100) / 100) : Number(u) || 0;
+  const subtotal = (itr.data || []).reduce((a, x) => a + Number(x.qty) * adjU(x.unit_price) - (Number(x.discount) || 0), 0);
+  const discount = qo.discount_type === "percent" ? subtotal * Number(qo.discount_value || 0) / 100 : Number(qo.discount_value || 0);
+  const afterDisc = subtotal - discount;
+  return { grand: afterDisc + (qo.vat ? afterDisc * 0.07 : 0), status: qo.status };
+}
 export async function saveInvoice(inv) {
   const { data: { user } } = await supabase.auth.getUser();
+  // guard ฝั่ง server: ใบเสนอต้องยัง approved และยอดสะสม (คิดสดจาก DB) ต้องไม่เกินยอดทั้งใบ — กัน 2 เครื่องวางบิลพร้อมกันเกิน 100%
+  if (inv.quote_no) {
+    const qg = await _quoteGrand(inv.quote_no).catch(() => null);
+    if (qg) {
+      if (qg.status !== "approved") throw new Error("ใบเสนอราคานี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว — วางบิลไม่ได้");
+      const { data: others, error: oe } = await supabase.from("invoices").select("invoice_no,total,status").eq("quote_no", inv.quote_no).neq("invoice_no", inv.invoice_no);
+      if (oe) throw oe;
+      const billedOther = (others || []).filter((x) => x.status !== "cancelled").reduce((a, x) => a + Number(x.total || 0), 0);
+      if (billedOther + (Number(inv.total) || 0) > qg.grand + 1)
+        throw new Error(`ยอดวางบิลรวมเกินยอดใบเสนอราคา — วางแล้ว ${billedOther.toLocaleString("en-US")} + งวดนี้ ${(Number(inv.total) || 0).toLocaleString("en-US")} > ${qg.grand.toLocaleString("en-US")} (อาจมีคนวางบิลพร้อมกันจากอีกเครื่อง — รีเฟรชแล้วลองใหม่)`);
+    }
+  }
   const { error } = await supabase.from("invoices").upsert({
     invoice_no: inv.invoice_no, quote_no: inv.quote_no || null, boq_no: inv.boq_no || null,
     customer_id: inv.customer_id || null, site_id: inv.site_id || null,
@@ -1486,11 +1527,14 @@ export async function setInvoiceWht(invoice_no, items, wht_rate, wht_amt) {
   if (error) throw error;
 }
 export async function setInvoiceStatus(invoice_no, status, reason) {
-  // chain safety: cannot cancel an invoice that already has a receipt
+  // chain safety: cannot cancel an invoice that has a LIVE receipt or sits in a LIVE billing note — ใบยกเลิกแล้วไม่บล็อก
   if (status === "cancelled") {
-    const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no);
+    const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no).neq("status", "cancelled");
     if (ce) throw ce;
-    if ((count || 0) > 0) throw new Error("ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว · ต้องลบใบเสร็จก่อน");
+    if ((count || 0) > 0) throw new Error("ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว · ต้องยกเลิก/ลบใบเสร็จก่อน");
+    // อยู่ในใบวางบิลที่ยังไม่ยกเลิก → ต้องยกเลิกใบวางบิลก่อน (เดิมล็อกไว้แค่ฝั่ง UI)
+    const { data: bns } = await supabase.from("billing_notes").select("billing_no,invoice_nos").neq("status", "cancelled").contains("invoice_nos", [invoice_no]).limit(1);
+    if (bns && bns.length) throw new Error(`ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — อยู่ในใบวางบิล ${bns[0].billing_no} · ต้องยกเลิกใบวางบิลก่อน`);
   }
   const { error } = await supabase.from("invoices").update({ status }).eq("invoice_no", invoice_no);
   if (error) throw error;
@@ -1498,10 +1542,10 @@ export async function setInvoiceStatus(invoice_no, status, reason) {
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background (cancel removes the "คาดว่าจะรับ" line)
 }
 export async function deleteInvoice(invoice_no, reason) {
-  // chain safety: block if a receipt was issued from this invoice
-  const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no);
+  // chain safety: block if a LIVE receipt was issued from this invoice — ใบเสร็จยกเลิกแล้วไม่บล็อก
+  const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no).neq("status", "cancelled");
   if (ce) throw ce;
-  if ((count || 0) > 0) throw new Error("ลบใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว · ต้องลบใบเสร็จก่อน");
+  if ((count || 0) > 0) throw new Error("ลบใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว · ต้องยกเลิก/ลบใบเสร็จก่อน");
   const { data: snap } = await supabase.from("invoices").select("*").eq("invoice_no", invoice_no).maybeSingle();
   const { error } = await supabase.from("invoices").delete().eq("invoice_no", invoice_no);
   if (error) throw error;
@@ -1512,12 +1556,12 @@ export async function deleteInvoice(invoice_no, reason) {
 // ---------- RECEIPTS (ใบเสร็จรับเงิน) ----------
 export async function listReceipts() {
   const [rc, cu, si, ct, jo, qt] = await Promise.all([
-    supabase.from("receipts").select("*").order("created_at", { ascending: false }),
-    supabase.from("customers").select("id,name,address,tax_id"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
-    supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("job_orders").select("job_no,quote_no"),
-    supabase.from("quotations").select("quote_no,title"),
+    _allRows((f, t) => supabase.from("receipts").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("receipt_no").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no", { count: "exact" }).order("job_no").range(f, t)),
+    _allRows((f, t) => supabase.from("quotations").select("quote_no,title", { count: "exact" }).order("quote_no").range(f, t)),
   ]);
   if (rc.error) throw rc.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error; if (qt.error) throw qt.error;
   const titleByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.title]));
@@ -1543,6 +1587,16 @@ export async function listReceipts() {
 export async function saveReceipt(r) {
   const { data: { user } } = await supabase.auth.getUser();
   const status = r.status === "pending" ? "pending" : "paid";
+  // guard ฝั่ง server: ใบแจ้งหนี้ต้องยังไม่ยกเลิก และห้ามมีใบเสร็จ live ซ้ำใบเดิม (กัน 2 เครื่องออกพร้อมกัน = รับเงินซ้ำ)
+  if (r.invoice_no) {
+    const { data: ivRow, error: ie } = await supabase.from("invoices").select("status").eq("invoice_no", r.invoice_no).maybeSingle();
+    if (ie) throw ie;
+    if (!ivRow) throw new Error(`ไม่พบใบส่งของ/ใบแจ้งหนี้ ${r.invoice_no}`);
+    if (ivRow.status === "cancelled") throw new Error("ใบส่งของ/ใบแจ้งหนี้ใบนี้ถูกยกเลิกแล้ว — ออกใบเสร็จไม่ได้");
+    const { count, error: re } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", r.invoice_no).neq("status", "cancelled").neq("receipt_no", r.receipt_no);
+    if (re) throw re;
+    if ((count || 0) > 0) throw new Error("ใบแจ้งหนี้นี้มีใบเสร็จอยู่แล้ว — ห้ามออกซ้ำ (อาจมีคนออกให้พร้อมกันจากอีกเครื่อง)");
+  }
   const { error } = await supabase.from("receipts").upsert({
     receipt_no: r.receipt_no, invoice_no: r.invoice_no || null, quote_no: r.quote_no || null, boq_no: r.boq_no || null, job_no: r.job_no || null,
     customer_id: r.customer_id || null, site_id: r.site_id || null, issue_date: r.issue_date || null, payment_method: r.payment_method || null,
@@ -1551,7 +1605,7 @@ export async function saveReceipt(r) {
     status, note: r.note?.trim() || null, internal_note: r.internal_note?.trim() || null, ..._termCols(r), ..._signCols(r), created_by: user?.id || null,
   }, { onConflict: "receipt_no" });
   if (error) throw error;
-  if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no);
+  if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no).neq("status", "cancelled"); // ห้ามปลุกใบที่ยกเลิกแล้วกลับมา
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
   syncBankReceipts().catch(() => {});        // auto-post the deposit into the bank-account ledger
   syncInternalNote({ invoiceNo: r.invoice_no }, r.internal_note).catch(() => {});
@@ -1565,13 +1619,13 @@ export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, n
 // ---------- BILLING NOTES (ใบวางบิล) ----------
 export async function listBillingNotes() {
   const [bn, iv, cu, si, ct, rc, qt] = await Promise.all([
-    supabase.from("billing_notes").select("*").order("created_at", { ascending: false }),
-    supabase.from("invoices").select("invoice_no,total,wht_amt,installment,pct,status,issue_date,quote_no"),
-    supabase.from("customers").select("id,name,address,tax_id,type"),
-    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
-    supabase.from("customer_contacts").select("customer_id,name,phone"),
-    supabase.from("receipts").select("invoice_no,status"),
-    supabase.from("quotations").select("quote_no,vat"),
+    _allRows((f, t) => supabase.from("billing_notes").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("billing_no").range(f, t)),
+    _allRows((f, t) => supabase.from("invoices").select("invoice_no,total,wht_amt,installment,pct,status,issue_date,quote_no", { count: "exact" }).order("invoice_no").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id,type", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("receipts").select("invoice_no,status", { count: "exact" }).order("receipt_no").range(f, t)),
+    _allRows((f, t) => supabase.from("quotations").select("quote_no,vat", { count: "exact" }).order("quote_no").range(f, t)),
   ]);
   if (bn.error) throw bn.error;
   const receiptedInv = new Set((rc.data || []).filter((r) => r.status !== "cancelled").map((r) => r.invoice_no));
@@ -1585,16 +1639,18 @@ export async function listBillingNotes() {
   const cc = _firstContacts(ct.data);
   return (bn.data || []).map((b) => {
     const invoices = (b.invoice_nos || []).map((no) => invByNo[no]).filter(Boolean);
-    const total = invoices.reduce((a, x) => a + (Number(x.total) || 0), 0);
-    const wht = invoices.reduce((a, x) => a + (Number(x.wht_amt) || 0), 0);   // หัก ณ ที่จ่าย รวม (นิติบุคคล)
-    const vat = invoices.some((x) => x.vat);   // ใบวางบิลถือเป็น VAT ถ้ามีใบแจ้งหนี้ VAT อยู่ → เลือกหัวกระดาษ/บัญชีให้ถูก
+    // ยอดรวมนับเฉพาะใบแจ้งหนี้ที่ยังไม่ยกเลิก — ใบยกเลิกยังโชว์ในรายการ (ติดป้าย) แต่ห้ามเข้าเงิน/เข้าใบพิมพ์
+    const live = invoices.filter((x) => x.status !== "cancelled");
+    const total = live.reduce((a, x) => a + (Number(x.total) || 0), 0);
+    const wht = live.reduce((a, x) => a + (Number(x.wht_amt) || 0), 0);   // หัก ณ ที่จ่าย รวม (นิติบุคคล)
+    const vat = live.some((x) => x.vat);   // ใบวางบิลถือเป็น VAT ถ้ามีใบแจ้งหนี้ VAT อยู่ → เลือกหัวกระดาษ/บัญชีให้ถูก
     const s = b.site_id ? sm[b.site_id] : null; const ct0 = cc[b.customer_id];
     return { ...b, customerName: cn[b.customer_id] || null, customerCode: b.customer_id || null, customerTaxId: cx[b.customer_id] || null,
       customerType: ctype[b.customer_id] || null, vat,
       customerAddr: ca[b.customer_id] || null, siteName: s?.site_name || null, siteAddress: s?.address || null, mapUrl: (s && s.map_url) || _gmap(s?.address || ca[b.customer_id]),
       mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
-      invoices, total, wht, net: Math.round((total - wht) * 100) / 100, missing: (b.invoice_nos || []).length - invoices.length };
+      invoices, liveInvoices: live, total, wht, net: Math.round((total - wht) * 100) / 100, missing: (b.invoice_nos || []).length - invoices.length };
   });
 }
 export async function saveBillingNote(b) {
@@ -1607,13 +1663,26 @@ export async function saveBillingNote(b) {
   if (error) throw error;
   syncInternalNote({ invoiceNo: (b.invoice_nos || [])[0] }, b.internal_note).catch(() => {});
 }
+// ใบวางบิลมีใบเสร็จ live ในสมาชิกไหม — ตัวล็อกโซ่ฝั่ง server (เดิมเช็คแค่ใน UI จาก data ตอนโหลดหน้า → 2 เครื่องแข่งกันหลุดได้)
+async function _bnLiveReceipts(billing_no) {
+  const { data: b } = await supabase.from("billing_notes").select("invoice_nos").eq("billing_no", billing_no).maybeSingle();
+  const nos = b?.invoice_nos || [];
+  if (!nos.length) return 0;
+  const { count, error } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).in("invoice_no", nos).neq("status", "cancelled");
+  if (error) throw error;
+  return count || 0;
+}
 export async function setBillingNoteStatus(billing_no, status, reason) {
+  if (status === "cancelled" && (await _bnLiveReceipts(billing_no)) > 0)
+    throw new Error("ยกเลิกใบวางบิลนี้ไม่ได้ — มีใบแจ้งหนี้ในใบนี้ที่ออกใบเสร็จแล้ว · ต้องยกเลิกใบเสร็จก่อน");
   const { error } = await supabase.from("billing_notes").update({ status }).eq("billing_no", billing_no);
   if (error) throw error;
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "billing_note", target_no: billing_no, reason });
   syncCashEntriesFromDocs().catch(() => {}); // reconcile cash flow after any status change
 }
 export async function deleteBillingNote(billing_no, reason) {
+  if ((await _bnLiveReceipts(billing_no)) > 0)
+    throw new Error("ลบใบวางบิลนี้ไม่ได้ — มีใบแจ้งหนี้ในใบนี้ที่ออกใบเสร็จแล้ว · ต้องยกเลิก/ลบใบเสร็จก่อน");
   const { data: snap } = await supabase.from("billing_notes").select("*").eq("billing_no", billing_no).maybeSingle();
   const { error } = await supabase.from("billing_notes").delete().eq("billing_no", billing_no);
   if (error) throw error;
@@ -1624,7 +1693,7 @@ export async function deleteBillingNote(billing_no, reason) {
 export async function setReceiptStatus(receipt_no, status, invoice_no, reason) {
   const { error } = await supabase.from("receipts").update({ status }).eq("receipt_no", receipt_no);
   if (error) throw error;
-  if (invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", invoice_no);
+  if (invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", invoice_no).neq("status", "cancelled"); // ห้ามปลุกใบที่ยกเลิกแล้ว
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "receipt", target_no: receipt_no, reason });
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
   syncBankReceipts().catch(() => {});        // paid→post / cancelled→remove the bank-ledger deposit
@@ -1642,7 +1711,7 @@ export async function deleteReceipt(receipt_no, invoice_no, reason) {
   const { data: snap } = await supabase.from("receipts").select("*").eq("receipt_no", receipt_no).maybeSingle();
   const { error } = await supabase.from("receipts").delete().eq("receipt_no", receipt_no);
   if (error) throw error;
-  if (invoice_no) await supabase.from("invoices").update({ status: "unpaid" }).eq("invoice_no", invoice_no);
+  if (invoice_no) await supabase.from("invoices").update({ status: "unpaid" }).eq("invoice_no", invoice_no).neq("status", "cancelled"); // ห้ามปลุกใบที่ยกเลิกแล้ว
   await logAudit({ action: "delete", target_type: "receipt", target_no: receipt_no, reason, snapshot: snap });
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
   syncBankReceipts().catch(() => {});        // remove the bank-ledger deposit for the deleted receipt
@@ -3805,11 +3874,11 @@ export async function markChatRead(roomId) {
 // chain is keyed by quote_no: BOQ → quote → invoices/job-orders → receipts
 export async function listDocLinks() {
   const [q, inv, rc, jo, po] = await Promise.all([
-    supabase.from("quotations").select("quote_no,boq_no"),
-    supabase.from("invoices").select("invoice_no,quote_no").neq("status", "cancelled"),
-    supabase.from("receipts").select("receipt_no,invoice_no,quote_no,job_no,boq_no"),
-    supabase.from("job_orders").select("job_no,quote_no,status"),
-    supabase.from("purchase_orders").select("po_no,quote_no,status").then((r) => (r.error ? { data: [] } : r)), // pre-100 → ยังไม่มี quote_no
+    _allRows((f, t) => supabase.from("quotations").select("quote_no,boq_no", { count: "exact" }).order("quote_no").range(f, t)),
+    _allRows((f, t) => supabase.from("invoices").select("invoice_no,quote_no", { count: "exact" }).neq("status", "cancelled").order("invoice_no").range(f, t)),
+    _allRows((f, t) => supabase.from("receipts").select("receipt_no,invoice_no,quote_no,job_no,boq_no", { count: "exact" }).neq("status", "cancelled").order("receipt_no").range(f, t)), // ใบเสร็จยกเลิกไม่ขึ้นชิป (กติกา: ใบยกเลิก = จบสาย)
+    _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no,status", { count: "exact" }).order("job_no").range(f, t)),
+    _allRows((f, t) => supabase.from("purchase_orders").select("po_no,quote_no,status", { count: "exact" }).order("po_no").range(f, t)).catch(() => ({ data: [] })), // pre-100 → ยังไม่มี quote_no
   ]);
   const byQuote = {};
   // สถานะใบงานรายใบ — เอกสารทุกใบในสายใช้ติดป้าย "✓ เสร็จปิดงาน" บนชิปงาน
