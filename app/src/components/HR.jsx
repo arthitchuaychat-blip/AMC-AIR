@@ -978,7 +978,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   async function saveRun(markPaid, meta) {
     setBusy(true);
     try {
-      let runNet = 0;
+      let runNet = 0, ledgerSkipped = false;
       // สลิปทั้งรอบบันทึกในคำสั่งเดียว (savePayslips) — กันเน็ตหลุดกลางทางแล้วได้รอบครึ่ง ๆ กลาง ๆ
       const rows = payable.map((r) => {
         const c = calcOf(r); runNet += c.net;
@@ -994,12 +994,15 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         const ids = payable.flatMap((r) => advIdsByUser[r.p.id] || []);
         await markAdvancesPaid(ym, ids);
         // เดินบัญชี: เงินเดือนทั้งรอบ = เงินออกจากบัญชีที่เลือก (best-effort — hr อาจไม่มีสิทธิ์)
-        if (meta?.accountId) await bookSalaryEntry(ym, meta.accountId, runNet, meta.payDate || payDate, payable.length).catch(() => {});
+        // booked === false = รอบนี้มีแถวเดินบัญชีเดิมที่กระทบแบงค์ (✓) ค้างอยู่ ระบบไม่ทับ — ต้องเตือนให้ไปตรวจเอง
+        if (meta?.accountId) { const booked = await bookSalaryEntry(ym, meta.accountId, runNet, meta.payDate || payDate, payable.length).catch(() => null); ledgerSkipped = booked === false; }
         // link to Cash Flow: projected outflow on the month's pay date (วันสิ้นเดือน) — best-effort
         // (ฝ่ายบุคคล/hr อาจไม่มีสิทธิ์เขียนกระแสเงินสด → ปล่อยให้บัญชีซิงค์ทีหลังได้ ไม่บล็อกการจ่าย)
         await upsertPayrollCashEntry(ym, runNet, meta?.payDate || payDate, payable.length).catch(() => {});
       }
-      flash(markPaid ? "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓ (ลงเดินบัญชี + กระแสเงินสด)" : "บันทึกรอบเงินเดือนแล้ว ✓"); await load();
+      flash(markPaid
+        ? (ledgerSkipped ? "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓ · ⚠️ รอบนี้มีรายการเดินบัญชีเดิมที่กระทบแบงค์ (✓) ค้างอยู่ — ยอดใหม่ไม่ถูกลงเดินบัญชี ไปตรวจ/ปลดกระทบที่เมนูเบิกจ่ายก่อน" : "บันทึก + ทำจ่ายเงินเดือนแล้ว ✓ (ลงเดินบัญชี + กระแสเงินสด)")
+        : "บันทึกรอบเงินเดือนแล้ว ✓", markPaid && ledgerSkipped); await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
