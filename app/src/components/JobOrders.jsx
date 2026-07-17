@@ -321,6 +321,20 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
               </Combo>
             </label>
           </div>
+          {/* ผูกใบเสนอราคาย้อนหลังได้ — ใบงานที่ไม่ผูก ต้นทุนวัสดุที่เบิกจะตกหล่นจากหน้ากำไร/งาน (คำเตือนสีแดง) */}
+          <label className="fld"><span>ใบเสนอราคาที่ผูก <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(ใช้คิดกำไร + เชื่อมเอกสาร/สถานะสั่งของ — งานแอร์ควรผูกเสมอ)</small></span>
+            <Combo className="inp" value={ed.quote_no || ""} onChange={(e) => setF("quote_no", e.target.value)}>
+              <option value="">— ไม่ผูกใบเสนอราคา —</option>
+              {(() => {
+                const opts = quotes.filter((q) => q.status === "approved" && (!ed.customer_id || String(q.customer_id) === String(ed.customer_id)));
+                if (ed.quote_no && !opts.some((q) => q.quote_no === ed.quote_no)) {
+                  const cur = quotes.find((q) => q.quote_no === ed.quote_no);
+                  opts.unshift(cur || { quote_no: ed.quote_no, customerName: "", title: "" });
+                }
+                return opts.map((q) => <option key={q.quote_no} value={q.quote_no}>{q.quote_no}{q.customerName ? ` · ${q.customerName}` : ""}{q.title ? ` · ${q.title}` : ""}</option>);
+              })()}
+            </Combo>
+          </label>
           <div className="fld-row">
             <label className="fld"><span>ผู้ติดต่อ</span><input className="inp" value={ed.contact_name} onChange={(e) => setF("contact_name", e.target.value)} /></label>
             <label className="fld"><span>เบอร์โทร</span><input className="inp" value={ed.contact_phone} onChange={(e) => setF("contact_phone", e.target.value)} /></label>
