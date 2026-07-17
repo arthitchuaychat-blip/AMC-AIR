@@ -30,7 +30,7 @@ export default function Profit() {
 
       const out = [];
       qs.forEach((q) => {
-        if (q.status === "cancelled") return;            // ใบเสนอราคาที่ยกเลิก → ตัดออกจากกำไร
+        if (q.status !== "approved") return;             // นับเฉพาะใบเสนอที่อนุมัติ — กติกาเดียวกับหน้ารายงานขาย (เจ้าของเคาะ 2026-07-17)
         const jobs = jobsByQuote[q.quote_no] || [];
         if (!jobs.length) return;                                   // ยังไม่มีใบงาน → ยังไม่ใช่งานที่ทำ
         const active = jobs.filter((j) => j.status !== "cancelled");
@@ -49,16 +49,24 @@ export default function Profit() {
         const expenses = detail.reduce((a, d) => a + d.expense, 0); // ค่าใช้จ่ายเบิกจ่ายของงาน (รวมทุกใบงาน)
 
         const sale = q.afterDisc;                                   // ยอดขายสุทธิ ก่อน VAT (นับครั้งเดียว)
+        // ค่าธรรมเนียมบัตร = ส่วนต่างระหว่างยอดขายราคาบัตร (price_show) กับยอดขายราคาเงินสด — เงินส่วนนี้จ่ายธนาคาร ไม่ใช่กำไร (เจ้าของเคาะ 2026-07-17)
+        let cardFee = 0;
+        if (q.payMethod && q.payMethod !== "cash") {
+          const subCash = (q.items || []).reduce((a, x) => a + Number(x.qty) * (Number(x.unit_price) || 0) - (Number(x.discount) || 0), 0);
+          const discCash = q.discount_type === "percent" ? subCash * Number(q.discount_value || 0) / 100 : Number(q.discount_value || 0);
+          cardFee = Math.max(0, Math.round((sale - (subCash - discCash)) * 100) / 100);
+        }
         const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : null;
         // สูตรต้นทุนจริง (เลือกโดยผู้ใช้ 2026-07-04): กำไรสุทธิ = ขาย − ต้นทุนจริง
-        // ต้นทุนจริง = เบิกจริง−คืน + ค่าแรงซัพ + เบิกจ่าย + ค่าสินค้าตาม PO ผูกงานที่ยังรอรับของ
+        // ต้นทุนจริง = เบิกจริง−คืน + ค่าแรงซัพ + เบิกจ่าย + ค่าสินค้าตาม PO ผูกงานที่ยังรอรับของ + ค่าธรรมเนียมบัตร
         // BOQ = กำไรตามประมาณการ ไว้เทียบเท่านั้น — ห้ามหักซ้อน
         const gross = cost == null ? null : sale - cost;            // กำไรตามประมาณการ (BOQ)
         const poPend = poPendByQuote[q.quote_no] || 0;
-        const actualCost = matNet + labor + expenses + poPend;
-        const net = actualCost > 0 ? sale - actualCost : null;      // ยังไม่มีต้นทุนจริง → ไม่โชว์กำไรลวง
+        const hasRealCost = matNet + labor + expenses + poPend > 0; // ค่าธรรมเนียมบัตรอย่างเดียวยังไม่นับว่า "มีต้นทุนจริง"
+        const actualCost = matNet + labor + expenses + poPend + cardFee;
+        const net = hasRealCost ? sale - actualCost : null;         // ยังไม่มีต้นทุนจริง → ไม่โชว์กำไรลวง
         const margin = net == null || sale <= 0 ? null : (net / sale) * 100;
-        out.push({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, net, margin });
+        out.push({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin });
       });
       setRows(out);
 
@@ -121,13 +129,13 @@ export default function Profit() {
           {rows.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ (ประมาณ)</span><span className="r">กำไรประมาณการ</span><span className="r">วัสดุ/แอร์เบิกจริง</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ (จริง)</span><span className="r">%</span></div>
-              {rows.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, net, margin }) => {
+              {rows.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin }) => {
                 const isOpen = !!open[q.quote_no];
                 return (
                   <React.Fragment key={q.quote_no}>
                     <div className="jp-row" style={{ cursor: "pointer" }} onClick={() => toggle(q.quote_no)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && toggle(q.quote_no)}>
                       <span className="jp-name"><b>{isOpen ? "▾ " : "▸ "}{q.quote_no}</b><br />
-                        <span className="jp-cust">{q.customerName || "-"} · {jobs.length} ใบงาน{cost == null ? " · ไม่อ้าง BOQ" : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}</span></span>
+                        <span className="jp-cust">{q.customerName || "-"} · {jobs.length} ใบงาน{cost == null ? " · ไม่อ้าง BOQ" : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · 💳 ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}</span></span>
                       <span className="r">{fmtBaht(sale)}</span>
                       <span className="r">{cost == null ? "—" : fmtBaht(cost)}</span>
                       <span className="r" style={{ color: gross == null ? "var(--ink-3)" : gross >= 0 ? "var(--ink)" : "var(--down)" }}>{gross == null ? "—" : fmtBaht(gross)}</span>
@@ -150,7 +158,7 @@ export default function Profit() {
                         ))}
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0 0", fontWeight: 700 }}>
                           <span>รวมทั้งงาน</span>
-                          <span style={{ textAlign: "right" }}>วัสดุ {fmtBaht(matNet)} · ค่าแรงซัพ {fmtBaht(labor)}{expenses > 0 ? ` · ค่าใช้จ่ายเบิก ${fmtBaht(expenses)}` : ""}{poPend > 0 ? ` · PO รอรับของ ${fmtBaht(poPend)}` : ""}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
+                          <span style={{ textAlign: "right" }}>วัสดุ {fmtBaht(matNet)} · ค่าแรงซัพ {fmtBaht(labor)}{expenses > 0 ? ` · ค่าใช้จ่ายเบิก ${fmtBaht(expenses)}` : ""}{poPend > 0 ? ` · PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
                         </div>
                       </div>
                     )}
@@ -159,7 +167,7 @@ export default function Profit() {
               })}
             </div>
           )}
-          <p className="page-sub" style={{ marginTop: 12 }}>* กดที่แถวเพื่อกางดูวัสดุ + ค่าแรงช่างซัพรายใบงาน · แสดงเฉพาะงานที่ใบงาน “เสร็จ” ครบทุกใบ · กำไรสุทธิคิดจาก<b>ต้นทุนจริง</b> (งานที่ยังไม่บันทึกต้นทุนจริงจะขึ้น “—” เพื่อไม่ให้กำไรลวง) · BOQ เป็นประมาณการไว้เทียบ · ยอดขายเป็นราคาก่อน VAT</p>
+          <p className="page-sub" style={{ marginTop: 12 }}>* กดที่แถวเพื่อกางดูวัสดุ + ค่าแรงช่างซัพรายใบงาน · นับเฉพาะใบเสนอราคาที่<b>อนุมัติแล้ว</b> (กติกาเดียวกับรายงานขาย) และใบงาน “เสร็จ” ครบทุกใบ · กำไรสุทธิคิดจาก<b>ต้นทุนจริง</b> (วัสดุเบิกจริง + ค่าแรงซัพ + เบิกจ่าย + PO รอรับของ + 💳 ค่าธรรมเนียมบัตร) — งานที่ยังไม่บันทึกต้นทุนจริงจะขึ้น “—” เพื่อไม่ให้กำไรลวง · BOQ เป็นประมาณการไว้เทียบ · ยอดขายเป็นราคาก่อน VAT</p>
         </>
       )}
     </div>
