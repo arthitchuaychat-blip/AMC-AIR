@@ -63,15 +63,17 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     dashboardActionLite().then(setAct).catch(() => {});
   }, []);
   const ovStat = React.useMemo(() => {
-    if (!ov) return { sale: 0, count: 0, est: 0 };
+    if (!ov) return { sale: 0, count: 0, est: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
     const boqCost = Object.fromEntries(ov.bs.map((b) => [b.boq_no, b.total]));
-    let sale = 0, count = 0, est = 0;
+    let sale = 0, count = 0, est = 0, vatSale = 0, vatCount = 0, novatSale = 0, novatCount = 0;
     ov.qs.forEach((qo) => {
       if (qo.status !== "approved" || !inRange(qo.approved_at || qo.issue_date, from, to)) return;
       sale += qo.afterDisc || 0; count += 1;
+      // แยกยอดตามบิล VAT / ไม่ VAT (ยอดก่อน VAT เสมอ — เทียบกันได้ตรง ๆ)
+      if (qo.vat) { vatSale += qo.afterDisc || 0; vatCount += 1; } else { novatSale += qo.afterDisc || 0; novatCount += 1; }
       if (qo.boq_no && boqCost[qo.boq_no] != null) est += (qo.afterDisc || 0) - boqCost[qo.boq_no];
     });
-    return { sale, count, est };
+    return { sale, count, est, vatSale, vatCount, novatSale, novatCount };
   }, [ov, from, to]);
 
   function applyPreset(p) { const r = PRESETS.find((x) => x.id === p).range(); setPreset(p); setFrom(r.from); setTo(r.to); }
@@ -155,7 +157,9 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       {tab === "overview" && (
         <>
           <div className="kpi-grid">
-            <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={fmtBaht(ovStat.sale)} sub={fmtNum(ovStat.count) + " ใบ"} onClick={() => setTab("sales")} />
+            <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={fmtBaht(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setTab("sales")} />
+            <StatCard icon="trend" color="#1f74e0" label="ยอดขายอนุมัติ · รับ VAT" value={fmtBaht(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setTab("sales")} />
+            <StatCard icon="trend" color="#64748b" label="ยอดขายอนุมัติ · ไม่ VAT" value={fmtBaht(ovStat.novatSale)} sub={fmtNum(ovStat.novatCount) + " ใบ"} onClick={() => setTab("sales")} />
             <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={fmtBaht(ovStat.est)} sub="กำไรจริงดูในแท็บ ขาย & กำไร" onClick={() => setTab("sales")} />
             <StatCard icon="clipboard" color="#d97706" label="เงินค้างรับ" value={fmtBaht(act?.receivable || 0)} sub={`${fmtNum(act?.unpaidCount || 0)} ใบ · เกินกำหนด ${fmtNum(act?.overdueCount || 0)} ใบ`} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
             <StatCard icon="withdraw" color="#dc2626" label="ยอดค้างจ่าย" value={fmtBaht(act?.payable || 0)} accent={act?.payable ? "#dc2626" : undefined}
