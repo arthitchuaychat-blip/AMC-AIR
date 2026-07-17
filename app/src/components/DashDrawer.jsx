@@ -1,5 +1,5 @@
 import React from "react";
-import { fmtBaht, fmtNum } from "../lib/format";
+import { fmtBaht, fmtNum, downloadCsv } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
 
 const META = {
@@ -65,6 +65,10 @@ export default function DashDrawer({ kind, periodLabel, txns, teams, mats, onClo
             <span><b>{fmtNum(totalQty)}</b> หน่วย</span>
             <span className="sep">·</span>
             <span><b>{matList.length}</b> ชนิดวัสดุ</span>
+            <button className="btn-ghost sm" style={{ marginLeft: "auto" }}
+              onClick={() => downloadCsv(`${M.th}-${new Date().toISOString().slice(0, 10)}`,
+                ["รหัส", "ชื่อ", "จำนวน", "หน่วย", "มูลค่า"],
+                matList.map(({ mat, value, qty }) => [mat.code, mat.th, Math.round(qty * 100) / 100, mat.unit || "", Math.round(value * 100) / 100]))}>⬇ Export</button>
           </div>
         </div>
 

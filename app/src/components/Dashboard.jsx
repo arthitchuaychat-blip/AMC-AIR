@@ -1,5 +1,6 @@
 import React from "react";
-import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, dashboardActionLite, vatSummary } from "../lib/api";
+import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, dashboardActionLite, vatSummary, listAccounts } from "../lib/api";
+import { downloadCsv } from "../lib/format";
 import { can } from "../lib/permissions";
 import { fmtBaht, fmtNum, fmtCompact, inRange } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
@@ -60,15 +61,34 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
   const [tab, setTab] = React.useState("overview");
   const [ov, setOv] = React.useState(null);   // {qs, bs} — ยอดขาย/กำไรประมาณการ บนแท็บภาพรวม
   const [act, setAct] = React.useState(null); // ตัวเลข "สิ่งที่ต้องทำ" (ค้างรับ/รออนุมัติ/PO ค้าง)
+  const [accounts, setAccounts] = React.useState(null); // เงินคงเหลือรายบัญชี (เฉพาะ role ที่เห็นการเงิน)
+  // ตัวกรองระดับแดชบอร์ด: พนักงานขาย (คนสร้างใบเสนอ) + ทีมช่าง (ทีมของใบงานที่ผูกใบเสนอ) — คุมการ์ดขาย/รับเงิน/กำไร/หัก ณ ที่จ่าย
+  const [byPerson, setByPerson] = React.useState("");
+  const [byTeam, setByTeam] = React.useState("");
   React.useEffect(() => {
     Promise.all([listQuotations(), listBoqs(), listReceipts().catch(() => [])]).then(([qs, bs, rcs]) => setOv({ qs, bs, rcs })).catch(() => {});
     dashboardActionLite().then(setAct).catch(() => {});
-  }, []);
+    if (can(role, "cashflow")) listAccounts().then(setAccounts).catch(() => {});
+  }, [role]);
+  // ใบเสนอหลังผ่านตัวกรองคน/ทีม — เป็นฐานของทุกการ์ดฝั่งขาย (ใบเสร็จกรองผ่านใบเสนอที่มันผูก)
+  const fq = React.useMemo(() => {
+    let qs = ov?.qs || [];
+    if (byPerson) qs = qs.filter((q) => (q.createdByName || "") === byPerson);
+    if (byTeam) qs = qs.filter((q) => q.jobTeam === byTeam);
+    return qs;
+  }, [ov, byPerson, byTeam]);
+  const fRcs = React.useMemo(() => {
+    if (!ov?.rcs) return [];
+    if (!byPerson && !byTeam) return ov.rcs;
+    const ok = new Set(fq.map((q) => q.quote_no));
+    return ov.rcs.filter((r) => r.quote_no && ok.has(r.quote_no));   // ใบเสร็จไม่ผูกใบเสนอ ระบุคน/ทีมไม่ได้ → ตัดออกตอนกรอง
+  }, [ov, fq, byPerson, byTeam]);
+  const salesNames = React.useMemo(() => [...new Set((ov?.qs || []).map((q) => q.createdByName).filter(Boolean))].sort(), [ov]);
   const ovStat = React.useMemo(() => {
     if (!ov) return { sale: 0, count: 0, est: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
     const boqCost = Object.fromEntries(ov.bs.map((b) => [b.boq_no, b.total]));
     let sale = 0, count = 0, est = 0, vatSale = 0, vatCount = 0, novatSale = 0, novatCount = 0;
-    ov.qs.forEach((qo) => {
+    fq.forEach((qo) => {
       if (qo.status !== "approved" || !inRange(qo.approved_at || qo.issue_date, from, to)) return;
       sale += qo.afterDisc || 0; count += 1;
       // แยกยอดตามบิล VAT / ไม่ VAT (ยอดก่อน VAT เสมอ — เทียบกันได้ตรง ๆ)
@@ -76,22 +96,23 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       if (qo.boq_no && boqCost[qo.boq_no] != null) est += (qo.afterDisc || 0) - boqCost[qo.boq_no];
     });
     return { sale, count, est, vatSale, vatCount, novatSale, novatCount };
-  }, [ov, from, to]);
+  }, [ov, fq, from, to]);
   // ยอดขายที่ออกใบเสร็จ + รับเงินแล้ว (ใบเสร็จสถานะ "ชำระเงินแล้ว" ตามวันที่รับเงิน) — ยอดก่อน VAT ให้เทียบกับการ์ดยอดขายอนุมัติได้ตรง ๆ
   const rcStat = React.useMemo(() => {
-    const z = { sale: 0, count: 0, net: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
+    const z = { sale: 0, count: 0, net: 0, wht: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
     if (!ov?.rcs) return z;
     const quoteVat = Object.fromEntries((ov.qs || []).map((q) => [q.quote_no, !!q.vat]));
     const s = { ...z };
-    ov.rcs.forEach((r) => {
+    fRcs.forEach((r) => {
       if (r.status !== "paid" || !inRange(r.issue_date, from, to)) return;
       const base = Number(r.base) || ((Number(r.total) || 0) - (Number(r.vat_amt) || 0)); // ก่อน VAT (ใบเก่าไม่มี base → total−vat)
       const isVat = r.quote_no ? !!quoteVat[r.quote_no] : (Number(r.vat_amt) || 0) > 0;
       s.sale += base; s.count += 1; s.net += Number(r.net) || ((Number(r.total) || 0) - (Number(r.wht_amt) || 0));
+      s.wht += Number(r.wht_amt) || 0;   // ถูกหัก ณ ที่จ่ายสะสม (ขอคืน/เครดิตภาษีได้)
       if (isVat) { s.vatSale += base; s.vatCount += 1; } else { s.novatSale += base; s.novatCount += 1; }
     });
     return s;
-  }, [ov, from, to]);
+  }, [ov, fRcs, from, to]);
 
   function applyPreset(p) { const r = PRESETS.find((x) => x.id === p).range(); setPreset(p); setFrom(r.from); setTo(r.to); }
   const setCustom = (k, v) => { setPreset("custom"); k === "from" ? setFrom(v) : setTo(v); };
@@ -173,6 +194,19 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
 
       {tab === "overview" && (
         <>
+          {/* กรองรายพนักงานขาย/ทีมช่าง — คุมการ์ดขาย · รับเงิน · กำไรประมาณการ · หัก ณ ที่จ่าย (การ์ดกลางร้าน เช่น ค้างรับ/สต๊อก ไม่ผูกรายคน) */}
+          <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
+            <select className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
+              <option value="">พนักงานขาย: ทุกคน</option>
+              {salesNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <select className="inp" style={{ width: "auto", flex: "none" }} value={byTeam} onChange={(e) => setByTeam(e.target.value)}>
+              <option value="">ทีมช่าง: ทุกทีม</option>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            {(byPerson || byTeam) && <button className="btn-ghost sm" onClick={() => { setByPerson(""); setByTeam(""); }}>✕ ล้างตัวกรอง</button>}
+            {(byPerson || byTeam) && <span className="page-sub" style={{ margin: 0 }}>กำลังดูเฉพาะ {byPerson || ""}{byPerson && byTeam ? " · " : ""}{byTeam ? `ทีม ${teams.find((t) => t.id === byTeam)?.name || byTeam}` : ""} (ใบเสร็จที่ไม่ผูกใบเสนอถูกตัดออก)</span>}
+          </div>
           <div className="kpi-grid">
             <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={fmtBaht(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setDocList("q_all")} />
             <StatCard icon="trend" color="#1f74e0" label="ยอดขายอนุมัติ · รับ VAT" value={fmtBaht(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("q_vat")} />
@@ -192,7 +226,28 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
                 sub={`ภาษีขาย ${fmtCompact(vat.saleVat)} − ภาษีซื้อ ${fmtCompact(vat.buyVat)}`}
                 onClick={() => onGo && onGo("tax")} />
             )}
+            {can(role, "tax") && (
+              <StatCard icon="clipboard" color="#7c3aed" label={"ถูกหัก ณ ที่จ่าย · " + periodLabel}
+                value={fmtBaht(rcStat.wht)} sub={`จากใบเสร็จที่รับเงินแล้ว ${fmtNum(rcStat.count)} ใบ · ใช้เป็นเครดิตภาษีได้`}
+                onClick={() => setDocList("rc_all")} />
+            )}
           </div>
+
+          {/* เงินคงเหลือแต่ละบัญชี (เฉพาะ role การเงิน) — ตัวเลขเดียวกับเมนูเบิกจ่าย → เดินบัญชี */}
+          {accounts && accounts.length > 0 && (
+            <>
+              <div className="sec-head" style={{ margin: "20px 0 10px" }}><div><div className="sec-title">เงินในบัญชี</div><div className="sec-sub">ยอดคงเหลือปัจจุบันรายบัญชี · กดเพื่อดูเดินบัญชี</div></div>
+                <button className="btn-ghost sm" onClick={() => downloadCsv(`เงินในบัญชี-${new Date().toISOString().slice(0, 10)}`,
+                  ["บัญชี", "ประเภท", "ยอดคงเหลือ"], accounts.map((a) => [a.name, a.kind === "cash" ? "เงินสด" : "ธนาคาร", Math.round((Number(a.balance) || 0) * 100) / 100]))}>⬇ Export</button></div>
+              <div className="kpi-grid">
+                {accounts.map((a) => (
+                  <StatCard key={a.id} icon="trend" color={a.kind === "cash" ? "#d97706" : "#0d9488"} label={(a.kind === "cash" ? "💵 " : "🏦 ") + a.name}
+                    value={fmtBaht(a.balance)} accent={Number(a.balance) < 0 ? "#dc2626" : undefined} onClick={() => onGo && onGo("expenses")} />
+                ))}
+                <StatCard icon="trend" color="#111" label="รวมทุกบัญชี" value={fmtBaht(accounts.reduce((s, a) => s + (Number(a.balance) || 0), 0))} onClick={() => onGo && onGo("expenses")} />
+              </div>
+            </>
+          )}
 
           <div className="sec-head" style={{ margin: "20px 0 10px" }}><div><div className="sec-title">สิ่งที่ต้องทำ</div><div className="sec-sub">งานค้างที่รอจัดการ · กดการ์ดเพื่อไปหน้านั้น</div></div></div>
           <div className="kpi-grid">
@@ -295,7 +350,13 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
 
             {/* reorder */}
             <div className="card lowstock-card">
-              <div className="sec-head"><div><div className="sec-title">ต้องสั่งซื้อเพิ่ม</div><div className="sec-sub">ต่ำกว่าขั้นต่ำ · Below minimum</div></div><span className="badge-warn">{low.length}</span></div>
+              <div className="sec-head"><div><div className="sec-title">ต้องสั่งซื้อเพิ่ม</div><div className="sec-sub">ต่ำกว่าขั้นต่ำ · Below minimum</div></div>
+                <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  {low.length > 0 && <button className="btn-ghost sm" onClick={() => downloadCsv(`ต้องสั่งซื้อ-${new Date().toISOString().slice(0, 10)}`,
+                    ["รหัส", "ชื่อ", "คงเหลือ", "ขั้นต่ำ", "ต้องสั่ง", "หน่วย", "มูลค่าที่ต้องสั่ง"],
+                    low.map((m) => [m.code, m.th, m.stock, m.minStock, m.need, m.unit || "", Math.round(m.orderValue * 100) / 100]))}>⬇</button>}
+                  <span className="badge-warn">{low.length}</span>
+                </span></div>
               <div className="lowstock">
                 {low.slice(0, 5).map((m) => (
                   <div className="lowstock-row" key={m.code}>
@@ -328,8 +389,8 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       )}
 
       {detail && <DashDrawer kind={detail} periodLabel={periodLabel} txns={rangeTxns} teams={teams} mats={mats} onClose={() => setDetail(null)} />}
-      {docList && <DashDocDrawer kind={docList} periodLabel={periodLabel} from={from} to={to}
-        quotes={ov?.qs || []} receipts={ov?.rcs || []} boqs={ov?.bs || []} onClose={() => setDocList(null)} onOpenDoc={onOpenDoc} />}
+      {docList && <DashDocDrawer kind={docList} periodLabel={periodLabel + (byPerson ? ` · ${byPerson}` : "") + (byTeam ? ` · ทีม ${teams.find((t) => t.id === byTeam)?.name || byTeam}` : "")} from={from} to={to}
+        quotes={fq} receipts={fRcs} boqs={ov?.bs || []} onClose={() => setDocList(null)} onOpenDoc={onOpenDoc} />}
     </div>
   );
 }

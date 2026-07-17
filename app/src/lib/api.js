@@ -1406,7 +1406,7 @@ export async function listQuotations() {
     _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id,type", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status", { count: "exact" }).order("job_no").range(f, t)),
+    _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status,assigned_team", { count: "exact" }).order("job_no").range(f, t)),
     _allRows((f, t) => supabase.from("invoices").select("quote_no,total,status", { count: "exact" }).order("invoice_no").range(f, t)),
   ]);
   if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
@@ -1448,6 +1448,7 @@ export async function listQuotations() {
       mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       jobNo: jobByQuote[qo.quote_no]?.job_no || null, hasJob: !!jobByQuote[qo.quote_no], jobScheduledAt: jobByQuote[qo.quote_no]?.scheduled_at || null,
+      jobTeam: jobByQuote[qo.quote_no]?.assigned_team || null,   // ทีมช่างของงาน (ไว้กรองรายทีมบนแดชบอร์ด)
       hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,
       items: itemsX, subtotal, discount, afterDisc, payMethod, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
   });
