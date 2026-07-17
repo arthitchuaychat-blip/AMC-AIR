@@ -220,7 +220,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           ))}
 
           <div className="line-total" style={{ fontSize: 15 }}><span>ต้นทุนรวมทั้งสิ้น</span><b style={{ fontSize: 20 }}>{fmtBaht(total)}</b></div>
-          <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} docItems={ed.items} onChange={(k, v) => setEd((e) => ({ ...e, [k]: v }))} />
+          <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} docItems={Object.values(ed.items).flat()} onChange={(k, v) => setEd((e) => ({ ...e, [k]: v }))} />
           <InternalNoteField value={ed.internal_note} onChange={(v) => setEd((e) => ({ ...e, internal_note: v }))} />
           <SignToggle on={ed.sign_on} onChange={(v) => setEd((e) => ({ ...e, sign_on: v }))} />
           {(() => { const n = Object.values(ed.items).reduce((a, arr) => a + arr.length, 0); return (
