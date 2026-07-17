@@ -3092,7 +3092,7 @@ export async function checkIn({ lat, lng, photo }) {
     : await supabase.from("hr_attendance").insert({ user_id: uid, work_date: day, ...row });
   if (error) throw error;
   const me = await getProfile();
-  notify(await _usersByRole(["admin", "exec"]), { category: "hr", title: `🕒 ${me?.name || "พนักงาน"} เช็คอินเข้างาน`, url: "hr", ref_type: "attendance" });
+  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `🕒 ${me?.name || "พนักงาน"} เช็คอินเข้างาน`, url: "hr", ref_type: "attendance" });
 }
 export async function checkOut({ lat, lng, photo }) {
   const uid = await _uid(), day = _today();
@@ -3131,7 +3131,7 @@ export async function submitLeave({ type, start_date, end_date, days, reason, ho
   if (error) throw error;
   const me = await getProfile();
   const amount = Number(hours) > 0 ? `${Number(hours)} ชม.` : `${days} วัน`;
-  notify(await _usersByRole(["admin", "exec"]), { category: "hr", title: `📝 ${me?.name || "พนักงาน"} ขอลา (${amount})`, body: reason || "", url: "hr", ref_type: "leave" });
+  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `📝 ${me?.name || "พนักงาน"} ขอลา (${amount})`, body: reason || "", url: "hr", ref_type: "leave" });
 }
 export async function listMyLeaves() {
   const uid = await _uid();
@@ -3176,7 +3176,7 @@ export async function submitAdvance({ amount, reason }) {
   const { error } = await supabase.from("hr_advances").insert({ user_id: uid, amount: Number(amount) || 0, reason: reason || null, created_by: uid });
   if (error) throw error;
   const me = await getProfile();
-  notify(await _usersByRole(["admin", "finance", "exec"]), { category: "hr", title: `💵 ${me?.name || "พนักงาน"} ขอเบิกเงินล่วงหน้า ${Number(amount) || 0} บาท`, body: reason || "", url: "hr", ref_type: "advance" });
+  notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `💵 ${me?.name || "พนักงาน"} ขอเบิกเงินล่วงหน้า ${Number(amount) || 0} บาท`, body: reason || "", url: "hr", ref_type: "advance" });
 }
 export async function listMyAdvances() {
   const uid = await _uid();
@@ -3184,6 +3184,11 @@ export async function listMyAdvances() {
   if (error) throw error; return data || [];
 }
 // staff can withdraw their own request while it's still pending
+// ยกเลิกใบลาของตัวเองตอนยังรออนุมัติ (mig 146 — RLS กันลบใบที่ตัดสินแล้ว)
+export async function cancelMyLeave(id) {
+  const { error } = await supabase.from("hr_leaves").delete().eq("id", id).eq("status", "pending");
+  if (error) throw error;
+}
 export async function cancelMyAdvance(id) {
   const { error } = await supabase.from("hr_advances").delete().eq("id", id).eq("status", "pending");
   if (error) throw error;

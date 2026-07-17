@@ -95,16 +95,27 @@ export const fmtTime = (t) => { if (!t) return "-"; const d = new Date(t); const
 export const todayYmd = () => ymd(new Date());
 export { ymd as hrYmd, parseYmd as hrParseYmd };
 
-// จำนวนวันลาของใบลา l ที่ตกในปี year — ใบคร่อมปี (ธ.ค.–ม.ค.) แบ่งตามสัดส่วนวันปฏิทินของแต่ละปี
-// (เดิมนับทั้งใบเข้าปีของวันเริ่ม ทำให้โควตาปีใหม่ไม่โดนหักส่วนที่ลาจริงในปีนั้น)
-export function leaveDaysInYear(l, year) {
+// จำนวนวันลาของใบลา l ที่ตกในช่วง [from, to] (YYYY-MM-DD) — แบ่งตามสัดส่วนวันปฏิทิน
+// ใช้คิดโควตา/ส่วนเกินแบบตัดช่วงเวลา: ใบคร่อมปีหรือคร่อมรอบเงินเดือน จะนับเฉพาะส่วนที่อยู่ในช่วงจริง
+export function leaveDaysInRange(l, from, to) {
   const total = Number(l?.days) || 0;
-  const sy = Number(String(l.start_date).slice(0, 4)), ey = Number(String(l.end_date || l.start_date).slice(0, 4));
-  if (sy === ey) return sy === Number(year) ? total : 0;
-  if (Number(year) < sy || Number(year) > ey) return 0;
-  let inYear = 0, all = 0;
-  for (let d = parseYmd(l.start_date); d <= parseYmd(l.end_date); d.setDate(d.getDate() + 1)) { all++; if (d.getFullYear() === Number(year)) inYear++; }
-  return all ? Math.round(total * inYear / all * 100) / 100 : 0;
+  if (!total || !from || !to || to < from) return 0;
+  const s = String(l.start_date), e = String(l.end_date || l.start_date);
+  if (e < from || s > to) return 0;
+  if (s >= from && e <= to) return total;
+  let inR = 0, all = 0;
+  for (let d = parseYmd(s); d <= parseYmd(e); d.setDate(d.getDate() + 1)) { all++; const k = ymd(d); if (k >= from && k <= to) inR++; }
+  return all ? Math.round(total * inR / all * 100) / 100 : 0;
+}
+// จำนวนวันลาที่ตกในปี year — ใบคร่อมปี (ธ.ค.–ม.ค.) แบ่งตามสัดส่วนวันปฏิทินของแต่ละปี
+export const leaveDaysInYear = (l, year) => leaveDaysInRange(l, `${year}-01-01`, `${year}-12-31`);
+
+// ระยะทางระหว่างพิกัด 2 จุด (กม.) — Haversine · ใช้เตือนเช็คอินไกลจากพิกัดร้าน
+export function distKm(lat1, lng1, lat2, lng2) {
+  const R = 6371, rad = (x) => (Number(x) * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // inclusive working-day count between two dates for a person (used to size a leave request)

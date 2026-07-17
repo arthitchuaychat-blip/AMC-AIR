@@ -3,7 +3,7 @@ import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, dele
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
-import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -106,6 +106,9 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
   // รูปเซลฟี่ (กดดูเต็ม) + หมุด GPS ตอนเช็คอิน/เอาท์ — หลักฐานที่เก็บอยู่แล้ว เอามาให้ HR เห็น
   const thumb = (url, title) => url ? <img src={url} alt="" title={title} loading="lazy" style={{ width: 26, height: 26, objectFit: "cover", borderRadius: 6, border: "1px solid var(--line)", cursor: "zoom-in", verticalAlign: "middle" }} onClick={() => window.open(url, "_blank")} /> : null;
   const pin = (lat, lng, title) => (lat != null && lng != null) ? <a href={`https://maps.google.com/?q=${lat},${lng}`} target="_blank" rel="noopener noreferrer" title={title} style={{ textDecoration: "none", fontSize: 13 }}>📍</a> : null;
+  // ป้ายเตือนเช็คอิน/เอาท์ไกลจากพิกัดร้าน (ตั้งใน กะ & ตั้งค่า) — ไว้ดูประกอบ ไม่ได้บล็อก
+  const shopGeo = React.useMemo(() => { const m = String(settings.geo || "").split(","); const lat = Number(m[0]), lng = Number(m[1]); return isFinite(lat) && isFinite(lng) && lat ? { lat, lng } : null; }, [settings.geo]);
+  const farTag = (lat, lng) => { if (!shopGeo || lat == null || lng == null) return null; const km = distKm(shopGeo.lat, shopGeo.lng, lat, lng); return km > (Number(settings.geoKm) || 1) ? <span className="att-tag late sm" title="ระยะจากพิกัดร้านที่ตั้งไว้">ไกลร้าน {km < 10 ? km.toFixed(1) : Math.round(km)} กม.</span> : null; };
   if (loading) return <div className="empty">กำลังโหลด…</div>;
   return (
     <div className="card">
@@ -136,8 +139,8 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
           <div className="hr-today-row" key={p.id}>
             <div className="hr-name"><b>{p.name || p.email}</b><span className="jo-dim">{p.department || "-"}</span></div>
             <div className="hr-times">
-              <span>เข้า <b>{fmtTime(a?.check_in_at)}</b>{s?.isLate && <span className="att-tag late sm">+{fmtMin(s.lateMin)}</span>} {thumb(a?.check_in_photo, "เซลฟี่ตอนเช็คอิน — กดดูเต็ม")}{pin(a?.check_in_lat, a?.check_in_lng, "พิกัดตอนเช็คอิน — เปิดแผนที่")}</span>
-              <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otHours > 0 && <span className="att-tag ot sm">OT {s.otHours} ชม.{settings.otNeedsApproval ? (a?.ot_ok ? " ✓" : " · รอรับรอง") : ""}</span>} {thumb(a?.check_out_photo, "เซลฟี่ตอนเช็คเอาท์ — กดดูเต็ม")}{pin(a?.check_out_lat, a?.check_out_lng, "พิกัดตอนเช็คเอาท์ — เปิดแผนที่")}</span>
+              <span>เข้า <b>{fmtTime(a?.check_in_at)}</b>{s?.isLate && <span className="att-tag late sm">+{fmtMin(s.lateMin)}</span>} {thumb(a?.check_in_photo, "เซลฟี่ตอนเช็คอิน — กดดูเต็ม")}{pin(a?.check_in_lat, a?.check_in_lng, "พิกัดตอนเช็คอิน — เปิดแผนที่")}{farTag(a?.check_in_lat, a?.check_in_lng)}</span>
+              <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otHours > 0 && <span className="att-tag ot sm">OT {s.otHours} ชม.{settings.otNeedsApproval ? (a?.ot_ok ? " ✓" : " · รอรับรอง") : ""}</span>} {thumb(a?.check_out_photo, "เซลฟี่ตอนเช็คเอาท์ — กดดูเต็ม")}{pin(a?.check_out_lat, a?.check_out_lng, "พิกัดตอนเช็คเอาท์ — เปิดแผนที่")}{farTag(a?.check_out_lat, a?.check_out_lng)}</span>
             </div>
             <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]?.t) : b.t}</span>
             {status !== "leave" && onLeave[p.id]?.h > 0 && <span className="job-badge b-blue">{leaveLabel(onLeave[p.id].t)} {onLeave[p.id].h} ชม.</span>}
@@ -641,31 +644,36 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
       const leaveDaySet = buildLeaveDaySet(leaves, from, calcTo);
       const result = staff.map((p) => {
-        let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveCnt = 0;
+        let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveCnt = 0, holDays = 0, holMin = 0;
         for (let d = hrParseYmd(from); d <= hrParseYmd(calcTo); d.setDate(d.getDate() + 1)) {
           const k = hrYmd(d);
           const onLeave = leaveDaySet[p.id]?.[k];
           if (onLeave) { leaveCnt += leaveFrac(onLeave); if (!onLeave.h) continue; }   // ลาราย ชม. = เศษวัน และวันนั้นยังนับเข้า/ขาดตามปกติ
-          if (!isWorkday(k, p.work_pattern || "mon_sat", p.sat_group, holSet)) continue;
+          if (!isWorkday(k, p.work_pattern || "mon_sat", p.sat_group, holSet)) {
+            // มาทำงานวันหยุด — นับไว้โชว์ (ตรงกับ periodStats ฝั่งเงินเดือน)
+            const ah = attByUserDay[p.id]?.[k];
+            if (ah?.check_in_at) { holDays++; if (ah.check_out_at) holMin += Math.max(0, (minutesOf(ah.check_out_at) ?? 0) - (minutesOf(ah.check_in_at) ?? 0)); }
+            continue;
+          }
           workdays++;
           const a = attByUserDay[p.id]?.[k];
           if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } if (!settings.otNeedsApproval || a.ot_ok) { otMin += s.otMin; otHours += s.otHours; } } // โหมดรับรอง OT: นับเฉพาะวันที่รับรองแล้ว (ตรงกับ periodStats ฝั่งเงินเดือน)
           else absent++;
         }
         leaveCnt = Math.round(leaveCnt * 100) / 100;
-        return { p, present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveCnt };
+        return { p, present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveCnt, holDays, holHours: Math.round(holMin / 60 * 100) / 100 };
       });
       result.sort((a, b) => b.absent - a.absent || b.lateCnt - a.lateCnt); // worst first (for review)
       setRows(result); setRaw({ attByUserDay, leaveDaySet, from, calcTo });
     } catch (e) { flash("คำนวณไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
-  React.useEffect(() => { run(); }, [ym]);
+  React.useEffect(() => { run(); }, [ym, settings]);   // settings มาช้ากว่าแท็บได้ — โหลดใหม่เมื่อค่าเวลางาน/โหมด OT มาถึง
 
   function exportCsv() {
     if (!rows) return;
-    const head = ["ชื่อ", "แผนก", "วันทำงาน", "มา", "ขาด", "ลา", "สาย(ครั้ง)", "สายรวม(นาที)", "OT(ชม.)"];
-    const lines = rows.map((r) => [r.p.name, r.p.department || "", r.workdays, r.present, r.absent, r.leaveCnt, r.lateCnt, Math.round(r.lateMin), r.otHours || 0]);
+    const head = ["ชื่อ", "แผนก", "วันทำงาน", "มา", "ขาด", "ลา", "สาย(ครั้ง)", "สายรวม(นาที)", "OT(ชม.)", "ทำงานวันหยุด(วัน)", "ทำงานวันหยุด(ชม.)"];
+    const lines = rows.map((r) => [r.p.name, r.p.department || "", r.workdays, r.present, r.absent, r.leaveCnt, r.lateCnt, Math.round(r.lateMin), r.otHours || 0, r.holDays || 0, r.holHours || 0]);
     const csv = "﻿" + [head, ...lines].map((a) => a.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = `hr-${ym}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -703,7 +711,7 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
       {loading || !rows ? <div className="empty">กำลังคำนวณ…</div> : (
         <div style={{ overflowX: "auto" }}>
           <table className="hr-table">
-            <thead><tr><th style={{ textAlign: "left" }}>ชื่อ</th><th>แผนก</th><th>วันทำงาน</th><th>มา</th><th>ขาด</th><th>ลา</th><th>สาย</th><th>สายรวม</th><th>OT</th></tr></thead>
+            <thead><tr><th style={{ textAlign: "left" }}>ชื่อ</th><th>แผนก</th><th>วันทำงาน</th><th>มา</th><th>ขาด</th><th>ลา</th><th>สาย</th><th>สายรวม</th><th>OT</th><th title="มาทำงานในวันหยุดของเขา — ชดเชยผ่านช่องโบนัสในเงินเดือน">วันหยุดที่มา</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.p.id} className="hr-row-click" onClick={() => setDetail(r)}>
@@ -716,6 +724,7 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
                   <td className={r.lateCnt ? "hr-warn" : ""}>{r.lateCnt}</td>
                   <td>{fmtMin(r.lateMin)}</td>
                   <td>{r.otHours ? r.otHours.toFixed(1) + " ชม." : "—"}</td>
+                  <td className={r.holDays ? "hr-warn" : ""}>{r.holDays ? `${r.holDays} วัน (${r.holHours} ชม.)` : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -811,7 +820,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
     } catch (e) { flash("คำนวณไม่สำเร็จ: " + (e.message || e), true); setRows([]); }
     setLoading(false);
   }
-  React.useEffect(() => { load(); }, [ym]);
+  React.useEffect(() => { load(); }, [ym, settings]); // settings มาช้ากว่าแท็บได้ — โหลดใหม่เมื่อค่าเวลางาน/โหมด OT มาถึง
   const scoreColor = (s) => s == null ? "var(--ink-3)" : s >= 80 ? "var(--up)" : s >= 60 ? "#d97706" : "var(--down)";
   return (
     <div className="card">
@@ -885,21 +894,25 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       if (settings.otNeedsApproval) att.forEach((a) => { if (!a.check_in_at || a.ot_ok) return; const s = dayStat(a, settings); if (s.otHours > 0) pend.push({ a, s }); });
       pend.sort((x, y) => (x.a.work_date < y.a.work_date ? -1 : 1));
       setPendingOt(pend);
-      const leaveDaySet = buildLeaveDaySet(leaves, from, to); const yearUsed = {}; const yr = ym.slice(0, 4);
-      leaves.forEach((l) => {
-        const dY = leaveDaysInYear(l, yr);   // ใบคร่อมปีแบ่งวันตามปีจริง ไม่นับทั้งใบเข้าปีวันเริ่ม
-        if (dY > 0) { (yearUsed[l.user_id] = yearUsed[l.user_id] || {}); yearUsed[l.user_id][l.type] = (yearUsed[l.user_id][l.type] || 0) + dY; }
-      });
+      const leaveDaySet = buildLeaveDaySet(leaves, from, to); const yr = ym.slice(0, 4);
       const quota = settings.quota || DEFAULT_HR_SETTINGS.quota;
+      // ลาเกินโควตา: หักเฉพาะ "ส่วนเกินที่เกิดขึ้นในรอบนี้" = (สะสมถึงปลายรอบ เกินโควตาเท่าไหร่) − (สะสมถึงก่อนต้นรอบ เกินอยู่แล้วเท่าไหร่) แยกรายประเภท
+      // — สูตรเดิมใช้ยอดเกินสะสมทั้งปี ทำให้เดือนถัด ๆ มาโดนหักซ้ำทุกเดือนที่มีการลา และประเภทที่ยังไม่เกินโดนลูกหลง
+      const yearStart = `${yr}-01-01`;
+      const dayBefore = (s) => { const d = hrParseYmd(s); d.setDate(d.getDate() - 1); return hrYmd(d); };
+      const usedThru = (uid, t, cutoff) => leaves.reduce((s, l) => (l.user_id === uid && l.type === t) ? s + leaveDaysInRange(l, yearStart, cutoff) : s, 0);
       const slipBy = Object.fromEntries(slips.map((s) => [s.user_id, s]));
       setPaidStatus(slips.length && slips.every((s) => s.status === "paid") ? "paid" : "draft");
       const initAdj = {};
       const result = staff.map((p) => {
         const st = periodStats(p, attByUserDay, leaveDaySet, from, to, holSet, settings);
-        const yu = yearUsed[p.id] || {}; let over = 0;
-        ["vacation", "personal", "sick"].forEach((t) => { over += Math.max(0, (yu[t] || 0) - (quota[t] ?? 0)); });
-        // หักค่าแรง = ลาเกินโควตา (เฉพาะประเภทมีโควตา) + ลาไม่รับค่าแรงทั้งหมดในรอบ (เต็มวัน/ราย ชม. คิดเศษวัน)
-        st.overLeave = Math.round((Math.min(st.leaveDays - (st.unpaidLeave || 0), over) + (st.unpaidLeave || 0)) * 100) / 100;
+        let over = 0;
+        ["vacation", "personal", "sick"].forEach((t) => {
+          const q = quota[t] ?? 0;
+          over += Math.max(0, usedThru(p.id, t, to) - q) - Math.max(0, usedThru(p.id, t, dayBefore(from)) - q);
+        });
+        // หักค่าแรง = ส่วนเกินโควตาที่เกิดในรอบนี้ + ลาไม่รับค่าแรงทั้งหมดในรอบ (เต็มวัน/ราย ชม. คิดเศษวัน)
+        st.overLeave = Math.round((Math.min(st.leaveDays - (st.unpaidLeave || 0), Math.max(0, over)) + (st.unpaidLeave || 0)) * 100) / 100;
         const slip = slipBy[p.id];
         initAdj[p.id] = { bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0 };
         return { p, st, slip };
@@ -908,7 +921,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     } catch (e) { flash("คำนวณไม่สำเร็จ: " + (e.message || e) + " (รัน 051_payroll.sql แล้วหรือยัง?)", true); setRows([]); }
     setLoading(false);
   }
-  React.useEffect(() => { load(); }, [ym]);
+  React.useEffect(() => { load(); }, [ym, settings]); // settings มาช้ากว่าแท็บได้ — โหลดใหม่เมื่อค่าเวลางาน/โหมด OT มาถึง
 
   const calcOf = (r) => computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0 }, r.st, {});
   // ---- export CSV ราชการ (BOM นำหน้าให้ Excel อ่านไทยถูก) ----
@@ -1285,6 +1298,13 @@ function StaffTab({ staff, settings, holidays, onReload, flash }) {
           <input type="checkbox" checked={!!s.otNeedsApproval} onChange={(e) => setS({ ...s, otNeedsApproval: e.target.checked })} />
           <span><b>OT ต้องรับรองก่อนคิดเงิน</b> — เปิดแล้ว OT จะเข้าเงินเดือน/รายงานเฉพาะวันที่ HR กด “รับรอง OT” ในแท็บวันนี้ (กัน OT อัตโนมัติจากการเช็คเอาท์ช้า · ต้องรัน migration 144)</span>
         </label>
+        <div className="fld-row" style={{ marginTop: 10 }}>
+          <label className="fld"><span>พิกัดร้าน (lat, lng) — เตือนเช็คอินไกลร้าน</span>
+            <input className="inp" placeholder="เช่น 13.7563, 100.5018 (เว้นว่าง = ไม่เตือน)" value={s.geo || ""} onChange={(e) => setS({ ...s, geo: e.target.value })} /></label>
+          <label className="fld"><span>รัศมีเตือน (กม.)</span>
+            <input className="inp" type="number" min="0" step="0.1" value={s.geoKm ?? 1} onChange={(e) => setS({ ...s, geoKm: Number(e.target.value) || 0 })} /></label>
+        </div>
+        <p className="page-sub" style={{ marginTop: 4 }}>ใส่พิกัดแล้ว แท็บวันนี้จะขึ้นป้ายส้มบอกระยะ เมื่อเช็คอิน/เอาท์อยู่ไกลจากร้านเกินรัศมี (ก็อปพิกัดจาก Google Maps: คลิกขวาที่ร้าน → ตัวเลขบรรทัดแรก) — งานหน้าไซต์ลูกค้าเป็นเรื่องปกติ ป้ายนี้ไว้ประกอบการดู ไม่ได้บล็อกการเช็คอิน</p>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>

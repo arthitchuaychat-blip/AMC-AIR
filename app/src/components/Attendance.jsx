@@ -1,5 +1,5 @@
 import React from "react";
-import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance } from "../lib/api";
+import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance, cancelMyLeave } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveDaysInYear, leaveLabel, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { useLang, LEAVE_MY, LV_STATUS_MY } from "../lib/i18n";
@@ -91,6 +91,9 @@ export default function Attendance({ me }) {
   const year = new Date().getFullYear();
   const usedByType = {};
   leaves.filter((l) => l.status === "approved").forEach((l) => { const dY = leaveDaysInYear(l, year); if (dY > 0) usedByType[l.type] = (usedByType[l.type] || 0) + dY; });
+  // ใบที่ยังรออนุมัติ — โชว์ให้รู้ว่ามีจองไว้แล้วเท่าไหร่ จะได้ไม่เผลอยื่นเกินสิทธิ์
+  const pendByType = {};
+  leaves.filter((l) => l.status === "pending").forEach((l) => { const dY = leaveDaysInYear(l, year); if (dY > 0) pendByType[l.type] = (pendByType[l.type] || 0) + dY; });
   const baseQuota = (settings && settings.quota) || DEFAULT_HR_SETTINGS.quota;
   // per-person override (HR-set) wins over the company default
   const quota = { vacation: myQuota?.vacation ?? baseQuota.vacation, personal: myQuota?.personal ?? baseQuota.personal, sick: myQuota?.sick ?? baseQuota.sick };
@@ -142,8 +145,8 @@ export default function Attendance({ me }) {
         <div className="card">
           <div className="sec-head"><div><div className="sec-title">{L("วันลาคงเหลือ", "ကျန်ရှိသော ခွင့်ရက်")} ({L("ปี", "နှစ်")} {lang === "my" ? year : year + 543})</div></div></div>
           <div className="att-bal">
-            {LEAVE_TYPES.filter((t) => t.id !== "unpaid").map((t) => { const q = quota[t.id] ?? 0, used = usedByType[t.id] || 0; return (
-              <div className="att-bal-item" key={t.id}><span>{lvType(t.id)}</span><b>{Math.max(0, q - used)}</b><small>/ {q} {L("วัน", "ရက်")}</small></div>
+            {LEAVE_TYPES.filter((t) => t.id !== "unpaid").map((t) => { const q = quota[t.id] ?? 0, used = usedByType[t.id] || 0, pend = pendByType[t.id] || 0; return (
+              <div className="att-bal-item" key={t.id}><span>{lvType(t.id)}</span><b>{Math.max(0, q - used)}</b><small>/ {q} {L("วัน", "ရက်")}{pend > 0 ? ` · ${L("รออนุมัติ", "စောင့်ဆိုင်း")} ${pend}` : ""}</small></div>
             ); })}
             {usedByType.unpaid > 0 && <div className="att-bal-item"><span>{lvType("unpaid")}</span><b>{usedByType.unpaid}</b><small>{L("วัน (ไม่มีโควตา)", "ရက်")}</small></div>}
           </div>
@@ -158,7 +161,10 @@ export default function Attendance({ me }) {
               <div className="att-leave-row" key={l.id}>
                 <div><b>{lvType(l.type)}</b> · {thDate(l.start_date)}{l.end_date !== l.start_date ? ` – ${thDate(l.end_date)}` : ""} <span className="att-days">{Number(l.hours) > 0 ? `${Number(l.hours)} ${L("ชม.", "နာရီ")}${l.time_from && l.time_to ? ` (${String(l.time_from).slice(0, 5)}–${String(l.time_to).slice(0, 5)})` : ""}` : `${l.days} ${L("วัน", "ရက်")}`}</span>
                   {l.reason && <div className="jo-dim">{l.reason}</div>}</div>
-                <span className={"job-badge " + b.cls}>{lang === "my" ? (LV_STATUS_MY[l.status] || b.th) : b.th}</span>
+                <div className="hr-leave-act">
+                  <span className={"job-badge " + b.cls}>{lang === "my" ? (LV_STATUS_MY[l.status] || b.th) : b.th}</span>
+                  {l.status === "pending" && <button className="btn-ghost sm" onClick={async () => { try { await cancelMyLeave(l.id); flash(L("ยกเลิกใบลาแล้ว", "ခွင့်လျှောက်လွှာ ပယ်ဖျက်ပြီး")); load(); } catch (e) { flash((e.message || e), true); } }}>{L("ยกเลิก", "ပယ်ဖျက်")}</button>}
+                </div>
               </div>
             ); })}
           </div>
