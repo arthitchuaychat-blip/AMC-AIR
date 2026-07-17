@@ -10,6 +10,7 @@ import SalesReport from "./SalesReport";
 import BillingSummary from "./BillingSummary";
 import CrmJobsSummary from "./CrmJobsSummary";
 import TrendCharts from "./TrendCharts";
+import ExecReports from "./ExecReports";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -186,7 +187,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       </div>
 
       <div className="cat-filter" style={{ marginTop: 2 }}>
-        {[["overview", "🏠 ภาพรวม"], ["sales", "ขาย & กำไร"], ["fin", "การเงิน & เอกสาร"], ["trend", "กราฟแนวโน้ม"], ["inv", "คลังวัสดุ & เบิกใช้"]].map(([v, l]) => (
+        {[["overview", "🏠 ภาพรวม"], ["sales", "ขาย & กำไร"], ["fin", "การเงิน & เอกสาร"], ...(can(role, "profit") ? [["exec", "📊 รายงานผู้บริหาร"]] : []), ["trend", "กราฟแนวโน้ม"], ["inv", "คลังวัสดุ & เบิกใช้"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
             style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
@@ -267,6 +268,8 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
           <CrmJobsSummary onGo={onGo} />
         </>
       )}
+
+      {tab === "exec" && <ExecReports ov={ov} act={act} accounts={accounts} from={from} to={to} periodLabel={periodLabel} />}
 
       {tab === "trend" && <TrendCharts from={from} to={to} />}
 
