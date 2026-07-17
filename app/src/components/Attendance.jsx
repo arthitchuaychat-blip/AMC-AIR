@@ -1,7 +1,9 @@
 import React from "react";
-import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance, cancelMyLeave } from "../lib/api";
+import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance, cancelMyLeave, listPayslips } from "../lib/api";
 import { fmtBaht } from "../lib/format";
-import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveDaysInYear, leaveLabel, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveDaysInYear, leaveDaysInRange, leaveLabel, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
+import PayDetailModal from "./PayDetail";
 import { useLang, LEAVE_MY, LV_STATUS_MY } from "../lib/i18n";
 import { UIcon } from "../icons";
 
@@ -49,6 +51,11 @@ export default function Attendance({ me }) {
   const [holidays, setHolidays] = React.useState(new Set());
   const [myQuota, setMyQuota] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
+  // สรุปเงินเดือนของฉัน (ละเอียด) — เลือกรอบเดือน แล้วเปิดแผงเดียวกับที่ HR เห็น
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const [payYm, setPayYm] = React.useState(() => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; });
+  const [payBusy, setPayBusy] = React.useState(false);
+  const [payDetail, setPayDetail] = React.useState(null); // props ของ PayDetailModal
   const [toast, setToast] = React.useState(null);
   const fileRef = React.useRef(null);
   const actionRef = React.useRef(null); // "in" | "out"
@@ -86,6 +93,44 @@ export default function Attendance({ me }) {
 
   const st = today ? dayStat(today, settings) : null;
   const mustWorkToday = isWorkday(todayYmd(), pattern, satGroup, holidays);
+
+  // คำนวณสรุปเงินเดือนของตัวเอง — สูตร/ชุดข้อมูลเดียวกับแท็บเงินเดือนของ HR (periodStats + computePayslip)
+  // RLS ให้พนักงานเห็นเฉพาะข้อมูลของตัวเองอยู่แล้ว · สลิปที่ HR บันทึก (โบนัส/หักอื่น/สถานะจ่าย) อ่านได้หลังรัน mig 149
+  async function openMyPay() {
+    setPayBusy(true);
+    try {
+      const { from, to } = payPeriod(payYm);
+      const [attRows, lvAll, hols, hs, advs, slips] = await Promise.all([
+        listMyAttendance(from), listMyLeaves(), listHolidays(), getHrSettings().catch(() => null),
+        listMyAdvances(), listPayslips(payYm).catch(() => []),
+      ]);
+      const hset = { ...DEFAULT_HR_SETTINGS, ...(hs || {}) };
+      const holSet = new Set((hols || []).map((h) => h.day));
+      const attByUserDay = { [me.id]: {} };
+      attRows.filter((a) => a.work_date >= from && a.work_date <= to).forEach((a) => { attByUserDay[me.id][a.work_date] = a; });
+      const approved = lvAll.filter((l) => l.status === "approved");
+      const leaveDaySet = buildLeaveDaySet(approved, from, to);
+      const stp = periodStats(me, attByUserDay, leaveDaySet, from, to, holSet, hset);
+      // ลาเกินโควตา: สูตรเดียวกับ HR — เฉพาะส่วนเกินที่ "เกิดในรอบนี้" แยกรายประเภท
+      const yearStart = `${payYm.slice(0, 4)}-01-01`;
+      const dayBefore = (s) => { const d = hrParseYmd(s); d.setDate(d.getDate() - 1); return hrYmd(d); };
+      const q0 = hset.quota || DEFAULT_HR_SETTINGS.quota;
+      const usedThru = (t, cutoff) => approved.filter((l) => l.type === t).reduce((s, l) => s + leaveDaysInRange(l, yearStart, cutoff), 0);
+      let over = 0;
+      ["vacation", "personal", "sick"].forEach((t) => { const qq = q0[t] ?? 0; over += Math.max(0, usedThru(t, to) - qq) - Math.max(0, usedThru(t, dayBefore(from)) - qq); });
+      stp.overLeave = Math.round((Math.min(stp.leaveDays - (stp.unpaidLeave || 0), Math.max(0, over)) + (stp.unpaidLeave || 0)) * 100) / 100;
+      const slip = (slips || []).find((s) => s.user_id === me.id) || null;
+      // เบิกล่วงหน้า: รอบที่จ่ายแล้ว = ใบที่ถูกหักในรอบนั้น (period = รอบ) · รอบยังไม่จ่าย = ใบอนุมัติที่ยังไม่ถูกหัก
+      const advRows = (advs || []).filter((a) => a.period === payYm || (!a.period && a.status === "approved"));
+      const advSum = slip ? Number(slip.d_advance) || 0 : advRows.reduce((x, a) => x + (Number(a.amount) || 0), 0);
+      const c = computePayslip({ ...me, bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0, advance: advSum }, stp, {});
+      const note = slip
+        ? (slip.status === "paid" ? `✅ รอบนี้จ่ายแล้ว · ยอดสุทธิตามสลิปที่บันทึก ${fmtBaht(slip.net)}` : "📝 รอบนี้ HR บันทึกร่างไว้แล้ว — ตัวเลขอาจขยับได้จนถึงวันจ่าย")
+        : "⏳ รอบนี้ยังไม่ถูกบันทึกโดย HR — ตัวเลขเป็นการคำนวณสด อาจขยับได้จนถึงวันจ่าย";
+      setPayDetail({ r: { p: me, st: stp }, c, advRows, settings: hset, period: `${from} ถึง ${to}`, note });
+    } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
+    setPayBusy(false);
+  }
 
   // leave balance: quota (settings) minus approved days this year, per type
   const year = new Date().getFullYear();
@@ -208,6 +253,17 @@ export default function Attendance({ me }) {
         </div>
       )}
 
+      {/* สรุปเงินเดือนของฉัน — พนักงานเห็นรายละเอียดของตัวเองแบบเดียวกับที่ HR เห็น */}
+      <div className="card">
+        <div className="sec-head"><div><div className="sec-title">🧾 {L("เงินเดือนของฉัน (ละเอียด)", "ကျွန်ုပ်၏ လစာ (အသေးစိတ်)")}</div>
+          <div className="sec-sub">{L("เข้างาน · ขาด · ลา · มาสาย · OT · ค่าวันหยุด · เบิกล่วงหน้า — แจกแจงรายวันเหมือนสลิปเงินเดือน (รอบตัดวันที่ 25)", "အလုပ်တက် · ပျက် · ခွင့် · နောက်ကျ · OT · လစာ အသေးစိတ်")}</div></div></div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <input className="inp" type="month" value={payYm} onChange={(e) => setPayYm(e.target.value)} style={{ width: 170 }} />
+          <button className="btn-primary sm" disabled={payBusy} onClick={openMyPay}>{payBusy ? L("กำลังคำนวณ…", "တွက်နေသည်…") : "🔍 " + L("ดูรายละเอียดรอบนี้", "ဒီလ အသေးစိတ်ကြည့်ရန်")}</button>
+        </div>
+        <p className="page-sub" style={{ marginBottom: 0 }}>{L("ตัวเลขคิดจากข้อมูลเข้างาน/ลา/เบิกของคุณเองแบบสด ๆ — ยอดจ่ายจริงยึดตามสลิปที่ HR ส่งให้ตอนจ่าย", "အတည်ပြု လစာမှာ HR ပေးပို့သော စလစ်အတိုင်း ဖြစ်သည်")}</p>
+      </div>
+
       {/* recent attendance */}
       <div className="card">
         <div className="sec-head"><div><div className="sec-title">{L("ประวัติเข้างาน 30 วันล่าสุด", "နောက်ဆုံး ၃၀ ရက် အလုပ်တက်မှတ်တမ်း")}</div></div></div>
@@ -223,6 +279,7 @@ export default function Attendance({ me }) {
         </div>
       </div>
 
+      {payDetail && <PayDetailModal {...payDetail} onClose={() => setPayDetail(null)} />}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );
