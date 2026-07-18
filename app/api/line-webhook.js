@@ -383,6 +383,22 @@ export default async function handler(req, res) {
       const out = await aiAnswer(conv, q, cfg, !isOpenNow(cfg));
       return res.status(200).json({ ok: !!out.text, ms: Date.now() - t0, question: q, matched: found, answer: out.text, err: out.err });
     }
+    // ?acwarranty=apply&go=1 — เขียนเงื่อนไขรับประกัน "รายซีรีส์" (src/lib/acWarranty.js) ทับข้อความรวมระดับยี่ห้อ
+    if (params.get("acwarranty") === "apply" && params.get("go") === "1") {
+      const { AC_WARRANTY } = await import("../src/lib/acWarranty.js");
+      let ok = 0, miss = 0; const fails = [];
+      for (const w of AC_WARRANTY) {
+        try {
+          const r = await tfetch(`${SB()}/rest/v1/materials?kind=eq.ac&brand=eq.${encodeURIComponent(w.brand)}&series=eq.${encodeURIComponent(w.series)}`, {
+            method: "PATCH", headers: { ...sbH(), Prefer: "return=representation" }, body: JSON.stringify({ warranty: w.warranty }),
+          });
+          if (!r.ok) { fails.push(`${w.brand}|${w.series}: ${r.status}`); continue; }
+          const n = (await r.json()).length;
+          if (n) ok += n; else { miss++; fails.push(`${w.brand}|${w.series}: ไม่พบรุ่น`); }
+        } catch (e) { fails.push(`${w.brand}|${w.series}: ${e?.message || e}`); }
+      }
+      return res.status(200).json({ series: AC_WARRANTY.length, updatedModels: ok, seriesNotFound: miss, fails: fails.slice(0, 30) });
+    }
     // ?acmedia=import&go=1[&from=0] — นำเข้ารูป/โบรชัวร์ "ทางการ" จาก manifest (src/lib/acOfficialMedia.js) ฝั่งเซิร์ฟเวอร์
     // ดาวน์โหลดจากเว็บผู้ผลิต → อัปโหลดเข้า storage เรา (ชื่อไฟล์ขึ้นต้น official- ) → ผูกให้ทุกรหัสในรุ่น
     // ปลอดภัย: manifest ตายตัว แก้จากโค้ดเท่านั้น + ทำซ้ำแล้วข้าม (idempotent) · แบ่งรอบตามเวลาเพราะ Vercel จำกัด 60 วิ
