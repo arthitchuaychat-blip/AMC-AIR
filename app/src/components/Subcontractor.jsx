@@ -19,11 +19,13 @@ const LABOR_ROLES = ["admin", "exec", "finance", "sales"]; // who can fill + con
 const EDIT_PAYOUT_ROLES = ["admin", "finance"];        // ธุรการ + บัญชี: แก้ไขใบจ่าย (รวมที่จ่ายแล้ว)
 
 // labor lines default to rate% of each line's sale amount (accounting can edit)
+// กติกาเจ้าของข้อ 5: ส่วนลดรายบรรทัด (quotation_items.discount, mig 142) ต้องหักก่อนเสมอ
+// ⇒ ฐานคิดค่าแรง = ยอดขายจริงหลังหักส่วนลด (เดิมคิดจากราคาก่อนลด ทำให้ตั้งค่าแรงเกินทุกงานที่ให้ส่วนลด)
 function buildLines(items, rate) {
   return (items || []).map((it) => {
-    const qty = Number(it.qty) || 0, price = Number(it.unit_price) || 0;
-    const sale = round2(qty * price);
-    return { code: it.item_code || null, name: it.name, qty, unit: it.unit || "", price, sale, labor: round2(sale * (Number(rate) || 0) / 100) };
+    const qty = Number(it.qty) || 0, price = Number(it.unit_price) || 0, disc = Number(it.discount) || 0;
+    const sale = round2(qty * price - disc);
+    return { code: it.item_code || null, name: it.name, qty, unit: it.unit || "", price, disc, sale, labor: round2(sale * (Number(rate) || 0) / 100) };
   });
 }
 const sumLabor = (lines) => round2((lines || []).reduce((a, l) => a + (Number(l.labor) || 0), 0));
@@ -271,7 +273,7 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
                 : <span className="sub-lab-name">{l.name}</span>}
               <span className="sub-lab-qty">{l.manual ? "" : `${l.qty} ${l.unit}`}</span>
               <span className="sub-lab-unit">{l.manual ? "" : fmtBaht(l.price)}</span>
-              <span className="sub-lab-sale">{l.manual ? "" : fmtBaht(l.sale)}</span>
+              <span className="sub-lab-sale">{l.manual ? "" : <>{fmtBaht(l.sale)}{Number(l.disc) > 0 && <small style={{ display: "block", color: "var(--down)", fontSize: 10.5 }} title="หักส่วนลดรายบรรทัดแล้ว">ลด {fmtBaht(l.disc)}</small>}</>}</span>
               <span className="inp inp-unit sub-lab-inp"><span className="unit-pre">฿</span><input type="number" min="0" value={l.labor} onChange={(e) => setLabor(i, e.target.value)} /></span>
             </div>
           ))}

@@ -504,13 +504,16 @@ export async function recordTransactions(rows) {
     reason: t.type === "damage" ? (t.reason || null) : null,
     prep_no: t.prep_no || null,   // ผูกกลับใบเตรียมวัสดุ (mig 115) — ไว้ลบตามกันได้
     po_no: t.po_no || null,       // ผูกใบสั่งซื้อ (mig 151) — ยกเลิกรับเข้าลบครบทั้งชุดซื้อ+เบิกอัตโนมัติ
+    twin_ref: t.twin_ref || null, // ชุดเบิกอัตโนมัติ: จำเลขชุด "รับของ" ที่เป็นต้นเหตุ (mig 155) — ยกเลิกรอบไหนลบเฉพาะคู่ของรอบนั้น
     ref_no: ref,
     recorded_by: user?.id || null,
   }));
   let { error } = await supabase.from("transactions").insert(payload);
+  if (error && /twin_ref/i.test(error.message || "")) { payload.forEach((r) => delete r.twin_ref); ({ error } = await supabase.from("transactions").insert(payload)); } // pre-155 fallback
   if (error && /po_no/i.test(error.message || "")) { payload.forEach((r) => delete r.po_no); ({ error } = await supabase.from("transactions").insert(payload)); }   // pre-151 fallback
   if (error && /prep_no/i.test(error.message || "")) { payload.forEach((r) => delete r.prep_no); ({ error } = await supabase.from("transactions").insert(payload)); } // pre-115 fallback
   if (error) throw error;
+  return ref;   // ผู้เรียกใช้ผูกชุดคู่แฝดได้
 }
 
 // ยอดคงเหลือสด ๆ รายรหัส (ใช้คิดต้นทุนเฉลี่ยตอนรับของ — สต๊อกในหน้าอาจค้างจากตอนเปิด)
@@ -2362,8 +2365,15 @@ export async function cancelTransactionGroup({ ids, ref_no, po_no }, reason) {
   if (error) throw error;
   if (!gone?.length) throw new Error("ยกเลิกไม่สำเร็จ — ไม่มีสิทธิ์ลบรายการสต๊อก (รัน migration 151 ใน Supabase ก่อน) ใบยังคงสถานะเดิม");
   if (po_no) {
-    // ลบชุดเบิกอัตโนมัติที่เกิดตอนรับของใบนี้ด้วย (เฉพาะชุดที่ประทับ po_no ไว้ — ของเก่าก่อน mig 151 ไม่มีตรา ต้องลบมือ)
-    const { data: twin } = await supabase.from("transactions").delete().eq("po_no", po_no).select("id");
+    // ลบเฉพาะ "ชุดเบิกอัตโนมัติที่เกิดคู่กับรอบนี้" (twin_ref = เลขชุดรับของรอบนี้ — mig 155)
+    // ⚠️ ห้ามลบด้วย po_no เฉย ๆ: ใบที่ทยอยรับหลายรอบจะโดนลบรายการของรอบก่อนหน้าไปด้วย = สต๊อกหายทั้งที่ของอยู่จริง
+    let twinQ = supabase.from("transactions").delete();
+    twinQ = ref_no ? twinQ.eq("twin_ref", ref_no) : twinQ.eq("po_no", po_no).eq("type", "withdraw").in("id", []);
+    let { data: twin, error: eTwin } = await twinQ.select("id");
+    // pre-155 fallback: ยังไม่มีคอลัมน์ twin_ref → ลบชุดเบิกที่ตรา po_no เดียวกัน (ปลอดภัยเฉพาะใบที่รับรอบเดียว)
+    if (eTwin && /twin_ref/i.test(eTwin.message || "")) {
+      ({ data: twin } = await supabase.from("transactions").delete().eq("po_no", po_no).eq("type", "withdraw").select("id"));
+    }
     const { error: e2 } = await supabase.from("purchase_orders").update({ status: "open", received_at: null }).eq("po_no", po_no).eq("status", "received");
     if (e2) throw e2;
     await logAudit({ action: "delete", target_type: "transaction_batch", target_no: ref_no || String(ids[0]), reason, snapshot: { po_no, rows: snap || [], twin_deleted: (twin || []).length } });

@@ -266,8 +266,9 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     try {
       // จองใบก่อนลงของ (กัน 2 คนรับพร้อมกัน = สต๊อกเบิ้ล) — ลงของพังกลางทางค่อยคืนสถานะใบ
       if (type === "purchase" && receivePo && fullReceive) { await markPoReceived(receivePo); claimedPo = true; }
+      let buyRef = null;   // เลขชุด "รับของ" รอบนี้ — ใช้ผูกชุดเบิกอัตโนมัติให้ยกเลิกตามกันได้ตรงรอบ
       try {
-        await recordTransactions(norm.map((l) => ({
+        buyRef = await recordTransactions(norm.map((l) => ({
           type, job_no: jobNo, team: type === "damage" ? null : team,
           material_code: l.code, qty: l.qty,
           unit_cost: l.unitCost, reason, txn_date: txnDate || undefined,
@@ -291,7 +292,8 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           await recordTransactions(norm.map((l) => ({
             type: "withdraw", job_no: receiveJob.job_no, team: receiveJob.team,
             material_code: l.code, qty: l.qty, unit_cost: l.unitCost, txn_date: txnDate || undefined,
-            po_no: receivePo,   // ตราคู่กับชุดซื้อ — ยกเลิกรับเข้าแล้วชุดเบิกอัตโนมัติถูกลบตาม ไม่ทิ้งสต๊อกติดลบ
+            po_no: receivePo,     // ตราใบสั่งซื้อ (ไว้ค้นหา/รายงาน)
+            twin_ref: buyRef,     // ผูกกับชุดรับของ "รอบนี้" — ยกเลิกรอบไหนลบเฉพาะคู่ของรอบนั้น (mig 155)
           })));
         }
         if (receivePo && fullReceive) setReceivePo(null);
