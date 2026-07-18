@@ -389,13 +389,16 @@ export default async function handler(req, res) {
       let ok = 0, miss = 0; const fails = [];
       for (const w of AC_WARRANTY) {
         try {
-          const r = await tfetch(`${SB()}/rest/v1/materials?kind=eq.ac&brand=eq.${encodeURIComponent(w.brand)}&series=eq.${encodeURIComponent(w.series)}`, {
+          const q = w.code
+            ? `code=eq.${encodeURIComponent(w.code)}`
+            : `kind=eq.ac&brand=eq.${encodeURIComponent(w.brand)}&series=eq.${encodeURIComponent(w.series)}`;
+          const r = await tfetch(`${SB()}/rest/v1/materials?${q}`, {
             method: "PATCH", headers: { ...sbH(), Prefer: "return=representation" }, body: JSON.stringify({ warranty: w.warranty }),
           });
-          if (!r.ok) { fails.push(`${w.brand}|${w.series}: ${r.status}`); continue; }
+          if (!r.ok) { fails.push(`${w.brand}|${w.series || w.code}: ${r.status}`); continue; }
           const n = (await r.json()).length;
-          if (n) ok += n; else { miss++; fails.push(`${w.brand}|${w.series}: ไม่พบรุ่น`); }
-        } catch (e) { fails.push(`${w.brand}|${w.series}: ${e?.message || e}`); }
+          if (n) ok += n; else { miss++; fails.push(`${w.brand}|${w.series || w.code}: ไม่พบรุ่น`); }
+        } catch (e) { fails.push(`${w.brand}|${w.series || w.code}: ${e?.message || e}`); }
       }
       return res.status(200).json({ series: AC_WARRANTY.length, updatedModels: ok, seriesNotFound: miss, fails: fails.slice(0, 30) });
     }

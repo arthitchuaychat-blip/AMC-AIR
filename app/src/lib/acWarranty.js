@@ -64,7 +64,8 @@ export const AC_WARRANTY = [
   { brand: "Hisense", series: "Floor", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 3 ปี", conf: "low" },
   { brand: "Hisense", series: "Hisense KC", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี", conf: "medium" },
   { brand: "Hisense", series: "Hisense KD", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี", conf: "low" },
-  { brand: "Hisense", series: "(ไม่มีรุ่น) Hisense LB Series Inverter 24,000 BTU", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี", conf: "medium" },
+  // รุ่นนี้ไม่มีชื่อซีรีส์ในระบบ จึงจับคู่ด้วยรหัสสินค้า
+  { brand: "Hisense", code: "AS-24TRLB2T", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี", conf: "medium" },
   { brand: "LG", series: "Cassette ZTNQ", warranty: "คอมเพรสเซอร์ 5 ปี · ตัวเครื่อง/อะไหล่ 1 ปี (ไม่รวมค่าแรง ค่าเดินทาง และอะไหล่เพื่อความสวยงาม)", conf: "low" },
   { brand: "LG", series: "Ceiling ZVNQ", warranty: "คอมเพรสเซอร์ 5 ปี · ตัวเครื่อง/อะไหล่ 1 ปี (ไม่รวมค่าแรง ค่าเดินทาง และอะไหล่เพื่อความสวยงาม)", conf: "low" },
   { brand: "LG", series: "VICTORY IKR", warranty: "คอมเพรสเซอร์ 10 ปี · ตัวเครื่อง 1 ปี · อะไหล่ 3 ปี (ไม่รวมค่าแรงและค่าทำระบบน้ำยา) — สำหรับลูกค้าที่ซื้อตั้งแต่ 1 มกราคม 2568", conf: "medium" },
