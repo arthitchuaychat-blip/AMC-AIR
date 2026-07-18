@@ -64,6 +64,14 @@ export const AC_WARRANTY = [
   { brand: "Hisense", series: "Floor", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 3 ปี", conf: "low" },
   { brand: "Hisense", series: "Hisense KC", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี", conf: "medium" },
   { brand: "Hisense", series: "Hisense KD", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี", conf: "low" },
+  // Haier HSU ปนทั้งอินเวอร์เตอร์และฟิกซ์สปีดในซีรีส์เดียว — haier.com/th/service-support/warranty-declaration ให้คนละเงื่อนไข
+  // แยกด้วยรหัสรุ่น: CQRC = ฟิกซ์สปีด (คอมฯ 5 ปี) · ที่เหลือ = อินเวอร์เตอร์ (คอมฯ 10 ปี)
+  { brand: "Haier", series: "HSU", codeLike: "CQRC", warranty: "คอมเพรสเซอร์ 5 ปี · อะไหล่ 5 ปี · ฟรีค่าแรง 5 ปี", conf: "high" },
+  { brand: "Haier", series: "HSU", codeNotLike: "CQRC", warranty: "คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี · ฟรีค่าแรง 5 ปี", conf: "high" },
+  // Copper SEAL: ตัวเลขอยู่ใน "รูปโฆษณา" บนหน้า carrierthailand.com/copper-seal/ (ป้ายโล่ 3 อัน) ตัวค้นอ่านข้อความจึงไม่เจอ — เปิดรูปดูแล้วยืนยัน
+  { brand: "Carrier", series: "TVDB", warranty: "คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี · ฟรีค่าแรง 1 ปี", conf: "high" },
+  // Copper ION: ภาพสเปกทางการ (แถบ WARRANTY การรับประกัน) ระบุ COMPRESSOR 10 YEARS / PARTS 5 YEARS / SERVICE 3 YEARS
+  { brand: "Carrier", series: "TVEB", warranty: "คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี · ฟรีค่าแรงซ่อม 3 ปี", conf: "high" },
   // รุ่นนี้ไม่มีชื่อซีรีส์ในระบบ จึงจับคู่ด้วยรหัสสินค้า
   { brand: "Hisense", code: "AS-24TRLB2T", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี", conf: "medium" },
   { brand: "LG", series: "Cassette ZTNQ", warranty: "คอมเพรสเซอร์ 5 ปี · ตัวเครื่อง/อะไหล่ 1 ปี (ไม่รวมค่าแรง ค่าเดินทาง และอะไหล่เพื่อความสวยงาม)", conf: "low" },

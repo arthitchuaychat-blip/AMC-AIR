@@ -389,9 +389,12 @@ export default async function handler(req, res) {
       let ok = 0, miss = 0; const fails = [];
       for (const w of AC_WARRANTY) {
         try {
-          const q = w.code
+          // จับคู่ได้ 3 แบบ: รหัสตรง ๆ · ทั้งซีรีส์ · ทั้งซีรีส์แต่กรองด้วยรูปแบบรหัส (บางซีรีส์ปนทั้งอินเวอร์เตอร์/ฟิกซ์สปีด)
+          let q = w.code
             ? `code=eq.${encodeURIComponent(w.code)}`
             : `kind=eq.ac&brand=eq.${encodeURIComponent(w.brand)}&series=eq.${encodeURIComponent(w.series)}`;
+          if (w.codeLike) q += `&code=like.*${encodeURIComponent(w.codeLike)}*`;
+          if (w.codeNotLike) q += `&code=not.like.*${encodeURIComponent(w.codeNotLike)}*`;
           const r = await tfetch(`${SB()}/rest/v1/materials?${q}`, {
             method: "PATCH", headers: { ...sbH(), Prefer: "return=representation" }, body: JSON.stringify({ warranty: w.warranty }),
           });
