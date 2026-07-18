@@ -1,5 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
+import Lightbox from "./Lightbox";
 import { UIcon } from "../icons";
 import { fmtNum } from "../lib/format";
 import {
@@ -43,6 +44,7 @@ export default function AcMediaManager({ mats, onClose, onChanged }) {
   const [featDirty, setFeatDirty] = React.useState({});
   const [err, setErr] = React.useState(null);
   const [toast, setToast] = React.useState(null);
+  const [zoom, setZoom] = React.useState(null);     // รูปทั้งหมดของรุ่นที่กดดูใหญ่ (เช็กลายน้ำ/ความคมชัดก่อนใช้)
   const changedRef = React.useRef(false);
   const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 2800); };
 
@@ -52,7 +54,8 @@ export default function AcMediaManager({ mats, onClose, onChanged }) {
       .catch(() => { /* ยังไม่รัน migration 106 — คุณสมบัติรายรุ่นจะบันทึกไม่ได้ */ });
   }, []);
   React.useEffect(() => {
-    const esc = (e) => e.key === "Escape" && close();
+    // Esc: ถ้ากำลังดูรูปใหญ่ ให้ Lightbox ปิดตัวเองก่อน — ไม่ปิดทั้งหน้าจัดการพร้อมกัน
+    const esc = (e) => e.key === "Escape" && !zoom && close();
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   });
@@ -220,7 +223,9 @@ export default function AcMediaManager({ mats, onClose, onChanged }) {
                 <div key={g.key} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "10px 12px", background: "#fff" }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
                     {g.photoUrl
-                      ? <img src={g.photoUrl} alt="" style={{ width: 64, height: 64, objectFit: "contain", background: "#fff", border: "1px solid var(--line)", borderRadius: 10, flex: "none" }} />
+                      ? <img src={g.photoUrl} alt="" title="กดดูรูปใหญ่ (เช็กลายน้ำ/ความคมชัด)"
+                          style={{ width: 64, height: 64, objectFit: "contain", background: "#fff", border: "1px solid var(--line)", borderRadius: 10, flex: "none", cursor: "zoom-in" }}
+                          onClick={() => { const pics = [...new Set(g.items.map((m) => m.photoUrl || m.photo_url).filter(Boolean))]; if (pics.length) setZoom(pics); }} />
                       : <div style={{ width: 64, height: 64, border: "1px dashed var(--line)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-3)", flex: "none" }}><UIcon name="camera" size={20} /></div>}
                     <div style={{ flex: "1 1 200px", minWidth: 0 }}>
                       <div style={{ fontWeight: 800, fontSize: 14 }}>{g.title}</div>
@@ -270,6 +275,7 @@ export default function AcMediaManager({ mats, onClose, onChanged }) {
         {toast && (
           <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", background: "#16a34a", color: "#fff", fontSize: 13.5, fontWeight: 600, padding: "12px 22px", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 400, maxWidth: "90%", textAlign: "center" }}>{toast}</div>
         )}
+        {zoom && <Lightbox images={zoom} onClose={() => setZoom(null)} />}
       </div>
     </div>
   );

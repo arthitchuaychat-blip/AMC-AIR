@@ -1,6 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
+import Lightbox from "./Lightbox";
 import { UIcon } from "../icons";
 import { UNITS } from "../lib/format";
 import { acPowerCostYear } from "../lib/api";
@@ -99,6 +100,9 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const [err, setErr] = React.useState(null);
+  const [zoom, setZoom] = React.useState(false);   // กดรูปสินค้า → ดูรูปใหญ่ (เช็กลายน้ำ/ความคมชัด)
+  const zoomRef = React.useRef(false);
+  zoomRef.current = zoom;
   // เพิ่มหมวดวัสดุใหม่จากในฟอร์ม (พิมพ์ชื่อ → สร้าง → เลือกให้ทันที)
   const [catAdding, setCatAdding] = React.useState(false);
   const [catName, setCatName] = React.useState("");
@@ -144,7 +148,8 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
     setUploading(false);
   }
   React.useEffect(() => {
-    const esc = (e) => e.key === "Escape" && onClose();
+    // Esc: ถ้าเปิดรูปใหญ่อยู่ ให้ Lightbox ปิดเอง — อย่าปิดฟอร์มซ้อน (ข้อมูลที่กรอกจะหาย)
+    const esc = (e) => e.key === "Escape" && !zoomRef.current && onClose();
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, []);
@@ -339,7 +344,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
           )}
           <label className="fld"><span>รูปสินค้า</span>
             <div className="photo-field">
-              {f.photo_url ? <img src={f.photo_url} className="photo-thumb" alt="" /> : <div className="photo-thumb empty"><UIcon name="camera" size={22} color="var(--ink-3)" /></div>}
+              {f.photo_url ? <img src={f.photo_url} className="photo-thumb" alt="" title="กดดูรูปใหญ่" style={{ cursor: "zoom-in" }} onClick={() => setZoom(true)} /> : <div className="photo-thumb empty"><UIcon name="camera" size={22} color="var(--ink-3)" /></div>}
               <div className="photo-actions">
                 <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
                   <UIcon name="camera" size={14} /> {uploading ? "กำลังอัปโหลด…" : (f.photo_url ? "เปลี่ยนรูป" : "อัปโหลดรูป")}
@@ -417,6 +422,7 @@ export default function MaterialModal({ initial, categories, brands = [], btus =
             <UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {busy ? "กำลังบันทึก…" : "บันทึก"}
           </button>
         </div>
+        {zoom && f.photo_url && <Lightbox images={[f.photo_url]} onClose={() => setZoom(false)} />}
       </div>
     </div>
   );

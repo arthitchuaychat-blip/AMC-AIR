@@ -2,6 +2,7 @@ import React from "react";
 import { listMaterialMovements } from "../lib/api";
 import { fmtBaht, fmtBaht2, fmtNum } from "../lib/format";
 import { MaterialThumb, UIcon } from "../icons";
+import Lightbox from "./Lightbox";
 
 const MOVE = {
   purchase:   { th: "ซื้อเข้า", color: "#7c3aed", dir: 1, icon: "purchase" },
@@ -18,10 +19,15 @@ export default function MaterialDrawer({ mat, onClose, onEdit }) {
   const [recs, setRecs] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [filter, setFilter] = React.useState("all");
+  const [zoom, setZoom] = React.useState(false);   // กดรูปสินค้า → ดูรูปใหญ่
+  const zoomRef = React.useRef(false);
+  zoomRef.current = zoom;
   const low = mat.stock < mat.minStock;
+  const photo = mat.photoUrl || mat.photo_url;
 
   React.useEffect(() => {
-    const esc = (e) => e.key === "Escape" && onClose();
+    // Esc: ถ้าเปิดรูปใหญ่อยู่ ให้ Lightbox ปิดเอง — อย่าปิด drawer ซ้อน
+    const esc = (e) => e.key === "Escape" && !zoomRef.current && onClose();
     window.addEventListener("keydown", esc);
     listMaterialMovements(mat.code).then((r) => { setRecs(r); setLoading(false); }).catch(() => setLoading(false));
     return () => window.removeEventListener("keydown", esc);
@@ -51,7 +57,9 @@ export default function MaterialDrawer({ mat, onClose, onEdit }) {
       <div className="drawer" onClick={(e) => e.stopPropagation()} style={{ "--mc": mat.color }}>
         <div className="drawer-head">
           <div className="drawer-head-row">
-            <MaterialThumb mat={mat} size={46} radius={13} />
+            <span onClick={photo ? () => setZoom(true) : undefined} style={photo ? { cursor: "zoom-in", flex: "none" } : { flex: "none" }} title={photo ? "กดดูรูปใหญ่" : undefined}>
+              <MaterialThumb mat={mat} size={46} radius={13} />
+            </span>
             <div style={{ minWidth: 0 }}>
               <div className="drawer-title">{mat.th}</div>
               <div className="drawer-en"><span className="code-chip">{mat.code}</span> {mat.en}</div>
@@ -158,6 +166,8 @@ export default function MaterialDrawer({ mat, onClose, onEdit }) {
           </div>
         </div>
       </div>
+      {/* กันคลิกใน Lightbox ทะลุไปโดน overlay ของ drawer แล้วปิดซ้อน */}
+      {zoom && photo && <span onClick={(e) => e.stopPropagation()}><Lightbox images={[photo]} onClose={() => setZoom(false)} /></span>}
     </div>
   );
 }

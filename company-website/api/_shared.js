@@ -110,7 +110,7 @@ h1{font-size:clamp(24px,4vw,36px);font-weight:800;line-height:1.25;letter-spacin
 /* product layout */
 .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:start}
 @media(max-width:700px){.pgrid{grid-template-columns:1fr}}
-.pimg{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}
+.pimg{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;cursor:zoom-in;text-decoration:none}
 .pimg img{width:100%;height:100%;object-fit:contain;padding:18px;box-sizing:border-box}
 .pimg .noimg{font-size:60px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}

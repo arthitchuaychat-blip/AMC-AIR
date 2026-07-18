@@ -1673,7 +1673,8 @@ select.unit-pick:focus{outline:none;color:var(--ink)}
 .tl-reply-btn:hover{text-decoration:underline}
 .tl-add-reply{padding:9px 10px}
 /* lightbox */
-.lb-overlay{position:fixed;inset:0;z-index:300;background:rgba(8,12,20,.93);display:flex;flex-direction:column}
+/* z ต้องสูงกว่า modal(1100)/drawer(1000) — เปิดดูรูปจากในฟอร์ม/แผงขวาแล้วต้องลอยบนสุดเสมอ */
+.lb-overlay{position:fixed;inset:0;z-index:1300;background:rgba(8,12,20,.93);display:flex;flex-direction:column}
 .lb-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;color:#fff;flex:none}
 .lb-count{font-size:13px;font-weight:700;color:#fff}
 .lb-bar-actions{display:flex;align-items:center;gap:8px}

@@ -71,7 +71,9 @@ module.exports = async (req, res) => {
     const content = `
       <div class="crumb"><a href="/">หน้าแรก</a> › <a href="/products">สินค้า</a> › ${esc(KIND_TH[p.kind] || "")}</div>
       <div class="pgrid">
-        <div class="pimg">${p.photo_url ? `<img src="${esc(p.photo_url)}" alt="${esc(name)}">` : `<span class="noimg">❄️</span>`}</div>
+        ${p.photo_url
+          ? `<a class="pimg" href="${esc(p.photo_url)}" target="_blank" rel="noopener" title="กดดูรูปขนาดเต็ม"><img src="${esc(p.photo_url)}" alt="${esc(name)}"></a>`
+          : `<div class="pimg"><span class="noimg">❄️</span></div>`}
         <div>
           <h1 style="font-size:clamp(21px,3vw,28px)">${esc(name)}</h1>
           <div class="chips">${chips}</div>
