@@ -383,6 +383,26 @@ export default async function handler(req, res) {
       const out = await aiAnswer(conv, q, cfg, !isOpenNow(cfg));
       return res.status(200).json({ ok: !!out.text, ms: Date.now() - t0, question: q, matched: found, answer: out.text, err: out.err });
     }
+    // ?acimg=1 — สำรวจรูป/โบรชัวร์แอร์รายรุ่น (series): กี่ตัวไม่มีรูป · รูปมาจากโดเมนไหน (เว็บตัวแทน = กลุ่มลายน้ำ) · โบรชัวร์มีไหม
+    if (params.get("acimg") === "1") {
+      const [mr2, sr2] = await Promise.all([
+        tfetch(`${SB()}/rest/v1/materials?select=code,brand,series,name_th,btu,photo_url&active=eq.true&kind=eq.ac&order=brand.asc,series.asc,btu.asc&limit=1000`, { headers: sbH() }),
+        tfetch(`${SB()}/rest/v1/ac_series?select=brand,name,brochure_url`, { headers: sbH() }),
+      ]);
+      const rows2 = mr2.ok ? await mr2.json() : [];
+      const broch = {}; (sr2.ok ? await sr2.json() : []).forEach((s) => { broch[`${s.brand}|${s.name}`] = !!s.brochure_url; });
+      const dom = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u ? "raw" : null; } };
+      const bySeries = {};
+      rows2.forEach((x) => {
+        const key = `${x.brand || "?"}|${x.series || x.name_th}`;
+        const g = bySeries[key] || (bySeries[key] = { brand: x.brand, series: x.series || `(ไม่มีรุ่น) ${x.name_th}`, n: 0, noPhoto: 0, doms: {}, codesNoPhoto: [] });
+        g.n++;
+        if (!x.photo_url) { g.noPhoto++; if (g.codesNoPhoto.length < 12) g.codesNoPhoto.push(x.code); }
+        else { const d = dom(x.photo_url); g.doms[d] = (g.doms[d] || 0) + 1; }
+      });
+      const out2 = Object.entries(bySeries).map(([k, g]) => ({ ...g, brochure: broch[k] ?? false }));
+      return res.status(200).json({ totalModels: rows2.length, series: out2 });
+    }
     // ?aicat=1 — ดูว่าบอทเห็นแคตตาล็อกกี่รายการ (นับจริงต่อหมวด) + รายการบริการพร้อมราคา (ไม่มีข้อมูลต้นทุน)
     if (params.get("aicat") === "1") {
       const cnt = async (k) => {
