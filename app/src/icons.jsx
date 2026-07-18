@@ -84,7 +84,7 @@ export function MaterialThumb({ mat, size = 48, radius = 12 }) {
   const photo = mat.photoUrl || mat.photo_url;
   if (photo) {
     return <img src={photo} alt="" width={size} height={size}
-      style={{ borderRadius: radius, objectFit: "cover", flex: "none", border: "1px solid var(--line)", background: "#fff" }}
+      style={{ borderRadius: radius, objectFit: "contain", flex: "none", border: "1px solid var(--line)", background: "#fff" }}
       onError={(e) => { e.currentTarget.replaceWith(Object.assign(document.createElement("span"), { className: "thumb-broken" })); }} />;
   }
   return (

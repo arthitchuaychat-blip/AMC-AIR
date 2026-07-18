@@ -284,6 +284,54 @@ export async function uploadBrochureFile(file) {
   return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
 
+// รายการ ac_series ทั้งหมด (คุณสมบัติ+โบรชัวร์ต่อรุ่น) — ใช้ในหน้า จัดการรูป & คุณสมบัติแอร์
+export async function listAcSeriesAll() {
+  const PAGE = 1000;
+  const all = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase.from("ac_series").select("*").order("brand").order("name").range(from, from + PAGE - 1);
+    if (error) throw error;
+    all.push(...(data || []));
+    if (!data || data.length < PAGE) break;
+  }
+  return all;
+}
+
+// ตั้งรูปสินค้าให้หลายรายการทีเดียว (ทุกขนาดในรุ่นใช้รูปเดียวกัน) — เช็กแถวที่อัปเดตจริง กัน RLS เงียบ
+export async function setMaterialsPhoto(codes, url) {
+  if (!codes || !codes.length) return;
+  const CHUNK = 100;
+  let touched = 0;
+  for (let i = 0; i < codes.length; i += CHUNK) {
+    const slice = codes.slice(i, i + CHUNK);
+    const { data, error } = await supabase.from("materials").update({ photo_url: url || null }).in("code", slice).select("code");
+    if (error) throw error;
+    touched += (data || []).length;
+  }
+  if (!touched) throw new Error("ไม่มีรายการถูกอัปเดต (ไม่มีสิทธิ์แก้คลังสินค้า?)");
+}
+
+// แก้เฉพาะ "คุณสมบัติ" ของสินค้ารายตัว (แอร์ที่ไม่มีซีรีส์ ใช้ materials.features แทน ac_series)
+export async function setMaterialFeatures(code, features) {
+  const { data, error } = await supabase.from("materials").update({ features: (features || "").trim() || null }).eq("code", code).select("code");
+  if (error) throw error;
+  if (!(data || []).length) throw new Error("ไม่มีรายการถูกอัปเดต (ไม่มีสิทธิ์แก้คลังสินค้า?)");
+}
+
+// ✨ ให้ AI ร่างคุณสมบัติของรุ่นแอร์ (ผ่าน /api/ai-features ฝั่งเซิร์ฟเวอร์) — ได้ข้อความร่างมาให้ผู้ใช้ตรวจก่อนบันทึก
+export async function aiDraftSeriesFeatures(brand, series, items) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const r = await fetch("/api/ai-features", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+    body: JSON.stringify({ brand, series, items }),
+  });
+  let j = null;
+  try { j = await r.json(); } catch { /* non-JSON error body */ }
+  if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+  return j.text;
+}
+
 // update a material's (weighted-average) unit cost — used by purchase moving average
 export async function updateMaterialCost(code, cost) {
   const { error } = await supabase.from("materials").update({ cost }).eq("code", code);

@@ -8,6 +8,7 @@ import { MaterialThumb, UIcon } from "../icons";
 import MaterialModal from "./MaterialModal";
 import MaterialDrawer from "./MaterialDrawer";
 import BulkImportModal from "./BulkImportModal";
+import AcMediaManager from "./AcMediaManager";
 
 const KINDS = [{ v: "all", l: "ทั้งหมด" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }, { v: "material", l: "วัสดุ" }];
 const KIND_LABEL = { ac: "แอร์", service: "บริการ", material: "วัสดุ" };
@@ -78,6 +79,7 @@ export default function Catalog({ role }) {
   const [openMat, setOpenMat] = React.useState(null);
   const [viewMode, setViewMode] = React.useState("grid");
   const [importing, setImporting] = React.useState(false);
+  const [mediaMgr, setMediaMgr] = React.useState(false);   // หน้าจัดการ รูป & คุณสมบัติแอร์ (ทั้งรุ่นทีเดียว)
   const [toast, setToast] = React.useState(null);
   const [sel, setSel] = React.useState(() => new Set()); // selected codes for bulk web show/hide
   const [pubBusy, setPubBusy] = React.useState(false);
@@ -246,6 +248,7 @@ export default function Catalog({ role }) {
           </div>
           {canEdit && <button className="btn-ghost" onClick={exportCsv} disabled={!mats.length || !stockReady} title={stockReady ? "" : "รอโหลดยอดคงเหลือจริงก่อน (กันได้เลขตั้งต้นไปใช้นับของ)"}><UIcon name="withdraw" size={15} /> {stockReady ? "ดาวน์โหลดรายการ" : "รอยอดคงเหลือ…"}</button>}
           {canEdit && <button className="btn-ghost" onClick={() => setImporting(true)}><UIcon name="box" size={15} /> นำเข้าหลายรายการ</button>}
+          {canEdit && <button className="btn-ghost" onClick={() => setMediaMgr(true)} title="ตั้งรูป official + คุณสมบัติ ให้ทุกขนาดในรุ่นทีเดียว">🖼️ รูป & คุณสมบัติแอร์</button>}
           {canEdit && <button className="btn-primary" onClick={() => setEditing(null)}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> เพิ่มรายการ</button>}
         </div>
       </div>
@@ -398,6 +401,7 @@ export default function Catalog({ role }) {
           <button className="cat-bulkbar-x" onClick={clearSel} title="ล้างที่เลือก">ล้าง</button>
         </div>
       )}
+      {mediaMgr && <AcMediaManager mats={mats} onChanged={() => {}} onClose={(changed) => { setMediaMgr(false); if (changed) load(); }} />}
       {openMat && <MaterialDrawer mat={openMat} onClose={() => setOpenMat(null)}
         onEdit={canEdit ? () => { const m = openMat; setOpenMat(null); setEditing(m); } : null} />}
       {editing !== undefined && (

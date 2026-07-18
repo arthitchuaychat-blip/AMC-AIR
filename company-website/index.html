@@ -190,8 +190,9 @@ nav.menu a:hover{color:var(--primary);background:var(--bg-soft)}
 .prod-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
 .prod{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:.2s}
 .prod:hover{box-shadow:var(--shadow);transform:translateY(-3px)}
-.prod .ph{aspect-ratio:4/3;background:var(--bg-soft);display:flex;align-items:center;justify-content:center;overflow:hidden}
-.prod .ph img{width:100%;height:100%;object-fit:cover}
+/* รูปสินค้า: contain บนพื้นขาว — เห็นทั้งเครื่อง กึ่งกลาง ไม่ครอป/ไม่ล้นกรอบ (กติการูปของร้าน) */
+.prod .ph{aspect-ratio:4/3;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.prod .ph img{width:100%;height:100%;object-fit:contain;padding:10px;box-sizing:border-box}
 .prod .ph .noimg{color:var(--ink-3);font-size:34px}
 .prod .body{padding:14px;display:flex;flex-direction:column;gap:5px;flex:1}
 .prod .tag{font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase}
@@ -204,8 +205,8 @@ nav.menu a:hover{color:var(--primary);background:var(--bg-soft)}
 .sprod{grid-column:span 2;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:.2s}
 .sprod:hover{box-shadow:var(--shadow)}
 .sprod-top{display:flex;gap:14px;padding:14px 14px 8px}
-.sprod-top .ph{width:118px;height:118px;flex:none;background:var(--bg-soft);border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:36px}
-.sprod-top .ph img{width:100%;height:100%;object-fit:cover}
+.sprod-top .ph{width:118px;height:118px;flex:none;background:#fff;border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:36px}
+.sprod-top .ph img{width:100%;height:100%;object-fit:contain;padding:6px;box-sizing:border-box}
 .sprod-brand{font-size:11px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.04em}
 .sprod-name{font-weight:800;font-size:16.5px;line-height:1.3}
 .sprod-sub{font-size:11.5px;color:var(--ink-3);font-weight:700;margin-top:2px}
@@ -268,8 +269,8 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 .drawer-x{width:36px;height:36px;border:none;background:var(--bg-soft);border-radius:10px;cursor:pointer;font-size:18px}
 .drawer-body{flex:1;overflow-y:auto;padding:16px 20px}
 .ci{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
-.ci .ph{width:56px;height:56px;border-radius:10px;background:var(--bg-soft);flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.ci .ph img{width:100%;height:100%;object-fit:cover}
+.ci .ph{width:56px;height:56px;border-radius:10px;background:#fff;border:1px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ci .ph img{width:100%;height:100%;object-fit:contain}
 .ci .mid{flex:1;min-width:0}
 .ci .nm{font-weight:700;font-size:13.5px}
 .ci .pr{color:var(--ink-3);font-size:12.5px}

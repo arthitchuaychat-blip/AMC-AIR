@@ -104,14 +104,14 @@ h1{font-size:clamp(24px,4vw,36px);font-weight:800;line-height:1.25;letter-spacin
 @media(max-width:640px){.rel-grid{grid-template-columns:1fr 1fr}}
 .rel-card{border:1px solid var(--line);border-radius:13px;overflow:hidden;background:#fff;box-shadow:var(--shadow-sm);transition:.15s;font-size:13.5px;font-weight:700}
 .rel-card:hover{box-shadow:var(--shadow);transform:translateY(-2px)}
-.rel-card img{aspect-ratio:16/10;object-fit:cover;width:100%}
+.rel-card img{aspect-ratio:16/10;object-fit:contain;width:100%;background:#fff;padding:8px;box-sizing:border-box}
 .rel-card .t{padding:10px 12px}
 .rel-card .pr{color:var(--primary);font-weight:800;padding:0 12px 10px;font-size:14px}
 /* product layout */
 .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:start}
 @media(max-width:700px){.pgrid{grid-template-columns:1fr}}
-.pimg{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--bg-soft);aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}
-.pimg img{width:100%;height:100%;object-fit:cover}
+.pimg{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}
+.pimg img{width:100%;height:100%;object-fit:contain;padding:18px;box-sizing:border-box}
 .pimg .noimg{font-size:60px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
 .chips span{font-size:12.5px;font-weight:700;background:var(--bg-soft);border:1px solid var(--line);border-radius:99px;padding:5px 12px;color:var(--ink-2)}
