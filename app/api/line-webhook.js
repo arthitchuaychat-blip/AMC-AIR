@@ -458,7 +458,7 @@ export default async function handler(req, res) {
       const bySeries = {};
       rows2.forEach((x) => {
         const key = `${x.brand || "?"}|${x.series || x.name_th}`;
-        const g = bySeries[key] || (bySeries[key] = { brand: x.brand, series: x.series || `(ไม่มีรุ่น) ${x.name_th}`, n: 0, noPhoto: 0, doms: {}, codesNoPhoto: [] });
+        const g = bySeries[key] || (bySeries[key] = { brand: x.brand, series: x.series || `(ไม่มีรุ่น) ${x.name_th}`, sample: x.name_th, sampleCode: x.code, n: 0, noPhoto: 0, doms: {}, codesNoPhoto: [] });
         g.n++;
         if (!x.photo_url) { g.noPhoto++; if (g.codesNoPhoto.length < 12) g.codesNoPhoto.push(x.code); }
         else { const d = dom(x.photo_url); g.doms[d] = (g.doms[d] || 0) + 1; }
