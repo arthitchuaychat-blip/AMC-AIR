@@ -383,6 +383,69 @@ export default async function handler(req, res) {
       const out = await aiAnswer(conv, q, cfg, !isOpenNow(cfg));
       return res.status(200).json({ ok: !!out.text, ms: Date.now() - t0, question: q, matched: found, answer: out.text, err: out.err });
     }
+    // ?acmedia=import&go=1[&from=0] — นำเข้ารูป/โบรชัวร์ "ทางการ" จาก manifest (src/lib/acOfficialMedia.js) ฝั่งเซิร์ฟเวอร์
+    // ดาวน์โหลดจากเว็บผู้ผลิต → อัปโหลดเข้า storage เรา (ชื่อไฟล์ขึ้นต้น official- ) → ผูกให้ทุกรหัสในรุ่น
+    // ปลอดภัย: manifest ตายตัว แก้จากโค้ดเท่านั้น + ทำซ้ำแล้วข้าม (idempotent) · แบ่งรอบตามเวลาเพราะ Vercel จำกัด 60 วิ
+    if (params.get("acmedia") === "import" && params.get("go") === "1") {
+      const { AC_OFFICIAL_MEDIA, AC_OFFICIAL_BROCHURES } = await import("../src/lib/acOfficialMedia.js");
+      const jobs = [
+        ...AC_OFFICIAL_MEDIA.map((m) => ({ t: "img", m })),
+        ...AC_OFFICIAL_MEDIA.filter((m) => m.brochure && m.series).map((m) => ({ t: "pdf", m: { brand: m.brand, series: m.series, url: m.brochure } })),
+        ...AC_OFFICIAL_BROCHURES.filter((b) => !b.review).map((b) => ({ t: "pdf", m: b })),
+      ];
+      const slug = (s) => String(s || "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40).toLowerCase();
+      const put = async (path, buf, ct) => {
+        const r = await tfetch(`${SB()}/storage/v1/object/photos/${path}`, {
+          method: "POST",
+          headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": ct, "x-upsert": "true" },
+          body: Buffer.from(buf),
+        }, 45000);
+        if (!r.ok) throw new Error(`storage ${r.status}: ${(await r.text()).slice(0, 120)}`);
+        return `${SB()}/storage/v1/object/public/photos/${path}`;
+      };
+      const grab = async (url) => {
+        const r = await tfetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; AMCAIR-fetch/1.0)", Accept: "image/*,application/pdf,*/*" }, redirect: "follow" }, 45000);
+        if (!r.ok) throw new Error(`ต้นทาง ${r.status}`);
+        const ct = r.headers.get("content-type") || "application/octet-stream";
+        return { buf: await r.arrayBuffer(), ct };
+      };
+      const t0 = Date.now(), out = [];
+      let i = Math.max(0, Number(params.get("from")) || 0);
+      for (; i < jobs.length; i++) {
+        if (Date.now() - t0 > 38000) break;                       // เหลือเวลาให้ตอบกลับ
+        const j = jobs[i], who = `${j.m.brand} ${j.m.series || j.m.code}`;
+        try {
+          if (j.t === "img") {
+            const q = j.m.code
+              ? `code=eq.${encodeURIComponent(j.m.code)}`
+              : `kind=eq.ac&brand=eq.${encodeURIComponent(j.m.brand)}&series=eq.${encodeURIComponent(j.m.series)}`;
+            const rs = await tfetch(`${SB()}/rest/v1/materials?${q}&select=code,photo_url`, { headers: sbH() });
+            const rows3 = rs.ok ? await rs.json() : [];
+            if (!rows3.length) { out.push(`SKIP ${who}: ไม่พบรุ่นในคลัง`); continue; }
+            if (rows3.every((x) => /\/official-/.test(x.photo_url || ""))) { out.push(`SKIP ${who}: นำเข้าแล้ว`); continue; }
+            const { buf, ct } = await grab(j.m.img);
+            const ext = /png/i.test(ct) ? "png" : /webp/i.test(ct) ? "webp" : "jpg";
+            const url = await put(`materials/official-${slug(j.m.brand)}-${slug(j.m.series || j.m.code)}.${ext}`, buf, ct);
+            const codes = rows3.map((x) => x.code);
+            const up = await tfetch(`${SB()}/rest/v1/materials?code=in.(${codes.map((c) => `"${String(c).replace(/"/g, "")}"`).join(",")})`, {
+              method: "PATCH", headers: sbH(), body: JSON.stringify({ photo_url: url }),
+            });
+            if (!up.ok) throw new Error(`patch ${up.status}: ${(await up.text()).slice(0, 120)}`);
+            out.push(`OK   ${who}: ${codes.length} รายการ`);
+          } else {
+            const { buf, ct } = await grab(j.m.url);
+            const url = await put(`brochures/official-${slug(j.m.brand)}-${slug(j.m.series)}.pdf`, buf, ct || "application/pdf");
+            const up = await tfetch(`${SB()}/rest/v1/ac_series?on_conflict=brand,name`, {
+              method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" },
+              body: JSON.stringify({ brand: j.m.brand, name: j.m.series, brochure_url: url }),
+            });
+            if (!up.ok) throw new Error(`ac_series ${up.status}: ${(await up.text()).slice(0, 120)}`);
+            out.push(`OK   โบรชัวร์ ${who}`);
+          }
+        } catch (e) { out.push(`FAIL ${who}: ${e?.message || e}`); }
+      }
+      return res.status(200).json({ done: i >= jobs.length, next: i, total: jobs.length, ms: Date.now() - t0, log: out });
+    }
     // ?acimg=1 — สำรวจรูป/โบรชัวร์แอร์รายรุ่น (series): กี่ตัวไม่มีรูป · รูปมาจากโดเมนไหน (เว็บตัวแทน = กลุ่มลายน้ำ) · โบรชัวร์มีไหม
     if (params.get("acimg") === "1") {
       const [mr2, sr2] = await Promise.all([
