@@ -54,14 +54,18 @@ export const AC_OFFICIAL_MEDIA = [
   { brand: "Carrier", series: "Way TGF", img: "https://images.carriercms.com/image/upload/v1676054271/carrier/hvac-thailand/products/light-commercial/cassette/carrier-40BGV-fancoil.jpg" },
   { brand: "Carrier", series: "Way TGV", img: "https://images.carriercms.com/image/upload/v1676054271/carrier/hvac-thailand/products/light-commercial/cassette/carrier-40BGV-fancoil.jpg" },
   { brand: "Carrier", code: "FCU-42TGF0601CP", img: "https://images.carriercms.com/image/upload/v1709218101/carrier/commercial-hvac-asia/products/split-type/42TGF-CP/UC_42TGF.jpg" },
-  { brand: "Carrier", series: "Apollo lll", img: "https://carrierthailand.com/wp-content/uploads/2025/04/Apollo3_RGB-01-scaled.webp", review: true, note: "รูปทางการ Apollo III มีแบบเดียวคือโปสเตอร์ (มีตัวหนังสือบนภาพ) — ผิดกติกา 'ไม่มีข้อความ' ให้เจ้าของตัดสินใจ" },
+  // รูปตัดพื้นขาวสะอาดจากหน้า /apollo-iii/ ของ Carrier เอง (ไฟล์ชื่อ apollo2 เพราะ CMS ใช้ไฟล์เดิม — ตัวเครื่อง 42FGE ตรงรุ่น)
+  // แทนรูปเดิมจาก ttair.co.th ที่มีลายน้ำ "TTAir Engineering" + เบอร์โทร/LINE ID ของร้านคู่แข่งคาดอยู่
+  { brand: "Carrier", series: "Apollo lll", img: "https://carrierthailand.com/wp-content/uploads/2023/03/apollo2_ac.png" },
 
   // ---------- Amena / Eminent / Midea ----------
   { brand: "Amena", code: "WL30B-MNVJM/KC30B-RSVJM", img: "https://www.amena-air.com/assets/uploads/product_domestic/image_th/20250204081345_9BB8B4EC-46BF-49BE-9169-F08115CFC712.jpg" },
   { brand: "Amena", code: "WR18B-MNVJE/RC18B-RSVJE", img: "https://www.amena-air.com/assets/uploads/product_domestic/image_th/20250204075658_3A5B8C0B-9844-463E-B439-4FCD76A50362.jpg" },
   { brand: "Amena", code: "DCC36B-MNVTE/KC36B-RSVTE", img: "https://www.amena-air.com/assets/uploads/product_domestic/image_th/20241108044546_60DC850F-353B-4F0F-AB07-612322ED6EDF.jpg" },
   { brand: "Eminent", code: "AVE60FTU / UVE60F", img: "https://eminent.co.th/wp-content/uploads/2025/02/superkoom.jpg" },
-  { brand: "Midea", code: "MFA-96CRDN1/MOUC-96CDN1-R", img: "https://web-res.midea.com/content/dam/midea-aem/mbt/hvac-goods/midea-products-category/vrfs/vrf-odu/large-splits-r410a-side-discharge-outdoor-unit-series/gallery1.jpg/jcr:content/renditions/cq5dam.web.5000.5000.jpeg", review: true, note: "midea.com มีแต่รูป 'ตัวนอก' (MOUC) ของซีรีส์นี้ ไม่มีรูปตู้ตัวใน MFA-96" },
+  // midea.com มีแต่รูป "ตัวนอก" ของซีรีส์นี้ (ไม่มีรูปตู้ตัวใน MFA-96) — แต่ตรงรุ่น MOUC-96CDN1-R ในรหัสสินค้า
+  // รูปสะอาด พื้นขาว ไม่มีลายน้ำ และดีกว่าปล่อยว่าง
+  { brand: "Midea", code: "MFA-96CRDN1/MOUC-96CDN1-R", img: "https://web-res.midea.com/content/dam/midea-aem/mbt/hvac-goods/midea-products-category/vrfs/vrf-odu/large-splits-r410a-side-discharge-outdoor-unit-series/gallery1.jpg/jcr:content/renditions/cq5dam.web.5000.5000.jpeg", note: "รูปคอนเดนซิ่ง (ตัวนอก) MOUC-96 — เว็บ Midea ไม่มีรูปตู้ตัวใน" },
 ];
 
 // โบรชัวร์เพิ่มเติม (ซีรีส์ที่มีรูปอยู่แล้ว แต่ยังไม่มีโบรชัวร์)
