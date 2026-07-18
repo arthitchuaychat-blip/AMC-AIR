@@ -64,6 +64,17 @@ export const AC_WARRANTY = [
   { brand: "Hisense", series: "Floor", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 3 ปี", conf: "low" },
   { brand: "Hisense", series: "Hisense KC", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี", conf: "medium" },
   { brand: "Hisense", series: "Hisense KD", warranty: "คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี", conf: "low" },
+  // Daikin SkyAir: โบรชัวร์ทางการ 2 เล่มให้เงื่อนไข "คอยล์" ต่างกันจริง — Premium (FHA/FCF) ระบุเฉพาะคอยล์ร้อน CAZ
+  // ส่วน Standard (FHFC/FCFC) ระบุทั้งคอยล์เย็น+ร้อน · ห้ามเติมคอยล์เย็นให้ Premium แม้จะเป็นรุ่นแพงกว่า
+  { brand: "Daikin", series: "Ceiling FHA", warranty: "คอมเพรสเซอร์ 5 ปี · คอยล์ร้อน CAZ 3 ปี · แผง PCB 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี", conf: "high" },
+  { brand: "Daikin", series: "FCF", warranty: "คอมเพรสเซอร์ 5 ปี · คอยล์ร้อน CAZ 3 ปี · แผง PCB 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี", conf: "high" },
+  { brand: "Daikin", series: "Ceiling FHFC", warranty: "คอมเพรสเซอร์ 5 ปี · คอยล์เย็น 3 ปี · คอยล์ร้อน 3 ปี · แผง PCB 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี", conf: "high" },
+  { brand: "Daikin", series: "FCFC", warranty: "คอมเพรสเซอร์ 5 ปี · คอยล์เย็น 3 ปี · คอยล์ร้อน 3 ปี · แผง PCB 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี", conf: "high" },
+  // Mitsubishi SE ในคลังคือ Mr.Slim แขวนใต้ฝ้า (SE-P*AKLT/PE-P*JAKL) ทุกรุ่นต่ำกว่า 60,000 BTU — เกิน 60,000 BTU จะเหลือคอมฯ 1 ปี
+  { brand: "Mitsubishi Electric", series: "SE", warranty: "คอมเพรสเซอร์ 5 ปี · คอยล์เย็น 3 ปี · คอยล์ร้อน 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี", conf: "high" },
+  // AUX MA (ASW-xxDIMA): รูปโฆษณาทางการ AUX สไลด์ Product warranty ไล่ขนาด 9K/13K/18K/24K ตรงกับรหัสในคลัง + ตัวแทนไทย 2 เจ้าตรงกัน
+  // กับดัก: หน้า auxair.com/th/product/ma.html โชว์ 3/4/5 ปี แต่เป็นรหัส 24CAR3DI คนละตลาด ห้ามใช้
+  { brand: "AUX", series: "AUX MA", warranty: "คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี", conf: "medium" },
   // Haier HSU ปนทั้งอินเวอร์เตอร์และฟิกซ์สปีดในซีรีส์เดียว — haier.com/th/service-support/warranty-declaration ให้คนละเงื่อนไข
   // แยกด้วยรหัสรุ่น: CQRC = ฟิกซ์สปีด (คอมฯ 5 ปี) · ที่เหลือ = อินเวอร์เตอร์ (คอมฯ 10 ปี)
   { brand: "Haier", series: "HSU", codeLike: "CQRC", warranty: "คอมเพรสเซอร์ 5 ปี · อะไหล่ 5 ปี · ฟรีค่าแรง 5 ปี", conf: "high" },

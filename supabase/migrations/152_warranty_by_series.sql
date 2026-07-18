@@ -1,5 +1,6 @@
 -- 152: เงื่อนไขรับประกันแอร์รายซีรีส์ (แทนข้อความรวมระดับยี่ห้อจาก mig 140)
--- ที่มา: เว็บ/โบรชัวร์ผู้ผลิต ผ่านการค้น + ตรวจสอบแย้ง 18 ก.ค. 2026 · ซีรีส์ที่ยังไม่มีข้อมูลคงข้อความเดิมไว้
+-- ที่มา: เว็บ/โบรชัวร์/ภาพสเปกผู้ผลิต ผ่านการค้น + ตรวจสอบแย้ง 18 ก.ค. 2026
+-- ซีรีส์ที่ยังไม่มีข้อมูลยืนยันได้ คงข้อความเดิมไว้ (ไม่เดาตัวเลขลงเอกสารลูกค้า)
 
 update materials set warranty='คอมเพรสเซอร์ 5 ปี · อะไหล่ 2 ปี' where kind='ac' and brand='Amena' and series='AMENA WL';
 update materials set warranty='คอมเพรสเซอร์ 10 ปี · อะไหล่ 2 ปี' where kind='ac' and brand='Amena' and series='AMENA WR';
@@ -60,7 +61,17 @@ update materials set warranty='คอมเพรสเซอร์ 12 ปี ·
 update materials set warranty='คอมเพรสเซอร์ 12 ปี · อะไหล่ 3 ปี' where kind='ac' and brand='Hisense' and series='Floor';
 update materials set warranty='คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี' where kind='ac' and brand='Hisense' and series='Hisense KC';
 update materials set warranty='คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี' where kind='ac' and brand='Hisense' and series='Hisense KD';
-update materials set warranty='คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี' where kind='ac' and brand='Hisense' and series='(ไม่มีรุ่น) Hisense LB Series Inverter 24,000 BTU';
+update materials set warranty='คอมเพรสเซอร์ 5 ปี · คอยล์ร้อน CAZ 3 ปี · แผง PCB 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี' where kind='ac' and brand='Daikin' and series='Ceiling FHA';
+update materials set warranty='คอมเพรสเซอร์ 5 ปี · คอยล์ร้อน CAZ 3 ปี · แผง PCB 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี' where kind='ac' and brand='Daikin' and series='FCF';
+update materials set warranty='คอมเพรสเซอร์ 5 ปี · คอยล์เย็น 3 ปี · คอยล์ร้อน 3 ปี · แผง PCB 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี' where kind='ac' and brand='Daikin' and series='Ceiling FHFC';
+update materials set warranty='คอมเพรสเซอร์ 5 ปี · คอยล์เย็น 3 ปี · คอยล์ร้อน 3 ปี · แผง PCB 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี' where kind='ac' and brand='Daikin' and series='FCFC';
+update materials set warranty='คอมเพรสเซอร์ 5 ปี · คอยล์เย็น 3 ปี · คอยล์ร้อน 3 ปี · อะไหล่อื่น 1 ปี · ฟรีค่าแรง 1 ปี' where kind='ac' and brand='Mitsubishi Electric' and series='SE';
+update materials set warranty='คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี' where kind='ac' and brand='AUX' and series='AUX MA';
+update materials set warranty='คอมเพรสเซอร์ 5 ปี · อะไหล่ 5 ปี · ฟรีค่าแรง 5 ปี' where kind='ac' and brand='Haier' and series='HSU' and code like '%CQRC%';
+update materials set warranty='คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี · ฟรีค่าแรง 5 ปี' where kind='ac' and brand='Haier' and series='HSU' and code not like '%CQRC%';
+update materials set warranty='คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี · ฟรีค่าแรง 1 ปี' where kind='ac' and brand='Carrier' and series='TVDB';
+update materials set warranty='คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี · ฟรีค่าแรงซ่อม 3 ปี' where kind='ac' and brand='Carrier' and series='TVEB';
+update materials set warranty='คอมเพรสเซอร์ 12 ปี · อะไหล่ 5 ปี' where code='AS-24TRLB2T';
 update materials set warranty='คอมเพรสเซอร์ 5 ปี · ตัวเครื่อง/อะไหล่ 1 ปี (ไม่รวมค่าแรง ค่าเดินทาง และอะไหล่เพื่อความสวยงาม)' where kind='ac' and brand='LG' and series='Cassette ZTNQ';
 update materials set warranty='คอมเพรสเซอร์ 5 ปี · ตัวเครื่อง/อะไหล่ 1 ปี (ไม่รวมค่าแรง ค่าเดินทาง และอะไหล่เพื่อความสวยงาม)' where kind='ac' and brand='LG' and series='Ceiling ZVNQ';
 update materials set warranty='คอมเพรสเซอร์ 10 ปี · ตัวเครื่อง 1 ปี · อะไหล่ 3 ปี (ไม่รวมค่าแรงและค่าทำระบบน้ำยา) — สำหรับลูกค้าที่ซื้อตั้งแต่ 1 มกราคม 2568' where kind='ac' and brand='LG' and series='VICTORY IKR';
@@ -114,5 +125,5 @@ update materials set warranty='คอมเพรสเซอร์ 10 ปี ·
 update materials set warranty='คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี (เฉพาะซื้อผ่านช่องทางออฟไลน์จากตัวแทนจำหน่ายที่ได้รับแต่งตั้ง — ซื้อออนไลน์ คอมเพรสเซอร์ 5 ปี · อะไหล่ 1 ปี)' where kind='ac' and brand='TCL' and series='TCL SaveIN';
 update materials set warranty='คอมเพรสเซอร์ 10 ปี · อะไหล่ 5 ปี (เฉพาะซื้อผ่านช่องทางออฟไลน์จากตัวแทนจำหน่ายที่ได้รับแต่งตั้ง — ซื้อออนไลน์ คอมเพรสเซอร์ 5 ปี · อะไหล่ 1 ปี)' where kind='ac' and brand='TCL' and series='TCL VOXIN';
 
--- ✅ ตรวจผล: รุ่นที่ยังใช้ข้อความรวมระดับยี่ห้ออยู่
-select brand, series, count(*) n, min(warranty) w from materials where kind='ac' and active group by 1,2 having min(warranty) like '%ตามซีรีส์%' or min(warranty) like '%–%' order by n desc;
+-- ✅ ตรวจผล: รุ่นที่ยังใช้ข้อความรวมระดับยี่ห้ออยู่ (ควรเหลือน้อยที่สุด)
+select brand, series, count(*) n from materials where kind='ac' and active and warranty like '%ตามซีรีส์%' group by 1,2 order by n desc;
