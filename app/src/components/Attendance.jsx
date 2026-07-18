@@ -125,8 +125,8 @@ export default function Attendance({ me }) {
       const advSum = slip ? Number(slip.d_advance) || 0 : advRows.reduce((x, a) => x + (Number(a.amount) || 0), 0);
       const c = computePayslip({ ...me, bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0, advance: advSum }, stp, {});
       const note = slip
-        ? (slip.status === "paid" ? `✅ รอบนี้จ่ายแล้ว · ยอดสุทธิตามสลิปที่บันทึก ${fmtBaht(slip.net)}` : "📝 รอบนี้ HR บันทึกร่างไว้แล้ว — ตัวเลขอาจขยับได้จนถึงวันจ่าย")
-        : "⏳ รอบนี้ยังไม่ถูกบันทึกโดย HR — ตัวเลขเป็นการคำนวณสด อาจขยับได้จนถึงวันจ่าย";
+        ? (slip.status === "paid" ? L(`✅ รอบนี้จ่ายแล้ว · ยอดสุทธิตามสลิปที่บันทึก ${fmtBaht(slip.net)}`, `✅ ဒီကာလ ပေးချေပြီး · အသားတင် ${fmtBaht(slip.net)}`) : L("📝 รอบนี้ HR บันทึกร่างไว้แล้ว — ตัวเลขอาจขยับได้จนถึงวันจ่าย", "📝 HR မူကြမ်းသိမ်းပြီး — ပေးချေရက်အထိ ပြောင်းနိုင်သည်"))
+        : L("⏳ รอบนี้ยังไม่ถูกบันทึกโดย HR — ตัวเลขเป็นการคำนวณสด อาจขยับได้จนถึงวันจ่าย", "⏳ HR မသိမ်းရသေး — အချိန်နှင့်တပြေးညီ တွက်ချက်မှုဖြစ်၍ ပေးချေရက်အထိ ပြောင်းနိုင်သည်");
       setPayDetail({ r: { p: me, st: stp }, c, advRows, settings: hset, period: `${from} ถึง ${to}`, note });
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setPayBusy(false);
@@ -279,7 +279,7 @@ export default function Attendance({ me }) {
         </div>
       </div>
 
-      {payDetail && <PayDetailModal {...payDetail} onClose={() => setPayDetail(null)} />}
+      {payDetail && <PayDetailModal {...payDetail} lang={lang} onClose={() => setPayDetail(null)} />}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );

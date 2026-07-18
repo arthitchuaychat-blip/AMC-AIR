@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-17·แดชบอร์ด: แท็บ 📊 รายงานผู้บริหาร 6 ตัว — อัตราปิดการขาย/ลูกค้า Top+หาย/อายุหนี้ DSO/กำไรตามประเภทงาน/สรุปผู้ขาย/เงินสุทธิพร้อมใช้ (Export ทุกตาราง) v451";
+const BUILD = "2026-07-17·เงินเดือนของฉัน (ละเอียด): รองรับภาษาพม่า — หัวข้อ/คำอธิบายทุกหมวดสลับตามสวิตช์ภาษาของช่าง v452";
 
 function SetupNotice() {
   return (
