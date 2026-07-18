@@ -4,9 +4,10 @@ import Lightbox from "./Lightbox";
 import { UIcon } from "../icons";
 import { fmtNum } from "../lib/format";
 import {
-  fetchExternalFile, uploadMaterialPhoto, setMaterialsPhoto, setMaterialFeatures,
+  fetchExternalFile, uploadMaterialPhoto, uploadBrochureFile, setMaterialsPhoto, setMaterialFeatures,
   listAcSeriesAll, getAcSeries, saveAcSeries, aiDraftSeriesFeatures,
 } from "../lib/api";
+import { AC_OFFICIAL_MEDIA, AC_OFFICIAL_BROCHURES } from "../lib/acOfficialMedia";
 
 // จัดการ "รูปสินค้า + คุณสมบัติ" ของแอร์ทีละรุ่น (ทุกขนาดในรุ่นใช้รูป/คุณสมบัติร่วมกัน)
 // กติการูปของเจ้าของ: รูปสินค้าเดี่ยว พื้นสะอาด ไม่มีลายน้ำ/ข้อความ/โลโก้ร้านอื่น (โลโก้ยี่ห้อบนตัวเครื่องได้)
@@ -99,6 +100,61 @@ export default function AcMediaManager({ mats, onClose, onChanged }) {
     external: groups.filter((g) => g.pstat === "external").length,
     nofeat: groups.filter((g) => !(g.features || "").trim()).length,
   }), [groups]);
+
+  // ---- รูป/โบรชัวร์ "ทางการ" ที่ค้นไว้แล้ว (lib/acOfficialMedia.js) → จับคู่กับของจริงในคลัง ----
+  // entry แบบ series = ใส่ทุกขนาดในรุ่น · แบบ code = ใส่เฉพาะรหัสนั้น
+  const officialTargets = React.useMemo(() => {
+    const out = [];
+    for (const m of AC_OFFICIAL_MEDIA) {
+      if (m.code) {
+        const it = rows.find((r) => r.code === m.code);
+        if (it) out.push({ m, codes: [it.code], label: `${m.brand} · ${it.th || it.code}`, groupKey: (it.series || "").trim() ? `${(it.brand || "").trim()}||${(it.series || "").trim()}` : `item:${it.code}` });
+      } else {
+        const its = rows.filter((r) => (r.brand || "").trim() === m.brand && (r.series || "").trim() === m.series);
+        if (its.length) out.push({ m, codes: its.map((i) => i.code), label: `${m.brand} ${m.series} (${its.length} ขนาด)`, groupKey: `${m.brand}||${m.series}` });
+      }
+    }
+    return out;
+  }, [rows]);
+  const officialAuto = officialTargets.filter((t) => !t.m.review);
+  const brochureAuto = AC_OFFICIAL_BROCHURES.filter((b) => !b.review);
+  const [imp, setImp] = React.useState(null);      // { i, n, label } ระหว่างนำเข้า
+  const [impLog, setImpLog] = React.useState(null); // สรุปผลหลังนำเข้า
+
+  // ดาวน์โหลดผ่านเซิร์ฟเวอร์ → เก็บเข้า storage เรา → ผูกให้ทุกรหัสในเป้าหมาย
+  async function importOne(t) {
+    const file = await fetchExternalFile(t.m.img);
+    if (!/^image\//i.test(file.type || "") && !/\.(jpe?g|png|webp|gif)([?#]|$)/i.test(t.m.img)) throw new Error("ลิงก์ไม่ใช่ไฟล์รูป");
+    const up = await uploadMaterialPhoto(file, t.codes[0]);
+    await setMaterialsPhoto(t.codes, up);
+    applyPhotoLocal(t.codes, up);
+  }
+  async function importBrochure(brand, series, url) {
+    const file = await fetchExternalFile(url);
+    const stored = await uploadBrochureFile(file);
+    let cur = srsMap[`${brand}||${series}`];
+    if (!cur) { try { cur = await getAcSeries(brand, series); } catch { /* ยังไม่มีแถว */ } }
+    await saveAcSeries({ brand, name: series, features: cur?.features || null, brochure_url: stored });
+    setSrsMap((s) => ({ ...s, [`${brand}||${series}`]: { ...(cur || {}), brand, name: series, brochure_url: stored } }));
+    changedRef.current = true;
+  }
+  async function importOfficialAll() {
+    const jobs = [
+      ...officialAuto.map((t) => ({ kind: "img", label: t.label, run: () => importOne(t) })),
+      ...officialAuto.filter((t) => t.m.brochure && t.m.series).map((t) => ({ kind: "pdf", label: `โบรชัวร์ ${t.m.brand} ${t.m.series}`, run: () => importBrochure(t.m.brand, t.m.series, t.m.brochure) })),
+      ...brochureAuto.map((b) => ({ kind: "pdf", label: `โบรชัวร์ ${b.brand} ${b.series}`, run: () => importBrochure(b.brand, b.series, b.url) })),
+    ];
+    if (!await confirmDialog({ title: `นำเข้ารูป/โบรชัวร์ทางการ ${jobs.length} รายการ?`, message: "ระบบจะดาวน์โหลดจากเว็บผู้ผลิตผ่านเซิร์ฟเวอร์ แล้วเก็บถาวรในระบบเรา (ทับรูปเดิมของรุ่นนั้น) — ใช้เวลาสักครู่", confirmText: "เริ่มนำเข้า" })) return;
+    setErr(null); setImpLog(null);
+    const errs = []; let ok = 0;
+    for (let i = 0; i < jobs.length; i++) {
+      setImp({ i: i + 1, n: jobs.length, label: jobs[i].label });
+      try { await jobs[i].run(); ok++; }
+      catch (ex) { errs.push(`${jobs[i].label}: ${ex.message || ex}`); }
+    }
+    setImp(null); setImpLog({ ok, total: jobs.length, errs });
+    onChanged?.();
+  }
 
   function applyPhotoLocal(codes, url) {
     const cs = new Set(codes);
@@ -200,6 +256,34 @@ export default function AcMediaManager({ mats, onClose, onChanged }) {
             คลิกขวารูปบนเว็บยี่ห้อ → <b>Copy image address</b> → กดปุ่ม <b>🔗 วางลิงก์รูป</b> ระบบจะดาวน์โหลดมาเก็บถาวรในระบบเรา แล้วใส่ให้<b>ทุกขนาดในรุ่น</b>ทีเดียว · การแสดงผลบนเว็บจัดกึ่งกลาง-ไม่ครอปให้อัตโนมัติ
           </div>
 
+          {/* รูป/โบรชัวร์ทางการที่ค้นไว้ให้แล้ว — กดปุ่มเดียวนำเข้าทั้งชุด */}
+          {(officialAuto.length > 0 || brochureAuto.length > 0) && (
+            <div style={{ border: "1.5px solid #bbf7d0", background: "#f0fdf4", borderRadius: 12, padding: "10px 12px", marginBottom: 10 }}>
+              <div style={{ fontSize: 12.5, color: "#14532d", lineHeight: 1.6 }}>
+                <b>📥 รูป &amp; โบรชัวร์ทางการที่ค้นไว้แล้ว</b> — จากเว็บผู้ผลิตโดยตรง (ตรวจลิงก์ครบทุกตัวแล้ว)
+                : รูป <b>{officialAuto.length}</b> รุ่น ({fmtNum(officialAuto.reduce((a, t) => a + t.codes.length, 0))} รายการ) · โบรชัวร์ <b>{officialAuto.filter((t) => t.m.brochure).length + brochureAuto.length}</b> รุ่น
+                <br />ระบบจะดาวน์โหลดมา<b>เก็บถาวรในระบบเรา</b> (ไม่ใช่ลิงก์ไปเว็บนอก) แล้วใส่ให้ทุกขนาดในรุ่นอัตโนมัติ
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+                <button className="btn-primary sm" disabled={!!imp || !!busy} onClick={importOfficialAll}>
+                  {imp ? `กำลังนำเข้า ${imp.i}/${imp.n}…` : `📥 นำเข้าทั้งชุด`}
+                </button>
+                {imp && <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{imp.label}</span>}
+                {officialTargets.some((t) => t.m.review) && (
+                  <span style={{ fontSize: 12, color: "#b45309" }}>
+                    ⚠️ {officialTargets.filter((t) => t.m.review).length} รุ่นต้องให้เจ้าของตัดสินใจเอง (ปุ่ม “ใช้รูปที่ค้นไว้” ในรายการ)
+                  </span>
+                )}
+              </div>
+              {impLog && (
+                <div style={{ marginTop: 8, fontSize: 12.5 }}>
+                  <b style={{ color: impLog.errs.length ? "#b45309" : "#15803d" }}>สำเร็จ {impLog.ok}/{impLog.total} รายการ</b>
+                  {impLog.errs.length > 0 && <ul style={{ margin: "4px 0 0 16px", color: "var(--down)" }}>{impLog.errs.map((e, i) => <li key={i}>{e}</li>)}</ul>}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="cat-filter" style={{ marginBottom: 8 }}>
             {chip("all", "ทั้งหมด", groups.length)}
             {chip("nophoto", "❌ ไม่มีรูป/ไม่ครบ", stats.nophoto)}
@@ -240,6 +324,19 @@ export default function AcMediaManager({ mats, onClose, onChanged }) {
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      {officialTargets.filter((t) => t.groupKey === g.key).map((t) => (
+                        <button key={t.m.img} className="btn-ghost sm" disabled={working || !!imp}
+                          style={{ color: "#15803d", borderColor: "#bbf7d0", background: "#f0fdf4" }}
+                          title={`ดึงรูปทางการที่ค้นไว้มาใช้${t.m.note ? "\n" + t.m.note : ""}`}
+                          onClick={async () => {
+                            setBusy(g.key); setErr(null);
+                            try { await importOne(t); flash(`ใส่รูปทางการให้ ${t.label} แล้ว ✓`); }
+                            catch (ex) { setErr(`${t.label}: ${ex.message || ex}`); }
+                            setBusy(null);
+                          }}>
+                          📥 ใช้รูปที่ค้นไว้{t.m.review ? " ⚠️" : ""}
+                        </button>
+                      ))}
                       <button className="btn-ghost sm" disabled={working} onClick={() => searchPhoto(g)} title="เปิดค้นรูปในแท็บใหม่ แล้วก็อปลิงก์รูปกลับมาวาง">🔍 หารูป</button>
                       <button className="btn-ghost sm" disabled={working} onClick={() => pullFromLink(g)}>🔗 วางลิงก์รูป</button>
                       <label className="btn-ghost sm" style={{ cursor: working ? "default" : "pointer", opacity: working ? .6 : 1 }}>

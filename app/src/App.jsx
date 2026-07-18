@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-18·รูปสินค้า: กดดูรูปใหญ่ได้ทุกจุด (หน้าจัดการรูปแอร์/แผงขวา/ฟอร์มแก้ไข + หน้าเว็บ /p) v454";
+const BUILD = "2026-07-18·รูปแอร์ทางการ: ปุ่มนำเข้าทั้งชุด — รูป 41 รุ่น (Central 67 รายการ/Carrier/Haier/Hisense/Gree/AUX/Amena/Eminent) + โบรชัวร์ 19 รุ่น จากเว็บผู้ผลิต เก็บเข้าระบบเรา v455";
 
 function SetupNotice() {
   return (
