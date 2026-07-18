@@ -11,7 +11,11 @@ AC product photos + brochures from manufacturer sites (v455, 2026-07-18). Audit 
 
 **Manifest** `app/src/lib/acOfficialMedia.js`: `AC_OFFICIAL_MEDIA` (match by `series` = all sizes, or `code` = one model) + `AC_OFFICIAL_BROCHURES`. `review:true` = don't auto-import, owner decides. All 66 URLs live-verified 2026-07-18.
 
-**Import path** (AcMediaManager "📥 นำเข้าทั้งชุด" + per-group "📥 ใช้รูปที่ค้นไว้"): `fetchExternalFile` → `/api/fetch-file` (server-side, office roles only, 15MB cap, accepts http://) → `uploadMaterialPhoto`/`uploadBrochureFile` → our Supabase storage → `setMaterialsPhoto`/`saveAcSeries`. **Never hotlink**: centralair.co.th serves http only (broken cert → mixed-content block) and external links rot.
+**Two import paths** — both store files in OUR bucket, never hotlink (centralair.co.th is http-only → mixed-content block; external links rot):
+1. UI: AcMediaManager "📥 นำเข้าทั้งชุด" / per-group "📥 ใช้รูปที่ค้นไว้" → `fetchExternalFile` → `/api/fetch-file` (office roles, 15MB cap) → `uploadMaterialPhoto`/`uploadBrochureFile` → `setMaterialsPhoto`/`saveAcSeries`.
+2. **Server-side (ใช้จริงรอบแรก)**: `?acmedia=import&go=1&from=<n>` on line-webhook — service role, downloads + uploads + patches DB itself, **time-sliced** (returns `next` cursor; ~8-20 jobs per 40s call, 5 calls for 60 jobs) and **idempotent** via the `official-` filename prefix. Use this when the owner shouldn't have to click through the UI.
+
+**RAN 2026-07-18: 60/60 jobs OK, zero failures.** Result: 0 AC models without a photo (was 74), all dealer-watermarked photos replaced (ttair/dasintergroup/bbairtrading now ~0-4 leftovers), 277 photos on our own storage, brochure gaps 43 → 24 series.
 
 **Audit result 2026-07-18** (855 AC models / 122 series): ~700 already on manufacturer CDNs (daikin.co.th, mitsubishi-kyw, images.carriercms, images.samsung, lg.com, tcl.com, web-res.midea, image.haier). Fixed: 74 models with no photo (Central 67) + ~110 on dealer hosts (dasintergroup=Haier/Hisense/Gree, ttair=Carrier Apollo III, bbairtrading=Hisense KD, makewebeasy=Star aire).
 
