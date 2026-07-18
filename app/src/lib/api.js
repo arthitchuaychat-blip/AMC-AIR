@@ -41,10 +41,22 @@ function enrich(m, catMap) {
   };
 }
 
+// ---------- ข้อมูลค่าจ้าง/เลขบัตร (hr_pay — mig 154) ----------
+// แยกออกจาก profiles เพราะ RLS ล็อกรายคอลัมน์ไม่ได้ · RLS ของ hr_pay = เจ้าตัว + admin/exec/hr/finance
+// คืน null = ยังไม่ได้รัน migration 154 → ให้ผู้เรียกใช้คอลัมน์เดิมใน profiles ต่อไปก่อน
+async function _payByUser(ids) {
+  let q = supabase.from("hr_pay").select("user_id,pay_type,base_pay,ot_rate,sso,citizen_id");
+  if (ids?.length) q = q.in("user_id", ids);
+  const { data, error } = await q;
+  if (error) return null;
+  return Object.fromEntries((data || []).map((r) => { const { user_id, ...rest } = r; return [user_id, rest]; }));
+}
+
 export async function getProfile() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  let { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  if (data) { const pay = await _payByUser([user.id]); if (pay) data = { ...data, ...(pay[user.id] || {}) }; }
   return data || { id: user.id, email: user.email, role: "tech", name: user.email };
 }
 
@@ -3631,14 +3643,31 @@ export async function listHrStaff() {
   ]);
   // pre-130 fallback — ยังไม่มีคอลัมน์เลขบัตรประชาชน
   if (pr.error && /citizen_id/i.test(pr.error.message || "")) pr = await supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso").order("name");
+  // post-154 fallback — คอลัมน์ค่าจ้างถูกย้ายออกจาก profiles แล้ว
+  if (pr.error && /(base_pay|ot_rate|pay_type|sso)/i.test(pr.error.message || "")) pr = await supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url").order("name");
   if (pr.error) throw pr.error;
   const subIds = new Set((tm.data || []).filter((t) => t.type === "sub").map((t) => t.id));
+  // ข้อมูลค่าจ้างมาจาก hr_pay (RLS กันคนนอก) — คนที่ไม่มีสิทธิ์จะได้เฉพาะแถวของตัวเอง
+  const pay = await _payByUser((pr.data || []).map((p) => p.id));
   // permanent staff only (drop subcontractor-team members); position label follows the Settings role
-  return (pr.data || []).filter((p) => !subIds.has(p.team)).map((p) => ({ ...p, department: posLabel(p) }));
+  return (pr.data || []).filter((p) => !subIds.has(p.team))
+    .map((p) => ({ ...p, ...(pay ? (pay[p.id] || {}) : {}), department: posLabel(p) }));
 }
+// แยกฟิลด์: ข้อมูลค่าจ้าง/เลขบัตร → hr_pay (mig 154) · ที่เหลือ (กะ/แผนก/วันเริ่มงาน) → profiles
+const _PAY_FIELDS = ["pay_type", "base_pay", "ot_rate", "sso", "citizen_id"];
 export async function updateHrProfile(id, fields) {
-  const { error } = await supabase.from("profiles").update(fields).eq("id", id);
-  if (error) throw error;
+  const payFields = {}, profFields = {};
+  Object.entries(fields || {}).forEach(([k, v]) => { (_PAY_FIELDS.includes(k) ? payFields : profFields)[k] = v; });
+  if (Object.keys(payFields).length) {
+    const { error } = await supabase.from("hr_pay").upsert({ user_id: id, ...payFields, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    // ยังไม่รัน mig 154 → เขียนลงคอลัมน์เดิมใน profiles ไปก่อน
+    if (error) Object.assign(profFields, payFields);
+    else await logAudit({ action: "update", target_type: "hr_pay", target_no: id, reason: "แก้ข้อมูลค่าจ้าง: " + Object.keys(payFields).join(", ") }).catch(() => {});
+  }
+  if (Object.keys(profFields).length) {
+    const { error } = await supabase.from("profiles").update(profFields).eq("id", id);
+    if (error) throw error;
+  }
 }
 
 // admin/HR manually set a person's check-in/out for a day (correction). times = ISO or null.
@@ -3940,7 +3969,9 @@ export async function syncCashEntriesFromDocs() {
     supabase.from("customers").select("id,name"),
     supabase.from("teams").select("id,name"),
     _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows })), // ถ้าอ่านไม่ครบ sync จะสร้างซ้ำ
-    supabase.from("profiles").select("id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0),
+    // ฐานเงินเดือนพนักงานประจำ (ประมาณการเงินออก) — อยู่ที่ hr_pay ตั้งแต่ mig 154 · fallback ไป profiles ถ้ายังไม่รัน
+    supabase.from("hr_pay").select("user_id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0)
+      .then((r) => (r.error ? supabase.from("profiles").select("id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0) : { data: (r.data || []).map((x) => ({ id: x.user_id, base_pay: x.base_pay })) })),
     // confirmed subcontractor labor not yet fully covered by a payout = "ค่าแรงรอจ่าย"
     _fetchAll((f, t) => supabase.from("job_orders").select("job_no,assigned_team,labor_total,labor_paid_amt,labor_confirmed_at,scheduled_at,created_at", { count: "exact" }).eq("labor_confirmed", true).gt("labor_total", 0).order("job_no").range(f, t)).then((rows) => ({ data: rows })),
     // ใบเบิกจ่าย (เจ้าของกระแสเงินสดฝั่งจ่าย: จ่ายจริง + ประมาณการยอดค้าง) — mig 112
