@@ -12,7 +12,9 @@ const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#08
 export default function CustomerFormModal({ initial, onClose, onSaved }) {
   const [cust, setCust] = React.useState(() => seedCust(initial));
   const [contacts, setContacts] = React.useState(() => initial?.contacts?.length ? initial.contacts.map((x) => ({ name: x.name || "", phone: x.phone || "", role: x.role || "" })) : [{ name: initial?.name || "", phone: "", role: "" }]);
-  const [sites, setSites] = React.useState(() => initial?.sites?.length ? initial.sites.map((x) => ({ site_name: x.site_name || "", contact_name: x.contact_name || "", phone: x.phone || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }]);
+  // ⚠️ ต้องพก id ของไซต์เดิมไปด้วย — saveCustomer ใช้ id ตัดสินว่า "แก้แถวเดิม" ไม่ใช่ลบทิ้งสร้างใหม่
+  // (ถ้า id หาย เอกสารเก่าทุกใบจะหลุดจากไซต์ เพราะ FK เป็น on delete set null)
+  const [sites, setSites] = React.useState(() => initial?.sites?.length ? initial.sites.map((x) => ({ id: x.id, site_name: x.site_name || "", contact_name: x.contact_name || "", phone: x.phone || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }]);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState(null);
 

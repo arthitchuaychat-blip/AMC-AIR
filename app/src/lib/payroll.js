@@ -18,14 +18,19 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
   const days = [];   // รายละเอียดรายวัน — ให้หน้าเงินเดือนกดดูที่มาของทุกช่องได้ (OT วันไหน/สายวันไหน/ขาดวันไหน ฯลฯ)
   for (let d = hrParseYmd(from); d <= hrParseYmd(to); d.setDate(d.getDate() + 1)) {
     const k = hrYmd(d);
-    const lv = leaveDaySet[emp.id]?.[k];
+    const lvRaw = leaveDaySet[emp.id]?.[k];
+    // ⚠️ นับวันลาเฉพาะ "วันทำงานของคนนั้น" เท่านั้น — ใบลาที่คร่อมเสาร์-อาทิตย์/วันหยุดบริษัท
+    // ตอนยื่นคิด days จากวันทำงานจริงอยู่แล้ว (leaveDays ใน lib/hr.js) ถ้าตรงนี้นับทุกวันปฏิทิน
+    // ลาไม่รับค่าแรง ศุกร์→จันทร์ จะกลายเป็น 4 วันแทน 2 วัน = หักเงินสองเท่า
+    const isWork = isWorkday(k, emp.work_pattern || "mon_sat", emp.sat_group, holSet);
+    const lv = lvRaw && isWork ? lvRaw : null;
     if (lv) {
       const frac = leaveFrac(lv);
       leaveDays += frac;
       if (lv.t === "unpaid") unpaidLeave += frac;   // ลาไม่รับค่าแรง → หักเงินเสมอ (ผ่าน overLeave)
       if (!lv.h) { days.push({ d: k, kind: "leave", lt: lv.t, frac: r2(frac) }); continue; } // ลาเต็มวัน — ไม่นับเข้างาน/ขาดของวันนั้น
     }
-    if (!isWorkday(k, emp.work_pattern || "mon_sat", emp.sat_group, holSet)) {
+    if (!isWork) {
       // มาทำงานวันหยุด — คิดค่าวันหยุดตามกฎหมาย (ม.62–63): แยกชั่วโมงเป็น 8 ชม.แรก กับส่วนเกิน (OT วันหยุด)
       const a = attByUserDay[emp.id]?.[k];
       if (a?.check_in_at) {

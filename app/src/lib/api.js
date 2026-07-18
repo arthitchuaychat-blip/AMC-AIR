@@ -1155,9 +1155,20 @@ export async function saveCustomer(cust, contacts, sites) {
   await supabase.from("customer_contacts").delete().eq("customer_id", id);
   const cRows = contacts.filter((x) => (x.name || x.phone)).map((x) => ({ customer_id: id, name: x.name?.trim() || null, phone: x.phone?.trim() || null, role: x.role?.trim() || null }));
   if (cRows.length) { const e = (await supabase.from("customer_contacts").insert(cRows)).error; if (e) throw e; }
-  await supabase.from("customer_sites").delete().eq("customer_id", id);
-  const sRows = sites.filter((x) => (x.site_name || x.address || x.contact_name || x.phone || x.map_url)).map((x) => ({ customer_id: id, site_name: x.site_name?.trim() || null, address: x.address?.trim() || null, map_url: x.map_url?.trim() || null, contact_name: x.contact_name?.trim() || null, phone: x.phone?.trim() || null }));
-  if (sRows.length) { const e = (await supabase.from("customer_sites").insert(sRows)).error; if (e) throw e; }
+  // ---- ไซต์งาน: อัปเดตรายแถว ห้ามลบทิ้งแล้วสร้างใหม่ ----
+  // เอกสารทุกชนิด (BOQ/ใบเสนอ/ใบส่งของ/ใบเสร็จ/ใบงาน/ใบวางบิล) อ้าง site_id แบบ on delete set null
+  // ⇒ ถ้าลบแถวไซต์ เอกสารเก่า "ลืมไซต์" ถาวรกู้ไม่ได้ แค่เพราะแก้เบอร์โทรผู้ติดต่อ
+  const keep = sites.filter((x) => (x.site_name || x.address || x.contact_name || x.phone || x.map_url));
+  const row = (x) => ({ customer_id: id, site_name: x.site_name?.trim() || null, address: x.address?.trim() || null, map_url: x.map_url?.trim() || null, contact_name: x.contact_name?.trim() || null, phone: x.phone?.trim() || null });
+  const keptIds = keep.map((x) => x.id).filter(Boolean);
+  // ลบเฉพาะไซต์ที่ผู้ใช้เอาออกจากฟอร์มจริง ๆ
+  let delQ = supabase.from("customer_sites").delete().eq("customer_id", id);
+  if (keptIds.length) delQ = delQ.not("id", "in", `(${keptIds.join(",")})`);
+  { const e = (await delQ).error; if (e) throw e; }
+  for (const s of keep) {
+    if (s.id) { const e = (await supabase.from("customer_sites").update(row(s)).eq("id", s.id)).error; if (e) throw e; }
+    else { const e = (await supabase.from("customer_sites").insert(row(s))).error; if (e) throw e; }
+  }
   return id;
 }
 
