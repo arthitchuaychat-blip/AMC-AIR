@@ -95,11 +95,15 @@ export function computePayslip(emp, st, opt = {}) {
   const gross = base + otPay + holPay + bonus;
   // เบิกล่วงหน้ามากกว่าเงินที่เหลือรับ → เดิมสุทธิติดลบ แล้วระบบปิดใบเบิกทั้งหมดว่า "หักแล้ว" หนี้ส่วนเกินหายไปเฉย ๆ
   // ⇒ หักได้ไม่เกินยอดที่เหลือจริง · ส่วนที่หักไม่ไหวส่งกลับไปเป็น advanceCarry ให้ยกไปหักรอบถัดไป
-  const dedBefore = dLate + dAbsent + dLeave + dSso + otherDeduct;
+  // ภาษีหัก ณ ที่จ่าย ภ.ง.ด.1 — ยอดคงที่ต่อเดือนที่บัญชีเคาะ (mig 161) ยังไม่คิดขั้นบันไดอัตโนมัติ
+  const dTax = Number(emp.tax_wht) || 0;
+  // ต้องอยู่ใน dedBefore ไม่ใช่บวกท้าย ded — เพื่อให้เพดานหักเบิกล่วงหน้า (advCap) ลดลงตาม
+  // คือหักเบิกล่วงหน้าได้ไม่เกินเงินที่เหลือ "หลังหักภาษีแล้ว" จริง ๆ
+  const dedBefore = dLate + dAbsent + dLeave + dSso + dTax + otherDeduct;
   const advCap = Math.max(0, gross - dedBefore);
   const dAdvanceApplied = Math.min(dAdvance, advCap);
   const advanceCarry = r0(dAdvance - dAdvanceApplied);   // > 0 = ยังค้าง ต้องยกไปรอบหน้า
   const ded = dedBefore + dAdvanceApplied;
-  return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso,
+  return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso, dTax,
     dAdvance: dAdvanceApplied, advanceCarry, bonus, otherDeduct, gross, ded, net: r0(gross - ded) };
 }

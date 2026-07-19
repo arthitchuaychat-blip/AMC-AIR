@@ -871,6 +871,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [advRowsByUser, setAdvRowsByUser] = React.useState({}); // user_id → [advance rows] ไว้กางดูรายละเอียด
   const [detailFor, setDetailFor] = React.useState(null); // แถวที่กดดูรายละเอียดรายวัน (r)
   const [pendingOt, setPendingOt] = React.useState([]);   // โหมดรับรอง OT: วันที่มี OT แต่ยังไม่กดรับรองในรอบนี้ — กันลืมแล้วพนักงานเสีย OT เงียบ ๆ
+  const [noOut, setNoOut] = React.useState([]);           // วันที่เช็คอินแล้วไม่มีเวลาออก ทั้งรอบ — กันทั้งจ่ายเกิน (รายวัน) และจ่ายขาด (ค่าวันหยุด)
+  const [attEdit, setAttEdit] = React.useState(null);     // { p, a, day } → เปิดโมดัลใส่เวลาออกจากแบนเนอร์ได้เลย
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
   const [company, setCompany] = React.useState({});
@@ -897,6 +899,11 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       if (settings.otNeedsApproval) att.forEach((a) => { if (!a.check_in_at || a.ot_ok) return; const s = dayStat(a, settings); if (s.otHours > 0) pend.push({ a, s }); });
       pend.sort((x, y) => (x.a.work_date < y.a.work_date ? -1 : 1));
       setPendingOt(pend);
+      // วันที่เช็คอินแล้วไม่มีเวลาออก — สแกน "ทั้งรอบ" ไม่ใช่ 7 วันหลังแบบแบนเนอร์ในแท็บวันนี้
+      const nOut = att.filter((a) => a.check_in_at && !a.check_out_at)
+        .map((a) => ({ a, name: staff.find((p) => p.id === a.user_id)?.name || a.user_id }))
+        .sort((x, y) => (x.a.work_date < y.a.work_date ? -1 : 1));
+      setNoOut(nOut);
       const leaveDaySet = buildLeaveDaySet(leaves, from, to); const yr = ym.slice(0, 4);
       const quota = settings.quota || DEFAULT_HR_SETTINGS.quota;
       // ลาเกินโควตา: หักเฉพาะ "ส่วนเกินที่เกิดขึ้นในรอบนี้" = (สะสมถึงปลายรอบ เกินโควตาเท่าไหร่) − (สะสมถึงก่อนต้นรอบ เกินอยู่แล้วเท่าไหร่) แยกรายประเภท
@@ -926,7 +933,20 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   }
   React.useEffect(() => { load(); }, [ym, settings]); // settings มาช้ากว่าแท็บได้ — โหลดใหม่เมื่อค่าเวลางาน/โหมด OT มาถึง
 
-  const calcOf = (r) => computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0 }, r.st, {});
+  // ⚠️ รอบที่จ่ายแล้ว = ประวัติ ต้องอ่านจากสลิปที่บันทึกไว้ ห้ามคำนวณใหม่
+  //    ไม่งั้นแก้กติกาการนับทีไร ตัวเลขเดือนที่จ่ายไปแล้วขยับตาม พนักงานเปิดสลิปเก่าแล้วเลขไม่ตรงกับเงินที่ได้รับจริง
+  const frozen = (s) => ({
+    monthly: (s.pay_type || "monthly") === "monthly",
+    base: Number(s.base) || 0, otHours: (Number(s.ot_min) || 0) / 60, otPay: Number(s.ot_pay) || 0,
+    holPay: Number(s.hol_pay) || 0, holNormHours: 0, holOtHours: 0,
+    dLate: Number(s.d_late) || 0, dAbsent: Number(s.d_absent) || 0, dLeave: Number(s.d_leave) || 0,
+    dSso: Number(s.d_sso) || 0, dTax: Number(s.d_tax) || 0, dAdvance: Number(s.d_advance) || 0, advanceCarry: 0,
+    bonus: Number(s.bonus) || 0, otherDeduct: Number(s.other_deduct) || 0,
+    gross: (Number(s.base) || 0) + (Number(s.ot_pay) || 0) + (Number(s.hol_pay) || 0) + (Number(s.bonus) || 0),
+    ded: 0, net: Number(s.net) || 0, _frozen: true,
+  });
+  const calcOf = (r) => (r.slip?.status === "paid" ? frozen(r.slip)
+    : computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0 }, r.st, {}));
   // ---- export CSV ราชการ (BOM นำหน้าให้ Excel อ่านไทยถูก) ----
   const dlCsv = (name, rowsArr) => { const csv = "﻿" + rowsArr.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = name; a.click(); };
   function exportSso() {
@@ -938,8 +958,10 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     flash("ดาวน์โหลดไฟล์ ปกส. แล้ว ✓ (เลขบัตร ปชช. เติมได้ในแท็บ กะ & ตั้งค่า)");
   }
   function exportPnd() {
-    dlCsv(`pnd1-${ym}.csv`, [["ลำดับ", "ชื่อ-สกุล", "เลขบัตรประชาชน", "เงินได้รอบนี้ (ก่อนหัก)", "ภาษีหัก ณ ที่จ่าย (ให้บัญชีกรอก)"],
-      ...payable.map((r, i) => { const c = calcOf(r); return [i + 1, r.p.name || r.p.email, r.p.citizen_id || "", c.gross, ""]; })]);
+    const rowsP = payable.map((r, i) => { const c = calcOf(r); return [i + 1, r.p.name || r.p.email, r.p.citizen_id || "", c.gross, c.dTax || 0, c.net]; });
+    // ไม่มีใครตั้งยอดภาษีเลย → บอกตรง ๆ ว่าไฟล์จะเว้นช่องภาษีว่าง ดีกว่าปล่อยให้เข้าใจว่าไม่มีใครต้องเสีย
+    if (!rowsP.some((x) => Number(x[4]) > 0)) flash("ยังไม่ได้ตั้งยอดภาษีหัก ณ ที่จ่ายรายคน (แท็บ กะ & ตั้งค่า) — ช่องภาษีในไฟล์จะเป็น 0", true);
+    dlCsv(`pnd1-${ym}.csv`, [["ลำดับ", "ชื่อ-สกุล", "เลขบัตรประชาชน", "เงินได้รอบนี้ (ก่อนหัก)", "ภาษีหัก ณ ที่จ่าย", "จ่ายสุทธิ"], ...rowsP]);
     flash("ดาวน์โหลดสรุปยื่น ภงด.1 แล้ว ✓");
   }
   // ---- ส่งสลิปเงินเดือนเข้าแชตส่วนตัว (DM) รายคน — การ์ดรูปเหมือนสลิปพิมพ์ + สลิปโอนของรอบ ----
@@ -956,7 +978,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         ${line(`ค่าทำงานวันหยุด (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`, c.holPay)}
         ${line("โบนัส/เบี้ยเลี้ยง", c.bonus)}
         ${line("หักมาสาย", c.dLate, 1)}${line("หักขาดงาน", c.dAbsent, 1)}${line("หักลาเกินโควต้า/ลาไม่รับค่าแรง", c.dLeave, 1)}
-        ${line("ประกันสังคม", c.dSso, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
+        ${line("ประกันสังคม", c.dSso, 1)}${line("ภาษีหัก ณ ที่จ่าย", c.dTax, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
         <tr><td style="padding:8px 10px;border-top:2px solid #0ea5e9;font-weight:800">รับสุทธิ</td><td style="padding:8px 12px;border-top:2px solid #0ea5e9;text-align:right;font-weight:800;font-size:16px;color:#0a6b3d">${fmtBaht(c.net)}</td></tr>
       </table></div>`;
     const host = document.createElement("div"); host.style.cssText = "position:fixed;left:-99999px;top:0;background:#fff;"; host.innerHTML = html; document.body.appendChild(host);
@@ -989,7 +1011,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         return { period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
           base: c.base, ot_pay: c.otPay, hol_pay: c.holPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
           late_min: r.st.lateMin, ot_min: r.st.otMin, d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
-          bonus: c.bonus, other_deduct: c.otherDeduct, net: c.net, status: markPaid ? "paid" : "draft" };
+          bonus: c.bonus, other_deduct: c.otherDeduct, d_tax: c.dTax || 0, net: c.net, status: markPaid ? "paid" : "draft" };
       });
       await savePayslips(rows);
       if (markPaid) {
@@ -1055,6 +1077,27 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           <button className="btn-ghost sm" disabled={!payable.length} title="สรุปเงินได้รอบเดือนสำหรับยื่น ภงด.1 (CSV)" onClick={exportPnd}>⬇ ภงด.1</button>
         </div>
       </div>
+      {!loading && noOut.length > 0 && paidStatus !== "paid" && (
+        <div style={{ border: "1.5px solid #dc2626", background: "#fef2f2", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, color: "#b91c1c", marginBottom: 4 }}>
+            ⏰ ยังไม่มีเวลาออก {noOut.length} วันในรอบนี้ — กดที่วันเพื่อใส่เวลาออกก่อนปิดรอบ
+          </div>
+          <div className="jo-dim" style={{ marginBottom: 6 }}>
+            วันเหล่านี้ระบบยังนับว่า “มาทำงานเต็มวัน” — พนักงานรายวันจะได้ค่าแรงเต็มทั้งที่อาจอยู่ไม่ครบ
+            และถ้าเป็นวันหยุด ค่าทำงานวันหยุดจะถูกคิดเป็น 0 (พนักงานเสียเงินฟรี)
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {noOut.map((x) => (
+              <button key={x.a.user_id + x.a.work_date} className="cat-chip" style={{ borderColor: "#fca5a5", color: "#b91c1c" }}
+                onClick={() => setAttEdit({ p: staff.find((s) => s.id === x.a.user_id) || { id: x.a.user_id, name: x.name }, a: x.a, day: x.a.work_date })}>
+                {x.name} · {x.a.work_date.slice(5)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {attEdit && <AttEditModal day={attEdit.day} row={{ p: attEdit.p, a: attEdit.a }} flash={flash}
+        onClose={() => setAttEdit(null)} onSaved={() => { setAttEdit(null); load(); }} />}
       {!loading && pendingOt.length > 0 && paidStatus !== "paid" && (
         <div style={{ border: "1.5px solid #f59e0b", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
@@ -1080,7 +1123,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       {loading ? <div className="empty">กำลังคำนวณ…</div> : payable.length === 0 ? <div className="empty">ยังไม่มีพนักงานที่ตั้งฐานเงินเดือน — ไปตั้งที่แท็บ “กะ & ตั้งค่า”</div> : (
         <div style={{ overflowX: "auto" }}>
           <table className="hr-table pay-table">
-            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>ค่าวันหยุด</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>หักเบิกล่วงหน้า</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
+            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>ค่าวันหยุด</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>ภาษี</th><th>หักเบิกล่วงหน้า</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
             <tbody>
               {payable.map((r) => { const c = calcOf(r); const openD = { onClick: () => setDetailFor(r), style: { cursor: "zoom-in" }, title: "กดดูรายละเอียดรายวัน" }; return (
                 <tr key={r.p.id}>
@@ -1092,6 +1135,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                   <td className={c.dAbsent ? "hr-bad" : ""} {...openD}>{c.dAbsent ? "−" + fmtBaht(c.dAbsent) : "—"}</td>
                   <td className={c.dLeave ? "hr-bad" : ""} {...openD}>{c.dLeave ? "−" + fmtBaht(c.dLeave) : "—"}</td>
                   <td className={c.dSso ? "hr-bad" : ""} {...openD}>{c.dSso ? "−" + fmtBaht(c.dSso) : "—"}</td>
+                  <td className={c.dTax ? "hr-bad" : ""} {...openD}>{c.dTax ? "−" + fmtBaht(c.dTax) : "—"}</td>
                   <td className={c.dAdvance ? "hr-bad" : ""} {...openD}>{c.dAdvance ? "−" + fmtBaht(c.dAdvance) : "—"}</td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
@@ -1103,7 +1147,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                 </tr>
               ); })}
             </tbody>
-            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={10} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td><td /></tr></tfoot>
+            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={11} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td><td /></tr></tfoot>
           </table>
         </div>
       )}
@@ -1137,6 +1181,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
               {c.dLeave > 0 && <tr><td>หักลาเกินสิทธิ์/ลาไม่รับค่าแรง</td><td className="r">−{fmtBaht(c.dLeave)}</td></tr>}
               {c.dSso > 0 && <tr><td>ประกันสังคม 5%</td><td className="r">−{fmtBaht(c.dSso)}</td></tr>}
               {c.dAdvance > 0 && <tr><td>หักเบิกเงินล่วงหน้า</td><td className="r">−{fmtBaht(c.dAdvance)}</td></tr>}
+              {c.dTax > 0 && <tr><td>ภาษีหัก ณ ที่จ่าย</td><td className="r">−{fmtBaht(c.dTax)}</td></tr>}
               {c.otherDeduct > 0 && <tr><td>หักอื่นๆ</td><td className="r">−{fmtBaht(c.otherDeduct)}</td></tr>}
               <tr className="ps-sub"><td>รวมรายการหัก</td><td className="r">−{fmtBaht(c.ded)}</td></tr>
               <tr className="ps-net"><td>เงินได้สุทธิ</td><td className="r">{fmtBaht(c.net)}</td></tr>
@@ -1208,7 +1253,8 @@ function PayRow({ p, onSave }) {
   const [otRate, setOtRate] = React.useState(p.ot_rate ?? 0);
   const [sso, setSso] = React.useState(!!p.sso);
   const [cid, setCid] = React.useState(p.citizen_id || "");
-  React.useEffect(() => { setPayType(p.pay_type || "monthly"); setBasePay(p.base_pay ?? 0); setOtRate(p.ot_rate ?? 0); setSso(!!p.sso); setCid(p.citizen_id || ""); }, [p.pay_type, p.base_pay, p.ot_rate, p.sso, p.citizen_id]);
+  const [taxWht, setTaxWht] = React.useState(p.tax_wht ?? 0);   // ภาษีหัก ณ ที่จ่ายต่อเดือน (ภ.ง.ด.1) ที่บัญชีเคาะ
+  React.useEffect(() => { setPayType(p.pay_type || "monthly"); setBasePay(p.base_pay ?? 0); setOtRate(p.ot_rate ?? 0); setSso(!!p.sso); setCid(p.citizen_id || ""); setTaxWht(p.tax_wht ?? 0); }, [p.pay_type, p.base_pay, p.ot_rate, p.sso, p.citizen_id, p.tax_wht]);
   // Thai law: OT rate = salary ÷ 30 ÷ 8 × 1.5
   const calcAutoOt = (bp) => Math.round((Number(bp) / 30 / 8) * 1.5 * 100) / 100;
   const saveBase = (val) => {
@@ -1241,6 +1287,10 @@ function PayRow({ p, onSave }) {
       <label className="hr-sso"><input type="checkbox" checked={sso} onChange={(e) => { setSso(e.target.checked); onSave({ sso: e.target.checked }); }} /> ประกันสังคม</label>
       <input className="inp" style={{ width: 150 }} placeholder="เลขบัตร ปชช." title="ใช้ออกไฟล์ประกันสังคม (สปส.1-10) และสรุปยื่น ภงด.1 (ต้องรัน migration 130)" value={cid}
         onChange={(e) => setCid(e.target.value)} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (p.citizen_id || "")) onSave({ citizen_id: v || null }); }} />
+      {/* ยอดภาษีที่บัญชีเคาะต่อเดือน — ระบบหักให้ในสลิปและเติมลงไฟล์ ภ.ง.ด.1 เอง (mig 161) */}
+      <span className="inp inp-unit" style={{ width: 140 }} title="ภาษีหัก ณ ที่จ่าย (ภ.ง.ด.1) ต่อเดือน ที่บัญชีเคาะ — 0 = ไม่ถึงเกณฑ์เสียภาษี"><span className="unit-pre">ภาษี ฿</span>
+        <input type="number" min="0" value={taxWht} onChange={(e) => setTaxWht(e.target.value)}
+          onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (Number(p.tax_wht) || 0)) onSave({ tax_wht: v }); }} /><span className="unit-suf">/ด.</span></span>
     </div>
   );
 }

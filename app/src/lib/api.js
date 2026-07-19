@@ -44,10 +44,12 @@ function enrich(m, catMap) {
 // ---------- ข้อมูลค่าจ้าง/เลขบัตร (hr_pay — mig 154) ----------
 // แยกออกจาก profiles เพราะ RLS ล็อกรายคอลัมน์ไม่ได้ · RLS ของ hr_pay = เจ้าตัว + admin/exec/hr/finance
 // คืน null = ยังไม่ได้รัน migration 154 → ให้ผู้เรียกใช้คอลัมน์เดิมใน profiles ต่อไปก่อน
+const _HR_PAY_COLS = "user_id,pay_type,base_pay,ot_rate,sso,citizen_id,tax_wht";
 async function _payByUser(ids) {
-  let q = supabase.from("hr_pay").select("user_id,pay_type,base_pay,ot_rate,sso,citizen_id");
-  if (ids?.length) q = q.in("user_id", ids);
-  const { data, error } = await q;
+  const build = (cols) => { let q = supabase.from("hr_pay").select(cols); if (ids?.length) q = q.in("user_id", ids); return q; };
+  let { data, error } = await build(_HR_PAY_COLS);
+  // ยังไม่รัน mig 161 → ถอย tax_wht ออก ไม่งั้นหน้า HR/เงินเดือนของฉันพังทั้งหน้า
+  if (error && /tax_wht/i.test(error.message || "")) ({ data, error } = await build(_HR_PAY_COLS.replace(",tax_wht", "")));
   if (error) return null;
   return Object.fromEntries((data || []).map((r) => { const { user_id, ...rest } = r; return [user_id, rest]; }));
 }
@@ -3958,7 +3960,7 @@ export async function listHrStaff() {
     .map((p) => ({ ...p, ...(pay ? (pay[p.id] || {}) : {}), department: posLabel(p) }));
 }
 // แยกฟิลด์: ข้อมูลค่าจ้าง/เลขบัตร → hr_pay (mig 154) · ที่เหลือ (กะ/แผนก/วันเริ่มงาน) → profiles
-const _PAY_FIELDS = ["pay_type", "base_pay", "ot_rate", "sso", "citizen_id"];
+const _PAY_FIELDS = ["pay_type", "base_pay", "ot_rate", "sso", "citizen_id", "tax_wht"];
 export async function updateHrProfile(id, fields) {
   const payFields = {}, profFields = {};
   Object.entries(fields || {}).forEach(([k, v]) => { (_PAY_FIELDS.includes(k) ? payFields : profFields)[k] = v; });
@@ -4004,6 +4006,7 @@ const _payslipRow = (p, uid, now) => ({
   present_days: p.present_days || 0, absent_days: p.absent_days || 0, leave_days: p.leave_days || 0, over_leave_days: p.over_leave_days || 0,
   late_min: p.late_min || 0, ot_min: p.ot_min || 0,
   d_late: p.d_late || 0, d_absent: p.d_absent || 0, d_leave: p.d_leave || 0, d_sso: p.d_sso || 0, d_advance: p.d_advance || 0,
+  d_tax: p.d_tax || 0,   // ภาษีหัก ณ ที่จ่าย (mig 161) — แช่แข็งไว้กับสลิป
   bonus: p.bonus || 0, other_deduct: p.other_deduct || 0, other_note: p.other_note || null,
   net: p.net || 0, status: p.status || "draft", note: p.note || null, created_by: uid, updated_at: now,
 });
@@ -4012,6 +4015,7 @@ export async function savePayslip(p) {
   const row = _payslipRow(p, uid, new Date().toISOString());
   let { error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" });
   if (error && /hol_pay/i.test(error.message || "")) { delete row.hol_pay; ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); } // pre-148 fallback
+  if (error && /d_tax/i.test(error.message || "")) { delete row.d_tax; ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); }   // pre-161 fallback
   if (error) throw error;
 }
 // บันทึกสลิปทั้งรอบใน "คำสั่งเดียว" — เดิมวนทีละคน เน็ตหลุดกลางทางแล้วได้รอบครึ่ง ๆ กลาง ๆ
@@ -4020,6 +4024,7 @@ export async function savePayslips(list) {
   const rows = list.map((p) => _payslipRow(p, uid, now));
   let { error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" });
   if (error && /hol_pay/i.test(error.message || "")) { rows.forEach((r) => delete r.hol_pay); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); } // pre-148 fallback
+  if (error && /d_tax/i.test(error.message || "")) { rows.forEach((r) => delete r.d_tax); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); }   // pre-161 fallback
   if (error) throw error;
 }
 export async function setPayslipPaid(period, paid, meta = {}) {
