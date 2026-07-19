@@ -122,9 +122,12 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
 
   async function load() {
     setLoading(true);
+    try {
     // lite list (materials table) is the authoritative item set — matches the catalog/BOQ picker;
     // the material_stock view only supplies current stock numbers, merged in by code.
-    const [lite, full, tm, r, j, jord] = await Promise.all([listMaterialsLite(), listMaterials(), listTeams(), listRecentTransactions(60), listOpenJobs(), listJobOrders()]);
+    // ช่างมีสิทธิ์เบิก/คืนของ แต่ไม่ต้องรู้ราคาขาย → ใบงานมาจากโหมดจอช่าง (mig 166)
+    const [lite, full, tm, r, j, jord] = await Promise.all([listMaterialsLite(), listMaterials(), listTeams(), listRecentTransactions(60), listOpenJobs(),
+      listJobOrders(isTech ? { fieldOnly: true, team: myTeam || null } : {})]);
     setJobOrders(jord || []);
     const stockByCode = {}; full.forEach((x) => { if (x.code != null) stockByCode[x.code] = x.stock; });
     const m = lite.map((x) => (x.code in stockByCode ? { ...x, stock: stockByCode[x.code] } : x));
@@ -134,9 +137,14 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     // ค่าเริ่มต้นทีม — เซ็ตแบบ functional: ถ้าถูกตั้งไว้แล้ว (เช่น เด้งมาจากปุ่มเบิกวัสดุบนใบงาน
     // ที่ผูกทีมมาให้ก่อน load เสร็จ) ห้ามทับ (closure เก่าของ team ตอนสร้าง load() เป็นค่าว่างเสมอ)
     if (tm.length) setTeam((cur) => cur || (isTech && myTeam ? myTeam : tm[0].id));
-    setLoading(false);
+    }
+    // เดิมไม่มี try/catch เลย — query พังเมื่อไร setLoading(false) ไปไม่ถึง
+    // หน้าค้าง "กำลังโหลด" ตลอดกาล ช่างเบิกของหน้างานไม่ได้และไม่รู้ว่าเพราะอะไร
+    catch (e) { flash("โหลดข้อมูลไม่สำเร็จ: " + (e.message || e), true); }
+    finally { setLoading(false); }
   }
   React.useEffect(() => { load(); }, []);
+  // ช่างมีสิทธิ์เบิก/คืนของ แต่ไม่ต้องรู้ราคาขาย — ใบงานที่ใช้เลือกงานมาจากโหมดจอช่าง (mig 166)
   // technicians are locked to their own team
   React.useEffect(() => { if (isTech && myTeam) setTeam(myTeam); }, [isTech, myTeam]);
   React.useEffect(() => { const m = matMap[pickCode]; if (m) setPickPrice(String(m.cost)); }, [pickCode, mats]);

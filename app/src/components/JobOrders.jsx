@@ -59,6 +59,10 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const [hoFlags, setHoFlags] = React.useState({});   // job_no → { any, submitted, signed } ใบส่งมอบงาน
   const [tplPick, setTplPick] = React.useState(false); // template picker modal open
 
+  // รีเฟรชรายการใบงาน — ต้องใช้โหมดเดียวกับตอนโหลดครั้งแรกเสมอ
+  // (เคยพลาด: บางจุดรีเฟรชด้วยโหมดออฟฟิศ แล้วราคาไหลกลับเข้าจอช่างเงียบ ๆ)
+  const reloadJobs = () => listJobOrders(fieldOnly ? { fieldOnly: true, team: role === "lead_tech" ? null : myTeam } : {});
+
   async function load() {
     setLoading(true);
     try {
@@ -274,7 +278,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const siblingsOf = (j) => list.filter((x) => groupKey(x) === groupKey(j)).sort((a, b) => a.job_no.localeCompare(b.job_no));
   async function addLinked(jo) {
     if (!await confirmDialog({ title: "สร้างใบงานเชื่อม (มอบทีมเพิ่ม) ?", message: `จาก ${jo.job_no} · คัดลอกลูกค้า/งาน แล้วให้กำหนดทีม+รอบของใบใหม่`, danger: false, confirmText: "สร้างใบเชื่อม" })) return;
-    try { const newNo = await createLinkedJob(jo); flash(`สร้างใบงานเชื่อม ${newNo} แล้ว`); await load(); setViewing(null); const fresh = await listJobOrders(); setList(fresh); startEdit(fresh.find((x) => x.job_no === newNo)); }
+    try { const newNo = await createLinkedJob(jo); flash(`สร้างใบงานเชื่อม ${newNo} แล้ว`); await load(); setViewing(null); const fresh = await reloadJobs(); setList(fresh); startEdit(fresh.find((x) => x.job_no === newNo)); }
     catch (e) { flash("สร้างไม่สำเร็จ: " + (e.message || e), true); }
   }
   // ก่อนปิดงาน: เตือนถ้ายังไม่มีใบส่งมอบงานที่ส่งแล้วและลูกค้าเซ็นรับ
@@ -326,7 +330,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     try {
       await unlockJob(jo.job_no);
       flash(`${jo.job_no} · ปลดล็อกแล้ว ✓`);
-      const fresh = await listJobOrders(); setList(fresh);
+      const fresh = await reloadJobs(); setList(fresh);
       setViewing((cur) => cur ? (fresh.find((x) => x.job_no === jo.job_no) || null) : cur);
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
@@ -519,7 +523,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   // field techs see only their own team's jobs (no team → nothing)
   // ⚠️ ต้องเทียบ 2 ชั้นเหมือนหน้า "งานของฉัน" — งานที่มอบผ่านรอบนัดจะหายถ้าดูแค่ assigned_team
   //    (RPC กรองมาให้แล้ว ตัวนี้เป็นตาข่ายกันพลาดสำหรับ lead_tech ที่ขอมาทุกทีม)
-  const baseList = fieldOnly && myTeam
+  const baseList = fieldOnly && role !== "lead_tech" && myTeam
     ? list.filter((j) => (j.visits && j.visits.length) ? j.visits.some((v) => v.assigned_team === myTeam) : j.assigned_team === myTeam)
     : list;
   return (
@@ -641,7 +645,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 {(jo.contact_name || jo.contact_phone) && <div className="jo-info-row"><span className="jo-ic">👤</span>{jo.contact_name || "ผู้ติดต่อ"}{jo.contact_phone && <a href={`tel:${jo.contact_phone}`} className="jo-tel">📞 {jo.contact_phone}</a>}</div>}
                 {jo.address && <div className="jo-info-row"><span className="jo-ic">📍</span><span style={{ flex: 1 }}>{jo.address}</span>{jo.map_url && <a href={jo.map_url} target="_blank" rel="noreferrer" className="btn-ghost sm" onClick={(e) => e.stopPropagation()}>แผนที่</a>}</div>}
               </div>
-              {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={jo.boq_no} quoteNo={jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "job", no: jo.job_no }}
+              {(() => { const ch = docLinks.byQuote[jo.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={fieldOnly ? null : jo.boq_no} quoteNo={fieldOnly ? null : jo.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "job", no: jo.job_no }}
                 onOpen={(t, n) => setPeek({ type: t, no: n })} />; })()}
               <InternalNoteTag note={jo.internal_note} role={role} />
               {(() => { const sibs = siblingsOf(jo); return sibs.length > 1 ? (

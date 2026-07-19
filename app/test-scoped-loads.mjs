@@ -285,5 +285,53 @@ check("ไม่มี NUL byte หลงเหลือในไฟล์ (git 
   assert.equal(n, 0, `เจอ NUL ${n} ตัว`);
 });
 
+
+// ============ (8) จอช่างต้องไม่ได้ข้อมูลราคา ============
+// รูที่เอเจนต์ตรวจเจอหลัง v477: select j.* ส่ง labor_lines ซึ่งเก็บ {price, disc, sale} ที่ก็อปมาจากใบเสนอราคา
+// และ internal_note ที่ตั้งใจซ่อนจากช่างมาตั้งแต่ mig 055 — ตัวตรวจเดิมมองไม่เห็นเพราะคีย์ชื่อไม่ตรง
+console.log("\nจอช่าง — ต้องไม่มีข้อมูลราคา/หลังบ้านหลุด:");
+
+const RPC = fs.readFileSync("../supabase/migrations/166_jobs_for_team.sql", "utf8");
+
+check("RPC ต้องไม่ใช้ j.* / jo.* ในผลลัพธ์ (พ่วงคอลัมน์ต้องห้ามมาด้วย)", () => {
+  const body = RPC.slice(RPC.indexOf("select coalesce(json_agg"));
+  assert.ok(!/select\s+j\.\*/.test(body), "ยังใช้ select j.* อยู่");
+});
+
+check("RPC ต้องไม่ส่ง labor_lines / internal_note / คะแนน-เคลม ถึงช่าง", () => {
+  const body = RPC.slice(RPC.indexOf("select coalesce(json_agg"));
+  const bad = ["labor_lines", "internal_note", "labor_total", "payout_id", "rating", "is_claim"].filter((c) => new RegExp("j\." + c + "\b").test(body));
+  assert.deepEqual(bad, [], "ยังส่ง: " + bad.join(", "));
+});
+
+check("ช่างที่ยังไม่ได้ตั้งทีม ต้องไม่เห็นงานทั้งบริษัท", () => {
+  assert.ok(/not \(my_role\(\) = 'tech' and my_team\(\) is null\)/.test(RPC), "ไม่มีด่านกันช่างไม่มีทีม");
+});
+
+check("เทียบทีมแบบ union (รอบนัดที่ทีมเป็น null ต้องไม่ทำให้งานหาย)", () => {
+  assert.ok(/or jo\.assigned_team = s\.team/.test(RPC) && /or exists \(select 1 from job_visits v where v\.job_no = jo\.job_no and v\.assigned_team = s\.team\)/.test(RPC),
+    "ยังใช้เงื่อนไขแบบ precedence");
+});
+
+check("หน้าจอที่ช่างเข้าถึงได้ ต้องเรียกใบงานแบบ fieldOnly", () => {
+  const PAGES = ["Movements.jsx", "Schedule.jsx", "Expenses.jsx", "MyJobs.jsx", "JobOrders.jsx"];
+  const bad = [];
+  for (const f of PAGES) {
+    const src = fs.readFileSync("src/components/" + f, "utf8");
+    if (!/fieldOnly/.test(src)) { bad.push(f + " (ไม่มีโหมดจอช่างเลย)"); continue; }
+    // เรียกแบบไม่มีอาร์กิวเมนต์ยอมได้เฉพาะในสาขาออฟฟิศ — บรรทัดนั้นต้องโหลดลูกค้าด้วย ซึ่งจอช่างไม่โหลด
+    for (const [k, line] of src.split("\n").entries()) {
+      if (line.includes("listJobOrders()") && !line.includes("listCustomers()")) bad.push(f + ":" + (k + 1));
+    }
+  }
+  assert.deepEqual(bad, [], "ยังเรียกโหมดออฟฟิศ: " + bad.join(", "));
+});
+
+check("จอช่างต้องไม่มีชิปที่พาไปเปิดใบเสนอราคา (มีราคาเต็ม)", () => {
+  const s = fs.readFileSync("src/components/JobOrders.jsx", "utf8");
+  assert.ok(/boqNo=\{fieldOnly \? null : jo\.boq_no\} quoteNo=\{fieldOnly \? null : jo\.quote_no\}/.test(s), "ชิปยังโผล่ในโหมดจอช่าง");
+});
+
+
 console.log(`\nสรุป: ผ่าน ${pass} · ตก ${fail}`);
 process.exit(fail ? 1 : 0);

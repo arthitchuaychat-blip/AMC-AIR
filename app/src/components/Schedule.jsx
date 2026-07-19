@@ -30,7 +30,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
 
   React.useEffect(() => { (async () => {
     setLoading(true);
-    try { const [j, t] = await Promise.all([listJobOrders(), listTeams()]); setJobs(j); setTeams(t); }
+    try { const [j, t] = await Promise.all([listJobOrders(role === "tech" || role === "lead_tech" ? { fieldOnly: true, team: role === "lead_tech" ? null : team } : {}), listTeams()]); setJobs(j); setTeams(t); }
     catch (e) { console.error(e); }
     setLoading(false);
   })(); }, []);

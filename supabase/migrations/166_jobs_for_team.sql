@@ -22,18 +22,28 @@ returns json language sql stable security definer set search_path = public as $$
     select jo.*
     from job_orders jo, scope s
     where my_role() in ('tech','lead_tech','admin','exec','finance','sales','hr','stock')
+      -- ⚠️ ช่างที่ยังไม่ได้ตั้งทีมในโปรไฟล์ → my_team() เป็น null
+      --    ถ้าปล่อยให้ตกไปเงื่อนไข "ไม่ระบุทีม = เห็นทุกทีม" ช่างคนนั้นจะเห็นงานทั้งบริษัท
+      --    (พร้อมชื่อ/ที่อยู่/เบอร์ลูกค้า) ⇒ ช่างที่ไม่มีทีม ต้องไม่เห็นอะไรเลย
+      and not (my_role() = 'tech' and my_team() is null)
       and (
-        s.team is null
-        -- ⚠️ ต้องเทียบ 2 ชั้นเหมือนที่หน้าจอทำ: มีรอบนัด → ดูทีมของรอบ · ไม่มีรอบ → ดูทีมบนหัวใบ
-        --    ถ้าเทียบแค่ assigned_team งานที่มอบผ่านรอบนัด (แบบใหม่) จะหายจากมือช่างทั้งหมด
-        or (exists (select 1 from job_visits v where v.job_no = jo.job_no)
-              and exists (select 1 from job_visits v where v.job_no = jo.job_no and v.assigned_team = s.team))
-        or (not exists (select 1 from job_visits v where v.job_no = jo.job_no)
-              and jo.assigned_team = s.team)
+        (s.team is null and my_role() <> 'tech')
+        -- เทียบทีมแบบ union: ทีมบนหัวใบ "หรือ" ทีมของรอบนัดใดรอบหนึ่ง
+        -- (ไม่ใช้แบบ "มีรอบแล้วไม่ดูหัวใบ" — รอบที่ทีมเป็น null จะทำให้งานหายทั้งที่หัวใบถูกต้อง)
+        or jo.assigned_team = s.team
+        or exists (select 1 from job_visits v where v.job_no = jo.job_no and v.assigned_team = s.team)
       )
   )
   select coalesce(json_agg(row_to_json(x) order by x.created_at desc), '[]'::json) from (
-    select j.*,
+    -- ⚠️ ห้ามใช้ j.* เด็ดขาด — job_orders มีคอลัมน์ที่ห้ามส่งถึงช่าง:
+    --    labor_lines (jsonb) เก็บ {price, disc, sale, labor} ที่ก็อปมาจากใบเสนอราคาตรง ๆ = ราคาขายเต็ม ๆ
+    --    labor_total / payout_id / rating / is_claim = เรื่องเงินและคะแนนของทีม
+    --    internal_note = โน้ตหลังบ้าน ที่ตั้งใจไม่ให้ช่างเห็นมาตั้งแต่ mig 055
+    select
+      j.job_no, j.quote_no, j.customer_id, j.site_id, j.title, j.group_no, j.job_type,
+      j.contact_name, j.contact_phone, j.address, j.map_url, j.details,
+      j.sales_note, j.sales_photos, j.assigned_team, j.scheduled_at, j.end_date, j.slot,
+      j.status, j.completion_note, j.photos, j.created_at, j.created_by, j.locked, j.issue_date,
       c.name  as customer_name,
       c.address as customer_address,
       cs.site_name, cs.address as site_address, cs.map_url as site_map_url,
@@ -65,5 +75,6 @@ grant execute on function jobs_for_team(text) to authenticated;
 -- ✅ ตรวจผล: ต้องได้ json array (ทดสอบด้วยบัญชีช่างจะเห็นเฉพาะทีมตัวเอง)
 -- select json_array_length(jobs_for_team(null));
 --
--- 🔒 ตรวจว่าไม่มีราคาหลุด: ผลลัพธ์ต้องไม่มีคำว่า unit_price / discount เลย
--- select (jobs_for_team(null)::text ~ '(unit_price|discount)') as มีราคาหลุด;   -- ต้องได้ false
+-- 🔒 ตรวจว่าไม่มีราคา/ข้อมูลหลังบ้านหลุด — ต้องครอบคีย์ที่ใช้จริงใน labor_lines ด้วย
+--    (เคยพลาดมาแล้ว: ตรวจแค่ unit_price/discount แต่ labor_lines ใช้คีย์ price/disc/sale/labor)
+-- select (jobs_for_team(null)::text ~ '("unit_price"|"discount"|"labor_lines"|"internal_note"|"labor_total"|"rating"|"is_claim"|"payout_id")') as มีข้อมูลหลุด;   -- ต้องได้ false

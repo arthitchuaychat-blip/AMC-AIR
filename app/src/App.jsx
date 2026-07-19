@@ -103,7 +103,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·กลาง 15 (1/2): จอช่างเลิกดาวน์โหลดราคาขายทั้งร้าน — ใบงานมาจาก RPC ที่กรองทีมและตัดราคาออกตั้งแต่ต้นทาง (mig 166) · ยังไม่รัน migration ก็ยังใช้งานได้ตามเดิม v477";
+const BUILD = "2026-07-19·แก้รูใน v477 ที่เอเจนต์ตรวจเจอ: RPC เคยส่ง labor_lines (ซึ่งเก็บราคาจากใบเสนอราคา) + โน้ตหลังบ้านไปด้วย · ช่างที่ยังไม่ตั้งทีมเคยเห็นงานทั้งบริษัท · หน้าเบิกของ/ปฏิทิน/เบิกจ่าย ยังโหลดราคาอยู่ v478";
 
 function SetupNotice() {
   return (
