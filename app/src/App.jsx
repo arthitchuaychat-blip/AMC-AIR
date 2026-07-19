@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
-import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams, unreadByModule, markModuleRead } from "./lib/api";
+import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams, unreadByModule, markModuleRead, poReceivedQty } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { NAV_MY, LangContext } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
@@ -489,7 +489,15 @@ export default function App() {
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           focus={poFocus} onFocusConsumed={() => setPoFocus(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }}
-          onReceive={(po) => { setPurchasePrefill({ poNo: po.po_no, quoteNo: po.quote_no || null, items: po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) }); go("movements"); }} />}
+          onReceive={async (po) => {
+            // ตั้งค่าเริ่มต้นเป็น "ยอดคงค้าง = สั่ง − รับไปแล้ว" — เดิมเติมเต็มใบทุกครั้ง รับรอบสองแล้วของเข้าเกิน
+            const got = await poReceivedQty(po.po_no).catch(() => ({}));
+            const items = po.items
+              .map((it) => ({ code: it.material_code, qty: Math.max(0, (Number(it.qty) || 0) - (Number(got[it.material_code]) || 0)), price: it.price, unit: it.unit || null }))
+              .filter((it) => it.qty > 0.0001);
+            setPurchasePrefill({ poNo: po.po_no, quoteNo: po.quote_no || null, items: items.length ? items : po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) });
+            go("movements");
+          }} />}
         {view === "tools" && <Tools role={role} me={profile} />}
         {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}

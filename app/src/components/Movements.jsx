@@ -285,7 +285,12 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           const m = matMap[code]; if (!m) continue;
           const after = freshStock ? (Number(freshStock[code]) || 0) : (m.stock + b.qty);   // สต๊อกหลังรับ (รวมล็อตนี้แล้ว)
           const before = after - b.qty;
-          if (after > 0) await updateMaterialCost(code, Math.round(((Math.max(0, before) * m.cost + b.val) / after) * 100) / 100);
+          // ถ้าของเดิมติดลบ (คีย์เบิกไว้เกินจริง) ห้ามใช้ after เป็นตัวหาร — ตัวตั้งมีแต่ล็อตใหม่ ตัวหารเล็กกว่าจริง
+          // ⇒ ต้นทุนเฉลี่ยพุ่งหลายเท่า · เคสนี้ใช้ "ราคาซื้อจริงของล็อตนี้" เป็นต้นทุน ซึ่งถูกต้องเชิงบัญชี
+          const newCost = before < 0
+            ? (b.qty > 0 ? b.val / b.qty : m.cost)
+            : (after > 0 ? (before * m.cost + b.val) / after : m.cost);
+          if (newCost > 0) await updateMaterialCost(code, Math.round(newCost * 100) / 100);
         }
         if (receivePo && receiveJob?.job_no) {
           // PO อ้างใบเสนอราคา → เบิกออกเข้างานนั้นทันทีด้วย "ราคาซื้อจริง" (ต้นทุนจริงของออเดอร์เข้ากำไรงาน · สต๊อกไม่ค้าง)

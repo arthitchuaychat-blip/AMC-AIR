@@ -517,6 +517,37 @@ export async function recordTransactions(rows) {
 }
 
 // ยอดคงเหลือสด ๆ รายรหัส (ใช้คิดต้นทุนเฉลี่ยตอนรับของ — สต๊อกในหน้าอาจค้างจากตอนเปิด)
+// ยอดที่ "รับเข้าไปแล้ว" ของใบสั่งซื้อ (รวมทุกรอบ) — ใช้ตั้งค่าเริ่มต้นหน้ารับของให้เป็นยอดคงค้าง
+// เดิมหน้ารับของเติมจำนวนเต็มใบทุกครั้ง กดยืนยันตามที่เห็น = ของเข้าเกินโดยไม่รู้ตัว
+// แก้ราคาตามบิลซัพพลายเออร์ "หลังรับของแล้ว" → ต้องไล่แก้ต้นทุนที่บันทึกไว้ในคลัง/งานด้วย
+// ไม่งั้นใบสั่งซื้อโชว์ราคาใหม่ แต่ต้นทุนงาน+ต้นทุนเฉลี่ยยังเป็นราคาเดิม (กำไรงานผิด)
+export async function repriceReceivedPo(poNo, items) {
+  if (!poNo || !items?.length) return 0;
+  const priceOf = {}; items.forEach((it) => { priceOf[it.code] = Number(it.price) || 0; });
+  const { data: rows, error } = await supabase.from("transactions").select("id,material_code,qty,unit_cost,type").eq("po_no", poNo);
+  if (error || !rows?.length) return 0;
+  let n = 0;
+  for (const r of rows) {
+    const want = priceOf[r.material_code];
+    if (want == null || Math.abs((Number(r.unit_cost) || 0) - want) < 0.005) continue;
+    const { error: e } = await supabase.from("transactions").update({ unit_cost: want }).eq("id", r.id);
+    if (!e) n++;
+  }
+  if (n) {
+    // ต้นทุนเฉลี่ยของสินค้าที่ราคาเปลี่ยน — ตั้งเป็นราคาซื้อล่าสุดจากบิลจริง
+    for (const [code, p] of Object.entries(priceOf)) if (p > 0) await updateMaterialCost(code, p).catch(() => {});
+    await logAudit({ action: "update", target_type: "purchase_order", target_no: poNo, reason: `แก้ราคาตามบิลซัพฯ หลังรับของ — ปรับต้นทุน ${n} รายการในคลัง/งาน` }).catch(() => {});
+  }
+  return n;
+}
+export async function poReceivedQty(poNo) {
+  if (!poNo) return {};
+  const { data, error } = await supabase.from("transactions").select("material_code,qty").eq("po_no", poNo).eq("type", "purchase");
+  if (error) return {};   // pre-151 (ยังไม่มีคอลัมน์ po_no) → ถือว่ายังไม่เคยรับ
+  const out = {};
+  (data || []).forEach((r) => { out[r.material_code] = (out[r.material_code] || 0) + (Number(r.qty) || 0); });
+  return out;
+}
 export async function getStockByCodes(codes) {
   const out = {};
   for (let i = 0; i < codes.length; i += 300) {

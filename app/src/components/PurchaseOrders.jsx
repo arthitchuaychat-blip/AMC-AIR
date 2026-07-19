@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies, docNoTaken, markPoReceived, lastPurchaseOf } from "../lib/api";
+import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies, docNoTaken, markPoReceived, lastPurchaseOf, repriceReceivedPo } from "../lib/api";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -208,7 +208,14 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     }
     const incl = !!editing.vat && !!editing.priceIncl;
     const items = editing.items.map((it) => ({ ...it, price: incl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0) })); // store pre-VAT price
-    try { await savePurchaseOrder({ po_no: poNo, supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, status: editing.status || "open" }, items); flash("บันทึกใบสั่งซื้อแล้ว"); setEditing(null); await load(); }
+    try {
+      await savePurchaseOrder({ po_no: poNo, supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, status: editing.status || "open" }, items);
+      // ใบที่รับของเข้าคลังไปแล้ว: แก้ราคาตามบิลซัพฯ ต้องไล่แก้ต้นทุนที่บันทึกไว้ในคลัง/ต้นทุนงานด้วย
+      let repriced = 0;
+      if (editing._edit && editing.status === "received") repriced = await repriceReceivedPo(poNo, items).catch(() => 0);
+      flash(repriced ? `บันทึกใบสั่งซื้อแล้ว · ปรับต้นทุนในคลัง/งานตามราคาใหม่ ${repriced} รายการ` : "บันทึกใบสั่งซื้อแล้ว");
+      setEditing(null); await load();
+    }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   // ปิดใบเอง (รับของครบนอกระบบ/รับบางส่วนจนครบแล้ว) — ไม่บันทึกของเข้าสต๊อกเพิ่ม
