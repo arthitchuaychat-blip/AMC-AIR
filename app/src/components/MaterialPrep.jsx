@@ -133,6 +133,27 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
     try { await setPrepStatus(p.prep_no, "draft", p.status); await load(); flash("กลับเป็นร่าง — แก้ไขได้"); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
+  // เคยแตกเป็นใบสั่งซื้อไปแล้วต้องถามก่อน — คนละกะเปิดใบเดิมแล้วนึกว่ายังไม่มีใครสั่ง = ของมาซ้ำ + เจ้าหนี้ซ้ำ
+  // ⚠️ ห้ามซ่อนปุ่มทิ้ง: บางใบตั้งใจแตกหลายรอบ (สั่งบางส่วนก่อน) ต้องกดสร้างเพิ่มได้เสมอ
+  async function goCreatePo(p) {
+    const has = (p.linkedPos || []).length;
+    if (has && !await confirmDialog({
+      title: "ใบนี้เคยสร้างใบสั่งซื้อไปแล้ว",
+      message: `มีใบสั่งซื้อที่แตกจากใบเตรียมวัสดุนี้อยู่แล้ว ${has} ใบ:\n${(p.linkedPos || []).map((x) => `· ${x.po_no}${x.date ? " (" + x.date + ")" : ""}`).join("\n")}\n\n⚠️ นี่ไม่ได้แปลว่า "สั่งครบแล้ว" — ตรวจก่อนว่าที่ขาดคือรายการไหน\n\nสร้างใบสั่งซื้ออีกใบ?`,
+      confirmText: "สร้างเพิ่ม",
+    })) return;
+    onCreatePo && onCreatePo(buyItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_buy), unit: it.unit || null })), p.quote_no, p.prep_no);
+  }
+  // ฝั่งเบิกอันตรายกว่า — กดซ้ำ = ตัดสต๊อกสองเท่าโดยของออกจากคลังจริงครั้งเดียว
+  async function goWithdraw(p) {
+    const has = (p.linkedWithdraws || []).length;
+    if (has && !await confirmDialog({
+      title: "ใบนี้เคยเบิกวัสดุไปแล้ว",
+      message: `มีชุดเบิกที่ผูกใบเตรียมวัสดุนี้อยู่แล้ว ${has} ชุด:\n${(p.linkedWithdraws || []).map((x) => `· ${x.ref_no}${x.date ? " (" + x.date + ")" : ""}`).join("\n")}\n\n⚠️ เบิกซ้ำ = สต๊อกถูกตัดสองเท่าทั้งที่ของออกจากคลังจริงครั้งเดียว\n\nไปเบิกเพิ่มจริงหรือไม่?`,
+      danger: true, confirmText: "เบิกเพิ่ม",
+    })) return;
+    onWithdraw && onWithdraw(wdItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_withdraw), unit: it.unit || null })), p.jobNo, p.jobTeam, p.prep_no);
+  }
   async function markDone(p) {
     if (!await confirmDialog(`ปิดใบ ${p.prep_no} (ดำเนินการครบแล้ว)?`)) return;
     try { await setPrepStatus(p.prep_no, "done", p.status); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
@@ -349,6 +370,15 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
                       <span className={"job-badge " + st.cls}>{st.th}</span>
                       {p.quote_no && <button type="button" className="vat-badge vat-on" style={{ cursor: "pointer", border: "1px solid transparent" }} onClick={() => openPeek("quote", p.quote_no)}>อ้างอิง {p.quote_no} ↗</button>}
                       {p.jobNo && <button type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#f3e8ff", color: "#7c3aed" }} onClick={() => openPeek("job", p.jobNo)}>งาน {p.jobNo} ↗</button>}
+                      {/* แตกไปเป็นใบสั่งซื้อ/ชุดเบิกอะไรแล้วบ้าง — เดิมการ์ดไม่บอกเลย คนละกะจึงกดสร้างซ้ำ
+                          ⚠️ ชิปนี้แปลว่า "เคยสร้าง" ไม่ใช่ "สั่งครบแล้ว" (ไม่ได้เทียบจำนวน) */}
+                      {(p.linkedPos || []).map((po) => (
+                        <button key={po.po_no} type="button" className="vat-badge" style={{ cursor: "pointer", border: "1px solid transparent", background: "#ede9fe", color: "#6d28d9" }}
+                          onClick={() => openPeek("po", po.po_no)} title={`เคยสร้างใบสั่งซื้อจากใบนี้${po.date ? " · " + po.date : ""}`}>🛒 {po.po_no} ↗</button>
+                      ))}
+                      {(p.linkedWithdraws || []).map((w) => (
+                        <span key={w.ref_no} className="vat-badge" style={{ background: "#e0f2fe", color: "#0369a1" }} title={`เคยเบิกวัสดุจากใบนี้${w.date ? " · " + w.date : ""}`}>📦 เบิกแล้ว {w.date || ""}</span>
+                      ))}
                     </>}
                     title={p.title || p.quoteTitle}
                     sub={`${p.teamName ? "🔧 " + p.teamName : ""}${p.approvedByName ? (p.teamName ? " · " : "") + "อนุมัติ " + p.approvedByName : ""}` || null}
@@ -360,12 +390,12 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
                     {p.status === "draft" && canConfirm && <button className="btn-primary sm" onClick={() => confirm(p)}>✓ ยืนยัน</button>}
                     {p.status === "approved" && canEdit && <button className="btn-ghost sm" onClick={() => backToDraft(p)} title="กลับไปแก้ไขรายการ">↩ กลับเป็นร่าง</button>}
                     {p.status === "approved" && nb > 0 && canEdit && (
-                      <button className="btn-primary sm" onClick={() => onCreatePo && onCreatePo(buyItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_buy), unit: it.unit || null })), p.quote_no, p.prep_no)}>🛒 สร้างใบสั่งซื้อ ({nb})</button>
+                      <button className={(p.linkedPos || []).length ? "btn-ghost sm" : "btn-primary sm"} onClick={() => goCreatePo(p)}>🛒 {(p.linkedPos || []).length ? `สร้างใบสั่งซื้อเพิ่ม (${nb})` : `สร้างใบสั่งซื้อ (${nb})`}</button>
                     )}
                     {p.status === "approved" && nw > 0 && canEdit && (
-                      <button className="btn-primary sm" style={{ background: "#0369a1" }} onClick={() => onWithdraw && onWithdraw(wdItems(p).map((it) => ({ code: it.material_code, qty: Number(it.qty_withdraw), unit: it.unit || null })), p.jobNo, p.jobTeam, p.prep_no)}>📦 ไปเบิกวัสดุ ({nw})</button>
+                      <button className={(p.linkedWithdraws || []).length ? "btn-ghost sm" : "btn-primary sm"} style={(p.linkedWithdraws || []).length ? undefined : { background: "#0369a1" }} onClick={() => goWithdraw(p)}>📦 {(p.linkedWithdraws || []).length ? `เบิกเพิ่ม (${nw})` : `ไปเบิกวัสดุ (${nw})`}</button>
                     )}
-                    {p.status === "approved" && canEdit && <button className="btn-ghost sm" onClick={() => markDone(p)}>ปิดใบ (ครบแล้ว)</button>}
+                    {p.status === "approved" && canEdit && <button className={((nb === 0 || (p.linkedPos || []).length) && (nw === 0 || (p.linkedWithdraws || []).length)) ? "btn-primary sm" : "btn-ghost sm"} onClick={() => markDone(p)} title="แตกเป็นใบสั่งซื้อ/ใบเบิกครบแล้ว — ปิดใบเพื่อไม่ให้คนอื่นกดสร้างซ้ำ">ปิดใบ (ครบแล้ว)</button>}
                     {(nb > 0 || nw > 0) && <>
                       <button className="btn-ghost sm" onClick={() => previewPrint(p)} title="เปิดพรีวิวแล้วสั่งพิมพ์ได้เลย">🖨️ พิมพ์</button>
                       <button className="btn-ghost sm" onClick={() => printPrep(p, "image")} title="บันทึกรายการเตรียมวัสดุเป็นรูปภาพ">🖼️ รูป</button>

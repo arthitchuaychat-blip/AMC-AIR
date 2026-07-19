@@ -789,6 +789,9 @@ export async function listPurchaseOrders() {
     _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("job_orders").select("job_no,quote_no,assigned_team,status", { count: "exact" }).order("job_no").range(f, t)),
     supabase.from("teams").select("id,name"),
+    // ใบสั่งซื้อ/ชุดเบิกที่แตกออกจากใบเตรียมวัสดุ (ผูกด้วย prep_no) — ไว้โชว์บนการ์ดและกันกดสร้างซ้ำ
+    _rows((f, t) => supabase.from("purchase_orders").select("po_no,prep_no,status,issue_date,created_at", { count: "exact" }).not("prep_no", "is", null).order("po_no").range(f, t)).catch(() => ({ data: [] })),
+    _rows((f, t) => supabase.from("transactions").select("ref_no,prep_no,txn_date,type", { count: "exact" }).not("prep_no", "is", null).eq("type", "withdraw").order("id").range(f, t)).catch(() => ({ data: [] })),
   ]);
   if (poRes.error) throw poRes.error;
   if (itemRes.error) throw itemRes.error;
@@ -823,7 +826,7 @@ export async function getQuoteItems(quote_no) {
 // ---------- ใบเตรียมวัสดุ (mig 109) — ประตูก่อนสั่งซื้อ/เบิก: แบ่งจำนวน ซื้อ/เบิก ต่อรายการ + ขั้นอนุมัติ ----------
 export async function listMaterialPreps() {
   const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows })); // กันเพดาน 1000 แถวทุกก้อน — เหมือน listPurchaseOrders (เดิมกันแค่รายการ ใบ/ลูกค้า/งานหลุดเมื่อเกินพัน)
-  const [pRes, iRes, qRes, cuRes, joRes, tmRes] = await Promise.all([
+  const [pRes, iRes, qRes, cuRes, joRes, tmRes, poRes, txRes] = await Promise.all([
     _rows((f, t) => supabase.from("material_preps").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("prep_no").range(f, t)),
     _rows((f, t) => supabase.from("material_prep_items").select("*", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),
@@ -833,6 +836,10 @@ export async function listMaterialPreps() {
   ]);
   if (pRes.error) throw pRes.error;
   const byPrep = {}; (iRes.data || []).forEach((it) => { (byPrep[it.prep_no] = byPrep[it.prep_no] || []).push(it); });
+  // ใบสั่งซื้อที่ยังไม่ยกเลิก ที่แตกออกจากใบเตรียมวัสดุใบนี้
+  const poByPrep = {}; (poRes.data || []).forEach((x) => { if (x.status !== "cancelled") (poByPrep[x.prep_no] = poByPrep[x.prep_no] || []).push({ po_no: x.po_no, status: x.status, date: x.issue_date || (x.created_at || "").slice(0, 10) }); });
+  // recordTransactions เขียนหลายแถวต่อการเบิก 1 ครั้ง แต่ใช้ ref_no ร่วมกัน — ต้องยุบตาม ref_no ไม่งั้นนับชุดเบิกเกินจริง
+  const wdByPrep = {}; (txRes.data || []).forEach((x) => { if (!x.ref_no) return; ((wdByPrep[x.prep_no] = wdByPrep[x.prep_no] || {})[x.ref_no] ||= { ref_no: x.ref_no, date: x.txn_date }); });
   const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
   const quoteInfo = Object.fromEntries((qRes.data || []).map((x) => [x.quote_no, x]));
   const teamName = Object.fromEntries((tmRes.data || []).map((t) => [t.id, t.name]));
@@ -844,6 +851,7 @@ export async function listMaterialPreps() {
     // ผูกใบงานตรง ๆ (job_no บนใบ · mig 120) ก่อน — ถ้าไม่มีค่อยเดาผ่านใบเสนอราคา
     const job = (p.job_no && jobByNo[p.job_no]) || (p.quote_no ? jobByQuote[p.quote_no] : null);
     return { ...p, items: byPrep[p.prep_no] || [],
+      linkedPos: poByPrep[p.prep_no] || [], linkedWithdraws: Object.values(wdByPrep[p.prep_no] || {}),
       customerName: qi ? custName[qi.customer_id] || null : null, quoteTitle: qi?.title || null,
       jobNo: job?.job_no || p.job_no || null, jobTeam: job?.assigned_team || null, teamName: job ? teamName[job.assigned_team] || job.assigned_team || null : null,
       createdByName: cb[p.created_by] || null, approvedByName: cb[p.approved_by] || null };

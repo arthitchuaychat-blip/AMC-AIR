@@ -1,5 +1,6 @@
 import React from "react";
-import { listJobOrders } from "../lib/api";
+// ⚠️ listQuotations() ไม่ส่ง opts = โหลดทั้งประวัติโดยตั้งใจ — ใบที่ค้างตอบอาจเก่ากว่าหน้าต่างวันที่ใด ๆ
+import { listJobOrders, listQuotations } from "../lib/api";
 import { JOB_TYPES, jobTypeDef } from "../lib/schedule";
 import { UIcon } from "../icons";
 import ChatCustomerLink from "./ChatCustomerLink";
@@ -29,6 +30,7 @@ const BUCKET = Object.fromEntries(BUCKETS.map((b) => [b.key, b]));
 const bucketOf = (days) => (BUCKETS.find((b) => days <= b.max) || BUCKETS[BUCKETS.length - 1]).key;
 
 const CADENCES = [[90, "3 เดือน"], [180, "6 เดือน"], [365, "1 ปี"]];
+const QUOTE_AGES = [[3, "เกิน 3 วัน"], [7, "เกิน 7 วัน"], [14, "เกิน 14 วัน"], [30, "เกิน 30 วัน"]];
 
 // the date a (completed) job was actually serviced: latest visit → end → scheduled → created
 function jobServiceDate(j) {
@@ -38,6 +40,9 @@ function jobServiceDate(j) {
 
 export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onCreateJob }) {
   const [jobs, setJobs] = React.useState(null);
+  const [quotes, setQuotes] = React.useState(null);
+  const [tab, setTab] = React.useState("service");   // service = รอบบริการ (ของเดิม) · quotes = ใบเสนอราคาค้างตอบ
+  const [qAge, setQAge] = React.useState(7);         // ค้างตอบเกินกี่วันถึงนับ
   const [cadence, setCadence] = React.useState(180);   // "รอบติดตาม" default 6 months
   const [dueOnly, setDueOnly] = React.useState(false); // show only customers past the cadence
   const [typeF, setTypeF] = React.useState("all");
@@ -48,8 +53,11 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onCre
   const today = todayYmd();
 
   async function load() {
-    try { setJobs(await listJobOrders()); }
-    catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setJobs([]); }
+    try {
+      const [j, q] = await Promise.all([listJobOrders(), listQuotations().catch(() => [])]);
+      setJobs(j); setQuotes(q || []);
+    }
+    catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setJobs([]); setQuotes([]); }
   }
   React.useEffect(() => { load(); }, []);
 
@@ -74,6 +82,22 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onCre
       return { ...c, last, days, bucket: bucketOf(days), times: c.jobs.length, due: days >= cadence };
     }).sort((a, b) => b.days - a.days); // most overdue first
   }, [jobs, today, cadence]);
+
+  // ใบเสนอราคาที่ส่งไปแล้วยังไม่ได้คำตอบ
+  // ⚠️ ต้องตัดใบที่ "ตอบรับแล้วจริง" ออก — ใบที่ยัง draft/sent แต่มีใบงาน/ใบแจ้งหนี้แล้ว คือปิดการขายไปแล้ว
+  //    แค่ลืมกดอนุมัติ ถ้านับเป็นค้างตอบ เซลล์จะโทรตามลูกค้าที่จ่ายเงินไปแล้ว
+  const pendingQuotes = React.useMemo(() => {
+    if (!quotes) return [];
+    return quotes.filter((q) => {
+      if (!["draft", "sent"].includes(q.status)) return false;   // อนุมัติ/ยกเลิก/ปฏิเสธ/หมดอายุ = ไม่ต้องตาม
+      if (q.hasJob || q.hasInvoice) return false;   // มีใบงาน/ใบแจ้งหนี้แล้ว = ตอบรับแล้วจริง
+      const base = String(q.issue_date || q.created_at || "").slice(0, 10);
+      if (!base) return false;                                    // ใบร่างที่ยังไม่ลงวันที่ — คิดอายุไม่ได้ ไม่นับ
+      const days = dayDiff(base, today);
+      return Number.isFinite(days) && days >= qAge;
+    }).map((q) => ({ ...q, days: dayDiff(String(q.issue_date || q.created_at).slice(0, 10), today) }))
+      .sort((a, b) => b.days - a.days);
+  }, [quotes, qAge, today]);
 
   const matches = (c) =>
     (typeF === "all" || c.lastByType[typeF] != null) &&
@@ -143,13 +167,54 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onCre
         <div><h1 className="page-title">ติดตามลูกค้า <span className="page-title-en">Follow-up</span></h1>
           <p className="page-sub">ลูกค้าใช้บริการอะไร ครั้งล่าสุดเมื่อไหร่ · ครบรอบแล้วโทรขายซ้ำ (เช่น ล้างแอร์ทุก 6 เดือน)</p></div>
         <div className="cat-head-actions" style={{ gap: 8, flexWrap: "wrap" }}>
-          <label className="fu-cad">รอบติดตาม
-            <div className="seg">{CADENCES.map(([d, l]) => <button key={d} className={"seg-btn" + (cadence === d ? " on" : "")} onClick={() => setCadence(d)}>{l}</button>)}</div>
-          </label>
+          {/* รอบติดตามใช้กับแท็บบริการเท่านั้น — ถ้าโชว์ในแท็บใบเสนอจะเข้าใจผิดว่า 6 เดือนไปกรองใบเสนอราคา */}
+          {tab === "service" ? (
+            <label className="fu-cad">รอบติดตาม
+              <div className="seg">{CADENCES.map(([d, l]) => <button key={d} className={"seg-btn" + (cadence === d ? " on" : "")} onClick={() => setCadence(d)}>{l}</button>)}</div>
+            </label>
+          ) : (
+            <label className="fu-cad">ค้างตอบ
+              <div className="seg">{QUOTE_AGES.map(([d, l]) => <button key={d} className={"seg-btn" + (qAge === d ? " on" : "")} onClick={() => setQAge(d)}>{l}</button>)}</div>
+            </label>
+          )}
           <button className="btn-ghost sm" onClick={load}>🔄 รีเฟรช</button>
         </div>
       </div>
 
+      <div className="cat-filter" style={{ marginBottom: 10 }}>
+        <button className={"cat-chip" + (tab === "service" ? " on" : "")} onClick={() => setTab("service")}
+          style={tab === "service" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>รอบบริการ ({customers.length})</button>
+        <button className={"cat-chip" + (tab === "quotes" ? " on" : "")} onClick={() => setTab("quotes")}
+          style={tab === "quotes" ? { background: "#dc2626", color: "#fff", borderColor: "#dc2626" } : {}}>ใบเสนอราคาค้างตอบ ({pendingQuotes.length})</button>
+      </div>
+
+      {tab === "quotes" ? (
+        quotes === null ? <div className="empty">กำลังโหลด…</div>
+        : pendingQuotes.length === 0 ? <div className="empty" style={{ padding: 40 }}>ไม่มีใบเสนอราคาค้างตอบเกิน {qAge} วัน 👍</div>
+        : (
+          <div className="job-cards">
+            {pendingQuotes.map((q) => (
+              <div className="card" key={q.quote_no} style={{ padding: "12px 14px" }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <b>{q.quote_no}</b>
+                  <span>{q.customerName || "(ไม่ระบุลูกค้า)"}</span>
+                  <span style={{ marginLeft: "auto", fontWeight: 700 }}>{q.grand != null ? q.grand.toLocaleString("th-TH", { maximumFractionDigits: 0 }) + " บาท" : ""}</span>
+                </div>
+                <div className="jo-dim" style={{ marginTop: 2 }}>
+                  {q.title || ""}{q.title ? " · " : ""}ส่งเมื่อ {thDate(q.issue_date || q.created_at)} · <b style={{ color: q.days >= 30 ? "#b91c1c" : "#d97706" }}>{agoText(q.days)}</b>
+                  {q.status === "draft" && <span style={{ color: "#64748b" }}> · ยังเป็นร่าง</span>}
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                  {q.contactPhone && <a className="btn-ghost sm" href={`tel:${q.contactPhone}`}><UIcon name="user" size={13} /> โทร</a>}
+                  <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />
+                  {onOpenQuote && <button className="btn-ghost sm" onClick={() => onOpenQuote(q.quote_no)}>เปิดใบเสนอราคา ↗</button>}
+                  {onOpenCustomer && <button className="btn-ghost sm" onClick={() => onOpenCustomer(q.customer_id)}>ดูลูกค้า</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (<>
       <div className="kpi-grid">
         <button className={"stat-card fu-kpi" + (dueOnly ? " on" : "")} onClick={() => setDueOnly((v) => !v)} title="กดเพื่อกรองเฉพาะที่ถึงเวลาติดตาม">
           <div className="stat-val" style={{ color: "#dc2626" }}>{dueCount}</div><div className="stat-label">🔔 ถึงเวลาติดตาม (กดกรอง)</div>
@@ -192,6 +257,7 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onCre
             })}
           </div>
         )}
+      </>)}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>

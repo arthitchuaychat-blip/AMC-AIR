@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·กลาง 8,9 + รอบที่จ่ายแล้วอ่านจากสลิป ไม่คำนวณใหม่: ช่องภาษีหัก ณ ที่จ่าย ภ.ง.ด.1 รายคน (mig 161) เข้าสลิป/ไฟล์ยื่นอัตโนมัติ · แบนเนอร์ยังไม่มีเวลาออกทั้งรอบ กดแก้ได้เลย v470";
+const BUILD = "2026-07-19·กลาง 11,28: ใบเตรียมวัสดุโชว์ว่าแตกเป็นใบสั่งซื้อ/ใบเบิกไหนแล้ว + ถามก่อนกดซ้ำ · หน้าติดตามลูกค้าเพิ่มแท็บใบเสนอราคาค้างตอบ (ตัดใบที่ตอบรับแล้วออก) v471";
 
 function SetupNotice() {
   return (
@@ -436,6 +436,7 @@ export default function App() {
         {view === "followup" && <CustomerFollowup role={role}
           onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
           onOpenCustomer={(cid) => { setCustFocus(String(cid)); go("customers"); }}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }}
           onCreateJob={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }} />}
         {view === "chat" && <Chat role={role} onOpenDoc={openDoc} onGoCustomers={(name) => { setCustFocus(name); go("customers"); }}
           focus={chatFocus} onFocusConsumed={() => setChatFocus(null)}
