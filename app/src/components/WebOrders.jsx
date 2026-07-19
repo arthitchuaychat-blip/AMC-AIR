@@ -1,6 +1,8 @@
 import React from "react";
-import { listWebOrders, setWebOrderStatus } from "../lib/api";
+import { listWebOrders, setWebOrderStatus, setWebOrderCustomer, setWebOrderBoq } from "../lib/api";
 import { fmtBaht } from "../lib/format";
+import { can } from "../lib/permissions";
+import CustomerFormModal from "./CustomerFormModal";
 
 const STATUS = [
   ["new", "ใหม่", "#dc2626", "#fee2e2"],
@@ -12,8 +14,9 @@ const STATUS = [
 const ST = Object.fromEntries(STATUS.map((s) => [s[0], s]));
 const thDateTime = (s) => { try { return new Date(s).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); } catch { return s; } };
 
-export default function WebOrders({ role }) {
+export default function WebOrders({ role, onCreateBoq, onOpenCustomer }) {
   const [rows, setRows] = React.useState(null);
+  const [custForm, setCustForm] = React.useState(null);   // { order, initial } → เปิดฟอร์มลูกค้าที่เติมข้อมูลจากใบนี้ให้แล้ว
   const [statusF, setStatusF] = React.useState("all");
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
@@ -23,6 +26,39 @@ export default function WebOrders({ role }) {
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e) + " (รัน 071_website.sql แล้วหรือยัง?)", true); setRows([]); }
   }
   React.useEffect(() => { load(); }, []);
+  // บันทึกลูกค้าเสร็จ → ผูกกลับเข้าใบคำสั่งซื้อทันที ไม่ต้องให้คนมากดผูกเอง
+  async function onCustSaved(cid) {
+    const o = custForm?.order;
+    setCustForm(null);
+    if (!o) return;
+    try { await setWebOrderCustomer(o.id, cid); setRows((rs) => rs.map((x) => x.id === o.id ? { ...x, customer_id: cid } : x)); flash("ผูกลูกค้าเข้าคำสั่งซื้อแล้ว ✓"); }
+    catch (e) { flash("สร้างลูกค้าแล้ว แต่ผูกกลับไม่สำเร็จ: " + (e.message || e), true); }
+  }
+
+  // ลูกค้ากรอกหมุดมาในโน้ตในรูป "📍 หมุด: <url>" (company-website) — แยกออกมาใส่ช่องแผนที่ของไซต์
+  function splitPin(note) {
+    const m = String(note || "").match(/📍\s*หมุด:\s*(\S+)/);
+    return { mapUrl: m ? m[1] : "", rest: String(note || "").replace(/📍\s*หมุด:\s*\S+/, "").trim() };
+  }
+  function openCustForm(o) {
+    const { mapUrl, rest } = splitPin(o.note);
+    setCustForm({ order: o, initial: {
+      type: "person", name: o.name || "", address: o.address || "", email: o.email || "",
+      note: ["ลูกค้าจากเว็บไซต์", rest].filter(Boolean).join(" · "),
+      contacts: [{ name: o.name || "", phone: o.phone || "", role: "" }],
+      sites: [{ site_name: "", contact_name: o.name || "", phone: o.phone || "", address: o.address || "", map_url: mapUrl }],
+    } });
+  }
+  // ⚠️ ส่งไปแค่ "รหัสสินค้า + จำนวน" — ห้ามส่งราคาจากเว็บ นั่นคือ "ราคาขาย"
+  //    ถ้าเอาไปใส่ช่องต้นทุนของ BOQ ต้นทุนจะเท่าราคาขาย กำไรทั้งสายเอกสารกลายเป็น ~0 หรือติดลบ
+  //    ให้หน้า BOQ ไปหาต้นทุนจริงจากตารางสินค้าเอง
+  function toBoq(o) {
+    if (!o.customer_id) return flash("ผูกลูกค้าก่อน — กด “สร้างลูกค้าจากใบนี้”", true);
+    onCreateBoq && onCreateBoq({
+      customerId: o.customer_id, orderId: o.id, title: `คำสั่งซื้อจากเว็บ #${o.id}`,
+      items: (o.items || []).map((it) => ({ code: it.code || it.material_code || null, name: it.name || "", qty: Number(it.qty) || 1 })),
+    });
+  }
 
   async function changeStatus(o, status) {
     try { await setWebOrderStatus(o.id, status); setRows((rs) => rs.map((x) => x.id === o.id ? { ...x, status } : x)); }
@@ -83,6 +119,17 @@ export default function WebOrders({ role }) {
                     <div className="wo-total"><span>รวมโดยประมาณ</span><b>{fmtBaht(o.total)}</b></div>
                   </div>
                 )}
+                <div className="wo-acts" style={{ borderBottom: "1px dashed var(--line-2)", paddingBottom: 8, marginBottom: 8 }}>
+                  {!o.customer_id && can(role, "customers", "edit") && (
+                    <button className="btn-primary sm" onClick={() => openCustForm(o)}>➕ สร้างลูกค้าจากใบนี้</button>
+                  )}
+                  {o.customer_id && (<>
+                    <span className="vat-badge vat-on" style={{ cursor: onOpenCustomer ? "pointer" : "default" }} onClick={() => onOpenCustomer && onOpenCustomer(o.customer_id)}>✓ ผูกลูกค้าแล้ว ↗</span>
+                    {o.boq_no
+                      ? <span className="vat-badge" style={{ background: "#ede9fe", color: "#6d28d9" }}>🧾 {o.boq_no}</span>
+                      : <button className="btn-primary sm" onClick={() => toBoq(o)}>🧾 สร้าง BOQ จากใบนี้</button>}
+                  </>)}
+                </div>
                 <div className="wo-acts">
                   <span style={{ fontSize: 12, color: "var(--ink-3)" }}>เปลี่ยนสถานะ:</span>
                   {STATUS.map(([v, l, c]) => (
@@ -96,6 +143,7 @@ export default function WebOrders({ role }) {
           </div>
         )}
 
+      {custForm && <CustomerFormModal initial={custForm.initial} onClose={() => setCustForm(null)} onSaved={onCustSaved} />}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );

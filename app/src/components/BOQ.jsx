@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, listDocLinks, docNoTaken } from "../lib/api";
+import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, listDocLinks, docNoTaken, setWebOrderBoq } from "../lib/api";
 import { fmtBaht, fmtNum, custCode, matchText, matchPhone, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -63,7 +63,7 @@ function SectionBlock({ sec, items, pool, onAdd, onSet, onDel, onMove }) {
   );
 }
 
-export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc, newForCustomer, onNewConsumed, onGoChat }) {
+export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc, newForCustomer, onNewConsumed, onGoChat, draft, onDraftConsumed }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "boq", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
@@ -103,6 +103,31 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   function startNewFor(customerId) { setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", job_type: "", issue_date: today(), note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
   // open a fresh BOQ pre-filled with this customer (e.g. launched from the chat panel)
   React.useEffect(() => { if (newForCustomer) { startNewFor(newForCustomer); onNewConsumed && onNewConsumed(); } }, [newForCustomer]);
+  // เปิด BOQ ใหม่พร้อมรายการจากคำสั่งซื้อหน้าเว็บ
+  // ⚠️ ต้องรอ mats โหลดเสร็จก่อน ไม่งั้น matMap ว่าง → ต้นทุนเป็น 0 ทุกบรรทัด
+  React.useEffect(() => { if (!draft || !mats.length) return; startNewFromWebOrder(draft); onDraftConsumed && onDraftConsumed(); }, [draft, mats.length]);
+  function startNewFromWebOrder(d) {
+    const items = blankItems();
+    const missing = [];
+    (d.items || []).forEach((it) => {
+      const m = it.code ? matMap[it.code] : null;
+      if (!m) {
+        // รุ่นที่ปิดขาย/ถูกลบไปแล้ว — ใส่เป็นบรรทัดชื่ออย่างเดียว ห้ามใส่รหัสที่ไม่มีจริงลง boq_items
+        // (จะได้แถวที่หา material ไม่เจอ แล้วต้นทุน/สต๊อกฝั่งท้ายน้ำเพี้ยน)
+        missing.push(it.name || it.code || "-");
+        items.charged.push({ code: "", name: it.name || it.code || "(ไม่ระบุ)", unit: "", qty: Number(it.qty) || 1, unit_cost: 0, description: "" });
+        return;
+      }
+      // ⚠️ ใช้ "ต้นทุน" จากตารางสินค้าเสมอ — ราคาที่ติดมากับคำสั่งซื้อคือราคาขาย
+      //    ถ้าเอามาใส่ช่องต้นทุน กำไรของทั้งสายเอกสารที่งอกจากใบนี้จะกลายเป็น ~0 หรือติดลบ
+      const sec = m.kind === "ac" ? "ac" : m.kind === "service" ? "service" : "charged";
+      items[sec].push({ code: m.code, name: m.th, unit: m.unit, qty: Number(it.qty) || 1, unit_cost: Number(m.cost) || 0, description: m.description || "" });
+    });
+    setEd({ boq_no: genNo(), customer_id: String(d.customerId || ""), site_id: "", title: d.title || "", job_type: "", issue_date: today(),
+      note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items, _webOrderId: d.orderId || null });
+    if (missing.length) flash(`เติมรายการให้แล้ว — แต่ ${missing.length} รายการหารหัสสินค้าไม่เจอ (${missing.slice(0, 3).join(", ")}) ใส่เป็นบรรทัดเปล่าไว้ ต้องเลือกสินค้าและใส่ต้นทุนเอง`, true);
+    else flash("เติมรายการจากคำสั่งซื้อหน้าเว็บให้แล้ว — ตรวจต้นทุนก่อนบันทึก");
+  }
   // chain lock: can't edit/delete a BOQ that already has a quotation downstream
   // delete/cancel: blocked once any quote is created from this BOQ (chain safety)
   const lockMsg = (bo) => bo.hasQuote ? `แก้ไข/ลบ BOQ นี้ไม่ได้ — สร้างใบเสนอราคา ${bo.quoteNo || ""} จาก BOQ นี้แล้ว\nต้องลบใบเสนอราคา (และเอกสารถัดไป) ก่อน` : null;
@@ -166,6 +191,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       await saveBoq({ ...ed, boq_no: boqNo, sign_url: sig?.url || null, sign_name: sig?.name || null }, flat);
       // กติกา: BOQ ที่ยกเลิกแล้วกลับมาแก้ไขได้ — บันทึกสำเร็จ = ปลดสถานะยกเลิก กลับมาใช้งานต่อ
       if (ed._wasCancelled) { try { await setBoqStatus(ed.boq_no, null); } catch { /* non-fatal */ } }
+      // มาจากคำสั่งซื้อหน้าเว็บ → ผูกเลข BOQ กลับเข้าใบนั้น + เลื่อนสถานะเป็น "เสนอราคาแล้ว"
+      if (ed._webOrderId) { try { await setWebOrderBoq(ed._webOrderId, boqNo); } catch (e) { flash(e.message || String(e), true); } }
       const renum = boqNo !== ed.boq_no ? ` · ⚠️ เลขที่เดิมชนกับใบอื่น — ใบนี้ได้เลขใหม่ ${boqNo}` : "";
       flash((ed._wasCancelled ? `บันทึก BOQ แล้ว — ใบนี้พ้นสถานะยกเลิก กลับมาใช้งานได้ (${flat.length} รายการ)` : `บันทึก BOQ แล้ว (${flat.length} รายการ)`) + renum); clearOnSaved(dk); setEd(null); await load(); }
     catch (e) { console.error("saveBoq failed:", e); window.alert("❌ บันทึก BOQ ไม่สำเร็จ\n\nสาเหตุจริงจากฐานข้อมูล:\n" + (e.message || String(e)) + "\n\n(กรุณาถ่ายรูปหน้าต่างนี้ส่งให้ผู้ดูแลระบบ)"); }

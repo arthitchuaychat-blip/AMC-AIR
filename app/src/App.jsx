@@ -103,7 +103,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·กลาง 19,27: เตือนก่อนสร้างลูกค้าซ้ำ (เลขผู้เสียภาษี/เบอร์/ชื่อตรงกัน) พร้อมปุ่มใช้รายเดิม (mig 162) · กระดานสั่งงานไม่ติดเพดาน 1000 แถวทุกตาราง · แถบเตือนงานค้างเลิกลากงานทั้งบริษัท ยืดเป็น 10 นาที และหยุดตอนแท็บไม่ได้เปิด v473";
+const BUILD = "2026-07-19·กลาง 25: คำสั่งซื้อจากเว็บ กดสร้างลูกค้า (เติมชื่อ/เบอร์/ที่อยู่/หมุดให้แล้ว) และสร้าง BOQ ต่อได้เลย ไม่ต้องพิมพ์ใหม่ — ต้นทุนดึงจากตารางสินค้า ไม่ใช่ราคาขายจากเว็บ (mig 163) v474";
 
 function SetupNotice() {
   return (
@@ -145,6 +145,7 @@ export default function App() {
   const [custFocus, setCustFocus] = React.useState(null);
   const [boqFocus, setBoqFocus] = React.useState(null);
   const [boqNewCust, setBoqNewCust] = React.useState(null); // open a new BOQ pre-filled with this customer id
+  const [boqDraft, setBoqDraft] = React.useState(null);     // เปิด BOQ ใหม่พร้อมรายการที่มาจากคำสั่งซื้อหน้าเว็บ
   const [invoiceFocus, setInvoiceFocus] = React.useState(null);
   const [receiptFocus, setReceiptFocus] = React.useState(null);
   const [quoteFromBoq, setQuoteFromBoq] = React.useState(null);
@@ -465,6 +466,7 @@ export default function App() {
         {view === "tasks" && <TaskBoard role={role} me={profile} prefill={taskPrefill} onPrefillConsumed={() => setTaskPrefill(null)} focus={taskFocus} onFocusConsumed={() => setTaskFocus(null)} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
           newForCustomer={boqNewCust} onNewConsumed={() => setBoqNewCust(null)}
+          draft={boqDraft} onDraftConsumed={() => setBoqDraft(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "quote" && <Quotation role={role} focus={quoteFocus} onFocusConsumed={() => setQuoteFocus(null)}
           fromBoq={quoteFromBoq} onFromBoqConsumed={() => setQuoteFromBoq(null)}
@@ -482,7 +484,9 @@ export default function App() {
         {view === "receivables" && <Receivables role={role} onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "payables" && <Payables role={role} onOpenPo={(no) => { setPoFocus(no); go("po"); }} onGoExpenses={() => go("expenses")} onGoSub={() => go("subcontract")} />}
         {view === "tax" && <TaxReport role={role} />}
-        {view === "weborders" && <WebOrders role={role} />}
+        {view === "weborders" && <WebOrders role={role}
+          onOpenCustomer={(cid) => { setCustFocus(String(cid)); go("customers"); }}
+          onCreateBoq={(d) => { setBoqDraft(d); go("boq"); }} />}
         {view === "website" && <WebManage role={role} />}
         {view === "profit" && <Profit />}
         {view === "cashflow" && <CashFlow />}

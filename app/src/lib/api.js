@@ -2525,6 +2525,21 @@ export async function listWebOrders() {
   if (error) throw error;
   return data || [];
 }
+// ผูกคำสั่งซื้อเว็บกับลูกค้าในระบบ (mig 163 — คอลัมน์ customer_id มีตั้งแต่ mig 071 แต่ไม่เคยมีใครเขียน)
+export async function setWebOrderCustomer(id, customerId) {
+  const { error } = await supabase.from("web_orders").update({ customer_id: customerId }).eq("id", id);
+  if (error) throw error;
+}
+// ผูกเลข BOQ ที่สร้างจากคำสั่งซื้อนี้ + เลื่อนสถานะเป็น "เสนอราคาแล้ว"
+export async function setWebOrderBoq(id, boqNo) {
+  let { error } = await supabase.from("web_orders").update({ boq_no: boqNo, status: "quoted" }).eq("id", id);
+  // ยังไม่รัน mig 163 → อย่างน้อยให้สถานะขยับ แล้วบอกให้ไปรัน migration (ไม่ใช่พังทั้งจอ)
+  if (error && /boq_no|PGRST204/i.test(error.message || "")) {
+    ({ error } = await supabase.from("web_orders").update({ status: "quoted" }).eq("id", id));
+    if (!error) throw new Error("บันทึกสถานะแล้ว แต่ยังผูกเลข BOQ ไม่ได้ — ต้องรัน migration 163 ใน Supabase ก่อน");
+  }
+  if (error) throw error;
+}
 export async function setWebOrderStatus(id, status) {
   const { error } = await supabase.from("web_orders").update({ status }).eq("id", id);
   if (error) throw error;
