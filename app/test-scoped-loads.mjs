@@ -305,12 +305,15 @@ check("RPC ต้องไม่ส่ง labor_lines / internal_note / คะ�
 });
 
 check("ช่างที่ยังไม่ได้ตั้งทีม ต้องไม่เห็นงานทั้งบริษัท", () => {
-  assert.ok(/not \(my_role\(\) = 'tech' and my_team\(\) is null\)/.test(RPC), "ไม่มีด่านกันช่างไม่มีทีม");
+  const flat = RPC.replace(/\s+/g, " ");
+  assert.ok(flat.includes("not (my_role()='tech' and my_team() is null)") || flat.includes("not (my_role() = 'tech' and my_team() is null)"),
+    "ไม่มีด่านกันช่างไม่มีทีม");
 });
 
 check("เทียบทีมแบบ union (รอบนัดที่ทีมเป็น null ต้องไม่ทำให้งานหาย)", () => {
-  assert.ok(/or jo\.assigned_team = s\.team/.test(RPC) && /or exists \(select 1 from job_visits v where v\.job_no = jo\.job_no and v\.assigned_team = s\.team\)/.test(RPC),
-    "ยังใช้เงื่อนไขแบบ precedence");
+  const flat = RPC.replace(/\s+/g, " ");
+  assert.ok(/or jo\.assigned_team ?= ?s\.team/.test(flat), "ไม่ได้เทียบทีมบนหัวใบ");
+  assert.ok(/or exists \(select 1 from job_visits v where v\.job_no ?= ?jo\.job_no and v\.assigned_team ?= ?s\.team\)/.test(flat), "ไม่ได้เทียบทีมของรอบนัด");
 });
 
 check("หน้าจอที่ช่างเข้าถึงได้ ต้องเรียกใบงานแบบ fieldOnly", () => {
