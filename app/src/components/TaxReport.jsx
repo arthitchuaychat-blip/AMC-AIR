@@ -1,5 +1,5 @@
 import React from "react";
-import { listReceipts, listPurchaseOrders } from "../lib/api";
+import { listReceipts, listPurchaseOrders, listSubPayouts, listTeams } from "../lib/api";
 import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
 
@@ -10,16 +10,22 @@ const netOf = (r) => Number(r.net) || ((Number(r.total) || 0) - (Number(r.wht_am
 export default function TaxReport({ role }) {
   const [receipts, setReceipts] = React.useState(null);
   const [pos, setPos] = React.useState([]);   // ใบสั่งซื้อที่ติ๊ก VAT → ภาษีซื้อ
+  const [payouts, setPayouts] = React.useState([]);   // ใบจ่ายช่างซัพที่จ่ายแล้ว → ภาษีที่เราหักไว้ ต้องนำส่ง (ภ.ง.ด.53)
+  const [teamName, setTeamName] = React.useState({});
   const [year, setYear] = React.useState(() => new Date().getFullYear());
   const [openMonth, setOpenMonth] = React.useState(null);
+  const [tab, setTab] = React.useState("vat");   // vat = ภ.พ.30 (ขาย/ซื้อ) · wht = ภ.ง.ด.53 (ที่เราหักช่างซัพ)
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
 
   async function load() {
     try {
-      const [r, p] = await Promise.all([listReceipts(), listPurchaseOrders().catch(() => [])]);
+      const [r, p, sp] = await Promise.all([listReceipts(), listPurchaseOrders().catch(() => []), listSubPayouts().catch(() => [])]);
       setReceipts(r.filter((x) => x.status !== "cancelled" && x.issue_date));
       setPos(p.filter((x) => x.status !== "cancelled" && x.vat));
+      // ภาษีที่ "เราหักจากช่างซัพ" แล้วต้องนำส่งสรรพากร (ภ.ง.ด.53) — คนละขากับ wht ในใบเสร็จที่ลูกค้าหักเรา
+      setPayouts((sp || []).filter((x) => x.status === "paid" && Number(x.wht_amt) > 0));
+      try { const ts = await listTeams(); setTeamName(Object.fromEntries((ts || []).map((t) => [t.id, t]))); } catch (_) { /* ชื่อทีมโหลดไม่ได้ก็ยังโชว์รหัสทีมได้ */ }
     }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setReceipts([]); }
   }
@@ -58,6 +64,43 @@ export default function TaxReport({ role }) {
   const tot = months.reduce((a, b) => ({ count: a.count + b.count, base: round2(a.base + b.base), vat: round2(a.vat + b.vat), buyVat: round2(a.buyVat + b.buyVat), buyCount: a.buyCount + b.buyCount, wht: round2(a.wht + b.wht), net: round2(a.net + b.net) }), { count: 0, base: 0, vat: 0, buyVat: 0, buyCount: 0, wht: 0, net: 0 });
   tot.vatDue = round2(tot.vat - tot.buyVat);
 
+  // ---------- ภ.ง.ด.53: ภาษีที่ "เรา" หักจากช่างซัพไว้ แล้วต้องนำส่งสรรพากรภายในวันที่ 7 ของเดือนถัดไป ----------
+  // รับรู้ตามวันที่จ่ายเงินจริง (paid_at) ตามหลักเกณฑ์ ป.ภาษี — ไม่ใช่วันที่สร้างใบ
+  const whtDate = (p) => (p.paid_at || p.created_at || "").slice(0, 10);
+  const teamOf = (id) => teamName[id] || {};
+  const whtMonths = React.useMemo(() => {
+    const m = Array.from({ length: 12 }, () => ({ count: 0, gross: 0, wht: 0, net: 0, rows: [] }));
+    payouts.forEach((p) => {
+      const d = whtDate(p);
+      if (d.slice(0, 4) !== String(year)) return;
+      const mi = Number(d.slice(5, 7)) - 1;
+      if (mi < 0 || mi > 11) return;
+      const b = m[mi];
+      b.count++; b.gross += Number(p.gross) || 0; b.wht += Number(p.wht_amt) || 0; b.net += Number(p.net) || 0; b.rows.push(p);
+    });
+    m.forEach((b) => { b.gross = round2(b.gross); b.wht = round2(b.wht); b.net = round2(b.net); b.rows.sort((a, c) => (whtDate(a) < whtDate(c) ? -1 : 1)); });
+    return m;
+  }, [payouts, year]);
+  const whtTot = whtMonths.reduce((a, b) => ({ count: a.count + b.count, gross: round2(a.gross + b.gross), wht: round2(a.wht + b.wht), net: round2(a.net + b.net) }), { count: 0, gross: 0, wht: 0, net: 0 });
+  // ทีมที่ยังไม่กรอกเลขผู้เสียภาษี → ยื่น ภ.ง.ด.53 ไม่ได้ ต้องเตือนไว้
+  const whtNoTaxId = React.useMemo(() => {
+    const s = new Set();
+    whtMonths.forEach((b) => b.rows.forEach((p) => { if (!teamOf(p.team).tax_id) s.add(p.team); }));
+    return Array.from(s);
+  }, [whtMonths, teamName]);
+
+  function exportWht() {
+    const headers = ["เดือนที่จ่าย", "วันที่จ่าย", "ทีมช่างซัพ", "เลขผู้เสียภาษี", "ยอดจ่ายก่อนหัก", "อัตรา %", "ภาษีหัก ณ ที่จ่าย", "จ่ายสุทธิ", "ใบงาน"];
+    const rows = [];
+    whtMonths.forEach((b, i) => b.rows.forEach((p) => {
+      const t = teamOf(p.team);
+      rows.push([`${TH_MONTHS[i]} ${year + 543}`, whtDate(p), t.name_th || p.team || "", t.tax_id || "", round2(p.gross), Number(p.wht_rate) || 3, round2(p.wht_amt), round2(p.net), (p.job_nos || []).join(" ")]);
+    }));
+    if (!rows.length) return flash("ไม่มีข้อมูลในปีนี้", true);
+    rows.push(["รวมทั้งปี", "", "", "", whtTot.gross, "", whtTot.wht, whtTot.net, ""]);
+    downloadCsv(`ภงด53-ภาษีหักช่างซัพ-${year + 543}`, headers, rows);
+  }
+
   function exportMonthly() {
     const headers = ["เดือน", "จำนวนใบเสร็จ", "ยอดก่อน VAT", "ภาษีขาย", "ภาษีซื้อ (ประมาณการ)", "VAT นำส่ง (ขาย−ซื้อ)", "หัก ณ ที่จ่าย", "รับสุทธิ"];
     const rows = months.map((b, i) => [`${TH_MONTHS[i]} ${year + 543}`, b.count, b.base, b.vat, b.buyVat, b.vatDue, b.wht, b.net]);
@@ -78,9 +121,16 @@ export default function TaxReport({ role }) {
         <div><h1 className="page-title">รายงานภาษี <span className="page-title-en">VAT / WHT</span></h1>
           <p className="page-sub">สรุปภาษีขาย (VAT) และภาษีหัก ณ ที่จ่าย รายเดือน · คิดจากวันที่ในใบเสร็จ/ใบกำกับภาษี · ส่งออก Excel ได้</p></div>
         <div className="cat-head-actions" style={{ gap: 8, flexWrap: "wrap" }}>
-          <button className="btn-ghost sm" onClick={exportMonthly}>⬇ Export สรุปรายเดือน</button>
-          <button className="btn-ghost sm" onClick={exportDetail}>⬇ Export รายใบ (ทั้งปี)</button>
+          {tab === "vat" ? (<>
+            <button className="btn-ghost sm" onClick={exportMonthly}>⬇ Export สรุปรายเดือน</button>
+            <button className="btn-ghost sm" onClick={exportDetail}>⬇ Export รายใบ (ทั้งปี)</button>
+          </>) : <button className="btn-ghost sm" onClick={exportWht}>⬇ Export ภ.ง.ด.53 (ทั้งปี)</button>}
         </div>
+      </div>
+
+      <div className="cat-chips" style={{ marginBottom: 10 }}>
+        <button className={"cat-chip" + (tab === "vat" ? " on" : "")} onClick={() => setTab("vat")}>ภาษีขาย/ซื้อ (ภ.พ.30)</button>
+        <button className={"cat-chip" + (tab === "wht" ? " on" : "")} onClick={() => setTab("wht")}>ภาษีหัก ณ ที่จ่าย ที่เราหักไว้ (ภ.ง.ด.53){whtTot.count ? ` · ${whtTot.count}` : ""}</button>
       </div>
 
       <div className="cf-bar">
@@ -96,6 +146,7 @@ export default function TaxReport({ role }) {
         </div>
       </div>
 
+      {tab === "vat" ? (<>
       <div className="kpi-grid">
         <div className="stat-card"><div className="stat-val">{fmtBaht(tot.base)}</div><div className="stat-label">ยอดขายก่อน VAT (ปีนี้) · {tot.count} ใบ</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#1d4ed8" }}>{fmtBaht(tot.vat)}</div><div className="stat-label">ภาษีขาย (จากใบกำกับ)</div></div>
@@ -163,6 +214,75 @@ export default function TaxReport({ role }) {
       <p className="page-sub" style={{ marginTop: 12, fontSize: 12 }}>
         💡 <b>ภาษีขาย</b>คิดจากใบเสร็จ/ใบกำกับภาษีที่ยังไม่ถูกยกเลิก ตามวันที่ในใบเสร็จ · <b>ภาษีซื้อ</b>ประมาณการจากใบสั่งซื้อที่ติ๊ก VAT ตามวันที่ใบสั่งซื้อ (ตอนยื่น ภพ.30 ให้ใช้ยอดจากใบกำกับภาษีซื้อจริงของผู้ขาย) · <b>VAT นำส่ง</b> = ภาษีขาย − ภาษีซื้อ (ติดลบ = ขอคืน/ยกยอด) · หัก ณ ที่จ่าย = ภาษีที่ลูกค้าหักไว้ (เครดิตคืน)
       </p>
+      </>) : (<>
+      <div className="kpi-grid">
+        <div className="stat-card"><div className="stat-val">{fmtBaht(whtTot.gross)}</div><div className="stat-label">ยอดจ่ายช่างซัพก่อนหัก (ปีนี้) · {whtTot.count} ใบ</div></div>
+        <div className="stat-card"><div className="stat-val" style={{ color: "#dc2626" }}>{fmtBaht(whtTot.wht)}</div><div className="stat-label">ภาษีที่หักไว้ ต้องนำส่งสรรพากร</div></div>
+        <div className="stat-card"><div className="stat-val">{fmtBaht(whtTot.net)}</div><div className="stat-label">จ่ายช่างซัพจริง (สุทธิ)</div></div>
+      </div>
+
+      {whtNoTaxId.length > 0 && (
+        <div className="card" style={{ borderLeft: "4px solid #dc2626", marginBottom: 10 }}>
+          ⚠️ <b>ยื่น ภ.ง.ด.53 ไม่ได้จนกว่าจะกรอกเลขผู้เสียภาษี</b> ของทีม: {whtNoTaxId.map((id) => teamOf(id).name_th || id).join(" · ")}
+          <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 4 }}>กรอกได้ที่ เมนูช่างซัพ → แก้ไขทีม → เลขผู้เสียภาษี</div>
+        </div>
+      )}
+
+      {whtTot.count === 0 ? <div className="empty" style={{ padding: 40 }}>ยังไม่มีใบจ่ายช่างซัพที่จ่ายแล้วและมีการหักภาษี ในปี {year + 543}</div> : (
+        <div className="card" style={{ padding: 0, overflow: "auto" }}>
+          <table className="cf-table">
+            <thead><tr>
+              <th style={{ textAlign: "left" }}>เดือนที่จ่าย</th>
+              <th>จำนวนใบ</th><th>ยอดจ่ายก่อนหัก</th><th>ภาษีหักไว้</th><th>จ่ายสุทธิ</th><th>กำหนดนำส่ง</th><th></th>
+            </tr></thead>
+            <tbody>
+              {whtMonths.map((b, i) => b.count === 0 ? null : (
+                <React.Fragment key={i}>
+                  <tr className="tax-monthrow" onClick={() => setOpenMonth(openMonth === "w" + i ? null : "w" + i)} style={{ cursor: "pointer" }}>
+                    <td style={{ textAlign: "left", fontWeight: 700 }}>{TH_MONTHS[i]}</td>
+                    <td>{b.count}</td>
+                    <td>{fmtBaht(b.gross)}</td>
+                    <td style={{ color: "#dc2626", fontWeight: 700 }}>{fmtBaht(b.wht)}</td>
+                    <td>{fmtBaht(b.net)}</td>
+                    <td style={{ fontSize: 12, color: "var(--ink-2)" }}>ภายใน 7 {TH_MONTHS[(i + 1) % 12]}</td>
+                    <td><UIcon name="chevR" size={13} style={{ transform: openMonth === "w" + i ? "rotate(90deg)" : "none", color: "var(--ink-3)" }} /></td>
+                  </tr>
+                  {openMonth === "w" + i && b.rows.map((p) => {
+                    const t = teamOf(p.team);
+                    return (
+                      <tr key={p.id} className="tax-detailrow">
+                        <td style={{ textAlign: "left", paddingLeft: 22 }}>
+                          <b>{t.name_th || p.team || "—"}</b> <span style={{ color: "var(--ink-3)", fontSize: 12 }}>{thDate(whtDate(p))}</span>
+                          <div style={{ fontSize: 12, color: t.tax_id ? "var(--ink-2)" : "#dc2626" }}>{t.tax_id ? "เลขผู้เสียภาษี " + t.tax_id : "⚠️ ไม่มีเลขผู้เสียภาษี"}</div>
+                          {(p.job_nos || []).length > 0 && <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{(p.job_nos || []).join(", ")}</div>}
+                        </td>
+                        <td></td>
+                        <td>{fmtBaht(p.gross)}</td>
+                        <td style={{ color: "#dc2626" }}>{fmtBaht(p.wht_amt)} <span style={{ fontSize: 11, color: "var(--ink-3)" }}>({Number(p.wht_rate) || 3}%)</span></td>
+                        <td>{fmtBaht(p.net)}</td>
+                        <td></td><td></td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </tbody>
+            <tfoot><tr>
+              <td style={{ textAlign: "left" }}>รวมทั้งปี</td>
+              <td>{whtTot.count}</td>
+              <td>{fmtBaht(whtTot.gross)}</td>
+              <td style={{ color: "#dc2626", fontWeight: 700 }}>{fmtBaht(whtTot.wht)}</td>
+              <td>{fmtBaht(whtTot.net)}</td>
+              <td></td><td></td>
+            </tr></tfoot>
+          </table>
+        </div>
+      )}
+
+      <p className="page-sub" style={{ marginTop: 12, fontSize: 12 }}>
+        💡 นี่คือภาษีที่ <b>เราหักจากช่างซัพไว้</b> ตอนจ่ายเงิน (คนละขากับแท็บแรกที่ลูกค้าหักเรา) — เป็น<b>หนี้ที่ต้องนำส่งสรรพากร</b> ไม่ใช่เงินของเรา · รับรู้ตามวันที่จ่ายจริง · ยื่น <b>ภ.ง.ด.53</b> ภายในวันที่ 7 ของเดือนถัดไป (ยื่นออนไลน์ถึงวันที่ 15) · ต้องออก<b>หนังสือรับรองการหักภาษี ณ ที่จ่าย</b>ให้ช่างซัพทุกครั้งที่จ่าย
+      </p>
+      </>)}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>

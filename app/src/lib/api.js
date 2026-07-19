@@ -1431,6 +1431,13 @@ export async function saveBoq(boq, items) {
     if (e1 && (e1.message || "").includes(c)) { delete bHead[c]; e1 = (await supabase.from("boqs").upsert(bHead, { onConflict: "boq_no" })).error; }
   }
   if (e1) throw e1;
+  // ลบ+เขียนใหม่ในธุรกรรมเดียว (mig 157) — เน็ตหลุดกลางทางแล้ว rollback เอง รายการเดิมไม่หาย
+  const atomic = await supabase.rpc("replace_boq_items", {
+    p_boq_no: boq.boq_no,
+    p_items: items.map((x) => ({ section: x.section, item_code: x.code || null, name: x.name || null, description: x.description?.trim() || null, unit: x.unit || null, qty: Number(x.qty) || 0, unit_cost: Number(x.unit_cost) || 0 })),
+  });
+  if (!atomic.error) { syncInternalNote({ boqNo: boq.boq_no }, boq.internal_note).catch(() => {}); return; }
+  // pre-157 fallback: ยังไม่มี function → ใช้วิธีเดิม (ลบก่อนเขียน)
   const e2 = (await supabase.from("boq_items").delete().eq("boq_no", boq.boq_no)).error;
   if (e2) throw e2;
   if (items.length) {
@@ -1586,6 +1593,13 @@ export async function saveQuotation(q, items) {
     }
   }
   if (e1) throw e1;
+  // ลบ+เขียนใหม่ในธุรกรรมเดียว (mig 157) — เน็ตหลุดกลางทางแล้ว rollback เอง รายการเดิมไม่หาย
+  const atomicQ = await supabase.rpc("replace_quotation_items", {
+    p_quote_no: q.quote_no,
+    p_items: items.map((x) => ({ item_code: x.code || null, name: x.name || null, kind: x.kind || null, description: x.description?.trim() || null, unit: x.unit || null, qty: Number(x.qty) || 0, unit_price: Number(x.unit_price) || 0, discount: Number(x.discount) || 0 })),
+  });
+  if (!atomicQ.error) { syncInternalNote({ quoteNo: q.quote_no, boqNo: q.boq_no }, q.internal_note).catch(() => {}); return; }
+  // pre-157 fallback: ยังไม่มี function → ใช้วิธีเดิม (ลบก่อนเขียน)
   const e2 = (await supabase.from("quotation_items").delete().eq("quote_no", q.quote_no)).error;
   if (e2) throw e2;
   if (items.length) {
