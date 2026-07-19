@@ -14,17 +14,23 @@ export default function DocCapture({ type, no, onReady, onError }) {
     (async () => {
       try {
         const companies = await getCompanies();
+        // ดึงเฉพาะใบที่ต้องใช้ ({ nos: [...] }) แล้วค่อยไล่ขึ้นไปหาใบแม่ — เดิมโหลดเอกสารทั้งบริษัท 3 ชุดเพื่อเอามาใบเดียว
         if (type === "quote") {
-          const q = (await listQuotations()).find((x) => x.quote_no === no);
+          const q = (await listQuotations({ nos: [no] })).find((x) => x.quote_no === no);
           if (!q) throw new Error("ไม่พบใบเสนอราคา " + no);
           alive && setData({ companies, q });
         } else if (type === "invoice") {
-          const [iv, qs] = await Promise.all([listInvoices(), listQuotations()]);
-          const x = iv.find((r) => r.invoice_no === no); if (!x) throw new Error("ไม่พบใบแจ้งหนี้ " + no);
+          const x = (await listInvoices({ nos: [no] })).find((r) => r.invoice_no === no);
+          if (!x) throw new Error("ไม่พบใบแจ้งหนี้ " + no);
+          const qs = x.quote_no ? await listQuotations({ nos: [x.quote_no] }) : [];
           alive && setData({ companies, x, q: qs.find((r) => r.quote_no === x.quote_no) });
         } else if (type === "receipt") {
-          const [rc, iv, qs] = await Promise.all([listReceipts(), listInvoices(), listQuotations()]);
-          const x = rc.find((r) => r.receipt_no === no); if (!x) throw new Error("ไม่พบใบเสร็จ " + no);
+          const x = (await listReceipts({ nos: [no] })).find((r) => r.receipt_no === no);
+          if (!x) throw new Error("ไม่พบใบเสร็จ " + no);
+          const [iv, qs] = await Promise.all([
+            x.invoice_no ? listInvoices({ nos: [x.invoice_no] }) : [],
+            x.quote_no ? listQuotations({ nos: [x.quote_no] }) : [],
+          ]);
           alive && setData({ companies, x, inv: iv.find((r) => r.invoice_no === x.invoice_no), q: qs.find((r) => r.quote_no === x.quote_no) });
         } else if (type === "po") {
           // ใบสั่งซื้อ — ส่งเข้าแชตซัพพลายเออร์ (โครงเดียวกับหน้าพิมพ์ในเมนูใบสั่งซื้อ)

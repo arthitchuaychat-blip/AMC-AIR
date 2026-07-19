@@ -1270,6 +1270,23 @@ export async function deleteSupplier(id, reason) {
 // ทุก select ในสายเอกสารขายต้องผ่าน _fetchAll — เกิน 1000 ใบเมื่อไหร่ ใบเก่าหาย + ตัวล็อกโซ่ (hasQuote/hasReceipt/ยอดวางบิล) คำนวณผิดเงียบ ๆ
 const _allRows = (build) => _fetchAll(build).then((rows) => ({ data: rows }));
 
+// ---------- ดึงเอกสารแบบเจาะจงใบ (แทนที่จะโหลดทั้งบริษัทแล้วมา .find() ในเบราว์เซอร์) ----------
+// พรีวิวแผงขวา/เปิดจากลิงก์ ต้องการเอกสารใบเดียว แต่เดิมเรียก listQuotations() = อ่าน 7 ตารางเต็ม
+// ทุกใบพร้อมรายการทุกบรรทัด เพื่อเอามาใบเดียว — โตขึ้นทุกวัน วันหนึ่งกดพรีวิวทีนึงรอเป็นสิบวินาที
+// ⚠️ ตั้งใจไม่ทำ view สรุปยอดใน SQL: ยอดทุกใบคำนวณจากรายการรายบรรทัดด้วยสูตร JS (ปัดเศษราคาบัตร +
+//    ส่วนลดรายบรรทัด) ถ้าเขียนสูตรซ้ำใน SQL ตัวเลขแดชบอร์ดจะเพี้ยนจากตัวใบเมื่อสูตรฝั่งใดฝั่งหนึ่งถูกแก้
+//    → คงสูตรเดิมไว้ที่เดียว แล้วลด "จำนวนแถวที่ดึงมา" แทน
+const _scopeNos = (opts) => {
+  const a = opts && opts.nos;
+  if (!Array.isArray(a) || !a.length) return null;
+  const u = [...new Set(a.filter(Boolean))];
+  return u.length && u.length <= 200 ? u : null;   // เกิน 200 = URL ยาวเกิน PostgREST → กลับไปโหลดเต็มปลอดภัยกว่า
+};
+const _onlyNos = (q, col, nos) => (nos ? q.in(col, nos) : q);
+const _idsOf = (rows, col) => [...new Set((rows || []).map((r) => r[col]).filter((v) => v != null))];
+// ids = null (ไม่ได้เจาะจง) → โหลดเต็มเหมือนเดิม · [] (เจาะจงแต่ไม่มีใบไหนอ้างถึง) → ต้องได้ 0 แถว ไม่ใช่ทั้งตาราง
+const _onlyIds = (q, col, ids) => (ids == null ? q : q.in(col, ids.length ? ids : [-1]));
+
 // เลขเอกสารซ้ำไหม — ต้องเช็คก่อนบันทึกใบใหม่ทุกครั้ง เพราะ save เป็น upsert ที่ "ทับใบเดิมเงียบ ๆ" ถ้าเลขชนกัน
 // (เลขจาก genNo ละเอียดระดับวินาที แต่ 2 เครื่องกดพร้อมกัน หรือพิมพ์เลขมือซ้ำ ก็ยังชนได้)
 const _DOC_NO_COL = { boqs: "boq_no", quotations: "quote_no", invoices: "invoice_no", receipts: "receipt_no", billing_notes: "billing_no", purchase_orders: "po_no", material_preps: "prep_no" };
@@ -1280,17 +1297,24 @@ export async function docNoTaken(table, no) {
   if (error) throw error;
   return (count || 0) > 0;
 }
-export async function listBoqs() {
-  const [b, it, cu, si, ct, qt] = await Promise.all([
-    _allRows((f, t) => supabase.from("boqs").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("boq_no").range(f, t)),
+export async function listBoqs(opts = {}) {
+  const nos = _scopeNos(opts);
+  const bP = _allRows((f, t) => _onlyNos(supabase.from("boqs").select("*", { count: "exact" }), "boq_no", nos).order("created_at", { ascending: false }).order("boq_no").range(f, t));
+  // เจาะจงใบ → ต้องรู้ customer_id/site_id ของใบนั้นก่อน จึงรอหัวใบมาก่อน · โหลดทั้งหมด → ไม่ต้องรอ ยิงขนานเหมือนเดิม
+  const b = nos ? await bP : { data: [] };
+  if (b.error) throw b.error;
+  const cids = _idsOf(b.data, "customer_id"), sids = _idsOf(b.data, "site_id");
+  const [it, cu, si, ct, qt] = await Promise.all([
     // ห้ามอ่านทั้งตารางตรง ๆ — Supabase ตัดที่ 1000 แถว รายการใบใหม่ (id ท้ายตาราง) จะหายทั้งที่บันทึกสำเร็จ
-    _allRows((f, t) => supabase.from("boq_items").select("*", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("quotations").select("quote_no,boq_no,status", { count: "exact" }).order("quote_no").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("boq_items").select("*", { count: "exact" }), "boq_no", nos).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,status", { count: "exact" }), "boq_no", nos).order("quote_no").range(f, t)),
   ]);
-  if (b.error) throw b.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
+  const bR = nos ? b : await bP;
+  if (bR.error) throw bR.error;
+  if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const byBoq = {}; (it.data || []).forEach((x) => { (byBoq[x.boq_no] = byBoq[x.boq_no] || []).push(x); });
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
@@ -1304,7 +1328,7 @@ export async function listBoqs() {
     if (q.status === "approved") { e.approved = true; e.no = q.quote_no; }
   });
   const cb = await _creators();
-  return (b.data || []).map((bo) => {
+  return (bR.data || []).map((bo) => {
     const items = byBoq[bo.boq_no] || [];
     const ct0 = cc[bo.customer_id];
     const s = bo.site_id ? sm[bo.site_id] : null;
@@ -1511,17 +1535,23 @@ export async function setJobStatus(job_no, status, reason) {
 }
 
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
-export async function listQuotations() {
-  const [q, it, cu, si, ct, jo, inv] = await Promise.all([
-    _allRows((f, t) => supabase.from("quotations").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("quote_no").range(f, t)),
-    _allRows((f, t) => supabase.from("quotation_items").select("*", { count: "exact" }).order("id").range(f, t)), // กันเพดาน 1000 แถว
-    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id,type", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status,assigned_team", { count: "exact" }).order("job_no").range(f, t)),
-    _allRows((f, t) => supabase.from("invoices").select("quote_no,total,status", { count: "exact" }).order("invoice_no").range(f, t)),
+export async function listQuotations(opts = {}) {
+  const nos = _scopeNos(opts);
+  const qP = _allRows((f, t) => _onlyNos(supabase.from("quotations").select("*", { count: "exact" }), "quote_no", nos).order("created_at", { ascending: false }).order("quote_no").range(f, t));
+  const q = nos ? await qP : { data: [] };   // เจาะจงใบ → รอหัวใบก่อนเพื่อรู้ลูกค้า/ไซต์ · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
+  if (q.error) throw q.error;
+  const cids = _idsOf(q.data, "customer_id"), sids = _idsOf(q.data, "site_id");
+  const [it, cu, si, ct, jo, inv] = await Promise.all([
+    _allRows((f, t) => _onlyNos(supabase.from("quotation_items").select("*", { count: "exact" }), "quote_no", nos).order("id").range(f, t)), // กันเพดาน 1000 แถว
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,type", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status,assigned_team", { count: "exact" }), "quote_no", nos).order("job_no").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("invoices").select("quote_no,total,status", { count: "exact" }), "quote_no", nos).order("invoice_no").range(f, t)),
   ]);
-  if (q.error) throw q.error; if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
+  const qR = nos ? q : await qP;
+  if (qR.error) throw qR.error;
+  if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
   const byQ = {}; (it.data || []).forEach((x) => { (byQ[x.quote_no] = byQ[x.quote_no] || []).push(x); });
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
@@ -1532,7 +1562,7 @@ export async function listQuotations() {
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
   const billedByQ = {}; (inv.data || []).forEach((x) => { if (x.status !== "cancelled") billedByQ[x.quote_no] = (billedByQ[x.quote_no] || 0) + Number(x.total || 0); });
   const cb = await _creators();
-  return (q.data || []).map((qo) => {
+  return (qR.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
     // วิธีการรับเงิน: ราคาบัตรปรับเข้า "ราคาต่อหน่วยของแต่ละรายการ" (ปัดขึ้นบาทเต็ม/หน่วย) — ไม่มีบรรทัดค่าธรรมเนียม
     // unit_price ที่เก็บ = ราคาเงินสดเสมอ · price_show = ราคาที่แสดง/พิมพ์ตามวิธีชำระ
@@ -1662,17 +1692,24 @@ async function _creators() {
 }
 
 // ---------- INVOICES (ใบแจ้งหนี้ · แบ่งงวดได้) ----------
-export async function listInvoices() {
-  const [iv, cu, si, ct, qt, rc, bn] = await Promise.all([
-    _allRows((f, t) => supabase.from("invoices").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("invoice_no").range(f, t)),
-    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("quotations").select("quote_no,boq_no,title", { count: "exact" }).order("quote_no").range(f, t)),
-    _allRows((f, t) => supabase.from("receipts").select("invoice_no,status", { count: "exact" }).order("receipt_no").range(f, t)),
-    _allRows((f, t) => supabase.from("billing_notes").select("billing_no,invoice_nos,status", { count: "exact" }).order("billing_no").range(f, t)).catch(() => ({ data: [] })), // pre-050 → ไม่มีตาราง
+export async function listInvoices(opts = {}) {
+  const nos = _scopeNos(opts);
+  const ivP = _allRows((f, t) => _onlyNos(supabase.from("invoices").select("*", { count: "exact" }), "invoice_no", nos).order("created_at", { ascending: false }).order("invoice_no").range(f, t));
+  const iv = nos ? await ivP : { data: [] };   // เจาะจงใบ → รอหัวใบก่อน · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
+  if (iv.error) throw iv.error;
+  const cids = _idsOf(iv.data, "customer_id"), sids = _idsOf(iv.data, "site_id"), qnos = _idsOf(iv.data, "quote_no");
+  const [cu, si, ct, qt, rc, bn] = await Promise.all([
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,title", { count: "exact" }), "quote_no", nos && (qnos.length ? qnos : [" "])).order("quote_no").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("receipts").select("invoice_no,status", { count: "exact" }), "invoice_no", nos).order("receipt_no").range(f, t)),
+    // invoice_nos เป็น array — หาใบวางบิลที่ "มีใบใดใบหนึ่งในชุดนี้" ต้องใช้ overlaps ไม่ใช่ in/contains
+    _allRows((f, t) => { const q = supabase.from("billing_notes").select("billing_no,invoice_nos,status", { count: "exact" }); return (nos ? q.overlaps("invoice_nos", nos) : q).order("billing_no").range(f, t); }).catch(() => ({ data: [] })), // pre-050 → ไม่มีตาราง
   ]);
-  if (iv.error) throw iv.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
+  const ivR = nos ? iv : await ivP;
+  if (ivR.error) throw ivR.error;
+  if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
@@ -1685,7 +1722,7 @@ export async function listInvoices() {
   const billingByInv = {};
   (bn.data || []).forEach((b) => { if (b.status !== "cancelled") (b.invoice_nos || []).forEach((n) => { if (!billingByInv[n]) billingByInv[n] = b.billing_no; }); });
   const cb = await _creators();
-  return (iv.data || []).map((x) => {
+  return (ivR.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
       title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
@@ -1779,16 +1816,23 @@ export async function deleteInvoice(invoice_no, reason) {
 }
 
 // ---------- RECEIPTS (ใบเสร็จรับเงิน) ----------
-export async function listReceipts() {
-  const [rc, cu, si, ct, jo, qt] = await Promise.all([
-    _allRows((f, t) => supabase.from("receipts").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("receipt_no").range(f, t)),
-    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
-    _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no", { count: "exact" }).order("job_no").range(f, t)),
-    _allRows((f, t) => supabase.from("quotations").select("quote_no,title", { count: "exact" }).order("quote_no").range(f, t)),
+export async function listReceipts(opts = {}) {
+  const nos = _scopeNos(opts);
+  const rcP = _allRows((f, t) => _onlyNos(supabase.from("receipts").select("*", { count: "exact" }), "receipt_no", nos).order("created_at", { ascending: false }).order("receipt_no").range(f, t));
+  const rc = nos ? await rcP : { data: [] };   // เจาะจงใบ → รอหัวใบก่อน · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
+  if (rc.error) throw rc.error;
+  const cids = _idsOf(rc.data, "customer_id"), sids = _idsOf(rc.data, "site_id");
+  const qnos = _idsOf(rc.data, "quote_no"); const qScope = nos && (qnos.length ? qnos : [" "]);
+  const [cu, si, ct, jo, qt] = await Promise.all([
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("job_no,quote_no", { count: "exact" }), "quote_no", qScope).order("job_no").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,title", { count: "exact" }), "quote_no", qScope).order("quote_no").range(f, t)),
   ]);
-  if (rc.error) throw rc.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error; if (qt.error) throw qt.error;
+  const rcR = nos ? rc : await rcP;
+  if (rcR.error) throw rcR.error;
+  if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error; if (qt.error) throw qt.error;
   const titleByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.title]));
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
@@ -1797,7 +1841,7 @@ export async function listReceipts() {
   const cc = _firstContacts(ct.data);
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j.job_no; });
   const cb = await _creators();
-  return (rc.data || []).map((x) => {
+  return (rcR.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,
       title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,

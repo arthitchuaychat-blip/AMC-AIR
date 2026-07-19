@@ -33,10 +33,11 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
     (async () => {
       try {
         let d = null;
-        if (type === "boq") d = (await listBoqs()).find((x) => x.boq_no === no);
-        else if (type === "quote") d = (await listQuotations()).find((x) => x.quote_no === no);
-        else if (type === "invoice") d = (await listInvoices()).find((x) => x.invoice_no === no);
-        else if (type === "receipt") d = (await listReceipts()).find((x) => x.receipt_no === no);
+        // { nos: [no] } = ให้ Supabase กรองมาให้ใบเดียว — เดิมโหลดเอกสารทั้งบริษัทมาแล้ว .find() ทิ้งเกือบหมด
+        if (type === "boq") d = (await listBoqs({ nos: [no] })).find((x) => x.boq_no === no);
+        else if (type === "quote") d = (await listQuotations({ nos: [no] })).find((x) => x.quote_no === no);
+        else if (type === "invoice") d = (await listInvoices({ nos: [no] })).find((x) => x.invoice_no === no);
+        else if (type === "receipt") d = (await listReceipts({ nos: [no] })).find((x) => x.receipt_no === no);
         else if (type === "po") {
           const [l, mats] = await Promise.all([listPurchaseOrders(), listMaterialsLite().catch(() => [])]);
           d = l.find((x) => x.po_no === no);
