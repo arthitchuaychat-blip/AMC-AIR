@@ -189,6 +189,16 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
 
   async function save() {
     if (!ed.title?.trim() && !ed.customer_id) return flash("ใส่ลูกค้าหรือชื่องาน", true);
+    // กด "ตั้งวันนัดหมายเพิ่ม" แล้วไม่ใส่วัน → รอบเปล่าถูกทิ้งตอนบันทึก ใบกลายเป็น "เสร็จปิดงาน" เงียบ ๆ งานหลุดคิวถาวร
+    const dated = (ed.visits || []).filter((v) => v.date);
+    const blanks = (ed.visits || []).length - dated.length;
+    if (blanks > 0 && dated.length > 0 && dated.every((v) => v.status === "done" || v.status === "cancelled")) {
+      if (!await confirmDialog({
+        title: "ยังไม่ได้ใส่วันนัดของรอบใหม่",
+        message: `มีรอบใหม่ที่ยังไม่ได้ระบุวัน ${blanks} รอบ — ถ้าบันทึกตอนนี้รอบนั้นจะหายไป และใบงานจะกลายเป็น "เสร็จปิดงาน" ทันที (งานหลุดคิว ไม่มีใครตามต่อ)\n\nกด "กลับไปใส่วัน" เพื่อระบุวันนัด หรือ "ปิดงานเลย" ถ้าตั้งใจจบงานจริง`,
+        confirmText: "ปิดงานเลย", cancelText: "กลับไปใส่วัน", danger: true,
+      })) return;
+    }
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบงาน ${ed.job_no} ?`)) return;
     // build the visit rows (only ones with a date) — each = วัน + รอบเวลา; ทีมเดียวทั้งใบ
     // (รอบที่เสร็จแล้วคงทีมเดิมไว้ เผื่อมีการเปลี่ยนทีมของใบภายหลัง)
@@ -248,12 +258,23 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   // office sets ONE รอบ (visit) status — siblings untouched; modal/list refresh in place
   async function doVisitStatus(jo, v, status, jobOverride, shouldLock) {
     setApproveCtx(null);
+    // ล็อกเป็น "ระดับใบ" — ถ้าใบยังมีรอบอื่นที่ช่างต้องไปทำต่อ ล็อกแล้วรอบนั้นเดินต่อไม่ได้
+    // ⇒ ล็อกเฉพาะตอนที่รอบอื่นจบหมดแล้วจริง ๆ
+    const others = (jo.visits || []).filter((x) => x.id !== v.id);
+    const othersActive = others.some((x) => !["done", "cancelled"].includes(x.status));
+    let lock = shouldLock;
+    if (shouldLock && othersActive) {
+      lock = false;
+      flash(`อนุมัติรอบนี้แล้ว · ใบนี้ยังมีอีก ${others.filter((x) => !["done", "cancelled"].includes(x.status)).length} รอบที่ยังไม่จบ จึงยังไม่ล็อกใบ`);
+    }
     try {
       // จบใน RPC เดียว (mig 150): เปลี่ยนรอบ + override สถานะใบ (เช่น รอทำใบเสนอราคา) + ล็อก — เน็ตสะดุดก็ไม่ค้างครึ่งทาง
-      await updateVisitStatus(v.id, jo.job_no, status, me, { jobOverride: jobOverride || null, lock: shouldLock === true ? true : shouldLock === false ? false : null });
-      flash(shouldLock ? "อนุมัติ · ปิดงานแล้ว (ล็อก) ✓"
-        : jobOverride === "quote_pending" ? "อนุมัติรอบนี้ · ส่งไปรอทำใบเสนอราคา ✓"
-        : status === "done" ? "อนุมัติ · ปิดงานรอบนี้แล้ว ✓" : "ส่งรอบนี้ไปนัดหมายเพิ่มแล้ว");
+      await updateVisitStatus(v.id, jo.job_no, status, me, { jobOverride: jobOverride || null, lock: lock === true ? true : lock === false ? false : null });
+      if (!(shouldLock && othersActive)) {   // เคสนั้นแจ้งไปแล้วว่ายังไม่ล็อกเพราะมีรอบค้าง
+        flash(lock ? "อนุมัติ · ปิดงานแล้ว (ล็อก) ✓"
+          : jobOverride === "quote_pending" ? "อนุมัติรอบนี้ · ส่งไปรอทำใบเสนอราคา ✓"
+          : status === "done" ? "อนุมัติ · ปิดงานรอบนี้แล้ว ✓" : "ส่งรอบนี้ไปนัดหมายเพิ่มแล้ว");
+      }
       const fresh = await listJobOrders(); setList(fresh);
       setViewing((cur) => cur ? (fresh.find((x) => x.job_no === jo.job_no) || null) : cur);
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }

@@ -3097,8 +3097,15 @@ async function _enrichExpenseJobs(rows) {
   let poByExp = {};   // ใบเบิก 1 ใบผูกได้หลาย PO (จ่ายเจ้าหนี้รวมหลายใบ) — เก็บเป็น array
   const poTotals = {};
   try {
-    const { data } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id,vat").in("expense_id", ids.length ? ids : ["_"]);
-    (data || []).forEach((p) => { if (p.expense_id) (poByExp[p.expense_id] = poByExp[p.expense_id] || []).push(p); });
+    // ⚠️ ต้องแบ่งก้อน — uuid ยาว ~37 ตัว ถ้าใบเบิกเกิน ~180 ใบ URL จะยาวเกินจน 400 แล้ว catch ด้านล่างกลืน error
+    // ผลคือหน้าเบิกจ่ายดูปกติแต่ลิงก์ PO/ชื่อลูกค้าหายไปทั้งหน้า (พังเงียบ)
+    const data = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: chunk, error } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id,vat").in("expense_id", ids.slice(i, i + 200));
+      if (error) throw error;
+      data.push(...(chunk || []));
+    }
+    data.forEach((p) => { if (p.expense_id) (poByExp[p.expense_id] = poByExp[p.expense_id] || []).push(p); });
     // ยอดต่อใบ (รวม VAT) — ไว้กางดูรายการ PO ในใบเบิกรวมหลายใบ
     const linkedPoNos = Object.values(poByExp).flat().map((p) => p.po_no);
     if (linkedPoNos.length) {
@@ -4010,6 +4017,13 @@ export async function setOpeningBalance(amount) {
 }
 // seed/refresh ledger lines from documents (idempotent; never overwrites user-edited rows)
 export async function syncCashEntriesFromDocs() {
+  // งานนี้อ่าน 8 ตารางทั้งบริษัท และถูกเรียกท้ายทุกการบันทึกเอกสาร (รวมปุ่มที่ช่างกดบนมือถือ)
+  // ⇒ ยิงเฉพาะคนที่ดูแลกระแสเงินสดจริง คนอื่นข้ามไป (ข้อมูลจะถูก sync ตอนบัญชี/ธุรการเปิดหน้าอยู่แล้ว)
+  // + RLS ของ cash_entries เขียนได้เฉพาะกลุ่มนี้อยู่แล้ว คนอื่นยิงไปก็ได้แค่โหลดเปล่า ๆ
+  try {
+    const me = await getProfile();
+    if (!["admin", "exec", "finance"].includes(me?.role)) return;
+  } catch { return; }
   const _d = (ts) => (ts ? String(ts).slice(0, 10) : null);
   const [inv, rec, pay, po, poItems, cust, team, existing, salaryProfiles, laborJobs, expReq] = await Promise.all([
     // ตารางเอกสารโตเรื่อย ๆ — ถ้าอ่านไม่ครบ (เพดาน 1000 แถว) sync จะลบ cash lines ของใบที่อ่านไม่ถึง

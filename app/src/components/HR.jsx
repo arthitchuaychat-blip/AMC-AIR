@@ -995,8 +995,11 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       if (markPaid) {
         await setPayslipPaid(ym, true, meta || {});
         // settle the advances deducted this run so they aren't deducted again next month
-        const ids = payable.flatMap((r) => advIdsByUser[r.p.id] || []);
+        // ⚠️ ปิดเฉพาะคนที่หักได้ครบจริง — ถ้าเงินไม่พอหัก (advanceCarry > 0) ต้องคงใบไว้ให้ยกไปหักรอบหน้า
+        const ids = payable.filter((r) => !(calcOf(r).advanceCarry > 0)).flatMap((r) => advIdsByUser[r.p.id] || []);
         await markAdvancesPaid(ym, ids);
+        const carried = payable.filter((r) => calcOf(r).advanceCarry > 0);
+        if (carried.length) flash(`⚠️ ${carried.length} คนเบิกล่วงหน้าเกินยอดที่หักได้ในรอบนี้ — ใบเบิกยังค้างไว้ ยกไปหักรอบถัดไปให้อัตโนมัติ`, true);
         // เดินบัญชี: เงินเดือนทั้งรอบ = เงินออกจากบัญชีที่เลือก (best-effort — hr อาจไม่มีสิทธิ์)
         // booked === false = รอบนี้มีแถวเดินบัญชีเดิมที่กระทบแบงค์ (✓) ค้างอยู่ ระบบไม่ทับ — ต้องเตือนให้ไปตรวจเอง
         if (meta?.accountId) { const booked = await bookSalaryEntry(ym, meta.accountId, runNet, meta.payDate || payDate, payable.length).catch(() => null); ledgerSkipped = booked === false; }

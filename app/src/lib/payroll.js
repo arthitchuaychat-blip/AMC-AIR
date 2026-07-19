@@ -93,6 +93,13 @@ export function computePayslip(emp, st, opt = {}) {
   const holOtHours = Number(st.holOtHours) || 0;
   const holPay = r0(holNormHours * hourly * (monthly ? 1 : 2) + holOtHours * hourly * 3);
   const gross = base + otPay + holPay + bonus;
-  const ded = dLate + dAbsent + dLeave + dSso + otherDeduct + dAdvance;
-  return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso, dAdvance, bonus, otherDeduct, gross, ded, net: gross - ded };
+  // เบิกล่วงหน้ามากกว่าเงินที่เหลือรับ → เดิมสุทธิติดลบ แล้วระบบปิดใบเบิกทั้งหมดว่า "หักแล้ว" หนี้ส่วนเกินหายไปเฉย ๆ
+  // ⇒ หักได้ไม่เกินยอดที่เหลือจริง · ส่วนที่หักไม่ไหวส่งกลับไปเป็น advanceCarry ให้ยกไปหักรอบถัดไป
+  const dedBefore = dLate + dAbsent + dLeave + dSso + otherDeduct;
+  const advCap = Math.max(0, gross - dedBefore);
+  const dAdvanceApplied = Math.min(dAdvance, advCap);
+  const advanceCarry = r0(dAdvance - dAdvanceApplied);   // > 0 = ยังค้าง ต้องยกไปรอบหน้า
+  const ded = dedBefore + dAdvanceApplied;
+  return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso,
+    dAdvance: dAdvanceApplied, advanceCarry, bonus, otherDeduct, gross, ded, net: r0(gross - ded) };
 }
