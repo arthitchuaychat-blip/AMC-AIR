@@ -3681,6 +3681,11 @@ export async function setLineStage(uid, stage) {
   const { error } = await supabase.from("line_contacts").update({ stage }).eq("line_user_id", uid);
   if (error) throw error;
 }
+// ปิด/เปิดบอท AI เฉพาะห้องนั้น (mig 164) — ใช้ตอนพนักงานคุยปิดการขายเอง ไม่อยากให้บอทแทรก
+export async function setLineAiOff(uid, off) {
+  const { error } = await supabase.from("line_contacts").update({ ai_off: !!off }).eq("line_user_id", uid);
+  if (error) throw new Error(/ai_off|PGRST204/i.test(error.message || "") ? "ต้องรัน migration 164 ใน Supabase ก่อน" : error.message);
+}
 export async function setLineOwner(uid, userId) {
   const { error } = await supabase.from("line_contacts").update({ assigned_to: userId || null }).eq("line_user_id", uid);
   if (error) throw error;

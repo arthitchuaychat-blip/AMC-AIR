@@ -478,6 +478,9 @@ const AR_DEFAULT = {
   cooldown_min: 120,
   ai_enabled: false,   // บอท AI ตอบคำถามสินค้า/ราคานอกเวลาทำการ (Claude Sonnet 5 — ต้องตั้ง ANTHROPIC_API_KEY บน Vercel)
   ai_always: false,    // ตอบทุกเวลา (รวมเวลาทำการ) — โหมดทดสอบ หรือให้บอทช่วยตอบตอนทีมไม่ว่าง
+  ai_max_per_hour: 6,  // เพดานคำตอบบอทต่อห้อง ต่อชั่วโมง — กันบอทตอบรัวใส่คนเดียว
+  ai_max_per_day: 120, // เพดานรวมทั้งร้านต่อวัน — กันบิลค่า API บานปลาย
+  ai_handoff_min: 20,  // พนักงานตอบเองแล้ว บอทเงียบกี่นาที — กันแทรกกลางบทสนทนาตอนกำลังปิดการขาย
   ai_extra: "",        // ข้อมูล/นโยบายเพิ่มเติมที่อยากให้บอทรู้ เช่น เงื่อนไขรับประกัน พื้นที่ให้บริการ
   lunch_enabled: true, // พักเที่ยง = นอกเวลาทำการ → บอท/ข้อความอัตโนมัติตอบแทนทีมช่วงนี้
   lunch_from: "12:00",
@@ -530,6 +533,24 @@ function AutoReplyCard({ flash }) {
             <input type="checkbox" checked={!!c.ai_always} onChange={(e) => set("ai_always", e.target.checked)} />
             <b>ตอบทุกเวลา</b>&nbsp;<span className="jo-dim" style={{ fontSize: 12 }}>(รวมช่วงเวลาทำการด้วย — เหมาะกับช่วงทดสอบบอท หรือให้บอทช่วยตอบตอนทีมไม่ว่าง · ไม่ติ๊ก = ตอบเฉพาะนอกเวลาทำการ)</span>
           </label>
+          {/* เบรกบอท (mig 164) — เดิมตอบทุกข้อความไม่จำกัด และแทรกทับตอนพนักงานกำลังคุยปิดการขาย */}
+          <div className="ar-row" style={{ marginBottom: 4, gap: 10, flexWrap: "wrap" }}>
+            <span className="inp inp-unit" style={{ width: 165 }} title="เพดานคำตอบบอทต่อห้อง ต่อชั่วโมง — กันบอทตอบรัวใส่คนเดียว">
+              <span className="unit-pre">ไม่เกิน</span>
+              <input type="number" min="0" value={c.ai_max_per_hour ?? 6} onChange={(e) => set("ai_max_per_hour", Number(e.target.value) || 0)} />
+              <span className="unit-suf">ครั้ง/ชม.</span></span>
+            <span className="inp inp-unit" style={{ width: 175 }} title="เพดานรวมทั้งร้านต่อวัน — กันบิลค่า API บานปลาย">
+              <span className="unit-pre">ทั้งร้าน</span>
+              <input type="number" min="0" value={c.ai_max_per_day ?? 120} onChange={(e) => set("ai_max_per_day", Number(e.target.value) || 0)} />
+              <span className="unit-suf">ครั้ง/วัน</span></span>
+            <span className="inp inp-unit" style={{ width: 185 }} title="พนักงานตอบเองแล้ว บอทเงียบกี่นาที — กันบอทแทรกกลางบทสนทนา">
+              <span className="unit-pre">คนตอบแล้วเงียบ</span>
+              <input type="number" min="0" value={c.ai_handoff_min ?? 20} onChange={(e) => set("ai_handoff_min", Number(e.target.value) || 0)} />
+              <span className="unit-suf">นาที</span></span>
+          </div>
+          <div className="jo-dim" style={{ fontSize: 12, marginBottom: 8 }}>
+            เกินเพดานแล้วบอทจะเงียบและใช้ข้อความนอกเวลาปกติแทน · ใส่ 0 = ไม่จำกัด · ปิดบอทเฉพาะห้องได้ที่แผงขวาในหน้าแชต
+          </div>
           <span style={{ fontSize: 12, fontWeight: 700 }}>ข้อมูลเพิ่มเติมที่อยากให้บอทรู้ (ไม่บังคับ)</span>
           <textarea className="inp" rows={3} value={c.ai_extra || ""} onChange={(e) => set("ai_extra", e.target.value)}
             placeholder={"เช่น รับประกันงานติดตั้ง 1 ปี · พื้นที่บริการ กรุงเทพฯ-สมุทรปราการ · ล้างแอร์เริ่มต้น 500 บาท/เครื่อง"} />

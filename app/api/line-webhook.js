@@ -226,6 +226,45 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
   } catch (e) { console.error("ai-bot error:", e?.message || String(e)); return { text: null, err: String(e?.message || e) }; }
 }
 
+// เบรกบอท AI — เช็คก่อนยิง Anthropic เสมอ (เช็คหลังยิง = จ่ายค่าโทเคนไปแล้ว)
+// คืนเหตุผลที่บล็อก (string) หรือ null ถ้าให้ตอบได้
+// ⚠️ คำตอบของบอทเองก็เป็น direction=out เหมือนกัน ต่างกันแค่ sent_by (บอท = null · คน = user id)
+//    ถ้าลืมกรอง sent_by บอทจะบล็อกตัวเองทุกข้อความหลังตอบครั้งแรก แล้วเงียบถาวรโดยไม่มีใครรู้
+async function aiGate(convId, cfg) {
+  try {
+    // (1) ปิดบอทเฉพาะห้องนี้ (mig 164) — พนักงานกำลังคุยปิดการขายเอง
+    const rc = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId)}&select=ai_off`, { headers: sbH() });
+    if (rc.ok) { const c = (await rc.json())[0]; if (c && c.ai_off) return "room-ai-off"; }
+
+    // (2) พนักงานเพิ่งตอบเอง → บอทต้องเงียบ ห้ามแทรกกลางบทสนทนา
+    const handoff = Math.max(0, Number(cfg.ai_handoff_min) || 20);
+    if (handoff > 0) {
+      const since = new Date(Date.now() - handoff * 60000).toISOString();
+      const rs = await tfetch(`${SB()}/rest/v1/line_messages?line_user_id=eq.${encodeURIComponent(convId)}&direction=eq.out&sent_by=not.is.null&created_at=gte.${since}&select=created_at&limit=1`, { headers: sbH() });
+      if (rs.ok && (await rs.json()).length) return "staff-took-over";
+    }
+
+    // (3) เพดานต่อห้องต่อชั่วโมง — นับเฉพาะคำตอบบอท (ขึ้นต้น 🤖) ไม่นับข้อความตายตัวนอกเวลา
+    const perHour = Math.max(0, Number(cfg.ai_max_per_hour) || 6);
+    if (perHour > 0) {
+      const since = new Date(Date.now() - 3600000).toISOString();
+      const rh = await tfetch(`${SB()}/rest/v1/line_messages?line_user_id=eq.${encodeURIComponent(convId)}&direction=eq.out&sent_by=is.null&text=like.${encodeURIComponent("🤖%")}&created_at=gte.${since}&select=id`, { headers: sbH() });
+      if (rh.ok && (await rh.json()).length >= perHour) return `room-hour-cap(${perHour})`;
+    }
+
+    // (4) เพดานรวมทั้งร้านต่อวัน — กันบิลค่า API บานปลายจากคนยิงรัว
+    //     ⚠️ ต้องคิด "วันนี้" ตามเวลาไทยแบบเดียวกับ isOpenNow ไม่งั้นโควตารีเซ็ตตอน 7 โมงเช้า
+    const perDay = Math.max(0, Number(cfg.ai_max_per_day) || 120);
+    if (perDay > 0) {
+      const th = new Date(Date.now() + 7 * 3600000);
+      const startTh = new Date(Date.UTC(th.getUTCFullYear(), th.getUTCMonth(), th.getUTCDate()) - 7 * 3600000).toISOString();
+      const rd = await tfetch(`${SB()}/rest/v1/line_messages?direction=eq.out&sent_by=is.null&text=like.${encodeURIComponent("🤖%")}&created_at=gte.${startTh}&select=id`, { headers: sbH() });
+      if (rd.ok && (await rd.json()).length >= perDay) return `day-cap(${perDay})`;
+    }
+    return null;
+  } catch (_) { return null; }   // เช็คไม่ได้ = ปล่อยให้ตอบ ดีกว่าบอทเงียบเพราะ query พัง
+}
+
 // store the auto-reply as an outbound message + stamp last_autoreply_at (for cooldown)
 async function recordAutoReply(convId, text) {
   await tfetch(`${SB()}/rest/v1/line_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ line_user_id: convId, direction: "out", type: "text", text, sent_by: null }) });
@@ -252,7 +291,15 @@ async function autoReply(replyToken, convId, isNew, isUser, msgRow, meta = {}) {
     const afterHours = !isOpenNow(cfg);
     // 0) บอท AI: ตอบคำถามจริงจากแคตตาล็อกทุกข้อความ (ไม่มี cooldown — คุยต่อเนื่องได้)
     //    ปกติตอบเฉพาะนอกเวลาทำการ · ติ๊ก "ตอบทุกเวลา" (ai_always) = ตอบตลอดรวมเวลาทำการ (โหมดทดสอบ/ช่วยทีม)
-    if (isText && cfg.ai_enabled && (afterHours || cfg.ai_always)) {
+    const aiOn = isText && cfg.ai_enabled && (afterHours || cfg.ai_always);
+    const gate = aiOn ? await aiGate(convId, cfg) : null;
+    if (aiOn && gate) {
+      // บันทึกเหตุผลที่เบรกไว้ในกล่องดำเสมอ — ไม่งั้นเวลาบอทเงียบจะไล่หาสาเหตุไม่ได้
+      await aiBlackbox(convId, msgRow.text, { skip: gate, ...meta });
+      // พนักงานกำลังคุยอยู่ = ห้ามแทรกข้อความอัตโนมัติใด ๆ ทั้งสิ้น
+      if (gate === "staff-took-over") return;
+      // เบรกอื่น ๆ ปล่อยตกไปใช้ข้อความตายตัวนอกเวลา (ซึ่งมี cooldown ของตัวเอง)
+    } else if (aiOn) {
       const t0 = Date.now();
       const out = await aiAnswer(convId, msgRow.text.trim(), cfg, afterHours);
       let sent = false;
@@ -375,6 +422,9 @@ export default async function handler(req, res) {
         // สถานะบอท AI: จะตอบจริงต้อง enabled + ai_enabled + มี key + (นอกเวลาทำการ หรือติ๊กตอบทุกเวลา)
         ai_enabled: cfg ? !!cfg.ai_enabled : null,
         ai_always: cfg ? !!cfg.ai_always : null,
+        ai_max_per_hour: cfg ? (Number(cfg.ai_max_per_hour) || 6) : null,
+        ai_max_per_day: cfg ? (Number(cfg.ai_max_per_day) || 120) : null,
+        ai_handoff_min: cfg ? (Number(cfg.ai_handoff_min) || 20) : null,
         anthropic_key: !!process.env.ANTHROPIC_API_KEY,
         aiWouldReplyNow: cfg ? (!!cfg.enabled && !!cfg.ai_enabled && !!process.env.ANTHROPIC_API_KEY && (!isOpenNow(cfg) || !!cfg.ai_always)) : null,
         // กล่องดำ: ผลการทำงานรอบล่าสุดของบอทกับข้อความจริง (at, q, ok, ms, err)

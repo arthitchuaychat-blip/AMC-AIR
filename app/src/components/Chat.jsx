@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -200,6 +200,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const staffColor = React.useMemo(() => Object.fromEntries(staff.map((s, i) => [s.id, STAFF_COLORS[i % STAFF_COLORS.length]])), [staff]);
   async function changeStage(s) { if (isFb) return; try { await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
   async function changeOwner(uid) { if (isFb) return; try { await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
+  // ปิดบอทเฉพาะห้องนี้ — ใช้ตอนกำลังคุยปิดการขายเอง ไม่อยากให้บอทแทรก (mig 164)
+  async function toggleAiOff(off) {
+    if (isFb) return;
+    try { await setLineAiOff(sel, off); await loadContacts(); flash(off ? "ปิดบอท AI ห้องนี้แล้ว — มีแต่คนตอบ" : "เปิดบอท AI ห้องนี้แล้ว"); }
+    catch (e) { flash("เปลี่ยนไม่สำเร็จ: " + (e.message || e), true); }
+  }
   React.useEffect(() => { selRef.current = sel; }, [sel]);
   // teams + jobs for the คิวช่าง panel (so we can answer queue questions instantly)
   React.useEffect(() => { listTeams().then(setTeams).catch(() => {}); listJobOrders().then(setJobs).catch(() => {}); }, []);
@@ -812,6 +818,14 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       ? <Combo className="inp" value={selContact.assigned_to || ""} onChange={(e) => changeOwner(e.target.value || null)}><option value="">— ยังไม่มอบหมาย —</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Combo>
                       : <span style={{ fontSize: 13 }}>{(selContact.assigned_to && staffMap[selContact.assigned_to]) || "—"}</span>}
                   </label>
+                  {/* บอทมีเบรกอยู่แล้ว (เงียบอัตโนมัติหลังพนักงานตอบ) แต่บางห้องอยากปิดถาวรระหว่างปิดการขาย */}
+                  {!isFb && canSend && (
+                    <label className="ci-field" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                      title="ปิดบอท AI เฉพาะห้องนี้ — ใช้ตอนกำลังคุยปิดการขายเอง ไม่อยากให้บอทแทรก">
+                      <input type="checkbox" checked={!!selContact.ai_off} onChange={(e) => toggleAiOff(e.target.checked)} />
+                      <span style={{ fontSize: 13 }}>🤖 ปิดบอท AI ห้องนี้</span>
+                    </label>
+                  )}
                 </div>
                 {cust ? (<>
                   {!isFb && (selContact.custIds || []).length > 0 && (
