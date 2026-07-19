@@ -1327,7 +1327,7 @@ export async function listBoqs(opts = {}) {
     const e = quoteByBoq[q.boq_no] || (quoteByBoq[q.boq_no] = { no: q.quote_no, approved: false });
     if (q.status === "approved") { e.approved = true; e.no = q.quote_no; }
   });
-  const cb = await _creators();
+  const cb = await _creators(nos ? _idsOf(bR.data, "created_by") : null);
   return (bR.data || []).map((bo) => {
     const items = byBoq[bo.boq_no] || [];
     const ct0 = cc[bo.customer_id];
@@ -1561,7 +1561,7 @@ export async function listQuotations(opts = {}) {
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
   const billedByQ = {}; (inv.data || []).forEach((x) => { if (x.status !== "cancelled") billedByQ[x.quote_no] = (billedByQ[x.quote_no] || 0) + Number(x.total || 0); });
-  const cb = await _creators();
+  const cb = await _creators(nos ? _idsOf(qR.data, "created_by") : null);
   return (qR.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
     // วิธีการรับเงิน: ราคาบัตรปรับเข้า "ราคาต่อหน่วยของแต่ละรายการ" (ปัดขึ้นบาทเต็ม/หน่วย) — ไม่มีบรรทัดค่าธรรมเนียม
@@ -1686,9 +1686,16 @@ export async function setQuotationStatus(quote_no, status, reason) {
 }
 
 // id → name map of document creators (for the "ผู้สร้างเอกสาร" audit line)
-async function _creators() {
-  const { data } = await supabase.from("profiles").select("id,name");
-  return Object.fromEntries((data || []).map((p) => [p.id, p.name]));
+// ชื่อคนสร้างเอกสาร · ids = เจาะจงเฉพาะคนที่เอกสารชุดนี้อ้างถึง (พรีวิวใบเดียวไม่ต้องโหลดพนักงานทั้งบริษัท)
+// ไม่ระบุ ids = โหลดทั้งหมด แต่ต้องผ่าน _fetchAll — เดิม select ตรง ๆ จึงโดนเพดาน 1000 แถวเงียบ ๆ
+async function _creators(ids) {
+  const list = ids ? [...new Set(ids.filter(Boolean))] : null;
+  if (list && !list.length) return {};
+  const rows = await _fetchAll((f, t) => {
+    const q = supabase.from("profiles").select("id,name", { count: "exact" });
+    return (list && list.length <= 200 ? q.in("id", list) : q).order("id").range(f, t);
+  }).catch(() => []);
+  return Object.fromEntries((rows || []).map((p) => [p.id, p.name]));
 }
 
 // ---------- INVOICES (ใบแจ้งหนี้ · แบ่งงวดได้) ----------
@@ -1721,7 +1728,7 @@ export async function listInvoices(opts = {}) {
   // ใบวางบิลที่ยังไม่ยกเลิกที่มีใบแจ้งหนี้นี้อยู่ — ล็อกลำดับการยกเลิก (ต้องยกเลิกใบวางบิลก่อน)
   const billingByInv = {};
   (bn.data || []).forEach((b) => { if (b.status !== "cancelled") (b.invoice_nos || []).forEach((n) => { if (!billingByInv[n]) billingByInv[n] = b.billing_no; }); });
-  const cb = await _creators();
+  const cb = await _creators(nos ? _idsOf(ivR.data, "created_by") : null);
   return (ivR.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
@@ -1840,7 +1847,7 @@ export async function listReceipts(opts = {}) {
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j.job_no; });
-  const cb = await _creators();
+  const cb = await _creators(nos ? _idsOf(rcR.data, "created_by") : null);
   return (rcR.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,

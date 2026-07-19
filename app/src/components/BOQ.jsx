@@ -261,7 +261,9 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       </div>
       {(() => {
         // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรองประเภทงาน (CRM)
-        const fl0 = list.filter((bo) => inDateRange(bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title) || matchPhone(search, bo.contactPhone)));
+        // กรองด้วยวันที่เดียวกับที่การ์ดแสดง (issue_date) ไม่ใช่วันที่สร้างแถว — ใบที่ลงวันที่ย้อนหลัง
+        // เคยหลุดช่วงที่เลือกทั้งที่บนการ์ดขึ้นวันที่ในช่วง · ใบเก่าก่อน mig 119 ไม่มี issue_date → ใช้ created_at
+        const fl0 = list.filter((bo) => inDateRange(bo.issue_date || bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title) || matchPhone(search, bo.contactPhone)));
         const nType = (v) => fl0.filter((bo) => v === "all" || bo.job_type === v).length;
         const fl = fl0.filter((bo) => typeF === "all" || bo.job_type === typeF);
         return (<>

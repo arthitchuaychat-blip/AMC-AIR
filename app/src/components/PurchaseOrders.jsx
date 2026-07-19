@@ -84,7 +84,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const poTypeOf = (po) => po.po_type || ((po.items || []).some((it) => matMap[it.material_code]?.kind === "ac") ? "ac" : "material");
   const [typeF, setTypeF] = React.useState("all");
   // base หลังค้นหา+วันที่ — ใช้นับจำนวนบนชิปตัวกรอง
-  const fl0 = pos.filter((po) => inDateRange(po.created_at, dateR)
+  // กรองด้วยวันที่เดียวกับที่การ์ดแสดง (issue_date) ไม่ใช่วันที่สร้างแถว — ใบลงวันที่ย้อนหลังเคยหลุดช่วงที่เลือก
+  const fl0 = pos.filter((po) => inDateRange(po.issue_date || po.created_at, dateR)
     && (matchText(q, po.po_no, po.supplier, po.note, po.quote_no, po.customerName, po.jobNo, po.teamName) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
   const [vatF, setVatF] = React.useState("all");   // งาน VAT / NOVAT (ตามธง vat ของใบ)
   const isVatMatch = (po, v) => v === "all" || (v === "vat" ? !!po.vat : !po.vat);
