@@ -75,9 +75,24 @@ export default function Profit() {
       });
       setRows(out);
 
-      // วัสดุที่เบิกในใบงานที่ไม่ผูกใบเสนอราคา → ต้นทุนที่ตกหล่นจากการคิดกำไร
-      const orph = Object.entries(mat)
-        .map(([jobNo, m]) => ({ jobNo, net: (m.withdraw || 0) - (m.return || 0), job: jobByNo[jobNo] }))
+      // ต้นทุนของใบงานที่ไม่ผูกใบเสนอราคา → ตกหล่นจากการคิดกำไรทั้งหมด
+      // ⚠️ เดิมกล่องเตือนนี้ดูแค่ "วัสดุที่เบิกจากคลัง" ใบงานซ่อมด่วนที่จ่ายค่าแรงช่างซัพ + ค่าอะไหล่ผ่านเบิกจ่าย
+      //    แต่ไม่ได้เบิกของจากคลังเลย จะไม่โผล่ในกล่องนี้ = เงินออกจริงหลักหมื่นโดยไม่มีอะไรเตือน
+      //    ⇒ รวมทั้ง 3 แหล่ง: วัสดุ (เบิก−คืน) + ค่าแรงช่างซัพ + เบิกจ่ายที่ผูกใบงาน
+      const orphNos = new Set([
+        ...Object.keys(mat),
+        ...Object.keys(exp || {}),
+        ...jos.filter((j) => Number(j.labor_total) > 0).map((j) => j.job_no),
+      ]);
+      const orph = [...orphNos]
+        .map((jobNo) => {
+          const job = jobByNo[jobNo];
+          const m = mat[jobNo] || {};
+          const matNet = (m.withdraw || 0) - (m.return || 0);
+          const labor = Number(job?.labor_total) || 0;
+          const expense = Number((exp || {})[jobNo]) || 0;
+          return { jobNo, job, matNet, labor, expense, net: matNet + labor + expense };
+        })
         .filter((o) => o.net > 0.01 && (!o.job || !o.job.quote_no))
         .sort((a, b) => b.net - a.net);
       setOrphans(orph);
@@ -141,12 +156,20 @@ export default function Profit() {
 
           {orphans.length > 0 && (
             <div className="card" style={{ padding: "12px 16px", marginBottom: 14, borderLeft: "3px solid var(--down)" }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--down)", marginBottom: 6 }}>⚠️ วัสดุที่เบิกแต่ยังไม่ผูกใบเสนอราคา ({orphans.length} ใบงาน)</div>
-              <div className="page-sub" style={{ marginTop: 0, marginBottom: 8 }}>ต้นทุนวัสดุเหล่านี้ยัง<b>ไม่ถูกนำไปคิดกำไร</b> เพราะใบงานไม่ได้อ้างใบเสนอราคา — ให้ผูกใบงานกับใบเสนอราคา หรือใช้ปุ่ม “ใบงานเชื่อม” กับงานหลัก</div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--down)", marginBottom: 6 }}>
+                ⚠️ ต้นทุนที่ยังไม่ผูกใบเสนอราคา ({orphans.length} ใบงาน · รวม {fmtBaht(orphans.reduce((a, o) => a + o.net, 0))})
+              </div>
+              <div className="page-sub" style={{ marginTop: 0, marginBottom: 8 }}>เงินที่จ่ายออกไปจริงเหล่านี้ยัง<b>ไม่ถูกนำไปคิดกำไร</b> เพราะใบงานไม่ได้อ้างใบเสนอราคา — ให้ผูกใบงานกับใบเสนอราคา หรือใช้ปุ่ม “ใบงานเชื่อม” กับงานหลัก</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {orphans.map((o) => (
                   <span key={o.jobNo} style={{ fontSize: 12, background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, padding: "3px 9px" }}>
                     {o.jobNo}{o.job?.customerName ? ` · ${o.job.customerName}` : ""} · <b style={{ color: "var(--down)" }}>{fmtBaht(o.net)}</b>
+                    {/* แยกให้เห็นว่าตกหล่นจากทางไหน จะได้ตามถูกที่ */}
+                    <span style={{ color: "var(--ink-3)" }}>
+                      {o.matNet > 0.01 ? ` · วัสดุ ${fmtBaht(o.matNet)}` : ""}
+                      {o.labor > 0.01 ? ` · ค่าแรงซัพ ${fmtBaht(o.labor)}` : ""}
+                      {o.expense > 0.01 ? ` · เบิกจ่าย ${fmtBaht(o.expense)}` : ""}
+                    </span>
                   </span>
                 ))}
               </div>

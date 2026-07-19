@@ -24,7 +24,7 @@ const snapshotItems = (q) => { const canW = q?.customerType === "company"; retur
 const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 
 const fmtBaht = fmtBaht2; // invoices show 2 decimals to avoid rounding leftovers
-const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, paid: { th: "ชำระแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
+const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, paid: { th: "ชำระแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" }, bad_debt: { th: "ตัดหนี้สูญ", cls: "b-red" } };
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `INV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -320,7 +320,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         </div>
       </div>
       <div className="cat-filter">
-        {[["all", "ทั้งหมด"], ["unpaid", "ค้างชำระ"], ["paid", "ชำระแล้ว"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
+        {[["all", "ทั้งหมด"], ["unpaid", "ค้างชำระ"], ["paid", "ชำระแล้ว"], ["bad_debt", "ตัดหนี้สูญ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({nStatus(v)})</button>
         ))}

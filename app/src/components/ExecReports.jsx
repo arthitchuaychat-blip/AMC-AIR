@@ -119,6 +119,7 @@ export default function ExecReports({ act, accounts, from, to, periodLabel }) {
 
   // 6) เงินสุทธิพร้อมใช้ (cash position) — เงินทุกบัญชี + ค้างรับ − ค้างจ่าย
   const accTotal = (accounts || []).reduce((s, a) => s + (Number(a.balance) || 0), 0);
+  // ค้างรับที่บวกเข้ามา = เฉพาะหนี้ที่ยังตามเก็บอยู่ (ใบที่ตัดหนี้สูญแล้วไม่ถูกนับ — dashboardActionLite กรอง unpaid)
   const net = accTotal + (act?.receivable || 0) - (act?.payable || 0);
 
   const pct = (v) => v.toFixed(0) + "%";

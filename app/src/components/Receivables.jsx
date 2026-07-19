@@ -1,5 +1,6 @@
 import React from "react";
-import { listInvoices } from "../lib/api";
+import { listInvoices, setInvoiceBadDebt } from "../lib/api";
+import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
 import ChatCustomerLink from "./ChatCustomerLink";
@@ -37,6 +38,7 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
   const [view, setView] = React.useState("aging"); // "aging" | "customer"
   const [q, setQ] = React.useState("");
   const [openCust, setOpenCust] = React.useState(null);
+  const [badDebt, setBadDebt] = React.useState([]);
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
   const today = todayYmd();
@@ -44,6 +46,8 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
   async function load() {
     try {
       const inv = await listInvoices();
+      // หนี้ที่ตัดสูญแล้ว: ไม่ตามต่อ แต่ต้องโชว์ยอดสะสมไว้ให้เห็นว่าปีนี้เก็บไม่ได้ไปเท่าไหร่
+      setBadDebt((inv || []).filter((x) => x.status === "bad_debt"));
       const ar = inv
         .filter((x) => x.status === "unpaid")
         .map((x) => {
@@ -62,6 +66,19 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setRows([]); }
   }
   React.useEffect(() => { load(); }, []);
+
+  // ตัดหนี้สูญ = เลิกตามใบนี้ แต่ยอดขาย/ภาษีขายยังอยู่ในประวัติ (ต่างจากยกเลิกที่ลบยอดขายทิ้งด้วย)
+  async function writeOff(r) {
+    const reason = await confirmDialog({
+      title: `ตัดหนี้สูญ ${r.invoice_no}?`,
+      message: `${r.customerName} · ค้าง ${fmtBaht(r.owed)}${r.days > 0 ? ` · เกินกำหนด ${r.days} วัน` : ""}\n\nใบนี้จะหลุดจากยอดค้างรับและจากประมาณการเงินเข้า แต่ยอดขายและภาษีขายยังอยู่ในประวัติครบ (งานทำไปแล้ว ใบกำกับภาษีออกไปแล้ว)\n\nถ้าเก็บเงินได้ทีหลัง ต้องแจ้งให้แก้สถานะกลับ`,
+      danger: true, confirmText: "ตัดหนี้สูญ",
+      prompt: { label: "เหตุผล (บังคับ)", placeholder: "เช่น ลูกค้าปิดกิจการ · ติดต่อไม่ได้เกิน 1 ปี · ตกลงยอมความแล้ว", required: true },
+    });
+    if (!reason) return;
+    try { await setInvoiceBadDebt(r.invoice_no, String(reason)); flash(`ตัดหนี้สูญ ${r.invoice_no} แล้ว`); await load(); }
+    catch (e) { flash(e.message || String(e), true); }
+  }
 
   const matches = (r) => { const n = q.trim().toLowerCase(); if (!n) return true; return [r.customerName, r.invoice_no, r.title, r.phone].some((f) => String(f || "").toLowerCase().includes(n)); };
   const shown = React.useMemo(() => (rows || []).filter(matches), [rows, q]);
@@ -117,6 +134,8 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
             {r.phone && <a className="btn-ghost sm" href={`tel:${r.phone}`} onClick={(e) => e.stopPropagation()}><UIcon name="user" size={13} /> โทร</a>}
             <ChatCustomerLink role={role} customerId={r.customer_id} onGoChat={onGoChat} />
             {onOpenInvoice && <button className="btn-ghost sm" onClick={() => onOpenInvoice(r.invoice_no)}><UIcon name="clipboard" size={13} /> ดูใบ</button>}
+            {/* ตัดหนี้สูญ = การเงิน/ผู้บริหาร/ธุรการเท่านั้น (เป็นการยอมรับว่าเก็บเงินไม่ได้) */}
+            {["admin", "exec", "finance"].includes(role) && <button className="btn-ghost sm" style={{ color: "#dc2626" }} onClick={(e) => { e.stopPropagation(); writeOff(r); }}>ตัดหนี้สูญ</button>}
           </span>
         </div>
       </div>
@@ -143,6 +162,10 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
         <div className="stat-card"><div className="stat-val" style={{ color: "#dc2626" }}>{fmtBaht(overdueOwed)}</div><div className="stat-label">เกินกำหนดชำระ</div></div>
         <div className="stat-card"><div className="stat-val">{shown.length}</div><div className="stat-label">จำนวนใบแจ้งหนี้</div></div>
         <div className="stat-card"><div className="stat-val">{custCount}</div><div className="stat-label">ลูกค้าที่ค้างจ่าย</div></div>
+        {badDebt.length > 0 && (
+          <div className="stat-card"><div className="stat-val" style={{ color: "#991b1b" }}>{fmtBaht(badDebt.reduce((a, x) => a + ((Number(x.total) || 0) - (Number(x.wht_amt) || 0)), 0))}</div>
+            <div className="stat-label">หนี้สูญสะสม · {badDebt.length} ใบ (ไม่ตามต่อแล้ว)</div></div>
+        )}
       </div>
 
       <div className="cat-search" style={{ maxWidth: 380, marginBottom: 14 }}>

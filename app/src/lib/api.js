@@ -1847,6 +1847,22 @@ export async function setInvoiceStatus(invoice_no, status, reason) {
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "invoice", target_no: invoice_no, reason });
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background (cancel removes the "คาดว่าจะรับ" line)
 }
+// ตัดหนี้สูญ (mig 160) — เลิกตามเป็นลูกหนี้ แต่ยอดขาย/ภาษีขายยังอยู่ในประวัติครบ
+// ต่างจาก "ยกเลิก" ตรงที่งานทำไปแล้ว ของส่งไปแล้ว ใบกำกับภาษีออกไปแล้ว แค่เก็บเงินไม่ได้
+// ยกเลิกจะลบยอดขายก้อนนั้นออกจากรายงานขาย/ภาษีด้วย ซึ่งผิดข้อเท็จจริง
+export async function setInvoiceBadDebt(invoice_no, reason) {
+  if (!reason || !reason.trim()) throw new Error("ต้องระบุเหตุผลที่ตัดหนี้สูญ");
+  const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no).neq("status", "cancelled");
+  if (ce) throw ce;
+  if ((count || 0) > 0) throw new Error("ตัดหนี้สูญไม่ได้ — ใบนี้ออกใบเสร็จ (รับเงิน) ไปแล้ว");
+  const patch = { status: "bad_debt", bad_debt_at: new Date().toISOString(), bad_debt_reason: reason.trim() };
+  let { error } = await supabase.from("invoices").update(patch).eq("invoice_no", invoice_no);
+  // ยังไม่รัน mig 160 → ต้องบอกให้ชัด ไม่ใช่ปล่อยเงียบแล้วผู้ใช้คิดว่าตัดแล้ว
+  if (error && /bad_debt|status_check|PGRST204/i.test(error.message || "")) throw new Error("ยังตัดหนี้สูญไม่ได้ — ต้องรัน migration 160 ใน Supabase ก่อน");
+  if (error) throw error;
+  await logAudit({ action: "bad_debt", target_type: "invoice", target_no: invoice_no, reason: reason.trim() });
+  syncCashEntriesFromDocs().catch(() => {});   // ตัดเส้น "คาดว่าจะรับ" ออกจากกระแสเงินสด
+}
 export async function deleteInvoice(invoice_no, reason) {
   // chain safety: block if a LIVE receipt was issued from this invoice — ใบเสร็จยกเลิกแล้วไม่บล็อก
   const { count, error: ce } = await supabase.from("receipts").select("receipt_no", { count: "exact", head: true }).eq("invoice_no", invoice_no).neq("status", "cancelled");
