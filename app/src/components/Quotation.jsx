@@ -42,6 +42,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
   const [printQ, setPrintQ] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);   // กันกดบันทึกซ้ำตอนเน็ตช้า
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [docF, setDocF] = React.useState("all"); // all | no_invoice | no_job
@@ -157,6 +158,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     // ไม่มีลูกค้า = เอกสารทั้งสายไม่มีชื่อลูกค้า (ตามหนี้ไม่ได้ · ใบกำกับภาษีใช้ไม่ได้ · เงินเข้าธนาคารไม่รู้ของใคร)
     if (!ed.customer_id) return flash("เลือกลูกค้าก่อนบันทึก — ใบเสนอราคาที่ไม่มีลูกค้าจะทำให้ใบแจ้งหนี้/ใบเสร็จที่ออกต่อไม่มีชื่อลูกค้า ตามหนี้และใช้ทางภาษีไม่ได้", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
+    setSaving(true);   // ผ่านการตรวจครบแล้วค่อยล็อกปุ่ม (ล็อกก่อนตรวจ = กรอกผิดแล้วปุ่มค้าง)
     try {
       // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — ใบใหม่ต้องเช็คก่อน ชนแล้วออกเลขใหม่ให้อัตโนมัติ
       let quoteNo = ed.quote_no;
@@ -184,6 +186,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       setEd(null); await load();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    finally { setSaving(false); }
   }
   // ลำดับการยกเลิก: ใบสั่งซื้อที่ยังไม่ยกเลิกก็ล็อกใบเสนอราคาด้วย (ยกเลิกจากเอกสารล่าสุดย้อนกลับ)
   const cancelLockMsg = (q) => {
@@ -371,7 +374,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
-            <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึกใบเสนอราคา</button>
+            <button className="btn-primary" style={{ flex: 1 }} disabled={saving} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {saving ? "กำลังบันทึก…" : "บันทึกใบเสนอราคา"}</button>
           </div>
         </div>
         <ItemBrowser mats={mats} onAdd={addLine} />

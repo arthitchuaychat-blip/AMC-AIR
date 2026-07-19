@@ -40,6 +40,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);   // กันกดบันทึกซ้ำตอนเน็ตช้า (เดิมกด 2 ที = ได้ใบงาน/รอบเข้างานซ้ำ)
   const [statusF, setStatusF] = React.useState("all");
   const [typeF, setTypeF] = React.useState("all");
   const [teamF, setTeamF] = React.useState("all");
@@ -235,11 +236,13 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     // with no scheduled รอบ yet, keep the chosen pre-work stage (รอทำใบเสนอราคา / รอจ่ายงาน)
     const status = visitRows.length ? deriveJobStatus(visitRows) : (ed.status === "quote_pending" ? "quote_pending" : "pending");
     try {
+      setSaving(true);
       await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows }, me);
       flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
       setEd(null); await load();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    finally { setSaving(false); }
   }
   async function del(jo) { const reason = await confirmDialog({ title: `ลบถาวรใบงาน ${jo.job_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } }); if (reason === false) return; try { await deleteJobOrder(jo.job_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
   async function cancelJob(jo) { const reason = await confirmDialog({ title: `ยกเลิกใบงาน ${jo.job_no}?`, message: "เก็บประวัติไว้", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น ลูกค้าเลื่อนงาน · เสนอใหม่", required: true } }); if (reason === false) return; try { await setJobStatus(jo.job_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
@@ -437,7 +440,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
-            <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึกใบงาน</button>
+            <button className="btn-primary" style={{ flex: 1 }} disabled={saving} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {saving ? "กำลังบันทึก…" : "บันทึกใบงาน"}</button>
           </div>
         </div>
         <TeamSchedulePanel teamId={ed.assigned_team} team={teams.find((t) => t.id === ed.assigned_team)} jobs={list} edVisits={ed.visits} excludeJobNo={ed.job_no} onPick={pickSlot} />

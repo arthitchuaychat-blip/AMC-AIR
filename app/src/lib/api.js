@@ -52,13 +52,20 @@ async function _payByUser(ids) {
   return Object.fromEntries((data || []).map((r) => { const { user_id, ...rest } = r; return [user_id, rest]; }));
 }
 
+// ⚠️ ห้ามเดา role เมื่ออ่านโปรไฟล์ไม่สำเร็จ — เดิม fallback เป็น "tech" เงียบ ๆ
+// เน็ตสะดุดตอนเปิดแอปครั้งเดียว ผู้บริหาร/ธุรการจะกลายเป็นช่าง เมนูหายเกือบหมด
+// แล้วผู้ใช้คิดว่าสิทธิ์ถูกแก้ ทั้งที่แค่โหลดพลาด ⇒ อ่านไม่ได้ = โยน error ให้หน้าจอบอกให้ลองใหม่
 export async function getProfile() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  let { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  let { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  if (error && error.code !== "PGRST116") throw new Error("โหลดข้อมูลผู้ใช้ไม่สำเร็จ — ลองใหม่อีกครั้ง (" + (error.message || error.code) + ")");
   if (data) { const pay = await _payByUser([user.id]); if (pay) data = { ...data, ...(pay[user.id] || {}) }; }
+  // ไม่มีแถวจริง (PGRST116) = ผู้ใช้ใหม่ที่ยังไม่ถูกตั้งตำแหน่ง → ช่าง เป็นค่าเริ่มต้นที่ถูกต้อง
   return data || { id: user.id, email: user.email, role: "tech", name: user.email };
 }
+// ใช้เมื่อ "รู้ว่าใครทำ" เป็นแค่ข้อมูลประกอบ ไม่ใช่ตัวตัดสินสิทธิ์ — อ่านพลาดแล้วเดินต่อได้
+async function _meSafe() { try { return await getProfile(); } catch { return null; } }
 
 export async function signIn(email, password) {
   return supabase.auth.signInWithPassword({ email, password });
@@ -1103,7 +1110,7 @@ export async function requestPoPayment(po) {
     await supabase.from("expense_requests").delete().eq("id", ex.id);   // ถอนใบเบิกที่เพิ่งสร้าง — ใบนี้มีคนตั้งเบิกไปแล้ว
     throw new Error(`ใบ ${po.po_no} ถูกตั้งเบิกไปแล้ว (มีคนทำพร้อมกัน) — รีเฟรชดูสถานะก่อน`);
   }
-  const me = await getProfile();
+  const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🛒 ${me?.name || "พนักงาน"} ขออนุมัติจ่ายค่าสินค้า ${po.po_no} · ${Number(po.total) || 0} บาท`, body: po.supplier || "", url: "expenses", ref_type: "expense" });
   return ex.id;
 }
@@ -1145,7 +1152,7 @@ export async function requestPoPaymentBatch(pos) {
     await supabase.from("expense_requests").delete().eq("id", ex.id);
     throw new Error("มีใบสั่งซื้อบางใบถูกตั้งเบิกไปแล้ว (มีคนทำพร้อมกัน) — รีเฟรชแล้วเลือกใหม่");
   }
-  const me = await getProfile();
+  const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🏭 ${me?.name || "พนักงาน"} ตั้งเบิกจ่ายเจ้าหนี้ ${list.length} ใบ · ${total.toLocaleString("en-US")} บาท`, body: supplier, url: "expenses", ref_type: "expense" });
   return ex.id;
 }
@@ -2971,12 +2978,12 @@ export async function markModuleRead(moduleId) {
 // ---------- TASK BOARD (กระดานสั่งงาน) ----------
 export async function listTasks() {
   const [t, profs, cc, cu] = await Promise.all([
-    supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+    _allRows((f, t) => supabase.from("tasks").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t)),
     supabase.from("profiles").select("id,name,email"),
-    supabase.from("task_comments").select("task_id"),
+    _allRows((f, t) => supabase.from("task_comments").select("task_id", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
   ]);
-  if (t.error) throw t.error;
+  // _allRows คืนแค่ { data } — ถ้ายังเช็ค t.error ต่อไปจะกลืน error ตลอดกาล (_fetchAll โยนออกมาเองอยู่แล้ว)
   const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
   const cnm = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const cnt = {}; (cc.data || []).forEach((c) => { cnt[c.task_id] = (cnt[c.task_id] || 0) + 1; });
@@ -3247,7 +3254,7 @@ export async function submitExpense(e) {
     note: e.note?.trim() || null, attachments: e.attachments || [], created_by: uid,
   });
   if (error) throw error;
-  const me = await getProfile();
+  const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🧾 ${me?.name || "พนักงาน"} ขอเบิกค่าใช้จ่าย ${Number(e.amount) || 0} บาท`, body: e.title || "", url: "expenses", ref_type: "expense" });
 }
 // เติม เลขงาน · ชื่องาน · ชื่อลูกค้า ให้ใบเบิกจ่าย
@@ -3705,7 +3712,7 @@ export async function checkIn({ lat, lng, photo }) {
     ? await supabase.from("hr_attendance").update(row).eq("id", ex.data.id)
     : await supabase.from("hr_attendance").insert({ user_id: uid, work_date: day, ...row });
   if (error) throw error;
-  const me = await getProfile();
+  const me = await _meSafe();
   notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `🕒 ${me?.name || "พนักงาน"} เช็คอินเข้างาน`, url: "hr", ref_type: "attendance" });
 }
 export async function checkOut({ lat, lng, photo }) {
@@ -3734,6 +3741,28 @@ export async function listAttendance(fromDay, toDay) {
 
 export async function submitLeave({ type, start_date, end_date, days, reason, hours, time_from, time_to }) {
   const uid = await _uid();
+  // กันยื่นทับวันเดิม — เดิม insert ตรงเลย พนักงานที่กดส่งซ้ำเพราะเน็ตช้าจะได้ใบลา 2 ใบวันเดียวกัน
+  // แล้ว HR เห็นเป็นคนละแถวไม่มีสัญญาณเตือน กดอนุมัติทั้งคู่ → โควตาถูกตัดสองครั้งจากการลาครั้งเดียว
+  // (usedThru รวม days ของทุกใบโดยไม่ dedupe ขณะที่ buildLeaveDaySet ใช้คีย์เป็นวันจึงไม่ซ้ำ = ตัวเลขสองฝั่งขัดกันเอง)
+  // ช่วงทับกันเมื่อ start เดิม <= end ใหม่ และ end เดิม >= start ใหม่
+  const { data: dup } = await supabase.from("hr_leaves").select("id,type,start_date,end_date,status,hours,time_from,time_to")
+    .eq("user_id", uid).in("status", ["pending", "approved"])
+    .lte("start_date", end_date).gte("end_date", start_date);
+  // ⚠️ ลาราย ชม. วันเดียวกันคนละช่วงเวลาเป็นเรื่องปกติ (เช้า 2 ชม. + บ่าย 2 ชม.) ห้ามบล็อก
+  //    บล็อกเฉพาะเมื่อมีฝั่งใดฝั่งหนึ่งเป็นลาเต็มวัน หรือทั้งคู่เป็นราย ชม. แล้วช่วงเวลาทับกันจริง
+  const newHourly = Number(hours) > 0;
+  const clash = (dup || []).find((d) => {
+    const oldHourly = Number(d.hours) > 0;
+    if (!newHourly || !oldHourly) return true;                       // มีเต็มวันอยู่ฝั่งใดฝั่งหนึ่ง = ทับแน่
+    if (!d.time_from || !d.time_to || !time_from || !time_to) return true;   // ไม่รู้เวลา = ถือว่าทับไว้ก่อน
+    return d.time_from < time_to && d.time_to > time_from;
+  });
+  if (clash) {
+    const st = clash.status === "approved" ? "อนุมัติแล้ว" : "รออนุมัติ";
+    const when = `${clash.start_date}${clash.end_date !== clash.start_date ? ` ถึง ${clash.end_date}` : ""}`;
+    const time = Number(clash.hours) > 0 && clash.time_from ? ` ${clash.time_from}–${clash.time_to}` : "";
+    throw new Error(`มีใบลาช่วงนี้อยู่แล้ว (${when}${time} · ${st})\nถ้าต้องการแก้ไข ให้ยกเลิกใบเดิมก่อน`);
+  }
   const row = { user_id: uid, type, start_date, end_date, days, reason: reason || null,
     hours: Number(hours) > 0 ? Number(hours) : null, time_from: time_from || null, time_to: time_to || null };
   let { error } = await supabase.from("hr_leaves").insert(row);
@@ -3743,7 +3772,7 @@ export async function submitLeave({ type, start_date, end_date, days, reason, ho
     ({ error } = await supabase.from("hr_leaves").insert(basic));
   }
   if (error) throw error;
-  const me = await getProfile();
+  const me = await _meSafe();
   const amount = Number(hours) > 0 ? `${Number(hours)} ชม.` : `${days} วัน`;
   notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `📝 ${me?.name || "พนักงาน"} ขอลา (${amount})`, body: reason || "", url: "hr", ref_type: "leave" });
 }
@@ -3789,7 +3818,7 @@ export async function submitAdvance({ amount, reason }) {
   const uid = await _uid();
   const { error } = await supabase.from("hr_advances").insert({ user_id: uid, amount: Number(amount) || 0, reason: reason || null, created_by: uid });
   if (error) throw error;
-  const me = await getProfile();
+  const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `💵 ${me?.name || "พนักงาน"} ขอเบิกเงินล่วงหน้า ${Number(amount) || 0} บาท`, body: reason || "", url: "hr", ref_type: "advance" });
 }
 export async function listMyAdvances() {
@@ -4379,7 +4408,7 @@ async function _firePush(roomId, body) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const name = (await getProfile())?.name || "ทีมงาน";
+    const name = (await _meSafe())?.name || "ทีมงาน";
     fetch("/api/push-send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
@@ -4397,7 +4426,7 @@ export async function sendChatMessage(roomId, text, mentionIds = []) {
   if (error) throw error;
   _firePush(roomId, text.trim());
   if (mentionIds.length) {
-    const me = await getProfile();
+    const me = await _meSafe();
     notify(mentionIds.filter((id) => id !== uid), {
       category: "team_chat", title: `📣 ${me?.name || "ทีมงาน"} แท็กคุณ`,
       body: text.trim().slice(0, 120), url: "teamchat", ref_type: "room", ref_no: String(roomId), push: false,

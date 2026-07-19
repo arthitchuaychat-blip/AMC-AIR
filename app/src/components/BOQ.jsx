@@ -79,6 +79,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const [typeF, setTypeF] = React.useState("all"); // กรองตามประเภทงาน (CRM)
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [printB, setPrintB] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);   // กันกดบันทึกซ้ำตอนเน็ตช้า (เดิมกด 2 ที = ได้ 2 ใบ)
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
@@ -149,6 +150,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     }
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไข BOQ ${ed.boq_no} ?`)) return;
     const sig = ed.sign_on ? mySignature() : null;
+    setSaving(true);   // ผ่านการตรวจครบแล้วค่อยล็อกปุ่ม (ล็อกก่อนตรวจ = กรอกผิดแล้วปุ่มค้าง)
     try {
       // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — ใบใหม่เช็คก่อน ชนแล้วออกเลขใหม่ให้อัตโนมัติ
       let boqNo = ed.boq_no;
@@ -163,6 +165,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       const renum = boqNo !== ed.boq_no ? ` · ⚠️ เลขที่เดิมชนกับใบอื่น — ใบนี้ได้เลขใหม่ ${boqNo}` : "";
       flash((ed._wasCancelled ? `บันทึก BOQ แล้ว — ใบนี้พ้นสถานะยกเลิก กลับมาใช้งานได้ (${flat.length} รายการ)` : `บันทึก BOQ แล้ว (${flat.length} รายการ)`) + renum); setEd(null); await load(); }
     catch (e) { console.error("saveBoq failed:", e); window.alert("❌ บันทึก BOQ ไม่สำเร็จ\n\nสาเหตุจริงจากฐานข้อมูล:\n" + (e.message || String(e)) + "\n\n(กรุณาถ่ายรูปหน้าต่างนี้ส่งให้ผู้ดูแลระบบ)"); }
+    finally { setSaving(false); }
   }
   async function del(bo) {
     const lk = lockMsg(bo); if (lk) return alert(lk);
@@ -238,7 +241,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
             <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "center" }}>
               <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
               <span style={{ fontSize: 13, fontWeight: 700, color: n > 0 ? "#16a34a" : "#dc2626" }}>{n > 0 ? `📋 มี ${n} รายการในใบ` : "⚠️ ยังไม่มีรายการ — กด ＋เพิ่ม ที่การ์ดขวา"}</span>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> บันทึก BOQ{n > 0 ? ` (${n})` : ""}</button>
+              <button className="btn-primary" style={{ flex: 1 }} disabled={saving} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {saving ? "กำลังบันทึก…" : "บันทึก BOQ"}{n > 0 ? ` (${n})` : ""}</button>
             </div>
           ); })()}
         </div>

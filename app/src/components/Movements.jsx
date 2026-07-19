@@ -23,6 +23,8 @@ const TYPE_BY = Object.fromEntries([...TYPES,
   { id: "adjust_in",  th: "ปรับยอด (เพิ่ม)", icon: "purchase", color: "#0891b2", dir: +1 },
   { id: "adjust_out", th: "ปรับยอด (ลด)",    icon: "damage",   color: "#ea580c", dir: -1 },
 ].map((t) => [t.id, t]));
+// ยกเลิกทั้งชุดได้เฉพาะรายการที่คนคีย์เอง — ปรับยอดจากการนับสต๊อกไม่รวม (ผูกกับรอบนับที่ล็อกแล้ว)
+const CANCELABLE_GROUP = ["purchase", "withdraw", "return", "damage"];
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
 
 // จัดกลุ่มธุรกรรมตามชุดที่บันทึก (ref_no) — แถวเก่าไม่มี ref ใช้วินาทีที่สร้างแทน (ใช้ทั้งรายการล่าสุด + ผลค้นหา)
@@ -383,9 +385,12 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     try { await updateTransaction(r.id, q); setEditId(null); flash("แก้ไขจำนวนแล้ว ✓"); await load(); }
     catch (e) { flash("แก้ไขไม่สำเร็จ: " + (e.message || e), true); }
   }
-  // ยกเลิกการรับเข้าทั้งชุด — สต๊อกคืนทุกรายการ · ถ้าชุดอ้างใบ PO → ใบเด้งกลับ "รอรับของ"
+  // ยกเลิกทั้งชุด — สต๊อกคืนทุกรายการ · ถ้าชุดอ้างใบ PO → ใบเด้งกลับ "รอรับของ"
+  // ⚠️ ปรับยอดจากการนับสต๊อก (adjust_in/adjust_out) ไม่อยู่ในลิสต์ — ผูกกับรอบนับที่ล็อกแล้ว
+  //    ถ้าลบรายการทิ้ง รอบนับกับสต๊อกจริงจะขัดกันโดยไม่มีทางกู้
   async function cancelGroup(g) {
-    const poNo = g.job_no && /^PO-/i.test(g.job_no) ? g.job_no : null;
+    // poNo มีความหมายเฉพาะชุด "รับเข้า" — ชุดเบิกก็ตรา po_no ได้ ถ้าไม่กรองจะเด้งใบ PO กลับเป็นรอรับของทั้งที่ของเข้าคลังไปแล้ว
+    const poNo = g.type === "purchase" && g.job_no && /^PO-/i.test(g.job_no) ? g.job_no : null;
     const reason = await confirmDialog({
       title: `ยกเลิก${TYPE_BY[g.type].th}ทั้งชุด (${g.rows.length} รายการ)?`,
       message: `สต๊อกจะคืนค่าทุกรายการ${poNo ? ` · ใบสั่งซื้อ ${poNo} จะกลับเป็น "รอรับของ" ให้รับใหม่ได้` : ""}`,
@@ -639,7 +644,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                     </div>
                     <div className="led-actions" onClick={(e) => e.stopPropagation()}>
                       <button className="led-btn" title="พิมพ์" onClick={() => printGroup(g)}><UIcon name="catalog" size={14} /></button>
-                      {canEditPast && g.type === "purchase" && <button className="led-btn danger" title={g.job_no && /^PO-/i.test(g.job_no) ? `ยกเลิกรับเข้าทั้งใบ — ${g.job_no} กลับเป็นรอรับของ` : "ยกเลิกทั้งชุด"} onClick={() => cancelGroup(g)}><UIcon name="trash" size={14} /></button>}
+                      {canEditPast && CANCELABLE_GROUP.includes(g.type) && <button className="led-btn danger" title={g.type === "purchase" && g.job_no && /^PO-/i.test(g.job_no) ? `ยกเลิกรับเข้าทั้งใบ — ${g.job_no} กลับเป็นรอรับของ` : `ยกเลิก${TYPE_BY[g.type].th}ทั้งชุด (${g.rows.length} รายการ)`} onClick={() => cancelGroup(g)}><UIcon name="trash" size={14} /></button>}
                       <button className="led-btn" title={open ? "ย่อ" : "ดูรายการ"} onClick={() => toggle(g.key)}><UIcon name={open ? "chevD" : "chevR"} size={14} /></button>
                     </div>
                   </div>

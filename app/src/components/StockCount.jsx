@@ -177,7 +177,9 @@ function CountSession({ id, role, canEdit, matByCode, onBack, flash, toast }) {
     const nz = countedRows.filter((r) => r.diff !== 0).length;
     // ส่วนต่างมูลค่าสูง = ตัดของหายก้อนใหญ่ ต้องให้ธุรการ/ผู้บริหารเป็นคนกด ธุรการวัสดุกดเองไม่ได้
     // (น็อตหาย 3 ตัว กับแอร์หายหลายเครื่อง เดิมใช้ปุ่มเดียวกันโดยไม่มีชั้นกรอง)
-    const loss = Math.abs(Math.min(0, diffValue));
+    // ⚠️ ต้องใช้ "มูลค่าที่ขาดล้วน ๆ" ไม่ใช่ยอดสุทธิ — ของเกินในรายการอื่นจะกลบของหายจนหลุดเพดาน
+    //    (เช่น แอร์หาย 30,000 + ท่อเกิน 28,000 → สุทธิ 2,000 ผ่านฉลุย ทั้งที่ของหายจริง 30,000)
+    const loss = countedRows.filter((r) => r.diff < 0).reduce((a, r) => a + Math.abs(r.diff) * r.cost, 0);
     if (loss > BIG_LOSS && !["admin", "exec"].includes(role)) {
       return flash(`ส่วนต่างขาด ${fmtBaht(loss)} เกิน ${fmtBaht(BIG_LOSS)} — ต้องให้ธุรการหรือผู้บริหารเป็นผู้อัพเดท`, true);
     }
