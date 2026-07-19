@@ -286,6 +286,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
             {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(q.vatAmt)}</b></div> : null}
             <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtBaht(q?.grand || 0)}</b></div>
             <div style={{ marginTop: 4 }}><span>รับชำระตามใบแจ้งหนี้ {printR.invoice_no}{inv ? ` · งวดที่ ${inv.installment} (${Math.round(inv.pct)}%)` : ""}</span><b /></div>
+            {/* ใบกำกับภาษีต้องแสดง "มูลค่า + VAT ของยอดที่เรียกเก็บจริง" (ม.86/4) — เดิมโชว์ VAT ของทั้งสัญญา ลูกค้าเครดิตภาษีซื้อผิดยอด */}
+            {Number(printR.base) > 0 && <div><span>มูลค่าก่อนภาษีงวดนี้</span><b>{fmtBaht(printR.base)}</b></div>}
+            {Number(printR.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtBaht(printR.vat_amt)}</b></div>}
             <div className="doc-grand"><span>รวมเป็นเงินงวดนี้</span><b>{fmtBaht(printR.total)}</b></div>
             {printR.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(printR.wht_rate) || 3}%</span><b>− {fmtBaht(printR.wht_amt)}</b></div>}
             <div className="doc-grand"><span>รับเงินสุทธิ</span><b>{fmtBaht(printR.net)}</b></div>

@@ -151,6 +151,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
     // กติกาบริษัท: เอกสารขายทุกใบต้องเริ่มจาก BOQ — ใบใหม่ต้องอ้าง BOQ เสมอ (ใบเก่าที่ไม่มีแก้ไขต่อได้)
     if (!ed._edit && !ed.boq_no) return flash("ใบเสนอราคาต้องเริ่มจาก BOQ — เลือก BOQ ที่ช่อง 'อ้างอิง BOQ' หรือไปสร้างจากเมนู BOQ (ปุ่ม 'สร้างใบเสนอราคา' บนการ์ด)", true);
+    // ไม่มีลูกค้า = เอกสารทั้งสายไม่มีชื่อลูกค้า (ตามหนี้ไม่ได้ · ใบกำกับภาษีใช้ไม่ได้ · เงินเข้าธนาคารไม่รู้ของใคร)
+    if (!ed.customer_id) return flash("เลือกลูกค้าก่อนบันทึก — ใบเสนอราคาที่ไม่มีลูกค้าจะทำให้ใบแจ้งหนี้/ใบเสร็จที่ออกต่อไม่มีชื่อลูกค้า ตามหนี้และใช้ทางภาษีไม่ได้", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
     try {
       // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — ใบใหม่ต้องเช็คก่อน ชนแล้วออกเลขใหม่ให้อัตโนมัติ
@@ -249,7 +251,21 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           {/* pull from BOQ */}
           <div className="fld"><span>ดึงรายการจาก BOQ (เพิ่มเฉพาะรายการใหม่ · ไม่ทับของเดิม)</span>
             <div className="line-add">
-              <Combo className="inp" value={ed.boq_no} onChange={(e) => { const v = e.target.value; const b = boqs.find((x) => x.boq_no === v); setEd((s) => ({ ...s, boq_no: v, job_type: b?.job_type || s.job_type || "" })); }}>
+              {/* เลือก BOQ แล้วดึง ลูกค้า/ไซต์/VAT มาให้ด้วย (ถ้ายังไม่ได้เลือก) — เดิมได้แค่เลข BOQ ทำให้บันทึกใบที่ไม่มีลูกค้าได้ */}
+              <Combo className="inp" value={ed.boq_no} onChange={(e) => {
+                const v = e.target.value; const b = boqs.find((x) => x.boq_no === v);
+                setEd((s) => {
+                  const next = { ...s, boq_no: v, job_type: b?.job_type || s.job_type || "" };
+                  if (b && !s.customer_id) {
+                    next.customer_id = b.customer_id || "";
+                    next.site_id = b.site_id || "";
+                    if (!s.title) next.title = b.title || "";
+                    const c = custs.find((x) => String(x.id) === String(b.customer_id));
+                    if (c) next.vat = c.vat ?? true;   // ลูกค้าไม่ VAT ต้องไม่โดนบวก 7% + ใช้หัวกระดาษถูกบริษัท
+                  }
+                  return next;
+                });
+              }}>
                 <option value="">{ed._edit ? "— ไม่อ้าง BOQ —" : "— เลือก BOQ (จำเป็น) —"}</option>{custBoqs.map((b) => <option key={b.boq_no} value={b.boq_no}>{b.boq_no}{b.title ? ` · ${b.title}` : ""}</option>)}
               </Combo>
               <button className="btn-ghost sm" onClick={pullFromBoq} disabled={!ed.boq_no}><UIcon name="box" size={14} /> ดึงรายการ</button>

@@ -366,6 +366,9 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(q.vatAmt)}</b></div> : null}
             <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtBaht(q?.grand || 0)}</b></div>
             <div style={{ marginTop: 4 }}><span>งวดที่ {printI.installment} ({Math.round(printI.pct)}%)</span><b /></div>
+            {/* แสดงมูลค่า+VAT ของ "งวดนี้" ตามที่เรียกเก็บจริง (ม.86/4) — เดิมมีแต่ VAT ของทั้งสัญญาด้านบน */}
+            {Number(printI.base) > 0 && <div><span>มูลค่าก่อนภาษีงวดนี้</span><b>{fmtBaht(printI.base)}</b></div>}
+            {Number(printI.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtBaht(printI.vat_amt)}</b></div>}
             <div className="doc-grand"><span>ยอดชำระงวดนี้</span><b>{fmtBaht(printI.total)}</b></div>
             {printI.wht_amt > 0 && <div className="doc-wht-note"><span>ฐานค่าบริการที่ถูกหัก ณ ที่จ่าย</span><b>{fmtBaht(whtBaseP)}</b></div>}
             {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(printI.wht_rate) || 3}% (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
