@@ -1,0 +1,155 @@
+// ทดสอบ listQuotations/listBoqs/listInvoices/listReceipts ที่แก้ใหม่ โดยดึง "โค้ดจริง" ออกจาก api.js
+// มารันกับ supabase ปลอมที่บันทึกทุก query — ตรวจว่า
+//   (1) เรียกแบบไม่ระบุใบ  → ต้องไม่มีตัวกรอง in/ov เลย (พฤติกรรมเดิมเป๊ะ)
+//   (2) เรียกแบบ { nos:[...] } → ทุกตารางต้องถูกกรอง และลูกค้า/ไซต์ต้องกรองตาม id ที่ใบนั้นอ้างถึงเท่านั้น
+import fs from "node:fs";
+import assert from "node:assert/strict";
+
+const SRC = fs.readFileSync(process.argv[2], "utf8");
+
+function grab(startMarker, endMarker) {
+  const i = SRC.indexOf(startMarker);
+  assert.ok(i >= 0, "ไม่เจอ " + startMarker);
+  const j = SRC.indexOf(endMarker, i);
+  assert.ok(j > i, "ไม่เจอจุดจบของ " + startMarker);
+  return SRC.slice(i, j);
+}
+
+const helpers = grab("const _scopeNos = (opts) =>", "export async function listBoqs");
+const fnBoqs = grab("export async function listBoqs(", "\n// ---------- COMPANY PROFILE");
+const fnQuotes = grab("export async function listQuotations(", "\nexport async function saveQuotation");
+const fnInv = grab("export async function listInvoices(", "\nexport function billedByQuote");
+const fnRc = grab("export async function listReceipts(", "\nexport async function saveReceipt");
+
+// ---- supabase ปลอม: บันทึก table + filters ของทุก query แล้วคืนแถวว่าง (ยกเว้นหัวใบที่ป้อนให้) ----
+let calls = [];
+let headRows = {};
+function makeQuery(table) {
+  const rec = { table, filters: [] };
+  calls.push(rec);
+  const q = {
+    select: () => q,
+    in: (col, vals) => { rec.filters.push(`${col} in [${vals.join(",")}]`); return q; },
+    overlaps: (col, vals) => { rec.filters.push(`${col} ov [${vals.join(",")}]`); return q; },
+    order: () => q,
+    range: () => q,
+    then: (res) => res({ data: headRows[table] || [], count: (headRows[table] || []).length, error: null }),
+    catch: () => q,
+  };
+  return q;
+}
+const supabase = { from: (t) => makeQuery(t) };
+
+const _fetchAll = async (build) => {
+  const { data, error } = await build(0, 999);
+  if (error) throw error;
+  return data || [];
+};
+const _firstContacts = () => ({});
+const _creators = async () => ({});
+const _gmap = () => null;
+
+const mod = `
+${helpers}
+const _allRows = (build) => _fetchAll(build).then((rows) => ({ data: rows }));
+${fnBoqs}
+${fnQuotes}
+${fnInv}
+${fnRc}
+return { listBoqs, listQuotations, listInvoices, listReceipts };
+`.replace(/export async function/g, "async function");
+
+const { listBoqs, listQuotations, listInvoices, listReceipts } = new Function(
+  "supabase", "_fetchAll", "_firstContacts", "_creators", "_gmap", mod
+)(supabase, _fetchAll, _firstContacts, _creators, _gmap);
+
+let pass = 0, fail = 0;
+const check = (name, fn) => { try { fn(); console.log("  ✓ " + name); pass++; } catch (e) { console.log("  ✗ " + name + "\n      " + e.message); fail++; } };
+
+// ============ (1) โหลดทั้งหมด — ต้องไม่มีตัวกรองเลย ============
+console.log("\nโหลดทั้งหมด (พฤติกรรมเดิม):");
+for (const [label, fn] of [["listQuotations", listQuotations], ["listBoqs", listBoqs], ["listInvoices", listInvoices], ["listReceipts", listReceipts]]) {
+  calls = []; headRows = {};
+  await fn();
+  const filtered = calls.filter((c) => c.filters.length);
+  check(`${label}() ไม่มีตัวกรอง (${calls.length} query)`, () => {
+    assert.equal(filtered.length, 0, "มี query ที่ถูกกรอง: " + JSON.stringify(filtered));
+    assert.ok(calls.length >= 6, "ควรยิงอย่างน้อย 6 ตาราง ได้ " + calls.length);
+  });
+}
+
+// ============ (2) เจาะจงใบเดียว — ทุกตารางต้องถูกกรอง ============
+console.log("\nเจาะจงใบเดียว { nos:[...] }:");
+
+calls = []; headRows = { quotations: [{ quote_no: "QT-1", customer_id: 7, site_id: 3 }] };
+await listQuotations({ nos: ["QT-1"] });
+check("listQuotations: ทุก query ถูกกรอง", () => {
+  const bare = calls.filter((c) => !c.filters.length);
+  assert.equal(bare.length, 0, "query ที่ไม่ถูกกรอง: " + bare.map((c) => c.table).join(", "));
+});
+check("listQuotations: ลูกค้ากรองด้วย id ของใบนั้น (7) ไม่ใช่ทั้งตาราง", () => {
+  const cu = calls.find((c) => c.table === "customers");
+  assert.deepEqual(cu.filters, ["id in [7]"]);
+});
+check("listQuotations: ไซต์กรองด้วย site_id ของใบนั้น (3)", () => {
+  assert.deepEqual(calls.find((c) => c.table === "customer_sites").filters, ["id in [3]"]);
+});
+check("listQuotations: รายการในใบกรองด้วย quote_no", () => {
+  assert.deepEqual(calls.find((c) => c.table === "quotation_items").filters, ["quote_no in [QT-1]"]);
+});
+
+calls = []; headRows = { boqs: [{ boq_no: "BQ-9", customer_id: 2, site_id: null }] };
+await listBoqs({ nos: ["BQ-9"] });
+check("listBoqs: ทุก query ถูกกรอง", () => {
+  const bare = calls.filter((c) => !c.filters.length);
+  assert.equal(bare.length, 0, "query ที่ไม่ถูกกรอง: " + bare.map((c) => c.table).join(", "));
+});
+check("listBoqs: ใบไม่มี site_id → ไซต์ต้องได้ 0 แถว ไม่ใช่ทั้งตาราง", () => {
+  assert.deepEqual(calls.find((c) => c.table === "customer_sites").filters, ["id in [-1]"]);
+});
+
+calls = []; headRows = { invoices: [{ invoice_no: "IV-5", customer_id: 4, site_id: 1, quote_no: "QT-1" }] };
+await listInvoices({ nos: ["IV-5"] });
+check("listInvoices: ทุก query ถูกกรอง", () => {
+  const bare = calls.filter((c) => !c.filters.length);
+  assert.equal(bare.length, 0, "query ที่ไม่ถูกกรอง: " + bare.map((c) => c.table).join(", "));
+});
+check("listInvoices: ใบวางบิลใช้ overlaps กับ array (ไม่ใช่ in)", () => {
+  assert.deepEqual(calls.find((c) => c.table === "billing_notes").filters, ["invoice_nos ov [IV-5]"]);
+});
+check("listInvoices: ใบเสนอแม่กรองด้วย quote_no ของใบนั้น", () => {
+  assert.deepEqual(calls.find((c) => c.table === "quotations").filters, ["quote_no in [QT-1]"]);
+});
+
+calls = []; headRows = { receipts: [{ receipt_no: "RC-2", customer_id: 8, site_id: 5, quote_no: null }] };
+await listReceipts({ nos: ["RC-2"] });
+check("listReceipts: ทุก query ถูกกรอง", () => {
+  const bare = calls.filter((c) => !c.filters.length);
+  assert.equal(bare.length, 0, "query ที่ไม่ถูกกรอง: " + bare.map((c) => c.table).join(", "));
+});
+check("listReceipts: ใบเสร็จไม่ผูกใบเสนอ → ใบงาน/ใบเสนอต้องได้ 0 แถว", () => {
+  assert.deepEqual(calls.find((c) => c.table === "job_orders").filters, ["quote_no in [__none__]"]);
+  assert.deepEqual(calls.find((c) => c.table === "quotations").filters, ["quote_no in [__none__]"]);
+});
+
+// ============ (3) กันพลาด: ขอเกิน 200 ใบ → กลับไปโหลดเต็ม (URL ยาวเกิน) ============
+console.log("\nกันพลาด:");
+calls = []; headRows = {};
+await listQuotations({ nos: Array.from({ length: 250 }, (_, i) => "Q" + i) });
+check("ขอ 250 ใบ → ถอยไปโหลดเต็ม ไม่ยิง URL ยาวเกิน", () => {
+  assert.equal(calls.filter((c) => c.filters.length).length, 0);
+});
+calls = []; headRows = {};
+await listQuotations({ nos: [] });
+check("nos: [] → โหลดเต็ม (ไม่ใช่ได้ 0 แถวเงียบ ๆ)", () => {
+  assert.equal(calls.filter((c) => c.filters.length).length, 0);
+});
+
+// sentinel "ไม่ตรงกับใบไหน" ต้องเป็นข้อความที่ Postgres เก็บได้ — เคยเผลอใส่ NUL แล้ว query ระเบิดแทนที่จะคืน 0 แถว
+check("ไม่มี NUL byte หลงเหลือในไฟล์ (git จะมองเป็น binary + PostgREST 22021)", () => {
+  const n = [...Buffer.from(SRC, "utf8")].filter((b) => b === 0).length;
+  assert.equal(n, 0, `เจอ NUL ${n} ตัว`);
+});
+
+console.log(`\nสรุป: ผ่าน ${pass} · ตก ${fail}`);
+process.exit(fail ? 1 : 0);

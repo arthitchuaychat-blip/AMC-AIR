@@ -1702,7 +1702,7 @@ export async function listInvoices(opts = {}) {
     _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
-    _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,title", { count: "exact" }), "quote_no", nos && (qnos.length ? qnos : [" "])).order("quote_no").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,title", { count: "exact" }), "quote_no", nos && (qnos.length ? qnos : ["__none__"])).order("quote_no").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("receipts").select("invoice_no,status", { count: "exact" }), "invoice_no", nos).order("receipt_no").range(f, t)),
     // invoice_nos เป็น array — หาใบวางบิลที่ "มีใบใดใบหนึ่งในชุดนี้" ต้องใช้ overlaps ไม่ใช่ in/contains
     _allRows((f, t) => { const q = supabase.from("billing_notes").select("billing_no,invoice_nos,status", { count: "exact" }); return (nos ? q.overlaps("invoice_nos", nos) : q).order("billing_no").range(f, t); }).catch(() => ({ data: [] })), // pre-050 → ไม่มีตาราง
@@ -1822,7 +1822,7 @@ export async function listReceipts(opts = {}) {
   const rc = nos ? await rcP : { data: [] };   // เจาะจงใบ → รอหัวใบก่อน · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
   if (rc.error) throw rc.error;
   const cids = _idsOf(rc.data, "customer_id"), sids = _idsOf(rc.data, "site_id");
-  const qnos = _idsOf(rc.data, "quote_no"); const qScope = nos && (qnos.length ? qnos : [" "]);
+  const qnos = _idsOf(rc.data, "quote_no"); const qScope = nos && (qnos.length ? qnos : ["__none__"]);
   const [cu, si, ct, jo, qt] = await Promise.all([
     _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
