@@ -12,7 +12,7 @@ import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import ChatCustomerLink from "./ChatCustomerLink";
-import DateRangeBar, { inDateRange } from "./DateRangeBar";
+import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
 import GrowArea from "./GrowArea";
 import DocSlip from "./DocSlip";
 import NumIn from "./NumIn";
@@ -66,8 +66,10 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "boq", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
-  const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
   const [list, setList] = React.useState([]);
+  // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
+  const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date || x.created_at, dateR)).length, [list, dateR]);
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -86,7 +88,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-  React.useEffect(() => { if (focus) { setEd(null); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
+  // เปิดเจาะจงใบ (มาจากลิงก์/ชิปเชื่อมโยง) → ล้างช่วงวันที่ ไม่งั้นใบเก่ากว่า 6 เดือนจะขึ้นว่าไม่พบ
+  React.useEffect(() => { if (focus) { setEd(null); setDateR({ from: "", to: "" }); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printB) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintB(null); }, 120); return () => clearTimeout(t); }, [printB]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
@@ -272,7 +275,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           <button key={v} className={"cat-chip" + (typeF === v ? " on" : "")} onClick={() => setTypeF(v)}
             style={typeF === v ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>{l} ({nType(v)})</button>
         ))}
-        <DateRangeBar value={dateR} onChange={setDateR} />
+        <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}

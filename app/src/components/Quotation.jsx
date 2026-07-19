@@ -10,7 +10,7 @@ import { mySignature, defaultSignOn } from "../lib/sign";
 import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
 import ChatCustomerLink from "./ChatCustomerLink";
-import DateRangeBar, { inDateRange } from "./DateRangeBar";
+import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
 import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { jobTypeDef } from "../lib/schedule";
@@ -45,7 +45,9 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [docF, setDocF] = React.useState("all"); // all | no_invoice | no_job
-  const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
+  // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
+  const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
   const [search, setSearch] = React.useState("");
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
@@ -62,7 +64,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printQ) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintQ(null); }, 120); return () => clearTimeout(t); }, [printQ]);
   // open focused on a specific quote (from the dashboard report link)
-  React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
+  // เปิดเจาะจงใบ (มาจากลิงก์/ชิปเชื่อมโยง) → ล้างช่วงวันที่ ไม่งั้นใบเก่ากว่า 6 เดือนจะขึ้นว่าไม่พบ
+  React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setDateR({ from: "", to: "" }); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
@@ -412,7 +415,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
             style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l} ({nVat(v)})</button>
         ))}
-        <DateRangeBar value={dateR} onChange={setDateR} />
+        <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
         {[["all", "ทุกใบ"], ["no_invoice", "ยังไม่สร้างใบส่งของ/ใบแจ้งหนี้"], ["no_job", "ยังไม่สร้างใบงาน"], ["no_ac_po", "ยังไม่สั่งซื้อแอร์"]].map(([v, l]) => (

@@ -10,7 +10,7 @@ import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
-import DateRangeBar, { inDateRange } from "./DateRangeBar";
+import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 
@@ -39,7 +39,9 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
   const [ed, setEd] = React.useState(null);     // create modal
   const [openInv, setOpenInv] = React.useState(null); // billing_no whose invoices are expanded
   const [printB, setPrintB] = React.useState(null);
-  const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
+  // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
+  const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
   const [search, setSearch] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
   const [docLinks, setDocLinks] = React.useState({ byQuote: {}, invToQuote: {} });
@@ -94,7 +96,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({fl0.filter((b) => stPred(b, v)).length})</button>
         ))}
-        <DateRangeBar value={dateR} onChange={setDateR} />
+        <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
       </div>
       {shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบวางบิล" : "ไม่พบใบวางบิล"}</div>}
       <div className="job-cards">

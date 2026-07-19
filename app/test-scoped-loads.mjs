@@ -198,7 +198,35 @@ check("quoteAttribution มีอยู่จริงใน api.js และอ
   assert.ok(!/quotation_items|customer_sites/.test(body), "ต้องไม่แตะตารางรายการ/ไซต์");
 });
 
-// ============ (5) กันพลาด: ขอเกิน 200 ใบ → กลับไปโหลดเต็ม (URL ยาวเกิน) ============
+// ============ (5) หน้ารายการเอกสาร: ค่าเริ่มต้น 6 เดือน ต้องไม่ทำใบหาย ============
+console.log("\nหน้ารายการเอกสาร — ค่าเริ่มต้น 6 เดือนล่าสุด:");
+
+const PAGES = [
+  ["Quotation.jsx", "list", true], ["BOQ.jsx", "list", true], ["Invoices.jsx", "list", true],
+  ["Receipts.jsx", "list", true], ["BillingNotes.jsx", "list", false], ["PurchaseOrders.jsx", "pos", true],
+];
+for (const [file, arr, hasFocus] of PAGES) {
+  const src = fs.readFileSync("src/components/" + file, "utf8");
+  check(`${file}: ตั้งค่าเริ่มต้นเป็น defaultDocRange + ส่งจำนวนที่ซ่อนให้แถบตัวกรอง`, () => {
+    assert.ok(/useState\(defaultDocRange\)/.test(src), "ยังไม่ได้ตั้งค่าเริ่มต้น");
+    assert.ok(/hidden=\{dateHidden\}/.test(src), "ไม่ได้ส่ง hidden ให้ DateRangeBar (ผู้ใช้จะไม่รู้ว่ามีใบถูกซ่อน)");
+  });
+  check(`${file}: dateHidden ต้องประกาศหลัง ${arr} (ไม่งั้นหน้าขาวเพราะ TDZ)`, () => {
+    const di = src.indexOf(`const [${arr}, set`);
+    const hi = src.indexOf("const dateHidden");
+    assert.ok(di >= 0 && hi > di, `dateHidden อยู่ก่อน ${arr}`);
+  });
+  if (hasFocus) {
+    check(`${file}: เปิดเจาะจงใบ (focus) ต้องล้างช่วงวันที่ ไม่งั้นใบเก่ากว่า 6 เดือนกดลิงก์ไปแล้วขึ้นว่าไม่พบ`, () => {
+      const i = src.indexOf("if (focus)") >= 0 ? src.indexOf("if (focus)") : src.indexOf("if (!focus) return");
+      assert.ok(i > 0, "ไม่เจอ effect ของ focus");
+      const body = src.slice(i, i + 320);
+      assert.ok(/setDateR\(\{ from: "", to: "" \}\)/.test(body), "ไม่ได้ล้างช่วงวันที่ตอนเปิดเจาะจงใบ");
+    });
+  }
+}
+
+// ============ (6) กันพลาด: ขอเกิน 200 ใบ → กลับไปโหลดเต็ม (URL ยาวเกิน) ============
 console.log("\nกันพลาด:");
 calls = []; headRows = {};
 await listQuotations({ nos: Array.from({ length: 250 }, (_, i) => "Q" + i) });

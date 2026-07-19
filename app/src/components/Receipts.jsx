@@ -13,7 +13,7 @@ import { useDocPeek } from "./DocPeek";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import ChatCustomerLink from "./ChatCustomerLink";
-import DateRangeBar, { inDateRange } from "./DateRangeBar";
+import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -44,7 +44,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const [search, setSearch] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
-  const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
+  // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
+  const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
   const [faBusy, setFaBusy] = React.useState(null);   // receipt_no being sent to FlowAccount
   const [faRes, setFaRes] = React.useState(null);     // { x, res } result modal
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
@@ -56,7 +58,8 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-  React.useEffect(() => { if (focus) { setEd(null); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
+  // เปิดเจาะจงใบ (มาจากลิงก์/ชิปเชื่อมโยง) → ล้างช่วงวันที่ ไม่งั้นใบเก่ากว่า 6 เดือนจะขึ้นว่าไม่พบ
+  React.useEffect(() => { if (focus) { setEd(null); setDateR({ from: "", to: "" }); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printR) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintR(null); }, 120); return () => clearTimeout(t); }, [printR]);
   // open the create form prefilled from an invoice (link from the invoice page)
@@ -221,7 +224,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({nStatus(v)})</button>
         ))}
-        <DateRangeBar value={dateR} onChange={setDateR} />
+        <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
         {[["all", "VAT / ไม่ VAT"], ["vat", "รับ VAT"], ["novat", "ไม่ VAT"]].map(([v, l]) => (

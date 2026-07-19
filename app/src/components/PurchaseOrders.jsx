@@ -5,7 +5,7 @@ import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { MaterialThumb, UIcon } from "../icons";
-import DateRangeBar, { inDateRange } from "./DateRangeBar";
+import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
 import ItemPicker from "./ItemPicker";
 import ItemBrowser from "./ItemBrowser";
 import UnitPick, { unitFactor } from "./UnitPick";
@@ -71,7 +71,9 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const [payF, setPayF] = React.useState("all");
   const [expanded, setExpanded] = React.useState(() => new Set()); // การ์ดที่กางรายการเต็ม (default ย่อเหลือ 3 บรรทัด)
   const toggleExpand = (poNo) => setExpanded((s) => { const n = new Set(s); n.has(poNo) ? n.delete(poNo) : n.add(poNo); return n; });
-  const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
+  // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
+  const dateHidden = React.useMemo(() => (pos || []).filter((x) => !inDateRange(x.issue_date || x.created_at, dateR)).length, [pos, dateR]);
   const [quotes, setQuotes] = React.useState([]);        // ใบเสนอราคาที่อนุมัติแล้ว (ตัวเลือกอ้างอิง)
   const [sups, setSups] = React.useState([]);            // ทะเบียนผู้ขายฉบับเต็ม (ที่อยู่/เลขภาษี สำหรับใบพิมพ์)
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
@@ -370,7 +372,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
               style={vatF === v ? { background: "#16a34a", color: "#fff", borderColor: "#16a34a" } : {}}>{l} ({nVat(v)})</button>
           ))}
-          <DateRangeBar value={dateR} onChange={setDateR} />
+          <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
         </div>
         <div className="cat-search">
           <UIcon name="search" size={17} color="var(--ink-3)" />

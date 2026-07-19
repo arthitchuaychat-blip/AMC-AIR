@@ -14,7 +14,7 @@ import { useDocPeek } from "./DocPeek";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import ChatCustomerLink from "./ChatCustomerLink";
-import DateRangeBar, { inDateRange } from "./DateRangeBar";
+import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
 import LineWhtModal from "./LineWhtModal";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
@@ -44,7 +44,9 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [search, setSearch] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
-  const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
+  // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
+  const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
   const [billIncomplete, setBillIncomplete] = React.useState(false); // เฉพาะงานที่วางบิลยังไม่ครบ 100%
   const [noReceiptF, setNoReceiptF] = React.useState(false);         // เฉพาะใบที่ยังไม่ออกใบเสร็จ (ยังไม่รับเงิน)
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
@@ -56,7 +58,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-  React.useEffect(() => { if (focus) { setEd(null); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
+  // เปิดเจาะจงใบ (มาจากลิงก์/ชิปเชื่อมโยง) → ล้างช่วงวันที่ ไม่งั้นใบเก่ากว่า 6 เดือนจะขึ้นว่าไม่พบ
+  React.useEffect(() => { if (focus) { setEd(null); setDateR({ from: "", to: "" }); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printI) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintI(null); }, 120); return () => clearTimeout(t); }, [printI]);
   // open the create form prefilled from a quotation (link from the quotation page)
@@ -312,7 +315,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           style={noReceiptF ? { background: "#16a34a", color: "#fff", borderColor: "#16a34a" } : {}}>ยังไม่ออกใบเสร็จ ({nNoReceipt})</button>
         <button className={"cat-chip" + (billIncomplete ? " on" : "")} onClick={() => setBillIncomplete((v) => !v)}
           style={billIncomplete ? { background: "#d97706", color: "#fff", borderColor: "#d97706" } : {}}>วางบิลยังไม่ครบ 100% ({nBillInc})</button>
-        <DateRangeBar value={dateR} onChange={setDateR} />
+        <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบส่งของ/ใบแจ้งหนี้" : "ไม่พบใบส่งของ/ใบแจ้งหนี้"}</div>}
