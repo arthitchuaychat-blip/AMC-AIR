@@ -5,7 +5,7 @@ import { custCode } from "../lib/format";
 
 // Full add/edit customer form in a popup. initial = customer obj (with contacts[]/sites[]) for edit, or a seed for new.
 // onSaved(id) fires after a successful save.
-const seedCust = (i) => ({ id: i?.id || null, type: i?.type || "person", name: i?.name || "", tax_id: i?.tax_id || "", email: i?.email || "", vat: !!i?.vat, address: i?.address || "", note: i?.note || "" });
+const seedCust = (i) => ({ id: i?.id || null, type: i?.type || "person", name: i?.name || "", tax_id: i?.tax_id || "", email: i?.email || "", vat: !!i?.vat, credit_days: i?.credit_days ?? 0, address: i?.address || "", note: i?.note || "" });
 // สีไล่ต่อไซต์ เพื่อแยกกล่องไซต์ให้เห็นง่าย ไม่ตาลาย
 const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626"];
 
@@ -52,8 +52,13 @@ export default function CustomerFormModal({ initial, onClose, onSaved }) {
             <label className="fld"><span>ภาษีมูลค่าเพิ่ม</span>
               <button type="button" className={"vat-toggle" + (cust.vat ? " on" : "")} onClick={() => setC("vat", !cust.vat)}>{cust.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</button>
             </label>
-            <label className="fld"><span>หมายเหตุ</span><input className="inp" value={cust.note} onChange={(e) => setC("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
+            {/* เครดิตเทอม → ใบแจ้งหนี้เติมวันครบกำหนดชำระให้เอง ไม่ต้องคิดเองทุกใบ (ปล่อยว่างแล้วหนี้จะหลุดจาก KPI เกินกำหนด) */}
+            <label className="fld"><span>เครดิตเทอม (วัน)</span>
+              <input className="inp" type="number" min="0" step="1" value={cust.credit_days}
+                onChange={(e) => setC("credit_days", e.target.value)} placeholder="0 = ครบกำหนดวันออกบิล" />
+            </label>
           </div>
+          <label className="fld"><span>หมายเหตุ</span><input className="inp" value={cust.note} onChange={(e) => setC("note", e.target.value)} placeholder="(ไม่บังคับ)" /></label>
           <label className="fld"><span>อีเมล</span><input className="inp" type="email" value={cust.email} onChange={(e) => setC("email", e.target.value)} placeholder="เช่น contact@company.com (ไม่บังคับ)" /></label>
           <label className="fld"><span>ที่อยู่หลัก</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={cust.address} onChange={(e) => setC("address", e.target.value)} /></label>
 

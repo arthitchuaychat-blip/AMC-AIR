@@ -44,6 +44,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [search, setSearch] = React.useState("");
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
+  const [noDueF, setNoDueF] = React.useState(false);   // ไล่เก็บใบเก่าที่ไม่ได้ใส่วันครบกำหนด (หลุดจาก KPI เกินกำหนด)
   const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
   // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
   const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
@@ -72,14 +73,23 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   function startNew(quoteNo = "") {
     const q = quoteNo ? quoteByNo[quoteNo] : null;
-    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: "", basis: "percent", basis_value: 100, note: "", internal_note: q?.internal_note || "", sign_on: defaultSignOn(),
+    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: q ? dueFromTerms(today(), q.customer_id) : "", basis: "percent", basis_value: 100, note: "", internal_note: q?.internal_note || "", sign_on: defaultSignOn(),
       wht_rate: Number(q?.wht_rate) || 3,
       terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" });
   }
+  // วันครบกำหนดชำระ = วันที่บิล + เครดิตเทอมของลูกค้า (mig 159) — ปล่อยว่างแล้วใบนี้จะไม่ถูกนับใน
+  // KPI "เกินกำหนดชำระ" ของรายงานลูกหนี้ และกระแสเงินสดจะวางเงินเข้าเร็วกว่าจริง
+  function dueFromTerms(issue, customerId) {
+    const days = Math.max(0, Math.round(Number(custById[String(customerId)]?.credit_days) || 0));   // custById คีย์เป็น string
+    if (!issue) return "";
+    const d = new Date(issue + "T00:00:00"); d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
   // picking a quote pulls its end-of-document terms forward (หัก ณ ที่จ่าย คำนวณอัตโนมัติสำหรับนิติบุคคล)
   function pickQuote(qno) {
     const q = quoteByNo[qno];
-    setEd((e) => ({ ...e, quote_no: qno, wht_rate: Number(q?.wht_rate) || 3, terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
+    setEd((e) => ({ ...e, quote_no: qno, due_date: e.due_date || dueFromTerms(e.issue_date, q?.customer_id), wht_rate: Number(q?.wht_rate) || 3, terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
   }
   // approved quotes that still have a balance to bill (shown in the picker)
   const billableQuotes = approvedQuotes.filter((q) => round2((q.grand || 0) - (billed[q.quote_no] || 0)) > 0.01);
@@ -119,6 +129,12 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   async function save() {
     if (!selQ) return flash("เลือกใบเสนอราคาก่อน", true);
+    // ปล่อยวันครบกำหนดว่าง = ใบนี้จะไม่โผล่ใน "เกินกำหนดชำระ" ตลอดกาล ต้องให้ยืนยันก่อน ไม่ใช่ผ่านเงียบ ๆ
+    if (!ed.due_date && !await confirmDialog({
+      title: "ไม่ระบุวันครบกำหนดชำระ?",
+      message: "ใบนี้จะไม่ถูกนับว่า “เกินกำหนด” ในรายงานลูกหนี้ และกระแสเงินสดจะถือว่าเงินเข้าวันที่ออกบิล\n\nตั้งเครดิตเทอมของลูกค้าไว้ที่หน้าลูกค้า แล้วระบบจะเติมวันครบกำหนดให้เองทุกใบ",
+      confirmText: "บันทึกโดยไม่ระบุ", cancelText: "กลับไปใส่วันที่",
+    })) return;
     if (newTotal <= 0) return flash("ยอดงวดต้องมากกว่า 0 (อาจวางบิลครบ 100% แล้ว)", true);
     if (newTotal > remaining + 0.01) return flash("ยอดงวดเกินยอดคงเหลือ", true);
     const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;
@@ -284,10 +300,13 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const nVat = (v) => fl0.filter((x) => v === "all" || (v === "vat" ? invVat(x) : !invVat(x))).length;
   const nBillInc = fl0.filter(notFullyBilled).length;
   const nNoReceipt = fl0.filter((x) => x.status !== "cancelled" && !x.hasReceipt).length;
+  const noDue = (x) => x.status === "unpaid" && !x.due_date;
+  const nNoDue = fl0.filter(noDue).length;
   const shown = fl0.filter((x) => (statusF === "all" || x.status === statusF)
     && (vatF === "all" || (vatF === "vat" ? invVat(x) : !invVat(x)))
     && (!billIncomplete || notFullyBilled(x))
-    && (!noReceiptF || (x.status !== "cancelled" && !x.hasReceipt)));
+    && (!noReceiptF || (x.status !== "cancelled" && !x.hasReceipt))
+    && (!noDueF || noDue(x)));
   return (
     <div className="adm">
       <div className="adm-head">
@@ -315,6 +334,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           style={noReceiptF ? { background: "#16a34a", color: "#fff", borderColor: "#16a34a" } : {}}>ยังไม่ออกใบเสร็จ ({nNoReceipt})</button>
         <button className={"cat-chip" + (billIncomplete ? " on" : "")} onClick={() => setBillIncomplete((v) => !v)}
           style={billIncomplete ? { background: "#d97706", color: "#fff", borderColor: "#d97706" } : {}}>วางบิลยังไม่ครบ 100% ({nBillInc})</button>
+        {nNoDue > 0 && <button className={"cat-chip" + (noDueF ? " on" : "")} onClick={() => setNoDueF((v) => !v)}
+          style={noDueF ? { background: "#dc2626", color: "#fff", borderColor: "#dc2626" } : { borderColor: "#dc2626", color: "#dc2626" }}>⚠️ ไม่ระบุวันครบกำหนด ({nNoDue})</button>}
         <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}

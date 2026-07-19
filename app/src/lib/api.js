@@ -1175,12 +1175,16 @@ export async function listCustomers() {
 
 export async function saveCustomer(cust, contacts, sites) {
   const { data: { user } } = await supabase.auth.getUser();
-  const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, email: cust.email?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null };
+  const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, email: cust.email?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null, credit_days: Math.max(0, Math.round(Number(cust.credit_days) || 0)) };
   let id = cust.id;
+  const preMig = (e) => /credit_days|PGRST204/i.test(e?.message || "");   // ยังไม่รัน mig 159 → บันทึกส่วนที่เหลือให้ผ่านไปก่อน
   if (id) {
-    const e = (await supabase.from("customers").update(fields).eq("id", id)).error; if (e) throw e;
+    let e = (await supabase.from("customers").update(fields).eq("id", id)).error;
+    if (e && preMig(e)) { const { credit_days, ...rest } = fields; e = (await supabase.from("customers").update(rest).eq("id", id)).error; }
+    if (e) throw e;
   } else {
-    const r = await supabase.from("customers").insert({ ...fields, created_by: user?.id || null }).select("id").single();
+    let r = await supabase.from("customers").insert({ ...fields, created_by: user?.id || null }).select("id").single();
+    if (r.error && preMig(r.error)) { const { credit_days, ...rest } = fields; r = await supabase.from("customers").insert({ ...rest, created_by: user?.id || null }).select("id").single(); }
     if (r.error) throw r.error; id = r.data.id;
   }
   await supabase.from("customer_contacts").delete().eq("customer_id", id);
@@ -1820,8 +1824,13 @@ export async function saveInvoice(inv) {
 }
 // update per-line WHT selection (items) + rate + recomputed amount on an invoice
 export async function setInvoiceWht(invoice_no, items, wht_rate, wht_amt) {
+  const { data: old } = await supabase.from("invoices").select("wht_amt").eq("invoice_no", invoice_no).single();
   const { error } = await supabase.from("invoices").update({ items: items || [], wht_rate: Number(wht_rate) || 3, wht_amt: Number(wht_amt) || 0 }).eq("invoice_no", invoice_no);
   if (error) throw error;
+  // เส้นเงินเข้าที่คาดการณ์จากใบแจ้งหนี้ = total − wht_amt → แก้ยอดหักแล้วต้องคำนวณใหม่
+  await logAudit({ action: "edit", target_type: "invoice", target_no: invoice_no,
+    reason: `แก้หัก ณ ที่จ่าย: ${Number(old?.wht_amt) || 0} → ${Number(wht_amt) || 0} บาท` });
+  syncCashEntriesFromDocs().catch(() => {});
 }
 export async function setInvoiceStatus(invoice_no, status, reason) {
   // chain safety: cannot cancel an invoice that has a LIVE receipt or sits in a LIVE billing note — ใบยกเลิกแล้วไม่บล็อก
@@ -1939,8 +1948,15 @@ export async function saveReceipt(r) {
 }
 // update per-line WHT selection + rate + recomputed amounts on a receipt
 export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, net) {
+  const { data: old } = await supabase.from("receipts").select("wht_amt,net").eq("receipt_no", receipt_no).single();
   const { error } = await supabase.from("receipts").update({ items: items || [], wht: !!wht, wht_rate: Number(wht_rate) || 3, wht_amt: Number(wht_amt) || 0, net: Number(net) || 0 }).eq("receipt_no", receipt_no);
   if (error) throw error;
+  // แก้หัก ณ ที่จ่ายหลังออกใบ = ยอดรับสุทธิเปลี่ยน → เงินฝากในสมุดบัญชีและเส้นกระแสเงินสดต้องขยับตาม
+  // เดิมไม่ sync เลย ยอดในระบบจึงเพี้ยนจากเงินที่เข้าธนาคารจริง จนกว่าจะมีคนบังเอิญไปกดออก/ยกเลิกใบอื่น
+  await logAudit({ action: "edit", target_type: "receipt", target_no: receipt_no,
+    reason: `แก้หัก ณ ที่จ่าย: ${Number(old?.wht_amt) || 0} → ${Number(wht_amt) || 0} บาท (รับสุทธิ ${Number(old?.net) || 0} → ${Number(net) || 0})` });
+  syncCashEntriesFromDocs().catch(() => {});
+  syncBankReceipts().catch(() => {});
 }
 // toggle a receipt's paid status (and sync the linked invoice)
 // ---------- BILLING NOTES (ใบวางบิล) ----------
@@ -3365,8 +3381,13 @@ export async function setExpenseExpectedDate(id, date) {
 }
 // approved/paid expense cost rolled up per job → adds to job cost in Profit
 export async function jobExpenseCost() {
-  const { data } = await supabase.from("expense_requests").select("job_no,amount,status").not("job_no", "is", null).in("status", ["approved", "paid"]);
-  const m = {}; (data || []).forEach((x) => { if (x.job_no) m[x.job_no] = (m[x.job_no] || 0) + (Number(x.amount) || 0); });
+  // ต้องผ่าน _fetchAll — เดิม select ตรง ๆ โดนเพดาน 1000 แถว ใบเบิกของงานเก่าหลุดหายเงียบ
+  // ผลคือต้นทุนงานต่ำกว่าจริง → กำไร/งานสูงเกินจริง โดยไม่มีอะไรฟ้องเลย
+  const rows = await _fetchAll((f, t) =>
+    supabase.from("expense_requests").select("job_no,amount,status", { count: "exact" })
+      .not("job_no", "is", null).in("status", ["approved", "paid"]).order("id").range(f, t)   // ไม่มี order = แถวซ้ำ/หายระหว่างหน้า
+  );
+  const m = {}; (rows || []).forEach((x) => { if (x.job_no) m[x.job_no] = (m[x.job_no] || 0) + (Number(x.amount) || 0); });
   return m;
 }
 export async function updateProfile(id, fields) {
