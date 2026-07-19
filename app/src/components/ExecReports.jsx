@@ -1,8 +1,8 @@
 import React from "react";
-import { listInvoices, listPurchaseOrders } from "../lib/api";
+import { listInvoices, listPurchaseOrders, listQuotations, listBoqs, listReceipts } from "../lib/api";
 import { fmtBaht, fmtNum, fmtCompact, downloadCsv, inRange } from "../lib/format";
 
-// รายงานผู้บริหาร 6 ตัว (แท็บในแดชบอร์ด) — คำนวณจากข้อมูลที่แดชบอร์ดโหลดอยู่แล้ว + โหลดเพิ่ม 2 ก้อนแบบขี้เกียจ
+// รายงานผู้บริหาร 6 ตัว (แท็บในแดชบอร์ด) — โหลดเอกสารทั้งประวัติเองตอนเปิดแท็บ (หลายรายงานคิดจากประวัติทั้งหมดโดยตั้งใจ)
 // ทุกตารางมี ⬇ Export CSV · ช่วงเวลาตามตัวกรองแดชบอร์ด (from/to)
 const R2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const JT = { install: "ติดตั้ง", move: "ย้าย", clean: "ล้าง/บำรุง", repair: "ซ่อม/แก้ไข", survey: "สำรวจ", maintain: "PM", other: "อื่น ๆ" };
@@ -25,12 +25,20 @@ const T = ({ head, rows }) => (
   </div>
 );
 
-export default function ExecReports({ ov, act, accounts, from, to, periodLabel }) {
+export default function ExecReports({ act, accounts, from, to, periodLabel }) {
   const [invs, setInvs] = React.useState(null);
   const [pos, setPos] = React.useState(null);
+  // ⚠️ ต้องโหลดเอกสาร "ทั้งประวัติ" เอง ห้ามรับต่อจากแดชบอร์ด — ตั้งแต่ v460 แดชบอร์ดดึงเฉพาะช่วงที่เลือก
+  // แต่รายงานหน้านี้หลายข้อคิดจากประวัติทั้งหมดโดยตั้งใจ: "ลูกค้าหาย (เงียบเกิน 6 เดือน)" ถ้าได้แต่ข้อมูล
+  // เดือนนี้ ทุกคนจะดูเหมือนเพิ่งซื้อ → รายชื่อลูกค้าหายกลายเป็นว่างเปล่าทั้งที่มีจริง · Top 10 ก็จะกลายเป็น
+  // ยอดเฉพาะเดือนนี้แทนยอดสะสม · DSO ก็จะคิดจากใบเสร็จแค่ช่วงเดียว — ผิดแบบไม่มีอะไรฟ้อง
+  // หน้านี้เปิดเฉพาะตอนกดแท็บ "รายงานผู้บริหาร" จึงยอมให้โหลดหนักได้
+  const [ov, setOv] = React.useState(null);
   React.useEffect(() => {
     listInvoices().then(setInvs).catch(() => setInvs([]));
     listPurchaseOrders().then(setPos).catch(() => setPos([]));
+    Promise.all([listQuotations(), listBoqs(), listReceipts().catch(() => [])])
+      .then(([qs, bs, rcs]) => setOv({ qs, bs, rcs })).catch(() => setOv({ qs: [], bs: [], rcs: [] }));
   }, []);
   const qs = ov?.qs || [], bs = ov?.bs || [], rcs = ov?.rcs || [];
   const inR = (q) => inRange(q.issue_date || q.created_at, from, to);

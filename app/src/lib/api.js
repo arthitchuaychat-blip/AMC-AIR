@@ -1282,7 +1282,29 @@ const _scopeNos = (opts) => {
   const u = [...new Set(a.filter(Boolean))];
   return u.length && u.length <= 200 ? u : null;   // เกิน 200 = URL ยาวเกิน PostgREST → กลับไปโหลดเต็มปลอดภัยกว่า
 };
-const _onlyNos = (q, col, nos) => (nos ? q.in(col, nos) : q);
+// nos = null → ไม่กรอง (โหลดเต็ม) · [] → ต้องได้ 0 แถว จึงยิง sentinel ที่ไม่มีทางตรงกับเลขเอกสารจริง
+// (ห้ามใช้ NUL เป็น sentinel — Postgres เก็บใน text ไม่ได้ query จะพังแทนที่จะคืน 0 แถว)
+const _onlyNos = (q, col, nos) => (nos ? q.in(col, nos.length ? nos : ["__none__"]) : q);
+// รายการเลข/ไอดีที่จะเอาไปกรอง — เกิน 200 ตัว URL จะยาวเกินที่ PostgREST รับ → คืน null = โหลดเต็ม
+// ผลลัพธ์ยังถูกเสมอ แค่ไม่ได้ประหยัด (เท่าพฤติกรรมเดิม) ไม่ใช่การตัดข้อมูลทิ้ง
+const _capNos = (arr) => {
+  const u = [...new Set((arr || []).filter((v) => v != null))];
+  return u.length <= 200 ? u : null;
+};
+
+// ---------- กรอง "ตั้งแต่วันที่" ฝั่งเซิร์ฟเวอร์ (ใช้กับแดชบอร์ด) ----------
+// ด้านเดียวเสมอ (from อย่างเดียว ไม่มี to) — เพราะ approved_at/created_at เป็น timestamptz
+// การใส่ .lte(to) จะตัดงานของวันสุดท้ายทิ้งทั้งวัน (bind เป็น 00:00) ไม่ตรงกับ inRange ฝั่งจอที่นับวันสุดท้ายด้วย
+// → ตัดปลายทางฝั่งจอเหมือนเดิม ฝั่งเซิร์ฟเวอร์ตัดแค่หัวเท่านั้น
+//
+// ⚠️ ต้อง OR หลายคอลัมน์: ใบเสนอที่ "ออกก่อนช่วง แต่อนุมัติในช่วง" คือใบที่การ์ดยอดขายนับ ถ้ากรองด้วย
+//    issue_date อย่างเดียวจะหายไป · และใบเก่าก่อน mig 119 ที่ issue_date เป็น NULL จะถูกตัดทิ้งเงียบ ๆ
+//    (NULL >= วันที่ = NULL = ไม่ผ่าน) จึงต้องมี created_at ซึ่ง not null เป็นตัวรับท้าย
+const _sinceOf = (opts) => {
+  const s = opts && opts.since;
+  return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+};
+const _orSince = (q, cols, since) => (since ? q.or(cols.map((c) => `${c}.gte.${since}`).join(",")) : q);
 const _idsOf = (rows, col) => [...new Set((rows || []).map((r) => r[col]).filter((v) => v != null))];
 // ids = null (ไม่ได้เจาะจง) → โหลดเต็มเหมือนเดิม · [] (เจาะจงแต่ไม่มีใบไหนอ้างถึง) → ต้องได้ 0 แถว ไม่ใช่ทั้งตาราง
 const _onlyIds = (q, col, ids) => (ids == null ? q : q.in(col, ids.length ? ids : [-1]));
@@ -1537,19 +1559,25 @@ export async function setJobStatus(job_no, status, reason) {
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
 export async function listQuotations(opts = {}) {
   const nos = _scopeNos(opts);
-  const qP = _allRows((f, t) => _onlyNos(supabase.from("quotations").select("*", { count: "exact" }), "quote_no", nos).order("created_at", { ascending: false }).order("quote_no").range(f, t));
-  const q = nos ? await qP : { data: [] };   // เจาะจงใบ → รอหัวใบก่อนเพื่อรู้ลูกค้า/ไซต์ · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
+  const since = _sinceOf(opts);
+  const qP = _allRows((f, t) => _orSince(_onlyNos(supabase.from("quotations").select("*", { count: "exact" }), "quote_no", nos), ["approved_at", "issue_date", "created_at"], since).order("created_at", { ascending: false }).order("quote_no").range(f, t));
+  const q = (nos || since) ? await qP : { data: [] };   // เจาะจงใบ/ช่วงวันที่ → รอหัวใบก่อนเพื่อรู้ลูกค้า/ไซต์ · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
   if (q.error) throw q.error;
   const cids = _idsOf(q.data, "customer_id"), sids = _idsOf(q.data, "site_id");
+  // กรองด้วยช่วงวันที่ → ตารางลูกกรองตาม "เลขใบที่ได้มาจริง" · ถ้าใบเยอะเกิน 200 _capNos คืน null = โหลดเต็ม
+  // (ผลลัพธ์ถูกเสมอ แค่ไม่ได้ประหยัด — เท่าพฤติกรรมเดิมก่อนแก้ ไม่ถือเป็นการถอยหลัง)
+  const scoped = !!(nos || since);
+  const scope = nos || (since ? _capNos(_idsOf(q.data, "quote_no")) : null);
+  const cScope = scoped ? _capNos(cids) : null, sScope = scoped ? _capNos(sids) : null;
   const [it, cu, si, ct, jo, inv] = await Promise.all([
-    _allRows((f, t) => _onlyNos(supabase.from("quotation_items").select("*", { count: "exact" }), "quote_no", nos).order("id").range(f, t)), // กันเพดาน 1000 แถว
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,type", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
-    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
-    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
-    _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status,assigned_team", { count: "exact" }), "quote_no", nos).order("job_no").range(f, t)),
-    _allRows((f, t) => _onlyNos(supabase.from("invoices").select("quote_no,total,status", { count: "exact" }), "quote_no", nos).order("invoice_no").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("quotation_items").select("*", { count: "exact" }), "quote_no", scope).order("id").range(f, t)), // กันเพดาน 1000 แถว
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,type", { count: "exact" }), "id", cScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", sScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", cScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status,assigned_team", { count: "exact" }), "quote_no", scope).order("job_no").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("invoices").select("quote_no,total,status", { count: "exact" }), "quote_no", scope).order("invoice_no").range(f, t)),
   ]);
-  const qR = nos ? q : await qP;
+  const qR = (nos || since) ? q : await qP;
   if (qR.error) throw qR.error;
   if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
   const byQ = {}; (it.data || []).forEach((x) => { (byQ[x.quote_no] = byQ[x.quote_no] || []).push(x); });
@@ -1561,7 +1589,7 @@ export async function listQuotations(opts = {}) {
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
   const billedByQ = {}; (inv.data || []).forEach((x) => { if (x.status !== "cancelled") billedByQ[x.quote_no] = (billedByQ[x.quote_no] || 0) + Number(x.total || 0); });
-  const cb = await _creators(nos ? _idsOf(qR.data, "created_by") : null);
+  const cb = await _creators(scoped ? _idsOf(qR.data, "created_by") : null);
   return (qR.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
     // วิธีการรับเงิน: ราคาบัตรปรับเข้า "ราคาต่อหน่วยของแต่ละรายการ" (ปัดขึ้นบาทเต็ม/หน่วย) — ไม่มีบรรทัดค่าธรรมเนียม
@@ -1823,21 +1851,44 @@ export async function deleteInvoice(invoice_no, reason) {
 }
 
 // ---------- RECEIPTS (ใบเสร็จรับเงิน) ----------
+// "ใบเสนอเลขนี้ ใครขาย ทีมไหนทำ" — ตารางบางเฉพาะที่ใช้ระบุตัวตน ไม่มีรายการ/ราคา/ลูกค้า
+// ทำไมต้องมี: แดชบอร์ดดึงใบเสนอเฉพาะช่วงที่เลือก แต่ใบเสร็จในช่วงนั้นมักผูกกับใบเสนอที่อนุมัติไปหลายเดือนก่อน
+// (ลูกค้าจ่ายทีหลัง = ปกติของงานนี้) ถ้าไม่มีตัวนี้ พอกรอง "พนักงานขาย: สมชาย" ใบเสร็จพวกนั้นจะถูกทิ้ง
+// แล้วการ์ด "รับเงินแล้ว" กลายเป็น 0 บาททั้งที่เก็บเงินได้จริง — ผิดแบบไม่มีอะไรฟ้อง
+export async function quoteAttribution(nos) {
+  const list = _capNos(nos);
+  if (list && !list.length) return {};
+  const [q, jo] = await Promise.all([
+    _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,created_by", { count: "exact" }), "quote_no", list).order("quote_no").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("quote_no,assigned_team,status,job_no", { count: "exact" }), "quote_no", list).order("job_no").range(f, t)),
+  ]);
+  if (q.error) throw q.error;
+  const cb = await _creators(list ? _idsOf(q.data, "created_by") : null);
+  const team = {}; (jo.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !team[j.quote_no]) team[j.quote_no] = j.assigned_team; });
+  const out = {};
+  (q.data || []).forEach((x) => { out[x.quote_no] = { createdByName: cb[x.created_by] || null, jobTeam: team[x.quote_no] || null }; });
+  return out;
+}
+
 export async function listReceipts(opts = {}) {
   const nos = _scopeNos(opts);
-  const rcP = _allRows((f, t) => _onlyNos(supabase.from("receipts").select("*", { count: "exact" }), "receipt_no", nos).order("created_at", { ascending: false }).order("receipt_no").range(f, t));
-  const rc = nos ? await rcP : { data: [] };   // เจาะจงใบ → รอหัวใบก่อน · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
+  const since = _sinceOf(opts);
+  // ใบเสร็จเก่าที่ issue_date เป็น NULL ต้องไม่หายไปเงียบ ๆ → OR กับ created_at ที่ not null เสมอ
+  const rcP = _allRows((f, t) => _orSince(_onlyNos(supabase.from("receipts").select("*", { count: "exact" }), "receipt_no", nos), ["issue_date", "created_at"], since).order("created_at", { ascending: false }).order("receipt_no").range(f, t));
+  const scoped = !!(nos || since);
+  const rc = scoped ? await rcP : { data: [] };   // เจาะจงใบ/ช่วงวันที่ → รอหัวใบก่อน · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
   if (rc.error) throw rc.error;
-  const cids = _idsOf(rc.data, "customer_id"), sids = _idsOf(rc.data, "site_id");
-  const qnos = _idsOf(rc.data, "quote_no"); const qScope = nos && (qnos.length ? qnos : ["__none__"]);
+  const cScope = scoped ? _capNos(_idsOf(rc.data, "customer_id")) : null;
+  const sScope = scoped ? _capNos(_idsOf(rc.data, "site_id")) : null;
+  const qScope = scoped ? _capNos(_idsOf(rc.data, "quote_no")) : null;
   const [cu, si, ct, jo, qt] = await Promise.all([
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
-    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
-    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", cScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", sScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("job_no,quote_no", { count: "exact" }), "quote_no", qScope).order("job_no").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,title", { count: "exact" }), "quote_no", qScope).order("quote_no").range(f, t)),
   ]);
-  const rcR = nos ? rc : await rcP;
+  const rcR = scoped ? rc : await rcP;
   if (rcR.error) throw rcR.error;
   if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error; if (qt.error) throw qt.error;
   const titleByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.title]));
@@ -1847,7 +1898,7 @@ export async function listReceipts(opts = {}) {
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j.job_no; });
-  const cb = await _creators(nos ? _idsOf(rcR.data, "created_by") : null);
+  const cb = await _creators(scoped ? _idsOf(rcR.data, "created_by") : null);
   return (rcR.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,

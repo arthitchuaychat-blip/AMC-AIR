@@ -1,5 +1,5 @@
 import React from "react";
-import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, dashboardActionLite, vatSummary, listAccounts } from "../lib/api";
+import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, dashboardActionLite, vatSummary, listAccounts, listProfiles, quoteAttribution } from "../lib/api";
 import { downloadCsv } from "../lib/format";
 import { can } from "../lib/permissions";
 import { fmtBaht, fmtNum, fmtCompact, inRange } from "../lib/format";
@@ -66,11 +66,39 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
   // ตัวกรองระดับแดชบอร์ด: พนักงานขาย (คนสร้างใบเสนอ) + ทีมช่าง (ทีมของใบงานที่ผูกใบเสนอ) — คุมการ์ดขาย/รับเงิน/กำไร/หัก ณ ที่จ่าย
   const [byPerson, setByPerson] = React.useState("");
   const [byTeam, setByTeam] = React.useState("");
+  const [staffNames, setStaffNames] = React.useState([]);   // ทะเบียนพนักงาน — ตัวเลือก "พนักงานขาย" ต้องไม่ผูกกับช่วงวันที่
+  const [ovErr, setOvErr] = React.useState(null);           // โหลดเอกสารไม่สำเร็จ — ต้องบอก ไม่ใช่โชว์ตัวเลขเก่าค้างไว้
   React.useEffect(() => {
-    Promise.all([listQuotations(), listBoqs(), listReceipts().catch(() => [])]).then(([qs, bs, rcs]) => setOv({ qs, bs, rcs })).catch(() => {});
-    dashboardActionLite().then(setAct).catch(() => {});
+    dashboardActionLite().then(setAct).catch(() => {});   // ตัวเลขค้างรับ/ค้างจ่าย = ทั้งบริษัทเสมอ ไม่ผูกช่วงวันที่
     if (can(role, "cashflow")) listAccounts().then(setAccounts).catch(() => {});
+    // รายชื่อพนักงานขายในตัวกรอง ต้องมาจากทะเบียนพนักงาน ไม่ใช่จากใบเสนอในช่วงที่เลือก
+    // ไม่งั้นเปลี่ยนช่วงวันที่แล้วชื่อที่เลือกอยู่หายจากลิสต์ ทั้งที่ค่ายังค้างใน state → การ์ดขึ้น 0 บาทโดยไม่มีสาเหตุให้เห็น
+    listProfiles().then((ps) => setStaffNames([...new Set((ps || []).map((p) => p.name).filter(Boolean))].sort())).catch(() => {});
   }, [role]);
+  // เอกสารฝั่งขาย: ดึงเฉพาะช่วงที่เลือก ("ทั้งหมด" = from ว่าง → ไม่ส่ง since = โหลดเต็มเหมือนเดิม)
+  // ⚠️ BOQ ดึงด้วย "เลขใบที่ใบเสนออ้างถึง" ไม่ใช่ด้วยวันที่ — BOQ ถูกทำก่อนใบเสนอเป็นวัน/สัปดาห์
+  //    ถ้ากรอง BOQ ด้วยวันที่ ใบแม่ของใบเสนอในช่วงจะหลุด แล้วการ์ด "กำไรประมาณการ" จะน้อยลงเงียบ ๆ
+  //    (โค้ดมี guard boqCost[..] != null อยู่ ทำให้ไม่มี error ให้เห็นเลย)
+  React.useEffect(() => {
+    let alive = true;
+    // ต้องล้างของเก่าทิ้งก่อน ไม่งั้นระหว่างโหลดชุดใหม่ การ์ดจะโชว์ตัวเลขของช่วงก่อนหน้าใต้ป้ายช่วงใหม่
+    setOv(null); setOvErr(null);
+    const opt = from ? { since: from } : {};
+    (async () => {
+      try {
+        const [qs, rcs] = await Promise.all([listQuotations(opt), listReceipts(opt).catch(() => [])]);
+        const boqNos = [...new Set(qs.map((q) => q.boq_no).filter(Boolean))];
+        const bs = await listBoqs(from && boqNos.length ? { nos: boqNos } : {});
+        // ใบเสร็จที่ผูกใบเสนอนอกช่วง → ขอแค่ "ใครขาย/ทีมไหน" ของใบเสนอพวกนั้นมาเพิ่ม (ตารางบาง 2 คอลัมน์)
+        // ไม่งั้นพอผู้ใช้เลือกตัวกรองพนักงานขาย ใบเสร็จเหล่านั้นจะถูกทิ้งทั้งที่เป็นเงินที่เก็บได้จริง
+        const inWin = new Set(qs.map((q) => q.quote_no));
+        const missing = [...new Set(rcs.map((r) => r.quote_no).filter((n) => n && !inWin.has(n)))];
+        const extra = missing.length ? await quoteAttribution(missing).catch(() => ({})) : {};
+        if (alive) setOv({ qs, bs, rcs, attrExtra: extra });
+      } catch (e) { if (alive) setOvErr(e.message || String(e)); }
+    })();
+    return () => { alive = false; };
+  }, [from]);
   // ใบเสนอหลังผ่านตัวกรองคน/ทีม — เป็นฐานของทุกการ์ดฝั่งขาย (ใบเสร็จกรองผ่านใบเสนอที่มันผูก)
   const fq = React.useMemo(() => {
     let qs = ov?.qs || [];
@@ -78,13 +106,29 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     if (byTeam) qs = qs.filter((q) => q.jobTeam === byTeam);
     return qs;
   }, [ov, byPerson, byTeam]);
+  // ตารางระบุตัวตนของทุกใบเสนอที่ใบเสร็จอ้างถึง = ใบในช่วง + ใบนอกช่วงที่ดึงมาเพิ่มแบบบาง
+  const attr = React.useMemo(() => {
+    const m = { ...(ov?.attrExtra || {}) };
+    (ov?.qs || []).forEach((q) => { m[q.quote_no] = { createdByName: q.createdByName || null, jobTeam: q.jobTeam || null }; });
+    return m;
+  }, [ov]);
   const fRcs = React.useMemo(() => {
     if (!ov?.rcs) return [];
     if (!byPerson && !byTeam) return ov.rcs;
-    const ok = new Set(fq.map((q) => q.quote_no));
-    return ov.rcs.filter((r) => r.quote_no && ok.has(r.quote_no));   // ใบเสร็จไม่ผูกใบเสนอ ระบุคน/ทีมไม่ได้ → ตัดออกตอนกรอง
-  }, [ov, fq, byPerson, byTeam]);
-  const salesNames = React.useMemo(() => [...new Set((ov?.qs || []).map((q) => q.createdByName).filter(Boolean))].sort(), [ov]);
+    // ⚠️ ห้ามกรองด้วย fq (ใบเสนอในช่วง) — ใบเสร็จเดือนนี้ส่วนใหญ่มาจากใบเสนอที่อนุมัติไปหลายเดือนก่อน
+    // จะถูกทิ้งหมดแล้วการ์ด "รับเงินแล้ว" กลายเป็น 0 · ใบเสร็จไม่ผูกใบเสนอ ระบุคน/ทีมไม่ได้ → ตัดออกตามเดิม
+    return ov.rcs.filter((r) => {
+      const a = r.quote_no ? attr[r.quote_no] : null;
+      if (!a) return false;
+      if (byPerson && (a.createdByName || "") !== byPerson) return false;
+      if (byTeam && a.jobTeam !== byTeam) return false;
+      return true;
+    });
+  }, [ov, attr, byPerson, byTeam]);
+  // ทะเบียนพนักงาน + คนที่มีใบเสนอในช่วง (เผื่อคนที่ลาออกไปแล้วแต่ยังมีใบเก่าอยู่ในช่วงที่ดู)
+  const salesNames = React.useMemo(
+    () => [...new Set([...staffNames, ...(ov?.qs || []).map((q) => q.createdByName)].filter(Boolean))].sort(),
+    [staffNames, ov]);
   const ovStat = React.useMemo(() => {
     if (!ov) return { sale: 0, count: 0, est: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
     const boqCost = Object.fromEntries(ov.bs.map((b) => [b.boq_no, b.total]));
@@ -107,7 +151,9 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     fRcs.forEach((r) => {
       if (r.status !== "paid" || !inRange(r.issue_date, from, to)) return;
       const base = Number(r.base) || ((Number(r.total) || 0) - (Number(r.vat_amt) || 0)); // ก่อน VAT (ใบเก่าไม่มี base → total−vat)
-      const isVat = r.quote_no ? !!quoteVat[r.quote_no] : (Number(r.vat_amt) || 0) > 0;
+      // ใบเสร็จผูกใบเสนอที่อยู่นอกช่วงที่โหลดมา → หาไม่เจอใน quoteVat ต้องถอยไปดูยอด VAT ในใบเสร็จเอง
+      // (เดิมเขียน !!quoteVat[..] ตรง ๆ ซึ่ง undefined = false = จัดเข้ากลุ่ม "ไม่ VAT" ผิดแบบเงียบ ๆ)
+      const isVat = r.quote_no && quoteVat[r.quote_no] !== undefined ? !!quoteVat[r.quote_no] : (Number(r.vat_amt) || 0) > 0;
       s.sale += base; s.count += 1; s.net += Number(r.net) || ((Number(r.total) || 0) - (Number(r.wht_amt) || 0));
       s.wht += Number(r.wht_amt) || 0;   // ถูกหัก ณ ที่จ่ายสะสม (ขอคืน/เครดิตภาษีได้)
       if (isVat) { s.vatSale += base; s.vatCount += 1; } else { s.novatSale += base; s.novatCount += 1; }
@@ -115,6 +161,8 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     return s;
   }, [ov, fRcs, from, to]);
 
+  // การ์ดที่คำนวณจากเอกสารในช่วง: ระหว่างโหลดต้องขึ้น "…" ไม่ใช่ตัวเลขของช่วงก่อนหน้าใต้ป้ายช่วงใหม่
+  const dv = (v) => (ov ? fmtBaht(v) : "…");
   function applyPreset(p) { const r = PRESETS.find((x) => x.id === p).range(); setPreset(p); setFrom(r.from); setTo(r.to); }
   const setCustom = (k, v) => { setPreset("custom"); k === "from" ? setFrom(v) : setTo(v); };
   const rangeLabel = preset !== "custom" ? (PRESETS.find((p) => p.id === preset)?.label || "") : `${from || "เริ่มต้น"} – ${to || "วันนี้"}`;
@@ -208,14 +256,18 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
             {(byPerson || byTeam) && <button className="btn-ghost sm" onClick={() => { setByPerson(""); setByTeam(""); }}>✕ ล้างตัวกรอง</button>}
             {(byPerson || byTeam) && <span className="page-sub" style={{ margin: 0 }}>กำลังดูเฉพาะ {byPerson || ""}{byPerson && byTeam ? " · " : ""}{byTeam ? `ทีม ${teams.find((t) => t.id === byTeam)?.name || byTeam}` : ""} (ใบเสร็จที่ไม่ผูกใบเสนอถูกตัดออก)</span>}
           </div>
+          {ovErr && <div className="card" style={{ borderLeft: "4px solid #dc2626", marginBottom: 10 }}>
+            ⚠️ โหลดเอกสารในช่วงนี้ไม่สำเร็จ — ตัวเลขการ์ดขาย/รับเงิน/กำไร <b>ยังไม่ใช่ของจริง</b>
+            <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 4 }}>{ovErr}</div>
+          </div>}
           <div className="kpi-grid">
-            <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={fmtBaht(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setDocList("q_all")} />
-            <StatCard icon="trend" color="#1f74e0" label="ยอดขายอนุมัติ · รับ VAT" value={fmtBaht(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("q_vat")} />
-            <StatCard icon="trend" color="#64748b" label="ยอดขายอนุมัติ · ไม่ VAT" value={fmtBaht(ovStat.novatSale)} sub={fmtNum(ovStat.novatCount) + " ใบ"} onClick={() => setDocList("q_novat")} />
-            <StatCard icon="check" color="#0a6b3d" label={"รับเงินแล้ว (ใบเสร็จ) · " + periodLabel} value={fmtBaht(rcStat.sale)} sub={`${fmtNum(rcStat.count)} ใบเสร็จ · ก่อน VAT · รับสุทธิ ${fmtCompact(rcStat.net)}`} onClick={() => setDocList("rc_all")} />
-            <StatCard icon="check" color="#15803d" label="รับเงินแล้ว · รับ VAT" value={fmtBaht(rcStat.vatSale)} sub={`${fmtNum(rcStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("rc_vat")} />
-            <StatCard icon="check" color="#4d7c0f" label="รับเงินแล้ว · ไม่ VAT" value={fmtBaht(rcStat.novatSale)} sub={fmtNum(rcStat.novatCount) + " ใบ"} onClick={() => setDocList("rc_novat")} />
-            <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={fmtBaht(ovStat.est)} sub="กำไรจริงดูในแท็บ ขาย & กำไร" onClick={() => setDocList("est")} />
+            <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={dv(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setDocList("q_all")} />
+            <StatCard icon="trend" color="#1f74e0" label="ยอดขายอนุมัติ · รับ VAT" value={dv(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("q_vat")} />
+            <StatCard icon="trend" color="#64748b" label="ยอดขายอนุมัติ · ไม่ VAT" value={dv(ovStat.novatSale)} sub={fmtNum(ovStat.novatCount) + " ใบ"} onClick={() => setDocList("q_novat")} />
+            <StatCard icon="check" color="#0a6b3d" label={"รับเงินแล้ว (ใบเสร็จ) · " + periodLabel} value={dv(rcStat.sale)} sub={`${fmtNum(rcStat.count)} ใบเสร็จ · ก่อน VAT · รับสุทธิ ${fmtCompact(rcStat.net)}`} onClick={() => setDocList("rc_all")} />
+            <StatCard icon="check" color="#15803d" label="รับเงินแล้ว · รับ VAT" value={dv(rcStat.vatSale)} sub={`${fmtNum(rcStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("rc_vat")} />
+            <StatCard icon="check" color="#4d7c0f" label="รับเงินแล้ว · ไม่ VAT" value={dv(rcStat.novatSale)} sub={fmtNum(rcStat.novatCount) + " ใบ"} onClick={() => setDocList("rc_novat")} />
+            <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={dv(ovStat.est)} sub="กำไรจริงดูในแท็บ ขาย & กำไร" onClick={() => setDocList("est")} />
             <StatCard icon="clipboard" color="#d97706" label="เงินค้างรับ" value={fmtBaht(act?.receivable || 0)} sub={`${fmtNum(act?.unpaidCount || 0)} ใบ · เกินกำหนด ${fmtNum(act?.overdueCount || 0)} ใบ`} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
             <StatCard icon="withdraw" color="#dc2626" label="ยอดค้างจ่าย" value={fmtBaht(act?.payable || 0)} accent={act?.payable ? "#dc2626" : undefined}
               sub={`PO ${fmtCompact(act?.poPayable || 0)} · ค่าแรงซัพ ${fmtCompact((act?.payoutUnpaid || 0) + (act?.laborOwed || 0))} · เบิกรอจ่าย ${fmtCompact(act?.approvedExpenseSum || 0)}`}
@@ -229,7 +281,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
             )}
             {can(role, "tax") && (
               <StatCard icon="clipboard" color="#7c3aed" label={"ถูกหัก ณ ที่จ่าย · " + periodLabel}
-                value={fmtBaht(rcStat.wht)} sub={`จากใบเสร็จที่รับเงินแล้ว ${fmtNum(rcStat.count)} ใบ · ใช้เป็นเครดิตภาษีได้`}
+                value={dv(rcStat.wht)} sub={`จากใบเสร็จที่รับเงินแล้ว ${fmtNum(rcStat.count)} ใบ · ใช้เป็นเครดิตภาษีได้`}
                 onClick={() => setDocList("rc_all")} />
             )}
           </div>
@@ -269,7 +321,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
         </>
       )}
 
-      {tab === "exec" && <ExecReports ov={ov} act={act} accounts={accounts} from={from} to={to} periodLabel={periodLabel} />}
+      {tab === "exec" && <ExecReports act={act} accounts={accounts} from={from} to={to} periodLabel={periodLabel} />}
 
       {tab === "trend" && <TrendCharts from={from} to={to} />}
 

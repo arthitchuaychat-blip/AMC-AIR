@@ -49,7 +49,9 @@ export default function DashDocDrawer({ kind, periodLabel, from, to, quotes, rec
       .map((r) => {
         const total = Number(r.total) || 0;
         const base = Number(r.base) || (total - (Number(r.vat_amt) || 0));
-        const isVat = r.quote_no ? !!quoteVat[r.quote_no] : (Number(r.vat_amt) || 0) > 0;
+        // ใบเสนอที่ผูกอยู่อาจอยู่นอกช่วงที่แดชบอร์ดโหลดมา → หาไม่เจอต้องถอยไปดูยอด VAT ในใบเสร็จเอง
+        // ไม่ใช่ตีเป็น "ไม่ VAT" (ไฟล์ Export ที่เอาไปกระทบยอดกับบัญชีจริงจะผิดตาม)
+        const isVat = r.quote_no && quoteVat[r.quote_no] !== undefined ? !!quoteVat[r.quote_no] : (Number(r.vat_amt) || 0) > 0;
         return {
           type: "receipt", no: r.receipt_no, date: (r.issue_date || "").slice(0, 10),
           name: r.customerName || "-", title: r.title || "", isVat,

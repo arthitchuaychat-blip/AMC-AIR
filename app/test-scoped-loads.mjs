@@ -31,6 +31,7 @@ function makeQuery(table) {
     select: () => q,
     in: (col, vals) => { rec.filters.push(`${col} in [${vals.join(",")}]`); return q; },
     overlaps: (col, vals) => { rec.filters.push(`${col} ov [${vals.join(",")}]`); return q; },
+    or: (expr) => { rec.filters.push(`or(${expr})`); return q; },
     order: () => q,
     range: () => q,
     then: (res) => res({ data: headRows[table] || [], count: (headRows[table] || []).length, error: null }),
@@ -132,7 +133,72 @@ check("listReceipts: ใบเสร็จไม่ผูกใบเสนอ �
   assert.deepEqual(calls.find((c) => c.table === "quotations").filters, ["quote_no in [__none__]"]);
 });
 
-// ============ (3) กันพลาด: ขอเกิน 200 ใบ → กลับไปโหลดเต็ม (URL ยาวเกิน) ============
+// ============ (3) กรองช่วงวันที่ { since } — ที่แดชบอร์ดใช้ ============
+console.log("\nกรองช่วงวันที่ { since }:");
+
+calls = []; headRows = { quotations: [{ quote_no: "QT-1", customer_id: 7, site_id: 3, created_by: "u1" }] };
+await listQuotations({ since: "2026-07-01" });
+check("ใบเสนอ: ต้อง OR 3 คอลัมน์ (อนุมัติในช่วงแต่ออกก่อนช่วง ต้องไม่หาย · ใบเก่า issue_date NULL ต้องไม่หาย)", () => {
+  const f = calls.find((c) => c.table === "quotations").filters;
+  assert.deepEqual(f, ["or(approved_at.gte.2026-07-01,issue_date.gte.2026-07-01,created_at.gte.2026-07-01)"]);
+});
+check("ใบเสนอ: ตารางลูกกรองตามเลขใบที่ได้มาจริง ไม่ใช่กรองด้วยวันที่ซ้ำ", () => {
+  assert.deepEqual(calls.find((c) => c.table === "quotation_items").filters, ["quote_no in [QT-1]"]);
+  assert.deepEqual(calls.find((c) => c.table === "customers").filters, ["id in [7]"]);
+  assert.deepEqual(calls.find((c) => c.table === "invoices").filters, ["quote_no in [QT-1]"]);
+});
+
+calls = []; headRows = { receipts: [{ receipt_no: "RC-1", customer_id: 2, site_id: null, quote_no: "QT-1" }] };
+await listReceipts({ since: "2026-07-01" });
+check("ใบเสร็จ: OR issue_date กับ created_at (ใบเก่าที่ยังไม่มี issue_date ต้องไม่หาย)", () => {
+  assert.deepEqual(calls.find((c) => c.table === "receipts").filters, ["or(issue_date.gte.2026-07-01,created_at.gte.2026-07-01)"]);
+});
+
+check("ไม่มีที่ไหนใช้ .lte(to) กับคอลัมน์ timestamptz (จะตัดงานของวันสุดท้ายทิ้งทั้งวัน)", () => {
+  assert.ok(!/\.lte\(\s*["'](approved_at|created_at)/.test(SRC), "เจอ .lte บน timestamptz");
+});
+
+calls = []; headRows = {};
+await listQuotations({ since: "1 ก.ค." });
+check("since รูปแบบผิด → ไม่กรอง (ไม่ใช่ยิง query พังหรือได้ 0 แถว)", () => {
+  assert.equal(calls.filter((c) => c.filters.length).length, 0);
+});
+
+// ============ (4) แดชบอร์ด: กรองรายพนักงานขายแล้วใบเสร็จต้องไม่หาย ============
+// บั๊กที่เอเจนต์ตรวจจับได้: ใบเสร็จเดือนนี้ส่วนใหญ่มาจากใบเสนอที่อนุมัติไปหลายเดือนก่อน (ลูกค้าจ่ายทีหลัง)
+// ถ้ากรองใบเสร็จด้วย "ใบเสนอในช่วง" ใบเสร็จพวกนั้นจะถูกทิ้ง การ์ด "รับเงินแล้ว" กลายเป็น 0 บาท
+console.log("\nแดชบอร์ด — กรองพนักงานขายแล้วใบเสร็จต้องไม่หาย:");
+
+const DASH = fs.readFileSync(process.argv[3], "utf8");
+check("fRcs ต้องไม่ใช้ fq (ใบเสนอในช่วง) เป็นตัวตัดสินว่าใบเสร็จของใคร", () => {
+  const i = DASH.indexOf("const fRcs");
+  const body = DASH.slice(i, DASH.indexOf("}, [", i));
+  assert.ok(!/ok\.has\(r\.quote_no\)/.test(body), "ยังกรองด้วยชุดเลขใบเสนอในช่วงอยู่");
+  assert.ok(/attr\[r\.quote_no\]/.test(body), "ต้องดูจากตารางระบุตัวตน (attr) แทน");
+});
+check("แดชบอร์ดต้องดึงตัวตนของใบเสนอนอกช่วงที่ใบเสร็จอ้างถึงมาเพิ่ม", () => {
+  assert.ok(/quoteAttribution\(missing\)/.test(DASH), "ไม่พบการเรียก quoteAttribution");
+});
+check("เปลี่ยนช่วงวันที่ต้องล้างของเก่า ไม่โชว์ตัวเลขช่วงก่อนใต้ป้ายช่วงใหม่", () => {
+  const i = DASH.indexOf("const opt = from ?");
+  assert.ok(/setOv\(null\)/.test(DASH.slice(Math.max(0, i - 400), i)), "ไม่พบ setOv(null) ก่อนโหลดชุดใหม่");
+});
+check("โหลดเอกสารพังต้องขึ้นคำเตือน ไม่กลืน error เงียบ ๆ", () => {
+  assert.ok(/setOvErr\(/.test(DASH) && /ovErr &&/.test(DASH), "ไม่พบ state/แบนเนอร์แจ้ง error");
+});
+
+calls = []; headRows = { quotations: [{ quote_no: "QT-1", created_by: "u1" }] };
+await listQuotations({ nos: ["QT-1"] });   // อุ่นเครื่องให้แน่ใจว่า helper ยังทำงาน
+check("quoteAttribution มีอยู่จริงใน api.js และอ่านแค่ 2 ตาราง (ไม่ใช่ 7)", () => {
+  const i = SRC.indexOf("export async function quoteAttribution");
+  assert.ok(i > 0, "ไม่พบ quoteAttribution");
+  const body = SRC.slice(i, SRC.indexOf("\nexport ", i + 10));
+  const tables = [...body.matchAll(/supabase\.from\("(\w+)"\)/g)].map((m) => m[1]);
+  assert.deepEqual(tables.sort(), ["job_orders", "quotations"]);
+  assert.ok(!/quotation_items|customer_sites/.test(body), "ต้องไม่แตะตารางรายการ/ไซต์");
+});
+
+// ============ (5) กันพลาด: ขอเกิน 200 ใบ → กลับไปโหลดเต็ม (URL ยาวเกิน) ============
 console.log("\nกันพลาด:");
 calls = []; headRows = {};
 await listQuotations({ nos: Array.from({ length: 250 }, (_, i) => "Q" + i) });

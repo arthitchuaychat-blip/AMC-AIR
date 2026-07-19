@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·index สายเอกสาร (mig 158) · _creators ไม่โหลดพนักงานทั้งบริษัทตอนพรีวิวใบเดียว และไม่ติดเพดาน 1000 แถวแล้ว · BOQ/ใบสั่งซื้อกรองวันที่ด้วย issue_date ให้ตรงกับที่การ์ดแสดง v459";
+const BUILD = "2026-07-19·แดชบอร์ดดึงเอกสารเฉพาะช่วงที่เลือก (กด ทั้งหมด = เหมือนเดิม) · BOQ ดึงตามเลขใบที่ใบเสนออ้างถึงไม่ใช่ตามวันที่ · รายงานผู้บริหารโหลดประวัติเต็มเอง · กรองพนักงานขายแล้วใบเสร็จของงานเก่าไม่หาย v460";
 
 function SetupNotice() {
   return (
