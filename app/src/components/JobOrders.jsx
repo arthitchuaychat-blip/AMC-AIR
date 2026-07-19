@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate, listHandoverFlags, saveJobReview } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline, { Linkify } from "./JobTimeline";
@@ -49,14 +49,19 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const [viewing, setViewing] = React.useState(null); // job being viewed (detail modal)
   const [peek, setPeek] = React.useState(null);       // {type,no} — พรีวิวเอกสารเชื่อมโยงเป็นแผงด้านขวา ก่อนเปิดหน้าเต็ม
   const [approveCtx, setApproveCtx] = React.useState(null); // { jo, v } → approval choice popup
+  // คะแนนงาน/ธงเคลม — เดิมตั้งได้เฉพาะหน้าช่างซัพ ทีมประจำจึงกรอกไม่ได้เลย
+  // ทั้งที่สกอร์การ์ด HR หักคะแนน "งานเคลม" ของทุกทีมเท่ากัน
+  const [apRating, setApRating] = React.useState(0);
+  const [apClaim, setApClaim] = React.useState(false);
   const [q, setQ] = React.useState("");
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
   const [templates, setTemplates] = React.useState([]);
+  const [hoFlags, setHoFlags] = React.useState({});   // job_no → { any, submitted, signed } ใบส่งมอบงาน
   const [tplPick, setTplPick] = React.useState(false); // template picker modal open
 
   async function load() {
     setLoading(true);
-    try { const [j, c, t, q, dl, ps, tpl] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => []), listJobTemplates().catch(() => [])]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); setTemplates(tpl || []); }
+    try { const [j, c, t, q, dl, ps, tpl, hf] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => []), listJobTemplates().catch(() => []), listHandoverFlags().catch(() => ({}))]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); setTemplates(tpl || []); setHoFlags(hf || {}); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -258,6 +263,23 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     try { const newNo = await createLinkedJob(jo); flash(`สร้างใบงานเชื่อม ${newNo} แล้ว`); await load(); setViewing(null); const fresh = await listJobOrders(); setList(fresh); startEdit(fresh.find((x) => x.job_no === newNo)); }
     catch (e) { flash("สร้างไม่สำเร็จ: " + (e.message || e), true); }
   }
+  // ก่อนปิดงาน: เตือนถ้ายังไม่มีใบส่งมอบงานที่ส่งแล้วและลูกค้าเซ็นรับ
+  // ⚠️ เตือนอย่างเดียว ห้ามบล็อก — งานล้าง/ซ่อมเล็กหลายงานลูกค้าไม่สะดวกเซ็น ถ้าบล็อกใบจะปิดไม่ได้
+  //    แล้วสถิติงานเสร็จ/สกอร์การ์ดทีม/รายงานงานค้างเพี้ยนทั้งชุด และคนจะเลี่ยงไปแก้สถานะทางอื่นแทน
+  async function approveClose(jo, v) {
+    const f = hoFlags[jo.job_no] || {};
+    if (!f.signed) {
+      const why = !f.any ? "ยังไม่มีใบส่งมอบงานสำหรับใบงานนี้"
+        : f.submitted ? "มีใบส่งมอบงานแล้ว แต่ยังไม่มีลายเซ็นลูกค้า"
+        : "ใบส่งมอบงานยังเป็นฉบับร่าง (ช่างยังไม่ได้ส่ง)";
+      if (!await confirmDialog({
+        title: "ปิดงานโดยยังไม่มีใบส่งมอบที่ลูกค้าเซ็น?",
+        message: `${jo.job_no} — ${why}\n\nใบส่งมอบที่ลูกค้าเซ็นคือหลักฐานว่ารับงานแล้ว ถ้ามีข้อโต้แย้งภายหลังจะไม่มีอะไรยืนยัน\nถ้างานนี้ลูกค้าไม่สะดวกเซ็น กดยืนยันเพื่อปิดงานต่อได้`,
+        confirmText: "ปิดงานเลย", cancelText: "ไปทำใบส่งมอบก่อน",
+      })) return;
+    }
+    await doVisitStatus(jo, v, "done", null, true);
+  }
   // office sets ONE รอบ (visit) status — siblings untouched; modal/list refresh in place
   async function doVisitStatus(jo, v, status, jobOverride, shouldLock) {
     setApproveCtx(null);
@@ -277,6 +299,10 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
         flash(lock ? "อนุมัติ · ปิดงานแล้ว (ล็อก) ✓"
           : jobOverride === "quote_pending" ? "อนุมัติรอบนี้ · ส่งไปรอทำใบเสนอราคา ✓"
           : status === "done" ? "อนุมัติ · ปิดงานรอบนี้แล้ว ✓" : "ส่งรอบนี้ไปนัดหมายเพิ่มแล้ว");
+      }
+      // คะแนนงาน/ธงเคลมเป็นค่าระดับ "ใบงาน" ไม่ใช่ระดับรอบ — เขียนเฉพาะตอนออฟฟิศแก้จริง กันรอบหลังทับรอบแรก
+      if ((apRating || 0) !== (jo.rating || 0) || apClaim !== !!jo.is_claim) {
+        try { await saveJobReview(jo.job_no, apRating || null, apClaim); } catch (e) { flash("บันทึกคะแนนงานไม่สำเร็จ: " + (e.message || e), true); }
       }
       const fresh = await listJobOrders(); setList(fresh);
       setViewing((cur) => cur ? (fresh.find((x) => x.job_no === jo.job_no) || null) : cur);
@@ -570,7 +596,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
               <div className="job-card-head jo-card-head" style={{ cursor: "pointer" }} onClick={() => setViewing(jo)} title="กดดูรายละเอียด">
                 <div className="job-card-id"><span className="job-no">{jo.job_no}</span>
                   {(() => { const td = jobTypeDef(jo.job_type); return <span className="job-type-chip" style={{ background: td[3] }}>{td[2]} {td[1]}</span>; })()}
-                  <span className={"job-badge " + st.cls}>{st.th}</span>{jo.locked && <span className="job-badge" style={{ background: "#64748b", color: "#fff" }}>🔒 ล็อก</span>}
+                  <span className={"job-badge " + st.cls}>{st.th}</span>{jo.locked && <span className="job-badge" style={{ background: "#64748b", color: "#fff" }}>🔒 ล็อก</span>}{(() => { const f = hoFlags[jo.job_no]; if (!f?.any) return null; return f.signed ? <span className="job-badge b-green" title="มีใบส่งมอบงานที่ส่งแล้วและลูกค้าเซ็นรับ">📝 ใบส่งมอบ ✓</span> : <span className="job-badge b-amber" title={f.submitted ? "ส่งใบส่งมอบแล้วแต่ยังไม่มีลายเซ็นลูกค้า" : "ใบส่งมอบยังเป็นฉบับร่าง"}>📝 ยังไม่เซ็น</span>; })()}
                   {/* สถานะการสั่งของสำหรับงานนี้ (ผ่านใบเสนอราคา ↔ ใบสั่งซื้อ) — ฝ่ายขาย/ทีมช่างเห็นทันทีว่าสั่งแอร์หรือยัง */}
                   {jo.quote_no && (() => {
                     const ch = docLinks.byQuote[jo.quote_no] || {};
@@ -683,7 +709,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                       {/* งานยกเลิกแล้ว ห้ามมีปุ่มอนุมัติ/นัดต่อ — กติกาบ้าน: เอกสารยกเลิกล็อกทุกการกระทำ */}
                       {canEditJob(jo) && jo.status !== "cancelled" && v.status === "awaiting_approval" && (
                         <div className="myjob-visit-acts" style={{ marginTop: 7 }}>
-                          <button className="btn-primary sm ok" onClick={() => setApproveCtx({ jo, v })}>✓ อนุมัติรอบนี้</button>
+                          <button className="btn-primary sm ok" onClick={() => { setApproveCtx({ jo, v }); setApRating(jo.rating || 0); setApClaim(!!jo.is_claim); }}>✓ อนุมัติรอบนี้</button>
                         </div>
                       )}
                       {canEditJob(jo) && jo.status !== "cancelled" && v.status === "reschedule" && (
@@ -726,8 +752,20 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
               <div className="confirm-icon">✅</div>
               <div className="confirm-title">อนุมัติรอบนี้</div>
               <div className="confirm-msg">{jo.job_no} · {v.teamName || "ทีม"}<br />🗓 {scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot })}<br /><br />งานรอบนี้…?</div>
+              {/* คะแนนงาน/งานเคลม — ระดับ "ใบงาน" ไม่ใช่ระดับรอบ · ทุกทีมกรอกได้ ไม่ใช่เฉพาะทีมซัพ */}
+              <div className="sub-review" style={{ margin: "0 0 10px" }}>
+                <div className="fld"><span>คะแนนงาน (ไม่บังคับ · กดดาวเดิมซ้ำ = ล้าง)</span>
+                  <div className="sub-stars">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button key={n} type="button" className={"sub-star" + (apRating >= n ? " on" : "")}
+                        onClick={() => setApRating((r) => (r === n ? 0 : n))}>★</button>
+                    ))}
+                  </div>
+                </div>
+                <label className="sub-claim"><input type="checkbox" checked={apClaim} onChange={(e) => setApClaim(e.target.checked)} /> งานนี้เป็นงานเคลม/แก้ซ้ำ</label>
+              </div>
               <div className="confirm-acts" style={{ flexDirection: "column" }}>
-                <button className="btn-primary ok" style={{ width: "100%" }} onClick={() => doVisitStatus(jo, v, "done", null, true)}>✅ เสร็จ ปิดงาน</button>
+                <button className="btn-primary ok" style={{ width: "100%" }} onClick={() => approveClose(jo, v)}>✅ เสร็จ ปิดงาน</button>
                 <button className="btn-primary" style={{ width: "100%", background: "#0891b2" }} onClick={() => doVisitStatus(jo, v, "reschedule", null, true)}>📅 เสร็จ รอนัดหมายเพิ่ม</button>
                 <button className="btn-primary" style={{ width: "100%", background: "#ea580c" }} onClick={() => doVisitStatus(jo, v, "done", "quote_pending", false)}>📝 เสร็จ รอทำใบเสนอราคา</button>
                 <button className="btn-ghost" style={{ width: "100%" }} onClick={() => setApproveCtx(null)}>ยกเลิก</button>

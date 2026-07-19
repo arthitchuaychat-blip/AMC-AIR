@@ -2341,6 +2341,24 @@ export async function listHandovers(jobNo) {
   return rows.map((r) => ({ ...r, creatorName: names[r.created_by] || "" }));
 }
 
+// ธงย่อของใบส่งมอบต่อใบงาน (ให้หน้าใบงานใช้) — เลือกแค่ 3 คอลัมน์ ไม่ดึง forms ที่เป็น JSON ก้อนใหญ่
+// ต้องผ่าน _fetchAll: ถ้าโดนเพดาน 1000 แถว งานเก่าที่มีใบเซ็นแล้วจริงจะขึ้นป้ายเตือนผิด
+// แล้วออฟฟิศจะเลิกเชื่อคำเตือนภายในสัปดาห์เดียว
+export async function listHandoverFlags() {
+  const rows = await _fetchAll((f, t) => supabase.from("job_handovers")
+    .select("job_no,status,cust_sign_url", { count: "exact" })
+    .order("job_no").order("id").range(f, t));
+  const m = {};
+  for (const r of rows || []) {
+    if (!r.job_no) continue;
+    const e = m[r.job_no] || (m[r.job_no] = { any: false, submitted: false, signed: false });
+    e.any = true;
+    // ใบร่างยังไม่ใช่หลักฐานรับมอบ — ช่างยังแก้เองได้ นับเป็น "ผ่าน" ไม่ได้
+    if (r.status !== "draft") e.submitted = true;
+    if (r.status !== "draft" && r.cust_sign_url) e.signed = true;
+  }
+  return m;
+}
 export async function getHandover(id) {
   const { data, error } = await supabase.from("job_handovers").select(HANDOVER_COLS).eq("id", id).single();
   if (error) throw error;
