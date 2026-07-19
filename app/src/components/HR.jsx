@@ -3,7 +3,7 @@ import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, dele
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
-import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
+import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -140,7 +140,7 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
           <div className="hr-today-row" key={p.id}>
             <div className="hr-name"><b>{p.name || p.email}</b><span className="jo-dim">{p.department || "-"}</span></div>
             <div className="hr-times">
-              <span>เข้า <b>{fmtTime(a?.check_in_at)}</b>{s?.isLate && <span className="att-tag late sm">+{fmtMin(s.lateMin)}</span>} {thumb(a?.check_in_photo, "เซลฟี่ตอนเช็คอิน — กดดูเต็ม")}{pin(a?.check_in_lat, a?.check_in_lng, "พิกัดตอนเช็คอิน — เปิดแผนที่")}{farTag(a?.check_in_lat, a?.check_in_lng)}</span>
+              <span>เข้า <b>{fmtTime(a?.check_in_at)}</b>{s?.isLate && <span className="att-tag late sm">+{fmtMin(s.lateMin)}</span>}{clockSkewFlag(a) && <span className="att-tag sm" style={{ background: "#fef3c7", color: "#b45309" }} title={clockSkewFlag(a)}>⏱</span>} {thumb(a?.check_in_photo, "เซลฟี่ตอนเช็คอิน — กดดูเต็ม")}{pin(a?.check_in_lat, a?.check_in_lng, "พิกัดตอนเช็คอิน — เปิดแผนที่")}{farTag(a?.check_in_lat, a?.check_in_lng)}</span>
               <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otHours > 0 && <span className="att-tag ot sm">OT {s.otHours} ชม.{settings.otNeedsApproval ? (a?.ot_ok ? " ✓" : " · รอรับรอง") : ""}</span>} {thumb(a?.check_out_photo, "เซลฟี่ตอนเช็คเอาท์ — กดดูเต็ม")}{pin(a?.check_out_lat, a?.check_out_lng, "พิกัดตอนเช็คเอาท์ — เปิดแผนที่")}{farTag(a?.check_out_lat, a?.check_out_lng)}</span>
             </div>
             <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]?.t) : b.t}</span>

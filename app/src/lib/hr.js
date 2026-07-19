@@ -18,6 +18,13 @@ export const leaveLabel = (id) => (LEAVE_TYPES.find((t) => t.id === id) || {}).l
 
 // ---- ลาราย ชม. (mig 141): แถวใบลามี hours/time_from/time_to · 8 ชม. = 1 วัน ----
 export const LEAVE_HOURS_PER_DAY = 8;
+// นาฬิกาเครื่องพนักงานต่างจากเวลาจริงเกิน 5 นาที = ควรตามไปแก้ที่เครื่อง (mig 165)
+// null = แถวเก่าก่อน mig 165 → ไม่รู้ ไม่ใช่ "เพี้ยน 0" จึงต้องไม่ขึ้นธง
+export const clockSkewFlag = (a) => {
+  const s = a?.skew_sec;
+  if (s == null || Math.abs(s) <= 300) return null;
+  return `นาฬิกาเครื่องพนักงานต่างจากเวลาจริง ${Math.round(Math.abs(s) / 60)} นาที (บันทึกด้วยเวลาเซิร์ฟเวอร์)`;
+};
 // แผนที่ user→วัน→{t: ประเภท, h: ชั่วโมง|null} — ใช้ร่วมทุกแท็บ (วันนี้/รายงาน/ประสิทธิผล/เงินเดือน)
 export function buildLeaveDaySet(leaves, from, to) {
   const set = {};

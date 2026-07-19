@@ -86,7 +86,13 @@ export default function Attendance({ me }) {
       if (actionRef.current === "in") { await checkIn({ ...gps, photo }); flash("เช็คอินเข้างานแล้ว ✓"); }
       else { await checkOut({ ...gps, photo }); flash("เช็คเอาท์ออกงานแล้ว ✓"); }
       await load();
-    } catch (err) { flash((err.message || err), true); }
+    } catch (err) {
+      // error ดิบจาก RLS เป็นภาษาอังกฤษ พนักงานอ่านแล้วไม่รู้จะแก้ยังไง
+      const m = String(err?.message || err);
+      flash(/row.level security|violates row-level/i.test(m)
+        ? "เช็คอินไม่สำเร็จ — วันที่ในเครื่องไม่ตรงกับวันที่จริง กรุณาตั้งวันที่/เวลาเป็น “อัตโนมัติ” แล้วลองใหม่"
+        : m, true);
+    }
     setBusy(false);
   }
   function trigger(action) { actionRef.current = action; fileRef.current && fileRef.current.click(); }

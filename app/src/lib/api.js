@@ -3760,6 +3760,12 @@ export async function uploadDocFile(blob, ext, contentType) {
 
 // ===================== HR (attendance / leave / holidays) =====================
 const _today = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+// วันที่ทำงานต้องมาจากเซิร์ฟเวอร์ (เวลาไทย) — นาฬิกา/โซนเวลาเครื่องพนักงานเชื่อไม่ได้ (mig 165)
+// ⚠️ ห้ามแคชไว้ระดับโมดูล: แอปที่เปิดค้างข้ามเที่ยงคืนจะได้วันเก่าแล้วเช็คอินไม่ตรงวัน
+async function _hrToday() {
+  try { const { data, error } = await supabase.rpc("hr_today"); return (error || !data) ? _today() : String(data).slice(0, 10); }
+  catch { return _today(); }   // ยังไม่รัน mig 165 → ใช้วันที่เครื่องไปก่อน (RLS ยังกันอีกชั้น)
+}
 
 // staff signature image → public URL (stored on the profile, optionally printed on documents).
 // accepts a canvas Blob (png) OR an uploaded image File (keeps its type/extension).
@@ -3809,11 +3815,12 @@ export async function deleteHoliday(day) {
 
 export async function myAttendanceToday() {
   const uid = await _uid();
-  const { data, error } = await supabase.from("hr_attendance").select("*").eq("user_id", uid).eq("work_date", _today()).maybeSingle();
+  // ต้องใช้วันเดียวกับที่ RLS ตรึงไว้ ไม่งั้นเครื่องที่วันเพี้ยนจะหาแถวไม่เจอแล้วขึ้นว่ายังไม่เช็คอิน
+  const { data, error } = await supabase.from("hr_attendance").select("*").eq("user_id", uid).eq("work_date", await _hrToday()).maybeSingle();
   if (error) throw error; return data || null;
 }
 export async function checkIn({ lat, lng, photo }) {
-  const uid = await _uid(), day = _today();
+  const uid = await _uid(), day = await _hrToday();   // วันที่จากเซิร์ฟเวอร์ ให้ตรงกับที่ RLS ตรึงไว้
   const ex = await supabase.from("hr_attendance").select("id,check_in_at").eq("user_id", uid).eq("work_date", day).maybeSingle();
   if (ex.data && ex.data.check_in_at) throw new Error("เช็คอินวันนี้ไปแล้ว");
   const row = { check_in_at: new Date().toISOString(), check_in_lat: lat ?? null, check_in_lng: lng ?? null, check_in_photo: photo || null };
@@ -3825,7 +3832,7 @@ export async function checkIn({ lat, lng, photo }) {
   notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `🕒 ${me?.name || "พนักงาน"} เช็คอินเข้างาน`, url: "hr", ref_type: "attendance" });
 }
 export async function checkOut({ lat, lng, photo }) {
-  const uid = await _uid(), day = _today();
+  const uid = await _uid(), day = await _hrToday();   // วันที่จากเซิร์ฟเวอร์ ให้ตรงกับที่ RLS ตรึงไว้
   const ex = await supabase.from("hr_attendance").select("id,check_in_at").eq("user_id", uid).eq("work_date", day).maybeSingle();
   if (!ex.data || !ex.data.check_in_at) throw new Error("ยังไม่ได้เช็คอินวันนี้");
   const { error } = await supabase.from("hr_attendance").update({
