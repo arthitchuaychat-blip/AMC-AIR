@@ -5,6 +5,7 @@ import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, lis
 import DocSlip from "./DocSlip";
 import NumIn from "./NumIn";
 import DocTerms from "./DocTerms";
+import { useFormDraft } from "../lib/useFormDraft";
 import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import DocChips from "./DocChips";
@@ -43,6 +44,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const [ed, setEd] = React.useState(null);
   const [printQ, setPrintQ] = React.useState(null);
   const [saving, setSaving] = React.useState(false);   // กันกดบันทึกซ้ำตอนเน็ตช้า
+  // ร่างอัตโนมัติ — เหตุผลเดียวกับ BOQ (Back ของ Android / แท็บถูกรีโหลด)
+  const { draftKey, clearOnSaved, closeGuard } = useFormDraft(ed, setEd, { kind: "quote", idOf: (e) => (e._edit ? e.quote_no : null), label: "ใบเสนอราคา" });
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [docF, setDocF] = React.useState("all"); // all | no_invoice | no_job
@@ -152,6 +155,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const netPay = grand - whtAmt;
 
   async function save() {
+    const dk = draftKey;   // เก็บไว้ก่อน — setEd(null) ตอนท้ายทำให้ draftKey กลายเป็น null
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
     // กติกาบริษัท: เอกสารขายทุกใบต้องเริ่มจาก BOQ — ใบใหม่ต้องอ้าง BOQ เสมอ (ใบเก่าที่ไม่มีแก้ไขต่อได้)
     if (!ed._edit && !ed.boq_no) return flash("ใบเสนอราคาต้องเริ่มจาก BOQ — เลือก BOQ ที่ช่อง 'อ้างอิง BOQ' หรือไปสร้างจากเมนู BOQ (ปุ่ม 'สร้างใบเสนอราคา' บนการ์ด)", true);
@@ -183,7 +187,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       }
       const renum = quoteNo !== ed.quote_no ? ` · ⚠️ เลขที่เดิมชนกับใบอื่น — ใบนี้ได้เลขใหม่ ${quoteNo}` : "";
       flash((synced > 0 ? `บันทึกแล้ว · ซิงค์ ${synced} รายการเข้า ${ed.boq_no}` : "บันทึกใบเสนอราคาแล้ว") + renum);
-      setEd(null); await load();
+      clearOnSaved(dk); setEd(null); await load();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     finally { setSaving(false); }
@@ -373,7 +377,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           <SignToggle on={ed.sign_on} onChange={(v) => setQ("sign_on", v)} />
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-            <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
+            <button className="btn-ghost" onClick={async () => { if (await closeGuard()) setEd(null); }}>ยกเลิก</button>
             <button className="btn-primary" style={{ flex: 1 }} disabled={saving} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {saving ? "กำลังบันทึก…" : "บันทึกใบเสนอราคา"}</button>
           </div>
         </div>

@@ -21,6 +21,7 @@ import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { JOB_TYPES, jobTypeDef } from "../lib/schedule";
+import { useFormDraft } from "../lib/useFormDraft";
 
 const SECTION_LABEL = { ac: "เครื่องปรับอากาศ", free: "วัสดุแถม (ไม่คิดเงิน)", charged: "วัสดุคิดเงิน", service: "ค่าบริการ" };
 
@@ -80,6 +81,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [printB, setPrintB] = React.useState(null);
   const [saving, setSaving] = React.useState(false);   // กันกดบันทึกซ้ำตอนเน็ตช้า (เดิมกด 2 ที = ได้ 2 ใบ)
+  // ร่างอัตโนมัติ — กดปุ่ม Back ของ Android หรือแท็บถูกรีโหลดแล้วที่คีย์ค้างไม่หายทั้งใบ
+  const { draftKey, clearOnSaved, closeGuard } = useFormDraft(ed, setEd, { kind: "boq", idOf: (e) => (e._edit ? e.boq_no : null), label: "BOQ" });
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   async function load() {
@@ -137,6 +140,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const delItem = (sec, i) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: e.items[sec].filter((_, j) => j !== i) } }));
 
   async function save() {
+    const dk = draftKey;   // เก็บไว้ก่อน — setEd(null) ตอนท้ายทำให้ draftKey กลายเป็น null
     // กติกา CRM: BOQ ทุกใบต้องระบุประเภทงาน — ติดไปใบเสนอราคา/ใบงานทั้งสาย
     if (!ed.job_type) return flash("เลือก 'ประเภทงาน' ก่อนบันทึก — ใช้ติดตามงาน (CRM) และติดไปทุกเอกสารที่สร้างต่อจากใบนี้", true);
     // นับรายการในแต่ละหมวด (รวมทุก qty) — ไว้บอกชัดถ้ายังไม่มีรายการเข้า state
@@ -163,7 +167,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       // กติกา: BOQ ที่ยกเลิกแล้วกลับมาแก้ไขได้ — บันทึกสำเร็จ = ปลดสถานะยกเลิก กลับมาใช้งานต่อ
       if (ed._wasCancelled) { try { await setBoqStatus(ed.boq_no, null); } catch { /* non-fatal */ } }
       const renum = boqNo !== ed.boq_no ? ` · ⚠️ เลขที่เดิมชนกับใบอื่น — ใบนี้ได้เลขใหม่ ${boqNo}` : "";
-      flash((ed._wasCancelled ? `บันทึก BOQ แล้ว — ใบนี้พ้นสถานะยกเลิก กลับมาใช้งานได้ (${flat.length} รายการ)` : `บันทึก BOQ แล้ว (${flat.length} รายการ)`) + renum); setEd(null); await load(); }
+      flash((ed._wasCancelled ? `บันทึก BOQ แล้ว — ใบนี้พ้นสถานะยกเลิก กลับมาใช้งานได้ (${flat.length} รายการ)` : `บันทึก BOQ แล้ว (${flat.length} รายการ)`) + renum); clearOnSaved(dk); setEd(null); await load(); }
     catch (e) { console.error("saveBoq failed:", e); window.alert("❌ บันทึก BOQ ไม่สำเร็จ\n\nสาเหตุจริงจากฐานข้อมูล:\n" + (e.message || String(e)) + "\n\n(กรุณาถ่ายรูปหน้าต่างนี้ส่งให้ผู้ดูแลระบบ)"); }
     finally { setSaving(false); }
   }
@@ -239,7 +243,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           <SignToggle on={ed.sign_on} onChange={(v) => setEd((e) => ({ ...e, sign_on: v }))} />
           {(() => { const n = Object.values(ed.items).reduce((a, arr) => a + arr.length, 0); return (
             <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "center" }}>
-              <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
+              <button className="btn-ghost" onClick={async () => { if (await closeGuard()) setEd(null); }}>ยกเลิก</button>
               <span style={{ fontSize: 13, fontWeight: 700, color: n > 0 ? "#16a34a" : "#dc2626" }}>{n > 0 ? `📋 มี ${n} รายการในใบ` : "⚠️ ยังไม่มีรายการ — กด ＋เพิ่ม ที่การ์ดขวา"}</span>
               <button className="btn-primary" style={{ flex: 1 }} disabled={saving} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {saving ? "กำลังบันทึก…" : "บันทึก BOQ"}{n > 0 ? ` (${n})` : ""}</button>
             </div>

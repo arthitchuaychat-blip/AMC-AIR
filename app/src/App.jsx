@@ -4,13 +4,14 @@ import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePer
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { NAV_MY, LangContext } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
+import { hasUnsaved } from "./lib/formDraft";
 import InstallBanner from "./components/InstallBanner";
 import Attendance from "./components/Attendance";
 import HR from "./components/HR";
 import Subcontractor from "./components/Subcontractor";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
-import { ConfirmHost } from "./components/ConfirmDialog";
+import { ConfirmHost, confirmDialog } from "./components/ConfirmDialog";
 import Catalog from "./components/Catalog";
 import Movements from "./components/Movements";
 import StockCount from "./components/StockCount";
@@ -102,7 +103,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·กลาง 11,28: ใบเตรียมวัสดุโชว์ว่าแตกเป็นใบสั่งซื้อ/ใบเบิกไหนแล้ว + ถามก่อนกดซ้ำ · หน้าติดตามลูกค้าเพิ่มแท็บใบเสนอราคาค้างตอบ (ตัดใบที่ตอบรับแล้วออก) v471";
+const BUILD = "2026-07-19·กลาง 23: BOQ/ใบเสนอราคาเก็บร่างอัตโนมัติ — กดปุ่ม Back ของ Android หรือแท็บถูกรีโหลด ที่คีย์ค้างไม่หายทั้งใบ กู้คืนได้ตอนเปิดครั้งหน้า + ถามก่อนออกจากหน้า v472";
 
 function SetupNotice() {
   return (
@@ -258,12 +259,23 @@ export default function App() {
 
   // hardware/browser Back → go back through the in-app view history (instead of leaving the app)
   React.useEffect(() => {
-    const onPop = () => setNavHist((h) => {
-      if (!h.length) return h;
-      setView(h[h.length - 1]); setMenuOpen(false);
-      window.history.pushState(null, ""); // keep a buffer so the next Back is handled too
-      return h.slice(0, -1);
-    });
+    const onPop = () => {
+      // เติมบัฟเฟอร์คืน "ทันทีเสมอ" แม้ประวัติในแอปว่าง — ไม่งั้นกด Back ซ้ำระหว่างกล่องถามเปิดอยู่
+      // จะหลุดออกจากแอปพร้อมฟอร์มที่คีย์ค้าง (popstate เป็น sync จึงต้อง push ก่อน await)
+      window.history.pushState(null, "");
+      (async () => {
+        if (hasUnsaved() && !await confirmDialog({
+          title: "มีเอกสารที่กรอกค้างไว้",
+          message: "ยังไม่ได้บันทึก — ออกจากหน้านี้เลยไหม?\n\nข้อมูลที่กรอกถูกเก็บไว้ กู้คืนได้ตอนเปิดใบนี้ครั้งหน้า",
+          confirmText: "ออกเลย", cancelText: "อยู่ต่อ",
+        })) return;
+        setNavHist((h) => {
+          if (!h.length) return h;
+          setView(h[h.length - 1]); setMenuOpen(false);
+          return h.slice(0, -1);
+        });
+      })();
+    };
     window.history.pushState(null, "");
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -298,7 +310,13 @@ export default function App() {
   const canBurmese = role === "tech" || role === "lead_tech";
   const effLang = canBurmese ? lang : "th";
 
-  function go(id) {
+  async function go(id) {
+    // สลับเมนูขณะฟอร์มค้าง = ฟอร์มถูก unmount ทิ้งเหมือนกัน ต้องถามก่อน
+    if (hasUnsaved() && !await confirmDialog({
+      title: "มีเอกสารที่กรอกค้างไว้",
+      message: "ยังไม่ได้บันทึก — เปลี่ยนเมนูเลยไหม?\n\nข้อมูลที่กรอกถูกเก็บไว้ กู้คืนได้ตอนเปิดใบนี้ครั้งหน้า",
+      confirmText: "เปลี่ยนเมนู", cancelText: "อยู่ต่อ",
+    })) return;
     if (view && view !== id) { setNavHist((h) => [...h, view]); window.history.pushState(null, ""); }
     setView(id); setMenuOpen(false);
     // opening a menu clears its "unread activity" badge
