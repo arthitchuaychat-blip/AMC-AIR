@@ -140,13 +140,29 @@ async function aiAnswer(convId, question, cfg, afterHours = true) {
     // ฟิลด์ที่ลูกค้าเห็นได้เท่านั้น — ห้ามมี cost/สต๊อก/ข้อมูลซื้อ/ผู้ขายเด็ดขาด (วัดขนาดแล้ว: desc≤139 ตัวอักษร/รุ่น รวม ~60k ไหว)
     const AC_FIELDS = "kind,brand,series,name_th,name_en,ac_type,btu,unit,sale_price,seer,energy_label,refrigerant,voltage,pipe_size,power_cost_year,description,features,warranty";
     const SVC_FIELDS = "kind,name_th,btu_min,btu_max,unit,sale_price,description";
-    const acFetch = (fields) => tfetch(`${SB()}/rest/v1/materials?select=${fields}&active=eq.true&kind=eq.ac&order=brand.asc,btu.asc,name_th.asc&limit=1000`, { headers: sbH() });
+    // ⚠️ limit=1000 ที่เคยใส่ไว้ "เท่ากับเพดานของ Supabase พอดี" จึงไม่ได้กันอะไรเลย —
+    // พอรุ่นแอร์ที่เปิดขายเกิน 1000 บอทจะไม่รู้จักรุ่นใหม่ แล้วตอบลูกค้าว่าไม่มีรุ่นนั้น (ตอนนี้ 800+ รุ่น ใกล้ชนแล้ว)
+    // ⇒ ไล่ทีละหน้าจนหมดจริง
+    const PAGE = 1000;
+    const acFetch = async (fields) => {
+      let rows = [], off = 0, status = 200;
+      for (;;) {
+        const r = await tfetch(`${SB()}/rest/v1/materials?select=${fields}&active=eq.true&kind=eq.ac&order=brand.asc,btu.asc,name_th.asc&limit=${PAGE}&offset=${off}`, { headers: sbH() });
+        status = r.status;
+        if (!r.ok) return { ok: false, status, rows: [] };
+        const page = await r.json();
+        rows = rows.concat(page);
+        if (page.length < PAGE || off > 20000) break;   // หน้าไม่เต็ม = หมดแล้ว · เพดานกันวนไม่จบ
+        off += page.length;
+      }
+      return { ok: true, status, rows };
+    };
     let [pa, ps] = await Promise.all([
       acFetch(AC_FIELDS),
-      tfetch(`${SB()}/rest/v1/materials?select=${SVC_FIELDS}&active=eq.true&kind=eq.service&order=name_th.asc&limit=200`, { headers: sbH() }),
+      tfetch(`${SB()}/rest/v1/materials?select=${SVC_FIELDS}&active=eq.true&kind=eq.service&order=name_th.asc&limit=500`, { headers: sbH() }),
     ]);
     if (!pa.ok) pa = await acFetch(AC_FIELDS.replace(",warranty", "")); // ยังไม่รัน migration 140 — ดึงแบบไม่มีคอลัมน์รับประกัน
-    const prods = [...(pa.ok ? await pa.json() : []), ...(ps.ok ? await ps.json() : [])];
+    const prods = [...(pa.ok ? pa.rows : []), ...(ps.ok ? await ps.json() : [])];
     if (!prods.length) return { text: null, err: `catalog empty (status ${pa.status}/${ps.status})` };
     const money = (v) => (Number(v) > 0 ? `${Number(v).toLocaleString("en-US")} บาท` : "สอบถามราคา");
     const clip = (t, n) => { const d = (t == null ? "" : String(t)).replace(/\s+/g, " ").trim(); return d ? d.slice(0, n) : null; };

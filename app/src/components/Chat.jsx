@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -96,6 +96,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [custs, setCusts] = React.useState([]);
   const [sel, setSel] = React.useState(null);          // selected line_user_id
   const [msgs, setMsgs] = React.useState([]);
+  const [moreOld, setMoreOld] = React.useState(false);   // ยังมีข้อความเก่ากว่าที่โหลดมาอีกไหม
+  const [loadingOld, setLoadingOld] = React.useState(false);
   const [text, setText] = React.useState("");
   const [q, setQ] = React.useState("");
   const [sending, setSending] = React.useState(false);
@@ -149,7 +151,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const isSup = channel === "sup";   // แท็บซัพพลายเออร์ = ผู้ติดต่อ LINE ที่ kind='supplier' (mig 138)
   // channel-aware data calls (FB returns the same shape, psid aliased to line_user_id)
   const chListContacts = () => (isFb ? listFbContacts() : listLineContacts());
-  const chListMessages = (id) => (isFb ? listFbMessages(id) : listLineMessages(id));
+  const chListMessages = (id, opt) => (isFb ? listFbMessages(id, opt) : listLineMessages(id, opt));
   const chMarkRead = (id) => (isFb ? markFbRead(id) : markLineRead(id));
   const chSendText = (id, t) => (isFb ? sendFbMessage(id, t) : sendLineMessage(id, t));
   const chSendImage = (id, url) => (isFb ? sendFbImage(id, url) : sendLineImage(id, url));
@@ -232,8 +234,25 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function openContact(c) {
     setSel(c.line_user_id); setShowThread(true); setShowInfo(false);
     setQrPendImgs([]);   // รูปแนบค้างจากแชตก่อนหน้า — อย่าหลุดไปห้องอื่น
-    try { setMsgs(await chListMessages(c.line_user_id)); if (c.unread) { chMarkRead(c.line_user_id); loadContacts(); } }
+    try {
+      const rows = await chListMessages(c.line_user_id);
+      setMsgs(rows);
+      // ได้มาเต็มหน้าพอดี = น่าจะยังมีเก่ากว่านี้อีก → โชว์ปุ่มโหลดย้อนหลัง
+      setMoreOld(rows.length >= CHAT_TAIL);
+      if (c.unread) { chMarkRead(c.line_user_id); loadContacts(); }
+    }
     catch (e) { flash("โหลดข้อความไม่สำเร็จ", true); }
+  }
+  // โหลดข้อความเก่ากว่าที่แสดงอยู่ (ทีละหน้า) — ห้องที่คุยกันยาวมากจะไม่ถูกตัดหายไปเฉย ๆ
+  async function loadOlder() {
+    if (!sel || loadingOld || !msgs.length) return;
+    setLoadingOld(true);
+    try {
+      const older = await chListMessages(sel, { before: msgs[0].created_at });
+      setMsgs((m) => [...older, ...m]);
+      setMoreOld(older.length >= CHAT_TAIL);
+    } catch (e) { flash("โหลดข้อความเก่าไม่สำเร็จ", true); }
+    setLoadingOld(false);
   }
 
   // "แชตลูกค้า" deep-link from a document: find this customer's contact (LINE or FB), switch
@@ -601,6 +620,15 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               </div>
 
               <div className="chat-msgs">
+                {/* ห้องที่คุยกันยาว: แสดงล่าสุดก่อนเสมอ แล้วไล่ดูย้อนหลังทีละหน้า
+                    (เดิมโหลดเรียงเก่า→ใหม่ พอเกิน 1000 ข้อความ ข้อความใหม่จะหายทั้งห้อง) */}
+                {moreOld && (
+                  <div style={{ textAlign: "center", padding: "6px 0" }}>
+                    <button className="btn-ghost sm" onClick={loadOlder} disabled={loadingOld}>
+                      {loadingOld ? "กำลังโหลด…" : "↑ โหลดข้อความเก่ากว่านี้"}
+                    </button>
+                  </div>
+                )}
                 {msgs.map((m, i) => {
                   const prev = msgs[i - 1];
                   const daySep = !prev || fmtDay(prev.created_at) !== fmtDay(m.created_at);

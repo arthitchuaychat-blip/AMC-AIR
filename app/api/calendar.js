@@ -34,6 +34,20 @@ async function sbGet(path) {
   if (!r.ok) throw new Error(`supabase ${r.status}`);
   return r.json();
 }
+// ⚠️ Supabase ตัดทุก select ที่ 1000 แถว — ฟีดนี้เคยอ่านตารางงานทั้งตารางแบบ "ไม่มี order เลย"
+// พองานเกิน 1000 ใบ งานที่หายจะหายแบบสุ่ม ไม่ใช่หายเรียงตามวัน = ปฏิทินที่พนักงาน subscribe ไว้
+// จะขาดนัดหมายไปเงียบ ๆ โดยเดาไม่ได้ว่าใบไหน ⇒ ไล่ทีละหน้าจนหมด และต้องมี order เสมอ
+async function sbGetAll(table, select, order, extra = "") {
+  const PAGE = 1000;
+  let rows = [], off = 0;
+  for (;;) {
+    const page = await sbGet(`${table}?select=${select}&order=${order}${extra}&limit=${PAGE}&offset=${off}`);
+    rows = rows.concat(page);
+    if (page.length < PAGE || off > 50000) break;
+    off += page.length;
+  }
+  return rows;
+}
 
 export default async function handler(req, res) {
   const want = process.env.CALENDAR_FEED_TOKEN;
@@ -44,9 +58,9 @@ export default async function handler(req, res) {
 
   try {
     const [jobs, visits, customers, teams] = await Promise.all([
-      sbGet("job_orders?select=job_no,customer_id,assigned_team,scheduled_at,end_date,slot,status,title,job_type,address,contact_name,contact_phone,map_url,details"),
-      sbGet("job_visits?select=job_no,assigned_team,scheduled_at,end_date,slot,status,visit_date"),
-      sbGet("customers?select=id,name"),
+      sbGetAll("job_orders", "job_no,customer_id,assigned_team,scheduled_at,end_date,slot,status,title,job_type,address,contact_name,contact_phone,map_url,details", "job_no.asc"),
+      sbGetAll("job_visits", "job_no,assigned_team,scheduled_at,end_date,slot,status,visit_date", "id.asc"),
+      sbGetAll("customers", "id,name", "id.asc"),
       sbGet("teams?select=id,name"),
     ]);
     const cn = Object.fromEntries(customers.map((c) => [c.id, c.name]));

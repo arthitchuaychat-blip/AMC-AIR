@@ -195,7 +195,7 @@ export const acPowerCostYear = (btu, seer) => {
 // รุ่นแอร์ + ข้อความรับประกัน (mig 140) สำหรับ picker ในเงื่อนไขท้ายเอกสาร (DocTerms) — ดึงเบา ๆ เฉพาะฟิลด์ที่ใช้
 export async function listAcWarranties() {
   const r = await supabase.from("materials").select("code,name_th,brand,series,ac_type,btu,warranty")
-    .eq("kind", "ac").eq("active", true).order("brand").order("btu").limit(1000);
+    .eq("kind", "ac").eq("active", true).order("brand").order("btu").order("code").limit(2000);   // แอร์ 800+ รุ่น · limit เดิม = เพดานพอดี จึงไม่ได้กันอะไร
   if (r.error && /warranty/i.test(r.error.message || "")) return [];   // ยังไม่รัน migration 140 — ซ่อน picker ไปก่อน
   if (r.error) throw r.error;
   return (r.data || []).map((m) => ({ ...m, th: m.name_th }));
@@ -568,7 +568,7 @@ const _round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 // list all count sessions with a per-session summary (counted / over / short)
 export async function listStockCounts() {
   const [scRes, itemRes, profRes] = await Promise.all([
-    supabase.from("stock_counts").select("*").order("created_at", { ascending: false }),
+    _allRows((f, t) => supabase.from("stock_counts").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("stock_count_items").select("count_id,counted_qty,diff", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     supabase.from("profiles").select("id,name,email"),
   ]);
@@ -1072,7 +1072,7 @@ export async function listPayables() {
 export async function listApprovedQuotesLite() {
   const [q, cu] = await Promise.all([
     supabase.from("quotations").select("quote_no,title,customer_id,approved_at").eq("status", "approved").order("approved_at", { ascending: false }).limit(300),
-    supabase.from("customers").select("id,name"),
+    _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
   ]);
   if (q.error) throw q.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
@@ -2161,14 +2161,22 @@ export async function listCustomerDocs(customerId) {
 }
 
 // job orders assigned to a team (technician view) — address/map/contact resolved live
-export async function listTeamJobOrders(team) {
-  const [j, si, cu, ct] = await Promise.all([
-    supabase.from("job_orders").select("*").eq("assigned_team", team).order("scheduled_at", { ascending: true }),
-    supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone"),
-    supabase.from("customers").select("id,name,address"),
-    supabase.from("customer_contacts").select("customer_id,name,phone"),
+// งานของทีม (จอช่าง) — ⚠️ เดิมอ่านประวัติงานทั้งหมดของทีมแบบเรียงวันนัดจากเก่าไปใหม่ ไม่มี limit
+// ทีมที่ทำวันละ ~5 งานจะเกินเพดาน 1000 แถวภายในราว 1 ปี แล้วของที่หายคือ "งานที่กำลังจะถึง"
+// (แถวท้ายสุดของลำดับ) = ช่างเปิดมาไม่เห็นงานตัวเอง โดยไม่มี error อะไรเลย
+// ⇒ ดึงจากใหม่→เก่าแบบมี limit แล้วค่อยเรียงกลับ · ตารางลูกดึงเฉพาะไอดีที่งานชุดนี้อ้างถึง
+export async function listTeamJobOrders(team, { limit = 500 } = {}) {
+  const j = await supabase.from("job_orders").select("*").eq("assigned_team", team).order("scheduled_at", { ascending: false }).limit(limit);
+  if (j.error) throw j.error;
+  j.data = (j.data || []).slice().reverse();
+  const cids = _capNos(_idsOf(j.data, "customer_id")), sids = _capNos(_idsOf(j.data, "site_id"));
+  // ลูกค้าเกิน 200 ราย → _capNos คืน null = อ่านทั้งตาราง จึงต้องผ่าน _allRows ไม่งั้นโดนเพดานซ้ำที่เดิม
+  const [si, cu, ct] = await Promise.all([
+    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", sids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address", { count: "exact" }), "id", cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", cids).order("id").range(f, t)),
   ]);
-  if (j.error) throw j.error; if (si.error) throw si.error; if (cu.error) throw cu.error; if (ct.error) throw ct.error;
+  if (si.error) throw si.error; if (cu.error) throw cu.error; if (ct.error) throw ct.error;
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
@@ -2680,7 +2688,8 @@ export async function confirmJobLabor(jobNo, confirmed) {
   syncCashEntriesFromDocs().catch(() => {}); // ยืนยัน/ยกเลิกค่าแรง → คาดว่าจะจ่าย (labor_owed) เด้งเข้า/ออกกระแสเงินสด
 }
 export async function listSubPayouts() {
-  const { data, error } = await supabase.from("sub_payouts").select("*").order("created_at", { ascending: false });
+  // ประวัติการเงิน — ต้องไล่ทีละหน้า ไม่งั้นใบเก่าหลุดหายเงียบเมื่อเกิน 1000 ใบ
+  const { data, error } = await _allRows((f, t) => supabase.from("sub_payouts").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t));
   if (error) throw error; return data || [];
 }
 const _r2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
@@ -2942,7 +2951,7 @@ export async function markAllNotificationsRead() {
 // unread notification counts per menu (grouped by url = module id) → sidebar badges per menu
 export async function unreadByModule() {
   const uid = await _uid();
-  const { data, error } = await supabase.from("notifications").select("url").eq("user_id", uid).is("read_at", null).not("url", "is", null).limit(1000);
+  const { data, error } = await supabase.from("notifications").select("url").eq("user_id", uid).is("read_at", null).not("url", "is", null).order("id").limit(1000);   // limit = เพดานพอดี แต่ป้ายนับพลาดไม่กระทบเงิน จึงยอมได้ ขอแค่ผลคงที่
   if (error) throw error;
   const m = {}; (data || []).forEach((n) => { if (n.url) m[n.url] = (m[n.url] || 0) + 1; });
   return m;
@@ -2960,7 +2969,7 @@ export async function listTasks() {
     supabase.from("tasks").select("*").order("created_at", { ascending: false }),
     supabase.from("profiles").select("id,name,email"),
     supabase.from("task_comments").select("task_id"),
-    supabase.from("customers").select("id,name"),
+    _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
   ]);
   if (t.error) throw t.error;
   const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
@@ -3256,15 +3265,18 @@ async function _enrichExpenseJobs(rows) {
     data.forEach((p) => { if (p.expense_id) (poByExp[p.expense_id] = poByExp[p.expense_id] || []).push(p); });
     // ยอดต่อใบ (รวม VAT) — ไว้กางดูรายการ PO ในใบเบิกรวมหลายใบ
     const linkedPoNos = Object.values(poByExp).flat().map((p) => p.po_no);
-    if (linkedPoNos.length) {
-      const { data: items } = await supabase.from("po_items").select("po_no,qty,price").in("po_no", linkedPoNos);
+    // แบ่งก้อนด้วยเหตุผลเดียวกับด้านบน — PO ที่ผูกอยู่ก็เกิน 180 ใบได้เมื่อจ่ายเจ้าหนี้รวมหลายใบสะสม
+    for (let i = 0; i < linkedPoNos.length; i += 200) {
+      const { data: items } = await supabase.from("po_items").select("po_no,qty,price").in("po_no", linkedPoNos.slice(i, i + 200));
       (items || []).forEach((it) => { poTotals[it.po_no] = (poTotals[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
     }
   } catch (_) { /* pre-100: ไม่มี expense_id — ข้าม */ }
+  // ตารางอ้างอิง 3 ตัวนี้เคยอ่านแบบไม่กันเพดาน 1000 แถว — พอใบงาน/ใบเสนอ/ลูกค้าโตเกินนั้น
+  // หน้าเบิกจ่ายจะขึ้นชื่องาน/ชื่อลูกค้าเป็นช่องว่าง เหมือนใบเบิกไม่ได้ผูกงานไว้ (พังเงียบ)
   const [joRes, quRes, cuRes] = await Promise.all([
-    supabase.from("job_orders").select("job_no,quote_no,customer_id,title,status"),
-    supabase.from("quotations").select("quote_no,customer_id,title"),
-    supabase.from("customers").select("id,name"),
+    _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no,customer_id,title,status", { count: "exact" }).order("job_no").range(f, t)),
+    _allRows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
   ]);
   const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
   const jobByNo = Object.fromEntries((joRes.data || []).map((j) => [j.job_no, j]));
@@ -3450,8 +3462,8 @@ export async function setLineContactKind(lineUserId, kind, supplierId = null) {
 }
 export async function listLineContacts() {
   const [c, cu, links] = await Promise.all([
-    supabase.from("line_contacts").select("*").order("last_message_at", { ascending: false, nullsFirst: false }),
-    supabase.from("customers").select("id,name"),
+    _allRows((f, t) => supabase.from("line_contacts").select("*", { count: "exact" }).order("last_message_at", { ascending: false, nullsFirst: false }).order("line_user_id").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     supabase.from("line_contact_customers").select("line_user_id,customer_id"),  // many-to-many (mig 081)
   ]);
   if (c.error) throw c.error;
@@ -3480,10 +3492,16 @@ export async function removeLineCustomer(uid, customerId) {
   }
 }
 
-export async function listLineMessages(uid) {
-  const { data, error } = await supabase.from("line_messages").select("*").eq("line_user_id", uid).order("created_at", { ascending: true });
+// ⚠️ ห้ามโหลดทั้งห้องแบบเรียงเก่า→ใหม่ — พอห้องไหนเกินเพดาน 1000 แถว Supabase จะคืนแค่ 1000 แถวแรก
+// = ข้อความเก่าสุด แล้ว "ข้อความใหม่หายทั้งห้อง" ลูกค้าทักมาเมื่อกี้ก็ไม่เห็น (บทเรียนเดียวกับแชตทีม)
+// ⇒ ดึงใหม่→เก่าตามจำนวนที่กำหนด แล้วค่อยกลับลำดับตอนแสดง
+export const CHAT_TAIL = 400;
+export async function listLineMessages(uid, { limit = CHAT_TAIL, before } = {}) {
+  let q = supabase.from("line_messages").select("*").eq("line_user_id", uid).order("created_at", { ascending: false }).limit(limit);
+  if (before) q = q.lt("created_at", before);   // ไล่ดูย้อนหลังทีละหน้า (ปุ่ม "โหลดข้อความเก่ากว่านี้")
+  const { data, error } = await q;
   if (error) throw error;
-  return data || [];
+  return (data || []).reverse();
 }
 
 export async function linkLineContact(uid, customerId) {
@@ -3504,18 +3522,21 @@ export async function countUnreadChats() {
 // ===================== FACEBOOK MESSENGER (mirrors LINE shape; psid aliased to line_user_id) =====================
 export async function listFbContacts() {
   const [c, cu] = await Promise.all([
-    supabase.from("fb_contacts").select("*").order("last_message_at", { ascending: false, nullsFirst: false }),
-    supabase.from("customers").select("id,name"),
+    _allRows((f, t) => supabase.from("fb_contacts").select("*", { count: "exact" }).order("last_message_at", { ascending: false, nullsFirst: false }).order("psid").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
   ]);
   if (c.error) throw c.error;
   const cn = Object.fromEntries((cu.data || []).map((x) => [x.id, x.name]));
   // line_user_id alias so the existing inbox UI can render FB contacts unchanged
   return (c.data || []).map((r) => ({ ...r, line_user_id: r.psid, channel: "fb", customerName: r.customer_id ? cn[r.customer_id] : null }));
 }
-export async function listFbMessages(psid) {
-  const { data, error } = await supabase.from("fb_messages").select("*").eq("psid", psid).order("created_at", { ascending: true });
+// ใหม่→เก่า + limit แล้วกลับลำดับ ด้วยเหตุผลเดียวกับ listLineMessages (ไม่งั้นข้อความใหม่หายทั้งห้อง)
+export async function listFbMessages(psid, { limit = CHAT_TAIL, before } = {}) {
+  let q = supabase.from("fb_messages").select("*").eq("psid", psid).order("created_at", { ascending: false }).limit(limit);
+  if (before) q = q.lt("created_at", before);   // ไล่ดูย้อนหลังทีละหน้า
+  const { data, error } = await q;
   if (error) throw error;
-  return (data || []).map((m) => ({ ...m, line_user_id: m.psid }));
+  return (data || []).reverse().map((m) => ({ ...m, line_user_id: m.psid }));
 }
 export async function linkFbContact(psid, customerId) {
   const { error } = await supabase.from("fb_contacts").update({ customer_id: customerId || null }).eq("psid", psid);
@@ -4185,7 +4206,7 @@ export async function syncCashEntriesFromDocs() {
     _fetchAll((f, t) => supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })),
     _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat,paid_at,expense_id", { count: "exact" }).order("po_no").range(f, t)).then((rows) => ({ data: rows })),
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
-    supabase.from("customers").select("id,name"),
+    _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     supabase.from("teams").select("id,name"),
     _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows })), // ถ้าอ่านไม่ครบ sync จะสร้างซ้ำ
     // ฐานเงินเดือนพนักงานประจำ (ประมาณการเงินออก) — อยู่ที่ hr_pay ตั้งแต่ mig 154 · fallback ไป profiles ถ้ายังไม่รัน
@@ -4454,7 +4475,8 @@ export async function deleteChatNote(id) {
 }
 // ดัชนีโน้ตทุกห้องที่ฉันเห็น (RLS กรองให้) — ใช้ให้ช่องค้นหาห้องหาเนื้อโน้ตเจอด้วย
 export async function listAllChatNotes() {
-  const { data, error } = await supabase.from("chat_notes").select("room_id,text").limit(2000);
+  // limit(2000) เกินเพดานจริง (1000) และไม่มี order → ค้นหาห้องได้ผลไม่แน่นอน ⇒ ไล่ทีละหน้า
+  const { data, error } = await _allRows((f, t) => supabase.from("chat_notes").select("room_id,text", { count: "exact" }).order("id").range(f, t));
   if (error) throw noteErr(error);
   return data || [];
 }

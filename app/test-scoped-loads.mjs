@@ -226,7 +226,47 @@ for (const [file, arr, hasFocus] of PAGES) {
   }
 }
 
-// ============ (6) กันพลาด: ขอเกิน 200 ใบ → กลับไปโหลดเต็ม (URL ยาวเกิน) ============
+// ============ (6) เพดาน 1000 แถว: จุดที่เคยอ่านตารางที่โตได้แบบไม่กัน ============
+// Supabase ตัดทุก select ที่ 1000 แถวเงียบ ๆ ไม่มี error — ข้อมูลหายโดยไม่มีอะไรฟ้อง
+console.log("\nเพดาน 1000 แถว:");
+
+check("แชต LINE/เฟซบุ๊ก ต้องดึงใหม่→เก่า + limit (เรียงเก่า→ใหม่ = ข้อความใหม่หายทั้งห้อง)", () => {
+  for (const fn of ["listLineMessages", "listFbMessages"]) {
+    const i = SRC.indexOf(`export async function ${fn}`);
+    assert.ok(i > 0, "ไม่เจอ " + fn);
+    const body = SRC.slice(i, SRC.indexOf("\n}", i));
+    assert.ok(/ascending: false/.test(body), `${fn} ยังเรียงเก่า→ใหม่`);
+    assert.ok(/\.limit\(/.test(body), `${fn} ไม่มี limit`);
+    assert.ok(/\.reverse\(\)/.test(body), `${fn} ลืมกลับลำดับตอนแสดง`);
+  }
+});
+
+check("งานของทีม (จอช่าง) ต้องมี limit — ไม่งั้นงานที่กำลังจะถึงหายก่อน", () => {
+  const i = SRC.indexOf("export async function listTeamJobOrders");
+  const body = SRC.slice(i, i + 1200);
+  assert.ok(/ascending: false/.test(body) && /\.limit\(/.test(body), "ยังอ่านประวัติงานทั้งหมดแบบเก่า→ใหม่");
+});
+
+check("ตารางที่โตได้ ต้องไม่มี select แบบเปล่า ๆ หลงเหลือ", () => {
+  const bad = [
+    ['from("customers").select("id,name"),', "ตารางลูกค้าอ่านแบบไม่กันเพดาน"],
+    ['from("sub_payouts").select("*").order', "ใบจ่ายช่างซัพอ่านแบบไม่กันเพดาน"],
+    ['from("stock_counts").select("*").order', "รอบนับสต๊อกอ่านแบบไม่กันเพดาน"],
+    ['from("line_contacts").select("*").order', "รายชื่อแชต LINE อ่านแบบไม่กันเพดาน"],
+    ['from("fb_contacts").select("*").order', "รายชื่อแชตเฟซบุ๊กอ่านแบบไม่กันเพดาน"],
+    ['from("job_orders").select("job_no,quote_no,customer_id,title,status"),', "ใบงานในหน้าเบิกจ่ายอ่านแบบไม่กันเพดาน"],
+  ];
+  const hits = bad.filter(([frag]) => SRC.includes(frag)).map(([, why]) => why);
+  assert.deepEqual(hits, [], hits.join(" · "));
+});
+
+check("ทุก _allRows/_fetchAll ต้องมี .order() (ไม่มี order = แถวซ้ำ/หายระหว่างหน้า)", () => {
+  const calls = [...SRC.matchAll(/_(?:allRows|fetchAll)\(\(f, t\) =>([\s\S]{0,400}?)\.range\(f, t\)/g)];
+  const noOrder = calls.filter((m) => !/\.order\(/.test(m[1])).map((m) => m[1].slice(0, 90).replace(/\s+/g, " "));
+  assert.deepEqual(noOrder, [], "พบ " + noOrder.length + " จุดไม่มี order: " + noOrder.join(" | "));
+});
+
+// ============ (7) กันพลาด: ขอเกิน 200 ใบ → กลับไปโหลดเต็ม (URL ยาวเกิน) ============
 console.log("\nกันพลาด:");
 calls = []; headRows = {};
 await listQuotations({ nos: Array.from({ length: 250 }, (_, i) => "Q" + i) });

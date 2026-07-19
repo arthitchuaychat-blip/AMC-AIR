@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·กลาง 4,7: ตัดหนี้สูญได้โดยยอดขาย/ภาษีขายยังอยู่ในประวัติ (mig 160) + การ์ดหนี้สูญสะสม · กล่องเตือนต้นทุนตกหล่นในหน้ากำไร ครอบค่าแรงช่างซัพและเบิกจ่ายด้วย ไม่ใช่แค่ค่าวัสดุ v463";
+const BUILD = "2026-07-19·อุดเพดาน 1000 แถวทั้งระบบ (สแกน 404 จุด): แชต LINE/FB ข้อความใหม่ไม่หาย + ปุ่มโหลดย้อนหลัง · งานของช่างไม่ตกหล่น · ฟีดปฏิทิน/แคตตาล็อกบอทไล่ทีละหน้าจนหมด · หน้าเบิกจ่ายชื่องาน-ลูกค้าไม่หาย v464";
 
 function SetupNotice() {
   return (
