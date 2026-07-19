@@ -2150,7 +2150,39 @@ function _resolveJo(jo, custName, custAddr, siteMap, teamName, custContact) {
 // first contact per customer (live fallback for the snapshot contact on the job order)
 function _firstContacts(rows) { const m = {}; (rows || []).forEach((c) => { if (!m[c.customer_id]) m[c.customer_id] = c; }); return m; }
 
-export async function listJobOrders() {
+// fieldOnly = โหมดจอช่าง: ให้ฐานข้อมูลกรองทีมและ "ตัดราคาออก" ตั้งแต่ต้นทาง (mig 166)
+// เดิมโหลด quotation_items ทั้งตารางแบบ select * ลงมือถือช่าง = ราคาต่อหน่วย+ส่วนลดของทุกลูกค้าอยู่ในเครื่อง
+// ⚠️ โหมดออฟฟิศ (ค่าเริ่มต้น) ต้องได้ผลเท่าเดิมเป๊ะ — quoteGrand/salesName/boq_no ถูกใช้ที่หน้าแชตและแผงพรีวิว
+//    ถ้าเผลอให้ออฟฟิศไปใช้โหมดช่าง มูลค่างานจะกลายเป็น 0 บาททุกใบแบบเงียบ ๆ
+export async function listJobOrders({ fieldOnly = false, team = null } = {}) {
+  if (fieldOnly) {
+    const { data, error } = await supabase.rpc("jobs_for_team", { p_team: team || null });
+    // ยังไม่รัน mig 166 → ถอยไปทางเดิม จอช่างต้องไม่พังระหว่างรอ deploy/รัน SQL
+    // (ยังเห็นราคาอยู่เหมือนเดิมจนกว่าจะรัน migration — เป็นสถานะชั่วคราวที่ยอมรับได้ ดีกว่าเปิดแอปไม่ได้)
+    if (error && /jobs_for_team|does not exist|PGRST202/i.test(error.message || "")) return listJobOrders();
+    if (error) throw error;
+    return (data || []).map((r) => {
+      const site = r.site_id ? { site_name: r.site_name, address: r.site_address, map_url: r.site_map_url, contact_name: r.site_contact_name, phone: r.site_phone } : null;
+      const address = (site && site.address) || r.address || r.customer_address || null;
+      return {
+        ...r,
+        customerName: r.customer_name || null,
+        address, map_url: (site && site.map_url) || r.map_url || _gmap(address),
+        customerAddr: r.customer_address || null,
+        siteName: site?.site_name || null, siteAddress: site?.address || null,
+        siteContactName: site?.contact_name || null, siteContactPhone: site?.phone || null,
+        mainContactName: r.main_contact?.name || null, mainContactPhone: r.main_contact?.phone || null,
+        contact_name: r.contact_name || site?.contact_name || r.main_contact?.name || null,
+        contact_phone: r.contact_phone || site?.phone || r.main_contact?.phone || null,
+        teamName: r.team_name || r.assigned_team || null,
+        visits: r.visits || [],
+        confirmItems: r.quote_no ? (r.confirm_items || []) : null,
+        quoteGrand: 0,       // จอช่างไม่ต้องรู้มูลค่างาน — ตั้งใจให้เป็น 0
+        salesName: null,
+        createdByName: null,
+      };
+    });
+  }
   const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows })); // กันเพดาน 1000 แถวทุกก้อน — ใบงาน/ลูกค้า/รอบนัดโตเรื่อย ๆ
   const [j, cu, tm, si, ct, qt, qit, jv] = await Promise.all([
     _rows((f, t) => supabase.from("job_orders").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("job_no").range(f, t)),

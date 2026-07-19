@@ -61,7 +61,21 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
 
   async function load() {
     setLoading(true);
-    try { const [j, c, t, q, dl, ps, tpl, hf] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => []), listJobTemplates().catch(() => []), listHandoverFlags().catch(() => ({}))]); setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); setTemplates(tpl || []); setHoFlags(hf || {}); }
+    try {
+      if (fieldOnly) {
+        // จอช่าง: เอาเฉพาะงานของทีมตัวเอง และไม่มีข้อมูลราคาติดมา (mig 166)
+        // ไม่โหลดลูกค้า/ใบเสนอ/ชิปเชื่อมโยง/ทะเบียนพนักงาน — ช่างแก้ใบงานไม่ได้จึงไม่ได้ใช้
+        const [j, t, tpl, hf] = await Promise.all([
+          listJobOrders({ fieldOnly: true, team: role === "lead_tech" ? null : myTeam }),
+          listTeams(), listJobTemplates().catch(() => []), listHandoverFlags().catch(() => ({})),
+        ]);
+        setList(j); setTeams(t); setTemplates(tpl || []); setHoFlags(hf || {});
+        setCusts([]); setQuotes([]); setDocLinks({ byQuote: {} }); setStaff([]);
+      } else {
+        const [j, c, t, q, dl, ps, tpl, hf] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => []), listJobTemplates().catch(() => []), listHandoverFlags().catch(() => ({}))]);
+        setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); setTemplates(tpl || []); setHoFlags(hf || {});
+      }
+    }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -304,7 +318,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       if ((apRating || 0) !== (jo.rating || 0) || apClaim !== !!jo.is_claim) {
         try { await saveJobReview(jo.job_no, apRating || null, apClaim); } catch (e) { flash("บันทึกคะแนนงานไม่สำเร็จ: " + (e.message || e), true); }
       }
-      const fresh = await listJobOrders(); setList(fresh);
+      const fresh = await listJobOrders(fieldOnly ? { fieldOnly: true, team: role === "lead_tech" ? null : myTeam } : {}); setList(fresh);
       setViewing((cur) => cur ? (fresh.find((x) => x.job_no === jo.job_no) || null) : cur);
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
@@ -503,7 +517,11 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
 
   // ---------- LIST ----------
   // field techs see only their own team's jobs (no team → nothing)
-  const baseList = fieldOnly ? list.filter((j) => j.assigned_team && j.assigned_team === myTeam) : list;
+  // ⚠️ ต้องเทียบ 2 ชั้นเหมือนหน้า "งานของฉัน" — งานที่มอบผ่านรอบนัดจะหายถ้าดูแค่ assigned_team
+  //    (RPC กรองมาให้แล้ว ตัวนี้เป็นตาข่ายกันพลาดสำหรับ lead_tech ที่ขอมาทุกทีม)
+  const baseList = fieldOnly && myTeam
+    ? list.filter((j) => (j.visits && j.visits.length) ? j.visits.some((v) => v.assigned_team === myTeam) : j.assigned_team === myTeam)
+    : list;
   return (
     <div className="adm">
       <div className="adm-head">

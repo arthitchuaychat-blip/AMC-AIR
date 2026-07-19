@@ -30,7 +30,9 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
     if (!allTeams && !team) { setLoading(false); return; }
     setLoading(true);
     try {
-      const all = await listJobOrders();
+      // จอช่าง: ให้ฐานข้อมูลกรองทีมและตัดราคาออกตั้งแต่ต้นทาง (mig 166)
+      // ตัวกรองฝั่งจอด้านล่างคงไว้เป็นตาข่ายกันพลาด (ทำซ้ำได้ ไม่เสียหาย)
+      const all = await listJobOrders({ fieldOnly: true, team: allTeams ? null : team });
       // a job is "mine" if my team is on ANY of its visits (fallback: legacy assigned_team)
       const mine = allTeams ? all : all.filter((j) =>
         (j.visits && j.visits.length) ? j.visits.some((v) => v.assigned_team === team) : j.assigned_team === team);
