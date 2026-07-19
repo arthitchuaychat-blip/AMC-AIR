@@ -630,7 +630,7 @@ export async function saveStockCountCounts(id, counts) {
   await supabase.from("stock_counts").update({ updated_at: new Date().toISOString() }).eq("id", id);
 }
 // apply: for each counted item, snapshot system qty + record an adjust movement for the difference, then lock the round
-export async function applyStockCount(id) {
+export async function applyStockCount(id, reason) {
   const uid = await _uid();
   const { data: sc, error: e0 } = await supabase.from("stock_counts").select("id,count_no,status").eq("id", id).single();
   if (e0) throw e0;
@@ -669,12 +669,17 @@ export async function applyStockCount(id) {
     await supabase.from("stock_count_items").update({ system_qty: sys, diff }).eq("id", it.id);
     if (diff !== 0) {
       txns.push({ txn_date: day, type: diff > 0 ? "adjust_in" : "adjust_out", material_code: it.material_code,
-        qty: Math.abs(diff), unit_cost: uc, ref_no: sc.count_no, reason: `ปรับยอดจากการนับสต๊อก ${sc.count_no}`, recorded_by: uid });
+        qty: Math.abs(diff), unit_cost: uc, ref_no: sc.count_no, reason: `ปรับยอดจากการนับสต๊อก ${sc.count_no}${reason ? " — " + reason : ""}`, recorded_by: uid });
       adjusted++;
     }
   }
   if (txns.length) { const { error: e2 } = await supabase.from("transactions").insert(txns); if (e2) throw e2; }
-  return { adjusted, counted: counted.length };
+  // ตัดของหาย/ของเกินคือการตัดเงินออกจากคลัง — ต้องมีร่องรอยว่าใครอนุมัติและเพราะอะไร
+  // เหมือนทุกจุดที่ยกเลิก/ลบของในระบบ (เดิมเก็บแค่ applied_by/applied_at ไม่มีเหตุผล)
+  const lossValue = _round2(txns.reduce((a, t) => a + (t.type === "adjust_out" ? -1 : 1) * (Number(t.qty) || 0) * (Number(t.unit_cost) || 0), 0));
+  await logAudit({ action: "adjust", target_type: "stock_count", target_no: sc.count_no,
+    reason: `ปรับยอด ${adjusted} รายการ · มูลค่าสุทธิ ${lossValue} บาท${reason ? " — " + reason : ""}` }).catch(() => {});
+  return { adjusted, counted: counted.length, lossValue };
   } catch (err) { await revert(); throw err; }   // พลาดกลางทาง → คืนสถานะร่าง ให้กดใหม่ได้ (ยังไม่มี txn ไหนถูกเขียนถ้าพังก่อน insert)
 }
 export async function deleteStockCount(id, reason) {

@@ -5,6 +5,8 @@ import { matchText, fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 
 const CAN_EDIT = ["admin", "exec", "stock"]; // ผู้ที่กดอัพเดท/แก้รอบนับได้ (ตรงกับ RLS ใน migration 086)
+// ส่วนต่าง "ขาด" เกินเท่านี้ = ตัดของหายก้อนใหญ่ ต้องให้ธุรการ/ผู้บริหารกดเอง (ธุรการวัสดุกดไม่ได้)
+const BIG_LOSS = 5000;
 const fmtNum = (n) => { const v = Number(n) || 0; return Number.isInteger(v) ? String(v) : v.toFixed(2); };
 const thDate = (s) => new Date(s).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
 
@@ -28,7 +30,7 @@ export default function StockCount({ role }) {
   }
   React.useEffect(() => { loadBase(); }, []);
 
-  if (openId) return <CountSession id={openId} canEdit={canEdit} matByCode={matByCode} onBack={() => { setOpenId(null); loadBase(); }} flash={flash} toast={toast} />;
+  if (openId) return <CountSession id={openId} role={role} canEdit={canEdit} matByCode={matByCode} onBack={() => { setOpenId(null); loadBase(); }} flash={flash} toast={toast} />;
 
   return (
     <div className="adm">
@@ -127,7 +129,7 @@ function NewCountModal({ mats, cats, onClose, onCreated, flash }) {
   );
 }
 
-function CountSession({ id, canEdit, matByCode, onBack, flash, toast }) {
+function CountSession({ id, role, canEdit, matByCode, onBack, flash, toast }) {
   const [sess, setSess] = React.useState(null);
   const [items, setItems] = React.useState([]);
   const [counts, setCounts] = React.useState({});
@@ -173,9 +175,22 @@ function CountSession({ id, canEdit, matByCode, onBack, flash, toast }) {
   async function apply() {
     if (!countedRows.length) return flash("ยังไม่ได้กรอกยอดนับ", true);
     const nz = countedRows.filter((r) => r.diff !== 0).length;
-    if (!await confirmDialog({ title: "อัพเดทสต๊อกตามที่นับ?", message: `จะปรับยอด ${nz} รายการที่มีส่วนต่าง ให้ตรงกับที่นับได้จริง\n(บันทึกเป็นรายการ "ปรับยอด" ในคลัง · ตรวจย้อนหลังได้ · รอบนี้จะถูกล็อก)`, danger: true, confirmText: "อัพเดทสต๊อก" })) return;
+    // ส่วนต่างมูลค่าสูง = ตัดของหายก้อนใหญ่ ต้องให้ธุรการ/ผู้บริหารเป็นคนกด ธุรการวัสดุกดเองไม่ได้
+    // (น็อตหาย 3 ตัว กับแอร์หายหลายเครื่อง เดิมใช้ปุ่มเดียวกันโดยไม่มีชั้นกรอง)
+    const loss = Math.abs(Math.min(0, diffValue));
+    if (loss > BIG_LOSS && !["admin", "exec"].includes(role)) {
+      return flash(`ส่วนต่างขาด ${fmtBaht(loss)} เกิน ${fmtBaht(BIG_LOSS)} — ต้องให้ธุรการหรือผู้บริหารเป็นผู้อัพเดท`, true);
+    }
+    // บังคับเหตุผลเหมือนทุกจุดที่ตัด/ยกเลิกของในระบบ — ของหายมูลค่าสูงต้องรู้ว่าหายเพราะอะไร
+    const reason = await confirmDialog({
+      title: "อัพเดทสต๊อกตามที่นับ?",
+      message: `จะปรับยอด ${nz} รายการที่มีส่วนต่าง ให้ตรงกับที่นับได้จริง\nมูลค่าส่วนต่างรวม ${fmtBaht(diffValue)}${loss > 0 ? ` (ขาด ${fmtBaht(loss)})` : ""}\n\n(บันทึกเป็นรายการ "ปรับยอด" ในคลัง · ตรวจย้อนหลังได้ · รอบนี้จะถูกล็อก)`,
+      danger: true, confirmText: "อัพเดทสต๊อก",
+      prompt: { label: "เหตุผล (บังคับ)", placeholder: "เช่น ของแตกระหว่างขนย้าย · เบิกไปหน้างานแล้วไม่ได้คีย์ · นับรอบก่อนผิด", required: true },
+    });
+    if (!reason) return;
     setBusy(true);
-    try { await saveStockCountCounts(id, Object.fromEntries(Object.entries(counts).filter(([k]) => dirty.current.has(k)))); dirty.current.clear(); const r = await applyStockCount(id); flash(`อัพเดทสต๊อกแล้ว ✓ ปรับ ${r.adjusted} รายการ`); await load(); }
+    try { await saveStockCountCounts(id, Object.fromEntries(Object.entries(counts).filter(([k]) => dirty.current.has(k)))); dirty.current.clear(); const r = await applyStockCount(id, String(reason)); flash(`อัพเดทสต๊อกแล้ว ✓ ปรับ ${r.adjusted} รายการ`); await load(); }
     catch (e) { flash("อัพเดทไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }

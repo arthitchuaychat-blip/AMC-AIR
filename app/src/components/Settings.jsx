@@ -377,7 +377,7 @@ function FlowAccountCard() {
 
 // ประวัติการลบ/ยกเลิก/อนุมัติเอกสารการเงิน (audit trail — มิ migration 067)
 const AUDIT_TYPES = { all: "ทุกประเภท", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", quotation: "ใบเสนอราคา", boq: "BOQ", billing_note: "ใบวางบิล", job_order: "ใบงาน", transaction: "เคลื่อนไหวสต๊อก", cash_entry: "กระแสเงินสด" };
-const AUDIT_ACTIONS = { all: "ทุกการกระทำ", delete: "ลบ", cancel: "ยกเลิก", bad_debt: "ตัดหนี้สูญ", approve: "อนุมัติ", status: "เปลี่ยนสถานะ", edit: "แก้ตัวเลขบนเอกสาร", update: "แก้ไข" };
+const AUDIT_ACTIONS = { all: "ทุกการกระทำ", delete: "ลบ", cancel: "ยกเลิก", bad_debt: "ตัดหนี้สูญ", adjust: "ปรับยอดสต๊อก", approve: "อนุมัติ", status: "เปลี่ยนสถานะ", edit: "แก้ตัวเลขบนเอกสาร", update: "แก้ไข" };
 const AUDIT_ACTION_BADGE = { delete: { t: "ลบ", c: "#fff", bg: "#dc2626" }, cancel: { t: "ยกเลิก", c: "#9a3412", bg: "#ffedd5" }, approve: { t: "อนุมัติ", c: "#0a6b3d", bg: "#dcf5e8" }, status: { t: "สถานะ", c: "#1d4ed8", bg: "#e6efff" }, update: { t: "แก้ไข", c: "#1d4ed8", bg: "#e6efff" } };
 
 function AuditCard({ flash }) {
