@@ -1,5 +1,5 @@
 import React from "react";
-import { listTasks } from "../lib/api";
+import { listMyTasks } from "../lib/api";
 
 const ST = { todo: { th: "รอเริ่ม", c: "#7c899c" }, doing: { th: "กำลังทำ", c: "#2563eb" } };
 const today = () => new Date().toISOString().slice(0, 10);
@@ -12,10 +12,18 @@ export default function TaskReminder({ myId, view, onOpen, onOpenBoard }) {
   const lastView = React.useRef(view);
 
   const load = React.useCallback(async () => {
-    try { const all = await listTasks(); setTasks(all.filter((t) => t.assignee === myId && (t.status === "todo" || t.status === "doing"))); }
+    try { setTasks(await listMyTasks(myId)); }
     catch { /* เงียบไว้ — แถบเตือนต้องไม่ขวางการใช้งาน */ }
   }, [myId]);
-  React.useEffect(() => { if (!myId) return; load(); const iv = setInterval(load, 180000); return () => clearInterval(iv); }, [myId, load]);
+    // มือถือช่างเปิดแอปค้างทั้งวัน — เดิมยิงทุก 3 นาทีตลอดแม้แท็บอยู่หลังบ้าน กินเน็ต/แบตเปล่า
+  React.useEffect(() => {
+    if (!myId) return;
+    load();
+    const iv = setInterval(() => { if (!document.hidden) load(); }, 600000);
+    const onVis = () => { if (!document.hidden) load(); };   // กลับมาที่แท็บ = โหลดสดทันที
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); };
+  }, [myId, load]);
   // ออกจากกระดานสั่งงาน → โหลดใหม่ทันที (เพิ่งกดเปลี่ยนสถานะ/ปิดงานมา)
   React.useEffect(() => { if (lastView.current === "tasks" && view !== "tasks") load(); lastView.current = view; }, [view, load]);
 

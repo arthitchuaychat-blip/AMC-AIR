@@ -1,5 +1,5 @@
 import React from "react";
-import { saveCustomer } from "../lib/api";
+import { saveCustomer, findSimilarCustomers } from "../lib/api";
 import { UIcon } from "../icons";
 import { custCode } from "../lib/format";
 
@@ -17,6 +17,7 @@ export default function CustomerFormModal({ initial, onClose, onSaved }) {
   const [sites, setSites] = React.useState(() => initial?.sites?.length ? initial.sites.map((x) => ({ id: x.id, site_name: x.site_name || "", contact_name: x.contact_name || "", phone: x.phone || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }]);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState(null);
+  const [dupes, setDupes] = React.useState(null);   // ลูกค้าเดิมที่คล้ายกัน — ให้เลือกใช้รายเดิมแทนการสร้างซ้ำ
 
   React.useEffect(() => { const esc = (e) => e.key === "Escape" && onClose(); window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc); }, []);
 
@@ -25,10 +26,17 @@ export default function CustomerFormModal({ initial, onClose, onSaved }) {
   const addRow = (setArr, blank) => setArr((rows) => [...rows, blank]);
   const delRow = (setArr, i) => setArr((rows) => rows.filter((_, j) => j !== i));
 
-  async function save() {
+  async function save({ force } = {}) {
     if (!cust.name.trim()) return setErr("ใส่ชื่อลูกค้า");
     setBusy(true); setErr(null);
-    try { const id = await saveCustomer(cust, contacts, sites); onSaved(id); }
+    try {
+      // เฉพาะลูกค้าใหม่ — แก้ไขรายเดิมไม่ต้องเช็ค · หาไม่ได้/พังก็ไม่บล็อกการบันทึก
+      if (!cust.id && !force) {
+        const sim = await findSimilarCustomers({ ...cust, contacts, sites }).catch(() => []);
+        if (sim.length) { setDupes(sim); setBusy(false); return; }
+      }
+      const id = await saveCustomer(cust, contacts, sites); onSaved(id);
+    }
     catch (e) { setErr("บันทึกไม่สำเร็จ: " + (e.message || e)); setBusy(false); }
   }
 
@@ -97,6 +105,27 @@ export default function CustomerFormModal({ initial, onClose, onSaved }) {
             })}
             <button className="btn-ghost sm" onClick={() => addRow(setSites, { site_name: "", contact_name: "", phone: "", address: "", map_url: "" })}><UIcon name="plus" size={13} /> เพิ่มไซต์งาน</button>
           </div>
+          {dupes && dupes.length > 0 && (
+            <div className="card" style={{ borderLeft: "4px solid #d97706", marginBottom: 10 }}>
+              <div style={{ fontWeight: 800, color: "#b45309", marginBottom: 4 }}>พบลูกค้าที่คล้ายกันอยู่แล้ว {dupes.length} ราย</div>
+              <div className="page-sub" style={{ marginTop: 0, marginBottom: 8 }}>
+                ถ้าเป็นรายเดียวกัน ให้ใช้รายเดิม — สร้างซ้ำจะทำให้ประวัติงาน ยอดค้างรับ และรอบติดตาม แตกออกจากกัน
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {dupes.map((d) => (
+                  <div key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <b>{custCode(d.id)}</b><span>{d.name}</span>
+                    <span className="jo-dim">· {d.reason}</span>
+                    <button className="btn-ghost sm" style={{ marginLeft: "auto" }} onClick={() => onSaved(d.id)}>ใช้รายเดิมนี้</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button className="btn-ghost sm" onClick={() => setDupes(null)}>กลับไปแก้ข้อมูล</button>
+                <button className="btn-ghost sm" style={{ color: "#b45309" }} disabled={busy} onClick={() => { setDupes(null); save({ force: true }); }}>สร้างใหม่อยู่ดี</button>
+              </div>
+            </div>
+          )}
           {err && <div className="login-err" style={{ marginTop: 8 }}>{err}</div>}
         </div>
         <div className="modal-foot">

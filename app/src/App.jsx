@@ -103,7 +103,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·กลาง 23: BOQ/ใบเสนอราคาเก็บร่างอัตโนมัติ — กดปุ่ม Back ของ Android หรือแท็บถูกรีโหลด ที่คีย์ค้างไม่หายทั้งใบ กู้คืนได้ตอนเปิดครั้งหน้า + ถามก่อนออกจากหน้า v472";
+const BUILD = "2026-07-19·กลาง 19,27: เตือนก่อนสร้างลูกค้าซ้ำ (เลขผู้เสียภาษี/เบอร์/ชื่อตรงกัน) พร้อมปุ่มใช้รายเดิม (mig 162) · กระดานสั่งงานไม่ติดเพดาน 1000 แถวทุกตาราง · แถบเตือนงานค้างเลิกลากงานทั้งบริษัท ยืดเป็น 10 นาที และหยุดตอนแท็บไม่ได้เปิด v473";
 
 function SetupNotice() {
   return (

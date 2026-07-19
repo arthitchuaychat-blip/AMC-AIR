@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listCustomers, saveCustomer, deleteCustomer, listCustomerDocs } from "../lib/api";
+import { listCustomers, saveCustomer, deleteCustomer, listCustomerDocs, findSimilarCustomers } from "../lib/api";
 import { UIcon } from "../icons";
 import { custCode, fmtBaht, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -68,6 +68,15 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   async function save() {
     if (!editing.cust.name.trim()) return flash("ใส่ชื่อลูกค้า", true);
     if (editing.cust.id && !await confirmDialog(`ยืนยันบันทึกการแก้ไขลูกค้า "${editing.cust.name}" ?`)) return;
+    // ลูกค้าใหม่: เตือนถ้ามีรายที่คล้ายกันอยู่แล้ว — สร้างซ้ำทำให้ประวัติงาน/ยอดค้างรับ/รอบติดตาม แตกออกจากกัน
+    if (!editing.cust.id) {
+      const sim = await findSimilarCustomers({ ...editing.cust, contacts: editing.contacts, sites: editing.sites }).catch(() => []);
+      if (sim.length && !await confirmDialog({
+        title: `พบลูกค้าคล้ายกัน ${sim.length} ราย`,
+        message: sim.map((d) => `· ${custCode(d.id)} ${d.name} — ${d.reason}`).join("\n") + "\n\nถ้าเป็นรายเดียวกัน ให้ปิดหน้านี้แล้วค้นหาชื่อเดิมแทน\n\nยืนยันสร้างเป็นลูกค้าใหม่อีกราย?",
+        confirmText: "สร้างใหม่อยู่ดี", cancelText: "กลับไปตรวจ",
+      })) return;
+    }
     try { await saveCustomer(editing.cust, editing.contacts, editing.sites); flash("บันทึกลูกค้าแล้ว"); setEditing(null); await load(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }

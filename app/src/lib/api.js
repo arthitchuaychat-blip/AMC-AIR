@@ -1195,6 +1195,37 @@ export async function listCustomers() {
   return c.map((cu) => ({ ...cu, contacts: byC[cu.id] || [], sites: byS[cu.id] || [] }));
 }
 
+// ค้นลูกค้าเดิมที่ "น่าจะเป็นรายเดียวกัน" — ใช้เตือนก่อนสร้างใหม่ (mig 162 ทำ index ให้ค้นเร็ว)
+// ลูกค้ารายเดียวที่ถูกสร้างซ้ำ = ประวัติงาน/ยอดค้างรับ/รอบติดตาม แตกออกจากกัน
+// เซลล์เห็นว่า "ไม่เคยซื้อ" ทั้งที่ซื้อไปแล้ว และตามหนี้ผิดคน
+const _digits = (s) => String(s || "").replace(/\D/g, "");
+const _normName = (s) => String(s || "").toLowerCase().replace(/\s+/g, "")
+  .replace(/(บริษัท|หจก\.?|ห้างหุ้นส่วนจำกัด|จำกัด|มหาชน|\(มหาชน\)|co\.?,?ltd\.?|company|limited)/g, "");
+export async function findSimilarCustomers(cust) {
+  const out = new Map();   // id → { id, name, tax_id, reason }
+  const add = (c, reason) => { if (c && String(c.id) !== String(cust?.id || "")) out.set(String(c.id), { ...c, reason }); };
+
+  const tid = _digits(cust?.tax_id);
+  const phones = [...(cust?.contacts || []), ...(cust?.sites || [])].map((x) => _digits(x?.phone)).filter((p) => p.length >= 9);
+  const name = _normName(cust?.name);
+
+  // ดึงเฉพาะคอลัมน์ที่ต้องใช้ — ต้องผ่าน _fetchAll ไม่งั้นฐานลูกค้าเกิน 1000 รายแล้วเช็คซ้ำไม่เจอเงียบ ๆ
+  const all = await _fetchAll((f, t) => supabase.from("customers").select("id,name,tax_id", { count: "exact" }).order("id").range(f, t)).catch(() => []);
+  if (tid.length >= 10) all.forEach((c) => { if (_digits(c.tax_id) === tid) add(c, "เลขผู้เสียภาษีตรงกัน"); });
+  if (name.length >= 3) all.forEach((c) => { if (_normName(c.name) === name) add(c, "ชื่อตรงกัน"); });
+
+  if (phones.length) {
+    const byId = Object.fromEntries(all.map((c) => [String(c.id), c]));
+    const hit = async (table, col) => {
+      const rows = await _fetchAll((f, t) => supabase.from(table).select("customer_id,phone", { count: "exact" }).not("phone", "is", null).order("id").range(f, t)).catch(() => []);
+      rows.forEach((r) => { if (phones.includes(_digits(r.phone))) add(byId[String(r.customer_id)], "เบอร์โทรตรงกัน"); });
+    };
+    await hit("customer_contacts");
+    await hit("customer_sites");
+  }
+  return [...out.values()].slice(0, 8);
+}
+
 export async function saveCustomer(cust, contacts, sites) {
   const { data: { user } } = await supabase.auth.getUser();
   const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, email: cust.email?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null, credit_days: Math.max(0, Math.round(Number(cust.credit_days) || 0)) };
@@ -3023,10 +3054,21 @@ export async function markModuleRead(moduleId) {
 }
 
 // ---------- TASK BOARD (กระดานสั่งงาน) ----------
+// แถบเตือนงานค้าง — เอาเฉพาะงานของฉันที่ยังไม่จบ กรองที่เซิร์ฟเวอร์
+// เดิมเรียก listTasks() ซึ่งลากงานทั้งบริษัท + คอมเมนต์ + โปรไฟล์ + ลูกค้า มากรองในเบราว์เซอร์ทุก 3 นาที ทุกเครื่อง
+export async function listMyTasks(myId) {
+  if (!myId) return [];
+  const { data, error } = await supabase.from("tasks")
+    .select("id,title,status,due_date,assigner")
+    .eq("assignee", myId).in("status", ["todo", "doing"])
+    .order("due_date", { ascending: true, nullsFirst: false }).order("id").limit(200);
+  if (error) throw error;
+  return data || [];
+}
 export async function listTasks() {
   const [t, profs, cc, cu] = await Promise.all([
     _allRows((f, t) => supabase.from("tasks").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t)),
-    supabase.from("profiles").select("id,name,email"),
+    _allRows((f, t) => supabase.from("profiles").select("id,name,email", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("task_comments").select("task_id", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
   ]);
