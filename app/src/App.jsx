@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
-import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams, unreadByModule, markModuleRead, poReceivedQty } from "./lib/api";
+import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams, unreadByModule, markModuleRead, poReceivedQty, getQuoteItems } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { NAV_MY, LangContext } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·กลาง 16: บันทึกใบงานไม่ลบรอบเข้างานทิ้งแล้วสร้างใหม่อีกต่อไป — id รอบคงเดิม มือถือช่างที่เปิดค้างกดอัปเดตได้ · รอบที่เครื่องอื่นเพิ่มระหว่างฟอร์มเปิดค้างไม่ถูกลบ และถูกนับตอนคิดสถานะหัวใบ v468";
+const BUILD = "2026-07-19·กลาง 13: รับของเข้างาน ระบุได้ว่าแต่ละบรรทัดเข้างานเท่าไร ที่เหลือค้างเป็นสต๊อกกลาง (ค่าเริ่มต้น = เต็มจำนวนที่รับ เท่าเดิม) + เตือนเมื่อเข้างานเกินจำนวนในใบเสนอราคา v469";
 
 function SetupNotice() {
   return (
@@ -495,7 +495,13 @@ export default function App() {
             const items = po.items
               .map((it) => ({ code: it.material_code, qty: Math.max(0, (Number(it.qty) || 0) - (Number(got[it.material_code]) || 0)), price: it.price, unit: it.unit || null }))
               .filter((it) => it.qty > 0.0001);
-            setPurchasePrefill({ poNo: po.po_no, quoteNo: po.quote_no || null, items: items.length ? items : po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) });
+            // รายการตามใบเสนอราคา — หน้ารับของใช้เตือนเมื่อซื้อเผื่อเกินจำนวนที่งานต้องใช้
+            // (ส่งเป็นหน่วยที่ขายลูกค้า หน้ารับของจะแปลงเป็นหน่วยหลักเอง — App.jsx ไม่มีตารางสินค้า)
+            const qi = po.quote_no ? await getQuoteItems(po.quote_no).catch(() => []) : [];
+            setPurchasePrefill({ poNo: po.po_no, quoteNo: po.quote_no || null,
+              quoteItems: (qi || []).filter((x) => x.item_code).map((x) => ({ code: x.item_code, qty: Number(x.qty) || 0, unit: x.unit || null })),
+              receivedQty: got,
+              items: items.length ? items : po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) });
             go("movements");
           }} />}
         {view === "tools" && <Tools role={role} me={profile} />}

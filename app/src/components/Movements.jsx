@@ -162,6 +162,9 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   // สินค้าที่สั่งเป็น "หน่วยซื้อ" (เช่น ม้วน) → แปลงเข้าสต๊อกเป็นหน่วยหลัก: จำนวน ×แฟกเตอร์ · ราคา/หน่วย ÷แฟกเตอร์
   // PO ที่อ้างใบเสนอราคา → จำงานปลายทางไว้ เพื่อบันทึก "เบิกเข้างาน" ต่อท้ายการซื้อเข้าอัตโนมัติ (ต้นทุนจริงเข้างาน)
   const [poLines0, setPoLines0] = React.useState(null); // รายการตามใบสั่งซื้อ (หน่วยหลัก) — ไว้เทียบว่ารับครบ/บางส่วน
+  const [quoteQty, setQuoteQty] = React.useState(null);  // จำนวนตามใบเสนอราคา (หน่วยหลัก) ต่อรหัส — ไว้เตือนเมื่อซื้อเผื่อเกินงาน
+  const [poGot, setPoGot] = React.useState(null);        // ยอดที่รับไปแล้วรอบก่อน ๆ — ต้องรวมด้วยตอนเทียบกับใบเสนอราคา
+  const [jobQty, setJobQty] = React.useState({});        // จำนวนที่จะเบิกเข้างานต่อรหัส (หน่วยหลัก) · ไม่กรอก = เข้างานเต็มจำนวนที่รับ
   React.useEffect(() => {
     if (!prefill || !prefill.items?.length || !mats.length) return;
     setType("purchase");
@@ -179,6 +182,18 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     });
     setLines(mapped);
     setPoLines0(mapped.map((l) => ({ code: l.code, qty: l.qty })));   // ยอดสั่งตามใบ (หน่วยหลัก)
+    setJobQty({});
+    setPoGot(prefill.receivedQty || null);
+    // จำนวนตามใบเสนอราคา — ⚠️ ต้องแปลงด้วย unitFactor ก่อนเทียบ: สต๊อก/ต้นทุนเป็นหน่วยหลักเสมอ
+    // แต่ quotation_items.unit เป็นหน่วยที่ขายลูกค้า (ม้วน/เส้น) เทียบเลขดิบจะเตือนผิดทุกใบสองหน่วย
+    if (prefill.quoteItems?.length) {
+      const qm = {};
+      prefill.quoteItems.forEach((p) => {
+        const m = matMap[p.code];
+        qm[p.code] = (qm[p.code] || 0) + (Number(p.qty) || 0) * unitFactor(m, p.unit || m?.unit);
+      });
+      setQuoteQty(qm);
+    } else setQuoteQty(null);
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats, jobOrders]);
   const printWin = React.useRef(null);
@@ -189,7 +204,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   }, [printData]);
 
   function flash(msg, bad) { setToast({ msg, bad }); setTimeout(() => setToast(null), 2800); }
-  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); setReceiveJob(null); setPrepNo(null); setPoLines0(null); setTxnDate(new Date().toISOString().slice(0, 10)); }
+  function changeType(t) { setType(t); setLines([]); setSelJob(""); setQtyByCode({}); setJobNo(""); setReceivePo(null); setReceiveJob(null); setPrepNo(null); setPoLines0(null); setQuoteQty(null); setJobQty({}); setPoGot(null); setTxnDate(new Date().toISOString().slice(0, 10)); }
 
   // ----- cart helpers -----
   // สินค้า 2 หน่วย: บรรทัดถือ l.unit (เมตร/ม้วน) · สต๊อก/ต้นทุนคิดเป็นหน่วยหลักเสมอ (แปลงด้วย unitFactor)
@@ -238,6 +253,13 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     setQtyModal(null);
   }
   const removeLine = (l) => setLines((ls) => ls.filter((x) => !(x.code === l.code && x.unit === l.unit)));
+  // จำนวนที่จะเบิกเข้างานจริงของบรรทัดนั้น (หน่วยหลัก) — ไม่กรอก = เต็มจำนวนที่รับ
+  // clamp 0..baseQty เสมอ: กรอกเกินจำนวนที่รับ = เบิกเกินของที่เพิ่งเข้า สต๊อกติดลบทันที
+  const jobEffOf = (code, baseQty) => {
+    const v = jobQty[code];
+    if (v === undefined || v === "") return baseQty;
+    return Math.min(Math.max(0, Number(v) || 0), baseQty);
+  };
   const cartValid = lines.length > 0 && (type === "purchase" || type === "damage" || team);
 
   async function submitCart() {
@@ -262,6 +284,21 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
       const overRecv = Object.entries(cur).some(([c, q]) => q > (orig[c] || 0) + 0.001);
       if (!fullReceive && !await confirmDialog("จำนวนที่รับไม่ครบตามใบสั่งซื้อ\n\n· ยืนยัน = รับบางส่วน — ใบยังค้างสถานะ \"รอรับของ\" ไว้กดรับส่วนที่เหลือทีหลัง\n· ยกเลิก = กลับไปแก้จำนวน")) return;
       if (overRecv && !await confirmDialog("⚠️ มีรายการที่รับ \"เกิน\" จำนวนในใบสั่งซื้อ — ยืนยันบันทึกตามนี้?")) return;
+    }
+    // เตือนเมื่อ "จำนวนที่จะเบิกเข้างาน" เกินจำนวนที่งานนั้นต้องใช้ตามใบเสนอราคา
+    // ⚠️ เทียบเป็นหน่วยหลักเท่านั้น (quoteQty แปลงด้วย unitFactor ตอนรับ prefill มาแล้ว)
+    //    ถ้าเทียบเลขดิบจะได้ "ซื้อ 30 vs ใบเสนอ 2" ในสินค้าสองหน่วย แล้วเตือนผิดทุกใบจนคนกดผ่านโดยไม่อ่าน
+    // ⚠️ เตือนเฉพาะรหัสที่ "มีอยู่ในใบเสนอราคา" — ของสิ้นเปลืองที่ซื้อพ่วงไม่มีในใบเสนอ ถ้าเตือนด้วยจะเตือนทุกใบ
+    if (type === "purchase" && receivePo && receiveJob?.job_no && quoteQty) {
+      const got = poGot || {};
+      const over = norm
+        .filter((l) => quoteQty[l.code] != null)
+        .map((l) => ({ code: l.code, use: (Number(got[l.code]) || 0) + jobEffOf(l.code, l.qty), need: quoteQty[l.code] }))
+        .filter((x) => x.use > x.need + 0.001);
+      if (over.length && !await confirmDialog(
+        `⚠️ เบิกเข้างานเกินจำนวนในใบเสนอราคา ${over.length} รายการ:\n` +
+        over.slice(0, 6).map((x) => `· ${matMap[x.code]?.th || x.code} — เข้างานรวม ${fmtNum(x.use)} ${matMap[x.code]?.unit || ""} · ใบเสนอราคา ${fmtNum(x.need)} (เกิน ${fmtNum(R2(x.use - x.need))})`).join("\n") +
+        `\n\nถ้าเป็นของซื้อเผื่อ ให้ลดช่อง "เข้างาน" ของบรรทัดนั้น ส่วนที่เหลือจะค้างเป็นสต๊อกกลาง\n\nยืนยันบันทึกตามนี้?`)) return;
     }
     setBusy(true);
     let claimedPo = false;
@@ -296,12 +333,15 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
         }
         if (receivePo && receiveJob?.job_no) {
           // PO อ้างใบเสนอราคา → เบิกออกเข้างานนั้นทันทีด้วย "ราคาซื้อจริง" (ต้นทุนจริงของออเดอร์เข้ากำไรงาน · สต๊อกไม่ค้าง)
-          await recordTransactions(norm.map((l) => ({
+          // เบิกเข้างานตามช่อง "เข้างาน" ของแต่ละบรรทัด (ค่าเริ่มต้น = เต็มจำนวนที่รับ)
+          // ส่วนที่เหลือค้างเป็นสต๊อกกลาง — ของซื้อเผื่อจะได้ไม่หายจากคลังไปกับงาน
+          const jobRows = norm.map((l) => ({
             type: "withdraw", job_no: receiveJob.job_no, team: receiveJob.team,
-            material_code: l.code, qty: l.qty, unit_cost: l.unitCost, txn_date: txnDate || undefined,
+            material_code: l.code, qty: jobEffOf(l.code, l.qty), unit_cost: l.unitCost, txn_date: txnDate || undefined,
             po_no: receivePo,     // ตราใบสั่งซื้อ (ไว้ค้นหา/รายงาน)
             twin_ref: buyRef,     // ผูกกับชุดรับของ "รอบนี้" — ยกเลิกรอบไหนลบเฉพาะคู่ของรอบนั้น (mig 155)
-          })));
+          })).filter((r) => r.qty > 0.0001);
+          if (jobRows.length) await recordTransactions(jobRows);
         }
         if (receivePo && fullReceive) setReceivePo(null);
       }
@@ -506,7 +546,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                   <label className="fld"><span>เลขใบสั่งซื้อ (PO)</span>
                     <input className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)} placeholder="เช่น PO-260610-01" />
                     {receivePo && (receiveJob?.job_no
-                      ? <span className="jo-dim" style={{ marginTop: 4, color: "#0a6b3d", fontWeight: 600 }}>✅ ยืนยันแล้วระบบจะ “เบิกเข้างาน {receiveJob.job_no}” ให้อัตโนมัติ ด้วยราคาซื้อจริง (PO ผูกใบเสนอราคา)</span>
+                      ? <span className="jo-dim" style={{ marginTop: 4, color: "#0a6b3d", fontWeight: 600 }}>✅ ยืนยันแล้วระบบจะ “เบิกเข้างาน {receiveJob.job_no}” ให้อัตโนมัติ ด้วยราคาซื้อจริง — ตามช่อง “เข้างาน” ของแต่ละบรรทัด (ค่าเริ่มต้น = เต็มจำนวนที่รับ) ส่วนที่เหลือค้างเป็นสต๊อกกลาง</span>
                       : <span className="jo-dim" style={{ marginTop: 4 }}>รับตามใบสั่งซื้อ {receivePo} · เข้าสต๊อกอย่างเดียว (PO ไม่ได้ผูกใบเสนอราคา หรือยังไม่มีใบงาน)</span>)}
                   </label>
                 )}
@@ -584,7 +624,26 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                     <div className="line-row" key={l.code + "|" + (l.unit || "")}>
                       <MaterialThumb mat={l.m} size={32} radius={8} />
                       <div className="line-info"><div className="line-name">{l.m?.th}</div>
-                        <div className="line-sub">{l.qty} {lineUnit(l, l.m)}{l.f > 1 ? ` (= ${fmtNum(l.baseQty)} ${l.m?.unit})` : ""}{type === "purchase" ? ` × ${fmtBaht(l.unitPrice)}` : ""} · {fmtBaht(l.value)}</div></div>
+                        <div className="line-sub">{l.qty} {lineUnit(l, l.m)}{l.f > 1 ? ` (= ${fmtNum(l.baseQty)} ${l.m?.unit})` : ""}{type === "purchase" ? ` × ${fmtBaht(l.unitPrice)}` : ""} · {fmtBaht(l.value)}</div>
+                        {/* รับของเข้างาน: ระบุได้ว่าเข้างานเท่าไร ที่เหลือค้างเป็นสต๊อกกลาง
+                            ค่าเริ่มต้น = เต็มจำนวนที่รับ (เท่าพฤติกรรมเดิม) — ของซื้อเผื่อค่อยลดเอง */}
+                        {type === "purchase" && receivePo && receiveJob?.job_no && (
+                          <div className="line-sub" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                            <span>เข้างาน</span>
+                            <input className="inp" type="number" min="0" max={l.baseQty} step="any" style={{ width: 84, padding: "2px 6px", height: 26 }}
+                              value={jobQty[l.code] ?? l.baseQty}
+                              onChange={(e) => setJobQty((s) => ({ ...s, [l.code]: e.target.value }))} />
+                            <span>{l.m?.unit}</span>
+                            {(() => {
+                              const eff = jobEffOf(l.code, l.baseQty);
+                              const left = R2(l.baseQty - eff);
+                              return (<>
+                                {quoteQty?.[l.code] != null && <span style={{ color: "var(--ink-3)" }}>· ใบเสนอราคา {fmtNum(quoteQty[l.code])} {l.m?.unit}</span>}
+                                {left > 0.0001 && <span style={{ color: "#d97706", fontWeight: 600 }}>· เหลือเข้าสต๊อก {fmtNum(left)} {l.m?.unit}</span>}
+                              </>);
+                            })()}
+                          </div>
+                        )}</div>
                       <span className="line-dir" style={{ color: T.color }}>{T.dir > 0 ? "+" : "−"}{l.qty} {l.f > 1 ? lineUnit(l, l.m) : ""}</span>
                       <button className="line-x" onClick={() => removeLine(l)}><UIcon name="x" size={14} /></button>
                     </div>
