@@ -2245,13 +2245,31 @@ export async function saveJobOrder(jo, author) {
       .filter((v) => v.visit_date)
       .map((v) => {
         const untouched = v.id && v._orig != null && v._orig === (v.status || "scheduled");
-        return { job_no: jo.job_no, visit_date: v.visit_date, end_date: v.end_date || null, slot: v.slot || null, scheduled_at: v.scheduled_at || null, assigned_team: v.assigned_team || null,
+        // พก id เดิมไว้ให้ขั้นบันทึกแยกออกว่าแถวไหน update แถวไหน insert
+        // (ห้ามส่ง id ไปกับ insert — job_visits.id เป็น generated always identity ต้องถอดออกก่อนเสมอ)
+        return { id: v.id || null, job_no: jo.job_no, visit_date: v.visit_date, end_date: v.end_date || null, slot: v.slot || null, scheduled_at: v.scheduled_at || null, assigned_team: v.assigned_team || null,
           status: (untouched && freshStat[v.id]) || v.status || "scheduled", note: v.note || null, created_by: user?.id || null };
       });
   }
-  // สถานะหัวใบ: มีรอบ → คำนวณจากสถานะรอบ (สด) · คง "รอทำใบเสนอราคา" เมื่อรอบเสร็จหมด (เดิมโดนบันทึกทับกลับเป็น "เสร็จ" หลุดคิวทำใบเสนอ)
-  const headStatus = visitRows && visitRows.length
-    ? (((jo.status === "quote_pending" || curHead?.status === "quote_pending") && visitRows.every((v) => v.status === "done" || v.status === "cancelled")) ? "quote_pending" : deriveJobStatus(visitRows))
+  // แยกว่าแถวไหนแก้ของเดิม แถวไหนเพิ่มใหม่ แถวไหนผู้ใช้เอาออก
+  // ⚠️ ต้องเทียบ "รอบที่มีตอนเปิดฟอร์ม" (visitIdsLoaded) ไม่ใช่เทียบกับ DB สด
+  //    ไม่งั้นรอบที่เครื่องอื่นเพิ่งเพิ่มระหว่างที่ฟอร์มเปิดค้าง จะถูกมองว่า "ผู้ใช้ลบ" แล้วโดนลบทิ้ง
+  let vKeep = [], vFresh = [], vGone = [], vFinal = null;
+  if (visitRows) {
+    const byId = Object.fromEntries(backup.map((v) => [String(v.id), v]));
+    vKeep = visitRows.filter((v) => v.id && byId[String(v.id)]);
+    vFresh = visitRows.filter((v) => !(v.id && byId[String(v.id)]));
+    const loaded = Array.isArray(jo.visitIdsLoaded) ? jo.visitIdsLoaded.map(String) : backup.map((v) => String(v.id));
+    const stay = new Set(vKeep.map((v) => String(v.id)));
+    vGone = loaded.filter((id) => byId[id] && !stay.has(id));
+    const goneSet = new Set(vGone);
+    const otherAdded = backup.filter((v) => !stay.has(String(v.id)) && !goneSet.has(String(v.id)));
+    vFinal = [...visitRows, ...otherAdded];   // ชุดรอบที่จะเป็นจริงหลังบันทึก
+  }
+  // สถานะหัวใบ: มีรอบ → คำนวณจาก "ชุดรอบหลังบันทึก" (รวมรอบที่เครื่องอื่นเพิ่มไว้)
+  // คง "รอทำใบเสนอราคา" เมื่อรอบเสร็จหมด (เดิมโดนบันทึกทับกลับเป็น "เสร็จ" หลุดคิวทำใบเสนอ)
+  const headStatus = vFinal && vFinal.length
+    ? (((jo.status === "quote_pending" || curHead?.status === "quote_pending") && vFinal.every((v) => v.status === "done" || v.status === "cancelled")) ? "quote_pending" : deriveJobStatus(vFinal))
     : (jo.status || "pending");
   const jHead = {
     job_no: jo.job_no, group_no: jo.group_no || null, quote_no: jo.quote_no || null, customer_id: jo.customer_id || null, site_id: jo.site_id || null,
@@ -2268,21 +2286,22 @@ export async function saveJobOrder(jo, author) {
   let { error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" });
   if (error && /issue_date/i.test(error.message || "")) { delete jHead.issue_date; ({ error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" })); } // pre-119 fallback
   if (error) throw error;
-  // replace this job's visits (job_visits) when provided
+  // บันทึกรอบเข้างาน — แก้ของเดิมคง id ไว้ ห้ามลบทิ้งแล้วสร้างใหม่
+  // id ของรอบคือสิ่งที่มือถือช่างถืออยู่ ถ้าเปลี่ยนทุกครั้งที่ออฟฟิศกดบันทึก ช่างที่เปิดหน้าค้างจะกดอัปเดตไม่ได้
+  // ลำดับสำคัญ: แก้ → เพิ่ม → ลบ (ลบท้ายสุด) พังกลางทางแล้วจะ "มีรอบเกิน" ซึ่งแก้ตามได้ ดีกว่า "รอบหาย"
   if (visitRows) {
-    const d = await supabase.from("job_visits").delete().eq("job_no", jo.job_no);
-    if (d.error) throw d.error;   // ลบไม่ผ่าน (RLS/เน็ต) ห้ามฝืน insert ต่อ — เดิมได้รอบซ้ำ
-    if (visitRows.length) {
-      const e2 = (await supabase.from("job_visits").insert(visitRows)).error;
-      if (e2) {
-        // insert พังหลังลบสำเร็จ (เน็ตสะดุด/ติด constraint) — กู้รอบเดิมกลับก่อน แล้วค่อยรายงาน error (เดิมรอบหายทั้งใบ)
-        // ต้องถอด id ออก: job_visits.id เป็น generated always — insert พร้อม id โดน Postgres ปัดตกทุกแถว
-        if (backup.length) {
-          const r = await supabase.from("job_visits").insert(backup.map(({ id: _id, ...rest }) => rest));
-          if (r.error) e2.message = (e2.message || "") + ` · ⚠️ กู้รอบเดิมคืนไม่สำเร็จ (${r.error.message}) — เปิดใบงานนี้ตรวจรอบนัดด่วน`;
-        }
-        throw e2;
-      }
+    for (const v of vKeep) {
+      const { id, job_no: _j, created_by: _c, ...fields } = v;   // ไม่แตะ created_by ของแถวเดิม
+      const { error: eU } = await supabase.from("job_visits").update(fields).eq("id", id).eq("job_no", jo.job_no);
+      if (eU) throw eU;
+    }
+    if (vFresh.length) {
+      const { error: eI } = await supabase.from("job_visits").insert(vFresh.map(({ id: _id, ...rest }) => rest));
+      if (eI) throw eI;
+    }
+    if (vGone.length) {
+      const { error: eD } = await supabase.from("job_visits").delete().in("id", vGone).eq("job_no", jo.job_no);
+      if (eD) throw eD;
     }
   }
   // audit trail: record who created/edited the job (best-effort)

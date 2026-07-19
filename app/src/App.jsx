@@ -102,7 +102,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·กลาง 17,18: ปิดงานแล้วเตือนถ้ายังไม่มีใบส่งมอบที่ลูกค้าเซ็น (เตือนอย่างเดียว ยืนยันผ่านได้) + ป้ายบนการ์ดใบงาน · คะแนนงาน/งานเคลม ตั้งได้ทุกทีมจากป๊อปอัปอนุมัติ ไม่ใช่เฉพาะทีมซัพ v467";
+const BUILD = "2026-07-19·กลาง 16: บันทึกใบงานไม่ลบรอบเข้างานทิ้งแล้วสร้างใหม่อีกต่อไป — id รอบคงเดิม มือถือช่างที่เปิดค้างกดอัปเดตได้ · รอบที่เครื่องอื่นเพิ่มระหว่างฟอร์มเปิดค้างไม่ถูกลบ และถูกนับตอนคิดสถานะหัวใบ v468";
 
 function SetupNotice() {
   return (

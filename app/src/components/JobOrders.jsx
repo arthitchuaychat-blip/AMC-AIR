@@ -153,7 +153,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       const p = (n) => String(n).padStart(2, "0");
       visits = [{ assigned_team: jo.assigned_team || "", date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", end_date: jo.end_date || "", slot: jo.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: jo.status || "scheduled" }];
     }
-    setEd({ ...jo, _edit: true, job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "",
+    setEd({ ...jo, _edit: true, _visitIdsLoaded: (jo.visits || []).map((v) => v.id).filter(Boolean), job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "",
       issue_date: jo.issue_date || (jo.created_at || "").slice(0, 10),
       assigned_team: jo.assigned_team || jo.visits?.[0]?.assigned_team || "",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
@@ -242,7 +242,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     const status = visitRows.length ? deriveJobStatus(visitRows) : (ed.status === "quote_pending" ? "quote_pending" : "pending");
     try {
       setSaving(true);
-      await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows }, me);
+      await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows, visitIdsLoaded: ed._visitIdsLoaded || null }, me);
       flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
       setEd(null); await load();
     }
