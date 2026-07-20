@@ -2369,6 +2369,11 @@ export async function saveJobOrder(jo, author) {
   // ใบที่ล็อกปิดไว้ (เช่น อนุมัติแบบ "เสร็จ รอนัดหมายเพิ่ม") พอออฟฟิศตั้งรอบนัดใหม่ → ปลดล็อกให้เอง
   // ไม่งั้นช่างกด "เริ่มทำรอบนี้" แล้วชนการ์ด locked ใน RPC (mig 150) จนกว่าจะมีคนมากดปลดล็อกเอง
   if (curHead?.locked && ["pending", "scheduled", "in_progress"].includes(headStatus)) jHead.locked = false;
+  // ⚠️ ใบเดิม: ห้ามส่ง created_by ไปกับ upsert — ON CONFLICT DO UPDATE เขียนทุกคอลัมน์ที่ส่งไป
+  //    คนที่กด "บันทึกใบงาน" ครั้งล่าสุดจะกลายเป็น "ออกใบงานโดย" แทนคนออกจริง แล้วกู้ไม่ได้
+  //    (created_at ไม่ได้ส่งไปด้วย แถวเลยดูปกติทุกอย่าง ไม่มีอะไรส่อว่าข้อมูลเพี้ยน)
+  //    กติกาเดียวกับรอบเข้างานด้านล่างที่ตัด created_by ออกก่อนแก้แถวเดิม
+  if (curHead) delete jHead.created_by;
   let { error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" });
   if (error && /issue_date/i.test(error.message || "")) { delete jHead.issue_date; ({ error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" })); } // pre-119 fallback
   if (error) throw error;

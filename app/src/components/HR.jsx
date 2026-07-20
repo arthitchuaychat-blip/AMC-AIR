@@ -943,7 +943,13 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     dSso: Number(s.d_sso) || 0, dTax: Number(s.d_tax) || 0, dAdvance: Number(s.d_advance) || 0, advanceCarry: 0,
     bonus: Number(s.bonus) || 0, otherDeduct: Number(s.other_deduct) || 0,
     gross: (Number(s.base) || 0) + (Number(s.ot_pay) || 0) + (Number(s.hol_pay) || 0) + (Number(s.bonus) || 0),
-    ded: 0, net: Number(s.net) || 0, _frozen: true,
+    // ⚠️ ห้ามใส่ 0 ตายตัว — เดิม ded: 0 ทำให้สลิปที่จ่ายแล้วพิมพ์ "รวมรายการหัก −฿0.00"
+    //    ทั้งที่บรรทัดหักมาสาย/ขาดงาน/ประกันสังคม/ภาษี ด้านบนมีตัวเลขจริง เลขบนสลิปเลยบวกไม่ลง
+    //    และปุ่มส่งสลิปให้พนักงานทำงานเฉพาะรอบที่จ่ายแล้ว = ทุกใบที่ส่งออกไปถือเลข 0 นี้
+    //    รวมจากรายการหักที่เก็บไว้จริง (ควรเท่ากับ gross − net ของสลิปที่บันทึกถูกต้อง)
+    ded: (Number(s.d_late) || 0) + (Number(s.d_absent) || 0) + (Number(s.d_leave) || 0)
+       + (Number(s.d_sso) || 0) + (Number(s.d_tax) || 0) + (Number(s.d_advance) || 0) + (Number(s.other_deduct) || 0),
+    net: Number(s.net) || 0, _frozen: true,
   });
   const calcOf = (r) => (r.slip?.status === "paid" ? frozen(r.slip)
     : computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0 }, r.st, {}));
@@ -975,7 +981,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         ${line(r.p.pay_type === "daily" ? `ค่าแรง (${r.st.present} วัน)` : "เงินเดือน", c.base)}
         ${line(`ค่าล่วงเวลา OT (${c.otHours.toFixed(1)} ชม.)`, c.otPay)}
-        ${line(`ค่าทำงานวันหยุด (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`, c.holPay)}
+        ${line(c._frozen ? "ค่าทำงานวันหยุด" : `ค่าทำงานวันหยุด (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`, c.holPay)}
         ${line("โบนัส/เบี้ยเลี้ยง", c.bonus)}
         ${line("หักมาสาย", c.dLate, 1)}${line("หักขาดงาน", c.dAbsent, 1)}${line("หักลาเกินโควต้า/ลาไม่รับค่าแรง", c.dLeave, 1)}
         ${line("ประกันสังคม", c.dSso, 1)}${line("ภาษีหัก ณ ที่จ่าย", c.dTax, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
@@ -1172,7 +1178,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
               <tr className="ps-h"><td colSpan={2}>รายได้</td></tr>
               <tr><td>{p.pay_type === "daily" ? `ค่าแรง (${r.st.present} วัน)` : "เงินเดือน"}</td><td className="r">{fmtBaht(c.base)}</td></tr>
               {c.otPay > 0 && <tr><td>ค่าล่วงเวลา OT ({c.otHours.toFixed(1)} ชม.)</td><td className="r">{fmtBaht(c.otPay)}</td></tr>}
-              {c.holPay > 0 && <tr><td>ค่าทำงานวันหยุด ({c.holNormHours} ชม.{c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})</td><td className="r">{fmtBaht(c.holPay)}</td></tr>}
+              {c.holPay > 0 && <tr><td>ค่าทำงานวันหยุด{c._frozen ? "" : ` (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`}</td><td className="r">{fmtBaht(c.holPay)}</td></tr>}
               {c.bonus > 0 && <tr><td>โบนัส/เบี้ยเลี้ยง</td><td className="r">{fmtBaht(c.bonus)}</td></tr>}
               <tr className="ps-sub"><td>รวมรายได้</td><td className="r">{fmtBaht(c.gross)}</td></tr>
               <tr className="ps-h"><td colSpan={2}>รายการหัก</td></tr>

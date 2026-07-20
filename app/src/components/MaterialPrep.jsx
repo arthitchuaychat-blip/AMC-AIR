@@ -1,5 +1,5 @@
 import React from "react";
-import { listMaterialPreps, saveMaterialPrep, setPrepStatus, deleteMaterialPrep, listMaterialsLite, listApprovedQuotesLite, getQuoteItems } from "../lib/api";
+import { listMaterialPreps, saveMaterialPrep, setPrepStatus, deleteMaterialPrep, listMaterialsLite, listMaterials, listApprovedQuotesLite, getQuoteItems } from "../lib/api";
 import { fmtNum, matchText } from "../lib/format";
 import { can } from "../lib/permissions";
 import { confirmDialog } from "./ConfirmDialog";
@@ -44,8 +44,13 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
 
   async function load() {
     try {
-      const [p, m, qs] = await Promise.all([listMaterialPreps(), listMaterialsLite(), listApprovedQuotesLite()]);
-      setList(p); setMats(m); setQuotes(qs);
+      // ⚠️ listMaterialsLite อ่านจากตาราง materials ซึ่งมีแค่ init_stock (ยอดตั้งต้นตอนนำเข้า)
+      //    ยอดคงเหลือจริงอยู่ใน view material_stock → ต้องดึง listMaterials() มาทับด้วยเสมอ
+      //    ไม่งั้น "คงเหลือ" บนหน้านี้คือยอดตั้งต้น และ smartSplit จะดันของเข้า 🛒 สั่งซื้อ ทั้งที่มีของในคลังแล้ว
+      //    (สินค้าที่เข้าคลังด้วยการซื้อ init_stock = 0 = ทุกอย่างกลายเป็นต้องสั่งซื้อใหม่หมด)
+      const [p, lite, qs, full] = await Promise.all([listMaterialPreps(), listMaterialsLite(), listApprovedQuotesLite(), listMaterials()]);
+      const stockByCode = {}; full.forEach((x) => { if (x.code != null) stockByCode[x.code] = x.stock; });
+      setList(p); setMats(lite.map((x) => (x.code in stockByCode ? { ...x, stock: stockByCode[x.code] } : x))); setQuotes(qs);
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e) + " (รัน migration 109 แล้วหรือยัง?)", true); setList([]); }
   }
   React.useEffect(() => { load(); }, []);
