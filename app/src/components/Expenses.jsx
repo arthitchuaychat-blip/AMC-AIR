@@ -83,7 +83,7 @@ export default function Expenses({ role, me, onOpenDoc }) {
         {TABS.map(([v, l]) => <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
           style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
       </div>
-      {tab === "mine" && <MineTab flash={flash} onOpenDoc={openPeek} />}
+      {tab === "mine" && <MineTab role={role} flash={flash} onOpenDoc={openPeek} />}
       {tab === "approve" && office && <ApproveTab flash={flash} onOpenDoc={openPeek} />}
       {tab === "accounts" && office && <AccountsTab flash={flash} />}
       {tab === "report" && office && <ReportTab flash={flash} />}
@@ -170,7 +170,7 @@ const expMatch = (x, q, dateR) =>
   matchText(q, x.title, x.poNo, ...(x.poNos || []), x.customerName, x.requesterName, x.jobNo || x.job_no, x.quoteNo, x.category, x.jobTitle, x.note)
   && inDateRange(x.created_at, dateR);
 
-function MineTab({ flash, onOpenDoc }) {
+function MineTab({ role, flash, onOpenDoc }) {
   const [list, setList] = React.useState(null);
   const [jobs, setJobs] = React.useState([]);
   const [form, setForm] = React.useState(null);

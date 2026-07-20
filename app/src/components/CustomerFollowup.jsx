@@ -38,7 +38,7 @@ function jobServiceDate(j) {
   return String(vd.length ? vd[vd.length - 1] : (j.end_date || j.scheduled_at || j.created_at || "")).slice(0, 10);
 }
 
-export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onCreateJob }) {
+export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpenQuote, onCreateJob }) {
   const [jobs, setJobs] = React.useState(null);
   const [quotes, setQuotes] = React.useState(null);
   const [tab, setTab] = React.useState("service");   // service = รอบบริการ (ของเดิม) · quotes = ใบเสนอราคาค้างตอบ

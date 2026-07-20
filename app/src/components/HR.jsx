@@ -734,7 +734,7 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
       )}
 
       {detail && <PersonDetail row={(rows || []).find((r) => r.p.id === detail.p.id) || detail} days={personDays(detail.p)}
-        otNeeds={!!settings.otNeedsApproval} canManage={canManage} flash={flash} onChanged={load} onClose={() => setDetail(null)} />}
+        otNeeds={!!settings.otNeedsApproval} canManage={canManage} flash={flash} onChanged={run} onClose={() => setDetail(null)} />}
     </div>
   );
 }
