@@ -291,7 +291,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
         <div><h1 className="page-title">BOQ <span className="page-title-en">Bill of Quantities</span></h1><p className="page-sub">{list.length} ใบ · ประมาณการต้นทุนงาน</p></div>
         <div className="cat-head-actions">
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
-            <input placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้าง BOQ</button>}
@@ -301,7 +301,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
         // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรองประเภทงาน (CRM)
         // กรองด้วยวันที่เดียวกับที่การ์ดแสดง (issue_date) ไม่ใช่วันที่สร้างแถว — ใบที่ลงวันที่ย้อนหลัง
         // เคยหลุดช่วงที่เลือกทั้งที่บนการ์ดขึ้นวันที่ในช่วง · ใบเก่าก่อน mig 119 ไม่มี issue_date → ใช้ created_at
-        const fl0 = list.filter((bo) => inDateRange(bo.issue_date || bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title) || matchPhone(search, bo.contactPhone)));
+        const fl0 = list.filter((bo) => inDateRange(bo.issue_date || bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title, bo.note, bo.internal_note) || matchPhone(search, bo.contactPhone)));
         const nType = (v) => fl0.filter((bo) => v === "all" || bo.job_type === v).length;
         const fl = fl0.filter((bo) => typeF === "all" || bo.job_type === typeF);
         return (<>

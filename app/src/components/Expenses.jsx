@@ -298,7 +298,7 @@ function ApproveTab({ flash, onOpenDoc }) {
         ))}
       </div>
       <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
-        <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา ลูกค้า / เลข PO / พนักงานผู้ขอ…" /></div>
+        <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา ลูกค้า / เลข PO / พนักงานผู้ขอ / หมายเหตุ…" /></div>
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
       {list === null && <div className="empty">กำลังโหลด…</div>}
@@ -351,7 +351,7 @@ function PayVendorModal({ onClose, onDone, flash }) {
     return Object.entries(m).sort((a, b) => b[1].sum - a[1].sum);
   }, [pos]);
   const list = (pos || []).filter((x) => supName(x) === sup
-    && matchText(q2, x.po_no, x.quote_no, x.customerName, x.jobNo, x.teamName));
+    && matchText(q2, x.po_no, x.quote_no, x.customerName, x.jobNo, x.teamName, x.note, x.internal_note));
   const chosen = list.filter((x) => sel[x.po_no]);
   const total = chosen.reduce((a, x) => a + (Number(x.total) || 0), 0);
   const allOn = list.length > 0 && chosen.length === list.length;

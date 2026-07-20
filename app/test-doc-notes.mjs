@@ -61,5 +61,20 @@ for (const [th, f] of DOCS) {
     seeds.length === 0 ? "ไม่เจอ state ใบใหม่ — โครงไฟล์เปลี่ยนไปแล้ว ตรวจตัวนี้ใหม่" : `${seeds.filter((x) => !/internal_note:/.test(x)).length} จุดขาด internal_note`);
 }
 
+// 5) ช่องค้นหาของทุกหน้าเอกสารต้องค้นหมายเหตุได้ — ไม่งั้นเขียนโน้ตไว้แล้วหาไม่เจอ
+//    (เจ้าของใช้หมายเหตุภายในเก็บเลขอ้างอิงของซัพฯ แล้วต้องค้นกลับ)
+const SEARCHABLE = [
+  ["BOQ", "BOQ.jsx", "bo"], ["ใบเสนอราคา", "Quotation.jsx", "q"], ["ใบส่งของ/ใบแจ้งหนี้", "Invoices.jsx", "x"],
+  ["ใบวางบิล", "BillingNotes.jsx", "b"], ["ใบเสร็จ", "Receipts.jsx", "x"], ["ใบสั่งซื้อ", "PurchaseOrders.jsx", "po"],
+];
+for (const [th, f, v] of SEARCHABLE) {
+  const s = read("src/components/" + f);
+  const line = s.split("\n").find((l) => /matchText\((?:search|q),/.test(l) && new RegExp(`${v}\\.(?:boq_no|quote_no|invoice_no|billing_no|receipt_no|po_no)`).test(l)) || "";
+  check(`${th}: ช่องค้นหาค้นหมายเหตุได้`,
+    line.includes(`${v}.note`) && line.includes(`${v}.internal_note`),
+    !line ? "หาบรรทัดตัวกรองไม่เจอ — โครงไฟล์เปลี่ยน ตรวจตัวนี้ใหม่"
+      : `ขาด ${[!line.includes(`${v}.note`) && "note", !line.includes(`${v}.internal_note`) && "internal_note"].filter(Boolean).join(" + ")}`);
+}
+
 console.log(`\nสรุป: ผ่าน ${pass} · ตก ${fail}`);
 process.exit(fail ? 1 : 0);

@@ -296,7 +296,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const notFullyBilled = (x) => { const q = quoteByNo[x.quote_no]; const grand = q?.grand || 0; return grand > 0 && round2((billed[x.quote_no] || 0)) < round2(grand) - 0.01; };
   // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรอง
   const fl0 = list.filter((x) => inDateRange(x.issue_date, dateR)
-    && (matchText(search, x.invoice_no, x.customerName, x.quote_no, x.createdByName) || matchPhone(search, x.contactPhone)));
+    && (matchText(search, x.invoice_no, x.customerName, x.quote_no, x.createdByName, x.note, x.internal_note) || matchPhone(search, x.contactPhone)));
   const nStatus = (v) => fl0.filter((x) => v === "all" || x.status === v).length;
   const nVat = (v) => fl0.filter((x) => v === "all" || (v === "vat" ? invVat(x) : !invVat(x))).length;
   const nBillInc = fl0.filter(notFullyBilled).length;
@@ -314,7 +314,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         <div><h1 className="page-title">ใบส่งของ/ใบแจ้งหนี้ <span className="page-title-en">Delivery / Invoice</span></h1><p className="page-sub">{list.length} ใบ · แบ่งงวดจากใบเสนอราคา · กดรับเงินออกใบเสร็จได้เลย</p></div>
         <div className="cat-head-actions">
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
-            <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบเสนอ" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบเสนอ / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบส่งของ/ใบแจ้งหนี้</button>}

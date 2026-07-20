@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -528,12 +528,31 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const selContact = contacts.find((c) => c.line_user_id === sel);
   // resolve a quoted message by its LINE id (to render the referenced message inside a reply)
   const byLineId = React.useMemo(() => { const m = {}; msgs.forEach((x) => { if (x.line_message_id) m[x.line_message_id] = x; }); return m; }, [msgs]);
+
+  // ค้นข้อความในประวัติแชต — จอโหลดมาแค่ข้อความท้าย ๆ ของห้องที่เปิดอยู่ จึงต้องถามเซิร์ฟเวอร์
+  // หน่วง 300ms กันยิง query ทุกตัวอักษร · ทิ้งผลที่กลับมาช้ากว่าคำค้นล่าสุด (กันผลเก่าทับผลใหม่)
+  const [msgHits, setMsgHits] = React.useState({});
+  const [searching, setSearching] = React.useState(false);
+  React.useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) { setMsgHits({}); setSearching(false); return; }
+    let dropped = false;
+    setSearching(true);
+    const t = setTimeout(() => {
+      searchLineMessages(term)
+        .then((hits) => { if (!dropped) setMsgHits(hits || {}); })
+        .catch(() => { if (!dropped) setMsgHits({}); })
+        .finally(() => { if (!dropped) setSearching(false); });
+    }, 300);
+    return () => { dropped = true; clearTimeout(t); };
+  }, [q]);
   const shown = contacts.filter((c) =>
     (stageF === "all" || (c.stage || "new") === stageF)
     && (!mineOnly || c.assigned_to === myId)
     // แท็บซัพ = เฉพาะผู้ติดต่อที่ติดป้ายซัพพลายเออร์ · แท็บ LINE ลูกค้า = ที่เหลือ (FB ไม่มีป้าย)
     && (isFb ? true : isSup ? c.kind === "supplier" : (c.kind || "customer") !== "supplier")
-    && (matchText(q, c.display_name, c.customerName, c.last_message) || matchPhone(q, c.phone)))
+    // ชื่อ/ลูกค้าที่ผูก/ข้อความล่าสุด/เบอร์ — หรือเจอคำนี้ในประวัติแชตของห้องนั้น (ค้นจากเซิร์ฟเวอร์)
+    && (matchText(q, c.display_name, c.customerName, c.last_message) || matchPhone(q, c.phone) || !!msgHits[c.line_user_id]))
     // ห้องที่ยังไม่อ่านลอยขึ้นบนสุดเสมอ · ที่เหลือเรียงตามข้อความล่าสุด
     .sort((a, b) => {
       const au = (a.unread || 0) > 0 ? 1 : 0, bu = (b.unread || 0) > 0 ? 1 : 0;
@@ -579,7 +598,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             </button>
           </div>
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
-            <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า / ข้อความในแชต" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className="chat-listfilter">
             <Combo className="inp" value={stageF} onChange={(e) => setStageF(e.target.value)}>
@@ -588,7 +607,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             <button className={"chat-mine" + (mineOnly ? " on" : "")} onClick={() => setMineOnly((v) => !v)} title="เฉพาะที่ฉันรับผิดชอบ">👤 ของฉัน</button>
           </div>
           <div className="chat-convos">
-            {shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ไม่พบผู้ติดต่อตามเงื่อนไข</div>}
+            {searching && <div className="empty" style={{ fontSize: 13 }}>กำลังค้นข้อความในแชต…</div>}
+            {!searching && shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ไม่พบผู้ติดต่อตามเงื่อนไข{q.trim().length === 1 ? " — พิมพ์อย่างน้อย 2 ตัวอักษรเพื่อค้นข้อความในแชต" : ""}</div>}
             {shown.map((c) => {
               const sd = stageDef(c.stage);
               return (
@@ -596,7 +616,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                 <div className="chat-av">{c.picture_url ? <img src={c.picture_url} alt="" /> : initial(c.display_name)}</div>
                 <div className="chat-convo-body">
                   <div className="chat-convo-top"><b>{c.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</b><span title={c.last_message_at ? new Date(c.last_message_at).toLocaleString("th-TH") : ""}>{fmtWhen(c.last_message_at)}</span></div>
-                  <div className="chat-convo-last">{c.last_message || "—"}</div>
+                  {/* เจอคำค้นในประวัติแชต → โชว์ข้อความที่ตรงแทนข้อความล่าสุด จะได้รู้ว่าเจอเพราะอะไร */}
+                  {msgHits[c.line_user_id]
+                    ? <div className="chat-convo-last chat-convo-hit" title={msgHits[c.line_user_id].text || ""}>
+                        <span className="chat-hit-tag">🔎 {msgHits[c.line_user_id].direction === "out" ? "เราตอบ" : "ลูกค้า"}</span>{" "}
+                        {msgHits[c.line_user_id].text || ""}
+                      </div>
+                    : <div className="chat-convo-last">{c.last_message || "—"}</div>}
                   <div className="chat-convo-tags">
                     <span className="conv-stage" style={{ background: sd.color }}>{sd.label}</span>
                     {c.customerName && <span className="chat-link-chip">🔗 {c.customerName}</span>}

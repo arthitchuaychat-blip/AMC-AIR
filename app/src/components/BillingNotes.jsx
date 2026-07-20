@@ -75,7 +75,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
           <p className="page-sub">รวมใบแจ้งหนี้ค้างชำระของลูกค้ารายเดียวกัน → ส่งวางบิล → ออกใบเสร็จต่อทีละใบแจ้งหนี้</p></div>
         <div className="cat-head-actions">
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
-            <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบแจ้งหนี้" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบแจ้งหนี้ / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
           {canEdit && <button className="btn-primary" onClick={() => setEd({ billing_no: genNo(), customer_id: "", issue_date: today(), note: "", internal_note: "", sign_on: defaultSignOn(), sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
@@ -85,7 +85,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
       {(() => {
         // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรองและกรองแสดงผล
         const fl0 = list.filter((b) => inDateRange(b.issue_date, dateR)
-          && (matchText(search, b.billing_no, b.customerName, ...(b.invoice_nos || [])) || matchPhone(search, b.contactPhone)));
+          && (matchText(search, b.billing_no, b.customerName, ...(b.invoice_nos || []), b.note, b.internal_note) || matchPhone(search, b.contactPhone)));
         const stPred = (b, v) => v === "all" ? true
           : v === "unpaid" ? (b.status !== "cancelled" && b.invoices.some((iv) => iv.status === "unpaid"))
           : bnStatus(b) === v;

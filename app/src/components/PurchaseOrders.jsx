@@ -88,7 +88,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   // base หลังค้นหา+วันที่ — ใช้นับจำนวนบนชิปตัวกรอง
   // กรองด้วยวันที่เดียวกับที่การ์ดแสดง (issue_date) ไม่ใช่วันที่สร้างแถว — ใบลงวันที่ย้อนหลังเคยหลุดช่วงที่เลือก
   const fl0 = pos.filter((po) => inDateRange(po.issue_date || po.created_at, dateR)
-    && (matchText(q, po.po_no, po.supplier, po.note, po.quote_no, po.customerName, po.jobNo, po.teamName) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
+    && (matchText(q, po.po_no, po.supplier, po.note, po.internal_note, po.quote_no, po.customerName, po.jobNo, po.teamName) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
   const [vatF, setVatF] = React.useState("all");   // งาน VAT / NOVAT (ตามธง vat ของใบ)
   const isVatMatch = (po, v) => v === "all" || (v === "vat" ? !!po.vat : !po.vat);
   const nStatus = (v) => fl0.filter((po) => v === "all" || po.status === v).length;
@@ -376,7 +376,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
         </div>
         <div className="cat-search">
           <UIcon name="search" size={17} color="var(--ink-3)" />
-          <input placeholder="ค้นหาเลข PO / ร้าน / วัสดุ" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input placeholder="ค้นหาเลข PO / ร้าน / วัสดุ / หมายเหตุ" value={q} onChange={(e) => setQ(e.target.value)} />
           {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
         </div>
       </div>

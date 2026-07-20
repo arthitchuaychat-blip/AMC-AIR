@@ -3670,6 +3670,25 @@ export async function listLineMessages(uid, { limit = CHAT_TAIL, before } = {}) 
   return (data || []).reverse();
 }
 
+// ค้นข้อความในแชตทุกห้อง (ไม่ใช่แค่บรรทัดล่าสุดที่โหลดมาแล้ว) — คืน "ห้องที่เจอ + ข้อความที่ตรง"
+// ต้องค้นฝั่งเซิร์ฟเวอร์: ห้องหนึ่งเก็บได้เป็นหมื่นข้อความ แต่จอโหลดมาแค่ CHAT_TAIL ล่าสุด
+export async function searchLineMessages(term, { limit = 300 } = {}) {
+  const t = String(term || "").trim();
+  if (t.length < 2) return {};                       // 1 ตัวอักษรจับได้เกือบทุกห้อง ไม่มีประโยชน์ + หนักฐานข้อมูล
+  // ⚠️ ต้อง escape % _ \ ก่อนยัดเข้า ilike — ลูกค้าพิมพ์ "50%" แล้ว % กลายเป็น wildcard จับมาทั้งตาราง
+  const esc = t.replace(/[\\%_]/g, (m) => "\\" + m);
+  const { data, error } = await supabase.from("line_messages")
+    .select("line_user_id,text,created_at,direction")
+    .ilike("text", `%${esc}%`)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  // เก็บข้อความล่าสุดที่ตรงของแต่ละห้อง (เรียงใหม่→เก่ามาแล้ว ตัวแรกที่เจอคือล่าสุด)
+  const byRoom = {};
+  (data || []).forEach((m) => { if (!byRoom[m.line_user_id]) byRoom[m.line_user_id] = m; });
+  return byRoom;
+}
+
 export async function linkLineContact(uid, customerId) {
   const { error } = await supabase.from("line_contacts").update({ customer_id: customerId || null }).eq("line_user_id", uid);
   if (error) throw error;

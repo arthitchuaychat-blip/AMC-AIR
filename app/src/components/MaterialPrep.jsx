@@ -257,7 +257,7 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
   const wdItems = (p) => (p.items || []).filter((it) => Number(it.qty_withdraw) > 0);
 
   const shown = (list || []).filter((p) => (statusF === "all" || p.status === statusF)
-    && matchText(q, p.prep_no, p.quote_no, p.title, p.customerName, p.jobNo, p.teamName));
+    && matchText(q, p.prep_no, p.quote_no, p.title, p.customerName, p.jobNo, p.teamName, p.note));
 
   if (ed) {
     const totBuy = ed.items.reduce((a, x) => a + x.qty_buy, 0), totWd = ed.items.reduce((a, x) => a + x.qty_withdraw, 0);
@@ -350,7 +350,7 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
         <div className="cat-head-actions">
           <div className="cat-search" style={{ maxWidth: 300 }}>
             <UIcon name="search" size={16} color="var(--ink-3)" />
-            <input placeholder="ค้นหา เลขใบ / ลูกค้า / งาน" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input placeholder="ค้นหา เลขใบ / ลูกค้า / งาน / หมายเหตุ" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> สร้างใบเตรียมวัสดุ</button>}
         </div>

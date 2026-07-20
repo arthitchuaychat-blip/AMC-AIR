@@ -394,7 +394,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   // ---------- LIST ----------
   // base หลังค้นหา+ช่วงวันที่ — ใช้ทั้งนับจำนวนบนชิปตัวกรองและกรองแสดงผล
   const fl0 = list.filter((q) => inDateRange(q.issue_date, dateR)
-    && (matchText(search, q.quote_no, q.customerName, q.contactName, q.title, q.boq_no) || matchPhone(search, q.contactPhone)));
+    && (matchText(search, q.quote_no, q.customerName, q.contactName, q.title, q.boq_no, q.note, q.internal_note) || matchPhone(search, q.contactPhone)));
   const hasAc = (q) => (q.items || []).some((it) => it.kind === "ac");
   const noAcPo = (q) => hasAc(q) && q.status !== "cancelled" && !(docLinks.byQuote[q.quote_no]?.poNos || []).length; // มีแอร์แต่ยังไม่เปิดใบสั่งซื้อ
   const docPred = (q, f) => f === "all" ? true : f === "no_invoice" ? !q.hasInvoice : f === "no_job" ? !q.hasJob : noAcPo(q);
@@ -407,7 +407,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         <div><h1 className="page-title">ใบเสนอราคา <span className="page-title-en">Quotations</span></h1><p className="page-sub">{list.length} ใบ</p></div>
         <div className="cat-head-actions">
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
-            <input placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบเสนอราคา</button>}
