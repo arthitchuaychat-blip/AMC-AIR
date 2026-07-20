@@ -18,6 +18,19 @@ export function SignToggle({ on, onChange }) {
 }
 
 // Back-office-only note. NEVER passed to DocSlip / printed output — shows only inside the app.
+// หมายเหตุที่ "พิมพ์ลงเอกสาร" — คู่แฝดของ InternalNoteField ด้านล่าง วางคู่กันเสมอเพื่อให้เห็นชัดว่าอันไหนลูกค้าเห็น
+// ค่านี้ไปโผล่ในกล่อง "หมายเหตุ" บน DocSlip (prop terms) · เริ่มกรอกที่ BOQ แล้วติดไปกับเอกสารใบถัดไปตอนสร้าง
+export function DocNoteField({ value, onChange, placeholder }) {
+  return (
+    <label className="fld">
+      <span>📄 หมายเหตุ <small>(พิมพ์ลงเอกสาร · ลูกค้าเห็น)</small></span>
+      <textarea className="inp" rows={2} style={{ resize: "vertical" }} value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder || "เช่น ราคานี้ไม่รวมงานเดินท่อเพิ่ม · กำหนดส่งของภายใน 7 วัน"} />
+    </label>
+  );
+}
+
 export function InternalNoteField({ value, onChange, placeholder }) {
   return (
     <label className="fld int-note-fld">

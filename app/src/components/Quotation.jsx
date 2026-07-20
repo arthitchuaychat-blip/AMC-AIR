@@ -6,7 +6,7 @@ import DocSlip from "./DocSlip";
 import NumIn from "./NumIn";
 import DocTerms from "./DocTerms";
 import { useFormDraft } from "../lib/useFormDraft";
-import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
+import { DocNoteField, InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
@@ -74,7 +74,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setDateR({ from: "", to: "" }); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
-  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
+  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
   // create a new quotation prefilled from a BOQ (customer/site + pulled items)
   function startFromBoq(boqNo) {
     const b = boqs.find((x) => x.boq_no === boqNo); if (!b) return;
@@ -83,7 +83,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       const m = matMap[x.item_code];
       return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
     });
-    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, job_type: b.job_type || "", title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: b.internal_note || "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
+    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, job_type: b.job_type || "", title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, pay_method: "cash", note: b.note || "", internal_note: b.internal_note || "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
   }
   React.useEffect(() => { if (!fromBoq || !boqs.length) return; startFromBoq(fromBoq); onFromBoqConsumed && onFromBoqConsumed(); }, [fromBoq, boqs]);
   // chain lock: can't edit/delete a quotation that already has an invoice or job order downstream
@@ -375,6 +375,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           </div>
 
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} docItems={ed.items} onChange={(k, v) => setQ(k, v)} />
+          <DocNoteField value={ed.note} onChange={(v) => setQ("note", v)} />
           <InternalNoteField value={ed.internal_note} onChange={(v) => setQ("internal_note", v)} />
           <SignToggle on={ed.sign_on} onChange={(v) => setQ("sign_on", v)} />
 

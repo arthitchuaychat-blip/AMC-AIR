@@ -33,7 +33,8 @@ function officerSign() {
   } catch { return null; }
 }
 
-export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, partyLabel = "ลูกค้า", projectTitle, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], signUrl, signName, children, totals, discountCol = false }) {
+// terms = "หมายเหตุ (ลูกค้าเห็น)" ของเอกสารใบนั้น — คนละตัวกับหมายเหตุภายในซึ่งห้ามพิมพ์ออกเอกสารเด็ดขาด
+export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, partyLabel = "ลูกค้า", projectTitle, terms, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], signUrl, signName, children, totals, discountCol = false }) {
   const co = company || {};
   // explicit per-document signature (saved on the doc) wins; otherwise fall back to the device toggle
   const sign = signUrl !== undefined ? (signUrl ? { url: signUrl, name: signName || "" } : null) : officerSign();
@@ -104,6 +105,7 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
           {totals && <tr className="ds-full ds-totals"><td colSpan={discountCol ? 7 : 6}>{totals}</td></tr>}
           <tr className="ds-full"><td colSpan={discountCol ? 7 : 6}>
             <div className="doc-terms">
+              {terms && <div className="doc-terms-box"><div className="doc-terms-title">หมายเหตุ</div><div className="doc-terms-body">{terms}</div></div>}
               {paymentInfo && <div className="doc-terms-box"><div className="doc-terms-title">การชำระเงิน</div><div className="doc-terms-body">{paymentInfo}</div></div>}
               {termsPayment && <div className="doc-terms-box"><div className="doc-terms-title">เงื่อนไขการชำระเงิน</div><div className="doc-terms-body">{termsPayment}</div></div>}
               {termsFreebies && <div className="doc-terms-box"><div className="doc-terms-title">ชุดวัสดุแถมมาตรฐาน</div><div className="doc-terms-body">{termsFreebies}</div></div>}

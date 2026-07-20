@@ -11,7 +11,7 @@ import { useDocPeek } from "./DocPeek";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
-import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
+import { DocNoteField, InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 
 // สถานะรวมของใบวางบิล: ยกเลิก / ออกใบเสร็จครบ / วางบิล (ยังออกใบเสร็จไม่ครบ)
@@ -78,7 +78,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
             <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบแจ้งหนี้" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
-          {canEdit && <button className="btn-primary" onClick={() => setEd({ billing_no: genNo(), customer_id: "", issue_date: today(), note: "", sign_on: defaultSignOn(), sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
+          {canEdit && <button className="btn-primary" onClick={() => setEd({ billing_no: genNo(), customer_id: "", issue_date: today(), note: "", internal_note: "", sign_on: defaultSignOn(), sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
         </div>
       </div>
 
@@ -283,7 +283,7 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
               )}
             </div>
           )}
-          <label className="fld"><span>หมายเหตุ (ไม่บังคับ)</span><input className="inp" value={ed.note} onChange={(e) => set("note", e.target.value)} placeholder="เช่น กำหนดชำระภายใน 7 วัน" /></label>
+          <DocNoteField value={ed.note} onChange={(v) => set("note", v)} placeholder="เช่น กำหนดชำระภายใน 7 วัน" />
           <InternalNoteField value={ed.internal_note} onChange={(v) => set("internal_note", v)} />
           <SignToggle on={ed.sign_on} onChange={(v) => set("sign_on", v)} />
         </div>

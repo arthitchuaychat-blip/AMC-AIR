@@ -10,7 +10,7 @@ import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
-import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
+import { DocNoteField, InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
@@ -76,7 +76,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   function onPickInvoice(invoice_no) {
     const iv = invByNo[invoice_no];
     const items = iv?.items?.length ? iv.items.map((x) => ({ ...x })) : snapshotItems(quoteByNo[iv?.quote_no]);
-    setEd((s) => ({ ...s, invoice_no, items, wht_rate: iv?.wht_rate || 3, internal_note: s.internal_note || iv?.internal_note || "", terms_payment: iv?.terms_payment || "", terms_freebies: iv?.terms_freebies || "", terms_warranty: iv?.terms_warranty || "" }));
+    setEd((s) => ({ ...s, invoice_no, items, wht_rate: iv?.wht_rate || 3, note: s.note || iv?.note || "", internal_note: s.internal_note || iv?.internal_note || "", terms_payment: iv?.terms_payment || "", terms_freebies: iv?.terms_freebies || "", terms_warranty: iv?.terms_warranty || "" }));
   }
   async function markPaid(x) { try { await setReceiptStatus(x.receipt_no, "paid", x.invoice_no); flash("รับเงินแล้ว ✓"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
@@ -186,6 +186,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           </div>
           {selInv && <p className="page-sub" style={{ margin: "0 0 6px" }}>หัก ณ ที่จ่าย ดึงจากใบแจ้งหนี้ (ค่าบริการ) · ปรับรายบรรทัดได้โดยกดที่ใบเสร็จในรายการหลังออกใบ</p>}
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setF(k, v)} />
+          <DocNoteField value={ed.note} onChange={(v) => setF("note", v)} />
           <InternalNoteField value={ed.internal_note} onChange={(v) => setF("internal_note", v)} />
           <SignToggle on={ed.sign_on} onChange={(v) => setF("sign_on", v)} />
 

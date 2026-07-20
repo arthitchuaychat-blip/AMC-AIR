@@ -11,7 +11,7 @@ import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
-import { InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
+import { DocNoteField, InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
@@ -73,7 +73,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   function startNew(quoteNo = "") {
     const q = quoteNo ? quoteByNo[quoteNo] : null;
-    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: q ? dueFromTerms(today(), q.customer_id) : "", basis: "percent", basis_value: 100, note: "", internal_note: q?.internal_note || "", sign_on: defaultSignOn(),
+    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: q ? dueFromTerms(today(), q.customer_id) : "", basis: "percent", basis_value: 100, note: q?.note || "", internal_note: q?.internal_note || "", sign_on: defaultSignOn(),
       wht_rate: Number(q?.wht_rate) || 3,
       terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" });
   }
@@ -89,7 +89,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   // picking a quote pulls its end-of-document terms forward (หัก ณ ที่จ่าย คำนวณอัตโนมัติสำหรับนิติบุคคล)
   function pickQuote(qno) {
     const q = quoteByNo[qno];
-    setEd((e) => ({ ...e, quote_no: qno, due_date: e.due_date || dueFromTerms(e.issue_date, q?.customer_id), wht_rate: Number(q?.wht_rate) || 3, terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
+    setEd((e) => ({ ...e, quote_no: qno, due_date: e.due_date || dueFromTerms(e.issue_date, q?.customer_id), wht_rate: Number(q?.wht_rate) || 3, note: e.note || q?.note || "", internal_note: e.internal_note || q?.internal_note || "", terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
   }
   // approved quotes that still have a balance to bill (shown in the picker)
   const billableQuotes = approvedQuotes.filter((q) => round2((q.grand || 0) - (billed[q.quote_no] || 0)) > 0.01);
@@ -276,6 +276,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           )}
 
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} onChange={(k, v) => setF(k, v)} />
+          <DocNoteField value={ed.note} onChange={(v) => setF("note", v)} />
           <InternalNoteField value={ed.internal_note} onChange={(v) => setF("internal_note", v)} />
           <SignToggle on={ed.sign_on} onChange={(v) => setF("sign_on", v)} />
 
