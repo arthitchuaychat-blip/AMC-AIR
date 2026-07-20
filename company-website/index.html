@@ -794,6 +794,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <a id="cLineBtn" href="#" class="btn btn-line" style="margin-top:8px">แชตผ่าน LINE</a>
       </div>
       <form class="form" id="leadForm" onsubmit="return submitLead(event)">
+      <!-- กับดักบอท: คนไม่เห็นช่องนี้ (ซ่อนนอกจอ + tabindex -1) ถ้ามีค่ากรอกมา = สคริปต์กรอกฟอร์ม -->
+      <input name="company" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
         <label>ชื่อ-สกุล *</label><input name="name" required placeholder="ชื่อของคุณ" />
         <label>เบอร์โทร *</label><input name="phone" required placeholder="0xx-xxx-xxxx" />
         <label>ที่อยู่ / พื้นที่หน้างาน</label><input name="address" placeholder="เขต/อำเภอ จังหวัด" />
@@ -861,6 +863,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div class="cart-total"><span>รวมโดยประมาณ</span><span id="cartTotal">฿0</span></div>
     <div class="cart-note">* ราคาเป็นการประมาณการ ทีมงานจะติดต่อยืนยันราคาจริง ค่าติดตั้ง และนัดหมาย</div>
     <form class="of" id="orderForm" onsubmit="return submitOrder(event)">
+      <!-- กับดักบอท: คนไม่เห็นช่องนี้ (ซ่อนนอกจอ + tabindex -1) ถ้ามีค่ากรอกมา = สคริปต์กรอกฟอร์ม -->
+      <input name="company" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
       <label>ชื่อ-สกุล *</label><input name="name" required placeholder="ชื่อของคุณ" />
       <label>เบอร์โทร *</label><input name="phone" required placeholder="0xx-xxx-xxxx" />
       <label>ที่อยู่จัดส่ง/ติดตั้ง</label><input name="address" placeholder="ที่อยู่" />
@@ -1170,10 +1174,24 @@ function lineOrderMsg(p) {
   if (p.note) tail.push("หมายเหตุ: " + p.note);
   return ["🛒 คำสั่งซื้อจากเว็บ www.amcair.net", ""].concat(rows, tail).join("\n");
 }
+// บอทกรอกทุกช่องที่เจอ รวมช่องที่ซ่อนไว้ → มีค่าเมื่อไหร่ = ทิ้งเงียบ ๆ (แกล้งบอกว่าส่งสำเร็จ บอทจะได้ไม่ลองใหม่)
+const isBot = (f) => !!(f.company && f.company.value);
+// กันกดซ้ำ/กดรัว ฝั่งเบราว์เซอร์ — ชั้นนี้กันคนพลาดกดสองที ส่วนสคริปต์ที่ยิงตรงเข้าฐานข้อมูลกันด้วย policy (mig 169)
+const tooSoon = () => {
+  try {
+    const last = Number(localStorage.getItem("amc_last_send_at") || 0);
+    if (Date.now() - last < 30000) return true;
+    localStorage.setItem("amc_last_send_at", String(Date.now()));
+  } catch (_) { /* เบราว์เซอร์ปิด localStorage ก็ปล่อยผ่าน ไม่ให้ลูกค้าจริงส่งไม่ได้ */ }
+  return false;
+};
+
 async function submitOrder(e) {
   e.preventDefault();
   if (!cart.length) { toast("ตะกร้าว่าง", true); return false; }
   const f = e.target;
+  if (isBot(f)) { toast("ส่งคำสั่งซื้อแล้ว ทีมงานจะติดต่อกลับ"); return false; }
+  if (tooSoon()) { toast("เพิ่งส่งไปเมื่อสักครู่ ทีมงานได้รับแล้ว รอสักครู่นะครับ", true); return false; }
   // หมุดโลเคชั่น (ไม่บังคับ) — เก็บต่อท้ายหมายเหตุ ขึ้นต้น 📍 ให้หลังบ้านเห็น/ก๊อปลิงก์ได้เลย
   const mapUrl = (f.mapUrl.value || "").trim();
   const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(),
@@ -1212,6 +1230,8 @@ async function submitOrder(e) {
 async function submitLead(e) {
   e.preventDefault();
   const f = e.target;
+  if (isBot(f)) { toast("ส่งข้อมูลแล้ว ทีมงานจะติดต่อกลับ"); return false; }
+  if (tooSoon()) { toast("เพิ่งส่งไปเมื่อสักครู่ ทีมงานได้รับแล้ว รอสักครู่นะครับ", true); return false; }
   const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), note: f.note.value.trim(), items: [], total: 0 };
   if (!hasSb) { toast("เว็บยังไม่ได้เชื่อมระบบ — โทร " + (C.PHONE || "") + " ได้เลย", true); return false; }
   const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "กำลังส่ง…";
