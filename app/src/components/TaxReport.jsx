@@ -22,7 +22,9 @@ export default function TaxReport({ role }) {
     try {
       const [r, p, sp] = await Promise.all([listReceipts(), listPurchaseOrders().catch(() => []), listSubPayouts().catch(() => [])]);
       setReceipts(r.filter((x) => x.status !== "cancelled" && x.issue_date));
-      setPos(p.filter((x) => x.status !== "cancelled" && x.vat));
+      // ภาษีซื้อรับรู้เมื่อ "รับของ/จ่ายเงิน" แล้วเท่านั้น — ใบที่ยังไม่รับของยังไม่มีใบกำกับภาษีซื้อในมือ
+      // เดิมนับทุกใบที่ติ๊ก VAT ตั้งแต่วันสั่ง → ใบที่สั่งค้างไว้ไม่รับของเลยก็ยังนับเป็นภาษีซื้อตลอดไป
+      setPos(p.filter((x) => x.status !== "cancelled" && x.vat && (x.status === "received" || x.paid_at)));
       // ภาษีที่ "เราหักจากช่างซัพ" แล้วต้องนำส่งสรรพากร (ภ.ง.ด.53) — คนละขากับ wht ในใบเสร็จที่ลูกค้าหักเรา
       setPayouts((sp || []).filter((x) => x.status === "paid" && Number(x.wht_amt) > 0));
       try { const ts = await listTeams(); setTeamName(Object.fromEntries((ts || []).map((t) => [t.id, t]))); } catch (_) { /* ชื่อทีมโหลดไม่ได้ก็ยังโชว์รหัสทีมได้ */ }
@@ -30,7 +32,10 @@ export default function TaxReport({ role }) {
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setReceipts([]); }
   }
   React.useEffect(() => { load(); }, []);
-  const poDate = (x) => x.issue_date || (x.created_at || "").slice(0, 10);
+  // timestamptz เก็บเป็น UTC — slice(0,10) ดื้อ ๆ จะร่นไปวันก่อนหน้าสำหรับเวลาหัวค่ำของไทย ต้องแปลงโซนก่อน
+  const bkkDay = (ts) => { if (!ts) return ""; const s = String(ts); return s.length <= 10 ? s : new Date(s).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" }); };
+  // ลงเดือนตามวันที่ "ได้รับของ/จ่ายเงิน" ไม่ใช่วันที่สั่ง — สั่งปลายเดือนแต่ของมาเดือนหน้า ต้องเป็นภาษีซื้อของเดือนหน้า
+  const poDate = (x) => bkkDay(x.received_at) || bkkDay(x.paid_at) || x.issue_date || bkkDay(x.created_at);
 
   const years = React.useMemo(() => {
     const ys = new Set((receipts || []).map((r) => Number((r.issue_date || "").slice(0, 4))).filter(Boolean));
@@ -41,7 +46,8 @@ export default function TaxReport({ role }) {
   const ofYear = React.useMemo(() => (receipts || []).filter((r) => (r.issue_date || "").slice(0, 4) === String(year)), [receipts, year]);
 
   // aggregate per month (index 0–11): tax is recognised on the receipt (ใบกำกับภาษี) date
-  // ภาษีซื้อ: จากใบสั่งซื้อที่ติ๊ก VAT ตามวันที่ใบ (ประมาณการ — ตอนยื่นจริงใช้ใบกำกับภาษีซื้อจากผู้ขาย)
+  // ภาษีซื้อ: จากใบสั่งซื้อที่ติ๊ก VAT และรับของ/จ่ายแล้ว ลงเดือนตามวันรับของ (ประมาณการ — ตอนยื่นจริงใช้ใบกำกับภาษีซื้อจากผู้ขาย)
+  // ⚠️ ยังไม่รวม VAT จากใบเบิกจ่าย (บิลหน้างานที่ไม่ได้ผ่าน PO) — ตาราง expense_requests ยังไม่มีคอลัมน์ VAT
   const months = React.useMemo(() => {
     const m = Array.from({ length: 12 }, () => ({ count: 0, base: 0, vat: 0, buyVat: 0, buyCount: 0, wht: 0, net: 0, rows: [] }));
     ofYear.forEach((r) => {
@@ -150,7 +156,7 @@ export default function TaxReport({ role }) {
       <div className="kpi-grid">
         <div className="stat-card"><div className="stat-val">{fmtBaht(tot.base)}</div><div className="stat-label">ยอดขายก่อน VAT (ปีนี้) · {tot.count} ใบ</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#1d4ed8" }}>{fmtBaht(tot.vat)}</div><div className="stat-label">ภาษีขาย (จากใบกำกับ)</div></div>
-        <div className="stat-card"><div className="stat-val" style={{ color: "#0d9488" }}>{fmtBaht(tot.buyVat)}</div><div className="stat-label">ภาษีซื้อ (จาก PO มี VAT · {tot.buyCount} ใบ)</div></div>
+        <div className="stat-card"><div className="stat-val" style={{ color: "#0d9488" }}>{fmtBaht(tot.buyVat)}</div><div className="stat-label">ภาษีซื้อ (PO รับของแล้ว · {tot.buyCount} ใบ)</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: tot.vatDue > 0 ? "#dc2626" : "#16a34a" }}>{fmtBaht(Math.abs(tot.vatDue))}</div><div className="stat-label">{tot.vatDue >= 0 ? "VAT นำส่งสุทธิ (ขาย − ซื้อ)" : "VAT ขอคืน (ซื้อ > ขาย)"}</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#d97706" }}>{fmtBaht(tot.wht)}</div><div className="stat-label">ภาษีหัก ณ ที่จ่าย (เครดิตคืน)</div></div>
       </div>
@@ -212,7 +218,7 @@ export default function TaxReport({ role }) {
         )}
 
       <p className="page-sub" style={{ marginTop: 12, fontSize: 12 }}>
-        💡 <b>ภาษีขาย</b>คิดจากใบเสร็จ/ใบกำกับภาษีที่ยังไม่ถูกยกเลิก ตามวันที่ในใบเสร็จ · <b>ภาษีซื้อ</b>ประมาณการจากใบสั่งซื้อที่ติ๊ก VAT ตามวันที่ใบสั่งซื้อ (ตอนยื่น ภพ.30 ให้ใช้ยอดจากใบกำกับภาษีซื้อจริงของผู้ขาย) · <b>VAT นำส่ง</b> = ภาษีขาย − ภาษีซื้อ (ติดลบ = ขอคืน/ยกยอด) · หัก ณ ที่จ่าย = ภาษีที่ลูกค้าหักไว้ (เครดิตคืน)
+        💡 <b>ภาษีขาย</b>คิดจากใบเสร็จ/ใบกำกับภาษีที่ยังไม่ถูกยกเลิก ตามวันที่ในใบเสร็จ · <b>ภาษีซื้อ</b>ประมาณการจากใบสั่งซื้อที่ติ๊ก VAT <b>เฉพาะใบที่รับของ/จ่ายแล้ว</b> ลงเดือนตามวันรับของ (ยังไม่รวมบิลหน้างานที่เบิกจ่ายโดยไม่ผ่านใบสั่งซื้อ · ตอนยื่น ภพ.30 ให้ใช้ยอดจากใบกำกับภาษีซื้อจริงของผู้ขาย) · <b>VAT นำส่ง</b> = ภาษีขาย − ภาษีซื้อ (ติดลบ = ขอคืน/ยกยอด) · หัก ณ ที่จ่าย = ภาษีที่ลูกค้าหักไว้ (เครดิตคืน)
       </p>
       </>) : (<>
       <div className="kpi-grid">
