@@ -32,3 +32,4 @@
 - [PO procurement](po-procurement.md) — order-driven purchasing (mig 100): PO↔quote link (AC must link), receive→auto-withdraw actual cost to job, payment via expense approval (no cash mirror double-count), 2-axis status, cash flow actual-on-paid.
 - [Supabase 1000-row cap](supabase-1000-row-cap.md) — every select capped at 1000 rows; page growing tables with _fetchAll or new docs' lines silently vanish on read (v324 BOQ incident)
 - [Tools system](tools-system.md) — เครื่องมือช่าง: registry สต๊อก/ประจำรถ/ประจำตัว + เบิก-คืน-แจ้งชำรุดแบบรออนุมัติ; Tools.jsx, mig 122
+- [Build ผ่าน ≠ หน้าเปิดได้](build-passes-page-dead.md) — Vite ไม่ตรวจตัวแปรอิสระ ต้องรัน npm test (test-undefined-vars.mjs) ก่อน commit ทุกครั้ง ไม่ใช่แค่ build
