@@ -1898,12 +1898,16 @@ export function billedByQuote(invoices) {
   return m;
 }
 // ยอดรวมทั้งสิ้นของใบเสนอ คำนวณสดจาก DB — สูตรเดียวกับ listQuotations (ส่วนลดบรรทัด → ส่วนลดรวม → VAT · ราคาบัตรปรับต่อหน่วย)
+// ⚠️ อ่านไม่สำเร็จต้อง "โยน" ไม่ใช่คืน null — ผู้เรียกใช้ค่านี้เป็นการ์ดกันวางบิลเกิน 100%
+//    ถ้าคืน null ตอนอ่านพลาด (เน็ตหลุด/RLS ปฏิเสธ) การ์ดจะถูกข้ามเงียบ ๆ แล้ววางบิลทะลุยอดใบเสนอได้
+//    null สงวนไว้สำหรับกรณีเดียว: ไม่มีใบเสนอราคาเลขนี้จริง ๆ
 async function _quoteGrand(quote_no) {
-  const { data: qo } = await supabase.from("quotations").select("discount_type,discount_value,vat,pay_method,status").eq("quote_no", quote_no).maybeSingle();
+  const { data: qo, error: qe } = await supabase.from("quotations").select("discount_type,discount_value,vat,pay_method,status").eq("quote_no", quote_no).maybeSingle();
+  if (qe) throw qe;
   if (!qo) return null;
   let itr = await supabase.from("quotation_items").select("qty,unit_price,discount").eq("quote_no", quote_no);
   if (itr.error) itr = await supabase.from("quotation_items").select("qty,unit_price").eq("quote_no", quote_no); // pre-142
-  if (itr.error) return null;
+  if (itr.error) throw itr.error;
   const payRate = qo.pay_method === "card_full" ? 0.04 : qo.pay_method === "card_inst10" ? 0.14 : 0;
   const adjU = (u) => payRate ? Math.ceil(Math.round((Number(u) || 0) * (1 + payRate) * 100) / 100) : Number(u) || 0;
   const subtotal = (itr.data || []).reduce((a, x) => a + Number(x.qty) * adjU(x.unit_price) - (Number(x.discount) || 0), 0);
@@ -1915,16 +1919,16 @@ export async function saveInvoice(inv) {
   const { data: { user } } = await supabase.auth.getUser();
   // guard ฝั่ง server: ใบเสนอต้องยัง approved และยอดสะสม (คิดสดจาก DB) ต้องไม่เกินยอดทั้งใบ — กัน 2 เครื่องวางบิลพร้อมกันเกิน 100%
   if (inv.quote_no) {
-    // fail-closed: อ่านใบเสนอไม่ได้ (เน็ต/สิทธิ์พัง) = หยุด ไม่ใช่ข้าม guard — _quoteGrand คืน null เฉพาะกรณีไม่พบใบจริง ๆ
+    // fail-closed: อ่านใบเสนอไม่ได้ (เน็ต/สิทธิ์พัง) = _quoteGrand โยน error ออกมา ไม่ใช่ข้าม guard เงียบ ๆ
+    // ไม่พบใบเสนอเลขนี้ = หยุดเช่นกัน (ใบแจ้งหนี้อ้างใบเสนอที่ไม่มีอยู่ ไม่มีอะไรให้เทียบยอด)
     const qg = await _quoteGrand(inv.quote_no);
-    if (qg) {
-      if (qg.status !== "approved") throw new Error("ใบเสนอราคานี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว — วางบิลไม่ได้");
-      const { data: others, error: oe } = await supabase.from("invoices").select("invoice_no,total,status").eq("quote_no", inv.quote_no).neq("invoice_no", inv.invoice_no);
-      if (oe) throw oe;
-      const billedOther = (others || []).filter((x) => x.status !== "cancelled").reduce((a, x) => a + Number(x.total || 0), 0);
-      if (billedOther + (Number(inv.total) || 0) > qg.grand + 1)
-        throw new Error(`ยอดวางบิลรวมเกินยอดใบเสนอราคา — วางแล้ว ${billedOther.toLocaleString("en-US")} + งวดนี้ ${(Number(inv.total) || 0).toLocaleString("en-US")} > ${qg.grand.toLocaleString("en-US")} (อาจมีคนวางบิลพร้อมกันจากอีกเครื่อง — รีเฟรชแล้วลองใหม่)`);
-    }
+    if (!qg) throw new Error(`ไม่พบใบเสนอราคา ${inv.quote_no} — วางบิลไม่ได้ (ใบถูกลบไปแล้ว หรือไม่มีสิทธิ์อ่าน)`);
+    if (qg.status !== "approved") throw new Error("ใบเสนอราคานี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว — วางบิลไม่ได้");
+    const { data: others, error: oe } = await supabase.from("invoices").select("invoice_no,total,status").eq("quote_no", inv.quote_no).neq("invoice_no", inv.invoice_no);
+    if (oe) throw oe;
+    const billedOther = (others || []).filter((x) => x.status !== "cancelled").reduce((a, x) => a + Number(x.total || 0), 0);
+    if (billedOther + (Number(inv.total) || 0) > qg.grand + 1)
+      throw new Error(`ยอดวางบิลรวมเกินยอดใบเสนอราคา — วางแล้ว ${billedOther.toLocaleString("en-US")} + งวดนี้ ${(Number(inv.total) || 0).toLocaleString("en-US")} > ${qg.grand.toLocaleString("en-US")} (อาจมีคนวางบิลพร้อมกันจากอีกเครื่อง — รีเฟรชแล้วลองใหม่)`);
   }
   const { error } = await supabase.from("invoices").upsert({
     invoice_no: inv.invoice_no, quote_no: inv.quote_no || null, boq_no: inv.boq_no || null,
