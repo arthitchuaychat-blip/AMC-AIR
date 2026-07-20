@@ -161,7 +161,9 @@ export async function listMaterialsLite() {
   const catMap = Object.fromEntries(cats.map((c) => [c.id, c]));
   const PAGE = 1000;
   const all = [];
-  const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty,btu_min,btu_max,series,voltage,refrigerant,seer,pipe_size,energy_label,warranty";
+  // ⚠️ web_published ต้องอยู่ในนี้เสมอ — ฟอร์มแก้สินค้าอ่านค่าเดิมจากลิสต์นี้ ถ้าไม่มีจะกลายเป็น false
+  // แล้ว saveMaterial เขียนทับ = แก้สินค้าทีเดียวสินค้าหลุดจากเว็บขายหน้าร้านเงียบ ๆ
+  const FULL = "code,name_th,name_en,kind,brand,btu,ac_type,category,unit,cost,sale_price,description,photo_url,tracked,min_stock,init_stock,power_cost_year,features,purchase_unit,purchase_qty,btu_min,btu_max,series,voltage,refrigerant,seer,pipe_size,energy_label,warranty,web_published";
   let cols = FULL;
   // ต้องมี order เสมอ — แบ่งหน้าโดยไม่มี order อาจได้แถวซ้ำ/หายระหว่างหน้า (ลำดับไม่การันตี)
   const page = (from) => supabase.from("materials").select(cols).eq("active", true).order("code").range(from, from + PAGE - 1);

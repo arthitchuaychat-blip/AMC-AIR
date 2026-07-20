@@ -94,7 +94,7 @@ export default function TaxReport({ role }) {
     const rows = [];
     whtMonths.forEach((b, i) => b.rows.forEach((p) => {
       const t = teamOf(p.team);
-      rows.push([`${TH_MONTHS[i]} ${year + 543}`, whtDate(p), t.name_th || p.team || "", t.tax_id || "", round2(p.gross), Number(p.wht_rate) || 3, round2(p.wht_amt), round2(p.net), (p.job_nos || []).join(" ")]);
+      rows.push([`${TH_MONTHS[i]} ${year + 543}`, whtDate(p), t.name || p.team || "", t.tax_id || "", round2(p.gross), Number(p.wht_rate) || 3, round2(p.wht_amt), round2(p.net), (p.job_nos || []).join(" ")]);
     }));
     if (!rows.length) return flash("ไม่มีข้อมูลในปีนี้", true);
     rows.push(["รวมทั้งปี", "", "", "", whtTot.gross, "", whtTot.wht, whtTot.net, ""]);
@@ -223,7 +223,7 @@ export default function TaxReport({ role }) {
 
       {whtNoTaxId.length > 0 && (
         <div className="card" style={{ borderLeft: "4px solid #dc2626", marginBottom: 10 }}>
-          ⚠️ <b>ยื่น ภ.ง.ด.53 ไม่ได้จนกว่าจะกรอกเลขผู้เสียภาษี</b> ของทีม: {whtNoTaxId.map((id) => teamOf(id).name_th || id).join(" · ")}
+          ⚠️ <b>ยื่น ภ.ง.ด.53 ไม่ได้จนกว่าจะกรอกเลขผู้เสียภาษี</b> ของทีม: {whtNoTaxId.map((id) => teamOf(id).name || id).join(" · ")}
           <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 4 }}>กรอกได้ที่ เมนูช่างซัพ → แก้ไขทีม → เลขผู้เสียภาษี</div>
         </div>
       )}
@@ -252,7 +252,7 @@ export default function TaxReport({ role }) {
                     return (
                       <tr key={p.id} className="tax-detailrow">
                         <td style={{ textAlign: "left", paddingLeft: 22 }}>
-                          <b>{t.name_th || p.team || "—"}</b> <span style={{ color: "var(--ink-3)", fontSize: 12 }}>{thDate(whtDate(p))}</span>
+                          <b>{t.name || p.team || "—"}</b> <span style={{ color: "var(--ink-3)", fontSize: 12 }}>{thDate(whtDate(p))}</span>
                           <div style={{ fontSize: 12, color: t.tax_id ? "var(--ink-2)" : "#dc2626" }}>{t.tax_id ? "เลขผู้เสียภาษี " + t.tax_id : "⚠️ ไม่มีเลขผู้เสียภาษี"}</div>
                           {(p.job_nos || []).length > 0 && <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{(p.job_nos || []).join(", ")}</div>}
                         </td>
