@@ -9,7 +9,8 @@ import { scheduleLabel } from "../lib/schedule";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import CustomerImportModal from "./CustomerImportModal";
 
-const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", vat: true, address: "", note: "" });
+// ⚠️ ต้องมีครบทุกฟิลด์ที่ saveCustomer เขียนลง DB — ฟิลด์ที่ขาดจะถูกเขียนทับเป็นค่าว่าง/0
+const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", email: "", vat: true, credit_days: 0, address: "", note: "" });
 // สีไล่ต่อไซต์ เพื่อแยกกล่องไซต์ให้เห็นง่าย ไม่ตาลาย
 const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626"];
 
@@ -55,9 +56,11 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   function startNew() { setEditing({ cust: blankCust(), contacts: [{ name: "", phone: "", role: "" }], sites: [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }] }); }
   function startEdit(c) {
     setEditing({
-      cust: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", email: c.email || "", vat: c.vat, address: c.address || "", note: c.note || "" },
+      cust: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", email: c.email || "", vat: c.vat, credit_days: c.credit_days ?? 0, address: c.address || "", note: c.note || "" },
       contacts: c.contacts.length ? c.contacts.map((x) => ({ name: x.name || "", phone: x.phone || "", role: x.role || "" })) : [{ name: "", phone: "", role: "" }],
-      sites: c.sites.length ? c.sites.map((x) => ({ site_name: x.site_name || "", contact_name: x.contact_name || "", phone: x.phone || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }],
+      // ⚠️ ต้องพก id ของไซต์เดิมไปด้วย — saveCustomer ใช้ id ตัดสินว่า "แก้แถวเดิม" ไม่ใช่ลบทิ้งสร้างใหม่
+      // ถ้า id หาย เอกสารเก่าทุกใบจะหลุดจากไซต์ถาวร (FK เป็น on delete set null) แค่เพราะแก้เบอร์โทร
+      sites: c.sites.length ? c.sites.map((x) => ({ id: x.id, site_name: x.site_name || "", contact_name: x.contact_name || "", phone: x.phone || "", address: x.address || "", map_url: x.map_url || "" })) : [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }],
     });
   }
   const setCust = (k, v) => setEditing((e) => ({ ...e, cust: { ...e.cust, [k]: v } }));
@@ -109,6 +112,12 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
                 {e.cust.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}
               </button>
             </label>
+          </div>
+          <div className="fld-row">
+            <label className="fld"><span>อีเมล</span><input className="inp" type="email" value={e.cust.email} onChange={(ev) => setCust("email", ev.target.value)} placeholder="เช่น contact@company.com (ไม่บังคับ)" /></label>
+            {/* เครดิตเทอม (mig 159) — ใบแจ้งหนี้ใช้ตั้งวันครบกำหนดชำระให้เอง */}
+            <label className="fld"><span>เครดิตเทอม (วัน)</span>
+              <input className="inp" type="number" min="0" step="1" value={e.cust.credit_days} onChange={(ev) => setCust("credit_days", ev.target.value)} placeholder="0 = ครบกำหนดวันออกบิล" /></label>
           </div>
           <label className="fld"><span>ที่อยู่หลัก</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={e.cust.address} onChange={(ev) => setCust("address", ev.target.value)} /></label>
 
