@@ -104,7 +104,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-20·ด่วน 3: แก้สินค้าไม่ทำให้สินค้าหลุดจากเว็บ www.amcair.net อีกแล้ว + ภ.ง.ด.53 พิมพ์ชื่อทีมช่างซัพแทนรหัสทีม v484";
+const BUILD = "2026-07-20·สินค้า 2 หน่วย: แก้ราคาตามบิลซัพฯ ไม่ทำต้นทุนพอง 100 เท่าอีกแล้ว + รับของรอบสองคิดยอดคงค้างถูก ไม่เด้งไปรับซ้ำทั้งใบ v485";
 
 function SetupNotice() {
   return (
@@ -517,18 +517,18 @@ export default function App() {
           focus={poFocus} onFocusConsumed={() => setPoFocus(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }}
           onReceive={async (po) => {
-            // ตั้งค่าเริ่มต้นเป็น "ยอดคงค้าง = สั่ง − รับไปแล้ว" — เดิมเติมเต็มใบทุกครั้ง รับรอบสองแล้วของเข้าเกิน
+            // ⚠️ ห้ามหักยอดที่รับแล้วตรงนี้ — it.qty เป็นหน่วยของบรรทัด (สินค้า 2 หน่วย = ม้วน)
+            //    ส่วน got มาจาก transactions ซึ่งเป็นหน่วยหลักเสมอ (เมตร) ลบกันตรง ๆ = 3 − 100 → 0
+            //    บรรทัดนั้นหายจากตะกร้า และถ้าหายหมดจะเด้งไปเติมเต็มใบ = รับซ้ำทั้งใบ
+            //    หน้ารับของมีตารางสินค้า จึงหักที่นั่นหลังแปลงหน่วยแล้ว (ส่ง receivedQty ไปให้ด้านล่าง)
             const got = await poReceivedQty(po.po_no).catch(() => ({}));
-            const items = po.items
-              .map((it) => ({ code: it.material_code, qty: Math.max(0, (Number(it.qty) || 0) - (Number(got[it.material_code]) || 0)), price: it.price, unit: it.unit || null }))
-              .filter((it) => it.qty > 0.0001);
+            const items = po.items.map((it) => ({ code: it.material_code, qty: Number(it.qty) || 0, price: it.price, unit: it.unit || null }));
             // รายการตามใบเสนอราคา — หน้ารับของใช้เตือนเมื่อซื้อเผื่อเกินจำนวนที่งานต้องใช้
             // (ส่งเป็นหน่วยที่ขายลูกค้า หน้ารับของจะแปลงเป็นหน่วยหลักเอง — App.jsx ไม่มีตารางสินค้า)
             const qi = po.quote_no ? await getQuoteItems(po.quote_no).catch(() => []) : [];
             setPurchasePrefill({ poNo: po.po_no, quoteNo: po.quote_no || null,
               quoteItems: (qi || []).filter((x) => x.item_code).map((x) => ({ code: x.item_code, qty: Number(x.qty) || 0, unit: x.unit || null })),
-              receivedQty: got,
-              items: items.length ? items : po.items.map((it) => ({ code: it.material_code, qty: it.qty, price: it.price, unit: it.unit || null })) });
+              receivedQty: got, items });
             go("movements");
           }} />}
         {view === "tools" && <Tools role={role} me={profile} />}

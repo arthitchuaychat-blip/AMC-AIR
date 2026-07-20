@@ -534,7 +534,18 @@ export async function recordTransactions(rows) {
 // ไม่งั้นใบสั่งซื้อโชว์ราคาใหม่ แต่ต้นทุนงาน+ต้นทุนเฉลี่ยยังเป็นราคาเดิม (กำไรงานผิด)
 export async function repriceReceivedPo(poNo, items) {
   if (!poNo || !items?.length) return 0;
-  const priceOf = {}; items.forEach((it) => { priceOf[it.code] = Number(it.price) || 0; });
+  // ⚠️ it.price = ราคาต่อ "หน่วยของบรรทัด" — สินค้า 2 หน่วยคือหน่วยซื้อ (ม้วน) ไม่ใช่หน่วยหลัก (เมตร)
+  //    แต่ transactions.unit_cost กับ materials.cost เก็บเป็นหน่วยหลักเสมอ (Movements เขียน price / f)
+  //    ไม่หารก่อน = ต้นทุนพองเท่ากับ purchase_qty (1,500฿/ม้วน กลายเป็น 1,500฿/เมตร = 100 เท่า)
+  //    แล้วลามเข้าต้นทุนงาน + ราคาทุนตั้งต้นของ BOQ/ใบเสนอทุกใบถัดไป
+  const codes = [...new Set(items.map((it) => it.code).filter(Boolean))];
+  const { data: mats } = await supabase.from("materials").select("code,unit,purchase_unit,purchase_qty").in("code", codes.length ? codes : ["__none__"]);
+  const mBy = Object.fromEntries((mats || []).map((m) => [m.code, m]));
+  const factorOf = (it) => {
+    const m = mBy[it.code], q = Number(m?.purchase_qty) || 0;
+    return (m?.purchase_unit && it.unit === m.purchase_unit && q > 1) ? q : 1;
+  };
+  const priceOf = {}; items.forEach((it) => { priceOf[it.code] = _round2((Number(it.price) || 0) / factorOf(it)); });
   const { data: rows, error } = await supabase.from("transactions").select("id,material_code,qty,unit_cost,type").eq("po_no", poNo);
   if (error || !rows?.length) return 0;
   let n = 0;

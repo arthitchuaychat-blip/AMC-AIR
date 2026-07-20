@@ -182,13 +182,20 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     setReceiveJob(rj ? { job_no: rj.job_no, team: rj.assigned_team || null } : null);
     // กันต้นทุนตกหล่นแบบเงียบ: PO อ้างใบเสนอราคาแต่ยังไม่มีใบงาน → เตือนชัด ๆ (ของจะเข้าสต๊อกเฉย ๆ ไม่เข้างาน)
     if (prefill.quoteNo && !rj) flash(`⚠️ ${prefill.quoteNo} ยังไม่มีใบงาน — รับรอบนี้ของจะเข้าสต๊อกอย่างเดียว ต้นทุนยังไม่เข้างาน · สร้างใบงานก่อนแล้วค่อยรับ ถ้าต้องการต้นทุนเข้างานอัตโนมัติ`, true);
+    // ยอดคงค้าง = สั่ง − รับไปแล้ว · หักที่นี่เท่านั้น เพราะต้องแปลงเป็นหน่วยหลักก่อน (ม้วน → เมตร)
+    // ทั้งสองฝั่งเป็นหน่วยหลักแล้วค่อยลบ ไม่งั้นสินค้า 2 หน่วยจะได้ยอดคงค้างผิดจนบรรทัดหายทั้งบรรทัด
+    const gotBase = prefill.receivedQty || {};
     const mapped = prefill.items.map((p) => {
       const m = matMap[p.code];
       const f = (p.unit && m?.purchaseUnit && p.unit === m.purchaseUnit && Number(m.purchaseQty) > 1) ? Number(m.purchaseQty) : 1;
       const price = p.price ?? m?.cost ?? 0;
-      return { code: p.code, qty: (Number(p.qty) || 1) * f, price: Math.round(((Number(price) || 0) / f) * 100) / 100, unit: m?.unit || null };
-    });
+      const ordered = (Number(p.qty) || 0) * f;
+      return { code: p.code, qty: Math.max(0, ordered - (Number(gotBase[p.code]) || 0)),
+        price: Math.round(((Number(price) || 0) / f) * 100) / 100, unit: m?.unit || null };
+    }).filter((l) => l.qty > 0.0001);
     setLines(mapped);
+    // รับครบแล้วทั้งใบ → ตะกร้าว่างไว้ ไม่เติมเต็มใบให้ (เดิมเติมเต็ม กดยืนยันแล้วของเข้าซ้ำทั้งใบ)
+    if (!mapped.length) flash(`${prefill.poNo} รับของครบตามใบแล้ว — ถ้าจะรับเพิ่มให้เลือกรายการเอง`, true);
     setPoLines0(mapped.map((l) => ({ code: l.code, qty: l.qty })));   // ยอดสั่งตามใบ (หน่วยหลัก)
     setJobQty({});
     setPoGot(prefill.receivedQty || null);
