@@ -349,7 +349,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
         <DocSlip company={company} titleTh="ใบประมาณการ (BOQ)" titleEn="BILL OF QUANTITIES" docNo={printB.boq_no}
           metaRows={[{ label: "วันที่", value: printB.issue_date || (printB.created_at || "").slice(0, 10) }, { label: "ชื่องาน", value: printB.title }]}
           projectTitle={printB.title}
-          customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, address: printB.customerAddr, contactName: printB.mainContactName, contactPhone: printB.mainContactPhone, siteName: printB.siteName, siteAddress: printB.siteAddress, siteContactName: printB.siteContactName, siteContactPhone: printB.siteContactPhone, mapUrl: printB.mapUrl }}
+          internal unitHead="ต้นทุน/หน่วย" amountHead="ต้นทุนรวม"
+          customer={{ name: printB.customerName, code: custCode(printB.customerCode), address: printB.customerAddr, contactName: printB.mainContactName, contactPhone: printB.mainContactPhone, siteName: printB.siteName, siteAddress: printB.siteAddress, siteContactName: printB.siteContactName, siteContactPhone: printB.siteContactPhone, mapUrl: printB.mapUrl }}
           terms={printB.note} termsPayment={printB.terms_payment} termsFreebies={printB.terms_freebies} termsWarranty={printB.terms_warranty} bank={null} signLabels={["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผู้อนุมัติ"]} signUrl={printB.sign_url} signName={printB.sign_name}
           totals={<div className="doc-totals">
             <div className="doc-grand"><span>ต้นทุนรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div>

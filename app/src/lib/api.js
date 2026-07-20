@@ -3690,7 +3690,9 @@ export async function listLineContacts() {
   const [c, cu, links] = await Promise.all([
     _allRows((f, t) => supabase.from("line_contacts").select("*", { count: "exact" }).order("last_message_at", { ascending: false, nullsFirst: false }).order("line_user_id").range(f, t)),
     _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
-    supabase.from("line_contact_customers").select("line_user_id,customer_id"),  // many-to-many (mig 081)
+    // เพดาน 1000 แถว: ตารางเชื่อมโตตามจำนวน "แชต × ลูกค้าที่ผูก" — เกินพันแล้วแชตบางห้องจะหายลูกค้าที่ผูกเพิ่มไว้
+    // order ด้วย 2 คอลัมน์ที่เป็น primary key (mig 081) — แบ่งหน้าโดยไม่มี order ได้แถวซ้ำ/หายระหว่างหน้า
+    _allRows((f, t) => supabase.from("line_contact_customers").select("line_user_id,customer_id", { count: "exact" }).order("line_user_id").order("customer_id").range(f, t)),  // many-to-many (mig 081)
   ]);
   if (c.error) throw c.error;
   const cn = Object.fromEntries((cu.data || []).map((x) => [x.id, x.name]));

@@ -1525,6 +1525,11 @@ select.inp{cursor:pointer}
    Header kept compact so it costs little space when repeated and more items fit per page. */
 .doc-sheet{width:100%;border-collapse:separate;border-spacing:0}
 .ds-head-cell{padding:0;text-align:left;font-weight:400;vertical-align:top}
+/* แบนเนอร์ "เอกสารภายใน" บน BOQ ที่พิมพ์ต้นทุน — อยู่ใน .doc-running จึงซ้ำหัวทุกหน้าเอง
+   print-color-adjust: exact บังคับให้พื้นสีติดตอนพิมพ์ ไม่งั้น Chrome ตัดพื้นหลังทิ้งแล้วเหลือแต่ตัวอักษรจาง ๆ */
+.doc-internal{background:#fef3c7;color:#92400e;border:1.5px solid #f59e0b;border-radius:6px;
+  padding:5px 10px;margin-bottom:8px;font-weight:800;font-size:12.5px;text-align:center;letter-spacing:.3px;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
 .doc-head{display:flex;justify-content:space-between;gap:18px;padding:2px 0 8px;margin-bottom:8px;border-bottom:1.5px solid #eef0f5}
 .doc-co{display:flex;gap:11px;align-items:flex-start}
 .doc-logo{width:42px;height:42px;object-fit:contain;flex:none;border-radius:9px}
