@@ -499,8 +499,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             {printQ.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printQ.vatAmt)}</b></div> : null}
             <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(printQ.grand)}</b></div>
             {printQ.payMethod === "card_inst10" ? <div><span>≈ ผ่อนเดือนละ</span><b>{fmtBaht(printQ.grand / 10)} × 10 เดือน</b></div> : null}
-            {printQ.wht ? <div><span>หัก ณ ที่จ่าย {Number(printQ.wht_rate) || 3}%</span><b>− {fmtBaht(printQ.whtAmt)}</b></div> : null}
-            {printQ.wht ? <div className="doc-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(printQ.netPay)}</b></div> : null}
+            {printQ.whtOn ? <div><span>หัก ณ ที่จ่าย {Number(printQ.wht_rate) || 3}%</span><b>− {fmtBaht(printQ.whtAmt)}</b></div> : null}
+            {printQ.whtOn ? <div className="doc-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(printQ.netPay)}</b></div> : null}
           </div>}>
           {(() => { const hasD = printQ.items.some((x) => Number(x.discount) > 0); return printQ.items.map((it, i) => (
             <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{it.qty} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(it.qty * (it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>

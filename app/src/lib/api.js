@@ -1727,7 +1727,12 @@ export async function listQuotations(opts = {}) {
     const grand = afterDisc + vatAmt;
     // หัก ณ ที่จ่าย: คิดเฉพาะ "ค่าบริการ" ก่อน VAT (ค่าสินค้าไม่โดนหัก) — เฉลี่ยส่วนลดตามสัดส่วน เหมือนใบแจ้งหนี้
     const svcSum = itemsX.reduce((a, x) => a + (x.kind === "service" ? Number(x.qty) * x.price_show - lineDisc(x) : 0), 0);
-    const whtAmt = qo.wht && subtotal > 0 ? afterDisc * (svcSum / subtotal) * (Number(qo.wht_rate) || 3) / 100 : 0;
+    // หัก ณ ที่จ่ายได้เฉพาะลูกค้านิติบุคคล — อ่านประเภท "สด" จากฐานข้อมูล ไม่เชื่อธงที่บันทึกไว้ในใบ
+    // กันเคส: ออกใบตอนลูกค้าเป็นนิติบุคคล แล้วภายหลังแก้เป็นบุคคลธรรมดา ใบเก่าจะยังหัก 3% ต่อไป
+    // (มาตรฐานเดียวกับใบแจ้งหนี้/ใบเสร็จที่อ่านประเภทลูกค้าสดอยู่แล้ว — ไม่งั้นยอดที่เสนอกับที่เรียกเก็บไม่ตรงกัน)
+    // ⚠️ ห้ามเขียนทับฟิลด์ wht ในแถวที่คืนออกไป — ฟอร์มแก้ใบอ่านค่านั้นเข้าไปแล้วบันทึกกลับ จะกลายเป็นแก้ DB เงียบ ๆ
+    const whtOn = !!qo.wht && custType[qo.customer_id] === "company";
+    const whtAmt = whtOn && subtotal > 0 ? afterDisc * (svcSum / subtotal) * (Number(qo.wht_rate) || 3) / 100 : 0;
     const s = qo.site_id ? sm[qo.site_id] : null;
     const siteAddress = (s && s.address) || null;
     const address = siteAddress || custAddr[qo.customer_id] || null;
@@ -1741,7 +1746,7 @@ export async function listQuotations(opts = {}) {
       jobNo: jobByQuote[qo.quote_no]?.job_no || null, hasJob: !!jobByQuote[qo.quote_no], jobScheduledAt: jobByQuote[qo.quote_no]?.scheduled_at || null,
       jobTeam: jobByQuote[qo.quote_no]?.assigned_team || null,   // ทีมช่างของงาน (ไว้กรองรายทีมบนแดชบอร์ด)
       hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,
-      items: itemsX, subtotal, discount, afterDisc, payMethod, vatAmt, grand, whtAmt, netPay: grand - whtAmt };
+      items: itemsX, subtotal, discount, afterDisc, payMethod, vatAmt, grand, whtOn, whtAmt, netPay: grand - whtAmt };
   });
 }
 

@@ -104,7 +104,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-20·ต่ำ 2: การ์ดกันวางบิลเกินยอดใบเสนอปิดสนิทแล้ว — เน็ตสะดุด/อ่านไม่ได้ = หยุดและแจ้ง ไม่ใช่ข้ามการ์ดเงียบ ๆ แล้วปล่อยวางบิลทะลุ 100% v491";
+const BUILD = "2026-07-20·ต่ำ 4: ใบเสนอราคาหัก ณ ที่จ่ายเฉพาะลูกค้านิติบุคคลแล้ว — อ่านประเภทลูกค้าสดเหมือนใบแจ้งหนี้ ยอดที่เสนอกับที่เรียกเก็บตรงกัน v492";
 
 function SetupNotice() {
   return (
