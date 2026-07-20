@@ -22,7 +22,8 @@ const fmtBaht = fmtBaht2; // receipts show 2 decimals
 const snapshotItems = (q) => { const canW = q?.customerType === "company"; return (q?.items || []).map((it) => { const p = Number(it.price_show ?? it.unit_price) || 0; return { code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: p, discount: Number(it.discount) || 0, amount: round2(Number(it.qty) * p - (Number(it.discount) || 0)), wht: canW && it.kind === "service" }; }); }; // เก็บ discount ให้ DocPeek/โมดัลโชว์ถูก
 const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 const METHODS = ["เงินสด", "โอนเงิน", "เช็ค", "บัตรเครดิต", "Trade Baht"];
-const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber" }, paid: { th: "ชำระเงินแล้ว", cls: "b-green" } };
+// ⚠️ ต้องมีทุกสถานะที่ setReceiptStatus เขียนได้ — สถานะที่ขาดจะตกไป fallback แล้วโชว์ป้ายผิด
+const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber" }, paid: { th: "ชำระเงินแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิกแล้ว", cls: "b-red" } };
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -236,9 +237,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสร็จ" : "ไม่พบใบเสร็จ"}</div>}
       <div className="job-cards">
         {shown.map((x) => {
-          const st = RSTATUS[x.status] || RSTATUS.paid;
+          const st = RSTATUS[x.status] || RSTATUS.pending;
           return (
-          <div className={"card job-card doc2" + (x.status === "paid" ? " closed" : "")} key={x.receipt_no}>
+          <div className={"card job-card doc2" + (x.status !== "pending" ? " closed" : "")} key={x.receipt_no}>
             <DocCardHead no={x.receipt_no} onClick={() => openPeek("receipt", x.receipt_no)}
               badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span>{x.flowaccount_no && <span className="fa-no-badge" title="เลขที่เอกสารใน FlowAccount"><b>FlowAccount</b> {x.flowaccount_no}</span>}</>}
               title={x.title} sub={<span className="dch-more">ดูตัวอย่าง ›</span>} by={x.createdByName}
@@ -255,7 +256,6 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
             {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "receipt", no: x.receipt_no }} onOpen={openPeek} />; })()}
             <InternalNoteTag note={x.internal_note} role={role} />
             <div className="job-lines"><div className="job-actions">
-              {x.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
               <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
               {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
               <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> รายการ / หัก ณ ที่จ่าย</button>

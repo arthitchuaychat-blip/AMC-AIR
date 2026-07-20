@@ -23,9 +23,11 @@ import ItemBrowser from "./ItemBrowser";
 import UnitPick, { unitFactor } from "./UnitPick";
 import { useDocPeek } from "./DocPeek";
 
+// ⚠️ ต้องมีทุกสถานะที่ setQuotationStatus เขียนได้ — สถานะที่ขาดจะตกไป fallback แล้วโชว์ป้ายผิด
 const STATUS = {
   draft: { th: "ร่าง", cls: "b-grey" }, sent: { th: "ส่งแล้ว", cls: "b-blue" },
   approved: { th: "อนุมัติ", cls: "b-green" }, rejected: { th: "ปฏิเสธ", cls: "b-red" }, expired: { th: "หมดอายุ", cls: "b-grey" },
+  cancelled: { th: "ยกเลิกแล้ว", cls: "b-red" },
 };
 const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"], ["approved", "อนุมัติ"], ["rejected", "ปฏิเสธ"], ["expired", "หมดอายุ"]];
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
@@ -451,7 +453,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "quote", no: q.quote_no }} onOpen={openPeek} />; })()}
               <InternalNoteTag note={q.internal_note} role={role} />
               <div className="job-lines"><div className="job-actions">
-                {q.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
                 <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob || q.status === "approved"} title={q.status === "approved" ? "อนุมัติแล้ว — กด 'คืนสถานะแก้ไข' ก่อน" : (lockMsg(q) || "")} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
