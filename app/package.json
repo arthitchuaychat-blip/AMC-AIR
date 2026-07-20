@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test-scoped-loads.mjs src/lib/api.js src/components/Dashboard.jsx && node test-job-visits.mjs src/lib/api.js && node test-customer-form.mjs && node test-status-badges.mjs && node test-undefined-vars.mjs"
+    "test": "node test-scoped-loads.mjs src/lib/api.js src/components/Dashboard.jsx && node test-job-visits.mjs src/lib/api.js && node test-customer-form.mjs && node test-status-badges.mjs && node test-undefined-vars.mjs && node test-promise-all-arity.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

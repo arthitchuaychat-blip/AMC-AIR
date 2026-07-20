@@ -789,9 +789,6 @@ export async function listPurchaseOrders() {
     _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("job_orders").select("job_no,quote_no,assigned_team,status", { count: "exact" }).order("job_no").range(f, t)),
     supabase.from("teams").select("id,name"),
-    // ใบสั่งซื้อ/ชุดเบิกที่แตกออกจากใบเตรียมวัสดุ (ผูกด้วย prep_no) — ไว้โชว์บนการ์ดและกันกดสร้างซ้ำ
-    _rows((f, t) => supabase.from("purchase_orders").select("po_no,prep_no,status,issue_date,created_at", { count: "exact" }).not("prep_no", "is", null).order("po_no").range(f, t)).catch(() => ({ data: [] })),
-    _rows((f, t) => supabase.from("transactions").select("ref_no,prep_no,txn_date,type", { count: "exact" }).not("prep_no", "is", null).eq("type", "withdraw").order("id").range(f, t)).catch(() => ({ data: [] })),
   ]);
   if (poRes.error) throw poRes.error;
   if (itemRes.error) throw itemRes.error;
@@ -833,6 +830,9 @@ export async function listMaterialPreps() {
     _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("job_orders").select("job_no,quote_no,assigned_team,status", { count: "exact" }).order("job_no").range(f, t)),
     supabase.from("teams").select("id,name"),
+    // ใบสั่งซื้อ/ชุดเบิกที่แตกออกจากใบเตรียมวัสดุ (ผูกด้วย prep_no) — ไว้โชว์บนการ์ดและกันกดสร้างซ้ำ
+    _rows((f, t) => supabase.from("purchase_orders").select("po_no,prep_no,status,issue_date,created_at", { count: "exact" }).not("prep_no", "is", null).order("po_no").range(f, t)).catch(() => ({ data: [] })),
+    _rows((f, t) => supabase.from("transactions").select("ref_no,prep_no,txn_date,type", { count: "exact" }).not("prep_no", "is", null).eq("type", "withdraw").order("id").range(f, t)).catch(() => ({ data: [] })),
   ]);
   if (pRes.error) throw pRes.error;
   const byPrep = {}; (iRes.data || []).forEach((it) => { (byPrep[it.prep_no] = byPrep[it.prep_no] || []).push(it); });
