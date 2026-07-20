@@ -4,7 +4,7 @@ import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
-import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
+import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 import PayDetailModal from "./PayDetail";
@@ -933,25 +933,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   }
   React.useEffect(() => { load(); }, [ym, settings]); // settings มาช้ากว่าแท็บได้ — โหลดใหม่เมื่อค่าเวลางาน/โหมด OT มาถึง
 
-  // ⚠️ รอบที่จ่ายแล้ว = ประวัติ ต้องอ่านจากสลิปที่บันทึกไว้ ห้ามคำนวณใหม่
-  //    ไม่งั้นแก้กติกาการนับทีไร ตัวเลขเดือนที่จ่ายไปแล้วขยับตาม พนักงานเปิดสลิปเก่าแล้วเลขไม่ตรงกับเงินที่ได้รับจริง
-  const frozen = (s) => ({
-    monthly: (s.pay_type || "monthly") === "monthly",
-    base: Number(s.base) || 0, otHours: (Number(s.ot_min) || 0) / 60, otPay: Number(s.ot_pay) || 0,
-    holPay: Number(s.hol_pay) || 0, holNormHours: 0, holOtHours: 0,
-    dLate: Number(s.d_late) || 0, dAbsent: Number(s.d_absent) || 0, dLeave: Number(s.d_leave) || 0,
-    dSso: Number(s.d_sso) || 0, dTax: Number(s.d_tax) || 0, dAdvance: Number(s.d_advance) || 0, advanceCarry: 0,
-    bonus: Number(s.bonus) || 0, otherDeduct: Number(s.other_deduct) || 0,
-    gross: (Number(s.base) || 0) + (Number(s.ot_pay) || 0) + (Number(s.hol_pay) || 0) + (Number(s.bonus) || 0),
-    // ⚠️ ห้ามใส่ 0 ตายตัว — เดิม ded: 0 ทำให้สลิปที่จ่ายแล้วพิมพ์ "รวมรายการหัก −฿0.00"
-    //    ทั้งที่บรรทัดหักมาสาย/ขาดงาน/ประกันสังคม/ภาษี ด้านบนมีตัวเลขจริง เลขบนสลิปเลยบวกไม่ลง
-    //    และปุ่มส่งสลิปให้พนักงานทำงานเฉพาะรอบที่จ่ายแล้ว = ทุกใบที่ส่งออกไปถือเลข 0 นี้
-    //    รวมจากรายการหักที่เก็บไว้จริง (ควรเท่ากับ gross − net ของสลิปที่บันทึกถูกต้อง)
-    ded: (Number(s.d_late) || 0) + (Number(s.d_absent) || 0) + (Number(s.d_leave) || 0)
-       + (Number(s.d_sso) || 0) + (Number(s.d_tax) || 0) + (Number(s.d_advance) || 0) + (Number(s.other_deduct) || 0),
-    net: Number(s.net) || 0, _frozen: true,
-  });
-  const calcOf = (r) => (r.slip?.status === "paid" ? frozen(r.slip)
+  // รอบที่จ่ายแล้วอ่านจากสลิปที่บันทึก — สูตรอยู่ที่ lib/payroll.js frozenPayslip() ใช้ร่วมกับหน้า เข้างาน/ลา
+
+  const calcOf = (r) => (r.slip?.status === "paid" ? frozenPayslip(r.slip)
     : computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0 }, r.st, {}));
   // ---- export CSV ราชการ (BOM นำหน้าให้ Excel อ่านไทยถูก) ----
   const dlCsv = (name, rowsArr) => { const csv = "﻿" + rowsArr.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = name; a.click(); };

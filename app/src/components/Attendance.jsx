@@ -2,7 +2,7 @@ import React from "react";
 import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance, cancelMyLeave, listPayslips } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveDaysInYear, leaveDaysInRange, leaveLabel, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
-import { payPeriod, periodStats, computePayslip } from "../lib/payroll";
+import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
 import PayDetailModal from "./PayDetail";
 import { useLang, LEAVE_MY, LV_STATUS_MY } from "../lib/i18n";
 import { UIcon } from "../icons";
@@ -129,7 +129,13 @@ export default function Attendance({ me }) {
       // เบิกล่วงหน้า: รอบที่จ่ายแล้ว = ใบที่ถูกหักในรอบนั้น (period = รอบ) · รอบยังไม่จ่าย = ใบอนุมัติที่ยังไม่ถูกหัก
       const advRows = (advs || []).filter((a) => a.period === payYm || (!a.period && a.status === "approved"));
       const advSum = slip ? Number(slip.d_advance) || 0 : advRows.reduce((x, a) => x + (Number(a.amount) || 0), 0);
-      const c = computePayslip({ ...me, bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0, advance: advSum }, stp, {});
+      // ⚠️ รอบที่จ่ายแล้ว = ประวัติ อ่านจากสลิปที่บันทึก ห้ามคำนวณสดใหม่ (กติกาเดียวกับหน้า HR)
+      //    เดิมคำนวณสดเสมอ: HR แก้เวลาเข้างานย้อนหลังทีเดียว พนักงานเปิดดูแล้วเห็น
+      //    "จ่ายแล้ว ยอดตามสลิป X" อยู่บรรทัดบน แต่ท้ายโมดัลขึ้นสุทธิอีกตัว ซึ่งเป็นเงินที่ไม่เคยโอนจริง
+      //    ใช้ frozenPayslip ตัวเดียวกับ HR.jsx เพื่อไม่ให้สองหน้าคิดคนละแบบอีก
+      const c = slip?.status === "paid"
+        ? frozenPayslip(slip)
+        : computePayslip({ ...me, bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0, advance: advSum }, stp, {});
       const note = slip
         ? (slip.status === "paid" ? L(`✅ รอบนี้จ่ายแล้ว · ยอดสุทธิตามสลิปที่บันทึก ${fmtBaht(slip.net)}`, `✅ ဒီကာလ ပေးချေပြီး · အသားတင် ${fmtBaht(slip.net)}`) : L("📝 รอบนี้ HR บันทึกร่างไว้แล้ว — ตัวเลขอาจขยับได้จนถึงวันจ่าย", "📝 HR မူကြမ်းသိမ်းပြီး — ပေးချေရက်အထိ ပြောင်းနိုင်သည်"))
         : L("⏳ รอบนี้ยังไม่ถูกบันทึกโดย HR — ตัวเลขเป็นการคำนวณสด อาจขยับได้จนถึงวันจ่าย", "⏳ HR မသိမ်းရသေး — အချိန်နှင့်တပြေးညီ တွက်ချက်မှုဖြစ်၍ ပေးချေရက်အထိ ပြောင်းနိုင်သည်");

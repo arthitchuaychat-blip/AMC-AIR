@@ -107,3 +107,25 @@ export function computePayslip(emp, st, opt = {}) {
   return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso, dTax,
     dAdvance: dAdvanceApplied, advanceCarry, bonus, otherDeduct, gross, ded, net: r0(gross - ded) };
 }
+
+// ⚠️ รอบที่จ่ายแล้ว = ประวัติ ต้องอ่านจากสลิปที่บันทึกไว้ ห้ามคำนวณใหม่
+//    ไม่งั้นแก้กติกาการนับทีไร ตัวเลขเดือนที่จ่ายไปแล้วขยับตาม พนักงานเปิดสลิปเก่าแล้วเลขไม่ตรงกับเงินที่ได้รับจริง
+//    ใช้ร่วมกัน 2 หน้า: ตารางเงินเดือนฝั่ง HR และ "เงินเดือนของฉัน" ในหน้าเข้างาน/ลา — ห้ามก๊อปไปไว้คนละที่อีก
+export function frozenPayslip(s) {
+  return {
+    monthly: (s.pay_type || "monthly") === "monthly",
+    base: Number(s.base) || 0, otHours: (Number(s.ot_min) || 0) / 60, otPay: Number(s.ot_pay) || 0,
+    holPay: Number(s.hol_pay) || 0, holNormHours: 0, holOtHours: 0,
+    dLate: Number(s.d_late) || 0, dAbsent: Number(s.d_absent) || 0, dLeave: Number(s.d_leave) || 0,
+    dSso: Number(s.d_sso) || 0, dTax: Number(s.d_tax) || 0, dAdvance: Number(s.d_advance) || 0, advanceCarry: 0,
+    bonus: Number(s.bonus) || 0, otherDeduct: Number(s.other_deduct) || 0,
+    gross: (Number(s.base) || 0) + (Number(s.ot_pay) || 0) + (Number(s.hol_pay) || 0) + (Number(s.bonus) || 0),
+    // ⚠️ ห้ามใส่ 0 ตายตัว — เดิม ded: 0 ทำให้สลิปที่จ่ายแล้วพิมพ์ "รวมรายการหัก −฿0.00"
+    //    ทั้งที่บรรทัดหักมาสาย/ขาดงาน/ประกันสังคม/ภาษี ด้านบนมีตัวเลขจริง เลขบนสลิปเลยบวกไม่ลง
+    //    และปุ่มส่งสลิปให้พนักงานทำงานเฉพาะรอบที่จ่ายแล้ว = ทุกใบที่ส่งออกไปถือเลข 0 นี้
+    //    รวมจากรายการหักที่เก็บไว้จริง (ควรเท่ากับ gross − net ของสลิปที่บันทึกถูกต้อง)
+    ded: (Number(s.d_late) || 0) + (Number(s.d_absent) || 0) + (Number(s.d_leave) || 0)
+       + (Number(s.d_sso) || 0) + (Number(s.d_tax) || 0) + (Number(s.d_advance) || 0) + (Number(s.other_deduct) || 0),
+    net: Number(s.net) || 0, _frozen: true,
+  };
+}

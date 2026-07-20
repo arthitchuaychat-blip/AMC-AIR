@@ -36,8 +36,17 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
-  // prefill search when opened from another page (e.g. "เปิดหน้าลูกค้า" in chat)
-  React.useEffect(() => { if (focus) { setQ(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
+  // เปิดจากหน้าอื่น — focus มาได้ 2 แบบ: "ชื่อลูกค้า" (จากแชต) หรือ "id ลูกค้า" (จากติดตามลูกค้า/คำสั่งซื้อจากเว็บ)
+  // ⚠️ id เอาไปค้นแบบข้อความไม่มีทางเจอ (ไม่มีฟิลด์ไหนเก็บ id ดิบ · custCode เขียนเป็น C000042)
+  //    แถม matchPhone เทียบแบบ "มีตัวเลขนี้อยู่ข้างใน" → ค้น "42" อาจไปโผล่ลูกค้าคนอื่นที่เลขภาษีมี 42
+  //    กดจากหน้าติดตามลูกค้าแล้วได้ลูกค้าผิดคน อันตรายกว่าหาไม่เจอ
+  // → เป็นตัวเลขล้วนและมีลูกค้า id นั้นจริง = เปิดการ์ดคนนั้นเลย · นอกนั้นถือเป็นคำค้นตามเดิม
+  React.useEffect(() => {
+    if (!focus || loading) return;      // รอโหลดลิสต์ก่อน ไม่งั้น id หาไม่เจอแล้วตกไปค้นเป็นข้อความ
+    const byId = /^\d+$/.test(String(focus)) ? list.find((c) => String(c.id) === String(focus)) : null;
+    if (byId) { setQ(""); setViewing(byId); } else setQ(focus);
+    onFocusConsumed && onFocusConsumed();
+  }, [focus, loading, list]);
   // load this customer's documents + jobs whenever the detail modal opens
   React.useEffect(() => {
     if (!viewing) { setViewDocs([]); return; }
