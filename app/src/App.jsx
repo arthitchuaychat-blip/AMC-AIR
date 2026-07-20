@@ -12,6 +12,7 @@ import Subcontractor from "./components/Subcontractor";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
 import { ConfirmHost, confirmDialog } from "./components/ConfirmDialog";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Catalog from "./components/Catalog";
 import Movements from "./components/Movements";
 import StockCount from "./components/StockCount";
@@ -103,7 +104,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-19·แก้รูใน v477 ที่เอเจนต์ตรวจเจอ: RPC เคยส่ง labor_lines (ซึ่งเก็บราคาจากใบเสนอราคา) + โน้ตหลังบ้านไปด้วย · ช่างที่ยังไม่ตั้งทีมเคยเห็นงานทั้งบริษัท · หน้าเบิกของ/ปฏิทิน/เบิกจ่าย ยังโหลดราคาอยู่ v478";
+const BUILD = "2026-07-19·ต่ำ 9: พังหน้าไหนไม่เป็นจอขาวทั้งจออีกแล้ว — ขึ้นข้อความไทย + ปุ่มโหลดใหม่ และเมนูยังใช้ได้ เปลี่ยนไปทำเมนูอื่นต่อได้เลย v479";
 
 function SetupNotice() {
   return (
@@ -445,6 +446,9 @@ export default function App() {
         {navHist.length > 0 && <button className="page-back" onClick={goBack}><UIcon name="chevR" size={15} style={{ transform: "rotate(180deg)" }} /> ย้อนกลับ</button>}
         {/* แถบเตือนงานค้างจากกระดานสั่งงาน — ตามไปทุกเมนู */}
         {profile?.id && <TaskReminder myId={profile.id} view={view} onOpen={(id) => { setTaskFocus(id); go("tasks"); }} onOpenBoard={() => go("tasks")} />}
+        {/* ครอบเฉพาะเนื้อหา ไม่ครอบเมนู/ปุ่มย้อนกลับ — หน้าไหนพังก็ยังเปลี่ยนไปทำเมนูอื่นต่อได้
+            resetKey={view} = เปลี่ยนหน้าแล้วล้าง error เอง ไม่งั้นค้างจอพังยาวถึงหน้าถัดไป */}
+        <ErrorBoundary resetKey={view}>
         {/* แผงแชตทีมลอยขวามือ — ตามไปทุกเมนู (ซ่อนเมื่ออยู่หน้าแชตทีมเอง · ซ่อนบนจอเล็ก) */}
         {profile?.id && can(role, "teamchat") && <ChatDock me={profile} hidden={view === "teamchat"} onOpenFull={() => go("teamchat")} />}
         <InstallBanner />
@@ -534,6 +538,7 @@ export default function App() {
         {view === "hr" && <HR role={role} />}
         {view === "subcontract" && <Subcontractor role={role} onOpenDoc={openDoc} />}
         {view === "settings" && <Settings role={role} />}
+        </ErrorBoundary>
       </main>
       <ConfirmHost />
     </div>
