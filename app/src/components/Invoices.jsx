@@ -10,6 +10,7 @@ import NumIn from "./NumIn";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
+import NotesEditModal from "./NotesEditModal";
 import { useDocPeek } from "./DocPeek";
 import { DocNoteField, InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
@@ -42,6 +43,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [printI, setPrintI] = React.useState(null);
   const [view, setView] = React.useState(null);
   const [search, setSearch] = React.useState("");
+  const [notesEd, setNotesEd] = React.useState(null);   // แก้หมายเหตุใบที่ออกไปแล้ว (ไม่แตะยอดเงิน)
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [noDueF, setNoDueF] = React.useState(false);   // ไล่เก็บใบเก่าที่ไม่ได้ใส่วันครบกำหนด (หลุดจาก KPI เกินกำหนด)
@@ -363,6 +365,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงิน / ออกใบเสร็จ</button>}
                 {canEdit && x.status !== "cancelled" && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
                 <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> รายการ / หัก ณ ที่จ่าย</button>
+                {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => setNotesEd({ kind: "invoice", docNo: x.invoice_no, title: x.title, note: x.note, internalNote: x.internal_note })}><UIcon name="edit" size={14} /> หมายเหตุ</button>}
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintI(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" disabled={x.hasReceipt} title={lockMsg(x) || ""} onClick={() => cancel(x)}>ยกเลิก</button>}
                 {canDelete && <button className="btn-ghost sm danger" disabled={x.hasReceipt} title={x.hasReceipt ? (lockMsg(x) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
@@ -416,6 +419,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           onSave={async ({ items, rate, whtAmt }) => { await setInvoiceWht(view.invoice_no, items, rate, whtAmt); flash("บันทึกหัก ณ ที่จ่ายแล้ว ✓"); setView(null); await load(); }}
         />
       )}
+      {notesEd && <NotesEditModal {...notesEd} onClose={() => setNotesEd(null)} onSaved={load} flash={flash} />}
       {peekEl}
       {toast && <Toast t={toast} />}
     </div>

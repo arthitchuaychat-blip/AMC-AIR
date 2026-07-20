@@ -104,7 +104,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-20·ค้นหาเก่งขึ้น: ช่องค้นหาแชต LINE ค้นเนื้อความในบทสนทนาได้ทั้งประวัติ · ช่องค้นหาทุกหน้าเอกสารค้นหมายเหตุ + หมายเหตุภายในได้ v489";
+const BUILD = "2026-07-20·แก้หมายเหตุใบที่ออกไปแล้วได้: ปุ่ม 'หมายเหตุ' บนใบส่งของ/ใบแจ้งหนี้ · ใบวางบิล · ใบเสร็จ — แก้ได้เฉพาะหมายเหตุ ยอดเงินกับรายการยังล็อกเหมือนเดิม v490";
 
 function SetupNotice() {
   return (

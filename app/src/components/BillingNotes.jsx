@@ -7,6 +7,7 @@ import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
+import NotesEditModal from "./NotesEditModal";
 import { useDocPeek } from "./DocPeek";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
@@ -43,6 +44,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
   // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
   const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
   const [search, setSearch] = React.useState("");
+  const [notesEd, setNotesEd] = React.useState(null);   // แก้หมายเหตุใบที่ออกไปแล้ว (ไม่แตะยอดเงิน)
   const [statusF, setStatusF] = React.useState("all");
   const [docLinks, setDocLinks] = React.useState({ byQuote: {}, invToQuote: {} });
   const [toast, setToast] = React.useState(null);
@@ -153,6 +155,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
             <div className="job-lines"><div className="job-actions">
               <ChatCustomerLink role={role} customerId={b.customer_id} onGoChat={onGoChat} />
               <button className="btn-ghost sm" onClick={() => setOpenInv(openInv === b.billing_no ? null : b.billing_no)}><UIcon name="clipboard" size={14} /> {openInv === b.billing_no ? "ซ่อนรายการ" : "ดูใบแจ้งหนี้ / ออกใบเสร็จ"}</button>
+              {canEdit && b.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => setNotesEd({ kind: "billing", docNo: b.billing_no, title: b.customerName, note: b.note, internalNote: b.internal_note })}><UIcon name="edit" size={14} /> หมายเหตุ</button>}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(b); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canEdit && b.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(b)}>ยกเลิก</button>}
               {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(b)}><UIcon name="trash" size={14} /></button>}
@@ -206,6 +209,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
         );
       })()}
 
+      {notesEd && <NotesEditModal {...notesEd} onClose={() => setNotesEd(null)} onSaved={load} flash={flash} />}
       {peekEl}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>

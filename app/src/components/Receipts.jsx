@@ -9,6 +9,7 @@ import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
 import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
+import NotesEditModal from "./NotesEditModal";
 import { useDocPeek } from "./DocPeek";
 import { DocNoteField, InternalNoteField, InternalNoteTag, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
@@ -43,6 +44,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const [printR, setPrintR] = React.useState(null);
   const [view, setView] = React.useState(null);
   const [search, setSearch] = React.useState("");
+  const [notesEd, setNotesEd] = React.useState(null);   // แก้หมายเหตุใบที่ออกไปแล้ว (ไม่แตะยอดเงิน)
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
@@ -260,6 +262,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
               {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
               <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> รายการ / หัก ณ ที่จ่าย</button>
+              {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => setNotesEd({ kind: "receipt", docNo: x.receipt_no, title: x.title, note: x.note, internalNote: x.internal_note })}><UIcon name="edit" size={14} /> หมายเหตุ</button>}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintR(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
               {canSendFlow && recVat(x) && x.status !== "cancelled" && <button className={"btn-ghost sm" + (x.flowaccount_no ? " fa-sent" : "")} disabled={faBusy === x.receipt_no} title={x.flowaccount_no ? `ส่งแล้ว เลขที่ ${x.flowaccount_no} · กดเพื่อส่งซ้ำ` : "ส่งใบกำกับภาษีเข้า FlowAccount"} onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : x.flowaccount_no ? "✓ FlowAccount" : "↗ FlowAccount"}</button>}
               {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
@@ -329,6 +332,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           </div>
         </div>
       )}
+      {notesEd && <NotesEditModal {...notesEd} onClose={() => setNotesEd(null)} onSaved={load} flash={flash} />}
       {peekEl}
       {toast && <Toast t={toast} />}
     </div>

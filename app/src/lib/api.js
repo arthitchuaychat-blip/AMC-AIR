@@ -1535,6 +1535,57 @@ async function syncInternalNote({ quoteNo, boqNo, invoiceNo }, note) {
   } catch (_) { /* ส่งต่อไม่สำเร็จก็ไม่ให้ขวางการบันทึกหลัก */ }
 }
 
+// แก้ "หมายเหตุ" ของเอกสารที่ออกไปแล้ว โดยไม่แตะยอดเงิน/รายการ
+// ใบส่งของ/ใบแจ้งหนี้ · ใบวางบิล · ใบเสร็จ ไม่มีฟอร์มแก้ทั้งใบ (ตั้งใจ — เป็นเอกสารการเงิน)
+// แต่หมายเหตุต้องแก้ได้ตามกติกาเจ้าของ จึงเปิดทางแคบ ๆ เฉพาะ 2 คอลัมน์นี้
+//
+// note          = ของใบนั้นใบเดียว (สิ่งที่พิมพ์ลงกระดาษของใบนั้น)
+// internal_note = ของทั้งสายเอกสาร → ส่งต่อผ่าน syncInternalNote เหมือนตอนบันทึกใบใหม่
+// เฉพาะ 3 ใบที่ "ไม่มีฟอร์มแก้ทั้งใบ" เท่านั้น — BOQ / ใบเสนอราคา / ใบสั่งซื้อ มีฟอร์มของตัวเองอยู่แล้ว
+// และฟอร์มพวกนั้นบังคับล็อกของมันเอง (เช่น ใบเสนอที่อนุมัติแล้วต้องกด "คืนสถานะแก้ไข" ก่อน)
+// ถ้าเปิดทางนี้ให้ด้วยจะกลายเป็นประตูหลังข้ามล็อกพวกนั้น
+//
+// link = คีย์ที่ใช้ส่ง internal_note ต่อทั้งสาย · ต้องตรงกับที่ save ปกติของใบนั้นใช้
+// audit = ชื่อชนิดเอกสารในสมุดตรวจสอบ (ต้องตรงกับ AUDIT_TYPES ใน Settings ไม่งั้นกรองไม่เจอ)
+const _NOTE_DOCS = {
+  invoice: { table: "invoices", pk: "invoice_no", th: "ใบส่งของ/ใบแจ้งหนี้", audit: "invoice", linkCol: null },
+  billing: { table: "billing_notes", pk: "billing_no", th: "ใบวางบิล", audit: "billing_note", linkCol: "invoice_nos" },
+  receipt: { table: "receipts", pk: "receipt_no", th: "ใบเสร็จ", audit: "receipt", linkCol: "invoice_no" },
+};
+export async function updateDocNotes(kind, docNo, { note, internal_note }) {
+  const d = _NOTE_DOCS[kind];
+  if (!d) throw new Error(`ไม่รู้จักชนิดเอกสาร: ${kind}`);
+  if (!docNo) throw new Error("ไม่มีเลขที่เอกสาร");
+  const n = (note ?? "").trim() || null;
+  const inn = (internal_note ?? "").trim() || null;
+
+  // ใบที่ยกเลิกแล้ว = ประวัติ ห้ามแก้ (กติกาบ้าน — ล็อกทุกชั้น เหลือแค่ดู/พิมพ์)
+  // ดึงคีย์เชื่อมสายมาในรอบเดียวกัน — ต้องใช้ส่ง internal_note ต่อทั้งสายด้านล่าง
+  const cols = "status" + (d.linkCol ? "," + d.linkCol : "");
+  const { data: cur, error: eR } = await supabase.from(d.table).select(cols).eq(d.pk, docNo).maybeSingle();
+  if (eR) throw eR;                        // อ่านไม่ได้ ห้ามเดินต่อ (ห้าม fail-open)
+  if (!cur) throw new Error(`ไม่พบ${d.th} ${docNo}`);
+  if (cur.status === "cancelled") throw new Error(`${d.th} ${docNo} ยกเลิกไปแล้ว — แก้หมายเหตุไม่ได้`);
+
+  // เช็กผลจริง: RLS ที่ปฏิเสธจะคืน 0 แถวแบบไม่ error → ถ้าไม่เช็ก จอจะขึ้น "บันทึกแล้ว" ทั้งที่ไม่ได้เขียนอะไร
+  const { data: hit, error } = await supabase.from(d.table)
+    .update({ note: n, internal_note: inn }).eq(d.pk, docNo).select(d.pk);
+  if (error) throw error;
+  if (!hit?.length) throw new Error("บันทึกไม่สำเร็จ — ไม่มีสิทธิ์แก้เอกสารนี้");
+
+  // หมายเหตุภายในเป็นของทั้งสาย — ส่งต่อเหมือนเส้นทางบันทึกปกติ (ล้มเหลวไม่ขวางการบันทึกหลัก)
+  // ⚠️ ต้องส่งต่อให้ครบทุกชนิด ไม่งั้นค่าที่พิมพ์จะเป็นเด็กกำพร้า: อยู่ใบเดียว แล้วรอบหน้าที่ใครก็ตาม
+  //    บันทึกใบใดในสายนี้ syncInternalNote จะกวาดค่าเก่าทับกลับลงมา (receipts .in(invoice_no) /
+  //    billing_notes .overlaps(invoice_nos)) = สิ่งที่เพิ่งพิมพ์หายเงียบ ๆ โดยไม่มี error
+  //    คีย์ที่ใช้ต้องตรงกับ saveReceipt / saveBillingNote ซึ่งอ้างผ่านใบแจ้งหนี้เหมือนกัน
+  const link = kind === "invoice" ? { invoiceNo: docNo }
+    : kind === "receipt" ? (cur.invoice_no ? { invoiceNo: cur.invoice_no } : null)
+    : kind === "billing" ? ((cur.invoice_nos || [])[0] ? { invoiceNo: cur.invoice_nos[0] } : null)
+    : null;
+  if (link && inn) await syncInternalNote(link, inn).catch(() => {});
+  await logAudit({ action: "update", target_type: d.audit, target_no: docNo, reason: "แก้หมายเหตุเอกสาร" }).catch(() => {});
+}
+
 export async function saveBoq(boq, items) {
   const { data: { user } } = await supabase.auth.getUser();
   const bHead = {
