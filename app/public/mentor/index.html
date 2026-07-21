@@ -845,6 +845,13 @@ function openMember(id){
       </div>`;})()}
   </div>`;})()}
 
+  ${(m.trainings&&m.trainings.length)?`<div class="sect"><h4>🎓 ประวัติการอบรม <span style="font-weight:400;color:var(--mut);font-size:11px">— ${m.trainings.length} หลักสูตร</span></h4>
+    ${m.trainings.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>`<div style="display:flex;gap:11px;padding:8px 0;border-bottom:1px solid #f2f4fa">
+      <div style="font-size:11.5px;color:var(--mut);white-space:nowrap;min-width:86px">${fmt(t.date)}</div>
+      <div style="flex:1"><b style="font-size:13px">${esc(t.name)}</b>${t.note?`<div style="font-size:11.5px;color:var(--mut);margin-top:1px">${esc(t.note)}</div>`:''}</div>
+    </div>`).join('')}
+  </div>`:''}
+
   <div class="sect"><h4>📝 หมายเหตุ</h4>
     <textarea rows="2" onchange="upd('${id}','note',this.value)">${esc(m.note||'')}</textarea>
   </div>

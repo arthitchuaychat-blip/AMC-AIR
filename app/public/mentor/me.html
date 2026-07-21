@@ -255,6 +255,14 @@ function render(){
     </div>`;}).join('')}
   </div>
 
+  ${(m.trainings&&m.trainings.length)?`<div class="card">
+    <h2>🎓 ประวัติการอบรม <span class="cnt">${m.trainings.length}</span></h2>
+    ${m.trainings.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>`<div style="display:flex;gap:11px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+      <div style="font-size:11.5px;color:var(--mut);white-space:nowrap;min-width:88px">${fmt(t.date)}</div>
+      <div style="flex:1"><b style="font-size:13.5px">${esc(t.name)}</b>${t.note?`<div style="font-size:11.5px;color:var(--mut);margin-top:1px">${esc(t.note)}</div>`:''}</div>
+    </div>`).join('')}
+  </div>`:''}
+
   <div class="card">
     <h2>✏️ แก้ไขข้อมูลของฉัน</h2>
     <div class="field"><label>ชื่อเล่น</label><input type="text" id="f_nick" value="${esc(m.nick||'')}"></div>
