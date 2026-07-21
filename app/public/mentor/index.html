@@ -741,6 +741,12 @@ function vMembers(){
   </div>`;
 }
 
+/* รายชื่อสมาชิกสำหรับเลือกเป็น Personal Mentor: "ชื่อเล่นไทย + ชื่อจริงอังกฤษ" */
+function mentorName(m){return ((m.nick||'').trim()+' '+(m.name||'').trim()).trim();}
+function mentorOptions(excludeId){
+  return [...new Set(state.members.filter(m=>m.id!==excludeId).map(mentorName).filter(Boolean))].sort()
+    .map(x=>`<option value="${esc(x)}">`).join('');
+}
 /* ---------- member modal ---------- */
 function openModal(html){document.getElementById('modalBox').innerHTML=html;document.getElementById('ovl').classList.add('show');}
 function closeModal(){document.getElementById('ovl').classList.remove('show');render();}
@@ -777,7 +783,7 @@ function openMember(id){
     <div class="field"><label>อาชีพ</label><input type="text" value="${esc(m.prof||'')}" onchange="upd('${id}','prof',this.value)"></div>
     <div class="field"><label>อีเมล</label><input type="text" value="${esc(m.email||'')}" placeholder="name@email.com" onchange="upd('${id}','email',this.value)"></div>
     <div class="field"><label>เบอร์โทร</label><input type="text" value="${esc(m.phone||'')}" placeholder="08x-xxx-xxxx" onchange="upd('${id}','phone',this.value)"></div>
-    <div class="field"><label>Personal Mentor</label><input type="text" value="${esc(m.mentor||'')}" ${adm?`onchange="upd('${id}','mentor',this.value)"`:'readonly style="background:#f1f4fb"'}></div>
+    <div class="field"><label>Personal Mentor</label><input type="text" value="${esc(m.mentor||'')}" ${adm?`list="mentorlist" placeholder="พิมพ์/เลือกจากรายชื่อสมาชิก" onchange="upd('${id}','mentor',this.value)"`:'readonly style="background:#f1f4fb"'}>${adm?`<datalist id="mentorlist">${mentorOptions(id)}</datalist>`:''}</div>
     <div class="field"><label>วันเริ่มเป็นสมาชิก</label><input type="date" value="${esc(m.start||'')}" ${adm?`onchange="upd('${id}','start',this.value)"`:'readonly style="background:#f1f4fb"'}></div>
     <div class="field"><label>สถานะสมาชิก</label><select ${adm?`onchange="upd('${id}','status',this.value)"`:'disabled style="background:#f1f4fb"'}>
       <option ${m.status==='ปีแรก'?'selected':''}>ปีแรก</option><option ${m.status==='เกิน 1 ปี'?'selected':''}>เกิน 1 ปี</option></select></div>
@@ -894,8 +900,8 @@ function openAdd(){
     <div class="field"><label>อาชีพ</label><input type="text" id="a_prof"></div>
     <div class="field"><label>อีเมล</label><input type="text" id="a_email" placeholder="name@email.com"></div>
     <div class="field"><label>เบอร์โทร</label><input type="text" id="a_phone" placeholder="08x-xxx-xxxx"></div>
-    <div class="field"><label>Personal Mentor *</label><input type="text" id="a_mentor" list="mentors">
-      <datalist id="mentors">${[...new Set(state.members.map(m=>m.mentor).filter(Boolean))].map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
+    <div class="field"><label>Personal Mentor *</label><input type="text" id="a_mentor" list="mentors" placeholder="พิมพ์/เลือกจากรายชื่อสมาชิก">
+      <datalist id="mentors">${mentorOptions()}</datalist></div>
     <div class="field"><label>วันเริ่มเป็นสมาชิก *</label><input type="date" id="a_start" value="${new Date().toISOString().slice(0,10)}"></div>
   </div>
   <div style="text-align:right;margin-top:10px"><button class="btn gold" onclick="addMember()">บันทึกสมาชิกใหม่</button></div>`);
