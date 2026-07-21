@@ -536,6 +536,34 @@ function vDashBody(ms){
 }
 const AV_COLORS=['#5b6cf0','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#22c55e'];
 function avColor(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return AV_COLORS[h%AV_COLORS.length];}
+function avatarHtml(m,sz){sz=sz||44;const r=Math.round(sz*0.3);
+  if(m.photo)return `<img src="${esc(m.photo)}" style="width:${sz}px;height:${sz}px;border-radius:${r}px;object-fit:cover;flex:none;box-shadow:inset 0 -6px 12px rgba(0,0,0,.12)" alt="">`;
+  return `<div style="width:${sz}px;height:${sz}px;border-radius:${r}px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(sz*0.42)}px;color:#fff;flex:none;background:${avColor(m.name)};box-shadow:inset 0 -6px 12px rgba(0,0,0,.14)">${esc((m.nick||m.name).trim().charAt(0))}</div>`;}
+async function uploadPhoto(id,inp){
+  const f=inp.files[0];if(!f)return;
+  if(f.size>5*1024*1024){toast('รูปใหญ่เกิน 5MB');return;}
+  toast('⏳ กำลังอัพโหลดรูป...');
+  const ext=(f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+  const path=id+'/photo_'+Date.now()+'.'+ext;
+  try{const r=await fetch(SB_URL+'/storage/v1/object/tm_slides/'+path,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':f.type||'image/jpeg','x-upsert':'true'},body:f});if(!r.ok)throw new Error(r.status);}
+  catch(e){toast('❌ อัพโหลดรูปไม่สำเร็จ');return;}
+  const m=findM(id);m.photo=SB_URL+'/storage/v1/object/public/tm_slides/'+path;save(id);openMember(id);toast('✅ เปลี่ยนรูปแล้ว');
+}
+function exportMembersCsv(){
+  const ms=membersList();
+  const rnd=(m,k)=>{const i=hsInfo(m,HS.find(h=>h.key===k));return {done:'ตอบแล้ว',wait:'รอตอบ',due:'ถึงกำหนด',notyet:'—'}[i.st];};
+  const happ=m=>{let h=null;HS.forEach(x=>{const rec=(m.hs&&m.hs[x.key])||{};if(rec.done&&Number.isFinite(rec.happiness))h=rec.happiness;});return h==null?'':h;};
+  const renew=m=>{let r='';HS.forEach(x=>{const rec=(m.hs&&m.hs[x.key])||{};if(rec.done&&rec.renew)r=rec.renew;});return r;};
+  const cols=['ชื่อเล่น','ชื่อ-สกุล','อาชีพ','อีเมล','เบอร์โทร','สถานะ','วันเริ่ม','อายุสมาชิก','Mentor','Mentoring','สไลด์','3เดือน','6เดือน','12เดือน','ความสุขล่าสุด','เจตนาต่ออายุ','หมายเหตุ'];
+  const rows=ms.map(m=>[m.nick||'',m.name||'',m.prof||'',m.email||'',m.phone||'',m.status||'',fmt(m.start),ageLabel(m),m.mentor||'',
+    (wLast(m)<0?'ยังไม่เริ่ม':wLast(m)+'/8'),SLIDES.filter(([k])=>hasSlide(m,k)).length+'/3',
+    rnd(m,'m3'),rnd(m,'m6'),rnd(m,'m12'),happ(m),renew(m),(m.note||'').replace(/\n/g,' ')]);
+  const esc2=v=>{v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const csv='﻿'+[cols,...rows].map(r=>r.map(esc2).join(',')).join('\r\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='the-top-mentor-สมาชิก-'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+  toast('ดาวน์โหลด CSV แล้ว ('+ms.length+' คน)');
+}
 function mcardHtml(m){
   const l=wLast(m),sd=SLIDES.filter(([k])=>hasSlide(m,k)).length;
   const s=pd(m.start);
@@ -549,7 +577,7 @@ function mcardHtml(m){
     :['#e3ebfe','#2f5ce0',`สัปดาห์ที่ ${expected===null?0:expected} · ตามแผน`];
   return `<div class="mcard" onclick="openMember('${m.id}')">
     <div class="mtop">
-      <div class="avatar" style="background:${avColor(m.name)}">${esc((m.nick||m.name).trim().charAt(0))}</div>
+      ${avatarHtml(m,44)}
       <div class="minfo"><b>${esc(m.nick||m.name)}</b><small>${esc(m.name)}</small></div>
       <span class="wchip" style="background:${chip[0]};color:${chip[1]}">${chip[2]}</span>
     </div>
@@ -593,7 +621,7 @@ function membersTableHtml(){
     ${ms.map(m=>{
       const icons=HS.map(h=>hsIcon(hsInfo(m,h).st)).join(' ');
       return `<tr class="click" onclick="openMember('${m.id}')">
-      <td class="mname">${esc(m.nick||'')} <small>${esc(m.name)}</small></td>
+      <td class="mname"><div style="display:flex;align-items:center;gap:9px">${avatarHtml(m,34)}<div>${esc(m.nick||'')} <small>${esc(m.name)}</small></div></div></td>
       <td style="font-size:12.5px;max-width:170px">${esc(m.prof||'')}</td>
       <td><span class="badge ${m.status==='ปีแรก'?'b-first':'b-old'}">${esc(m.status||'—')}</span></td>
       <td style="white-space:nowrap">${fmt(m.start)}<small style="display:block;color:var(--mut);font-size:11px">อายุ ${ageLabel(m)}</small></td>
@@ -648,6 +676,7 @@ function vMembers(){
         <option value="name" ${msort==='name'?'selected':''}>ชื่อเล่น (ก-ฮ)</option>
         <option value="progress" ${msort==='progress'?'selected':''}>ความคืบหน้า</option></select></label>
       <button class="btn ghost sm" onclick="resetFilters();render()">↺ ล้างตัวกรอง</button>
+      <button class="btn ghost sm" onclick="exportMembersCsv()">⬇️ ส่งออก CSV</button>
     </div>
     <div id="mtable">${membersTableHtml()}</div>
   </div>`;
@@ -663,8 +692,15 @@ function openMember(id){
   const cw=curWeek(m);
   openModal(`
   <button class="x" onclick="closeModal()">✕</button>
-  <h3>${esc(m.nick||'')} — ${esc(m.name)}</h3>
-  <div class="sub">${esc(m.prof||'')} · เริ่ม ${fmt(m.start)} · อายุสมาชิก ${ageLabel(m)}${cw!==null?` · สัปดาห์ที่ ${cw}`:''}</div>
+  <div style="display:flex;align-items:center;gap:13px;margin-bottom:6px">
+    <label style="cursor:pointer;position:relative;flex:none" title="เปลี่ยนรูป">${avatarHtml(m,56)}
+      <input type="file" accept="image/*" style="display:none" onchange="uploadPhoto('${id}',this)">
+      <span style="position:absolute;right:-3px;bottom:-3px;background:#fff;border-radius:99px;font-size:10px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.25)">📷</span></label>
+    <div style="flex:1;min-width:0">
+      <h3 style="padding-right:34px">${esc(m.nick||'')} — ${esc(m.name)}</h3>
+      <div class="sub" style="margin-bottom:0">${esc(m.prof||'')} · เริ่ม ${fmt(m.start)} · อายุ ${ageLabel(m)}${cw!==null?` · สัปดาห์ที่ ${cw}`:''}</div>
+    </div>
+  </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 12px">
     ${renewChip(m)}
     ${adm?(renewInfo(m)&&renewInfo(m).renewed

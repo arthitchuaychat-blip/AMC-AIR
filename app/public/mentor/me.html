@@ -150,7 +150,9 @@ function render(){
   app.innerHTML=`
   <div class="hero">
     <div class="top">
-      <div class="avatar" style="background:${avColor(m.name)}">${esc((m.nick||m.name).trim().charAt(0))}</div>
+      <label style="cursor:pointer;position:relative;flex:none" title="เปลี่ยนรูป">${m.photo?`<img src="${esc(m.photo)}" class="avatar" style="object-fit:cover">`:`<div class="avatar" style="background:${avColor(m.name)}">${esc((m.nick||m.name).trim().charAt(0))}</div>`}
+        <input type="file" accept="image/*" style="display:none" onchange="uploadPhoto(this)">
+        <span style="position:absolute;right:-3px;bottom:-3px;background:#fff;color:#333;border-radius:99px;font-size:11px;width:22px;height:22px;display:flex;align-items:center;justify-content:center">📷</span></label>
       <div><h1>${esc(m.nick||m.name)}</h1><div class="sub">${esc(m.name)}${m.prof?' · '+esc(m.prof):''}</div></div>
     </div>
     <div class="chips">
@@ -280,6 +282,17 @@ async function submitSurvey(round){
   rec.source='line-form';
   ME.hs=Object.assign({},ME.hs,{[round]:rec});
   await persist();toast('✅ ส่งแบบสอบถามเรียบร้อย ขอบคุณครับ 🙏');render();window.scrollTo(0,0);
+}
+async function uploadPhoto(inp){
+  const f=inp.files[0];if(!f)return;
+  if(f.size>5*1024*1024){toast('รูปใหญ่เกิน 5MB');return;}
+  toast('⏳ กำลังอัพโหลดรูป...');
+  const ext=(f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+  const path=ROWID+'/photo_'+Date.now()+'.'+ext;
+  try{const r=await fetch(SB_URL+'/storage/v1/object/tm_slides/'+path,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':f.type||'image/jpeg','x-upsert':'true'},body:f});if(!r.ok)throw new Error(r.status);}
+  catch(e){toast('❌ อัพโหลดไม่สำเร็จ');return;}
+  ME.photo=SB_URL+'/storage/v1/object/public/tm_slides/'+path;
+  await persist();render();toast('✅ เปลี่ยนรูปแล้ว');
 }
 async function saveProfile(){
   ME.nick=document.getElementById('f_nick').value.trim();
