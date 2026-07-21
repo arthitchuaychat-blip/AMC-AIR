@@ -244,12 +244,19 @@ async function aiGate(convId, cfg) {
       if (rs.ok && (await rs.json()).length) return "staff-took-over";
     }
 
+    // ⚠️ นับจำนวนแถวด้วย count header ไม่ใช่ .length ของ payload — select ตัน 1000 แถวเสมอ
+    //    ถ้าตั้งเพดานเกิน 1000 (ai_max_per_day ไม่มีลิมิตบน) แล้วนับ .length จะได้ 1000 ตลอด → 1000 >= 2000 เป็นเท็จ
+    //    เพดานเลยไม่มีวันทำงาน API ถูกยิงไม่หยุด (แบบเดียวกับ ?aicat=1 ที่นับถูกอยู่แล้ว)
+    const countRows = async (qs) => {
+      const r = await tfetch(`${SB()}/rest/v1/line_messages?${qs}&select=id`, { headers: { ...sbH(), Prefer: "count=exact", Range: "0-0" } });
+      return r.ok ? (Number((r.headers.get("content-range") || "").split("/")[1]) || 0) : 0;
+    };
+
     // (3) เพดานต่อห้องต่อชั่วโมง — นับเฉพาะคำตอบบอท (ขึ้นต้น 🤖) ไม่นับข้อความตายตัวนอกเวลา
     const perHour = Math.max(0, Number(cfg.ai_max_per_hour) || 6);
     if (perHour > 0) {
       const since = new Date(Date.now() - 3600000).toISOString();
-      const rh = await tfetch(`${SB()}/rest/v1/line_messages?line_user_id=eq.${encodeURIComponent(convId)}&direction=eq.out&sent_by=is.null&text=like.${encodeURIComponent("🤖%")}&created_at=gte.${since}&select=id`, { headers: sbH() });
-      if (rh.ok && (await rh.json()).length >= perHour) return `room-hour-cap(${perHour})`;
+      if (await countRows(`line_user_id=eq.${encodeURIComponent(convId)}&direction=eq.out&sent_by=is.null&text=like.${encodeURIComponent("🤖%")}&created_at=gte.${since}`) >= perHour) return `room-hour-cap(${perHour})`;
     }
 
     // (4) เพดานรวมทั้งร้านต่อวัน — กันบิลค่า API บานปลายจากคนยิงรัว
@@ -258,8 +265,7 @@ async function aiGate(convId, cfg) {
     if (perDay > 0) {
       const th = new Date(Date.now() + 7 * 3600000);
       const startTh = new Date(Date.UTC(th.getUTCFullYear(), th.getUTCMonth(), th.getUTCDate()) - 7 * 3600000).toISOString();
-      const rd = await tfetch(`${SB()}/rest/v1/line_messages?direction=eq.out&sent_by=is.null&text=like.${encodeURIComponent("🤖%")}&created_at=gte.${startTh}&select=id`, { headers: sbH() });
-      if (rd.ok && (await rd.json()).length >= perDay) return `day-cap(${perDay})`;
+      if (await countRows(`direction=eq.out&sent_by=is.null&text=like.${encodeURIComponent("🤖%")}&created_at=gte.${startTh}`) >= perDay) return `day-cap(${perDay})`;
     }
     return null;
   } catch (_) { return null; }   // เช็คไม่ได้ = ปล่อยให้ตอบ ดีกว่าบอทเงียบเพราะ query พัง
