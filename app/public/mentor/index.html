@@ -606,8 +606,8 @@ function exportMembersCsv(){
   const rnd=(m,k)=>{const i=hsInfo(m,HS.find(h=>h.key===k));return {done:'ตอบแล้ว',wait:'รอตอบ',due:'ถึงกำหนด',notyet:'—',na:'ไม่เกี่ยวข้อง'}[i.st]||'';};
   const happ=m=>{let h=null;HS.forEach(x=>{if(!surveyApplies(m,x))return;const rec=(m.hs&&m.hs[x.key])||{};if(rec.done&&Number.isFinite(rec.happiness))h=rec.happiness;});return h==null?'':h;};
   const renew=m=>{let r='';HS.forEach(x=>{if(!surveyApplies(m,x))return;const rec=(m.hs&&m.hs[x.key])||{};if(rec.done&&rec.renew)r=rec.renew;});return r;};
-  const cols=['ชื่อเล่น','ชื่อ-สกุล','อาชีพ','อีเมล','เบอร์โทร','สถานะ','วันเริ่ม','อายุสมาชิก','Mentor','Mentoring','สไลด์','3เดือน','6เดือน','12เดือน','ความสุขล่าสุด','เจตนาต่ออายุ','หมายเหตุ'];
-  const rows=ms.map(m=>[m.nick||'',m.name||'',m.prof||'',m.email||'',m.phone||'',m.status||'',fmt(m.start),ageLabel(m),m.mentor||'',
+  const cols=['ชื่อเล่น','ชื่อ-สกุล','อาชีพ','ชื่อบริษัท','เว็บไซต์','อีเมล','เบอร์โทร','สถานะ','วันเริ่ม','อายุสมาชิก','Mentor','Mentoring','สไลด์','3เดือน','6เดือน','12เดือน','ความสุขล่าสุด','เจตนาต่ออายุ','หมายเหตุ'];
+  const rows=ms.map(m=>[m.nick||'',m.name||'',m.prof||'',m.company||'',m.website||'',m.email||'',m.phone||'',m.status||'',fmt(m.start),ageLabel(m),m.mentor||'',
     (wLast(m)<0?'ยังไม่เริ่ม':wLast(m)+'/8'),SLIDES.filter(([k])=>hasSlide(m,k)).length+'/3',
     rnd(m,'m3'),rnd(m,'m6'),rnd(m,'m12'),happ(m),renew(m),(m.note||'').replace(/\n/g,' ')]);
   const esc2=v=>{v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
@@ -780,9 +780,11 @@ function openMember(id){
   <div class="grid2">
     <div class="field"><label>ชื่อสมาชิก (Member Name)</label><input type="text" value="${esc(m.name)}" onchange="upd('${id}','name',this.value)"></div>
     <div class="field"><label>ชื่อเล่น</label><input type="text" value="${esc(m.nick||'')}" onchange="upd('${id}','nick',this.value)"></div>
-    <div class="field"><label>อาชีพ</label><input type="text" value="${esc(m.prof||'')}" onchange="upd('${id}','prof',this.value)"></div>
+    <div class="field"><label>อาชีพ / ประเภทธุรกิจ</label><input type="text" value="${esc(m.prof||'')}" onchange="upd('${id}','prof',this.value)"></div>
+    <div class="field"><label>ชื่อบริษัท</label><input type="text" value="${esc(m.company||'')}" placeholder="บริษัท ... จำกัด" onchange="upd('${id}','company',this.value)"></div>
     <div class="field"><label>อีเมล</label><input type="text" value="${esc(m.email||'')}" placeholder="name@email.com" onchange="upd('${id}','email',this.value)"></div>
     <div class="field"><label>เบอร์โทร</label><input type="text" value="${esc(m.phone||'')}" placeholder="08x-xxx-xxxx" onchange="upd('${id}','phone',this.value)"></div>
+    <div class="field"><label>เว็บไซต์</label><input type="text" value="${esc(m.website||'')}" placeholder="www.example.com" onchange="upd('${id}','website',this.value)"></div>
     <div class="field"><label>Personal Mentor</label><input type="text" value="${esc(m.mentor||'')}" ${adm?`list="mentorlist" placeholder="พิมพ์/เลือกจากรายชื่อสมาชิก" onchange="upd('${id}','mentor',this.value)"`:'readonly style="background:#f1f4fb"'}>${adm?`<datalist id="mentorlist">${mentorOptions(id)}</datalist>`:''}</div>
     <div class="field"><label>วันเริ่มเป็นสมาชิก</label><input type="date" value="${esc(m.start||'')}" ${adm?`onchange="upd('${id}','start',this.value)"`:'readonly style="background:#f1f4fb"'}></div>
     <div class="field"><label>สถานะสมาชิก</label><select ${adm?`onchange="upd('${id}','status',this.value)"`:'disabled style="background:#f1f4fb"'}>

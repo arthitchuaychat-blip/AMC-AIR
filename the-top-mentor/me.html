@@ -259,8 +259,10 @@ function render(){
     <h2>✏️ แก้ไขข้อมูลของฉัน</h2>
     <div class="field"><label>ชื่อเล่น</label><input type="text" id="f_nick" value="${esc(m.nick||'')}"></div>
     <div class="field"><label>อาชีพ / ธุรกิจ</label><input type="text" id="f_prof" value="${esc(m.prof||'')}"></div>
+    <div class="field"><label>ชื่อบริษัท</label><input type="text" id="f_company" value="${esc(m.company||'')}" placeholder="บริษัท ... จำกัด"></div>
     <div class="field"><label>อีเมล</label><input type="text" id="f_email" value="${esc(m.email||'')}" placeholder="name@email.com"></div>
     <div class="field"><label>เบอร์โทร</label><input type="text" id="f_phone" value="${esc(m.phone||'')}" placeholder="08x-xxx-xxxx"></div>
+    <div class="field"><label>เว็บไซต์</label><input type="text" id="f_website" value="${esc(m.website||'')}" placeholder="www.example.com"></div>
     <button class="btn gold" onclick="saveProfile()">💾 บันทึกข้อมูล</button>
   </div>`;
 }
@@ -392,6 +394,8 @@ async function saveProfile(){
   ME.prof=document.getElementById('f_prof').value.trim();
   ME.email=document.getElementById('f_email').value.trim();
   ME.phone=document.getElementById('f_phone').value.trim();
+  ME.company=document.getElementById('f_company').value.trim();
+  ME.website=document.getElementById('f_website').value.trim();
   await persist();render();toast('✅ บันทึกข้อมูลแล้ว');
 }
 // โหลด config ให้ CFG ก่อน (สำหรับลิงก์แบบสอบถาม) แล้ว boot
