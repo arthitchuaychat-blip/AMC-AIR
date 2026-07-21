@@ -1177,14 +1177,15 @@ function lineOrderMsg(p) {
 // บอทกรอกทุกช่องที่เจอ รวมช่องที่ซ่อนไว้ → มีค่าเมื่อไหร่ = ทิ้งเงียบ ๆ (แกล้งบอกว่าส่งสำเร็จ บอทจะได้ไม่ลองใหม่)
 const isBot = (f) => !!(f.company && f.company.value);
 // กันกดซ้ำ/กดรัว ฝั่งเบราว์เซอร์ — ชั้นนี้กันคนพลาดกดสองที ส่วนสคริปต์ที่ยิงตรงเข้าฐานข้อมูลกันด้วย policy (mig 169)
+// ⚠️ tooSoon() ต้อง "อ่านอย่างเดียว" ห้าม stamp ตรงนี้ — ไม่งั้นส่งล้มเหลว (เน็ตหลุด/policy ปฏิเสธ) แล้วนับว่าส่งไปแล้ว
+//    ลูกค้ากดใหม่จะขึ้น "ได้รับแล้ว" ทั้งที่ไม่มีในระบบ → คำสั่งซื้อหายเงียบ · จึง stamp เฉพาะหลัง insert สำเร็จ
 const tooSoon = () => {
   try {
     const last = Number(localStorage.getItem("amc_last_send_at") || 0);
-    if (Date.now() - last < 30000) return true;
-    localStorage.setItem("amc_last_send_at", String(Date.now()));
-  } catch (_) { /* เบราว์เซอร์ปิด localStorage ก็ปล่อยผ่าน ไม่ให้ลูกค้าจริงส่งไม่ได้ */ }
-  return false;
+    return Date.now() - last < 30000;
+  } catch (_) { return false; }  /* เบราว์เซอร์ปิด localStorage ก็ปล่อยผ่าน ไม่ให้ลูกค้าจริงส่งไม่ได้ */
 };
+const stampSend = () => { try { localStorage.setItem("amc_last_send_at", String(Date.now())); } catch (_) {} };
 
 async function submitOrder(e) {
   e.preventDefault();
@@ -1207,6 +1208,7 @@ async function submitOrder(e) {
   try {
     const { error } = await sb.from("web_orders").insert(payload);
     if (error) throw error;
+    stampSend();   // สำเร็จแล้วค่อยจับเวลากันกดซ้ำ — ล้มเหลวจะได้กดใหม่ได้ทันที
     // ลิงก์เปิดแชท LINE OA พร้อมข้อความรายการ (ปุ่มให้ลูกค้ากดเอง — เปิดอัตโนมัติโดน popup blocker)
     const lineUrl = C.LINE_ID
       ? "https://line.me/R/oaMessage/" + encodeURIComponent(C.LINE_ID) + "/?" + encodeURIComponent(lineOrderMsg(payload))
@@ -1238,6 +1240,7 @@ async function submitLead(e) {
   try {
     const { error } = await sb.from("web_orders").insert(payload);
     if (error) throw error;
+    stampSend();   // สำเร็จแล้วค่อยจับเวลากันกดซ้ำ — ล้มเหลวจะได้กดใหม่ได้ทันที
     f.reset(); toast("ส่งคำขอแล้ว ✓ ทีมงานจะติดต่อกลับโดยเร็ว");
     track("generate_lead", { currency: "THB", value: 0, lead_type: "contact_form" });
   } catch (err) { toast("ส่งไม่สำเร็จ ลองใหม่หรือโทรหาเรา", true); }

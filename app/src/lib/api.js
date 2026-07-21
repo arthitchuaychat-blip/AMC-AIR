@@ -1593,6 +1593,10 @@ export async function saveBoq(boq, items) {
     job_type: boq.job_type || null,
     title: boq.title?.trim() || null, note: boq.note?.trim() || null, internal_note: boq.internal_note?.trim() || null, ..._termCols(boq), ..._signCols(boq), status: boq.status || "open", created_by: user?.id || null,
   };
+  // ⚠️ ใบเดิม: ห้ามส่ง created_by ไปกับ upsert (เหตุผลเดียวกับ saveQuotation/saveJobOrder — คนแก้ล่าสุดแย่งเครดิตคนสร้าง)
+  const { data: curBoq, error: cbErr } = await supabase.from("boqs").select("boq_no").eq("boq_no", boq.boq_no).maybeSingle();
+  if (cbErr) throw cbErr;
+  if (curBoq) delete bHead.created_by;
   let e1 = (await supabase.from("boqs").upsert(bHead, { onConflict: "boq_no" })).error;
   for (const c of ["issue_date", "job_type"]) { // pre-119/139 fallback
     if (e1 && (e1.message || "").includes(c)) { delete bHead[c]; e1 = (await supabase.from("boqs").upsert(bHead, { onConflict: "boq_no" })).error; }
@@ -1753,11 +1757,9 @@ export async function listQuotations(opts = {}) {
 export async function saveQuotation(q, items) {
   const { data: { user } } = await supabase.auth.getUser();
   // guard ฝั่ง server: ใบที่อนุมัติแล้วห้ามบันทึกทับ (หน้าเก่าค้างจากอีกเครื่อง) — ต้องผ่านปุ่ม "คืนสถานะแก้ไข" (มี audit) เท่านั้น
-  {
-    const { data: cur, error: ce } = await supabase.from("quotations").select("status").eq("quote_no", q.quote_no).maybeSingle();
-    if (ce) throw ce;
-    if (cur && cur.status === "approved") throw new Error(`ใบเสนอราคา ${q.quote_no} อนุมัติแล้ว — บันทึกทับไม่ได้\nถ้าจำเป็นต้องแก้ กด "คืนสถานะแก้ไข" บนการ์ดก่อน (หน้าอาจค้าง — รีเฟรชแล้วลองใหม่)`);
-  }
+  const { data: cur, error: ce } = await supabase.from("quotations").select("status").eq("quote_no", q.quote_no).maybeSingle();
+  if (ce) throw ce;
+  if (cur && cur.status === "approved") throw new Error(`ใบเสนอราคา ${q.quote_no} อนุมัติแล้ว — บันทึกทับไม่ได้\nถ้าจำเป็นต้องแก้ กด "คืนสถานะแก้ไข" บนการ์ดก่อน (หน้าอาจค้าง — รีเฟรชแล้วลองใหม่)`);
   const head = {
     quote_no: q.quote_no, customer_id: q.customer_id || null, site_id: q.site_id || null, boq_no: q.boq_no || null,
     title: q.title?.trim() || null, status: q.status || "draft", job_type: q.job_type || null,
@@ -1768,6 +1770,10 @@ export async function saveQuotation(q, items) {
     approved_at: q.status === "approved" ? (q.approved_at || new Date().toISOString()) : null,
     created_by: user?.id || null,
   };
+  // ⚠️ ใบเดิม: ห้ามส่ง created_by ไปกับ upsert — ON CONFLICT DO UPDATE เขียนทับทุกคอลัมน์ที่ส่ง
+  //    คนที่กดบันทึกล่าสุดจะกลายเป็น "ผู้ทำ/ผู้ขาย" แทนคนสร้างจริง → รายงานยอดขายรายคนเพี้ยน กู้ไม่ได้
+  //    (created_at ไม่ได้ส่งไป แถวเลยดูปกติ ไม่มีอะไรส่อว่าเพี้ยน) — กติกาเดียวกับ saveJobOrder
+  if (cur) delete head.created_by;
   let e1 = (await supabase.from("quotations").upsert(head, { onConflict: "quote_no" })).error;
   // ยังไม่รัน migration 105/139 → บันทึกต่อได้ (แค่ยังไม่เก็บคอลัมน์นั้น)
   for (const c of ["pay_method", "job_type"]) {

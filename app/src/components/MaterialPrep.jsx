@@ -85,12 +85,15 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
     (async () => {
       let items = prefill.items;
       if (!items && prefill.quoteNo) {
-        try { items = (await getQuoteItems(prefill.quoteNo)).filter((it) => it.item_code && it.kind !== "service").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })); }
+        // ⚠️ ต้องเก็บ unit ของบรรทัดใบเสนอไว้ด้วย — สินค้า 2 หน่วยบรรทัดถือหน่วยขาย (ม้วน) ไม่ใช่หน่วยหลัก (เมตร)
+        //    ถ้าทิ้ง unit แล้วแบ่งซื้อ/เบิกด้วยหน่วยหลัก จะสั่ง/เบิกน้อยกว่าจริงเท่ากับ purchase_qty (100 เท่า)
+        //    เส้นทาง pullQuote() ทำถูกอยู่แล้วผ่าน lineFromQuoteItem — ตรงนี้ต้องให้เหมือนกัน
+        try { items = (await getQuoteItems(prefill.quoteNo)).filter((it) => it.item_code && it.kind !== "service").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1, unit: it.unit || null, name: it.name })); }
         catch { items = []; }
       }
       if (dead) return;
       setEd({ prep_no: genNo(), quote_no: prefill.quoteNo || "", job_no: prefill.jobNo || "", title: prefill.title || "", issue_date: new Date().toISOString().slice(0, 10), note: "", status: "draft",
-        items: (items || []).map((p) => { const m = matMap[p.code]; return { code: p.code, name: m?.th || p.code, unit: m?.unit || "", ...smartSplit(m, Number(p.qty) || 1) }; }) });
+        items: (items || []).map((p) => { const m = matMap[p.code]; const u = p.unit || m?.unit || ""; return { code: p.code, name: p.name || m?.th || p.code, unit: u, ...smartSplit(m, Number(p.qty) || 1, u) }; }) });
       onPrefillConsumed && onPrefillConsumed();
     })();
     return () => { dead = true; };

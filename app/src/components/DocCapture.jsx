@@ -94,7 +94,7 @@ function quoteSlip(q, companies) {
       metaRows={[{ label: "วันที่", value: q.issue_date }, { label: "ยืนราคาถึง", value: q.valid_until }, { label: "อ้างอิง BOQ", value: q.boq_no }]}
       projectTitle={q.title}
       customer={{ name: q.customerName, code: custCode(q.customerCode), taxId: q.customerTaxId, address: q.siteAddress || q.customerAddr, contactName: q.contactName, contactPhone: q.contactPhone, mapUrl: q.map_url }}
-      termsPayment={q.terms_payment} termsFreebies={q.terms_freebies} termsWarranty={q.terms_warranty} bank={co.bank_info} signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}
+      terms={q.note || co.default_terms} termsPayment={q.terms_payment} termsFreebies={q.terms_freebies} termsWarranty={q.terms_warranty} bank={co.bank_info} signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}
       discountCol={(q.items || []).some((it) => Number(it.discount) > 0)}
       totals={<div className="doc-totals">
         <div><span>รวมเป็นเงิน</span><b>{fmtBaht(q.subtotal)}</b></div>
@@ -119,7 +119,7 @@ function invoiceSlip(x, q, companies) {
       metaRows={[{ label: "วันที่", value: x.issue_date }, { label: "ครบกำหนด", value: x.due_date }, { label: "อ้างอิงใบเสนอ", value: x.quote_no }, { label: "อ้างอิง BOQ", value: x.boq_no }, { label: "งวดที่", value: `${x.installment} (${Math.round(x.pct)}%)` }]}
       projectTitle={x.title}
       customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, address: x.siteAddress || x.customerAddr, contactName: x.contactName, contactPhone: x.contactPhone, mapUrl: x.mapUrl }}
-      termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}
+      terms={x.note || co.default_terms} termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}
       discountCol={(q?.items || []).some((it) => Number(it.discount) > 0)}
       totals={<div className="doc-totals">
         <div><span>รวมเป็นเงิน</span><b>{fmtBaht2(q?.subtotal || 0)}</b></div>
@@ -147,7 +147,7 @@ function receiptSlip(x, q, inv, companies) {
       metaRows={[{ label: "วันที่", value: x.issue_date }, { label: "อ้างอิงใบแจ้งหนี้", value: x.invoice_no }, { label: "อ้างอิงใบเสนอ", value: x.quote_no }, { label: "อ้างอิง BOQ", value: x.boq_no }, { label: "อ้างอิงใบงาน", value: x.job_no }]}
       projectTitle={x.title}
       customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, address: x.siteAddress || x.customerAddr, contactName: x.contactName, contactPhone: x.contactPhone, mapUrl: x.mapUrl }}
-      termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}
+      terms={x.note} termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}
       discountCol={(q?.items || []).some((it) => Number(it.discount) > 0)}
       paymentInfo={paid ? `ได้รับชำระเงินแล้ว · วันที่ ${x.issue_date || "-"} · โดย ${x.payment_method || "-"} · จำนวน ${fmtBaht2(x.net)}` : null}
       totals={<div className="doc-totals">
