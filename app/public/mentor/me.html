@@ -109,6 +109,12 @@ function ageLabel(m){const s=pd(m.start);if(!s)return '—';const t=today();let 
 function hsInfo(m,h){const s=pd(m.start);const rec=(m.hs&&m.hs[h.key])||{sent:false,done:false,note:''};const ageDays=s?dayDiff(today(),s):-1;let due=s?addDays(s,h.days):null;let open=due;if(h.key==='m12'&&due){if(due<today()){const nx=new Date(due);while(nx<today())nx.setFullYear(nx.getFullYear()+1);due=nx;}open=addDays(due,-180);}let st='notyet';if(h.key==='m12'&&ageDays<365)st='notyet';else if((h.key==='m3'||h.key==='m6')&&ageDays>=365&&!rec.done)st='notyet';else if(rec.done)st='done';else if(rec.sent)st='wait';else if(open&&today()>=open)st='due';return {due,open,st,rec};}
 const AV=['#5b6cf0','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#22c55e'];
 function avColor(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return AV[h%AV.length];}
+function trafficColor(c){
+  if(c==='G')return {emoji:'🟢',label:'ผลงานดีเยี่ยม',bg:'rgba(52,211,153,.2)',fg:'#6ee7c7'};
+  if(c==='Y')return {emoji:'🟡',label:'เฝ้าระวัง',bg:'rgba(251,191,36,.2)',fg:'#fde68a'};
+  if(c==='R')return {emoji:'🔴',label:'ต้องปรับปรุง',bg:'rgba(251,113,133,.2)',fg:'#fda4af'};
+  return {emoji:'⚪',label:'—',bg:'rgba(255,255,255,.1)',fg:'#c3ccea'};
+}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.opacity=0,2200);}
 
 let ME=null, ROWID=null;
@@ -163,6 +169,27 @@ function render(){
     </div>
   </div>
   <div class="saved" id="saved"></div>
+
+  ${(()=>{const t=m.traffic;if(!t)return '';const tc=trafficColor(t.color);const baht=n=>Number(n||0).toLocaleString('en-US');
+    const met=[['📅 เข้าประชุม',`${t.attend.P} ครั้ง`,`ขาด ${t.attend.A} · สาย ${t.attend.L}`],
+      ['🔄 Referral',`ให้ ${t.refGiven} · รับ ${t.refReceived}`,''],
+      ['👥 Visitor เชิญ',`${t.visitors} คน`,''],['🤝 1-2-1',`${t.oneToOne} ครั้ง`,''],
+      ['💰 ธุรกิจที่ส่งให้เพื่อน',`${baht(t.bizGiven)} ฿`,''],['💰 ธุรกิจที่ได้รับ',`${baht(t.bizReceived)} ฿`,'']];
+    return `<div class="card">
+    <h2>🚦 ผลงานของฉัน <span class="cnt">${esc(t.month||'')}</span></h2>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:15px">
+      <div style="width:66px;height:66px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:30px;background:${tc.bg};flex:none">${tc.emoji}</div>
+      <div><div style="font-size:18px;font-weight:700;color:${tc.fg}">${tc.label}</div>
+        <div class="muted" style="font-size:13px;margin-top:2px">คะแนนรวม <b style="color:#fff">${t.score}</b>/100</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+      ${met.map(([l,v,s])=>`<div style="background:rgba(255,255,255,.05);border:1px solid var(--glassbd);border-radius:13px;padding:11px 13px">
+        <div style="font-size:11px;color:var(--mut)">${l}</div>
+        <div style="font-size:14.5px;font-weight:700;margin-top:2px">${v}</div>
+        ${s?`<div style="font-size:10.5px;color:var(--mut);margin-top:1px">${s}</div>`:''}</div>`).join('')}
+    </div>
+    <div class="muted" style="font-size:10.5px;margin-top:10px;text-align:center">ข้อมูลจากรายงาน Member Traffic Light · อัปเดต ${esc(t.updatedAt||'')}</div>
+  </div>`;})()}
 
   <div class="card">
     <h2>📅 Mentoring 8 สัปดาห์ <span class="cnt">${l<0?'ยังไม่เริ่ม':'ถึงสัปดาห์ที่ '+l+'/8'}</span></h2>
