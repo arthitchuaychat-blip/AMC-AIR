@@ -28,6 +28,21 @@ async function reply(replyToken, text) {
   } catch {}
 }
 
+// เก็บข้อความลง tm_chat (สำหรับกล่องแชตในแอป)
+async function saveChat(uid, memberId, dir, text) {
+  try {
+    await fetch(`${SB()}/rest/v1/tm_chat`, {
+      method: "POST", headers: { ...sbH(), Prefer: "return=minimal" },
+      body: JSON.stringify({ line_user_id: uid, member_id: memberId || null, dir, text }),
+    });
+  } catch {}
+}
+// ตอบกลับ + บันทึกข้อความที่บอทตอบเป็น 'out'
+async function replyAndLog(replyToken, uid, memberId, text) {
+  await reply(replyToken, text);
+  await saveChat(uid, memberId, "out", text);
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "GET") {
@@ -48,7 +63,7 @@ export default async function handler(req, res) {
     if (!uid) continue;
 
     if (ev.type === "follow") {
-      await reply(ev.replyToken,
+      await replyAndLog(ev.replyToken, uid, null,
         "สวัสดีครับ 🙏 นี่คือระบบติดตาม Mentoring & Happiness Survey ของ Chapter The Top\n\nกรุณาพิมพ์ \"ชื่อเล่น\" ของคุณตามที่ลงทะเบียนกับ Chapter เพื่อเชื่อมบัญชี\nเช่น: พัด");
       continue;
     }
@@ -59,33 +74,33 @@ export default async function handler(req, res) {
 
     const r = await fetch(`${SB()}/rest/v1/tm_members?select=id,data`, { headers: sbH() });
     const rows = r.ok ? await r.json() : [];
+    // memberId ปัจจุบัน (ถ้าเชื่อมแล้ว) — ใช้ผูกข้อความในกล่องแชต
+    let memberId = (rows.find((x) => ((x.data || {}).lineUserId || "") === uid) || {}).id || null;
+    await saveChat(uid, memberId, "in", text); // บันทึกข้อความที่สมาชิกพิมพ์เข้ามา
+
     const q = text.toLowerCase();
     const matches = rows.filter((x) => {
       const d = x.data || {};
       return (d.nick || "").trim().toLowerCase() === q || (d.name || "").trim().toLowerCase() === q;
     });
 
-    if (matches.length === 1) {
+    if (matches.length === 1 && !memberId) {
       const m = matches[0];
+      memberId = m.id;
       const data = { ...m.data, lineUserId: uid, lineLinkedAt: new Date().toISOString() };
       await fetch(`${SB()}/rest/v1/tm_members?id=eq.${encodeURIComponent(m.id)}`, {
         method: "PATCH", headers: sbH(), body: JSON.stringify({ data }),
       });
-      await reply(ev.replyToken,
+      await replyAndLog(ev.replyToken, uid, memberId,
         `เชื่อมบัญชีสำเร็จ ✅\nคุณ${data.nick || data.name} (${data.name})\n\nเมื่อถึงกำหนดทำแบบสอบถาม Happiness Survey ระบบจะส่งลิงก์มาให้ทางแชทนี้อัตโนมัติครับ`);
-    } else if (matches.length > 1) {
-      await reply(ev.replyToken,
+    } else if (matches.length > 1 && !memberId) {
+      await replyAndLog(ev.replyToken, uid, memberId,
         `มีสมาชิกชื่อ "${text}" มากกว่า 1 คน 🙏\nกรุณาพิมพ์ชื่อเต็มภาษาอังกฤษตามทะเบียน Chapter แทน\nเช่น: Pipat Wattanamongkolsiri`);
-    } else {
-      const already = rows.find((x) => (x.data || {}).lineUserId === uid);
-      if (already) {
-        await reply(ev.replyToken,
-          `บัญชีไลน์นี้เชื่อมกับคุณ${already.data.nick || already.data.name} เรียบร้อยแล้ว ✅\nเมื่อถึงกำหนดแบบสอบถาม ระบบจะส่งให้อัตโนมัติครับ`);
-      } else {
-        await reply(ev.replyToken,
-          `ไม่พบสมาชิกชื่อ "${text}" 🙏\nกรุณาพิมพ์เฉพาะชื่อเล่น หรือชื่อเต็มภาษาอังกฤษตามทะเบียน Chapter\nหรือติดต่อผู้ดูแลระบบครับ`);
-      }
+    } else if (!memberId) {
+      await replyAndLog(ev.replyToken, uid, memberId,
+        `ไม่พบสมาชิกชื่อ "${text}" 🙏\nกรุณาพิมพ์เฉพาะชื่อเล่น หรือชื่อเต็มภาษาอังกฤษตามทะเบียน Chapter\nหรือติดต่อผู้ดูแลระบบครับ`);
     }
+    // สมาชิกที่เชื่อมแล้ว (memberId มีค่า) — ไม่ตอบอัตโนมัติ ปล่อยให้แอดมินตอบเองในแอป
   }
   return res.status(200).json({ ok: true });
 }
