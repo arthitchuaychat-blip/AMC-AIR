@@ -99,8 +99,12 @@ export default async function handler(req, res) {
   }
 
   // ---- actions ที่ต้องเป็นแอดมิน ----
+  // ⚠️ อ่าน role "สด" จากฐานข้อมูล ไม่เชื่อ role ที่ฝังในโทเคน — โทเคนไม่มีวันหมดอายุ/ไม่มี version
+  //    เดิมเช็ก auth.role (จากโทเคน) แล้ว await getUser แค่เอา truthy → คนที่ถูกลดจาก admin
+  //    ยังถือโทเคนเก่าที่ decode เป็น admin ได้ตลอดกาล ลบ/เลื่อนบัญชีคนอื่นได้
   const auth = verifyToken(body.token);
-  const isAdmin = auth && auth.role === "admin" && (await getUser(auth.username));
+  const dbUser = auth && await getUser(auth.username);
+  const isAdmin = !!dbUser && dbUser.data?.role === "admin";
   if (["listUsers", "saveUser", "deleteUser"].includes(action)) {
     if (!isAdmin) return res.status(200).json({ ok: false, error: "ต้องเป็นแอดมิน" });
   }
