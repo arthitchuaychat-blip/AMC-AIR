@@ -330,26 +330,25 @@ function wLabel(m){const l=wLast(m);return l<0?'ยังไม่เริ่�
 /* สไลด์ "มีแล้ว" ก็ต่อเมื่อ อัพโหลดไฟล์แล้ว หรือแอดมินกดยืนยันว่ามีแล้ว */
 function hasSlide(m,k){return m.slides[k]===true||!!(m.slideFiles&&m.slideFiles[k]);}
 function curWeek(m){const s=pd(m.start);if(!s)return null;const w=Math.floor(dayDiff(today(),s)/7);return w<0?0:(w>8?null:w);}
-/* survey status: done | wait(ส่งแล้วรอตอบ) | due(ถึงกำหนด ยังไม่ส่ง) | notyet */
+/* แบบสอบถามใช้ได้กับใคร: 3+6 เดือน = เฉพาะสมาชิกปีแรก · 12 เดือน = เฉพาะสมาชิกเกิน 1 ปี (ตามสถานะสมาชิก) */
+function surveyApplies(m,h){const first=(m.status||'').trim()==='ปีแรก';return h.key==='m12'?!first:first;}
+/* survey status: done | wait | due | notyet | na(ไม่เกี่ยวข้องกับสถานะสมาชิก — ซ่อน) */
 function hsInfo(m,h){
   const s=pd(m.start);const rec=m.hs[h.key];
-  const ageDays=s?dayDiff(today(),s):-1; // อายุสมาชิก (วัน)
   let due=s?addDays(s,h.days):null;
   let open=due; // วันที่เริ่มถึงกำหนดส่ง
-  if(h.key==='m12'&&due){ // ส่งล่วงหน้า 6 เดือนก่อนวันต่ออายุ (เฉพาะสมาชิกเกิน 1 ปี)
+  if(h.key==='m12'&&due){ // ส่งล่วงหน้า 6 เดือนก่อนวันต่ออายุ
     if(due<today()){const nx=new Date(due);while(nx<today())nx.setFullYear(nx.getFullYear()+1);due=nx;}
     open=addDays(due,-180);
   }
   let st='notyet';
-  // 12 เดือน = เฉพาะสมาชิกเกิน 1 ปี (ปีแรกยังไม่ต้องทำ) · 3+6 เดือน = เฉพาะสมาชิกปีแรก (เกิน 1 ปีไม่ต้องทำแล้ว)
-  if(h.key==='m12'&&ageDays<365)st='notyet';
-  else if((h.key==='m3'||h.key==='m6')&&ageDays>=365&&!rec.done)st='notyet';
+  if(!surveyApplies(m,h))st='na';       // ไม่ตรงสถานะสมาชิก → ซ่อน
   else if(rec.done)st='done';
   else if(rec.sent)st='wait';
   else if(open&&today()>=open)st='due';
   return {due,open,st,rec};
 }
-const HS_BADGE={done:['b-done','✅ ทำแล้ว'],wait:['b-wait','📨 ส่งแล้ว รอคำตอบ'],due:['b-due','⏰ ถึงกำหนด ยังไม่ส่ง'],notyet:['b-notyet','⏳ ยังไม่ถึงกำหนด']};
+const HS_BADGE={done:['b-done','✅ ทำแล้ว'],wait:['b-wait','📨 ส่งแล้ว รอคำตอบ'],due:['b-due','⏰ ถึงกำหนด ยังไม่ส่ง'],notyet:['b-notyet','⏳ ยังไม่ถึงกำหนด'],na:['b-notyet','—']};
 function hsIcon(st){return {done:'✅',wait:'📨',due:'⏰',notyet:'▫️'}[st];}
 function lineMsg(m,h){
   const link=state.config[h.link]||'(ยังไม่ได้ใส่ลิงก์แบบสอบถาม — ใส่ได้ที่หน้า ตั้งค่า)';
@@ -604,9 +603,9 @@ async function uploadPhoto(id,inp){
 }
 function exportMembersCsv(){
   const ms=membersList();
-  const rnd=(m,k)=>{const i=hsInfo(m,HS.find(h=>h.key===k));return {done:'ตอบแล้ว',wait:'รอตอบ',due:'ถึงกำหนด',notyet:'—'}[i.st];};
-  const happ=m=>{let h=null;HS.forEach(x=>{const rec=(m.hs&&m.hs[x.key])||{};if(rec.done&&Number.isFinite(rec.happiness))h=rec.happiness;});return h==null?'':h;};
-  const renew=m=>{let r='';HS.forEach(x=>{const rec=(m.hs&&m.hs[x.key])||{};if(rec.done&&rec.renew)r=rec.renew;});return r;};
+  const rnd=(m,k)=>{const i=hsInfo(m,HS.find(h=>h.key===k));return {done:'ตอบแล้ว',wait:'รอตอบ',due:'ถึงกำหนด',notyet:'—',na:'ไม่เกี่ยวข้อง'}[i.st]||'';};
+  const happ=m=>{let h=null;HS.forEach(x=>{if(!surveyApplies(m,x))return;const rec=(m.hs&&m.hs[x.key])||{};if(rec.done&&Number.isFinite(rec.happiness))h=rec.happiness;});return h==null?'':h;};
+  const renew=m=>{let r='';HS.forEach(x=>{if(!surveyApplies(m,x))return;const rec=(m.hs&&m.hs[x.key])||{};if(rec.done&&rec.renew)r=rec.renew;});return r;};
   const cols=['ชื่อเล่น','ชื่อ-สกุล','อาชีพ','อีเมล','เบอร์โทร','สถานะ','วันเริ่ม','อายุสมาชิก','Mentor','Mentoring','สไลด์','3เดือน','6เดือน','12เดือน','ความสุขล่าสุด','เจตนาต่ออายุ','หมายเหตุ'];
   const rows=ms.map(m=>[m.nick||'',m.name||'',m.prof||'',m.email||'',m.phone||'',m.status||'',fmt(m.start),ageLabel(m),m.mentor||'',
     (wLast(m)<0?'ยังไม่เริ่ม':wLast(m)+'/8'),SLIDES.filter(([k])=>hasSlide(m,k)).length+'/3',
@@ -673,7 +672,7 @@ function membersTableHtml(){
   return `<div class="tblwrap"><table>
     <tr><th>สมาชิก</th><th>อาชีพ</th><th>สถานะ</th><th>เริ่ม</th><th>Mentor</th><th>Week 0–8</th><th>สไลด์</th><th>Survey</th></tr>
     ${ms.map(m=>{
-      const icons=HS.map(h=>hsIcon(hsInfo(m,h).st)).join(' ');
+      const icons=HS.filter(h=>surveyApplies(m,h)).map(h=>hsIcon(hsInfo(m,h).st)).join(' ');
       return `<tr class="click" onclick="openMember('${m.id}')">
       <td class="mname"><div style="display:flex;align-items:center;gap:9px">${avatarHtml(m,34)}<div>${esc(m.nick||'')} <small>${esc(m.name)}</small></div></div></td>
       <td style="font-size:12.5px;max-width:170px">${esc(m.prof||'')}</td>
@@ -803,8 +802,8 @@ function openMember(id){
     </div>
   </div>
 
-  <div class="sect"><h4>💛 Happiness Survey</h4>
-    ${HS.map(h=>{const i=hsInfo(m,h);const[cls,txt]=HS_BADGE[i.st];return `
+  <div class="sect"><h4>💛 Happiness Survey <span style="font-weight:400;font-size:11px;color:var(--mut)">— ${m.status==='ปีแรก'?'3 & 6 เดือน (ปีแรก)':'12 เดือน (เกิน 1 ปี)'}</span></h4>
+    ${HS.filter(h=>surveyApplies(m,h)).map(h=>{const i=hsInfo(m,h);const[cls,txt]=HS_BADGE[i.st];return `
     <div class="hsbox">
       <div class="top"><b>${h.label}</b>
         <span class="badge ${cls}">${txt}</span>
@@ -928,7 +927,7 @@ function vSurvey(){
     </div>
   </div>
   ${HS.map(h=>{
-    let rows=scopedMembers().map(m=>({m,i:hsInfo(m,h)}));
+    let rows=scopedMembers().filter(m=>surveyApplies(m,h)).map(m=>({m,i:hsInfo(m,h)}));
     if(hsFil==='pending')rows=rows.filter(r=>r.i.st==='due'||r.i.st==='wait');
     rows.sort((a,b)=>(a.i.due||0)-(b.i.due||0));
     return `<div class="card">
@@ -953,7 +952,7 @@ let repRound='all';
 /* ประเมินความเสี่ยง/ความน่ากังวลจากคำตอบแบบสอบถาม */
 function memberRisk(m){
   let score=null,renew='',reasons=[];
-  for(const h of HS){const rec=(m.hs&&m.hs[h.key])||{};if(!rec.done)continue;
+  for(const h of HS){if(!surveyApplies(m,h))continue;const rec=(m.hs&&m.hs[h.key])||{};if(!rec.done)continue;
     if(Number.isFinite(rec.happiness)&&(score===null||rec.happiness<score))score=rec.happiness;
     if(rec.renew)renew=rec.renew;}
   let level='ok';
@@ -965,7 +964,7 @@ function memberRisk(m){
 }
 function memberComments(m){
   const out=[];
-  for(const h of HS){const rec=(m.hs&&m.hs[h.key])||{};if(!rec.done)continue;const a=rec.answers||{};
+  for(const h of HS){if(!surveyApplies(m,h))continue;const rec=(m.hs&&m.hs[h.key])||{};if(!rec.done)continue;const a=rec.answers||{};
     if(a.feel)out.push(`ความรู้สึก: ${a.feel}`);
     if(a.improve&&a.improve!=='-'&&a.improve!=='ไม่มี')out.push(`ข้อเสนอ: ${a.improve}`);
     if(rec.note)out.push(`โน้ต: ${rec.note}`);}
@@ -974,15 +973,16 @@ function memberComments(m){
 /* สถิติภาพรวม Chapter */
 function chapterStats(ms){
   const scores=[];const renew={'ต่อ':0,'ยังไม่แน่ใจ':0,'ไม่ต่อ':0};
-  ms.forEach(m=>{let r='';HS.forEach(h=>{const rec=(m.hs&&m.hs[h.key])||{};if(rec.done){if(Number.isFinite(rec.happiness))scores.push(rec.happiness);if(rec.renew)r=rec.renew;}});if(r&&renew[r]!==undefined)renew[r]++;});
+  ms.forEach(m=>{let r='';HS.forEach(h=>{if(!surveyApplies(m,h))return;const rec=(m.hs&&m.hs[h.key])||{};if(rec.done){if(Number.isFinite(rec.happiness))scores.push(rec.happiness);if(rec.renew)r=rec.renew;}});if(r&&renew[r]!==undefined)renew[r]++;});
   const avg=scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:null;
   const dist={high:scores.filter(s=>s>=8).length,mid:scores.filter(s=>s>=6&&s<8).length,low:scores.filter(s=>s<=5).length};
   const age=m=>{const s=pd(m.start);return s?dayDiff(today(),s):-1;};
   const rnd=(k,fn)=>{const el=ms.filter(fn);return {done:el.filter(m=>m.hs&&m.hs[k]&&m.hs[k].done).length,total:el.length};};
+  const first=m=>m.status==='ปีแรก';
   return {total:ms.length,nScore:scores.length,avg,dist,renew,
-    first:ms.filter(m=>m.status==='ปีแรก').length,over:ms.filter(m=>m.status!=='ปีแรก').length,
+    first:ms.filter(first).length,over:ms.filter(m=>!first(m)).length,
     withMentor:ms.filter(m=>(m.mentor||'').trim()).length,
-    comp:{m3:rnd('m3',m=>age(m)<365),m6:rnd('m6',m=>age(m)<365),m12:rnd('m12',m=>age(m)>=365)}};
+    comp:{m3:rnd('m3',first),m6:rnd('m6',first),m12:rnd('m12',m=>!first(m))}};
 }
 function bar2(parts){ // parts: [[value,color,label],...]
   const tot=parts.reduce((s,p)=>s+p[0],0)||1;
@@ -1029,7 +1029,7 @@ function vReport(){
   const done=[],pending=[];
   rounds.forEach(h=>scopedMembers().forEach(m=>{
     const i=hsInfo(m,h);
-    if(i.rec.done)done.push({m,h,i});
+    if(i.st==='done')done.push({m,h,i});
     else if(i.st==='due'||i.st==='wait')pending.push({m,h,i});
   }));
   done.sort((a,b)=>(b.i.due||0)-(a.i.due||0));

@@ -24,10 +24,6 @@ function todayTH() { const t = new Date(Date.now() + 7 * 3600e3); return new Dat
 function isDue(startIso, h) {
   const s = pd(startIso); if (!s) return false;
   const today = todayTH();
-  const ageDays = (today - s) / 864e5;
-  // 12 เดือน = เฉพาะสมาชิกเกิน 1 ปี · 3+6 เดือน = เฉพาะสมาชิกปีแรก (เกิน 1 ปีไม่ต้องส่ง)
-  if (h.key === "m12" && ageDays < 365) return false;
-  if ((h.key === "m3" || h.key === "m6") && ageDays >= 365) return false;
   let due = addDays(s, h.days);
   let open = due;
   if (h.key === "m12") {
@@ -55,7 +51,10 @@ export default async function handler(req, res) {
     const m = row.data || {};
     if (!m.lineUserId) continue;
     let changed = false;
+    const first = (m.status || "").trim() === "ปีแรก";
     for (const h of HS) {
+      // 3+6 เดือน = เฉพาะปีแรก · 12 เดือน = เฉพาะเกิน 1 ปี (ตามสถานะสมาชิก)
+      if (h.key === "m12" ? first : !first) continue;
       const rec = (m.hs && m.hs[h.key]) || { sent: false, done: false, note: "" };
       if (rec.sent || rec.done) continue;
       if (!isDue(m.start, h)) continue;

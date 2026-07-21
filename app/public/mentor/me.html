@@ -106,7 +106,8 @@ function hasSlide(m,k){return m.slides[k]===true||!!(m.slideFiles&&m.slideFiles[
 function annivAfter(s,ref){let d=new Date(s);d.setFullYear(ref.getFullYear());while(d<ref)d.setFullYear(d.getFullYear()+1);return d;}
 function renewInfo(m){const s=pd(m.start);if(!s)return null;const t=today();let d=annivAfter(s,t);const ru=m.renewedUntil?pd(m.renewedUntil):null;let renewed=false;if(ru&&ru>=d){renewed=true;d=annivAfter(s,addDays(ru,1));}return {date:d,days:dayDiff(d,t),renewed};}
 function ageLabel(m){const s=pd(m.start);if(!s)return '—';const t=today();let mo=(t.getFullYear()-s.getFullYear())*12+(t.getMonth()-s.getMonth());if(t.getDate()<s.getDate())mo--;if(mo<0)mo=0;const y=Math.floor(mo/12),r=mo%12;return y?(r?`${y} ปี ${r} เดือน`:`${y} ปี`):(r?`${r} เดือน`:'ไม่ถึง 1 เดือน');}
-function hsInfo(m,h){const s=pd(m.start);const rec=(m.hs&&m.hs[h.key])||{sent:false,done:false,note:''};const ageDays=s?dayDiff(today(),s):-1;let due=s?addDays(s,h.days):null;let open=due;if(h.key==='m12'&&due){if(due<today()){const nx=new Date(due);while(nx<today())nx.setFullYear(nx.getFullYear()+1);due=nx;}open=addDays(due,-180);}let st='notyet';if(h.key==='m12'&&ageDays<365)st='notyet';else if((h.key==='m3'||h.key==='m6')&&ageDays>=365&&!rec.done)st='notyet';else if(rec.done)st='done';else if(rec.sent)st='wait';else if(open&&today()>=open)st='due';return {due,open,st,rec};}
+function surveyApplies(m,h){const first=(m.status||'').trim()==='ปีแรก';return h.key==='m12'?!first:first;}
+function hsInfo(m,h){const s=pd(m.start);const rec=(m.hs&&m.hs[h.key])||{sent:false,done:false,note:''};let due=s?addDays(s,h.days):null;let open=due;if(h.key==='m12'&&due){if(due<today()){const nx=new Date(due);while(nx<today())nx.setFullYear(nx.getFullYear()+1);due=nx;}open=addDays(due,-180);}let st='notyet';if(!surveyApplies(m,h))st='na';else if(rec.done)st='done';else if(rec.sent)st='wait';else if(open&&today()>=open)st='due';return {due,open,st,rec};}
 const AV=['#5b6cf0','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#22c55e'];
 function avColor(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return AV[h%AV.length];}
 function trafficColor(c){
@@ -239,7 +240,7 @@ function render(){
 
   <div class="card">
     <h2>💛 แบบสอบถาม Happiness Survey</h2>
-    ${HS.map(h=>{const i=hsInfo(m,h);const B={done:['b-done','✅ ทำแล้ว'],wait:['b-wait','📨 รอตอบ'],due:['b-due','⏰ ถึงกำหนด'],notyet:['b-notyet','⏳ ยังไม่ถึง']}[i.st];const link=CFG[h.link];return `
+    ${HS.filter(h=>surveyApplies(m,h)).map(h=>{const i=hsInfo(m,h);const B={done:['b-done','✅ ทำแล้ว'],wait:['b-wait','📨 รอตอบ'],due:['b-due','⏰ ถึงกำหนด'],notyet:['b-notyet','⏳ ยังไม่ถึง']}[i.st];const link=CFG[h.link];return `
     <div class="hsbox">
       <div class="top"><b>${h.label}</b><span class="badge ${B[0]}">${B[1]}</span></div>
       <div class="muted" style="font-size:12px">กำหนด: ${fmt(i.due)}</div>
