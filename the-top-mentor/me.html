@@ -78,6 +78,11 @@ input:focus,textarea:focus{border-color:#22d3ee;box-shadow:0 0 0 3px rgba(34,211
 .opb{padding:12px 15px;text-align:left;border:1px solid var(--glassbd);background:rgba(255,255,255,.06);color:#eaf0ff;border-radius:13px;font-family:inherit;font-size:14.5px;cursor:pointer;transition:.12s}
 .opb.on{background:rgba(34,211,238,.2);border-color:#22d3ee;color:#a5f3fc;font-weight:600}
 .qn{font-size:14.5px;font-weight:600;margin-bottom:11px;line-height:1.5}
+.qn .opt{font-size:11px;font-weight:400;color:var(--mut)}
+.gq{margin-bottom:12px}
+.gq b{font-size:12.5px;display:block;margin-bottom:6px;font-weight:500;line-height:1.4}
+.grow{display:flex;gap:6px}
+.grow .opb{flex:1;text-align:center;padding:10px 5px;font-size:12px}
 </style>
 </head>
 <body>
@@ -282,56 +287,86 @@ async function delSlide(k){
   if(ME.slides[k]===true&&!(ME.slideFiles&&ME.slideFiles[k]))ME.slides[k]=null;
   await persist();render();toast('ลบไฟล์แล้ว');
 }
-/* ---------- แบบสอบถามในแอป (ตอบผ่าน LINE) ---------- */
+/* ---------- แบบสอบถามในแอป (ตอบผ่าน LINE) — ตรงกับ Google Forms ของ Chapter ---------- */
+const TL_ROLES=['President','Membership Coordinator ( MC )','Secretary/Treasurer ( ST )','Visitor Host','Membership Committee','Event Co-ordinator','Mentor Co-ordinator','Education Co-ordiantor (NEC)','Growth Co-ordinator','Chapter Webmaster'];
 const SURVEYS={
-  m3:{title:'Happiness Survey — 3 เดือน',q:[
+  m3:{title:'Happiness Survey — สมาชิก 3 เดือน',q:[
     {k:'feel',t:'text',label:'ขณะนี้คุณรู้สึกอย่างไรกับการเป็นส่วนหนึ่งในแชพเตอร์นี้?'},
-    {k:'happy',t:'scale',label:'ให้คะแนนความสุขของคุณในแชพเตอร์นี้ (1 = น้อยที่สุด, 10 = มากที่สุด)'},
-    {k:'mentor',t:'radio',label:'คุณมีพี่เลี้ยง (Personal Mentor) แล้วหรือยัง?',o:['มีแล้ว','ยังไม่มี']},
-    {k:'msp',t:'radio',label:'คุณได้เข้าอบรม MSP แล้วหรือยัง?',o:['อบรมแล้ว','ยังไม่ได้อบรม']},
-    {k:'improve',t:'text',label:'คุณคิดว่าควรปรับปรุง/ทำเพิ่มอะไรเพื่อให้สมาชิกใหม่ได้ประโยชน์มากขึ้น?'},
+    {k:'msp',t:'grid',label:'คุณได้เข้าอบรม MSP และ 1st Year Member Club แล้วหรือยัง?',rows:['Member Success Program (MSP)','1st Year Member Club'],o:['อบรมแล้ว','ยังไม่ได้อบรม']},
+    {k:'learned',t:'text',opt:1,label:'คุณได้เรียนรู้อะไรบ้างจากการเข้าอบรม/ประชุมนั้น'},
+    {k:'improve',t:'text',opt:1,label:'คุณคิดว่ามีอะไรที่ควรปรับปรุงหรือทำเพิ่มเพื่อให้สมาชิกใหม่ได้ประโยชน์เพิ่มมากขึ้น?'},
+    {k:'happyText',t:'text',opt:1,label:'คุณมีความสุขกับการเป็นสมาชิกในแชพเตอร์นี้หรือไม่?'},
+    {k:'happy',t:'scale',label:'ช่วยให้คะแนนความสุขของคุณในแชพเตอร์นี้ (1 = น้อยที่สุด, 10 = มากที่สุด)'},
+    {k:'green',t:'radio',label:'คุณคิดว่าการเป็นสมาชิกสีเขียวมีความสำคัญหรือไม่?',o:['สำคัญ','ไม่สำคัญ','อื่นๆ']},
+    {k:'greenReason',t:'text',opt:1,label:'ถ้า "ไม่สำคัญ" หรือ "อื่นๆ" โปรดบอกเหตุผล'},
+    {k:'mentor',t:'radio',label:'คุณมีสมาชิกทำหน้าที่เป็นพี่เลี้ยง (Personal Mentor) แล้วหรือไม่',o:['มีแล้ว','ไม่มี']},
+    {k:'passport',t:'radio',label:'คุณได้เริ่มใช้คู่มือตามโปรแกรม "Passport2Success" แล้วหรือยัง?',o:['เริ่มใช้แล้ว','ยังไม่ได้ใช้']},
+    {k:'mentorRole',t:'radio',label:'ขณะนี้คุณกำลังคุยกับพี่เลี้ยงตามโปรแกรม "Passport2Success" ตำแหน่งใดอยู่?',o:TL_ROLES},
   ]},
-  m6:{title:'Happiness Survey — 6 เดือน',q:[
+  m6:{title:'Happiness Survey — สมาชิก 6 เดือน',q:[
     {k:'feel',t:'text',label:'ขณะนี้คุณรู้สึกอย่างไรกับการเป็นส่วนหนึ่งในแชพเตอร์นี้?'},
-    {k:'happy',t:'scale',label:'ให้คะแนนความสุขของคุณ (1 = น้อยที่สุด, 10 = มากที่สุด)'},
-    {k:'onetwoone',t:'radio',label:'คุณทำ 1-2-1 บ่อยแค่ไหน?',o:['1 ครั้ง/สัปดาห์','2 ครั้ง/สัปดาห์','3+ ครั้ง/สัปดาห์','ยังไม่ได้ทำ']},
-    {k:'gotref',t:'radio',label:'คุณเริ่มได้รับรีฟอรัลจากเพื่อนในแชพเตอร์แล้วหรือไม่?',o:['ได้แล้ว','ยังไม่ได้']},
-    {k:'renew',t:'radio',label:'คุณคิดว่าจะต่ออายุสมาชิกล่วงหน้าเพื่อความต่อเนื่องของธุรกิจไหม?',o:['ต่อ','ยังไม่แน่ใจ','ไม่ต่อ']},
-    {k:'improve',t:'text',label:'เหตุผล / ข้อเสนอแนะเพิ่มเติม'},
+    {k:'training',t:'grid',label:'คุณได้เข้าอบรม MSP, Advanced MSP และหลักสูตร Advanced Skill อื่นๆแล้วหรือยัง?',rows:['Member Success Program (MSP)','Advanced MSP','Advanced Skill อื่นๆ'],o:['เข้าอบรมแล้ว','ยังไม่ได้เข้าอบรม']},
+    {k:'learned',t:'text',opt:1,label:'คุณได้เรียนรู้อะไรบ้างจากการเข้าอบรม/ประชุมนั้น'},
+    {k:'improve',t:'text',opt:1,label:'คุณคิดว่ามีอะไรที่ควรปรับปรุงหรือทำเพิ่มเพื่อให้สมาชิกใหม่ได้ประโยชน์เพิ่มมากขึ้น?'},
+    {k:'happyText',t:'text',opt:1,label:'คุณมีความสุขกับการเป็นสมาชิกในแชพเตอร์นี้หรือไม่?'},
+    {k:'happy',t:'scale',label:'ช่วยให้คะแนนความสุขของคุณในแชพเตอร์นี้ (1 = น้อยที่สุด, 10 = มากที่สุด)'},
+    {k:'green',t:'radio',label:'คุณคิดว่าการเป็นสมาชิกสีเขียวมีความสำคัญหรือไม่?',o:['สำคัญ','ไม่สำคัญ','อื่นๆ']},
+    {k:'greenReason',t:'text',opt:1,label:'ถ้า "ไม่สำคัญ" หรือ "อื่นๆ" โปรดบอกเหตุผล'},
+    {k:'onetwoone',t:'radio',label:'คุณทำ 1-2-1 บ่อยแค่ไหน?',o:['ทุกวัน','1ครั้ง / อาทิตย์','2ครั้ง / อาทิตย์','3 ครั้ง / อาทิตย์']},
+    {k:'gaveRef',t:'radio',label:'คุณเคยให้รีฟอรัลเพื่อนๆหรือไม่?',o:['เคย','ไม่เคย']},
+    {k:'gotRef',t:'radio',label:'ขณะนี้คุณเริ่มได้รีฟอรัลจากเพื่อนๆในแชพเตอร์แล้วหรือไม่?',o:['ได้แล้ว','ยังไม่ได้']},
+    {k:'knowRenew',t:'radio',label:'คุณรู้ไหมว่าสามารถแจ้งขอต่ออายุสมาชิกได้ที่ ST ของกลุ่ม หรือทำในเว็บ BNIconnectglobal',o:['ทราบ','ไม่ทราบ']},
+    {k:'renew',t:'radio',label:'คุณคิดว่าจะต่ออายุสมาชิกล่วงหน้าเพื่อความต่อเนื่องของความสัมพันธ์และธุรกิจ และป้องกันอาชีพจากคู่แข่งหรือไม่?',o:['ต่อ','ยังไม่แน่ใจ','ไม่ต่อ']},
+    {k:'renewReason',t:'text',opt:1,label:'ถ้า "ยังไม่แน่ใจ" หรือ "ไม่ต่อ" กรุณาบอกเหตุผล'},
   ]},
-  m12:{title:'Happiness Survey — 12 เดือน (ก่อนต่ออายุ)',q:[
-    {k:'duration',t:'radio',label:'คุณเป็นสมาชิก BNI มานานเท่าไหร่?',o:['ไม่เกิน 12 เดือน','13–24 เดือน','มากกว่า 24 เดือน']},
-    {k:'happy',t:'scale',label:'ให้คะแนนความสุขของคุณกับการเป็นสมาชิก (1–10)'},
-    {k:'recommend',t:'text',label:'คุณจะแนะนำคนอื่นมาเป็นสมาชิกในแชพเตอร์ไหม? เพราะอะไร?'},
-    {k:'renew',t:'radio',label:'หากอายุสมาชิกครบกำหนดพอดี คุณจะต่ออายุสมาชิกไหม?',o:['ต่อ','ยังไม่แน่ใจ','ไม่ต่อ']},
-    {k:'improve',t:'text',label:'คุณอยากให้ BNI / แชพเตอร์ทำอะไรเพิ่มขึ้น?'},
+  m12:{title:'Happiness Feedback — สมาชิก 12 เดือนขึ้นไป',q:[
+    {k:'duration',t:'radio',label:'คุณเป็นสมาชิกบีเอ็นไอมานานเท่าไหร่',o:['น้อยกว่า 6 เดือน','6 – 12 เดือน','13-24 เดือน','มากกว่า 24 เดือน','มากกว่า 120 เดือน']},
+    {k:'leadership',t:'radio',label:'ขณะนี้คุณเป็น Leadership Team หรือเคยทำบทบาทนี้หรือไม่',o:['เป็นอยู่','เคยเป็น','ไม่เคย']},
+    {k:'impressed',t:'checkbox',label:'สิ่งที่คุณประทับใจในวันที่มาเยี่ยมชมการประชุมครั้งแรกคืออะไร? (ตอบได้มากกว่า 1 ข้อ)',o:['สถานที่และอาหาร','การต้อนรับของสมาชิกในกลุ่ม','การประชุมที่เป็นมืออาชีพมาก','พลังงานความกระตือรือร้นของคนในห้องประชุม','โอกาสธุรกิจ','การให้รีฟอรัลและ/หรือการขอบคุณที่ได้ยอดธุรกิจ','การนำเสนอของสมาชิก','ขนาดของแชพเตอร์']},
+    {k:'assess',t:'grid',label:'กรุณาประเมินความรู้สึกในขณะนี้เปรียบเทียบกับวันแรกที่เป็นสมาชิกบีเอ็นไอ',rows:['มีความมั่นใจและพูดธุรกิจตัวเองได้ชัดเจนขึ้น','มีความเข้าใจธุรกิจอื่นมากขึ้น','รู้จักเพื่อนนักธุรกิจเพิ่มมากขึ้น','มีความรู้เพิ่มขึ้นและมีทักษะในการพูดโน้มน้าว','ได้รับคำแนะนำในการทำธุรกิจจากเพื่อนสมาชิก','มั่นใจสบายใจในการพูดคุยกับคนอื่นตามงานสังคมมากขึ้น','มีทีมช่วยในการทำธุรกิจมากขึ้น','มีแหล่งข้อมูล/ตัวช่วยที่แบ่งปันกับเพื่อนๆได้มากขึ้น','มีความสัมพันธ์ที่ดีเพิ่มขึ้น','มีภาวะผู้นำเพิ่มขึ้น','ได้รับลูกค้าจากการแนะนำ (รีฟอรัล) เพิ่มมากขึ้น','อัตราปิดการขายจากลูกค้าที่มีการแนะนำสูงมาก','มีลูกค้ากลุ่มเป้าหมายที่มองหาอยู่เพิ่มมากขึ้น','ร้องขอลูกค้ากลุ่มใหม่ๆที่ต้องการรู้จักจากเพื่อนๆได้','สนุกสนานกับการช่วยคนอื่นให้ประสบความสำเร็จ','ยอดขายโดยรวมเพิ่มขึ้น','มีทักษะในการสื่อสารกับเจ้าของกิจการดีขึ้น'],o:['ไม่แตกต่าง','มีการพัฒนาขึ้นบ้าง','ยอดเยี่ยมมาก']},
+    {k:'happyText',t:'radio',label:'คุณมีความสุขกับการเป็นสมาชิกบีเอ็นไอหรือไม่',o:['มีความสุขมาก','พอสมควร','ไม่เลย']},
+    {k:'recommend',t:'text',opt:1,label:'คุณจะแนะนำคนอื่นมาเป็นสมาชิกในแชพเตอร์คุณไหม? เหตุผลคืออะไร?'},
+    {k:'renew',t:'radio',label:'หากอายุสมาชิกของคุณครบกำหนดพอดี คุณจะต่ออายุสมาชิกไหม',o:['ต่อ','ไม่ต่อ','ยังไม่แน่ใจ']},
+    {k:'renewReason',t:'text',opt:1,label:'ถ้า "ไม่ต่อ" หรือ "ยังไม่แน่ใจ" กรุณาบอกเหตุผล'},
+    {k:'wantMore',t:'text',opt:1,label:'คุณต้องการให้บีเอ็นไอทำอะไรเพิ่มขึ้น?'},
+    {k:'willDo',t:'text',opt:1,label:'และคุณจะทำอะไรเพิ่มเติมจากปัจจุบันบ้าง?'},
+    {k:'other',t:'text',opt:1,label:'ความคิดเห็นอื่นๆ (โปรดระบุ)'},
+    {k:'lastSurvey',t:'radio',label:'คุณทำแบบสำรวจนี้ครั้งสุดท้ายเมื่อไหร่?',o:['ครั้งแรก','3-6 เดือนที่ผ่านมา','6-12 เดือนที่ผ่านมา','มากกว่า 12 เดือน']},
   ]},
 };
 let SVANS={};
 function openSurvey(round){SVANS={};renderSurvey(round);window.scrollTo(0,0);}
+function qField(q){
+  if(q.t==='text')return `<textarea id="sv_${q.k}" rows="2" placeholder="${q.opt?'(ไม่บังคับ)':''}"></textarea>`;
+  if(q.t==='scale')return `<div class="scalerow" id="sv_${q.k}">${Array.from({length:10},(_,n)=>`<button type="button" class="scb" onclick="pickSV('${q.k}',${n+1},this)">${n+1}</button>`).join('')}</div>`;
+  if(q.t==='checkbox')return `<div class="optcol" id="sv_${q.k}">${q.o.map(o=>`<button type="button" class="opb" onclick="pickChk('${q.k}','${String(o).replace(/'/g,"\\'")}',this)">${esc(o)}</button>`).join('')}</div>`;
+  if(q.t==='grid')return q.rows.map((row,ri)=>`<div class="gq"><b>${esc(row)}</b><div class="grow" data-g="${q.k}" data-r="${ri}">${q.o.map(o=>`<button type="button" class="opb" onclick="pickGrid('${q.k}','${String(row).replace(/'/g,"\\'")}','${String(o).replace(/'/g,"\\'")}',this)">${esc(o)}</button>`).join('')}</div></div>`).join('');
+  return `<div class="optcol" id="sv_${q.k}">${q.o.map(o=>`<button type="button" class="opb" onclick="pickSV('${q.k}','${String(o).replace(/'/g,"\\'")}',this)">${esc(o)}</button>`).join('')}</div>`; // radio/dropdown
+}
 function renderSurvey(round){
   const s=SURVEYS[round];
   app.innerHTML=`
   <div class="hero"><div><h1 style="font-size:18px">${s.title}</h1><div class="sub">ตอบเพื่อให้แชพเตอร์ดูแลคุณได้ดียิ่งขึ้น 🙏</div></div></div>
-  ${s.q.map((q,i)=>`<div class="card">
-    <div class="qn">${i+1}. ${q.label}</div>
-    ${q.t==='text'?`<textarea id="sv_${q.k}" rows="2"></textarea>`:
-      q.t==='scale'?`<div class="scalerow" id="sv_${q.k}">${Array.from({length:10},(_,n)=>`<button type="button" class="scb" onclick="pickSV('${q.k}',${n+1},this)">${n+1}</button>`).join('')}</div>`:
-      `<div class="optcol" id="sv_${q.k}">${q.o.map(o=>`<button type="button" class="opb" onclick="pickSV('${q.k}','${String(o).replace(/'/g,"\\'")}',this)">${esc(o)}</button>`).join('')}</div>`}
-  </div>`).join('')}
+  ${s.q.map((q,i)=>`<div class="card"><div class="qn">${i+1}. ${q.label}${q.opt?' <span class="opt">(ไม่บังคับ)</span>':''}</div>${qField(q)}</div>`).join('')}
   <button class="btn gold" onclick="submitSurvey('${round}')">✅ ส่งแบบสอบถาม</button>
   <button class="btn up" style="margin-top:9px" onclick="render()">← ยกเลิก กลับหน้าหลัก</button>`;
 }
 function pickSV(k,v,btn){SVANS[k]=v;[...btn.parentElement.children].forEach(b=>b.classList.remove('on'));btn.classList.add('on');}
+function pickChk(k,v,btn){SVANS[k]=SVANS[k]||[];const i=SVANS[k].indexOf(v);if(i<0){SVANS[k].push(v);btn.classList.add('on');}else{SVANS[k].splice(i,1);btn.classList.remove('on');}}
+function pickGrid(k,row,v,btn){SVANS[k]=SVANS[k]||{};SVANS[k][row]=v;[...btn.parentElement.children].forEach(b=>b.classList.remove('on'));btn.classList.add('on');}
 async function submitSurvey(round){
   const s=SURVEYS[round];
-  s.q.forEach(q=>{if(q.t==='text'){const el=document.getElementById('sv_'+q.k);if(el)SVANS[q.k]=el.value.trim();}});
-  if(SVANS.happy==null){toast('กรุณาให้คะแนนความสุขก่อนส่ง');window.scrollTo(0,0);return;}
+  s.q.forEach(q=>{if(q.t==='text'){const el=document.getElementById('sv_'+q.k);if(el&&el.value.trim())SVANS[q.k]=el.value.trim();}});
+  // ตรวจข้อบังคับ: ความสุข (สเกล m3/m6 หรือ radio m12) + เจตนาต่ออายุ
+  if(round==='m12'){if(!SVANS.happyText){toast('กรุณาตอบข้อ "คุณมีความสุขกับการเป็นสมาชิกหรือไม่"');window.scrollTo(0,0);return;}}
+  else if(SVANS.happy==null){toast('กรุณาให้คะแนนความสุขก่อนส่ง');window.scrollTo(0,0);return;}
+  if(SURVEYS[round].q.some(q=>q.k==='renew')&&!SVANS.renew){toast('กรุณาตอบข้อเรื่องการต่ออายุสมาชิก');window.scrollTo(0,0);return;}
+  const happMap={'มีความสุขมาก':10,'พอสมควร':6,'ไม่เลย':2};
   const rec=Object.assign({sent:true,done:false,note:''},ME.hs&&ME.hs[round]);
   rec.done=true;rec.sent=true;
-  rec.happiness=SVANS.happy||null;
+  rec.happiness=SVANS.happy!=null?SVANS.happy:(happMap[SVANS.happyText]||null);
   rec.renew=SVANS.renew||'';
-  rec.answers={feel:SVANS.feel||'',improve:SVANS.improve||'',happy:SVANS.recommend||'',all:Object.assign({},SVANS)};
+  rec.answers={feel:SVANS.feel||SVANS.recommend||'',improve:SVANS.improve||SVANS.wantMore||'',happy:SVANS.happyText||SVANS.recommend||'',all:Object.assign({},SVANS)};
   rec.submittedAt=today().toISOString?today().toISOString().slice(0,10):new Date().toISOString().slice(0,10);
   rec.source='line-form';
   ME.hs=Object.assign({},ME.hs,{[round]:rec});
