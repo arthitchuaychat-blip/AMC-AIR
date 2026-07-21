@@ -989,7 +989,8 @@ export async function dashboardActionLite() {
   const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows }));
   const [inv, exp, po, poi, sp, lj] = await Promise.all([
     _rows((f, t) => supabase.from("invoices").select("total,wht_amt,status,due_date,invoice_no", { count: "exact" }).order("invoice_no").range(f, t)),
-    _rows((f, t) => supabase.from("expense_requests").select("id,status,amount", { count: "exact" }).order("id").range(f, t)),
+    _rows((f, t) => supabase.from("expense_requests").select("id,status,amount,paid_amount", { count: "exact" }).order("id").range(f, t))
+      .catch(async (e) => (/paid_amount/i.test(e.message || "") ? _rows((f, t) => supabase.from("expense_requests").select("id,status,amount", { count: "exact" }).order("id").range(f, t)) : Promise.reject(e))), // pre-063 fallback
     _rows((f, t) => supabase.from("purchase_orders").select("po_no,status,vat,expense_id,paid_at", { count: "exact" }).order("po_no").range(f, t))
       .catch(async (e) => (/expense_id|paid_at|vat/i.test(e.message || "") ? _rows((f, t) => supabase.from("purchase_orders").select("po_no,status", { count: "exact" }).order("po_no").range(f, t)) : Promise.reject(e))), // pre-096/100 fallback
     _rows((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)), // กันเพดาน 1000 แถว
@@ -1002,11 +1003,26 @@ export async function dashboardActionLite() {
   const pos = po.data || [];
   // ---- ยอดค้างจ่าย (เจ้าหนี้) ----
   const poTotal = {}; (poi.data || []).forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + (Number(it.qty) || 0) * (Number(it.price) || 0); });
-  const poPayable = pos.filter((x) => x.status !== "cancelled" && !x.paid_at && (x.status === "received" || x.expense_id))
-    .reduce((a, x) => a + (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1), 0);               // PO ที่ยังไม่จ่ายเงิน (รวม VAT) — นับเฉพาะรับของแล้ว/ส่งเบิกแล้ว
-  // เบิกอนุมัติแล้วรอจ่าย — ไม่นับใบเบิกที่เป็นค่าจ่าย PO (PO ตัวนั้นถูกนับใน poPayable แล้ว ไม่งั้นซ้ำ)
+  // ⚠️ ต้องหักยอดที่ "จ่ายบางส่วนแล้ว" ให้ตรงกับเมนูค้างจ่าย (listPayables) — payExpense จ่ายบางส่วนได้
+  //    เดิมนับ PO/ใบเบิกเต็มหน้าใบ ไม่หัก paid_amount → การ์ดแดชบอร์ดสูงกว่าเมนูค้างจ่ายทั้งที่โฆษณาว่าตัวเลขชุดเดียวกัน
+  //    ใบเบิก 1 ใบจ่ายได้หลาย PO → ปันยอดที่จ่ายแล้วให้ทีละ PO ตามลำดับ ไม่หักซ้ำ (สูตรเดียวกับ listPayables)
+  const expById = Object.fromEntries((exp.data || []).map((x) => [x.id, x]));
+  const expPaidLeft = {};
+  let poPayable = 0;                                                                     // PO ที่ยังไม่จ่าย (รวม VAT) หักงวดที่จ่ายผ่านใบเบิกแล้ว — นับเฉพาะรับของแล้ว/ส่งเบิกแล้ว
+  pos.filter((x) => x.status !== "cancelled" && !x.paid_at && (x.status === "received" || x.expense_id)).forEach((x) => {
+    const gross = (poTotal[x.po_no] || 0) * (x.vat ? 1.07 : 1);
+    let paid = 0;
+    if (x.expense_id) {
+      if (!(x.expense_id in expPaidLeft)) expPaidLeft[x.expense_id] = Number(expById[x.expense_id]?.paid_amount) || 0;
+      paid = Math.min(gross, expPaidLeft[x.expense_id]);
+      expPaidLeft[x.expense_id] = Math.round((expPaidLeft[x.expense_id] - paid) * 100) / 100;
+    }
+    poPayable += Math.max(0, Math.round((gross - paid) * 100) / 100);
+  });
+  // เบิกอนุมัติแล้วรอจ่าย — ไม่นับใบเบิกที่เป็นค่าจ่าย PO (PO ตัวนั้นถูกนับใน poPayable แล้ว ไม่งั้นซ้ำ) · หักยอดที่จ่ายบางส่วนแล้ว
   const poExpIds = new Set(pos.map((x) => x.expense_id).filter(Boolean));
-  const approvedExpenseSum = (exp.data || []).filter((x) => x.status === "approved" && !poExpIds.has(x.id)).reduce((a, x) => a + (Number(x.amount) || 0), 0);
+  const approvedExpenseSum = (exp.data || []).filter((x) => x.status === "approved" && !poExpIds.has(x.id))
+    .reduce((a, x) => a + Math.max(0, (Number(x.amount) || 0) - (Number(x.paid_amount) || 0)), 0);
   const payoutUnpaid = (sp.data || []).filter((x) => x.status !== "paid").reduce((a, x) => a + (Number(x.net) || 0), 0);              // ใบจ่ายช่างซัพรอจ่าย
   const laborOwed = (lj.data || []).reduce((a, j) => a + Math.max(0, (Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0)), 0); // ค่าแรงยืนยันแล้วยังไม่ตั้งเบิก
   return {
@@ -2637,7 +2653,9 @@ export async function deleteJobTemplate(id) {
 
 // ---------- website orders (มิ migration 071) ----------
 export async function listWebOrders() {
-  const { data, error } = await supabase.from("web_orders").select("*").order("created_at", { ascending: false });
+  // เพดาน 1000 แถว: คำสั่งซื้อเว็บโตเรื่อย ๆ เกินพันแล้วใบเก่าหาย + ยอดนับตามสถานะผิด → แบ่งหน้าเหมือนลิสต์อื่น
+  const data = await _fetchAll((f, t) => supabase.from("web_orders").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t));
+  const error = null;
   if (error) throw error;
   return data || [];
 }
@@ -4612,18 +4630,19 @@ export async function listChatRooms() {
   const avById = Object.fromEntries((staff.data || []).map((p) => [p.id, p.avatar_url]));
   const memByRoom = {}; (members.data || []).forEach((m) => { (memByRoom[m.room_id] = memByRoom[m.room_id] || []).push(m); });
   const myRead = {}; (members.data || []).forEach((m) => { if (m.user_id === uid) myRead[m.room_id] = m.last_read_at; });
-  const ids = (rooms.data || []).map((r) => r.id);
-  let msgs = [];
-  if (ids.length) {
-    const r = await supabase.from("chat_messages").select("room_id,text,image_url,file_url,file_name,created_at,sender").in("room_id", ids).order("created_at", { ascending: false }).limit(500);
-    msgs = r.data || [];
-  }
+  // ⚠️ เดิมดึง 500 ข้อความล่าสุด "รวมทุกห้อง" ก้อนเดียว — ถ้าห้องบริษัท/DM คุยกันรัวจน 500 ข้อความเต็ม
+  //    ห้องเงียบที่มีข้อความยังไม่อ่านจริงจะไม่ติดมาเลย → ป้ายยังไม่อ่าน = 0 ทั้งที่มีของค้าง (กระดิ่ง sidebar ก็ต่ำตาม)
+  //    แก้เป็นถามทีละห้อง (จำนวนห้องต่อคนมีจำกัด): ข้อความล่าสุด 1 แถว + นับยังไม่อ่านด้วย count query
   const last = {}, unread = {};
-  msgs.forEach((m) => {
-    if (!last[m.room_id]) last[m.room_id] = m;
-    const lr = myRead[m.room_id];
-    if (lr && m.sender !== uid && new Date(m.created_at) > new Date(lr)) unread[m.room_id] = (unread[m.room_id] || 0) + 1;
-  });
+  await Promise.all((rooms.data || []).map(async (r) => {
+    const lm = await supabase.from("chat_messages").select("room_id,text,image_url,file_url,file_name,created_at,sender").eq("room_id", r.id).order("created_at", { ascending: false }).limit(1);
+    if (lm.data && lm.data[0]) last[r.id] = lm.data[0];
+    const lr = myRead[r.id];
+    if (lr) {
+      const { count } = await supabase.from("chat_messages").select("id", { count: "exact", head: true }).eq("room_id", r.id).gt("created_at", lr).neq("sender", uid);
+      if (count) unread[r.id] = count;
+    }
+  }));
   return (rooms.data || []).map((r) => {
     const mem = memByRoom[r.id] || [];
     const otherIds = mem.filter((m) => m.user_id !== uid).map((m) => m.user_id);

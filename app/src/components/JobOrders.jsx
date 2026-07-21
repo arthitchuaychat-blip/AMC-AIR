@@ -2,7 +2,7 @@ import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate, listHandoverFlags, saveJobReview } from "../lib/api";
-import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES } from "../lib/schedule";
+import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES, ymd } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline, { Linkify } from "./JobTimeline";
 import DocChips from "./DocChips";
@@ -591,8 +591,10 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       {(() => {
         // all visit dates of a job (YYYY-MM-DD) — falls back to the legacy single scheduled_at
         const jobDates = (jo) => {
-          const ds = (jo.visits || []).map((v) => v.scheduled_at).filter(Boolean).map((s) => new Date(s).toISOString().slice(0, 10));
-          if (!ds.length && jo.scheduled_at) ds.push(new Date(jo.scheduled_at).toISOString().slice(0, 10));
+          // ⚠️ ใช้ ymd (วันที่ท้องถิ่น) ไม่ใช่ toISOString (UTC) — input วันที่/ปุ่มวันนี้เป็นวันท้องถิ่น
+          //    งานเริ่มก่อน 07:00 ไทย toISOString จะร่นไปวันก่อนหน้า แล้วหายจากตัวกรอง
+          const ds = (jo.visits || []).map((v) => v.scheduled_at).filter(Boolean).map((s) => ymd(new Date(s)));
+          if (!ds.length && jo.scheduled_at) ds.push(ymd(new Date(jo.scheduled_at)));
           return ds;
         };
         const inDateRange = (jo) => {
@@ -620,7 +622,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                   {(() => { const td = jobTypeDef(jo.job_type); return <span className="job-type-chip" style={{ background: td[3] }}>{td[2]} {td[1]}</span>; })()}
                   <span className={"job-badge " + st.cls}>{st.th}</span>{jo.locked && <span className="job-badge" style={{ background: "#64748b", color: "#fff" }}>🔒 ล็อก</span>}{(() => { const f = hoFlags[jo.job_no]; if (!f?.any) return null; return f.signed ? <span className="job-badge b-green" title="มีใบส่งมอบงานที่ส่งแล้วและลูกค้าเซ็นรับ">📝 ใบส่งมอบ ✓</span> : <span className="job-badge b-amber" title={f.submitted ? "ส่งใบส่งมอบแล้วแต่ยังไม่มีลายเซ็นลูกค้า" : "ใบส่งมอบยังเป็นฉบับร่าง"}>📝 ยังไม่เซ็น</span>; })()}
                   {/* สถานะการสั่งของสำหรับงานนี้ (ผ่านใบเสนอราคา ↔ ใบสั่งซื้อ) — ฝ่ายขาย/ทีมช่างเห็นทันทีว่าสั่งแอร์หรือยัง */}
-                  {jo.quote_no && (() => {
+                  {/* โหมดจอช่างไม่โหลด docLinks (setDocLinks byQuote:{}) → ป้ายนี้จะแดงตลอด ไม่มีความหมาย ต้องซ่อน */}
+                  {!fieldOnly && jo.quote_no && (() => {
                     const ch = docLinks.byQuote[jo.quote_no] || {};
                     const n = (ch.poNos || []).length;
                     if (!n) return jo.job_type === "install" && jo.status !== "done" && jo.status !== "cancelled"
