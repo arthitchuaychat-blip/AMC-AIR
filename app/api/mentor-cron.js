@@ -20,17 +20,19 @@ function addDays(d, n) { const x = new Date(d); x.setUTCDate(x.getUTCDate() + n)
 // "วันนี้" ตามเวลาไทย (UTC+7)
 function todayTH() { const t = new Date(Date.now() + 7 * 3600e3); return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate())); }
 
-// ถึงกำหนดส่งหรือยัง — ตรรกะเดียวกับในแอป: 3/6 เดือน = start+90/180 วัน, 12 เดือน = เปิดส่งได้ 180 วันก่อนวันครบรอบปีถัดไป
-function isDue(startIso, h) {
-  const s = pd(startIso); if (!s) return false;
+// ครบรอบ (เดือน/วันของ start) ครั้งถัดไป >= ref
+function annivAfter(s, ref) { let d = new Date(Date.UTC(ref.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate())); while (d < ref) d.setUTCFullYear(d.getUTCFullYear() + 1); return d; }
+// ถึงกำหนดส่งหรือยัง: 3/6 เดือน = start+90/180 วัน · 12 เดือน = 180 วันก่อน "วันครบกำหนดต่ออายุจริง" (เดือน/วันของ start ครั้งถัดไป, เลื่อนถ้าต่ออายุล่วงหน้าแล้ว)
+function isDue(m, h) {
+  const s = pd(m.start); if (!s) return false;
   const today = todayTH();
-  let due = addDays(s, h.days);
-  let open = due;
   if (h.key === "m12") {
-    if (due < today) { const nx = new Date(due); while (nx < today) nx.setUTCFullYear(nx.getUTCFullYear() + 1); due = nx; }
-    open = addDays(due, -180);
+    let d = annivAfter(s, today);
+    const ru = m.renewedUntil ? pd(m.renewedUntil) : null;
+    if (ru && ru >= d) d = annivAfter(s, addDays(ru, 1));
+    return today >= addDays(d, -180);
   }
-  return today >= open;
+  return today >= addDays(s, h.days);
 }
 
 export default async function handler(req, res) {
@@ -57,7 +59,7 @@ export default async function handler(req, res) {
       if (h.key === "m12" ? first : !first) continue;
       const rec = (m.hs && m.hs[h.key]) || { sent: false, done: false, note: "" };
       if (rec.sent || rec.done) continue;
-      if (!isDue(m.start, h)) continue;
+      if (!isDue(m, h)) continue;
       const link = cfg[h.link];
       if (!link) { skippedNoLink.push(`${m.nick || m.name} · ${h.key}`); continue; }
       const text = tpl.replace(/\{nick\}/g, m.nick || m.name).replace(/\{name\}/g, m.name)

@@ -337,9 +337,9 @@ function hsInfo(m,h){
   const s=pd(m.start);const rec=m.hs[h.key];
   let due=s?addDays(s,h.days):null;
   let open=due; // วันที่เริ่มถึงกำหนดส่ง
-  if(h.key==='m12'&&due){ // ส่งล่วงหน้า 6 เดือนก่อนวันต่ออายุ
-    if(due<today()){const nx=new Date(due);while(nx<today())nx.setFullYear(nx.getFullYear()+1);due=nx;}
-    open=addDays(due,-180);
+  if(h.key==='m12'){ // ส่ง 6 เดือนก่อน "วันครบกำหนดต่ออายุจริง" (ใช้ renewInfo ไม่ใช่ start+365)
+    const r=renewInfo(m);
+    if(r){due=r.date;open=addDays(r.date,-180);}else{due=null;open=null;}
   }
   let st='notyet';
   if(!surveyApplies(m,h))st='na';       // ไม่ตรงสถานะสมาชิก → ซ่อน
