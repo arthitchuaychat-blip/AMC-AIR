@@ -92,6 +92,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold2);box-shadow:0 0
 .filterbar label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:var(--mut);font-weight:600}
 .filterbar select{padding:7px 10px;font-size:12.5px}
 .filterbar .btn{margin-left:auto}
+.todo{padding:9px 12px;margin-top:6px;background:#f7f9ff;border:1px solid var(--line);border-radius:11px;font-size:12.5px;cursor:pointer;transition:.12s}
+.todo:hover{background:#eef2fc;border-color:#c9d5f0}
+.todogrp{margin-bottom:12px}.todogrp:last-child{margin-bottom:0}
+.todogrp>b{font-size:13px;display:block;margin-bottom:2px}
 .toolbar input[type=text]{max-width:280px}
 .toolbar select{width:auto}
 .field{margin-bottom:10px}
@@ -414,8 +418,30 @@ function render(){
 
 /* ---------- dashboard ---------- */
 let dueExpand=false,waitExpand=false,slideExpand=false,renewFil=180;
+function vMentorTodo(ms){
+  const due=[],slides=[],behind=[];
+  ms.forEach(m=>{
+    HS.forEach(h=>{const i=hsInfo(m,h);if(i.st==='due'||i.st==='wait')due.push({m,h});});
+    if(m.status==='ปีแรก'){const miss=SLIDES.filter(([k])=>!hasSlide(m,k));if(miss.length)slides.push({m,miss});}
+    const cw=curWeek(m),l=wLast(m);if(cw!==null&&l<cw)behind.push({m,gap:cw-l});
+  });
+  behind.sort((a,b)=>b.gap-a.gap);
+  const none=!due.length&&!slides.length&&!behind.length;
+  return `<div class="card" style="border:2px solid #f0cf7e">
+    <h2>📋 งานที่ต้องดูแล — mentee ของฉัน <span class="cnt">${ms.length} คน</span></h2>
+    ${none?`<div class="empty">🎉 เยี่ยม! mentee ทุกคนอัปเดตครบ ไม่มีงานค้าง</div>`:`
+    ${behind.length?`<div class="todogrp"><b>🐢 Mentoring ช้ากว่าแผน (${behind.length})</b>${behind.map(({m,gap})=>`<div class="todo" onclick="openMember('${m.id}')">${esc(m.nick||m.name)} — ช้า ${gap} สัปดาห์ · ทำถึง ${wLast(m)<0?'ยังไม่เริ่ม':'สัปดาห์ที่ '+wLast(m)+'/8'}</div>`).join('')}</div>`:''}
+    ${slides.length?`<div class="todogrp"><b>🖼️ สไลด์ยังไม่ครบ (${slides.length})</b>${slides.map(({m,miss})=>`<div class="todo" onclick="openMember('${m.id}')">${esc(m.nick||m.name)} — ขาด ${miss.map(([k,l])=>l).join(', ')}</div>`).join('')}</div>`:''}
+    ${due.length?`<div class="todogrp"><b>⏰ แบบสอบถามถึงกำหนด (${due.length})</b>${due.map(({m,h})=>`<div class="todo" onclick="openMember('${m.id}')">${esc(m.nick||m.name)} — ${h.label}</div>`).join('')}</div>`:''}
+    `}
+  </div>`;
+}
 function vDash(){
   const ms=scopedMembers();
+  if(isMentor())return vMentorTodo(ms)+vDashBody(ms);
+  return vDashBody(ms);
+}
+function vDashBody(ms){
   const mentoring=ms.filter(m=>wDone(m)<9&&m.status==='ปีแรก');
   const finished=ms.filter(m=>wDone(m)===9);
   let due=[],wait=[];
@@ -831,6 +857,59 @@ function memberComments(m){
     if(rec.note)out.push(`โน้ต: ${rec.note}`);}
   return out;
 }
+/* สถิติภาพรวม Chapter */
+function chapterStats(ms){
+  const scores=[];const renew={'ต่อ':0,'ยังไม่แน่ใจ':0,'ไม่ต่อ':0};
+  ms.forEach(m=>{let r='';HS.forEach(h=>{const rec=(m.hs&&m.hs[h.key])||{};if(rec.done){if(Number.isFinite(rec.happiness))scores.push(rec.happiness);if(rec.renew)r=rec.renew;}});if(r&&renew[r]!==undefined)renew[r]++;});
+  const avg=scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:null;
+  const dist={high:scores.filter(s=>s>=8).length,mid:scores.filter(s=>s>=6&&s<8).length,low:scores.filter(s=>s<=5).length};
+  const age=m=>{const s=pd(m.start);return s?dayDiff(today(),s):-1;};
+  const rnd=(k,fn)=>{const el=ms.filter(fn);return {done:el.filter(m=>m.hs&&m.hs[k]&&m.hs[k].done).length,total:el.length};};
+  return {total:ms.length,nScore:scores.length,avg,dist,renew,
+    first:ms.filter(m=>m.status==='ปีแรก').length,over:ms.filter(m=>m.status!=='ปีแรก').length,
+    withMentor:ms.filter(m=>(m.mentor||'').trim()).length,
+    comp:{m3:rnd('m3',m=>age(m)<365),m6:rnd('m6',m=>age(m)<365),m12:rnd('m12',m=>age(m)>=365)}};
+}
+function bar2(parts){ // parts: [[value,color,label],...]
+  const tot=parts.reduce((s,p)=>s+p[0],0)||1;
+  return `<div style="display:flex;height:12px;border-radius:99px;overflow:hidden;background:#eef1f8">${parts.map(([v,c])=>v?`<div style="width:${Math.round(v/tot*100)}%;background:${c}"></div>`:'').join('')}</div>`;
+}
+function vChapterStats(ms){
+  const s=chapterStats(ms);
+  const pct=(a,b)=>b?Math.round(a/b*100):0;
+  return `<div class="card">
+    <h2>📊 ภาพรวม Chapter <span class="cnt">${s.total} คน</span></h2>
+    <div class="stats" style="margin-bottom:14px">
+      <div class="stat gold"><div class="ic">😊</div><div><div class="n">${s.avg!=null?s.avg.toFixed(1):'—'}</div><div class="l">ความสุขเฉลี่ย /10 (${s.nScore} คำตอบ)</div></div></div>
+      <div class="stat green"><div class="ic">🔄</div><div><div class="n">${s.renew['ต่อ']}</div><div class="l">แจ้งจะต่ออายุ</div></div></div>
+      <div class="stat red"><div class="ic">⚠️</div><div><div class="n">${s.renew['ไม่ต่อ']+s.renew['ยังไม่แน่ใจ']}</div><div class="l">ไม่ต่อ/ยังไม่แน่ใจ</div></div></div>
+      <div class="stat blue"><div class="ic">🎓</div><div><div class="n">${s.withMentor}/${s.total}</div><div class="l">มี Mentor</div></div></div>
+    </div>
+    <div class="grid2" style="gap:16px">
+      <div>
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:7px">ระดับความสุข (${s.nScore} คำตอบ)</div>
+        ${bar2([[s.dist.high,'#12b76a'],[s.dist.mid,'#f6c64b'],[s.dist.low,'#ef4444']])}
+        <div style="display:flex;gap:12px;font-size:11px;color:var(--mut);margin-top:6px;flex-wrap:wrap">
+          <span>🟢 สูง 8-10: <b>${s.dist.high}</b></span><span>🟡 กลาง 6-7: <b>${s.dist.mid}</b></span><span>🔴 ต่ำ ≤5: <b>${s.dist.low}</b></span></div>
+      </div>
+      <div>
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:7px">แนวโน้มต่ออายุ</div>
+        ${bar2([[s.renew['ต่อ'],'#12b76a'],[s.renew['ยังไม่แน่ใจ'],'#f6c64b'],[s.renew['ไม่ต่อ'],'#ef4444']])}
+        <div style="display:flex;gap:12px;font-size:11px;color:var(--mut);margin-top:6px;flex-wrap:wrap">
+          <span>🟢 จะต่อ: <b>${s.renew['ต่อ']}</b></span><span>🟡 ยังไม่แน่ใจ: <b>${s.renew['ยังไม่แน่ใจ']}</b></span><span>🔴 ไม่ต่อ: <b>${s.renew['ไม่ต่อ']}</b></span></div>
+      </div>
+    </div>
+    <div style="border-top:1px dashed var(--line);margin-top:14px;padding-top:12px">
+      <div style="font-size:12.5px;font-weight:600;margin-bottom:9px">อัตราการตอบแบบสอบถาม (เฉพาะคนที่เข้าเกณฑ์)</div>
+      <div class="grid3" style="gap:12px">
+        ${[['3 เดือน',s.comp.m3],['6 เดือน',s.comp.m6],['12 เดือน',s.comp.m12]].map(([l,c])=>`
+        <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span>${l}</span><b>${c.done}/${c.total} (${pct(c.done,c.total)}%)</b></div>
+          <div class="bar" style="min-width:0"><i style="width:${pct(c.done,c.total)}%"></i></div></div>`).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--mut);margin-top:12px">สัดส่วนสมาชิก: ปีแรก <b>${s.first}</b> · เกิน 1 ปี <b>${s.over}</b></div>
+    </div>
+  </div>`;
+}
 function vReport(){
   const rounds=repRound==='all'?HS:HS.filter(h=>h.key===repRound);
   const done=[],pending=[];
@@ -860,6 +939,8 @@ function vReport(){
     <div class="stat blue"><div class="n">${pending.filter(p=>p.i.st==='wait').length}</div><div class="l">ส่งแล้ว รอคำตอบ</div></div>
     <div class="stat red"><div class="n">${pending.filter(p=>p.i.st==='due').length}</div><div class="l">ถึงกำหนด ยังไม่ส่ง</div></div>
   </div>
+
+  ${vChapterStats(scopedMembers())}
 
   ${(()=>{
     const risks=scopedMembers().map(m=>({m,r:memberRisk(m)})).filter(x=>x.r.level!=='ok')
