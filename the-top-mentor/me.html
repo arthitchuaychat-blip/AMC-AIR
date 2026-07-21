@@ -163,8 +163,10 @@ async function boot(){
     }
     ROWID=found.id; ME=Object.assign({},found.data,{id:found.id});
     render();
-    const sv=new URLSearchParams(location.search).get('survey');
-    if(sv&&SURVEYS[sv]){const hh=HS.find(h=>h.key===sv);const i=hh&&hsInfo(ME,hh);if(i&&i.st!=='na')openSurvey(sv);} // เปิดได้ทุกแบบที่ตรงสถานะ (ทดสอบ/แก้คำตอบซ้ำได้)
+    const params=new URLSearchParams(location.search);
+    SVTEST=params.get('test')==='1'; // โหมดทดสอบ: เปิดได้ทุกแบบ + ไม่บันทึกจริง
+    const sv=params.get('survey');
+    if(sv&&SURVEYS[sv]){const hh=HS.find(h=>h.key===sv);const i=hh&&hsInfo(ME,hh);if(SVTEST||(i&&i.st!=='na'))openSurvey(sv);}
   }catch(e){fail('⚠️','เชื่อมต่อไม่สำเร็จ','กรุณาปิดแล้วเปิดเมนูใหม่อีกครั้ง<br><small style="color:#aab">'+esc(e.message||e)+'</small>');}
 }
 
@@ -334,7 +336,7 @@ const SURVEYS={
     {k:'lastSurvey',t:'radio',label:'คุณทำแบบสำรวจนี้ครั้งสุดท้ายเมื่อไหร่?',o:['ครั้งแรก','3-6 เดือนที่ผ่านมา','6-12 เดือนที่ผ่านมา','มากกว่า 12 เดือน']},
   ]},
 };
-let SVANS={};
+let SVANS={},SVTEST=false;
 function openSurvey(round){SVANS={};renderSurvey(round);window.scrollTo(0,0);}
 function qField(q){
   if(q.t==='text')return `<textarea id="sv_${q.k}" rows="2" placeholder="${q.opt?'(ไม่บังคับ)':''}"></textarea>`;
@@ -347,6 +349,7 @@ function renderSurvey(round){
   const s=SURVEYS[round];
   app.innerHTML=`
   <div class="hero"><div><h1 style="font-size:18px">${s.title}</h1><div class="sub">ตอบเพื่อให้แชพเตอร์ดูแลคุณได้ดียิ่งขึ้น 🙏</div></div></div>
+  ${SVTEST?`<div style="background:rgba(251,191,36,.16);border:1px solid rgba(251,191,36,.4);color:#fde68a;border-radius:13px;padding:11px 13px;font-size:12.5px;margin-bottom:13px">🧪 โหมดทดสอบ — กรอกและกดส่งเพื่อดูการทำงานได้ คำตอบจะ<b>ไม่ถูกบันทึกจริง</b></div>`:''}
   ${s.q.map((q,i)=>`<div class="card"><div class="qn">${i+1}. ${q.label}${q.opt?' <span class="opt">(ไม่บังคับ)</span>':''}</div>${qField(q)}</div>`).join('')}
   <button class="btn gold" onclick="submitSurvey('${round}')">✅ ส่งแบบสอบถาม</button>
   <button class="btn up" style="margin-top:9px" onclick="render()">← ยกเลิก กลับหน้าหลัก</button>`;
@@ -361,6 +364,7 @@ async function submitSurvey(round){
   if(round==='m12'){if(!SVANS.happyText){toast('กรุณาตอบข้อ "คุณมีความสุขกับการเป็นสมาชิกหรือไม่"');window.scrollTo(0,0);return;}}
   else if(SVANS.happy==null){toast('กรุณาให้คะแนนความสุขก่อนส่ง');window.scrollTo(0,0);return;}
   if(SURVEYS[round].q.some(q=>q.k==='renew')&&!SVANS.renew){toast('กรุณาตอบข้อเรื่องการต่ออายุสมาชิก');window.scrollTo(0,0);return;}
+  if(SVTEST){toast('✅ ทดสอบส่งแบบสอบถามสำเร็จ (โหมดทดสอบ — ไม่บันทึกจริง) 🧪');render();window.scrollTo(0,0);return;}
   const happMap={'มีความสุขมาก':10,'พอสมควร':6,'ไม่เลย':2};
   const rec=Object.assign({sent:true,done:false,note:''},ME.hs&&ME.hs[round]);
   rec.done=true;rec.sent=true;
