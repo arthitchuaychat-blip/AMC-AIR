@@ -1193,24 +1193,34 @@ async function loadUsers(){
 }
 function openUserForm(u){
   const edit=!!u;u=u||{role:'mentor'};
-  const mentors=[...new Set(state.members.map(m=>(m.mentor||'').trim()).filter(Boolean))].sort();
+  const mopts=[...new Set(state.members.map(mentorName).filter(Boolean))].sort();
+  if(u.mentorName&&!mopts.includes(u.mentorName))mopts.unshift(u.mentorName);
   openModal(`
   <button class="x" onclick="closeModal()">✕</button>
   <h3>${edit?'แก้ไขบัญชี':'เพิ่มบัญชี Mentor'}</h3>
   <div class="sub">${edit?esc(u.username):'สร้างบัญชีให้ Mentor ล็อกอินอัปเดต mentee ของตัวเอง'}</div>
   <div id="uerr"></div>
   <div class="grid2">
-    <div class="field"><label>ชื่อผู้ใช้ (username) *</label><input type="text" id="u_user" value="${esc(u.username||'')}" ${edit?'readonly style="background:#f1f4fb"':''}></div>
+    <div class="field"><label>ชื่อผู้ใช้ (username) — ชื่อจริงภาษาอังกฤษ *</label><input type="text" id="u_user" value="${esc(u.username||'')}" placeholder="เช่น Arthit Chuaychat" ${edit?'readonly style="background:#f1f4fb"':''}></div>
     <div class="field"><label>ชื่อ-สกุล</label><input type="text" id="u_name" value="${esc(u.name||'')}"></div>
     <div class="field"><label>บทบาท</label><select id="u_role" onchange="document.getElementById('u_mnwrap').style.display=this.value==='mentor'?'':'none'">
       <option value="mentor" ${u.role==='mentor'?'selected':''}>🎓 Mentor</option>
       <option value="admin" ${u.role==='admin'?'selected':''}>👑 แอดมิน</option></select></div>
-    <div class="field" id="u_mnwrap" style="${u.role==='admin'?'display:none':''}"><label>ดูแล Mentor (ให้ตรงกับข้อมูลสมาชิก)</label>
-      <input type="text" id="u_mn" list="mnlist" value="${esc(u.mentorName||'')}" placeholder="เช่น ไมค์ Arthit Chuaychat">
-      <datalist id="mnlist">${mentors.map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
+    <div class="field" id="u_mnwrap" style="${u.role==='admin'?'display:none':''}"><label>ดูแล Mentor คนไหน (เลือกจากรายชื่อสมาชิก)</label>
+      <select id="u_mn" onchange="onPickMentor()">
+        <option value="">— เลือกสมาชิกที่เป็น Mentor —</option>
+        ${mopts.map(x=>`<option value="${esc(x)}" ${u.mentorName===x?'selected':''}>${esc(x)}</option>`).join('')}
+      </select></div>
     <div class="field"><label>รหัสผ่าน ${edit?'(เว้นว่าง = ไม่เปลี่ยน)':'*'}</label><input type="password" id="u_pass" autocomplete="new-password"></div>
   </div>
   <div style="text-align:right;margin-top:10px"><button class="btn gold" onclick="saveUser(${edit})">บันทึก</button></div>`);
+}
+/* เลือก Mentor → เติม username เป็นชื่อจริงภาษาอังกฤษ + ชื่อ-สกุลอัตโนมัติ */
+function onPickMentor(){
+  const sel=document.getElementById('u_mn').value;
+  const m=state.members.find(x=>mentorName(x)===sel);if(!m)return;
+  const uu=document.getElementById('u_user');if(uu&&!uu.readOnly)uu.value=(m.name||'').trim();
+  const nm=document.getElementById('u_name');if(nm&&!nm.value.trim())nm.value=(m.name||'').trim();
 }
 async function saveUser(edit){
   const g=i=>document.getElementById(i).value;
