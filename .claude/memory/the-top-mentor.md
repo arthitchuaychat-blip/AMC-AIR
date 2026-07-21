@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 4a9c11e5-0286-4087-9881-1aa5b5b8a037
-  modified: 2026-07-21T02:11:48.265Z
+  modified: 2026-07-21T02:57:58.828Z
 ---
 
 The Top Mentor — แอปใหม่ (เริ่ม 5 ก.ค. 2026, ขึ้นคลาวด์วันเดียวกัน) **ลิงก์จริง: https://amc-air.vercel.app/mentor/** deploy ผ่าน `app/public/mentor/index.html` (สำเนาของ `the-top-mentor/index.html` — แก้ต้องคัดลอกให้ตรงกันทั้ง 2 ไฟล์แล้ว push) single-file vanilla JS, seed 75 คนจากไฟล์ Desktop "The Top Mentor  - Report.csv"
@@ -27,6 +27,7 @@ The Top Mentor — แอปใหม่ (เริ่ม 5 ก.ค. 2026, ข�
 
 - โครงข้อมูล: member = {id, name, nick, prof, status(ปีแรก/เกิน 1 ปี), start(ISO), mentor, weeks[9] tri-state (Week 0–8), slides{onepage,s121,s5min}, hs{m3,m6,m12:{sent,done,note}}, note}
 - กำหนด survey: 3 เดือน = start+90 วัน, 6 เดือน = +180 วัน, 12 เดือน = วันครบรอบปีถัดไป โดยเริ่มส่งได้ 6 เดือนก่อนต่ออายุ (ตรงกับสูตรในชีตเดิม, ปี ค.ศ.)
+- **เกณฑ์แสดง/นับ/ส่งแบบสอบถาม = สถานะสมาชิก m.status (ไม่ใช่อายุคำนวณ)** (user ยืนยัน 8 ก.ค. 2026): `surveyApplies(m,h)` — 3+6 เดือน เฉพาะ status==='ปีแรก' · 12 เดือน เฉพาะ 'เกิน 1 ปี'. hsInfo คืน st='na' เมื่อไม่ตรง → ทุกที่ที่ loop HS ต้อง `.filter(h=>surveyApplies(m,h))` (โมดัล/ตารางไอคอน/survey tab/me.html card) + chapterStats/memberRisk/memberComments/report gate ด้วย surveyApplies; cron เช็ก status ในลูป. **เดิมเคยใช้ ageDays<365 เลิกใช้แล้ว**
 - LINE: ตอนนี้เป็นปุ่มคัดลอกข้อความ (template + ลิงก์ฟอร์มตั้งได้ในหน้าตั้งค่า) — **เฟส 2 ค้างอยู่**: ส่งอัตโนมัติผ่าน LINE OA Messaging API + Vercel cron + Supabase และ user จะอัพโหลดแบบสอบถาม 3 ชุดมาให้ทีหลัง
 - นำเข้า CSV โครงเดิมซ้ำได้ในหน้าตั้งค่า (แทนที่ทั้งหมด), สำรอง/กู้คืน JSON ได้
 - พรีวิวผ่าน launch config "static" (_design/serve.ps1 เสิร์ฟทั้ง repo ที่ :8123) → /the-top-mentor/
