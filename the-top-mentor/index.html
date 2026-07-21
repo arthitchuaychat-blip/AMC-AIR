@@ -543,6 +543,27 @@ function trafficColor(c){
   if(c==='R')return {emoji:'🔴',label:'ต้องปรับปรุง',bg:'#fee4e2',fg:'#d92d20'};
   return {emoji:'⚪',label:'—',bg:'#f1f4fb',fg:'#8a94ad'};
 }
+/* คะแนนรายหมวดตามกฎ Traffic Light (ใช้แนะนำว่ายังเพิ่มได้ตรงไหน) */
+function tlScores(t){const A=t.attend.A||0,L=t.attend.L||0,tr=t.training||0,bg=t.bizGiven||0,rw=t.refPerWk||0,vw=t.visitorPerWk||0,ow=t.oneToOnePerWk||0;
+  return {pA:A===0?15:A===1?10:A===2?5:0,pL:L===0?10:L===1?5:0,
+    pRef:rw>=1.5?20:rw>=1.2?15:rw>=1.0?10:rw>=0.75?5:0,pVis:vw>=0.75?20:vw>=0.5?15:vw>=0.25?10:vw>=0.01?5:0,
+    p121:ow>=2?10:ow>=1?5:0,pTrain:tr>=4?20:tr>=3?15:tr>=2?10:tr>=1?5:0,pBiz:bg>=500000?15:bg>=200000?10:bg>=100000?5:0};
+}
+/* แนะนำว่าต้องทำอะไรอีกเพื่อขึ้นสีถัดไป (เหลือง→เขียว) */
+function tlAdvice(t){
+  if(!t||!Number.isFinite(t.score))return null;
+  const cur=t.score,tier=cur>=70?'G':cur>=50?'Y':cur>=30?'R':'B';
+  if(tier==='G')return {green:true};
+  const target=tier==='Y'?70:50,targetName=target===70?'เขียว':'เหลือง',weeks=t.weeks||26,s=tlScores(t);
+  const nx=(arr,v)=>arr.find(x=>v<x);const steps=[];
+  if(s.pVis<20){const m=nx([0.01,0.25,0.5,0.75],t.visitorPerWk||0);if(m!=null)steps.push(`เชิญ Visitor เพิ่มอีก ${Math.max(1,Math.ceil(m*weeks)-(t.visitors||0))} คน (+5)`);}
+  if(s.pRef<20){const m=nx([0.75,1.0,1.2,1.5],t.refPerWk||0);if(m!=null)steps.push(`ส่ง Referral ให้เพื่อนเพิ่มอีก ${Math.max(1,Math.ceil(m*weeks)-(t.refGiven||0))} ครั้ง (+5)`);}
+  if(s.p121<10){const m=nx([1,2],t.oneToOnePerWk||0);if(m!=null)steps.push(`ทำ 1-2-1 เพิ่มอีก ${Math.max(1,Math.ceil(m*weeks)-(t.oneToOne||0))} ครั้ง (+5)`);}
+  if(s.pTrain<20)steps.push('เข้าอบรม/พัฒนาทักษะเพิ่มอีก 1 ครั้ง (+5)');
+  if(s.pBiz<15){const m=nx([100000,200000,500000],t.bizGiven||0);if(m!=null)steps.push(`ส่งมอบธุรกิจให้เพื่อน (TYFCB) เพิ่มอีก ${(m-(t.bizGiven||0)).toLocaleString('en-US')} บาท (+5)`);}
+  const maintain=[];if((t.attend.A||0)>0)maintain.push(`ลดการขาดประชุม (ขาด ${t.attend.A} ครั้ง)`);if((t.attend.L||0)>0)maintain.push(`มาให้ตรงเวลา (สาย ${t.attend.L} ครั้ง)`);
+  return {green:false,targetName,need:Math.max(5,target-cur),steps,maintain};
+}
 async function importTrafficXlsx(inp){
   const f=inp.files[0];if(!f)return;
   if(typeof XLSX==='undefined'){toast('ไลบรารียังโหลดไม่เสร็จ ลองใหม่อีกครั้ง');return;}
@@ -555,7 +576,11 @@ async function importTrafficXlsx(inp){
     const monthLabel=mm?`${MTH[mm[1]]||mm[1]} 20${mm[2]}`:'ล่าสุด';
     const num=v=>typeof v==='number'?v:(parseFloat(v)||0);
     const nrm=s=>String(s||'').toLowerCase().replace(/นาย|นาง|นางสาว|น\.ส\.|ดร\.?|mr\.?|ms\.?|mrs\.?/g,'').replace(/[^a-z0-9ก-๙]/g,'');
-    const recs=rows.slice(2).filter(r=>typeof r[0]==='number'&&r[2]&&String(r[2]).trim()!=='Visitors').map(r=>({name:String(r[2]).trim(),color:String(r[32]||'').trim().toUpperCase(),score:num(r[31]),attend:{P:num(r[3]),A:num(r[4]),L:num(r[5]),M:num(r[6]),S:num(r[7])},refGiven:num(r[8])+num(r[9]),refReceived:num(r[10])+num(r[11]),visitors:num(r[12]),oneToOne:num(r[13]),bizGiven:num(r[14]),bizReceived:num(r[33])}));
+    const recs=rows.slice(2).filter(r=>typeof r[0]==='number'&&r[2]&&String(r[2]).trim()!=='Visitors').map(r=>{
+      const refGiven=num(r[8])+num(r[9]),visitors=num(r[12]),oneToOne=num(r[13]);
+      const refPerWk=num(r[18]),visitorPerWk=num(r[19]),oneToOnePerWk=num(r[20]),P=num(r[3]),A=num(r[4]),L=num(r[5]);
+      const weeks=Math.round(oneToOnePerWk>0?oneToOne/oneToOnePerWk:refPerWk>0?refGiven/refPerWk:visitorPerWk>0?visitors/visitorPerWk:(P+A+L)||26)||26;
+      return {name:String(r[2]).trim(),color:String(r[32]||'').trim().toUpperCase(),score:num(r[31]),attend:{P,A,L,M:num(r[6]),S:num(r[7])},refGiven,refReceived:num(r[10])+num(r[11]),visitors,oneToOne,training:num(r[15]),refPerWk,visitorPerWk,oneToOnePerWk,weeks,bizGiven:num(r[14]),bizReceived:num(r[33])};});
     if(!recs.length){toast('ไม่พบข้อมูลสมาชิกในไฟล์ — ตรวจสอบว่าเป็นไฟล์ Traffic Light');return;}
     const iso=new Date().toISOString().slice(0,10);let n=0,miss=[];
     recs.forEach(rec=>{const nn=nrm(rec.name);const m=state.members.find(x=>{const xn=nrm(x.name);return xn===nn||xn.includes(nn)||nn.includes(xn);});
@@ -804,6 +829,13 @@ function openMember(id){
       <span style="font-size:13px">คะแนนรวม <b>${t.score}</b>/100</span></div>
     <div class="grid3">${met.map(([l,v])=>`<div style="background:#f7f9fc;border:1px solid var(--line);border-radius:12px;padding:9px 12px">
       <div style="font-size:11px;color:var(--mut)">${l}</div><div style="font-size:13.5px;font-weight:600;margin-top:2px">${v}</div></div>`).join('')}</div>
+    ${(()=>{const a=tlAdvice(t);if(!a)return '';
+      if(a.green)return `<div style="margin-top:11px;padding:11px 13px;border-radius:12px;background:#dcf7e9;color:#0a9152;font-size:12.5px">🎉 ผลงานสีเขียว — รักษาระดับนี้ไว้ได้เลย</div>`;
+      return `<div style="margin-top:11px;padding:12px 13px;border-radius:12px;background:#fffaf0;border:1px solid #f0e0c0">
+        <div style="font-size:13px;font-weight:700;margin-bottom:2px">🎯 แนะนำเพื่อขึ้นเป็นสี${a.targetName} (ต้องได้อีก ~${a.need} คะแนน)</div>
+        ${a.steps.map(s=>`<div style="font-size:12.5px;padding:5px 0;border-top:1px dashed #eadfc8">✅ ${esc(s)}</div>`).join('')}
+        ${a.maintain.length?`<div style="font-size:11.5px;color:var(--mut);margin-top:6px">⚠️ ${a.maintain.map(esc).join(' · ')}</div>`:''}
+      </div>`;})()}
   </div>`;})()}
 
   <div class="sect"><h4>📝 หมายเหตุ</h4>
