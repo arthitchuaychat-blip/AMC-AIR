@@ -106,9 +106,9 @@ export default function Attendance({ me }) {
     setPayBusy(true);
     try {
       const { from, to } = payPeriod(payYm);
-      const [attRows, lvAll, hols, hs, advs, slips] = await Promise.all([
+      const [attRows, lvAll, hols, hs, advs, slips, myQ] = await Promise.all([
         listMyAttendance(from), listMyLeaves(), listHolidays(), getHrSettings().catch(() => null),
-        listMyAdvances(), listPayslips(payYm).catch(() => []),
+        listMyAdvances(), listPayslips(payYm).catch(() => []), getMyLeaveQuota(Number(payYm.slice(0, 4))).catch(() => null),
       ]);
       const hset = { ...DEFAULT_HR_SETTINGS, ...(hs || {}) };
       const holSet = new Set((hols || []).map((h) => h.day));
@@ -123,7 +123,7 @@ export default function Attendance({ me }) {
       const q0 = hset.quota || DEFAULT_HR_SETTINGS.quota;
       const usedThru = (t, cutoff) => approved.filter((l) => l.type === t).reduce((s, l) => s + leaveDaysInRange(l, yearStart, cutoff), 0);
       let over = 0;
-      ["vacation", "personal", "sick"].forEach((t) => { const qq = q0[t] ?? 0; over += Math.max(0, usedThru(t, to) - qq) - Math.max(0, usedThru(t, dayBefore(from)) - qq); });
+      ["vacation", "personal", "sick"].forEach((t) => { const qq = (myQ?.[t] ?? q0[t]) ?? 0; over += Math.max(0, usedThru(t, to) - qq) - Math.max(0, usedThru(t, dayBefore(from)) - qq); });
       stp.overLeave = Math.round((Math.min(stp.leaveDays - (stp.unpaidLeave || 0), Math.max(0, over)) + (stp.unpaidLeave || 0)) * 100) / 100;
       const slip = (slips || []).find((s) => s.user_id === me.id) || null;
       // เบิกล่วงหน้า: รอบที่จ่ายแล้ว = ใบที่ถูกหักในรอบนั้น (period = รอบ) · รอบยังไม่จ่าย = ใบอนุมัติที่ยังไม่ถูกหัก

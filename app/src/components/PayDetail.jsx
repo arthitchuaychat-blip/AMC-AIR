@@ -74,6 +74,9 @@ export default function PayDetailModal({ r, c, advRows, settings, period, note, 
           <Sec title={t("ประกันสังคม 5%", "လူမှုဖူလုံရေး 5%")} amount={c.dSso} neg>
             <Row l={c.dSso ? `ฐาน ${fmtBaht(Math.min(monthly ? basePay : c.base, 17500))} (เพดาน 17,500) × 5%` : "ไม่ได้ติ๊กประกันสังคม (ตั้งได้ที่ กะ & ตั้งค่า)"} v="" dim />
           </Sec>
+          <Sec title={t("ภาษีหัก ณ ที่จ่าย (ภ.ง.ด.1)", "အခွန်ဖြတ်")} amount={c.dTax} neg>
+            <Row l={c.dTax ? t("ยอดคงที่ต่อเดือนที่ฝ่ายบัญชีกำหนด", "အခွန်ဌာနက သတ်မှတ်သည့် လစဉ်ပုံသေ") : t("ไม่มีภาษีหัก ณ ที่จ่ายในรอบนี้", "ဒီကာလ အခွန်ဖြတ်ခြင်း မရှိပါ")} v="" dim />
+          </Sec>
           <Sec title={t("หักเบิกเงินล่วงหน้า", "ကြိုတင်ငွေ ဖြတ်")} amount={c.dAdvance} neg>
             {(advRows || []).length === 0 && <Row l={t("ไม่มีเบิกล่วงหน้าค้างหักในรอบนี้", "ဒီကာလ ကြိုတင်ငွေ ဖြတ်စရာ မရှိပါ")} v="" dim />}
             {(advRows || []).map((a) => <Row key={a.id} l={`${a.created_at ? thDate(a.created_at.slice(0, 10)) : ""}${a.reason ? ` · ${a.reason}` : ""}`} v={"−" + fmtBaht(a.amount)} />)}

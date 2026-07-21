@@ -888,7 +888,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   async function load() {
     setLoading(true);
     try {
-      const [att, leaves, slips, advs] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym), listAdvances("approved")]);
+      const [att, leaves, slips, advs, qOverRows] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym), listAdvances("approved"), getLeaveQuotas(ym.slice(0, 4)).catch(() => [])]);
+      // โควตาลารายคน (HR ตั้งเองใน กะ & ตั้งค่า) — ต้องใช้คิดหักลาเกินให้ตรงกับการ์ดยอดคงเหลือ ไม่งั้นจอบอกเหลือ 2 วันแต่หักเงินเหมือนเกินโควตา
+      const qOver = Object.fromEntries((qOverRows || []).map((r) => [r.user_id, r]));
       // approved advances not yet settled (period not set) → deduct in this run
       const advSum = {}, advIds = {}, advRows = {};
       advs.filter((a) => !a.period).forEach((a) => { advSum[a.user_id] = (advSum[a.user_id] || 0) + (Number(a.amount) || 0); (advIds[a.user_id] = advIds[a.user_id] || []).push(a.id); (advRows[a.user_id] = advRows[a.user_id] || []).push(a); });
@@ -918,7 +920,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         const st = periodStats(p, attByUserDay, leaveDaySet, from, to, holSet, settings);
         let over = 0;
         ["vacation", "personal", "sick"].forEach((t) => {
-          const q = quota[t] ?? 0;
+          const q = (qOver[p.id]?.[t] ?? quota[t]) ?? 0;
           over += Math.max(0, usedThru(p.id, t, to) - q) - Math.max(0, usedThru(p.id, t, dayBefore(from)) - q);
         });
         // หักค่าแรง = ส่วนเกินโควตาที่เกิดในรอบนี้ + ลาไม่รับค่าแรงทั้งหมดในรอบ (เต็มวัน/ราย ชม. คิดเศษวัน)
@@ -1000,7 +1002,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         const c = calcOf(r); runNet += c.net;
         return { period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
           base: c.base, ot_pay: c.otPay, hol_pay: c.holPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
-          late_min: r.st.lateMin, ot_min: r.st.otMin, d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
+          // ⚠️ เก็บนาที OT "ที่จ่ายจริง" (ปัดครึ่ง ชม.แล้ว = c.otHours) ไม่ใช่นาทีดิบ r.st.otMin
+          //    frozenPayslip อ่าน ot_min/60 กลับมาโชว์ชั่วโมง ถ้าเก็บดิบ สลิปจะโชว์ ชม.มากกว่าที่จ่าย (3.3 ชม. × 60 ≠ 150)
+          late_min: r.st.lateMin, ot_min: Math.round((c.otHours || 0) * 60), d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
           bonus: c.bonus, other_deduct: c.otherDeduct, d_tax: c.dTax || 0, net: c.net, status: markPaid ? "paid" : "draft" };
       });
       await savePayslips(rows);
