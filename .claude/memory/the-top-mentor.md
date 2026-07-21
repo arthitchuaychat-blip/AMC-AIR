@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 4a9c11e5-0286-4087-9881-1aa5b5b8a037
-  modified: 2026-07-21T03:27:22.841Z
+  modified: 2026-07-21T05:11:48.481Z
 ---
 
 The Top Mentor — แอปใหม่ (เริ่ม 5 ก.ค. 2026, ขึ้นคลาวด์วันเดียวกัน) **ลิงก์จริง: https://amc-air.vercel.app/mentor/** deploy ผ่าน `app/public/mentor/index.html` (สำเนาของ `the-top-mentor/index.html` — แก้ต้องคัดลอกให้ตรงกันทั้ง 2 ไฟล์แล้ว push) single-file vanilla JS, seed 75 คนจากไฟล์ Desktop "The Top Mentor  - Report.csv"
@@ -26,7 +26,8 @@ The Top Mentor — แอปใหม่ (เริ่ม 5 ก.ค. 2026, ข�
 - **ไฟล์สไลด์** (mig 109): Storage bucket `tm_slides` (public, anon เขียน/ลบได้) path `<member_id>/<slide>_<ts>.<ext>`; member.slideFiles={onepage/s121/s5min:{url,name,path}}; สถานะ "มีแล้ว" = hasSlide() (มีไฟล์ หรือ slides[k]===true จากแอดมินกด)
 - รัน SQL migration เองได้ผ่าน Chrome → Supabase SQL editor (monaco.editor.getModels()[0].setValue แล้วคลิก Run — มี dialog ยืนยันถ้ามี drop/destructive)
 
-- โครงข้อมูล: member = {id, name, nick, prof, status(ปีแรก/เกิน 1 ปี), start(ISO), mentor, weeks[9] tri-state (Week 0–8), slides{onepage,s121,s5min}, hs{m3,m6,m12:{sent,done,note}}, note}
+- โครงข้อมูล: member = {id, name, nick, prof, company, website, email, phone, photo, status(ปีแรก/เกิน 1 ปี), start(ISO), mentor, weeks[9] tri-state (Week 0–8), slides{onepage,s121,s5min}, slideFiles, hs{m3,m6,m12}, traffic, trainings:[{date,name,note}], renewedUntil, lineUserId, note}
+- **ข้อมูลจาก BNI Connect (bniconnectglobal.com)**: user ส่ง**ภาพหน้าจอ**โปรไฟล์มาให้ (เว็บ BNI ถูกบล็อกทั้ง WebFetch และ claude-in-chrome เข้าไม่ได้) → อ่านจากภาพแล้ว PATCH ทีละคน (match by name). ดึงได้: company/prof(ประเภทธุรกิจ)/phone/email/website + trainings (ประวัติการอบรม date DD/MM/YYYY→ISO). **รูปถ่ายดึงจากภาพหน้าจอไม่ได้** (ตัด avatar ไปเก็บเป็นไฟล์ไม่ได้) — ใช้สมาชิกอัปเองผ่าน LINE หรือแอดมินอัปในแอป
 - กำหนด survey: 3 เดือน = start+90 วัน, 6 เดือน = +180 วัน. **12 เดือน = 180 วันก่อน "วันครบกำหนดต่ออายุจริง" = `renewInfo(m).date` (ครบรอบเดือน/วันของ start ครั้งถัดไป + เลื่อนถ้า renewedUntil)** — ห้ามใช้ start+365 เพราะสมาชิกเกิน 1 ปีมี start เป็นวันต่ออายุในอนาคต (เช่น กระเป๋า start 1 ต.ค. 2026) จะเพี้ยนบวกไปอีกปี. cron isDue(m,h) ก็ใช้ annivAfter(s,today) เหมือนกัน (แก้ 8 ก.ค. 2026)
 - **เกณฑ์แสดง/นับ/ส่งแบบสอบถาม = สถานะสมาชิก m.status (ไม่ใช่อายุคำนวณ)** (user ยืนยัน 8 ก.ค. 2026): `surveyApplies(m,h)` — 3+6 เดือน เฉพาะ status==='ปีแรก' · 12 เดือน เฉพาะ 'เกิน 1 ปี'. hsInfo คืน st='na' เมื่อไม่ตรง → ทุกที่ที่ loop HS ต้อง `.filter(h=>surveyApplies(m,h))` (โมดัล/ตารางไอคอน/survey tab/me.html card) + chapterStats/memberRisk/memberComments/report gate ด้วย surveyApplies; cron เช็ก status ในลูป. **เดิมเคยใช้ ageDays<365 เลิกใช้แล้ว**
 - LINE: ตอนนี้เป็นปุ่มคัดลอกข้อความ (template + ลิงก์ฟอร์มตั้งได้ในหน้าตั้งค่า) — **เฟส 2 ค้างอยู่**: ส่งอัตโนมัติผ่าน LINE OA Messaging API + Vercel cron + Supabase และ user จะอัพโหลดแบบสอบถาม 3 ชุดมาให้ทีหลัง
