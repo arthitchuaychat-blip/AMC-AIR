@@ -3,8 +3,8 @@
 // ลบเมนู: GET /api/mentor-richmenu?clear=1 · ดูสถานะ: GET /api/mentor-richmenu
 // ใช้ env: MENTOR_LINE_ACCESS_TOKEN + SUPABASE_URL/SERVICE_ROLE (ดึง liffId จาก tm_config)
 
-const SB = () => process.env.SUPABASE_URL;
-const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SB = () => process.env.MENTOR_SUPABASE_URL;
+const KEY = () => process.env.MENTOR_SUPABASE_SERVICE_ROLE_KEY;
 const TOKEN = () => process.env.MENTOR_LINE_ACCESS_TOKEN || "";
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
 const laH = () => ({ Authorization: `Bearer ${TOKEN()}`, "Content-Type": "application/json" });

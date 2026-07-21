@@ -3,8 +3,8 @@
 // Vercel env vars: MENTOR_LINE_ACCESS_TOKEN (+ SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 // เรียกเองเพื่อทดสอบ: GET /api/mentor-cron?dry=1 (ดูว่าจะส่งให้ใคร โดยไม่ส่งจริง)
 
-const SB = () => process.env.SUPABASE_URL;
-const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SB = () => process.env.MENTOR_SUPABASE_URL;
+const KEY = () => process.env.MENTOR_SUPABASE_SERVICE_ROLE_KEY;
 const TOKEN = () => process.env.MENTOR_LINE_ACCESS_TOKEN || "";
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
 

@@ -5,12 +5,13 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 4a9c11e5-0286-4087-9881-1aa5b5b8a037
-  modified: 2026-07-21T11:16:54.105Z
+  modified: 2026-07-21T12:13:03.905Z
 ---
 
 The Top Mentor — แอปใหม่ (เริ่ม 5 ก.ค. 2026, ขึ้นคลาวด์วันเดียวกัน) **ลิงก์จริง: https://amc-air.vercel.app/mentor/** deploy ผ่าน `app/public/mentor/index.html` (สำเนาของ `the-top-mentor/index.html` — แก้ต้องคัดลอกให้ตรงกันทั้ง 2 ไฟล์แล้ว push) single-file vanilla JS, seed 75 คนจากไฟล์ Desktop "The Top Mentor  - Report.csv"
 
-- **ข้อมูลบน Supabase โปรเจกต์เดียวกับ วัสดุOS**: ตาราง `tm_members` (id + data jsonb) และ `tm_config` (key='main') — mig 108 รันแล้ว, RLS เปิด anon อ่าน/เขียนเต็ม (สมาชิก chapter ไม่มี login), sync แบบ dirty-outbox + localStorage cache (key `topmentor_v1`, `tm_dirty`), ดึงซ้ำตอน focus/ทุก 90 วิ
+- **⭐ Supabase โปรเจกต์แยกของตัวเอง (21 ก.ค. 2026)**: The Top Mentor ย้ายออกจากโปรเจกต์ ERP (tpyrlxhoyghawqvsphfj) มาอยู่โปรเจกต์ **`podnetvgaboegaqyetwq`** ("Mentorship tracking app", สิงคโปร์) แยกจาก ERP ชัดเจน. **client** (index.html/me.html) `SB_URL='https://podnetvgaboegaqyetwq.supabase.co'` + `SB_KEY`=anon ของโปรเจกต์นี้ (commit ได้). **API ทั้ง 5** (mentor-auth/line/cron/chat/richmenu) ใช้ env **`MENTOR_SUPABASE_URL`** + **`MENTOR_SUPABASE_SERVICE_ROLE_KEY`** (แยกจาก ERP ที่ใช้ SUPABASE_URL/SERVICE_ROLE_KEY) → ตั้งใน Vercel เอง. ย้ายข้อมูลด้วยสคริปต์ scratchpad/migrate-project.mjs (อ่านเก่า→เขียนใหม่ผ่าน anon 2 ฝั่ง): tm_members 76 คน + tm_config ย้ายแล้ว. **tm_users ย้าย anon ไม่ได้ (ล็อก) → สร้างแอดมินใหม่ในโปรเจกต์ใหม่ผ่าน bootstrap**. ต้องรัน SQL รวมทุกตาราง (tm_members/config/users/chat + tm_slides bucket) ในโปรเจกต์ใหม่ก่อน
+- **ข้อมูลบน Supabase**: ตาราง `tm_members` (id + data jsonb) และ `tm_config` (key='main') — RLS เปิด anon อ่าน/เขียนเต็ม (สมาชิก chapter ไม่มี login), sync แบบ dirty-outbox + localStorage cache (key `topmentor_v1`, `tm_dirty`), ดึงซ้ำตอน focus/ทุก 90 วิ
 - app/vercel.json: SPA rewrite ยกเว้น `/mentor` + no-cache header `/mentor/(.*)` + cron `/api/mentor-cron` 02:00 UTC (09:00 ไทย)
 - **LINE OA (Chapter — แยกจาก OA บริษัท)**: `api/mentor-line.js` webhook ผูกบัญชี (สมาชิกพิมพ์ชื่อเล่น/ชื่อเต็ม → เซ็ต data.lineUserId), `api/mentor-cron.js` ส่ง survey อัตโนมัติเมื่อถึงกำหนด (+mark sent, `?dry=1` ทดสอบ) — ใช้ env `MENTOR_LINE_ACCESS_TOKEN` + `MENTOR_LINE_CHANNEL_SECRET` (คนละชุดกับ LINE_CHANNEL_* ของแชทบริษัท) **สถานะ: โค้ด deploy แล้ว รอ user ใส่ env จาก LINE Developers + ตั้ง webhook URL https://amc-air.vercel.app/api/mentor-line**
 - Vercel อัพเป็น Pro แล้ว (5 ก.ค. 2026) — เลิกติด deploy rate limit; user เคยโดน limit ตอนแผนฟรี

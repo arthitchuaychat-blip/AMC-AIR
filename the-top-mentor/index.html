@@ -280,8 +280,8 @@ function saveDel(id){dirty.del.push(id);dirty.m=dirty.m.filter(x=>x!==id);save()
 function saveAll(){dirty.all=true;dirty.cfg=true;save();}
 
 /* ---------- cloud sync (Supabase — โปรเจกต์เดียวกับ วัสดุOS, ตาราง tm_*) ---------- */
-const SB_URL='https://tpyrlxhoyghawqvsphfj.supabase.co';
-const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRweXJseGhveWdoYXdxdnNwaGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk3NzYsImV4cCI6MjA5NjU2NTc3Nn0.OnfQ4VipqPlEpg5PfBGXhx44oSpqY1ifW1AlnY52p0Q';
+const SB_URL='https://podnetvgaboegaqyetwq.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvZG5ldHZnYWJvZWdhcXlldHdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2MzM1NjYsImV4cCI6MjEwMDIwOTU2Nn0.N8Rw4AUCG0kNkbrgz8AB3Gz7aeHFaRlcPCQ5XFpsKH4';
 let dirty=loadDirty();
 function loadDirty(){try{const d=JSON.parse(localStorage.getItem('tm_dirty'));if(d&&Array.isArray(d.m))return d;}catch(e){}return{m:[],del:[],cfg:false,all:false};}
 function persistDirty(){localStorage.setItem('tm_dirty',JSON.stringify(dirty));}

@@ -3,8 +3,8 @@
 // env: MENTOR_LINE_ACCESS_TOKEN (+ SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 import crypto from "crypto";
 
-const SB = () => process.env.SUPABASE_URL;
-const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SB = () => process.env.MENTOR_SUPABASE_URL;
+const KEY = () => process.env.MENTOR_SUPABASE_SERVICE_ROLE_KEY;
 const TOKEN = () => process.env.MENTOR_LINE_ACCESS_TOKEN || "";
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
 

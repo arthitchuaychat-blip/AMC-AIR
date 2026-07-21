@@ -91,8 +91,8 @@ input:focus,textarea:focus{border-color:#22d3ee;box-shadow:0 0 0 3px rgba(34,211
 </div>
 <div id="toast"></div>
 <script>
-const SB_URL='https://tpyrlxhoyghawqvsphfj.supabase.co';
-const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRweXJseGhveWdoYXdxdnNwaGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk3NzYsImV4cCI6MjA5NjU2NTc3Nn0.OnfQ4VipqPlEpg5PfBGXhx44oSpqY1ifW1AlnY52p0Q';
+const SB_URL='https://podnetvgaboegaqyetwq.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvZG5ldHZnYWJvZWdhcXlldHdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2MzM1NjYsImV4cCI6MjEwMDIwOTU2Nn0.N8Rw4AUCG0kNkbrgz8AB3Gz7aeHFaRlcPCQ5XFpsKH4';
 const H={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'};
 async function sb(path,opts={}){const r=await fetch(SB_URL+'/rest/v1/'+path,{method:opts.method||'GET',headers:H,body:opts.body});if(!r.ok)throw new Error('sb '+r.status);return (r.headers.get('content-type')||'').includes('json')?r.json():null;}
 
