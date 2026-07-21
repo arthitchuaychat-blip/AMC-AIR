@@ -164,7 +164,7 @@ async function boot(){
     ROWID=found.id; ME=Object.assign({},found.data,{id:found.id});
     render();
     const sv=new URLSearchParams(location.search).get('survey');
-    if(sv&&SURVEYS[sv]){const hh=HS.find(h=>h.key===sv);const i=hh&&hsInfo(ME,hh);if(i&&(i.st==='due'||i.st==='wait'))openSurvey(sv);}
+    if(sv&&SURVEYS[sv]){const hh=HS.find(h=>h.key===sv);const i=hh&&hsInfo(ME,hh);if(i&&i.st!=='na')openSurvey(sv);} // เปิดได้ทุกแบบที่ตรงสถานะ (ทดสอบ/แก้คำตอบซ้ำได้)
   }catch(e){fail('⚠️','เชื่อมต่อไม่สำเร็จ','กรุณาปิดแล้วเปิดเมนูใหม่อีกครั้ง<br><small style="color:#aab">'+esc(e.message||e)+'</small>');}
 }
 
