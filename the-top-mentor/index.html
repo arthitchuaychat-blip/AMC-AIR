@@ -2,33 +2,68 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Top Mentor — ระบบติดตาม Mentoring & Happiness Survey</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Top Mentoring — ระบบติดตาม Mentoring & Happiness Survey</title>
+<meta name="theme-color" content="#e11d2a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="The Top Mentoring">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="fontLink" href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --ink:#0f1830; --ink2:#1c2a52; --gold:#e8a614; --gold2:#f6c64b;
+  --ink:#12203f; --ink2:#1c2a52; --gold:#e8a614; --gold2:#f6c64b;
   --navy:#1e2a4a; --navy2:#2b3b66;
-  --bg:#eef1f8; --card:#ffffff; --line:#e7ebf4; --txt:#1c2540; --mut:#8791ab;
+  --brand:#e11d2a; --brand2:#b3121f; --brand-soft:#fdeaec;
+  --bg:#f5f7fb; --card:#ffffff; --line:#e9edf5; --txt:#1b2440; --mut:#8a94ad;
   --ok:#12b76a; --bad:#ef4444; --warn:#f79009; --info:#3b6ef6;
-  --sh:0 10px 30px rgba(28,42,82,.07);
+  --sh:0 1px 2px rgba(28,42,82,.05),0 1px 3px rgba(28,42,82,.045);
+  --sh2:0 10px 30px rgba(28,42,82,.09);
+  --side-w:238px;
+  --font:'Prompt',system-ui,-apple-system,'Segoe UI',sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Prompt',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--txt);font-size:14.5px;background:var(--bg);
-  background-image:radial-gradient(700px 300px at 15% -5%,rgba(246,198,75,.16),transparent 60%),radial-gradient(800px 350px at 90% -10%,rgba(59,110,246,.10),transparent 60%);
-  background-attachment:fixed}
-header{background:linear-gradient(120deg,#111a35 0%,#1d2c58 55%,#25356b 100%);color:#fff;padding:12px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:50;box-shadow:0 6px 24px rgba(10,16,40,.35)}
-header .logo{display:flex;align-items:center;gap:11px}
-header .logo .badge{width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 12px rgba(232,166,20,.45)}
-header h1{font-size:17px;font-weight:700;line-height:1.2;letter-spacing:.2px}
-header h1 small{display:block;font-size:10.5px;font-weight:300;opacity:.65;letter-spacing:.4px}
-nav{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto;background:rgba(255,255,255,.07);padding:4px;border-radius:99px}
-nav button{border:0;background:transparent;color:#cdd6ee;padding:8px 16px;border-radius:99px;cursor:pointer;font-family:inherit;font-size:13px;transition:.18s}
-nav button:hover{color:#fff;background:rgba(255,255,255,.10)}
-nav button.on{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#241c04;font-weight:600;box-shadow:0 3px 10px rgba(232,166,20,.4)}
-#saved{font-size:11px;color:#c9d4ef;min-width:64px;text-align:right;transition:.3s}
-main{max-width:1200px;margin:0 auto;padding:22px 18px 90px}
+body{font-family:var(--font);color:var(--txt);font-size:14.5px;background:var(--bg);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+/* ===== app shell (เมนูซ้าย) ===== */
+#app{display:flex;min-height:100vh}
+#side{width:var(--side-w);flex:none;background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:15px 12px;position:sticky;top:0;height:100vh;overflow-y:auto;z-index:40}
+.brandbox{display:flex;align-items:center;gap:10px;padding:5px 8px 13px;margin-bottom:2px;border-bottom:1px solid var(--line)}
+.brandbox .lg{width:38px;height:38px;flex:none}
+.brandbox .bt{font-size:13.5px;font-weight:800;line-height:1.05;color:var(--brand);letter-spacing:.2px}
+.brandbox .bt small{display:block;font-size:8.5px;font-weight:700;color:var(--mut);letter-spacing:.14em;margin-top:3px}
+.navlbl{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--mut);font-weight:700;padding:14px 12px 6px}
+#nav{display:flex;flex-direction:column;gap:2px}
+#nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:transparent;color:#44506d;font-family:inherit;font-size:13.5px;font-weight:600;padding:10px 13px;border-radius:11px;cursor:pointer;transition:.14s}
+#nav button:hover{background:#f4f6fb;color:var(--txt)}
+#nav button.on{background:var(--brand-soft);color:var(--brand);font-weight:700}
+#hdrUser{margin-top:auto;padding-top:12px;margin-top:auto;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px}
+.uchip{display:flex;align-items:center;gap:9px;flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--txt)}
+.uchip .uav{width:33px;height:33px;border-radius:10px;flex:none;background:linear-gradient(135deg,#f26b73,var(--brand));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+.uchip .un{min-width:0;line-height:1.2}.uchip .un small{display:block;font-weight:400;color:var(--mut);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lo{border:0;background:#f4f6fb;color:var(--mut);font-family:inherit;font-size:15px;width:34px;height:34px;border-radius:10px;cursor:pointer;flex:none;transition:.14s}
+.lo:hover{background:var(--brand-soft);color:var(--brand)}
+#mainwrap{flex:1;min-width:0;display:flex;flex-direction:column}
+#topbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;gap:12px;min-height:56px}
+#topbar .ptitle{font-size:16px;font-weight:800;line-height:1.15}
+#topbar .ptitle small{display:block;font-size:11px;font-weight:400;color:var(--mut)}
+.menobtn{display:none;border:0;background:#f4f6fb;width:38px;height:38px;border-radius:11px;font-size:17px;cursor:pointer;flex:none;color:var(--txt)}
+#saved{font-size:11px;color:var(--mut);margin-left:auto;text-align:right;transition:.3s;white-space:nowrap}
+#scrim{display:none}
+main{max-width:1180px;width:100%;margin:0;padding:22px 24px 90px}
+@media(max-width:820px){
+  #side{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .22s ease;box-shadow:0 0 46px rgba(10,16,40,.28)}
+  #app.navopen #side{transform:none}
+  #scrim{position:fixed;inset:0;background:rgba(10,16,40,.42);z-index:39}
+  #app.navopen #scrim{display:block}
+  .menobtn{display:inline-flex;align-items:center;justify-content:center}
+  main{padding:18px 16px 90px}
+}
+#app.noauth #side,#app.noauth #topbar,#app.noauth #scrim{display:none}
+#app.noauth main{max-width:none;padding:0}
 .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:16px;box-shadow:var(--sh)}
 .card h2{font-size:15.5px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:9px}
 .card h2 .cnt{background:#f1f4fb;color:var(--mut);font-size:11.5px;padding:3px 11px;border-radius:99px;font-weight:500}
@@ -79,14 +114,14 @@ tr.click{cursor:pointer} tr.click:hover td{background:#f7f9ff}
 .slidechips .sc{flex:1;text-align:center;font-size:10.5px;font-weight:600;padding:4px 4px;border-radius:8px;background:#f1f4fb;color:#9aa3bd;white-space:nowrap}
 .slidechips .sc.on{background:#dcf7e9;color:#0a9152}
 /* ปุ่ม + ฟอร์ม */
-button.btn{border:0;background:linear-gradient(135deg,#25356b,#17224a);color:#fff;font-family:inherit;font-size:13px;padding:9px 17px;border-radius:12px;cursor:pointer;transition:.16s;box-shadow:0 3px 10px rgba(23,34,74,.22)}
-button.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(23,34,74,.3)}
+button.btn{border:0;background:linear-gradient(135deg,#f0343f,var(--brand2));color:#fff;font-family:inherit;font-size:13px;padding:9px 17px;border-radius:12px;cursor:pointer;transition:.16s;box-shadow:0 3px 10px rgba(225,29,42,.22)}
+button.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(225,29,42,.3)}
 button.btn.gold{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#241c04;font-weight:600;box-shadow:0 3px 10px rgba(232,166,20,.35)}
 button.btn.ghost{background:#eef1f9;color:var(--txt);box-shadow:none}
 button.btn.sm{padding:6px 12px;font-size:12px;border-radius:10px}
 button.btn.red{background:#feecec;color:#d92d20;box-shadow:none}
 input[type=text],input[type=date],input[type=url],select,textarea{font-family:inherit;font-size:13.5px;padding:9px 13px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--txt);outline:none;width:100%;transition:.15s}
-input:focus,select:focus,textarea:focus{border-color:var(--gold2);box-shadow:0 0 0 3px rgba(246,198,75,.18)}
+input:focus,select:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(225,29,42,.14)}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
 .filterbar{display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;padding:12px 14px;background:#f5f7fc;border:1px solid var(--line);border-radius:14px}
 .filterbar label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:var(--mut);font-weight:600}
@@ -144,14 +179,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold2);box-shadow:0 0
 .uchip{font-size:12.5px;font-weight:600;color:#fff;background:rgba(255,255,255,.14);padding:6px 12px;border-radius:99px}
 .lo{border:0;background:rgba(255,255,255,.1);color:#fff;font-family:inherit;font-size:12px;padding:6px 12px;border-radius:99px;cursor:pointer}
 .lo:hover{background:rgba(255,255,255,.22)}
-.authwrap{max-width:380px;margin:8vh auto 0;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:30px 26px;box-shadow:0 18px 50px rgba(28,42,82,.14)}
-.authwrap .lgo{text-align:center;font-size:40px;margin-bottom:8px}
+.authwrap{max-width:392px;margin:9vh auto 0;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:32px 28px;box-shadow:0 18px 50px rgba(28,42,82,.14)}
+.authwrap .lgo{text-align:center;margin-bottom:10px}
+.authwrap .lgo svg{width:64px;height:64px}
 .authwrap h2{text-align:center;font-size:19px;font-weight:700;margin-bottom:4px}
 .authwrap p.sub{text-align:center;color:var(--mut);font-size:12.5px;margin-bottom:20px}
 .autherr{background:#fee4e2;color:#b32020;font-size:12.5px;padding:9px 12px;border-radius:10px;margin-bottom:12px;text-align:center}
 @media print{
   body{background:#fff;font-size:12px}
-  header,.no-print{display:none!important}
+  #side,#topbar,#scrim,.no-print{display:none!important}
   main{max-width:none;padding:0}
   .card{border:0;box-shadow:none;padding:4px;page-break-inside:avoid}
   .rephead{display:block;text-align:center;margin-bottom:14px}
@@ -161,16 +197,26 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold2);box-shadow:0 0
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">
-    <div class="badge">🏆</div>
-    <h1>The Top Mentor<small>ระบบติดตาม Mentoring & Happiness Survey</small></h1>
+<div id="app" class="noauth">
+  <aside id="side">
+    <div class="brandbox">
+      <span class="lg"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="The Top Mentoring"><defs><linearGradient id="tmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0343f"/><stop offset="1" stop-color="#b3121f"/></linearGradient></defs><polygon points="50,4 89,27 89,73 50,96 11,73 11,27" fill="url(#tmg)"/><g stroke="#fff" stroke-opacity=".16" stroke-width="1.4" fill="none"><path d="M50,4V50M89,27L50,50M89,73L50,50M50,96V50M11,73L50,50M11,27L50,50"/></g><path d="M50,17 L55.5,44.5 L83,50 L55.5,55.5 L50,83 L44.5,55.5 L17,50 L44.5,44.5 Z" fill="#fff"/><path d="M50,29 L53,47 L71,50 L53,53 L50,71 L47,53 L29,50 L47,47 Z" fill="#f0343f"/></svg></span>
+      <div class="bt">THE TOP<br>MENTORING<small>PROFESSIONAL DEVELOPMENT</small></div>
+    </div>
+    <div class="navlbl">เมนู</div>
+    <nav id="nav"></nav>
+    <div id="hdrUser"></div>
+  </aside>
+  <div id="scrim" onclick="closeNav()"></div>
+  <div id="mainwrap">
+    <div id="topbar">
+      <button class="menobtn" onclick="toggleNav()" aria-label="เปิด/ปิดเมนู">☰</button>
+      <div class="ptitle" id="ptitle">แดชบอร์ด<small>The Top Mentoring</small></div>
+      <div id="saved">⏳ กำลังเชื่อมต่อ...</div>
+    </div>
+    <main id="view"></main>
   </div>
-  <nav id="nav"></nav>
-  <div id="hdrUser"></div>
-  <div id="saved">⏳ กำลังเชื่อมต่อ...</div>
-</header>
-<main id="view"></main>
+</div>
 <div id="ovl" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -178,7 +224,23 @@ const SEED=[{"id":"m1","name":"Pipat Wattanamongkolsiri","nick":"พัด","pro
 
 /* ---------- state ---------- */
 const LS_KEY='topmentor_v1';
-const DEF_CONFIG={link3:'',link6:'',link12:'',tpl:'เรียนคุณ {nick} ({name})\nถึงกำหนดทำแบบสอบถาม {survey} ของ Chapter The Top แล้วครับ/ค่ะ\nรบกวนตอบแบบสอบถามได้ที่ลิงก์นี้\n{link}\nขอบคุณครับ/ค่ะ 🙏'};
+const DEF_CONFIG={link3:'',link6:'',link12:'',font:'Prompt',tpl:'เรียนคุณ {nick} ({name})\nถึงกำหนดทำแบบสอบถาม {survey} ของ Chapter The Top แล้วครับ/ค่ะ\nรบกวนตอบแบบสอบถามได้ที่ลิงก์นี้\n{link}\nขอบคุณครับ/ค่ะ 🙏'};
+/* ---------- ฟอนต์ (เลือกได้ในหน้าตั้งค่า) ---------- */
+const FONTS=[
+  ['Prompt','พรอมต์ — มนกลม อ่านสบาย (ค่าเริ่มต้น)'],
+  ['Kanit','คณิต — เหลี่ยมเข้ม โมเดิร์น หนักแน่น'],
+  ['Sarabun','สารบรรณ — ทางการ อ่านง่าย มาตรฐานราชการ'],
+  ['IBM Plex Sans Thai','ไอบีเอ็ม เพล็กซ์ — โปรเฟสชันแนล สะอาด'],
+  ['Anuphan','อนุพันธ์ — ร่วมสมัย เรียบ คมชัด'],
+  ['Noto Sans Thai','โนโตะ — เป็นกลาง อ่านง่ายทุกขนาด']
+];
+function applyFont(name){
+  const f=FONTS.find(x=>x[0]===name)?name:'Prompt';
+  const link=document.getElementById('fontLink');
+  if(link)link.href='https://fonts.googleapis.com/css2?family='+encodeURIComponent(f)+':wght@300;400;500;600;700&display=swap';
+  document.documentElement.style.setProperty('--font',`'${f}',system-ui,-apple-system,'Segoe UI',sans-serif`);
+}
+function setFont(name){state.config.font=name;save('cfg');applyFont(name);toast('เปลี่ยนฟอนต์เป็น '+name);}
 let state=load();
 function load(){
   try{const s=JSON.parse(localStorage.getItem(LS_KEY));
@@ -371,11 +433,11 @@ let AUTH=loadAuth();
 function loadAuth(){try{const a=JSON.parse(localStorage.getItem('tm_auth'));if(a&&a.token)return a;}catch(e){}return null;}
 function isAdmin(){return AUTH&&AUTH.role==='admin';}
 function isMentor(){return AUTH&&AUTH.role==='mentor';}
-/* สมาชิกที่ผู้ใช้ปัจจุบันเห็นได้ — admin เห็นหมด, mentor เห็นเฉพาะ mentee ของตัวเอง */
+/* สมาชิกที่ผู้ใช้ปัจจุบันเห็นได้ — admin เห็นหมด · mentor/สมาชิก เห็นตัวเอง + mentee ที่ดูแล */
 function scopedMembers(){
   if(isAdmin())return state.members;
   const mn=(AUTH&&AUTH.mentorName||'').trim();
-  return state.members.filter(m=>(m.mentor||'').trim()===mn);
+  return state.members.filter(m=>mentorName(m)===mn||(m.mentor||'').trim()===mn);
 }
 async function authApi(action,extra){
   const r=await fetch(API_BASE+'/mentor-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({action},extra))});
@@ -387,32 +449,40 @@ function logout(){localStorage.removeItem('tm_auth');AUTH=null;tab='dash';locati
 /* ---------- nav ---------- */
 function navTabs(){
   if(isAdmin())return [['dash','🏠 แดชบอร์ด'],['members','👥 สมาชิก'],['survey','💛 Happiness Survey'],['report','📊 รายงานประธาน'],['users','👤 ผู้ใช้/Mentor'],['settings','⚙️ ตั้งค่า']];
-  return [['dash','🏠 แดชบอร์ด'],['members','👥 Mentee ของฉัน'],['survey','💛 Happiness Survey']];
+  return [['dash','🏠 แดชบอร์ด'],['members','👥 ข้อมูลของฉัน'],['survey','💛 Happiness Survey']];
 }
 let tab='dash';
-function go(t){tab=t;render();}
+const TAB_TITLES={dash:['แดชบอร์ด','ภาพรวม Chapter The Top'],members:['สมาชิก','ข้อมูลและความคืบหน้า Mentoring'],survey:['Happiness Survey','ติดตามแบบสอบถามความสุข'],report:['รายงานประธาน','สรุปภาพรวมสำหรับผู้นำ'],users:['ผู้ใช้ / Mentor','จัดการบัญชีเข้าใช้งาน'],settings:['ตั้งค่า','ระบบ · ฟอนต์ · ข้อมูล']};
+function toggleNav(){document.getElementById('app').classList.toggle('navopen');}
+function closeNav(){document.getElementById('app').classList.remove('navopen');}
+function go(t){tab=t;closeNav();render();}
 function scrollCard(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
 function render(){
-  const hdrUser=document.getElementById('hdrUser');
+  const app=document.getElementById('app'),hdrUser=document.getElementById('hdrUser');
   if(!AUTH){
+    app.classList.add('noauth');app.classList.remove('navopen');
     document.getElementById('nav').innerHTML='';
     if(hdrUser)hdrUser.innerHTML='';
     document.getElementById('saved').style.display='none';
     document.getElementById('view').innerHTML=vAuth();
     return;
   }
+  app.classList.remove('noauth');
   document.getElementById('saved').style.display='';
   const TABS=navTabs();
   if(!TABS.some(([k])=>k===tab))tab='dash';
   document.getElementById('nav').innerHTML=TABS.map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
-  if(hdrUser)hdrUser.innerHTML=`<span class="uchip">${isAdmin()?'👑':'🎓'} ${esc(AUTH.name||AUTH.username)}</span><button class="lo" onclick="logout()">ออกจากระบบ</button>`;
+  const ti=TAB_TITLES[tab]||['',''];const pt=document.getElementById('ptitle');
+  if(pt)pt.innerHTML=`${esc(ti[0])}<small>${esc(ti[1])}</small>`;
+  const initial=((AUTH.name||AUTH.username||'?').trim()[0]||'?');
+  if(hdrUser)hdrUser.innerHTML=`<span class="uchip"><span class="uav">${esc(initial)}</span><span class="un">${esc(AUTH.name||AUTH.username)}<small>${isAdmin()?'👑 แอดมิน':'🎓 Mentor'}</small></span></span><button class="lo" onclick="logout()" title="ออกจากระบบ">⏻</button>`;
   const v=document.getElementById('view');
   if(tab==='dash')v.innerHTML=vDash();
   else if(tab==='members')v.innerHTML=vMembers();
   else if(tab==='survey')v.innerHTML=vSurvey();
   else if(tab==='report'&&isAdmin())v.innerHTML=vReport();
   else if(tab==='users'&&isAdmin()){v.innerHTML=vUsers();loadUsers();}
-  else if(tab==='settings'&&isAdmin()){v.innerHTML=vSettings();checkLine();}
+  else if(tab==='settings'&&isAdmin()){v.innerHTML=vSettings();checkLine();if(deferredPrompt){const b=document.getElementById('pwaInstall');if(b)b.style.display='';}}
   else v.innerHTML=vDash();
 }
 
@@ -752,7 +822,7 @@ function openModal(html){document.getElementById('modalBox').innerHTML=html;docu
 function closeModal(){document.getElementById('ovl').classList.remove('show');render();}
 function openMember(id){
   const m=findM(id);if(!m)return;
-  if(isMentor()&&(m.mentor||'').trim()!==(AUTH.mentorName||'').trim()){toast('เปิดดูได้เฉพาะ mentee ของคุณ');return;}
+  if(!isAdmin()){const mn=(AUTH&&AUTH.mentorName||'').trim();if(mentorName(m)!==mn&&(m.mentor||'').trim()!==mn){toast('เปิดดูได้เฉพาะข้อมูลของคุณและ mentee ที่ดูแล');return;}}
   const adm=isAdmin();
   const cw=curWeek(m);
   openModal(`
@@ -1125,10 +1195,11 @@ function vReport(){
 
 /* ---------- login / bootstrap ---------- */
 let authMode='login'; // 'login' | 'bootstrap'
+const LOGO='<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="The Top Mentoring"><defs><linearGradient id="tmgL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0343f"/><stop offset="1" stop-color="#b3121f"/></linearGradient></defs><polygon points="50,4 89,27 89,73 50,96 11,73 11,27" fill="url(#tmgL)"/><g stroke="#fff" stroke-opacity=".16" stroke-width="1.4" fill="none"><path d="M50,4V50M89,27L50,50M89,73L50,50M50,96V50M11,73L50,50M11,27L50,50"/></g><path d="M50,17 L55.5,44.5 L83,50 L55.5,55.5 L50,83 L44.5,55.5 L17,50 L44.5,44.5 Z" fill="#fff"/><path d="M50,29 L53,47 L71,50 L53,53 L50,71 L47,53 L29,50 L47,47 Z" fill="#f0343f"/></svg>';
 function vAuth(){
   if(authMode==='bootstrap')return `
   <div class="authwrap">
-    <div class="lgo">🏆</div>
+    <div class="lgo">${LOGO}</div>
     <h2>ตั้งค่าบัญชีแอดมินครั้งแรก</h2>
     <p class="sub">ยังไม่มีบัญชีในระบบ — สร้างบัญชีผู้ดูแล (แอดมิน) เพื่อเริ่มใช้งาน</p>
     <div id="autherr"></div>
@@ -1139,13 +1210,14 @@ function vAuth(){
   </div>`;
   return `
   <div class="authwrap">
-    <div class="lgo">🏆</div>
-    <h2>The Top Mentor</h2>
+    <div class="lgo">${LOGO}</div>
+    <h2>The Top Mentoring</h2>
     <p class="sub">เข้าสู่ระบบเพื่อจัดการข้อมูล Mentoring</p>
     <div id="autherr"></div>
-    <div class="field"><label>ชื่อผู้ใช้</label><input type="text" id="lg_user" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <div class="field"><label>รหัสผ่าน</label><input type="password" id="lg_pass" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <button class="btn gold" style="width:100%;margin-top:6px" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div class="field"><label>ชื่อผู้ใช้</label><input type="text" id="lg_user" autocomplete="username" placeholder="สมาชิก: ชื่อจริงภาษาอังกฤษ" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="field"><label>รหัสผ่าน</label><input type="password" id="lg_pass" autocomplete="current-password" placeholder="สมาชิก: เบอร์โทรของคุณ" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn" style="width:100%;margin-top:6px" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <p style="text-align:center;font-size:11.5px;color:var(--mut);margin-top:14px;line-height:1.7">👤 <b>สมาชิก</b> เข้าด้วย <b>ชื่อจริงภาษาอังกฤษ</b> + <b>เบอร์โทร</b> ของตัวเอง<br>จะเห็นเฉพาะข้อมูลของคุณ และ mentee ที่คุณดูแล</p>
   </div>`;
 }
 function authErr(msg){const e=document.getElementById('autherr');if(e)e.innerHTML=msg?`<div class="autherr">${esc(msg)}</div>`:'';}
@@ -1290,6 +1362,26 @@ function vSettings(){
   </div>
 
   <div class="card">
+    <h2>🔤 ฟอนต์ตัวอักษร</h2>
+    <div class="sub" style="color:var(--mut);font-size:12.5px;margin-bottom:10px">เลือกฟอนต์ที่ใช้ทั้งแอป — กดแล้วเปลี่ยนทันที ทุกคนที่เปิดแอปเห็นเหมือนกัน</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">
+      ${FONTS.map(([f,d])=>`<button onclick="setFont('${f}')" style="text-align:left;border:1.5px solid ${(c.font||'Prompt')===f?'var(--brand)':'var(--line)'};background:${(c.font||'Prompt')===f?'var(--brand-soft)':'#fff'};border-radius:13px;padding:11px 13px;cursor:pointer;font-family:'${f}',sans-serif;transition:.14s">
+        <div style="font-size:16px;font-weight:700;color:var(--txt)">${f} · กขคง สวัสดี</div>
+        <div style="font-size:11px;color:var(--mut);margin-top:3px;font-family:var(--font)">${d}${(c.font||'Prompt')===f?' ✓':''}</div></button>`).join('')}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📱 ติดตั้งแอปลงมือถือ (Web App)</h2>
+    <div class="sub" style="color:var(--mut);font-size:12.5px;margin-bottom:10px">เพิ่มแอปลงหน้าจอมือถือ เปิดได้เหมือนแอปจริง เต็มจอ ไม่มีแถบเบราว์เซอร์</div>
+    <div id="pwaBox" class="help" style="font-size:12.5px;line-height:1.9">
+      <b>iPhone/iPad (Safari):</b> กดปุ่ม <b>แชร์</b> ⬆️ ด้านล่าง → เลือก <b>"เพิ่มลงในหน้าจอโฮม"</b> (Add to Home Screen)<br>
+      <b>Android (Chrome):</b> กดเมนู ⋮ มุมขวาบน → <b>"ติดตั้งแอป"</b> หรือ <b>"เพิ่มลงในหน้าจอหลัก"</b>
+    </div>
+    <div class="toolbar" style="margin:12px 0 0"><button class="btn" id="pwaInstall" style="display:none" onclick="doInstall()">⬇️ ติดตั้งแอปเลย</button></div>
+  </div>
+
+  <div class="card">
     <h2>💾 ข้อมูล</h2>
     <div class="toolbar" style="margin-bottom:0">
       <button class="btn" onclick="expJson()">⬇️ สำรองข้อมูล (JSON)</button>
@@ -1381,6 +1473,13 @@ function impCsv(inp){
   }catch(e){toast('อ่านไฟล์ CSV ไม่สำเร็จ — ตรวจสอบว่าโครงคอลัมน์ตรงกับไฟล์รายงานเดิม');}};
   r.readAsText(f,'utf-8');
 }
+
+/* ---------- PWA + ฟอนต์ ---------- */
+var deferredPrompt=null;
+applyFont(state.config.font||'Prompt');
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;const b=document.getElementById('pwaInstall');if(b)b.style.display='';});
+async function doInstall(){if(!deferredPrompt)return;deferredPrompt.prompt();try{await deferredPrompt.userChoice;}catch(e){}deferredPrompt=null;const b=document.getElementById('pwaInstall');if(b)b.style.display='none';toast('กำลังติดตั้งแอป...');}
 
 render();
 /* boot: ส่งของค้าง (ถ้ามี) แล้วดึงข้อมูลล่าสุดจากคลาวด์ + ดึงซ้ำเมื่อกลับมาที่หน้าจอ/ทุก 90 วิ */

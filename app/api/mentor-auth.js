@@ -38,6 +38,23 @@ async function allUsers() {
 }
 const pub = (u) => ({ username: u.username, role: u.data.role, name: u.data.name || "", mentorName: u.data.mentorName || "" });
 
+// สมาชิกทั่วไป login ด้วยชื่อจริงอังกฤษ (username) + เบอร์โทร (password) จาก tm_members
+const digitsOnly = (s) => String(s || "").replace(/\D/g, "");
+const normName = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+async function findMemberByLogin(name, pass) {
+  const pd = digitsOnly(pass);
+  const target = normName(name);
+  if (!target || pd.length < 6) return null;
+  const r = await fetch(`${SB()}/rest/v1/tm_members?select=id,data`, { headers: sbH() });
+  const rows = r.ok ? await r.json() : [];
+  for (const row of rows) {
+    const d = row.data || {};
+    const ph = digitsOnly(d.phone);
+    if (ph && ph === pd && normName(d.name) === target) return { id: row.id, name: d.name || "", nick: d.nick || "" };
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -66,9 +83,19 @@ export default async function handler(req, res) {
 
   if (action === "login") {
     const { username, password } = body;
-    const u = await getUser((username || "").trim());
-    if (!u || u.data.hash !== hashPass(password || "")) return res.status(200).json({ ok: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" });
-    return res.status(200).json({ ok: true, token: makeToken(u.username, u.data.role), user: pub(u) });
+    const uname = (username || "").trim();
+    const u = await getUser(uname);
+    if (u && u.data.hash === hashPass(password || "")) {
+      return res.status(200).json({ ok: true, token: makeToken(u.username, u.data.role), user: pub(u) });
+    }
+    // ไม่ตรงบัญชี tm_users → ลองเป็นสมาชิก (ชื่อจริงอังกฤษ + เบอร์โทร)
+    const m = await findMemberByLogin(uname, password || "");
+    if (m) {
+      const nm = m.name || uname;
+      const mentorName = ((m.nick || "").trim() + " " + (m.name || "").trim()).trim();
+      return res.status(200).json({ ok: true, token: makeToken("member:" + m.id, "member"), user: { username: nm, role: "member", name: nm, mentorName } });
+    }
+    return res.status(200).json({ ok: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" });
   }
 
   // ---- actions ที่ต้องเป็นแอดมิน ----
