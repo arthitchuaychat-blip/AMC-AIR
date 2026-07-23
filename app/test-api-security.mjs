@@ -18,14 +18,9 @@ check("ลบบัญชี: ไม่ลบ profiles ตรง ๆ (ปล่�
   "ยังมี DELETE profiles ตรง ๆ อยู่ — เสี่ยงลบ profile ทิ้งทั้งที่ auth ยังอยู่");
 check("ลบบัญชี: FK ค้าง = แจ้งให้ปิดใช้งานแทน ไม่ทำข้อมูลกำพร้า", /foreign key|violates/i.test(del) && /ปิดใช้งาน|เปลี่ยนตำแหน่ง/.test(del));
 
-// ---------- 2) mentor: สิทธิ์แอดมินต้องอ่าน role สดจาก DB ไม่ใช่จากโทเคน ----------
-const ma = fs.readFileSync("api/mentor-auth.js", "utf8");
-check("mentor: เช็ก isAdmin จาก role ในฐานข้อมูล",
-  /dbUser\.data\?\.role === "admin"/.test(ma) || /getUser\([^)]*\)[\s\S]{0,60}\.data[\s\S]{0,20}role === "admin"/.test(ma),
-  "เช็ก role จากโทเคน = คนถูกลดสิทธิ์ยังถือโทเคนเก่าที่ decode เป็น admin ตลอดกาล");
-check("mentor: ไม่เชื่อ auth.role (จากโทเคน) เป็นตัวตัดสินสิทธิ์แอดมิน",
-  !/isAdmin = auth && auth\.role === "admin"/.test(ma),
-  "ยังใช้ auth.role จากโทเคนตัดสิน = โทเคนที่ไม่มีวันหมดอายุถือ role เดิมได้ตลอด");
+// หมายเหตุ: เคยมีเทสต์สิทธิ์แอดมินของแอป Mentor (api/mentor-auth.js) ตรงนี้
+// The Top Mentor แยกออกไปเป็นโปรเจกต์อิสระแล้ว (repo the-top-mentor) และโค้ดถูกลบออกจาก repo นี้
+// → เทสต์ย้ายตามไปอยู่ repo นั้น ที่นี่ไม่ต้องมี (เจ้าของสั่ง: แอป Mentor ไม่ต้องแตะ)
 
 console.log(`\nสรุป: ผ่าน ${pass} · ตก ${fail}`);
 process.exit(fail ? 1 : 0);

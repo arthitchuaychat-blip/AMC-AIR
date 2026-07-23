@@ -586,8 +586,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </select>
       <select id="fltType" aria-label="ประเภทเครื่องปรับอากาศ">
         <option value="">ประเภทเครื่องปรับอากาศ</option>
-        <option value="ติดผนัง">ติดผนัง</option><option value="แขวน">แขวน</option>
-        <option value="ฝังฝ้า">ฝังฝ้า (4 ทิศ)</option><option value="ตู้ตั้ง">ตู้ตั้ง</option>
+        <!-- ตัวเลือกชั่วคราวก่อนสินค้าโหลดเสร็จ — fillFilters() จะเขียนทับด้วยของจริงจากฐานข้อมูล
+             ค่าต้องตรงกับชื่อมาตรฐานใน TYPE_TH ไม่งั้นเลือกก่อนโหลดเสร็จแล้วกรองไม่เจอ -->
+        <option value="ติดผนัง">ติดผนัง</option><option value="แขวนใต้ฝ้า">แขวนใต้ฝ้า</option>
+        <option value="ฝังฝ้า 4 ทิศ">ฝังฝ้า 4 ทิศ</option><option value="ตู้ตั้งพื้น">ตู้ตั้งพื้น</option>
       </select>
       <select id="fltBtu" aria-label="ขนาด BTU">
         <option value="">ขนาด BTU</option>
@@ -949,7 +951,8 @@ function setQty(code, d) { const it = cart.find((x) => x.code === code); if (!it
 function rmItem(code) { cart = cart.filter((x) => x.code !== code); saveCart(); renderCart(); }
 // ค่าบริการติดตั้งที่ตรงกับแอร์ตัวนี้: หมวดติดตั้ง + ประเภทแอร์เดียวกัน + BTU อยู่ในช่วงบริการ
 // (เทียบประเภทแบบไม่สนตัวพิมพ์เล็ก/ใหญ่ · บริการที่ไม่ระบุประเภทใช้เป็นตัวสำรอง · ไม่เจอ = ไม่โชว์ตัวเลือก)
-const normType = (s) => String(s || "").trim().toLowerCase();
+// เดิม lowercase อย่างเดียว → "Floor standing Type" ไม่ตรงกับบริการที่ติดแท็ก "Floor Standing" แล้วไม่ขึ้นตัวเลือกติดตั้ง
+const normType = (s) => typeKey(s);
 function installSvcFor(x) {
   const full = x.kind ? x : (allProducts.find((p) => String(p.code) === String(x.code)) || {});
   if ((full.kind || "") !== "ac") return null;
@@ -1024,7 +1027,24 @@ function svcMatch(p, label) {
   if (label === "อื่นๆ") return !["ติดตั้ง", "ล้าง", "ย้าย", "ซ่อม", "รื้อ"].some((k) => nm.includes(k));
   return nm.includes(label);
 }
-const TYPE_TH = { "Wall type": "ติดผนัง", "Ceiling type": "แขวนใต้ฝ้า", "Cassette 4 way type": "ฝังฝ้า 4 ทิศ", "Cassette 1 way type": "ฝังฝ้า 1 ทิศ", "Duct Type": "ต่อท่อลม", "Floor Standing": "ตู้ตั้ง" };
+// ประเภทแอร์: ค่าในฐานข้อมูลเป็น "ช่องพิมพ์อิสระ" ในแอป (ไม่ใช่ตัวเลือกตายตัว) จึงมีตัวสะกดต่างกันแต่ความหมายเดียวกัน
+// เช่น "Floor Standing" / "Floor standing Type" / "ตู้ตั้งพื้น" → ต้องยุบเป็นตัวเลือกเดียวบนเว็บ ไม่งั้นเมนูมีรายการซ้ำ
+// วิธี: ทำ "คีย์มาตรฐาน" (ตัดตัวพิมพ์/ช่องว่าง/เครื่องหมาย/คำว่า type ทิ้ง) แล้ว map เป็นชื่อไทยชื่อเดียว
+// ⚠️ ประเภทใหม่ที่ยังไม่มีในแผนที่ จะโชว์ข้อความดิบตามที่พิมพ์ในแอป (ไม่หายไปจากเมนู) — เว็บจึงตามฐานข้อมูลเสมอ
+const typeKey = (s) => String(s || "").toLowerCase().replace(/[\s\-_.&/()]+/g, "").replace(/type$/, "");
+const TYPE_TH = {
+  wall: "ติดผนัง", ติดผนัง: "ติดผนัง",
+  ceiling: "แขวนใต้ฝ้า", ceilingsuspended: "แขวนใต้ฝ้า", แขวน: "แขวนใต้ฝ้า", แขวนใต้ฝ้า: "แขวนใต้ฝ้า",
+  cassette: "ฝังฝ้า 4 ทิศ", cassette4way: "ฝังฝ้า 4 ทิศ", ฝังฝ้า: "ฝังฝ้า 4 ทิศ", ฝังฝ้า4ทิศ: "ฝังฝ้า 4 ทิศ", ฝังฝ้า4ทิศทาง: "ฝังฝ้า 4 ทิศ",
+  cassette1way: "ฝังฝ้า 1 ทิศ", ฝังฝ้า1ทิศ: "ฝังฝ้า 1 ทิศ", ฝังฝ้า1ทิศทาง: "ฝังฝ้า 1 ทิศ",
+  duct: "ต่อท่อลม", ต่อท่อลม: "ต่อท่อลม",
+  floorstanding: "ตู้ตั้งพื้น", ตู้ตั้ง: "ตู้ตั้งพื้น", ตู้ตั้งพื้น: "ตู้ตั้งพื้น",
+  floorceiling: "แขวน/ตั้งพื้น", แขวนตั้งพื้น: "แขวน/ตั้งพื้น",
+  window: "หน้าต่าง", หน้าต่าง: "หน้าต่าง",
+  portable: "เคลื่อนที่", เคลื่อนที่: "เคลื่อนที่",
+};
+// ชื่อที่โชว์ = ชื่อไทยถ้ารู้จัก · ไม่รู้จักใช้ข้อความดิบจากแอป (เมนูจึงตรงกับฐานข้อมูลเสมอ)
+const typeLabel = (s) => TYPE_TH[typeKey(s)] || String(s || "").trim();
 // build the sidebar filter dropdowns from the real published AC products (so every option matches data)
 function fillFilters() {
   const acs = allProducts.filter((p) => p.kind === "ac");
@@ -1035,17 +1055,19 @@ function fillFilters() {
   // แถบซ้ายใช้ป้ายชื่อช่องตามดีไซน์ (ยี่ห้อ/ประเภท/ขนาด) · หน้าสินค้าใช้ป้าย "ทั้งหมด"
   const brandOpts = brands.map((b) => `<option value="${b}">${b}</option>`).join("");
   const btuOptsH = btus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join("");
-  const typeOpts = types.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join("");
+  // ยุบตัวสะกดที่ความหมายเดียวกันให้เหลือตัวเลือกเดียว · value = ชื่อที่โชว์ (ตอนกรองเทียบด้วย typeLabel เหมือนกัน)
+  const typeLabels = [...new Set(types.map(typeLabel).filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
+  const typeOpts = typeLabels.map((t) => `<option value="${t}">${t}</option>`).join("");
   if (brands.length) { fill(["#fltModel"], `<option value="">ยี่ห้อเครื่องปรับอากาศ</option>` + brandOpts); fill(["#ppModel"], `<option value="">รุ่นแอร์ทั้งหมด</option>` + brandOpts); }
   if (btus.length) { fill(["#fltBtu"], `<option value="">ขนาด BTU</option>` + btuOptsH); fill(["#ppBtu"], `<option value="">ทุกขนาด BTU</option>` + btuOptsH); }
   if (types.length) { fill(["#fltType"], `<option value="">ประเภทเครื่องปรับอากาศ</option>` + typeOpts); fill(["#ppType"], `<option value="">ทุกประเภท</option>` + typeOpts); }
   // ตัวกรองฝั่งบริการ (เหมือนหลังบ้าน): ประเภท/ขนาดที่บริการติดแท็กไว้ก่อน ถ้าไม่มีใช้ชุดของแอร์ · BTU รวมขอบช่วงของบริการ
-  const sTypes = [...new Set(svcs.map((p) => p.ac_type).filter(Boolean))].sort();
-  const useTypes = sTypes.length ? sTypes : types;
+  const sTypes = [...new Set(svcs.map((p) => typeLabel(p.ac_type)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
+  const useTypes = sTypes.length ? sTypes : typeLabels;
   const sBtuSet = new Set(btus.map(Number));
   svcs.forEach((p) => [p.btu, p.btuMin, p.btuMax].forEach((v) => { if (v) sBtuSet.add(Number(v)); }));
   const sBtus = [...sBtuSet].sort((a, b) => a - b);
-  if (useTypes.length) fill(["#fltSvcType"], `<option value="">ประเภทเครื่องปรับอากาศ</option>` + useTypes.map((t) => `<option value="${t}">${TYPE_TH[t] || t}</option>`).join(""));
+  if (useTypes.length) fill(["#fltSvcType"], `<option value="">ประเภทเครื่องปรับอากาศ</option>` + useTypes.map((t) => `<option value="${t}">${t}</option>`).join(""));
   if (sBtus.length) fill(["#fltSvcBtu"], `<option value="">ขนาด BTU</option>` + sBtus.map((b) => `<option value="${b}">${Number(b).toLocaleString("en-US")} BTU</option>`).join(""));
 }
 let allProducts = [], prodFilter = "all", prodQuery = "", prodBrand = "", prodBtu = "", prodType = "", prodSvc = "", prodNote = "";
@@ -1081,7 +1103,7 @@ function seriesCard(g, gi) {
       <div style="min-width:0;flex:1">
         <div class="sprod-brand">${esc2(g.brand)}</div>
         <div class="sprod-name">รุ่น ${esc2(g.series)}</div>
-        <div class="sprod-sub">${[TYPE_TH[p.ac_type] || p.ac_type, p.energyLabel].filter(Boolean).map(esc2).join(" · ")}</div>
+        <div class="sprod-sub">${[typeLabel(p.ac_type), p.energyLabel].filter(Boolean).map(esc2).join(" · ")}</div>
         ${feats ? `<div class="sprod-feats">${esc2(feats)}</div>` : ""}
         ${info.brochure_url ? `<a class="sprod-bro" href="${esc2(info.brochure_url)}" target="_blank" rel="noreferrer">📄 ดาวน์โหลดโบรชัวร์</a>` : ""}
       </div>
@@ -1116,7 +1138,7 @@ function renderProducts() {
   const list = allProducts.filter((p) =>
     (prodFilter === "all" || p.kind === prodFilter)
     && (!prodBrand || String(p.brand || "").toLowerCase() === prodBrand.toLowerCase())
-    && (!prodType || String(p.ac_type || "") === prodType)
+    && (!prodType || typeLabel(p.ac_type) === prodType)
     && (!prodBtu || btuHit(p, prodBtu))
     && (!prodSvc || p.kind !== "service" || svcMatch(p, prodSvc))
     && (!q || (p.name || "").toLowerCase().includes(q)));
