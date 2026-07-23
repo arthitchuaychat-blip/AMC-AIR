@@ -6,7 +6,7 @@ ERP ของร้านแอร์ AMC AIR + เว็บขายหน้�
 - `company-website/` — เว็บสาธารณะ www.amcair.net (Vercel โปรเจกต์แยก amc-air-497i) — SSR หน้า `/p/:code`, `/a/:id` อยู่ใน `api/`
 - `supabase/` — schema + migrations (Postgres/RLS/Realtime โปรเจกต์ tpyrlxhoyghawqvsphfj)
 - `app/api/` — Vercel serverless (line-webhook.js = แชต LINE + บอท AI, push-send, calendar ฯลฯ)
-- `the-top-mentor/` + `app/public/mentor/` — แอป The Top Mentor (BNI Chapter) → amc-air.vercel.app/mentor/ (สำเนาคู่ ต้องแก้ให้ตรงกันทั้ง 2 ที่)
+- **The Top Mentor (BNI Chapter) — ย้ายออกไปเป็นโปรเจกต์อิสระแล้ว (23 ก.ค. 2026)**: repo แยก `github.com/arthitchuaychat-blip/the-top-mentor` → Vercel `the-top-mentor.vercel.app` → Supabase `podnetvgaboegaqyetwq` (คนละที่กับ ERP ทั้งหมด) · โค้ดใน AMC-AIR (the-top-mentor/, app/public/mentor/, app/api/mentor-*) ลบออกแล้ว · migration tm_* (108/109/110/170) เก็บไว้เป็นประวัติเฉย ๆ
 - **`.claude/memory/` — ความจำสะสมของ Claude (อ่านก่อนเริ่มงานเสมอ)** เริ่มที่ `.claude/memory/MEMORY.md` = สารบัญ แล้วเปิดไฟล์ที่เกี่ยวกับงานที่จะทำ
 
 ## กฎเหล็ก (ห้ามละเมิด)
