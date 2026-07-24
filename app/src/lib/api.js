@@ -2661,14 +2661,36 @@ export async function deleteJobTemplate(id) {
 export async function listWebOrders() {
   // เพดาน 1000 แถว: คำสั่งซื้อเว็บโตเรื่อย ๆ เกินพันแล้วใบเก่าหาย + ยอดนับตามสถานะผิด → แบ่งหน้าเหมือนลิสต์อื่น
   const data = await _fetchAll((f, t) => supabase.from("web_orders").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t));
-  const error = null;
-  if (error) throw error;
-  return data || [];
+  // ชื่อลูกค้าที่ผูกไว้ — การ์ดต้องบอกได้ว่า "ผูกกับใคร" ไม่ใช่แค่ "ผูกแล้ว"
+  const ids = [...new Set((data || []).map((o) => o.customer_id).filter(Boolean))];
+  const nameBy = {};
+  for (let i = 0; i < ids.length; i += 300) {   // .in() ยาวเกินไปจะโดนตัด — ซอยทีละ 300 เหมือนที่อื่น
+    const { data: cs } = await supabase.from("customers").select("id,name").in("id", ids.slice(i, i + 300));
+    (cs || []).forEach((c) => { nameBy[c.id] = c.name; });
+  }
+  // ผูกไว้แต่หาชื่อไม่เจอ = ลูกค้าถูกลบ (FK on delete set null ยังไม่ทันวิ่ง) — ให้การ์ดบอกตรง ๆ ดีกว่าโชว์ว่าง
+  return (data || []).map((o) => ({ ...o, customerName: o.customer_id ? (nameBy[o.customer_id] || null) : null }));
+}
+// รายชื่อลูกค้าแบบเบา (id/ชื่อ/เบอร์) — ใช้ค้นหาเพื่อผูกคำสั่งซื้อเว็บกับลูกค้าที่มีอยู่แล้ว
+// ไม่ใช้ listCustomers() เพราะดึงทุกคอลัมน์ + ที่อยู่ไซต์ทั้งฐาน หนักเกินความจำเป็นสำหรับช่องค้นหา
+export async function listCustomersLite() {
+  const [c, cc, cs] = await Promise.all([
+    _fetchAll((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
+    _fetchAll((f, t) => supabase.from("customer_contacts").select("customer_id,phone", { count: "exact" }).order("id").range(f, t)),
+    _fetchAll((f, t) => supabase.from("customer_sites").select("customer_id,phone", { count: "exact" }).order("id").range(f, t)),
+  ]);
+  const ph = {};
+  [...cc, ...cs].forEach((x) => { if (x.phone) (ph[x.customer_id] = ph[x.customer_id] || []).push(x.phone); });
+  return c.map((x) => ({ ...x, phones: [...new Set(ph[x.id] || [])] }));
 }
 // ผูกคำสั่งซื้อเว็บกับลูกค้าในระบบ (mig 163 — คอลัมน์ customer_id มีตั้งแต่ mig 071 แต่ไม่เคยมีใครเขียน)
+// customerId = null คือ "ยกเลิกการผูก" (ผูกผิดราย)
 export async function setWebOrderCustomer(id, customerId) {
-  const { error } = await supabase.from("web_orders").update({ customer_id: customerId }).eq("id", id);
+  // ⚠️ ต้อง .select() แล้วเช็กว่ามีแถวเปลี่ยนจริง — RLS ปฏิเสธ update จะคืน "0 แถว ไม่มี error"
+  //    ไม่เช็ก = การ์ดขึ้นว่าผูกแล้ว พอรีเฟรชป้ายก็หายไปเฉย ๆ โดยไม่มีใครรู้ว่าทำไม
+  const { data, error } = await supabase.from("web_orders").update({ customer_id: customerId ?? null }).eq("id", id).select("id");
   if (error) throw error;
+  if (!data?.length) throw new Error("ผูกลูกค้าไม่สำเร็จ — ไม่พบคำสั่งซื้อใบนี้ หรือสิทธิ์ไม่พอ");
 }
 // ผูกเลข BOQ ที่สร้างจากคำสั่งซื้อนี้ + เลื่อนสถานะเป็น "เสนอราคาแล้ว"
 export async function setWebOrderBoq(id, boqNo) {
