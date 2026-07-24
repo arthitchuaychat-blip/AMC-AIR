@@ -79,9 +79,13 @@ export function Logo({ size = 40, radius = 11 }) {
   );
 }
 
+// ⚠️ mat ต้องรับ undefined ได้ — ทุกหน้าที่โชว์รูปสินค้าหาข้อมูลจาก matMap[code] ซึ่งมีแต่สินค้าที่
+//    active = true (listMaterialsLite กรองไว้) · สินค้าที่ถูกปิดใช้งานภายหลังจะหาไม่เจอ แล้วเดิม
+//    mat.color จะทำทั้งหน้าพัง ("Cannot read properties of undefined (reading 'color')")
+//    เคยโดนมาแล้ว 2 จุดจนต้องเขียน mat={m || { color: "#888" }} กันไว้ที่ปลายทาง — คราวนี้กันที่ต้นทาง
 export function MaterialThumb({ mat, size = 48, radius = 12 }) {
-  const c = mat.color || "#64748b";
-  const photo = mat.photoUrl || mat.photo_url;
+  const c = mat?.color || "#64748b";
+  const photo = mat?.photoUrl || mat?.photo_url;
   if (photo) {
     return <img src={photo} alt="" width={size} height={size}
       style={{ borderRadius: radius, objectFit: "contain", flex: "none", border: "1px solid var(--line)", background: "#fff" }}

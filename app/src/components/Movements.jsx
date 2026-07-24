@@ -194,6 +194,10 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
         price: Math.round(((Number(price) || 0) / f) * 100) / 100, unit: m?.unit || null };
     }).filter((l) => l.qty > 0.0001);
     setLines(mapped);
+    // สินค้าที่ถูกปิดใช้งานหลังออกใบสั่งซื้อจะไม่อยู่ในคลัง (listMaterialsLite กรอง active) — บอกให้รู้ตัว
+    // ยังรับเข้าได้ (แถวสินค้ายังอยู่ในฐานข้อมูล) แต่ราคา/หน่วยจะเติมให้อัตโนมัติไม่ได้ ต้องคีย์เอง
+    const missing = mapped.filter((l) => !matMap[l.code]).map((l) => l.code);
+    if (missing.length) flash(`สินค้าที่ถูกปิดใช้งานอยู่ในใบนี้: ${missing.join(", ")} — เปิดใช้งานที่เมนูคลังสินค้าก่อน ระบบจะได้เติมหน่วย/ต้นทุนให้ถูก`, true);
     // รับครบแล้วทั้งใบ → ตะกร้าว่างไว้ ไม่เติมเต็มใบให้ (เดิมเติมเต็ม กดยืนยันแล้วของเข้าซ้ำทั้งใบ)
     if (!mapped.length) flash(`${prefill.poNo} รับของครบตามใบแล้ว — ถ้าจะรับเพิ่มให้เลือกรายการเอง`, true);
     setPoLines0(mapped.map((l) => ({ code: l.code, qty: l.qty })));   // ยอดสั่งตามใบ (หน่วยหลัก)
@@ -638,7 +642,8 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                   {linesView.map((l) => (
                     <div className="line-row" key={l.code + "|" + (l.unit || "")}>
                       <MaterialThumb mat={l.m} size={32} radius={8} />
-                      <div className="line-info"><div className="line-name">{l.m?.th}</div>
+                      {/* ไม่เจอในคลัง = สินค้าถูกปิดใช้งานไปแล้ว — ต้องโชว์รหัสไว้ ไม่งั้นบรรทัดว่างเปล่าจนไม่รู้ว่าของอะไร */}
+                      <div className="line-info"><div className="line-name">{l.m?.th || l.code}{!l.m && <span className="jo-dim" style={{ color: "#d97706", fontWeight: 600 }}> · สินค้าถูกปิดใช้งาน</span>}</div>
                         <div className="line-sub">{l.qty} {lineUnit(l, l.m)}{l.f > 1 ? ` (= ${fmtNum(l.baseQty)} ${l.m?.unit})` : ""}{type === "purchase" ? ` × ${fmtBaht(l.unitPrice)}` : ""} · {fmtBaht(l.value)}</div>
                         {/* รับของเข้างาน: ระบุได้ว่าเข้างานเท่าไร ที่เหลือค้างเป็นสต๊อกกลาง
                             ค่าเริ่มต้น = เต็มจำนวนที่รับ (เท่าพฤติกรรมเดิม) — ของซื้อเผื่อค่อยลดเอง */}
