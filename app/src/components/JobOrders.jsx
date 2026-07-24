@@ -257,7 +257,10 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     const tn = ed.assigned_team ? (teams.find((t) => t.id === ed.assigned_team)?.name?.replace("Team ", "") || ed.assigned_team) : null;
     // overall job status is derived from the visits' own statuses;
     // with no scheduled รอบ yet, keep the chosen pre-work stage (รอทำใบเสนอราคา / รอจ่ายงาน)
-    const status = visitRows.length ? deriveJobStatus(visitRows) : (ed.status === "quote_pending" ? "quote_pending" : "pending");
+    // ⚠️ ใบที่ยังไม่มีรอบนัด ต้องคงสถานะระดับใบไว้ ไม่ใช่ตีกลับเป็น "รอจ่ายงาน" ทุกครั้งที่กดบันทึก
+    //    เดิมคงไว้เฉพาะ quote_pending → ใบที่ปิดงานไปแล้ว (done) พอออฟฟิศเข้าไปแก้เบอร์โทรแล้วบันทึก งานเด้งกลับมาเปิดใหม่
+    const KEEP_HEAD_ST = ["quote_pending", "done"];
+    const status = visitRows.length ? deriveJobStatus(visitRows) : (KEEP_HEAD_ST.includes(ed.status) ? ed.status : "pending");
     try {
       setSaving(true);
       await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows, visitIdsLoaded: ed._visitIdsLoaded || null }, me);
@@ -666,10 +669,14 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                   <button className="btn-primary sm" onClick={() => startReschedule(jo)}><UIcon name="calendar" size={14} color="#fff" /> ตั้งวันนัดหมายเพิ่ม</button>
                 </div></div>
               )}
-              {canEditJob(jo) && jo.status === "quote_pending" && jo.quote_no && (
+              {/* ⚠️ ห้ามบังคับว่าต้องมี quote_no — ใบสำรวจที่ช่างกด "เสร็จ รอทำใบเสนอราคา" ยังไม่มีใบเสนอผูก
+                  เดิมเงื่อนไขมี jo.quote_no ด้วย ปุ่มเลยไม่โผล่เลย = ใบงานค้าง "รอทำใบเสนอราคา" ปิดไม่ได้ตลอดกาล
+                  (ลูกค้าไม่เอา / ทำใบเสนอนอกระบบ / ยังไม่ได้ผูกใบ ก็ต้องปิดงานได้) */}
+              {canEditJob(jo) && jo.status === "quote_pending" && (
                 <div className="job-lines"><div className="job-actions">
-                  <button className="btn-primary sm ok" onClick={() => markQuoteDone(jo)} style={{ background: "#16a34a" }}>
-                    <UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> ใบเสนอราคาเสร็จแล้ว → ปิดงาน
+                  <button className="btn-primary sm ok" onClick={() => markQuoteDone(jo)} style={{ background: "#16a34a" }}
+                    title={jo.quote_no ? `ปิดงานนี้ (ใบเสนอราคา ${jo.quote_no})` : "ปิดงานนี้ — ยังไม่มีใบเสนอราคาผูกกับใบงาน"}>
+                    <UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> {jo.quote_no ? "ใบเสนอราคาเสร็จแล้ว → ปิดงาน" : "ปิดงาน (เสร็จปิดงาน)"}
                   </button>
                 </div></div>
               )}
