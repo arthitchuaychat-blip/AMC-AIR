@@ -1354,6 +1354,15 @@ select.inp{cursor:pointer}
 .wc-acts{display:flex;gap:6px}
 /* hero banner manager rows */
 .wb-list{display:flex;flex-direction:column;gap:10px}
+/* แถบรูปในอัลบั้มผลงาน (1 อัลบั้มหลายรูป · mig 172) — รูปแรกคือปก */
+.wb-strip{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.wb-strip-item{position:relative;width:96px;border-radius:9px;overflow:hidden;background:var(--surface-2);border:1px solid var(--line)}
+.wb-strip-item img{width:100%;height:100%;object-fit:cover;display:block}
+.wb-cover{position:absolute;top:4px;left:4px;background:#111;color:#fff;font-size:10px;font-weight:800;border-radius:5px;padding:1px 5px}
+.wb-strip-acts{position:absolute;inset:auto 0 0 0;display:flex;gap:2px;justify-content:center;padding:3px;background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.wb-strip-acts button{border:0;background:rgba(255,255,255,.9);color:#111;border-radius:5px;font-size:10px;line-height:1;padding:3px 5px;cursor:pointer}
+.wb-strip-acts button:disabled{opacity:.35;cursor:default}
+.wb-strip-acts button.danger{background:#dc2626;color:#fff}
 .wb-row{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px}
 .wb-row.off{opacity:.45}
 .wb-no{flex:none;width:24px;height:24px;border-radius:50%;background:var(--surface-2);color:var(--ink-2);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}

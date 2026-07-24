@@ -9,8 +9,9 @@ const TABS = [
   { kind: "banners", chip: "🖼️ ปก/สไลด์โชว์", label: "ภาพปก Hero (สไลด์โชว์)", imageLabel: "ภาพปก", aspect: "16/9", folder: "web-banners", imageRequired: true,
     hint: "ภาพแนวนอน ~1920×720px · โชว์ด้านบนสุดของเว็บ สลับทุก 2 วินาที · เรียงลำดับด้วย ◀▶",
     fields: [{ key: "caption", ph: "ข้อความบนภาพ (ไม่ใส่ก็ได้)" }], primary: "caption", primaryFallback: "(ไม่มีข้อความ)" },
-  { kind: "portfolio", chip: "📸 อัลบั้มผลงาน", label: "อัลบั้มผลงาน", imageLabel: "รูปผลงาน", aspect: "4/3", folder: "web-portfolio", imageRequired: true,
-    hint: "เพิ่มรูปผลงานได้ไม่จำกัด · โชว์ที่หน้าแรก (สุ่มหมุน) + หน้าผลงาน + แกลเลอรี",
+  // multiImage = 1 อัลบั้มเก็บได้หลายรูป (mig 172 คอลัมน์ images) · รูปแรก = รูปปก
+  { kind: "portfolio", chip: "📸 อัลบั้มผลงาน", label: "อัลบั้มผลงาน", imageLabel: "รูปผลงาน", aspect: "4/3", folder: "web-portfolio", imageRequired: true, multiImage: true,
+    hint: "1 อัลบั้มใส่รูปได้ไม่จำกัด (เลือกหลายรูปพร้อมกันได้) · รูปแรก = รูปปก · โชว์ที่หน้าแรก (สุ่มหมุน) + หน้าผลงาน + แกลเลอรี · ต้องรัน migration 172 ก่อน ไม่งั้นเก็บได้แค่รูปปก",
     fields: [{ key: "title", ph: "คำบรรยายผลงาน (เช่น ติดตั้งแอร์ คอนโด)" }], primary: "title", primaryFallback: "(ผลงาน)" },
   { kind: "clients", chip: "🏢 โลโก้ลูกค้า", label: "โลโก้ลูกค้า", imageLabel: "โลโก้", aspect: "1/1", folder: "web-clients", imageRequired: false, imageKey: "logo_url",
     hint: "อัปโหลดโลโก้ (PNG พื้นโปร่งใสสวยสุด) + ชื่อ → โชว์ในหมวด “องค์กรที่ไว้วางใจเรา”",
@@ -70,9 +71,30 @@ export default function WebManage({ role }) {
   );
 }
 
+// แถบรูปในอัลบั้ม — รูปแรก = ปก · ย้ายลำดับ/ลบได้ทีละรูป
+function PhotoStrip({ imgs, aspect, busy, onRemove, onMove }) {
+  return (
+    <div className="wb-strip">
+      {imgs.map((u, i) => (
+        <div className="wb-strip-item" key={u + i} style={{ aspectRatio: aspect }}>
+          <img src={u} alt="" />
+          {i === 0 && <span className="wb-cover">ปก</span>}
+          <div className="wb-strip-acts">
+            <button type="button" title="เลื่อนซ้าย" disabled={busy || i === 0} onClick={() => onMove(i, -1)}>◀</button>
+            <button type="button" title="เลื่อนขวา" disabled={busy || i === imgs.length - 1} onClick={() => onMove(i, 1)}>▶</button>
+            <button type="button" className="danger" title="ลบรูปนี้" disabled={busy} onClick={() => onRemove(i)}>✕</button>
+          </div>
+        </div>
+      ))}
+      <span className="jo-dim" style={{ fontSize: 11.5, alignSelf: "center" }}>{imgs.length} รูป · รูปแรกคือปก</span>
+    </div>
+  );
+}
+
 function WebItemManager({ cfg, flash }) {
   const [list, setList] = React.useState(null);
   const [img, setImg] = React.useState("");
+  const [imgs, setImgs] = React.useState([]);   // อัลบั้มหลายรูป (โหมด multiImage) — ลำดับในนี้คือลำดับบนเว็บ
   const [vals, setVals] = React.useState({});
   const [uploading, setUploading] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -85,30 +107,56 @@ function WebItemManager({ cfg, flash }) {
   React.useEffect(() => { load(); }, [cfg.kind]);
 
   async function onImg(e) {
-    const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
+    const files = [...(e.target.files || [])]; e.target.value = ""; if (!files.length) return;
     setUploading(true);
-    try { setImg(await uploadWebImage(f, cfg.folder)); } catch (err) { flash("อัปโหลดไม่สำเร็จ: " + (err.message || err), true); }
+    try {
+      if (cfg.multiImage) {
+        // อัปโหลดทีละไฟล์ตามลำดับที่เลือก — เก็บลำดับให้ตรงกับที่ผู้ใช้เห็น (Promise.all จะสลับลำดับได้)
+        const urls = [];
+        for (const file of files) urls.push(await uploadWebImage(file, cfg.folder));
+        setImgs((s) => [...s, ...urls]);
+      } else setImg(await uploadWebImage(files[0], cfg.folder));
+    } catch (err) { flash("อัปโหลดไม่สำเร็จ: " + (err.message || err), true); }
     setUploading(false);
   }
+  // แก้ลำดับ/ลบรูปในอัลบั้ม (ใช้ทั้งฟอร์มเพิ่มและตอนแก้ไข)
+  const rmAt = (arr, i) => arr.filter((_, j) => j !== i);
+  const swapAt = (arr, i, d) => { const j = i + d; if (j < 0 || j >= arr.length) return arr; const a = arr.slice(); [a[i], a[j]] = [a[j], a[i]]; return a; };
   async function add() {
-    if (cfg.imageRequired && !img) return flash("อัปโหลดรูปก่อน", true);
+    if (cfg.imageRequired && !(cfg.multiImage ? imgs.length : img)) return flash("อัปโหลดรูปก่อน", true);
     for (const f of cfg.fields) if (f.required && !(vals[f.key] || "").trim()) return flash(`กรอก "${f.ph}" ก่อน`, true);
     setBusy(true);
-    const row = { [cfg.imageKey || "image_url"]: img || null, sort: (list?.length || 0) + 1 };
+    // ⚠️ image_url ต้องเป็นรูปแรกของ images เสมอ — เว็บบันเดิลเก่า/แท็ก og:image ยังอ่านคอลัมน์นี้ (mig 172)
+    const row = cfg.multiImage
+      ? { image_url: imgs[0] || null, images: imgs, sort: (list?.length || 0) + 1 }
+      : { [cfg.imageKey || "image_url"]: img || null, sort: (list?.length || 0) + 1 };
     cfg.fields.forEach((f) => { row[f.key] = (vals[f.key] || "").trim() || null; });
-    try { await saveWebItem(cfg.kind, row); setImg(""); setVals({}); await load(); flash("เพิ่มแล้ว ✓"); }
+    try {
+      const res = await saveWebItem(cfg.kind, row);
+      setImg(""); setVals({});
+      if (res?.degraded === "images") { await load(); flash("ยังไม่ได้รัน migration 172 — เก็บได้เฉพาะรูปปก รูปที่เหลือยังไม่ถูกบันทึก (รูปยังอยู่ในฟอร์ม กด SQL แล้วบันทึกใหม่ได้)", true); }   // คงรูปไว้ในฟอร์มให้บันทึกซ้ำได้
+      else { setImgs([]); await load(); flash("เพิ่มแล้ว ✓"); }
+    }
     catch (e) { const m = e.message || String(e); flash("บันทึกไม่สำเร็จ: " + m + (/body/.test(m) ? " — ต้องรัน migration 101 ก่อน" : ""), true); }
     setBusy(false);
   }
   function startEdit(b) {
     const v = {}; cfg.fields.forEach((f) => { v[f.key] = b[f.key] || ""; });
-    setEdit({ id: b.id, vals: v });
+    // อัลบั้มเก่าที่ยังไม่ได้ย้ายข้อมูล (images ว่าง) → ใช้รูปปกเดิมเป็นรูปแรก จะได้ไม่กลายเป็นอัลบั้มเปล่า
+    setEdit({ id: b.id, vals: v, imgs: cfg.multiImage ? (b.images?.length ? [...b.images] : (b.image_url ? [b.image_url] : [])) : null });
   }
   async function saveEdit(b) {
+    // image_url เป็น NOT NULL (mig 079) — ลบรูปหมดแล้วบันทึกจะเด้ง error ดิบจากฐานข้อมูล
+    if (cfg.multiImage && cfg.imageRequired && !(edit.imgs || []).length) return flash("อัลบั้มต้องมีอย่างน้อย 1 รูป — เพิ่มรูปก่อน หรือกดลบทั้งอัลบั้มแทน", true);
     setBusy(true);
     const row = { ...b };
     cfg.fields.forEach((f) => { row[f.key] = (edit.vals[f.key] || "").trim() || null; });
-    try { await saveWebItem(cfg.kind, row); setEdit(null); await load(); flash("บันทึกแล้ว ✓"); }
+    if (cfg.multiImage) { row.images = edit.imgs || []; row.image_url = (edit.imgs || [])[0] || null; }
+    try {
+      const res = await saveWebItem(cfg.kind, row);
+      if (res?.degraded === "images") { await load(); flash("ยังไม่ได้รัน migration 172 — เก็บได้เฉพาะรูปปก รูปที่เหลือยังไม่ถูกบันทึก (รูปยังอยู่ในฟอร์ม กด SQL แล้วบันทึกใหม่ได้)", true); }   // ไม่ปิดฟอร์ม รูปที่เพิ่มยังอยู่
+      else { setEdit(null); await load(); flash("บันทึกแล้ว ✓"); }
+    }
     catch (e) { const m = e.message || String(e); flash("บันทึกไม่สำเร็จ: " + m + (/body/.test(m) ? " — ต้องรัน migration 101 ก่อน" : ""), true); }
     setBusy(false);
   }
@@ -136,8 +184,10 @@ function WebItemManager({ cfg, flash }) {
         <div className="sec-head"><div><div className="sec-title">เพิ่ม{cfg.label}</div><div className="sec-sub">{cfg.hint}</div></div></div>
         <div className="wc-add">
           <label className="wc-drop" style={{ width: 120, aspectRatio: cfg.aspect }}>
-            {img ? <img src={img} alt="" style={{ objectFit: "cover" }} /> : <span>{uploading ? "กำลังอัปโหลด…" : "+ " + cfg.imageLabel}</span>}
-            <input type="file" accept="image/*" hidden disabled={uploading} onChange={onImg} />
+            {cfg.multiImage
+              ? (imgs.length ? <img src={imgs[0]} alt="" style={{ objectFit: "cover" }} /> : <span>{uploading ? "กำลังอัปโหลด…" : "+ " + cfg.imageLabel}</span>)
+              : (img ? <img src={img} alt="" style={{ objectFit: "cover" }} /> : <span>{uploading ? "กำลังอัปโหลด…" : "+ " + cfg.imageLabel}</span>)}
+            <input type="file" accept="image/*" multiple={!!cfg.multiImage} hidden disabled={uploading} onChange={onImg} />
           </label>
           <div style={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", gap: 8 }}>
             {cfg.fields.map((f) => f.multiline ? (
@@ -152,6 +202,10 @@ function WebItemManager({ cfg, flash }) {
           </div>
           <button className="btn-primary" disabled={busy || uploading} onClick={add}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่ม</button>
         </div>
+        {cfg.multiImage && imgs.length > 0 && (
+          <PhotoStrip imgs={imgs} aspect={cfg.aspect} busy={uploading}
+            onRemove={(i) => setImgs((a) => rmAt(a, i))} onMove={(i, d) => setImgs((a) => swapAt(a, i, d))} />
+        )}
       </div>
 
       {list === null ? <div className="empty">กำลังโหลด…</div>
@@ -173,9 +227,26 @@ function WebItemManager({ cfg, flash }) {
                         onChange={(e) => setEdit((s) => ({ ...s, vals: { ...s.vals, [f.key]: e.target.value } }))}
                         style={{ fontWeight: 400 }} />
                     ))}
+                    {cfg.multiImage && (<>
+                      <PhotoStrip imgs={edit.imgs || []} aspect={cfg.aspect} busy={uploading}
+                        onRemove={(i) => setEdit((s) => ({ ...s, imgs: rmAt(s.imgs || [], i) }))}
+                        onMove={(i, d) => setEdit((s) => ({ ...s, imgs: swapAt(s.imgs || [], i, d) }))} />
+                      <label className="btn-ghost xs" style={{ alignSelf: "flex-start", cursor: uploading ? "default" : "pointer" }}>
+                        {uploading ? "กำลังอัปโหลด…" : "＋ เพิ่มรูปเข้าอัลบั้ม"}
+                        <input type="file" accept="image/*" multiple hidden disabled={uploading}
+                          onChange={async (e) => {
+                            const files = [...(e.target.files || [])]; e.target.value = ""; if (!files.length) return;
+                            setUploading(true);
+                            try { const urls = []; for (const file of files) urls.push(await uploadWebImage(file, cfg.folder)); setEdit((s) => ({ ...s, imgs: [...(s.imgs || []), ...urls] })); }
+                            catch (err) { flash("อัปโหลดไม่สำเร็จ: " + (err.message || err), true); }
+                            setUploading(false);
+                          }} />
+                      </label>
+                    </>)}
                   </div>
                 ) : (
                   <div className="wb-cap">{b[cfg.primary] || <span className="jo-dim">{cfg.primaryFallback || "—"}</span>}
+                    {cfg.multiImage ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>🖼️ {(b.images?.length || (b.image_url ? 1 : 0))} รูปในอัลบั้ม</div> : null}
                     {b.excerpt ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.excerpt}</div> : null}
                     {b.source ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{b.source}</div> : null}
                     {b.text ? <div className="jo-dim" style={{ fontWeight: 400, fontSize: 12 }}>{"★".repeat(Math.max(1, Math.min(5, Number(b.stars) || 5)))} “{b.text}”{b.role ? ` — ${b.role}` : ""}</div> : null}

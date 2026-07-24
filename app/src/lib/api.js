@@ -2737,8 +2737,22 @@ export async function listWebItems(kind) {
 export async function saveWebItem(kind, row) {
   const t = WEB_KINDS[kind]; if (!t) throw new Error("unknown web kind");
   const r = { ...row }; delete r.created_at;
-  if (r.id) { const id = r.id; delete r.id; const { error } = await supabase.from(t).update(r).eq("id", id); if (error) throw error; }
-  else { delete r.id; const { error } = await supabase.from(t).insert(r); if (error) throw error; }
+  // pre-172 fallback: ยังไม่ได้รันมิเกรชันคอลัมน์ images (อัลบั้มหลายรูป) → บันทึกต่อได้ด้วยรูปปกใบเดียว
+  // ⚠️ ห้ามเงียบ! ต้องคืนธง degraded ให้ผู้เรียกเตือนผู้ใช้ ไม่งั้นอัปโหลด 12 รูปแล้วขึ้น "เพิ่มแล้ว ✓"
+  //    ทั้งที่เก็บแค่รูปปก อีก 11 รูปกลายเป็นไฟล์กำพร้าใน storage และกู้จากหน้าจอไม่ได้
+  const write = async (body) => (body.id
+    ? (({ id, ...rest }) => supabase.from(t).update(rest).eq("id", id))(body)
+    : supabase.from(t).insert((({ id, ...rest }) => rest)(body)));
+  let { error } = await write(r);
+  let degraded = null;
+  if (error && /images/i.test(error.message || "") && "images" in r) {
+    const kept = (r.images || []).length;
+    delete r.images;
+    ({ error } = await write(r));
+    if (!error && kept > 1) degraded = "images";   // เก็บได้แค่รูปปก — ผู้เรียกต้องบอกผู้ใช้
+  }
+  if (error) throw error;
+  return degraded ? { degraded } : null;
 }
 export async function deleteWebItem(kind, id) {
   const t = WEB_KINDS[kind]; if (!t) throw new Error("unknown web kind");

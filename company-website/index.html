@@ -224,6 +224,9 @@ nav.menu a:hover{color:var(--primary);background:var(--bg-soft)}
 .prod .feats{font-size:12px;color:var(--ink-2);line-height:1.55;white-space:normal}
 .prod .add{margin-top:6px;width:100%;justify-content:center}
 .prod-empty{grid-column:1/-1;text-align:center;color:var(--ink-3);padding:50px;font-size:15px}
+/* ป้ายจำนวนรูปบนการ์ดอัลบั้ม + การ์ดที่กดเปิดอัลบั้มได้ */
+.port-alb{cursor:pointer}
+.port-n{position:absolute;top:8px;right:8px;background:rgba(2,8,20,.72);color:#fff;font-size:11.5px;font-weight:800;border-radius:999px;padding:3px 9px;backdrop-filter:blur(4px)}
 /* portfolio */
 .port-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
 .port{position:relative;border-radius:16px;overflow:hidden;aspect-ratio:4/3;box-shadow:var(--shadow-sm);background:linear-gradient(135deg,#e6f6ff,#eef6ff)}
@@ -721,7 +724,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </section>
 
 <div class="gal-mask" id="galMask">
-  <div class="gal-head"><b>ผลงานทั้งหมด</b><button class="gal-x" id="galX" aria-label="ปิด">✕</button></div>
+  <div class="gal-head"><b id="galHead">ผลงานทั้งหมด</b><button class="gal-x" id="galX" aria-label="ปิด">✕</button></div>
   <div class="gal-grid" id="galGrid"></div>
 </div>
 
@@ -1288,15 +1291,41 @@ if (Array.isArray(C.VALUES)) $("#heroValues").innerHTML = C.VALUES.map((v) => `<
 // ---------- ผลงาน: ดึงจาก web_portfolio (หลังบ้าน) หรือ C.PORTFOLIO · สุ่มหมุน + กริด + แกลเลอรี ----------
 let PF = [], pfPool = [], pfTimer = null;
 const shuffle = (a) => { const x = a.slice(); for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
-const portCard = (p) => `<div class="port"><img src="${p.img}" alt="${p.title || ''}" loading="lazy"><div class="cap"><b>${p.title || 'ผลงาน'}</b></div></div>`;
-function openGal() { $("#galGrid").innerHTML = PF.map(portCard).join(""); $("#galMask").classList.add("on"); }
+// ชื่ออัลบั้มพิมพ์เองจากหลังบ้าน — ถ้ามี " หรือ < จะทำ markup พัง ต้อง escape ก่อนเสมอ
+const escA = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// การ์ด 1 ใบ = 1 อัลบั้ม · มีหลายรูปให้กดเปิดดูทั้งอัลบั้ม (mig 172 คอลัมน์ images)
+const portCard = (p, idx) => {
+  const n = (p.imgs || []).length;
+  const clickable = idx != null && n > 1;
+  const t = escA(p.title);
+  return `<div class="port${clickable ? " port-alb" : ""}"${clickable ? ` role="button" tabindex="0" onclick="openAlbum(${idx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAlbum(${idx})}"` : ""}>` +
+    `<img src="${escA(p.img)}" alt="${t}" loading="lazy">` +
+    (n > 1 ? `<span class="port-n">🖼️ ${n} รูป</span>` : "") +
+    `<div class="cap"><b>${t || 'ผลงาน'}</b></div></div>`;
+};
+// รูปเดี่ยวในแกลเลอรี (ไม่ต้องกดต่อ)
+const photoCard = (src, title) => `<div class="port"><img src="${escA(src)}" alt="${escA(title)}" loading="lazy"></div>`;
+// เปิดดูทุกรูปในอัลบั้มเดียว
+function openAlbum(i) {
+  const a = PF[i]; if (!a) return;
+  $("#galHead").textContent = a.title || "ผลงาน";
+  $("#galGrid").innerHTML = (a.imgs || [a.img]).map((u) => photoCard(u, a.title)).join("");
+  $("#galMask").classList.add("on");
+}
+// "ดูผลงานทั้งหมด" — กางทุกรูปของทุกอัลบั้ม
+function openGal() {
+  $("#galHead").textContent = "ผลงานทั้งหมด";
+  $("#galGrid").innerHTML = PF.flatMap((a) => (a.imgs || [a.img]).map((u) => photoCard(u, a.title))).join("");
+  $("#galMask").classList.add("on");
+}
 function closeGal() { $("#galMask").classList.remove("on"); }
 if ($("#heroPfAll")) $("#heroPfAll").onclick = openGal;
 if ($("#galX")) $("#galX").onclick = closeGal;
 if ($("#galMask")) $("#galMask").onclick = (e) => { if (e.target.id === "galMask") closeGal(); };
 function renderHeroPf() {
   const host = $("#heroPf"); if (!host || !PF.length) return;
-  if (pfPool.length < 3) pfPool = shuffle(PF);
+  // สุ่มจาก "ทุกรูปในทุกอัลบั้ม" ไม่ใช่แค่รูปปก — อัลบั้มที่มีหลายรูปจะได้โชว์ครบ
+  if (pfPool.length < 3) pfPool = shuffle(PF.flatMap((a) => (a.imgs || [a.img]).map((u) => ({ img: u, title: a.title }))));
   const pick = pfPool.splice(0, 3), cls = ["tall", "", ""];
   host.style.opacity = 0;
   setTimeout(() => {
@@ -1306,13 +1335,26 @@ function renderHeroPf() {
 }
 async function loadPortfolio() {
   let items = [];
-  if (hasSb) { try { const { data } = await sb.from("web_portfolio").select("*").eq("active", true).order("sort").order("id"); items = (data || []).map((x) => ({ img: x.image_url, title: x.title })); } catch (e) {} }
-  if (!items.length && Array.isArray(C.PORTFOLIO)) items = C.PORTFOLIO;
+  if (hasSb) {
+    try {
+      const { data } = await sb.from("web_portfolio").select("*").eq("active", true).order("sort").order("id");
+      // images = รูปทั้งอัลบั้ม (mig 172) · ยังไม่ได้รัน migration หรืออัลบั้มเก่า → ใช้รูปปกใบเดียวตามเดิม
+      items = (data || []).map((x) => {
+        const imgs = (Array.isArray(x.images) ? x.images : []).filter(Boolean);
+        const all = imgs.length ? imgs : (x.image_url ? [x.image_url] : []);
+        return { img: all[0], imgs: all, title: x.title };
+      });
+    } catch (e) {}
+  }
+  if (!items.length && Array.isArray(C.PORTFOLIO)) items = C.PORTFOLIO.map((p) => ({ ...p, imgs: [p.img] }));
   PF = items.filter((p) => p && p.img);
-  if ($("#portGrid") && PF.length) $("#portGrid").innerHTML = PF.map(portCard).join("");
+  if ($("#portGrid") && PF.length) $("#portGrid").innerHTML = PF.map((p, i) => portCard(p, i)).join("");
   pfPool = []; renderHeroPf();
   if (pfTimer) clearInterval(pfTimer);
-  if (PF.length > 3) pfTimer = setInterval(renderHeroPf, 4200);
+  // ⚠️ นับ "จำนวนรูปทั้งหมด" ไม่ใช่จำนวนอัลบั้ม — PF เป็นอัลบั้มแล้ว (mig 172)
+  //    ถ้านับอัลบั้ม พอยุบเหลือ ≤3 อัลบั้ม (ซึ่งคือสิ่งที่ฟีเจอร์นี้ทำให้เกิด) สไลด์หน้าแรกจะค้างถาวร
+  const pfPhotos = PF.reduce((n, a) => n + (a.imgs || [a.img]).length, 0);
+  if (pfPhotos > 3) pfTimer = setInterval(renderHeroPf, 4200);
 }
 
 // ---------- บทความ + ข่าวในสื่อ (ดึงจากหลังบ้าน ถ้ามี ไม่งั้นใช้เนื้อหาเดิม) ----------
