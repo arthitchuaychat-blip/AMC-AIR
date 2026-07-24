@@ -45,5 +45,18 @@ files.forEach((f) => { sites += (fs.readFileSync("src/components/" + f, "utf8").
 check(`ตรวจครบทุกจุดที่ใช้ MaterialThumb (${sites} จุด)`, sites >= 12,
   "เจอน้อยผิดปกติ — regex อาจไม่จับ ไม่ใช่ว่าโค้ดถูก");
 
+// ---------- ประเภทธุรกรรมที่ไม่รู้จัก ต้องไม่ทำทั้งหน้าตายเหมือนกัน ----------
+const badLookups = [...mv.matchAll(/TYPE_BY\[[^\]]+\]\.\w+/g)].map((m) => m[0]);
+check("ไม่มีการอ่าน TYPE_BY[...] แล้วจุดต่อทันที", badLookups.length === 0,
+  `ยังเหลือ: ${badLookups.join(", ")} — เจอ type ที่ไม่รู้จักแล้วพังทั้งหน้า ให้ผ่าน typeOf() แทน`);
+check("มี typeOf() ที่คืนค่าสำรองเมื่อไม่รู้จักประเภท", /const typeOf = \(t\) => TYPE_BY\[t\] \|\| \{/.test(mv) && /color: "#64748b"/.test(mv));
+
+// ---------- กล่อง error ต้องบอกได้ว่าพังที่ไหน ----------
+const eb = strip(fs.readFileSync("src/components/ErrorBoundary.jsx", "utf8"));
+check("กล่อง error เก็บ componentStack ไว้แสดง", /this\.setState\(\{ stack: info\?\.componentStack/.test(eb),
+  "มีแต่ข้อความ error = ไล่ไม่ถูกว่าพังที่ component ไหน");
+check("กล่อง error เปิดรายละเอียดไว้เลย ไม่ต้องกดหา", /<details style=\{\{ marginTop: 18, textAlign: "left" \}\} open>/.test(eb));
+check("กล่อง error มีปุ่มคัดลอกรายละเอียด", /navigator\.clipboard\?\.writeText/.test(eb));
+
 console.log(`\nสรุป: ผ่าน ${pass} · ตก ${fail}`);
 process.exit(fail ? 1 : 0);

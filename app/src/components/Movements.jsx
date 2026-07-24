@@ -23,6 +23,9 @@ const TYPE_BY = Object.fromEntries([...TYPES,
   { id: "adjust_in",  th: "ปรับยอด (เพิ่ม)", icon: "purchase", color: "#0891b2", dir: +1 },
   { id: "adjust_out", th: "ปรับยอด (ลด)",    icon: "damage",   color: "#ea580c", dir: -1 },
 ].map((t) => [t.id, t]));
+// ⚠️ อย่าอ่าน TYPE_BY[x] ตรง ๆ แล้วจุด .color/.th ต่อ — ถ้าเจอ type ที่ไม่รู้จัก (แถวเก่า/ชนิดใหม่ที่
+//    เพิ่มใน DB ก่อนหน้าจอ) จะพังทั้งหน้าเป็น "Cannot read properties of undefined" · ให้ผ่านตัวนี้เสมอ
+const typeOf = (t) => TYPE_BY[t] || { id: t, th: t || "ไม่ทราบประเภท", icon: "purchase", color: "#64748b", dir: +1 };
 // ยกเลิกทั้งชุดได้เฉพาะรายการที่คนคีย์เอง — ปรับยอดจากการนับสต๊อกไม่รวม (ผูกกับรอบนับที่ล็อกแล้ว)
 const CANCELABLE_GROUP = ["purchase", "withdraw", "return", "damage"];
 const REASONS = ["ชำรุด", "หาย", "หมดอายุ", "ใช้ผิดงาน"];
@@ -116,7 +119,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
       (!q || `${m.code} ${m.th || ""} ${m.name || ""} ${m.brand || ""} ${m.ac_type || ""} ${m.btu || ""}`.toLowerCase().includes(q))
     );
   }, [mats, mvKind, mvCat, mvBrand, mvType, mvBtu, pickSearch]);
-  const T = TYPE_BY[type];
+  const T = typeOf(type);
   // which UI flow is active
   const flow = type === "return" ? "job" : type === "damage" ? (damageMode === "job" ? "job" : "cart") : "cart";
 
@@ -395,7 +398,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
 
   async function cancel(r) {
     // กติกาบ้าน: ยกเลิก/ลบ ต้องระบุเหตุผลเสมอ (ลง audit) — เดิมช่องนี้หลุด
-    const rs = await confirmDialog({ title: `ยกเลิกรายการนี้? (${TYPE_BY[r.type].th} ${matMap[r.material_code]?.th || r.material_code} ${r.qty})`,
+    const rs = await confirmDialog({ title: `ยกเลิกรายการนี้? (${typeOf(r.type).th} ${matMap[r.material_code]?.th || r.material_code} ${r.qty})`,
       message: "สต๊อกจะคืนค่าให้", confirmText: "ยกเลิกรายการ", prompt: { label: "เหตุผล", placeholder: "เช่น คีย์ผิด · ซ้ำ", required: true } });
     if (rs === false) return;
     try { await deleteTransaction(r.id, rs); flash("ยกเลิกรายการแล้ว"); await load(); }
@@ -432,7 +435,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   function printGroup(g) {
     printWin.current = openPrintWindow();
     setPrintData({
-      typeTh: TYPE_BY[g.type].th, ref_no: g.ref_no, job_no: g.job_no, team: g.team, date: g.date,
+      typeTh: typeOf(g.type).th, ref_no: g.ref_no, job_no: g.job_no, team: g.team, date: g.date,
       lines: g.rows.map((x) => { const m = matMap[x.material_code]; return { th: m?.th || x.material_code, code: x.material_code, qty: x.qty, unit: m?.unit || "", value: Number(x.value || 0), reason: x.reason }; }),
       total: g.rows.reduce((a, x) => a + Number(x.value || 0), 0),
     });
@@ -451,7 +454,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     // poNo มีความหมายเฉพาะชุด "รับเข้า" — ชุดเบิกก็ตรา po_no ได้ ถ้าไม่กรองจะเด้งใบ PO กลับเป็นรอรับของทั้งที่ของเข้าคลังไปแล้ว
     const poNo = g.type === "purchase" && g.job_no && /^PO-/i.test(g.job_no) ? g.job_no : null;
     const reason = await confirmDialog({
-      title: `ยกเลิก${TYPE_BY[g.type].th}ทั้งชุด (${g.rows.length} รายการ)?`,
+      title: `ยกเลิก${typeOf(g.type).th}ทั้งชุด (${g.rows.length} รายการ)?`,
       message: `สต๊อกจะคืนค่าทุกรายการ${poNo ? ` · ใบสั่งซื้อ ${poNo} จะกลับเป็น "รอรับของ" ให้รับใหม่ได้` : ""}`,
       confirmText: "ยกเลิกทั้งชุด",
       prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น รับผิดใบ / จำนวนผิด", required: true },
@@ -697,7 +700,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           {!loading && recent.length > 0 && shownGroups.length === 0 && <div className="empty sm">ไม่พบรายการที่ตรงกับ "{refQ}"</div>}
           <div className="ledger">
             {shownGroups.map((g) => {
-              const mv = TYPE_BY[g.type];
+              const mv = typeOf(g.type);
               const open = expanded.has(g.key);
               const single = g.rows.length === 1;
               const firstM = matMap[g.rows[0].material_code];
@@ -723,7 +726,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
                     </div>
                     <div className="led-actions" onClick={(e) => e.stopPropagation()}>
                       <button className="led-btn" title="พิมพ์" onClick={() => printGroup(g)}><UIcon name="catalog" size={14} /></button>
-                      {canEditPast && CANCELABLE_GROUP.includes(g.type) && <button className="led-btn danger" title={g.type === "purchase" && g.job_no && /^PO-/i.test(g.job_no) ? `ยกเลิกรับเข้าทั้งใบ — ${g.job_no} กลับเป็นรอรับของ` : `ยกเลิก${TYPE_BY[g.type].th}ทั้งชุด (${g.rows.length} รายการ)`} onClick={() => cancelGroup(g)}><UIcon name="trash" size={14} /></button>}
+                      {canEditPast && CANCELABLE_GROUP.includes(g.type) && <button className="led-btn danger" title={g.type === "purchase" && g.job_no && /^PO-/i.test(g.job_no) ? `ยกเลิกรับเข้าทั้งใบ — ${g.job_no} กลับเป็นรอรับของ` : `ยกเลิก${typeOf(g.type).th}ทั้งชุด (${g.rows.length} รายการ)`} onClick={() => cancelGroup(g)}><UIcon name="trash" size={14} /></button>}
                       <button className="led-btn" title={open ? "ย่อ" : "ดูรายการ"} onClick={() => toggle(g.key)}><UIcon name={open ? "chevD" : "chevR"} size={14} /></button>
                     </div>
                   </div>
