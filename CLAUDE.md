@@ -18,7 +18,7 @@ ERP ของร้านแอร์ AMC AIR + เว็บขายหน้�
    - **เฉพาะบนคอมเครื่องเจ้าของ** (มีความจำ local ที่ `~/.claude/projects/.../memory` → junction ไป Google Drive): หลัง `git pull` รัน `.\.claude\sync-memory.ps1 -Pull` · ก่อน push รัน `.\.claude\sync-memory.ps1 -Push` เพื่อให้ 2 ที่ตรงกัน
 
 1. **ห้ามจับ secrets/API keys** ในโค้ดหรือแชตเด็ดขาด — เจ้าของตั้ง env ใน Vercel dashboard เอง (ยกเว้น Supabase anon key = public, commit ได้)
-2. **Migration รันเองไม่ได้** — เขียนไฟล์ใน `supabase/migrations/` แล้ว**วาง SQL ในแชต**ให้เจ้าของไปรันใน Supabase SQL Editor เสมอ (ล่าสุด: 151)
+2. **Migration รันเองไม่ได้** — เขียนไฟล์ใน `supabase/migrations/` แล้ว**วาง SQL ในแชต**ให้เจ้าของไปรันใน Supabase SQL Editor เสมอ (ล่าสุด: 174 — เช็กเลขในโฟลเดอร์ก่อนตั้งใหม่เสมอ เคยตั้งชนกันมาแล้ว)
 3. **ก่อน commit**: `git reset -q .claude/settings.local.json` แล้ว `git add` เฉพาะไฟล์ที่ระบุชื่อ (ห้าม `-A`/`.`) — **ก็อปพาธจาก `git status` ตรง ๆ** (กับดัก: ไฟล์คือ `app/src/components/BOQ.jsx` ตัวใหญ่ — add เป็น `Boq.jsx` จะหลุดเงียบ)
 4. **Bump `BUILD`** ใน `app/src/App.jsx` ทุกครั้งที่แก้โค้ดใน app/ (แก้เฉพาะ `app/api/*` ไม่ต้อง bump) — เวอร์ชันโชว์มุมซ้ายล่างไว้เช็กว่าเบราว์เซอร์โหลดบันเดิลใหม่
 5. Commit ลงท้าย `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` · ห้าม commit ไฟล์ `_design/*`

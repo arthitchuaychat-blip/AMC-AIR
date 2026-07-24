@@ -214,9 +214,12 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     try {
       await savePurchaseOrder({ po_no: poNo, supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, status: editing.status || "open" }, items);
       // ใบที่รับของเข้าคลังไปแล้ว: แก้ราคาตามบิลซัพฯ ต้องไล่แก้ต้นทุนที่บันทึกไว้ในคลัง/ต้นทุนงานด้วย
-      let repriced = 0;
-      if (editing._edit && editing.status === "received") repriced = await repriceReceivedPo(poNo, items).catch(() => 0);
-      flash(repriced ? `บันทึกใบสั่งซื้อแล้ว · ปรับต้นทุนในคลัง/งานตามราคาใหม่ ${repriced} รายการ` : "บันทึกใบสั่งซื้อแล้ว");
+      let repriced = 0, repriceErr = null;
+      // ห้ามกลืน error เงียบ ๆ — ถ้าปรับต้นทุนไม่ผ่าน (สิทธิ์ไม่พอ) ต้องบอก ไม่งั้นใบโชว์ราคาใหม่
+      // แต่ต้นทุนคลัง/งานยังเป็นราคาเก่า โดยที่คนกดเห็นข้อความว่าบันทึกสำเร็จ
+      if (editing._edit && editing.status === "received") repriced = await repriceReceivedPo(poNo, items).catch((err) => { repriceErr = err; return 0; });
+      if (repriceErr) flash("บันทึกใบสั่งซื้อแล้ว แต่ปรับต้นทุนไม่สำเร็จ: " + (repriceErr.message || repriceErr), true);
+      else flash(repriced ? `บันทึกใบสั่งซื้อแล้ว · ปรับต้นทุนในคลัง/งานตามราคาใหม่ ${repriced} รายการ` : "บันทึกใบสั่งซื้อแล้ว");
       setEditing(null); await load();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }

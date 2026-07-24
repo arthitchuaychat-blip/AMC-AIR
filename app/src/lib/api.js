@@ -552,8 +552,14 @@ export async function repriceReceivedPo(poNo, items) {
   for (const r of rows) {
     const want = priceOf[r.material_code];
     if (want == null || Math.abs((Number(r.unit_cost) || 0) - want) < 0.005) continue;
-    const { error: e } = await supabase.from("transactions").update({ unit_cost: want }).eq("id", r.id);
-    if (!e) n++;
+    // ⚠️ ต้อง .select() แล้วนับแถวที่เปลี่ยนจริง — RLS ปฏิเสธ update จะคืน "ไม่มี error + 0 แถว"
+    //    เดิมเช็กแค่ if (!e) n++ ⇒ คนที่แก้ใบ PO ได้แต่ไม่มีสิทธิ์แก้ transactions (ธุรการวัสดุ/ฝ่ายขาย)
+    //    จะนับว่าสำเร็จทั้งที่ไม่มีอะไรเปลี่ยน → materials.cost ถูกเขียนใหม่ (สิทธิ์ผ่าน) แต่ต้นทุนที่ผูกกับงานยังเป็นราคาเก่า
+    //    = ต้นทุนคลังกับต้นทุนงานไม่ตรงกัน กำไร/งานเพี้ยน และ audit บันทึกว่า "ปรับต้นทุน n รายการ" ทั้งที่ไม่ได้ปรับ
+    const { data: upd, error: e } = await supabase.from("transactions").update({ unit_cost: want }).eq("id", r.id).select("id");
+    if (e) throw e;
+    if (!upd?.length) throw new Error("แก้ต้นทุนที่บันทึกไว้ในคลัง/งานไม่สำเร็จ (สิทธิ์ไม่พอ) — ราคาในใบเปลี่ยนแล้ว แต่ต้นทุนคลัง/งานยังเป็นราคาเดิม ให้ธุรการหรือบัญชีแก้ราคาใบนี้แทน");
+    n++;
   }
   if (n) {
     // ต้นทุนเฉลี่ยของสินค้าที่ราคาเปลี่ยน — ตั้งเป็นราคาซื้อล่าสุดจากบิลจริง
