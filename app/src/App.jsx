@@ -104,7 +104,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-20·ใบงาน “รอทำใบเสนอราคา” ปิดงานได้แล้ว (เดิมปุ่มโผล่เฉพาะใบที่ผูกใบเสนอ ใบสำรวจเลยค้างถาวร) + ใบที่ปิดแล้วไม่เด้งกลับเป็นรอจ่ายงานตอนแก้ข้อมูล v499";
+const BUILD = "2026-07-24·ที่อยู่ในเอกสาร: ช่องลูกค้า = ที่อยู่หลัก (บัญชี/ภาษี) เสมอ · ช่องหน้างานแยกต่างหาก — แก้รูปที่ส่งลูกค้าทาง LINE + ใบกำกับที่ยิงเข้า FlowAccount ที่เคยใช้ที่อยู่ไซต์งาน v500";
 
 function SetupNotice() {
   return (

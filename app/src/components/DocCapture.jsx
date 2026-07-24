@@ -5,6 +5,11 @@ import { fmtBaht, fmtBaht2, fmtNum, custCode, fmtDocDate } from "../lib/format";
 
 // Renders a single document (quotation/invoice/receipt) off-screen at A4 size so it can be captured
 // to an image/PDF and sent — WITHOUT navigating to the document page. Calls onReady(node) when painted.
+//
+// ⚠️ กติกาที่อยู่ในเอกสาร (เจ้าของกำหนด) — ต้องเหมือนหน้าพิมพ์เป๊ะ ๆ เพราะเป็นเอกสารใบเดียวกัน:
+//   ช่อง 1 "ลูกค้า" = ที่อยู่หลักที่จดทะเบียนไว้ (customerAddr) เสมอ — ใช้ออกเอกสารบัญชี/ภาษี
+//   ช่อง 2 "📍 หน้างาน" = ที่อยู่ไซต์งาน (siteAddress) — บอกว่าไปทำงานที่ไหน
+//   ห้ามเขียน address: siteAddress || customerAddr เด็ดขาด (เคยเป็นแบบนั้น → ที่อยู่ไซต์ไปโผล่ช่องภาษี)
 export default function DocCapture({ type, no, onReady, onError }) {
   const [data, setData] = React.useState(null);
   const ref = React.useRef(null);
@@ -93,7 +98,7 @@ function quoteSlip(q, companies) {
     <DocSlip company={co} titleTh="ใบเสนอราคา" titleEn="QUOTATION" docNo={q.quote_no}
       metaRows={[{ label: "วันที่", value: q.issue_date }, { label: "ยืนราคาถึง", value: q.valid_until }, { label: "อ้างอิง BOQ", value: q.boq_no }]}
       projectTitle={q.title}
-      customer={{ name: q.customerName, code: custCode(q.customerCode), taxId: q.customerTaxId, address: q.siteAddress || q.customerAddr, contactName: q.contactName, contactPhone: q.contactPhone, mapUrl: q.map_url }}
+      customer={{ name: q.customerName, code: custCode(q.customerCode), taxId: q.customerTaxId, address: q.customerAddr, contactName: q.mainContactName, contactPhone: q.mainContactPhone, siteName: q.siteName, siteAddress: q.siteAddress, siteContactName: q.siteContactName, siteContactPhone: q.siteContactPhone, mapUrl: q.map_url }}
       terms={q.note || co.default_terms} termsPayment={q.terms_payment} termsFreebies={q.terms_freebies} termsWarranty={q.terms_warranty} bank={co.bank_info} signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]}
       discountCol={(q.items || []).some((it) => Number(it.discount) > 0)}
       totals={<div className="doc-totals">
@@ -118,7 +123,7 @@ function invoiceSlip(x, q, companies) {
     <DocSlip company={co} titleTh="ใบแจ้งหนี้" titleEn="INVOICE" docNo={x.invoice_no}
       metaRows={[{ label: "วันที่", value: x.issue_date }, { label: "ครบกำหนด", value: x.due_date }, { label: "อ้างอิงใบเสนอ", value: x.quote_no }, { label: "อ้างอิง BOQ", value: x.boq_no }, { label: "งวดที่", value: `${x.installment} (${Math.round(x.pct)}%)` }]}
       projectTitle={x.title}
-      customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, address: x.siteAddress || x.customerAddr, contactName: x.contactName, contactPhone: x.contactPhone, mapUrl: x.mapUrl }}
+      customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, address: x.customerAddr, contactName: x.mainContactName, contactPhone: x.mainContactPhone, siteName: x.siteName, siteAddress: x.siteAddress, siteContactName: x.siteContactName, siteContactPhone: x.siteContactPhone, mapUrl: x.mapUrl }}
       terms={x.note || co.default_terms} termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]}
       discountCol={(q?.items || []).some((it) => Number(it.discount) > 0)}
       totals={<div className="doc-totals">
@@ -146,7 +151,7 @@ function receiptSlip(x, q, inv, companies) {
     <DocSlip company={co} titleTh={isVat ? "ใบเสร็จรับเงิน/ใบกำกับภาษี" : "ใบเสร็จรับเงิน"} titleEn={isVat ? "RECEIPT / TAX INVOICE" : "RECEIPT"} docNo={x.receipt_no}
       metaRows={[{ label: "วันที่", value: x.issue_date }, { label: "อ้างอิงใบแจ้งหนี้", value: x.invoice_no }, { label: "อ้างอิงใบเสนอ", value: x.quote_no }, { label: "อ้างอิง BOQ", value: x.boq_no }, { label: "อ้างอิงใบงาน", value: x.job_no }]}
       projectTitle={x.title}
-      customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, address: x.siteAddress || x.customerAddr, contactName: x.contactName, contactPhone: x.contactPhone, mapUrl: x.mapUrl }}
+      customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, address: x.customerAddr, contactName: x.mainContactName, contactPhone: x.mainContactPhone, siteName: x.siteName, siteAddress: x.siteAddress, siteContactName: x.siteContactName, siteContactPhone: x.siteContactPhone, mapUrl: x.mapUrl }}
       terms={x.note} termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]}
       discountCol={(q?.items || []).some((it) => Number(it.discount) > 0)}
       paymentInfo={paid ? `ได้รับชำระเงินแล้ว · วันที่ ${x.issue_date || "-"} · โดย ${x.payment_method || "-"} · จำนวน ${fmtBaht2(x.net)}` : null}
