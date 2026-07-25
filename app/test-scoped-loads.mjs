@@ -15,11 +15,13 @@ function grab(startMarker, endMarker) {
   return SRC.slice(i, j);
 }
 
-const helpers = grab("const _scopeNos = (opts) =>", "export async function listBoqs");
-const fnBoqs = grab("export async function listBoqs(", "\n// ---------- COMPANY PROFILE");
-const fnQuotes = grab("export async function listQuotations(", "\nexport async function saveQuotation");
-const fnInv = grab("export async function listInvoices(", "\nexport function billedByQuote");
-const fnRc = grab("export async function listReceipts(", "\nexport async function saveReceipt");
+// หมายเหตุ: list* ถูกห่อด้วยแคช (export function listX → เรียก _cached(() => _loadX())) แล้ว
+// ตรรกะ query จริงย้ายไปอยู่ใน _loadX — ดึง _loadX มาทดสอบแล้ว alias กลับเป็น listX ตอน return
+const helpers = grab("const _scopeNos = (opts) =>", "export function listBoqs");
+const fnBoqs = grab("async function _loadBoqs(", "\n// ---------- COMPANY PROFILE");
+const fnQuotes = grab("async function _loadQuotations(", "\nexport async function saveQuotation");
+const fnInv = grab("async function _loadInvoices(", "\nexport function billedByQuote");
+const fnRc = grab("async function _loadReceipts(", "\nexport async function saveReceipt");
 
 // ---- supabase ปลอม: บันทึก table + filters ของทุก query แล้วคืนแถวว่าง (ยกเว้นหัวใบที่ป้อนให้) ----
 let calls = [];
@@ -57,7 +59,7 @@ ${fnBoqs}
 ${fnQuotes}
 ${fnInv}
 ${fnRc}
-return { listBoqs, listQuotations, listInvoices, listReceipts };
+return { listBoqs: _loadBoqs, listQuotations: _loadQuotations, listInvoices: _loadInvoices, listReceipts: _loadReceipts };
 `.replace(/export async function/g, "async function");
 
 const { listBoqs, listQuotations, listInvoices, listReceipts } = new Function(

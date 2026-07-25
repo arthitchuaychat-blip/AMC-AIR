@@ -1,11 +1,11 @@
 ---
 name: app-performance
-description: ทำแอปโหลดเร็วขึ้น — code-split + แคชตัวคงที่ทำแล้ว (v506); เหลือ index/แคช doc-list ถ้ายังอืด
+description: ทำแอปโหลดเร็วขึ้น — code-split + แคชตัวคงที่ + แคชลิสต์เอกสารทำแล้ว (v507); เหลือแค่ index ตอนตารางโต
 metadata: 
   node_type: memory
   type: project
   originSessionId: 9e3e3c98-8673-47b0-99ce-ee3aa866d22b
-  modified: 2026-07-25T16:00:30.800Z
+  modified: 2026-07-25T16:38:06.869Z
 ---
 
 เจ้าของแจ้ง (2026-07-25) ว่าแอปใช้งานอืด. (ส่วนที่รู้สึกว่า "ทวนความจำนาน" = แชต Claude ยาวเกิน ไม่ใช่แอป — แก้ด้วยเปิดแชตใหม่ต่อ 1 งาน. ความจำมีแค่ ~870 บรรทัด ไม่ใช่คอขวด.)
@@ -16,7 +16,8 @@ quotation_items 1705 · boq_items 1675 · materials 1326 · transactions 763 · 
 **แผน (ปรับลำดับตามข้อมูลจริง — index เลื่อนออกเพราะข้อมูลยังเล็ก):**
 1. ✅ **เสร็จแล้ว (v506, 2026-07-25) — code-split บันเดิล** — App.jsx เปลี่ยน import หน้าเมนูทั้ง ~35 หน้าเป็น `React.lazy(() => import(...))` + ครอบ view-switch ด้วย `<React.Suspense fallback="กำลังโหลด…">`. เปลือกที่ตามทุกเมนู (TaskReminder/ChatDock/NotificationBell/Login/ConfirmDialog/ErrorBoundary) ยัง eager. **ผล: บันเดิลแรก 2,290KB → 647KB (gzip 659→181)** · libs หนัก (jspdf 390KB, html2canvas 201KB, heic2any 1.35MB) แยกก้อนโหลดเฉพาะหน้าที่ใช้.
 2. ✅ **เสร็จแล้ว (v506) — แคชตัวคงที่ระดับแอป** — เพิ่ม `_cached(key, loader)` + `bustCache(key)` ใน api.js (TTL 5 นาที, เก็บ promise = dedupe คำขอที่ยิงพร้อมกัน, ล้มไม่แคช). ครอบ `getCompanies`("companies") · `listTeams`("teams") · `listMaterialsLite`("materials-lite" → body ย้ายไป `_loadMaterialsLite`). ล้างแคชทุกจุดเขียน: materials (saveMaterial/setMaterialsPhoto/setMaterialFeatures/updateMaterialCost/deactivateMaterial/setMaterialsWebPublished/bulkUpsertMaterials/deleteAllMaterials) · teams (saveTeam/deleteTeam) · companies (saveCompany). ⚠️ test-thumb-missing-mat.mjs anchor เปลี่ยนเป็น `_loadMaterialsLite` แล้ว. **หมายเหตุ: listMaterials (view material_stock เต็ม) ไม่แคช** — เพราะ stock เปลี่ยนตาม transactions; lite อ่านตาราง materials ตรง ๆ จึงแคชได้.
+2.5 ✅ **เสร็จแล้ว (v507, 2026-07-25) — แคชลิสต์เอกสาร (TTL สั้น 45 วิ)** — เจ้าของยังรู้สึกอืด เพราะ code-split ช่วยแค่ "โหลดครั้งแรก"; ตัวอืดจริงตอน**สลับเมนู** = แต่ละหน้า refetch ลิสต์เต็มทุกครั้ง (Receipts เปิดที = ยิง 5 query · listQuotations 1 หน้า = ~7 query join หลายตาราง). วัด RTT ไป Supabase จริง = เฉลี่ย ~210ms/query (แกว่ง 20–640). **ทำ**: เพิ่มชั้นแคช TTL สั้น 45 วิ ใน `_cached(key, loader, ttl)` ครอบ 12 ลิสต์: listPurchaseOrders/Customers/Suppliers/Boqs/Quotations/Invoices/Receipts/BillingNotes/JobOrders/CustomersLite/Expenses/DocLinks (body ย้ายไป `_loadX`, key = ชื่อ+JSON.stringify(opts)). **ความถูกต้อง (สำคัญสุด)**: แทนไล่ bust ~90 ทางเขียน (พลาดจุดเดียว=ลิสต์ค้างหลังเซฟ) → **ดักที่ตัว client**: patch `supabase.from().{insert,update,upsert,delete}` + `supabase.rpc()` ให้เรียก `bustShort()` อัตโนมัติ (IIFE installWriteBust ใน api.js). over-bust ปลอดภัย (แค่โหลดใหม่) · under-bust ไม่เกิด. **ต้องดัก rpc ด้วย** เพราะ set_job_status/replace_quotation_items/replace_boq_items/set_visit_status/set_receipt_flowaccount/expense_attach_receipt เขียนผ่าน RPC เลี่ยง .from(). ⚠️ แก้ anchor 2 เทสต์: test-scoped-loads (grab `_loadBoqs/_loadQuotations/_loadInvoices/_loadReceipts` แล้ว alias กลับ) + test-weborder-link (`_loadCustomersLite`).
 3. **index — พักไว้ก่อน** (1700 แถวมี/ไม่มีก็เร็วพอกัน) ค่อยทำตอนตารางโตหลักหมื่น. ตอนนั้นค่อยเพิ่ม issue_date/customer_id/status/quote_no ฯลฯ.
-4. **ยังไม่ทำ ถ้ายังรู้สึกอืด**: (ก) แต่ละหน้ายังดึงหลายตารางเต็มทุกครั้งสลับเมนู (เช่น Receipts.load = listReceipts+listInvoices+listQuotations+getCompanies+listDocLinks พร้อมกัน) — แคช doc-list ระดับแอปหรือ prefetch ได้อีก · (ข) `select` เฉพาะคอลัมน์ที่ใช้ · (ค) material_stock view คิดสดจาก transactions ทุกครั้ง → ตารางยอดคงเหลือสะสมเมื่อ transactions โต. **ก่อนทำเพิ่ม: ให้เจ้าของวัด Network/Performance จริงว่ายังช้าตรงไหน.**
+4. **ยังไม่ทำ ถ้ายังรู้สึกอืด**: (ก) `select` เฉพาะคอลัมน์ที่ใช้ (ตอนนี้ listQuotations select("*") หลายตาราง) · (ข) material_stock view คิดสดจาก transactions ทุกครั้ง → ตารางยอดคงเหลือสะสมเมื่อ transactions โต · (ค) เพิ่ม TTL แคชถ้า 45 วิ ยังรู้สึกยิงบ่อย. **ก่อนทำเพิ่ม: ให้เจ้าของวัด Network/Performance จริงว่ายังช้าตรงไหน — โหลดครั้งแรกเร็วแล้ว (1 chunk 181KB gzip) สลับเมนูซ้ำก็แคชแล้ว.**
 
 ⚠️ วิธีตรวจว่าช้าตรงไหนจริง: ก่อนแก้ ให้ดู Network/Performance tab ในเบราว์เซอร์ (แอปล็อกอิน — เจ้าของเปิดเอง) ว่าเสียเวลาที่ "โหลดบันเดิล" หรือ "รอ query". ดู [[supabase-1000-row-cap]] (_fetchAll เพจทั้งตาราง) + [[stale-cache-deploys]] (bump BUILD ทุกครั้งที่แก้ app/).

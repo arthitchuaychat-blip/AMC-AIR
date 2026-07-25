@@ -108,7 +108,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-25·เร่งแอปให้โหลดเร็วขึ้น: แยกก้อนโค้ดตามเมนู (code-split React.lazy บันเดิลแรก 2.3MB→0.65MB) + แคชตัวคงที่ companies/teams/materials-lite ไม่ดึงซ้ำทุกหน้า v506";
+const BUILD = "2026-07-25·เร่งแอป: แคชลิสต์เอกสารระดับแอป (สลับเมนูซ้ำใน 45 วิ ไม่ยิง query ใหม่ — ใบเสนอ/แจ้งหนี้/เสร็จ/งาน/ลูกค้า ฯลฯ) · เขียนตารางไหนก็ล้างแคชอัตโนมัติผ่านตัวดัก supabase.from/rpc = เซฟแล้วเห็นสด v507";
 
 function SetupNotice() {
   return (

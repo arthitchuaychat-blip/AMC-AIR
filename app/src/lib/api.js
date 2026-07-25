@@ -9,19 +9,47 @@ const posLabel = (p) => (p && (ROLE_LABEL[p.role] || p.department)) || "";
 const _url = import.meta.env.VITE_SUPABASE_URL;
 const _anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// ---------- แคชระดับแอป: ตารางที่แทบไม่เปลี่ยน (company_profile / teams / materials-lite) ----------
-// สลับเมนูไป-มาไม่ต้องดึงซ้ำทุกครั้ง · เก็บ "โปรมิส" เพื่อรวมคำขอที่ยิงพร้อมกันเป็นครั้งเดียว (dedupe) ·
-// เขียนทับตารางไหน = ล้างแคชคีย์นั้นทันที (bustCache) · TTL กันข้อมูลค้างนานเกินจากการแก้ที่เครื่องอื่น
-const _CACHE_TTL = 5 * 60 * 1000; // 5 นาที
-const _cache = new Map(); // key -> { at:number, p:Promise }
+// ---------- แคชระดับแอป: กันดึงซ้ำเวลาสลับเมนูไป-มา ----------
+// เก็บ "โปรมิส" เพื่อรวมคำขอที่ยิงพร้อมกันเป็นครั้งเดียว (dedupe) · ล้มแล้วไม่แคชความล้มเหลว
+// 2 ชั้นอายุ: ยาว = ตารางแทบไม่เปลี่ยน (company/teams/materials-lite) · สั้น = ลิสต์เอกสารที่เปลี่ยนบ่อย
+// ⚠️ ความถูกต้อง: "เขียนตารางไหนก็ตาม" ล้างแคชสั้นทั้งชั้นอัตโนมัติ ผ่านตัวดักที่ supabase.from()
+//    ด้านล่าง — over-bust ปลอดภัย (แค่โหลดใหม่) · กันลืม bust รายจุด ~90 ทางเขียน (เซฟแล้วลิสต์ค้าง)
+const _CACHE_TTL = 5 * 60 * 1000; // ยาว: 5 นาที
+const _SHORT_TTL = 45 * 1000;     // สั้น: 45 วินาที (ลิสต์เอกสาร — แก้ที่เครื่องอื่นเห็นช้าสุด 45 วิ)
+const _cache = new Map();  // key -> { at:number, p:Promise, ttl:number }
 function bustCache(key) { if (key) _cache.delete(key); else _cache.clear(); }
-function _cached(key, loader) {
+// ล้างเฉพาะแคช "สั้น" (ลิสต์เอกสาร) — เรียกอัตโนมัติทุกครั้งที่มีการเขียนตาราง
+function bustShort() { for (const [k, v] of _cache) { if (v.ttl === _SHORT_TTL) _cache.delete(k); } }
+function _cached(key, loader, ttl = _CACHE_TTL) {
   const hit = _cache.get(key);
-  if (hit && (Date.now() - hit.at) < _CACHE_TTL) return hit.p;
+  if (hit && (Date.now() - hit.at) < hit.ttl) return hit.p;
   const p = loader().catch((e) => { _cache.delete(key); throw e; }); // ล้มแล้วอย่าแคชความล้มเหลว
-  _cache.set(key, { at: Date.now(), p });
+  _cache.set(key, { at: Date.now(), p, ttl });
   return p;
 }
+
+// ตัวดักการ "เขียน" ทุกตารางผ่าน supabase.from(...).{insert,update,upsert,delete}
+// → ล้างแคชลิสต์สั้นทันที เพื่อให้ผู้ใช้เห็นผลการแก้ของตัวเองทันที (ไม่ต้องไล่ bust รายฟังก์ชัน)
+// อ่าน (.select) ไม่ถูกแตะ จึงไม่ล้างแคชโดยไม่จำเป็น
+(function installWriteBust() {
+  if (!supabase || supabase.__writeBust) return;
+  const rawFrom = supabase.from.bind(supabase);
+  supabase.from = (table) => {
+    const b = rawFrom(table);
+    for (const m of ["insert", "update", "upsert", "delete"]) {
+      const orig = b[m];
+      if (typeof orig === "function") {
+        b[m] = (...args) => { try { bustShort(); } catch (_) {} return orig.apply(b, args); };
+      }
+    }
+    return b;
+  };
+  // RPC ที่เขียนข้อมูล (set_job_status, replace_quotation_items, set_receipt_flowaccount ฯลฯ)
+  // เลี่ยงตัวดัก .from() → ต้องล้างแคชด้วย · RPC ที่เป็น read แค่ over-bust (ปลอดภัย โหลดใหม่เฉย ๆ)
+  const rawRpc = supabase.rpc.bind(supabase);
+  supabase.rpc = (...args) => { try { bustShort(); } catch (_) {} return rawRpc(...args); };
+  supabase.__writeBust = true;
+})();
 
 // default icon per category (materials table doesn't store an icon)
 const CAT_ICON = { pipe: "pipe", fit: "elbow", ref: "tank", ins: "foam", wire: "wire", elec: "breaker" };
@@ -826,7 +854,8 @@ export async function reopenJob(job_no) {
 }
 
 // ---------- PURCHASE ORDERS ----------
-export async function listPurchaseOrders() {
+export function listPurchaseOrders() { return _cached("listPurchaseOrders", _loadPurchaseOrders, _SHORT_TTL); }
+async function _loadPurchaseOrders() {
   const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows })); // กันเพดาน 1000 แถวทุกก้อน (header PO ก็โตเรื่อย ๆ เหมือนใบขาย)
   const [poRes, itemRes, qRes, cuRes, joRes, tmRes] = await Promise.all([
     _rows((f, t) => supabase.from("purchase_orders").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("po_no").range(f, t)),
@@ -1245,7 +1274,8 @@ async function _fetchAll(build) {
   return all;
 }
 
-export async function listCustomers() {
+export function listCustomers() { return _cached("listCustomers", _loadCustomers, _SHORT_TTL); }
+async function _loadCustomers() {
   const [c, cc, cs] = await Promise.all([
     _fetchAll((f, t) => supabase.from("customers").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(f, t)),
     _fetchAll((f, t) => supabase.from("customer_contacts").select("*", { count: "exact" }).order("id").range(f, t)),   // ไม่มี order = แถวซ้ำ/หายระหว่างหน้า
@@ -1344,7 +1374,8 @@ export async function bulkImportCustomers(rows) {
 }
 
 // ---------- SUPPLIERS (ข้อมูลผู้ขาย · โครงเดียวกับลูกค้า) ----------
-export async function listSuppliers() {
+export function listSuppliers() { return _cached("listSuppliers", _loadSuppliers, _SHORT_TTL); }
+async function _loadSuppliers() {
   const [s, sc, ss] = await Promise.all([
     _fetchAll((f, t) => supabase.from("suppliers").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(f, t)),
     _fetchAll((f, t) => supabase.from("supplier_contacts").select("*", { count: "exact" }).order("id").range(f, t)),   // ไม่มี order = แถวซ้ำ/หายระหว่างหน้า
@@ -1438,7 +1469,8 @@ export async function docNoTaken(table, no) {
   if (error) throw error;
   return (count || 0) > 0;
 }
-export async function listBoqs(opts = {}) {
+export function listBoqs(opts = {}) { return _cached("listBoqs:" + JSON.stringify(opts || {}), () => _loadBoqs(opts), _SHORT_TTL); }
+async function _loadBoqs(opts = {}) {
   const nos = _scopeNos(opts);
   const bP = _allRows((f, t) => _onlyNos(supabase.from("boqs").select("*", { count: "exact" }), "boq_no", nos).order("created_at", { ascending: false }).order("boq_no").range(f, t));
   // เจาะจงใบ → ต้องรู้ customer_id/site_id ของใบนั้นก่อน จึงรอหัวใบมาก่อน · โหลดทั้งหมด → ไม่ต้องรอ ยิงขนานเหมือนเดิม
@@ -1734,7 +1766,8 @@ export async function setJobStatus(job_no, status, reason) {
 }
 
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
-export async function listQuotations(opts = {}) {
+export function listQuotations(opts = {}) { return _cached("listQuotations:" + JSON.stringify(opts || {}), () => _loadQuotations(opts), _SHORT_TTL); }
+async function _loadQuotations(opts = {}) {
   const nos = _scopeNos(opts);
   const since = _sinceOf(opts);
   const qP = _allRows((f, t) => _orSince(_onlyNos(supabase.from("quotations").select("*", { count: "exact" }), "quote_no", nos), ["approved_at", "issue_date", "created_at"], since).order("created_at", { ascending: false }).order("quote_no").range(f, t));
@@ -1911,7 +1944,8 @@ async function _creators(ids) {
 }
 
 // ---------- INVOICES (ใบแจ้งหนี้ · แบ่งงวดได้) ----------
-export async function listInvoices(opts = {}) {
+export function listInvoices(opts = {}) { return _cached("listInvoices:" + JSON.stringify(opts || {}), () => _loadInvoices(opts), _SHORT_TTL); }
+async function _loadInvoices(opts = {}) {
   const nos = _scopeNos(opts);
   const ivP = _allRows((f, t) => _onlyNos(supabase.from("invoices").select("*", { count: "exact" }), "invoice_no", nos).order("created_at", { ascending: false }).order("invoice_no").range(f, t));
   const iv = nos ? await ivP : { data: [] };   // เจาะจงใบ → รอหัวใบก่อน · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
@@ -2079,7 +2113,8 @@ export async function quoteAttribution(nos) {
   return out;
 }
 
-export async function listReceipts(opts = {}) {
+export function listReceipts(opts = {}) { return _cached("listReceipts:" + JSON.stringify(opts || {}), () => _loadReceipts(opts), _SHORT_TTL); }
+async function _loadReceipts(opts = {}) {
   const nos = _scopeNos(opts);
   const since = _sinceOf(opts);
   // ใบเสร็จเก่าที่ issue_date เป็น NULL ต้องไม่หายไปเงียบ ๆ → OR กับ created_at ที่ not null เสมอ
@@ -2160,7 +2195,8 @@ export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, n
 }
 // toggle a receipt's paid status (and sync the linked invoice)
 // ---------- BILLING NOTES (ใบวางบิล) ----------
-export async function listBillingNotes() {
+export function listBillingNotes() { return _cached("listBillingNotes", _loadBillingNotes, _SHORT_TTL); }
+async function _loadBillingNotes() {
   const [bn, iv, cu, si, ct, rc, qt] = await Promise.all([
     _allRows((f, t) => supabase.from("billing_notes").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("billing_no").range(f, t)),
     _allRows((f, t) => supabase.from("invoices").select("invoice_no,total,wht_amt,installment,pct,status,issue_date,quote_no", { count: "exact" }).order("invoice_no").range(f, t)),
@@ -2304,7 +2340,8 @@ function _firstContacts(rows) { const m = {}; (rows || []).forEach((c) => { if (
 // เดิมโหลด quotation_items ทั้งตารางแบบ select * ลงมือถือช่าง = ราคาต่อหน่วย+ส่วนลดของทุกลูกค้าอยู่ในเครื่อง
 // ⚠️ โหมดออฟฟิศ (ค่าเริ่มต้น) ต้องได้ผลเท่าเดิมเป๊ะ — quoteGrand/salesName/boq_no ถูกใช้ที่หน้าแชตและแผงพรีวิว
 //    ถ้าเผลอให้ออฟฟิศไปใช้โหมดช่าง มูลค่างานจะกลายเป็น 0 บาททุกใบแบบเงียบ ๆ
-export async function listJobOrders({ fieldOnly = false, team = null } = {}) {
+export function listJobOrders(opts = {}) { return _cached("listJobOrders:" + JSON.stringify(opts || {}), () => _loadJobOrders(opts), _SHORT_TTL); }
+async function _loadJobOrders({ fieldOnly = false, team = null } = {}) {
   if (fieldOnly) {
     const { data, error } = await supabase.rpc("jobs_for_team", { p_team: team || null });
     // ยังไม่รัน mig 166 → ถอยไปทางเดิม จอช่างต้องไม่พังระหว่างรอ deploy/รัน SQL
@@ -2722,7 +2759,8 @@ export async function listWebOrders() {
 }
 // รายชื่อลูกค้าแบบเบา (id/ชื่อ/เบอร์) — ใช้ค้นหาเพื่อผูกคำสั่งซื้อเว็บกับลูกค้าที่มีอยู่แล้ว
 // ไม่ใช้ listCustomers() เพราะดึงทุกคอลัมน์ + ที่อยู่ไซต์ทั้งฐาน หนักเกินความจำเป็นสำหรับช่องค้นหา
-export async function listCustomersLite() {
+export function listCustomersLite() { return _cached("listCustomersLite", _loadCustomersLite, _SHORT_TTL); }
+async function _loadCustomersLite() {
   const [c, cc, cs] = await Promise.all([
     _fetchAll((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("customer_contacts").select("customer_id,phone", { count: "exact" }).order("id").range(f, t)),
@@ -3648,7 +3686,8 @@ export async function listMyExpenses() {
   const data = await _fetchAll((f, t) => supabase.from("expense_requests").select("*", { count: "exact" }).eq("requester", uid).order("created_at", { ascending: false }).order("id").range(f, t));
   return _enrichExpenseJobs(data || []);
 }
-export async function listExpenses(status) {
+export function listExpenses(status) { return _cached("listExpenses:" + String(status), () => _loadExpenses(status), _SHORT_TTL); }
+async function _loadExpenses(status) {
   // กันเพดาน 1000 แถว — ทุกการจ่าย PO สร้างใบเบิก 1 ใบ ตารางโตเร็ว · PayVendorModal พึ่ง list นี้ตัดสินว่าใบเบิกเดิม "ถูกลบ" หรือยัง
   const build = (f, t) => { let q = supabase.from("expense_requests").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
   const [exRows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,email")]);
@@ -4892,7 +4931,8 @@ export async function markChatRead(roomId) {
 
 // ---------- cross-document links (full chain both directions) ----------
 // chain is keyed by quote_no: BOQ → quote → invoices/job-orders → receipts
-export async function listDocLinks() {
+export function listDocLinks() { return _cached("listDocLinks", _loadDocLinks, _SHORT_TTL); }
+async function _loadDocLinks() {
   const [q, inv, rc, jo, po] = await Promise.all([
     _allRows((f, t) => supabase.from("quotations").select("quote_no,boq_no", { count: "exact" }).order("quote_no").range(f, t)),
     _allRows((f, t) => supabase.from("invoices").select("invoice_no,quote_no", { count: "exact" }).neq("status", "cancelled").order("invoice_no").range(f, t)),

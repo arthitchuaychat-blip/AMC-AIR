@@ -15,7 +15,7 @@ const api = fs.readFileSync("src/lib/api.js", "utf8");
 console.log("\nคำสั่งซื้อจากเว็บ — สถานะเชื่อมลูกค้า:");
 
 // ---------- ชั้นข้อมูล: ต้องส่งชื่อลูกค้ามาด้วย ----------
-const lw = api.slice(api.indexOf("export async function listWebOrders"), api.indexOf("export async function listCustomersLite"));
+const lw = api.slice(api.indexOf("export async function listWebOrders"), api.indexOf("export function listCustomersLite"));
 check("listWebOrders คืนชื่อลูกค้าที่ผูกไว้ (customerName)", /customerName: o\.customer_id \?/.test(lw),
   "ไม่มีชื่อ = การ์ดบอกได้แค่ 'ผูกแล้ว' เช็กไม่ได้ว่าผูกกับใคร");
 check("ดึงชื่อลูกค้าแบบซอยทีละก้อน (กัน .in() ยาวเกิน)", /for \(let i = 0; i < ids\.length; i \+= 300\)/.test(lw),
@@ -56,7 +56,7 @@ check("ผูกเสร็จแล้วดึงชื่อจริงม�
 check("โหลดรายชื่อลูกค้าล้มแล้วหน้ายังใช้ได้", /listCustomersLite\(\)\.then\(setCusts\)\.catch\(\(\) => setCusts\(\[\]\)\)/.test(wo),
   "ไม่ catch = หน้าขาวทั้งหน้าเพราะตัวช่วยเตือนซ้ำ");
 check("listCustomersLite กันเพดาน 1000 แถวทั้ง 3 ตาราง",
-  (api.slice(api.indexOf("export async function listCustomersLite"), api.indexOf("export async function setWebOrderCustomer")).match(/_fetchAll/g) || []).length === 3,
+  (api.slice(api.indexOf("async function _loadCustomersLite"), api.indexOf("export async function setWebOrderCustomer")).match(/_fetchAll/g) || []).length === 3,
   "ฐานลูกค้าเกินพันแล้วตัวเตือนซ้ำจะมองไม่เห็นลูกค้าเก่า");
 
 console.log(`\nสรุป: ผ่าน ${pass} · ตก ${fail}`);
