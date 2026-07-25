@@ -4,13 +4,9 @@
 - [PowerShell + ภาษาไทย](ps1-thai-bom.md) — .ps1 ที่มีคอมเมนต์ไทยต้องเซฟ UTF-8 **พร้อม BOM** ไม่งั้น PS 5.1 พังด้วย error หลอกว่า "Missing closing '}'"
 - [รูปแอร์ทางการ](ac-official-media.md) — manifest acOfficialMedia.js + ปุ่มนำเข้าทั้งชุด (ดาวน์โหลดเก็บเข้า storage เรา ห้าม hotlink); ?acimg=1 สำรวจ + กับดัก codesNoPhoto cap 12; รุ่นที่ยังหารูปไม่ได้
 
-- [The Top Mentor](the-top-mentor.md) — แอปติดตาม Mentoring 8 สัปดาห์ + Happiness Survey, live ที่ amc-air.vercel.app/mentor/ (Supabase tm_* mig 108, สำเนาคู่ the-top-mentor/ ↔ app/public/mentor/); ค้าง = LINE auto-send + แบบสอบถามจริง
-
-- [วัสดุOS app](vatsadu-os-app.md) — what this project is; index.html is precompiled single-file React, runs by double-click (no Node/Python here).
 - [Company website](company-website.md) — live storefront www.amcair.net (company-website/, Vercel amc-air-497i): Supabase-wired catalog+cart, SSR /a/:id article + /p/:code product pages, sitemap/SEO; content managed via app's จัดการเว็บไซต์.
 - [FlowAccount MCP](flowaccount-mcp.md) — FA เชื่อม Claude แล้ว (อ่านอย่างเดียว, บริษัท N498831); งานค้าง = กระทบยอดขาย ERP↔FA (ฝั่ง FA ได้ 59 ใบ ฿4.5M แล้ว รอฝั่ง ERP)
 - [Air shop site](air-shop-site.md) — single-file e-commerce site air-shop/index.html; catalog+prices scraped from แอร์บ้านราคาถูก.com; LINE-checkout cart.
-- [Production plan](production-plan.md) — going live via Cloud + CODE (React/Vite + Supabase, reusing the prototype UI). supabase/schema.sql done. Needs Node installed + user's Supabase account. (Earlier No-code/AppSheet attempt set aside.)
 - [LINE OA chat](line-oa-chat.md) — in-app chat board via Vercel edge functions + Supabase Realtime; env vars + activation steps + migration 023.
 - [AI LINE bot](ai-line-bot.md) — บอท Claude Sonnet 5 ตอบลูกค้านอกเวลาทำการใน line-webhook.js (aiAnswer, แคตตาล็อก web_products, ai_enabled/ai_extra ใน app_config.autoreply); ต้องมี ANTHROPIC_API_KEY บน Vercel, maxDuration 60.
 - [Stale-cache deploys](stale-cache-deploys.md) — "broken" filters/search are usually a cached old bundle; how to verify the live bundle; cache headers in app/vercel.json.
