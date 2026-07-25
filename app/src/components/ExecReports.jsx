@@ -1,11 +1,11 @@
 import React from "react";
 import { listInvoices, listPurchaseOrders, listQuotations, listBoqs, listReceipts } from "../lib/api";
 import { fmtBaht, fmtNum, fmtCompact, downloadCsv, inRange } from "../lib/format";
+import { jobTypeDef } from "../lib/schedule";
 
 // รายงานผู้บริหาร 6 ตัว (แท็บในแดชบอร์ด) — โหลดเอกสารทั้งประวัติเองตอนเปิดแท็บ (หลายรายงานคิดจากประวัติทั้งหมดโดยตั้งใจ)
 // ทุกตารางมี ⬇ Export CSV · ช่วงเวลาตามตัวกรองแดชบอร์ด (from/to)
 const R2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-const JT = { install: "ติดตั้ง", move: "ย้าย", clean: "ล้าง/บำรุง", repair: "ซ่อม/แก้ไข", survey: "สำรวจ", maintain: "PM", other: "อื่น ๆ" };
 const today = () => new Date().toISOString().slice(0, 10);
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 
@@ -100,7 +100,7 @@ export default function ExecReports({ act, accounts, from, to, periodLabel }) {
       b.count++; b.sale += q.afterDisc || 0;
       if (q.boq_no && boqCost[q.boq_no] != null) { b.est += (q.afterDisc || 0) - boqCost[q.boq_no]; b.estN++; }
     });
-    return Object.entries(by).map(([t, b]) => ({ type: JT[t] || t, ...b, margin: b.sale ? b.est / b.sale * 100 : 0 })).sort((a, x) => x.sale - a.sale);
+    return Object.entries(by).map(([t, b]) => ({ type: jobTypeDef(t)[1], ...b, margin: b.sale ? b.est / b.sale * 100 : 0 })).sort((a, x) => x.sale - a.sale);
   }, [qs, bs, from, to]);
 
   // 5) สรุปผู้ขาย — PO ไม่ยกเลิกทั้งประวัติ: ยอดซื้อสะสม/จำนวนใบ/ซื้อล่าสุด

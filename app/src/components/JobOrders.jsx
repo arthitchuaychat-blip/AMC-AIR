@@ -141,7 +141,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     if (!surveyFor || !custs.length) return;
     const c = custs.find((x) => String(x.id) === String(surveyFor));
     const address = c?.address || "";
-    setEd({ ...blankEd(), customer_id: String(surveyFor), title: "สำรวจหน้างาน", job_type: "survey",
+    setEd({ ...blankEd(), customer_id: String(surveyFor), title: "สำรวจงาน", job_type: "survey",
       contact_name: c?.contacts?.[0]?.name || "", contact_phone: c?.contacts?.[0]?.phone || "",
       address, map_url: mapLink(address) });
     onSurveyConsumed && onSurveyConsumed();
@@ -629,8 +629,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                   {!fieldOnly && jo.quote_no && (() => {
                     const ch = docLinks.byQuote[jo.quote_no] || {};
                     const n = (ch.poNos || []).length;
-                    if (!n) return jo.job_type === "install" && jo.status !== "done" && jo.status !== "cancelled"
-                      ? <span className="job-badge b-red" title="งานติดตั้งแต่ยังไม่มีใบสั่งซื้อผูกใบเสนอราคานี้">🛒 ยังไม่สั่งของ</span> : null;
+                    if (!n) return (jo.job_type === "install" || jo.job_type === "ac_sale") && jo.status !== "done" && jo.status !== "cancelled"
+                      ? <span className="job-badge b-red" title="งานขาย/ติดตั้งเครื่องแต่ยังไม่มีใบสั่งซื้อผูกใบเสนอราคานี้">🛒 ยังไม่สั่งของ</span> : null;
                     return ch.poOpen > 0
                       ? <span className="job-badge b-amber" title="มีใบสั่งซื้อแล้ว แต่ยังรอรับของ — กดชิป 'สั่งซื้อ' ด้านล่างเพื่อเปิดดู">🛒 สั่งแล้ว {n} ใบ · รอรับของ {ch.poOpen}</span>
                       : <span className="job-badge b-green" title="ใบสั่งซื้อทุกใบรับของครบแล้ว">🛒 รับของครบ ({n} ใบ)</span>;

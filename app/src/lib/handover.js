@@ -133,7 +133,8 @@ export const AC_BRANDS = [
 export const BTU_SIZES = ["9000", "12000", "15000", "18000", "24000", "28000", "30000", "32000", "36000", "40000", "45000", "48000", "50000", "60000", "100000"];
 
 // map a job_orders.job_type → the handover work-type value to pre-tick
-export const JOBTYPE_TO_WORK = { install: "install", maintenance: "maintenance", repair: "repair", survey: "survey_install", other: "other" };
+// (job_type ใหม่: ac_sale=ขายเครื่องอย่างเดียว→other · move→move · fix=แก้ไขงาน→repair · remove=รื้อถอน→other)
+export const JOBTYPE_TO_WORK = { survey: "survey_install", ac_sale: "other", install: "install", maintenance: "maintenance", move: "move", repair: "repair", fix: "repair", remove: "other", other: "other" };
 
 // ═══════════ แบบฟอร์มชุดใหม่ (ก.ค. 2569) — ตามเอกสาร AMC-AIR 4 ใบของเจ้าของ ═══════════
 // เช็คลิสต์เก็บเป็น section: [ชื่อหมวด, [[รายการ, เกณฑ์/มาตรฐาน], ...]] · ติ๊ก ผ่าน Pass / ไม่ผ่าน Fail

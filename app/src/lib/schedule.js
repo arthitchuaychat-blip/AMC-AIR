@@ -16,14 +16,21 @@ export const BUCKETS = [
 ];
 
 // job categories — [value, label, icon, color] · shared by the editor, list filter and calendar
+// ⚠️ value (รหัส) ห้ามเปลี่ยน — เก็บใน boqs/quotations/job_orders.job_type แล้ว (เปลี่ยนป้ายได้ เปลี่ยนรหัสงานเก่าเพี้ยน)
+// รหัสเดิม 5: survey/install/repair/maintenance/other · เพิ่มใหม่ 4: ac_sale/move/fix/remove
 export const JOB_TYPES = [
-  ["survey", "สำรวจหน้างาน", "🔍", "#2563eb"],
-  ["install", "ติดตั้ง", "🔧", "#16a34a"],
-  ["repair", "ซ่อม/แก้ไข", "🛠️", "#d97706"],
-  ["maintenance", "ล้าง/บำรุงรักษา", "🧊", "#0891b2"],
+  ["survey", "สำรวจงาน", "🔍", "#2563eb"],
+  ["ac_sale", "เครื่องปรับอากาศ", "❄️", "#0ea5e9"],
+  ["install", "เครื่องปรับอากาศพร้อมติดตั้ง", "🔧", "#16a34a"],
+  ["maintenance", "ล้าง", "🧊", "#0891b2"],
+  ["move", "ย้าย", "🚚", "#7c3aed"],
+  ["repair", "ซ่อม", "🛠️", "#d97706"],
+  ["fix", "แก้ไขงาน", "🔩", "#db2777"],
+  ["remove", "รื้อถอน", "🧱", "#b45309"],
   ["other", "อื่น ๆ", "📋", "#6b7280"],
 ];
-export const jobTypeDef = (t) => JOB_TYPES.find((x) => x[0] === t) || JOB_TYPES[1];
+// ค่าที่ไม่รู้จัก/ว่าง → "อื่น ๆ" (ไม่เดาเป็นประเภทใดประเภทหนึ่ง)
+export const jobTypeDef = (t) => JOB_TYPES.find((x) => x[0] === t) || JOB_TYPES[JOB_TYPES.length - 1];
 
 // shared job/visit statuses — [value, label, badge-class, color]
 // note: "quote_pending" is a job-level-only stage (no quote/schedule yet); it is never a visit status.

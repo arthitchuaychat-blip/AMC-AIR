@@ -1,7 +1,7 @@
 import React from "react";
 import { listBoqs, listQuotations, listInvoices, listReceipts, listPurchaseOrders, listMaterialsLite, listJobOrders, listBillingNotes } from "../lib/api";
 import { fmtBaht, fmtNum, fmtDocDate } from "../lib/format";
-import { JOB_STATUSES } from "../lib/schedule";
+import { JOB_STATUSES, jobTypeDef } from "../lib/schedule";
 import { UIcon } from "../icons";
 
 // แผงพรีวิวเอกสารด้านขวา — เปิดจากชิป "เชื่อมโยง" บนใบงาน: ดูสรุปเร็ว ๆ โดยไม่หลุดจากหน้าเดิม
@@ -159,7 +159,7 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
                 </>}
                 {type === "job" && (Number(doc.quoteGrand) > 0
                   ? <PeekRow big l="มูลค่างาน (ตามใบเสนอ)" v={fmtBaht(doc.quoteGrand)} />
-                  : <PeekRow l="ประเภทงาน" v={{ survey: "สำรวจหน้างาน", install: "ติดตั้ง", repair: "ซ่อม/แก้ไข", maintenance: "ล้าง/บำรุงรักษา", other: "อื่น ๆ" }[doc.job_type] || doc.job_type || "-"} />)}
+                  : <PeekRow l="ประเภทงาน" v={doc.job_type ? jobTypeDef(doc.job_type)[1] : "-"} />)}
               </div>
             </>
           )}
