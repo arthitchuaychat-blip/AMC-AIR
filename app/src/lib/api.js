@@ -2211,13 +2211,32 @@ export async function setReceiptStatus(receipt_no, status, invoice_no, reason) {
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
   syncBankReceipts().catch(() => {});        // paid→post / cancelled→remove the bank-ledger deposit
 }
+// จองใบก่อนยิงเข้า FlowAccount (mig 175) — คืน "claimed" = จองได้ ยิงต่อได้ · "taken" = ส่ง/กำลังส่งอยู่แล้ว
+// กันสองแท็บ/สองคนกดส่งใบเดียวกันพร้อมกัน = สร้างเอกสารซ้ำใน FlowAccount
+export async function claimReceiptFlowAccount(receipt_no) {
+  const { data, error } = await supabase.rpc("claim_receipt_flowaccount", { p_receipt_no: receipt_no });
+  if (!error) return data === true ? "claimed" : "taken";
+  // ⚠️ ห้าม degrade เป็นเช็กแบบไม่ atomic (SELECT flowaccount_id แล้วถือว่า claimed) — สองแท็บอ่าน null
+  //    พร้อมกันจะจองทั้งคู่ = สร้างเอกสารซ้ำใน FlowAccount · โยน error ให้ลองใหม่ดีกว่าเสี่ยงส่งซ้ำ
+  //    (รวมเคส RPC หายเพราะยังไม่รัน migration 175 หรือ schema cache กำลัง reload หลังรัน)
+  if (/claim_receipt_flowaccount|PGRST202|42883|does not exist|schema cache/i.test(error.message || "")) {
+    throw new Error("ยังส่ง FlowAccount ไม่ได้ — ต้องรัน migration 175 ใน Supabase ก่อน (ระบบกันส่งซ้ำ) แล้วลองใหม่");
+  }
+  throw error;
+}
+// ปล่อยการจอง เมื่อส่งไม่สำเร็จ (ยังไม่ได้เลขจริงจาก FlowAccount) — ให้แก้แล้วส่งใหม่ได้
+export async function releaseReceiptFlowAccount(receipt_no) {
+  await supabase.rpc("release_receipt_flowaccount", { p_receipt_no: receipt_no }).catch(() => {});
+}
 export async function saveReceiptFlowAccount(receipt_no, faId, faNo) {
-  // RPC stamps only the flowaccount_* columns, gated to the FlowAccount-allowed roles (so hr/sales can
-  // mark a receipt as sent without broad write access to receipts). Falls back to a direct update if
-  // migration 084 hasn't been run yet (works for admin/sales/exec/finance via rc_write).
+  // RPC ประทับเลขแบบ "เขียนครั้งเดียว" (mig 175 — มีเลขแล้วไม่ทับ) · gate เฉพาะ role ที่ส่ง FlowAccount ได้
+  // ⚠️ ห้ามกลืน error — ถ้า FA สร้างเอกสารแล้วแต่บันทึกเลขกลับไม่ได้ ผู้เรียกต้องรู้ เพื่อเตือนไม่ให้กดส่งซ้ำ
   const { error } = await supabase.rpc("set_receipt_flowaccount", { p_receipt_no: receipt_no, p_fa_id: faId ? String(faId) : null, p_fa_no: faNo || null });
-  if (!error) return;
-  const { error: e2 } = await supabase.from("receipts").update({ flowaccount_id: faId ? String(faId) : null, flowaccount_no: faNo || null, flowaccount_at: new Date().toISOString() }).eq("receipt_no", receipt_no);
+  if (!error) return;   // data true = ประทับแล้ว · data false = มีเลขอยู่แล้ว — ทั้งคู่ถือว่าเลขถูกบันทึกไว้แล้ว
+  // fallback (pre-084/085 หรือ RPC หาย): เขียนตรงแบบเขียนครั้งเดียว (ไม่ทับใบที่มีเลขแล้ว)
+  const { error: e2 } = await supabase.from("receipts")
+    .update({ flowaccount_id: faId ? String(faId) : null, flowaccount_no: faNo || null, flowaccount_at: new Date().toISOString() })
+    .eq("receipt_no", receipt_no).is("flowaccount_id", null);
   if (e2) throw e2;
 }
 export async function deleteReceipt(receipt_no, invoice_no, reason) {

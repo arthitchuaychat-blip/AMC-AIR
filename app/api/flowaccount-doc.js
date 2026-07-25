@@ -62,6 +62,11 @@ export default async function handler(req, res) {
   const totalAfterDiscount = r2(subTotal - discountAmount);
   const vatAmount = isVat ? r2(totalAfterDiscount * 7 / 100) : 0;
   const grandTotal = r2(totalAfterDiscount + vatAmount);
+  // ใบกำกับภาษีต้องมี VAT จริง — ตรวจจาก "ยอด VAT ที่คำนวณได้" ไม่ใช่แค่ธง isVat ที่ client ส่งมา
+  // (client ปัจจุบันส่ง isVat:true เสมอ — ถ้าตรวจแค่ธงจะเป็น dead code · เผื่อ caller ใหม่/ยอดเพี้ยนหลุดมา)
+  if (input.docType === "tax-invoice" && !(vatAmount > 0)) {
+    return res.status(200).json({ ok: false, reason: "not-vat", msg: "ใบกำกับภาษีต้องมี VAT — ยอด VAT ที่คำนวณได้เป็น 0 จึงส่งเข้า FlowAccount ไม่ได้" });
+  }
   const doc = {
     recordId: 0,
     contactCode: input.contactCode || "", contactName: input.contactName || "-",

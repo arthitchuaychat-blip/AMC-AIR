@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks, flowaccountSendDoc, saveReceiptFlowAccount, docNoTaken } from "../lib/api";
+import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks, flowaccountSendDoc, saveReceiptFlowAccount, claimReceiptFlowAccount, releaseReceiptFlowAccount, docNoTaken } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -106,13 +106,18 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   async function del(x) { const reason = await confirmDialog({ title: `ลบใบเสร็จ ${x.receipt_no}?`, message: "ใบแจ้งหนี้จะกลับเป็นค้างชำระ · ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ออกผิด · รับเงินผิดยอด", required: true } }); if (reason === false) return; try { await deleteReceipt(x.receipt_no, x.invoice_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
   async function cancel(x) { const reason = await confirmDialog({ title: `ยกเลิกใบเสร็จ ${x.receipt_no}?`, message: "เก็บประวัติไว้ · ใบแจ้งหนี้กลับเป็นค้างชำระ", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น รับเงินผิดยอด · ออกผิดใบ", required: true } }); if (reason === false) return; try { await setReceiptStatus(x.receipt_no, "cancelled", x.invoice_no, reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
   async function sendToFlow(x) {
-    const q = quoteByNo[x.quote_no];
-    const msg = x.flowaccount_no
-      ? `⚠️ ใบเสร็จนี้ส่ง FlowAccount ไปแล้ว (เลขที่ ${x.flowaccount_no})\nกดส่งอีกครั้งจะสร้างเอกสาร "ซ้ำ" ใน FlowAccount — ยืนยันส่งซ้ำ?`
-      : `ส่งใบกำกับภาษีของ ${x.receipt_no} เข้า FlowAccount?`;
-    if (!await confirmDialog(msg)) return;
+    // (1) VAT เท่านั้น — ตัดสินจาก "ยอด VAT บนใบเสร็จจริง" ไม่ใช่ธงในใบเสนอที่อาจโหลดไม่ครบ
+    //     ใบกำกับภาษีต้องมี VAT · ฝั่งเซิร์ฟเวอร์ (flowaccount-doc.js) ก็ปฏิเสธ tax-invoice ที่ไม่มี VAT ซ้ำอีกชั้น
+    if (!(Number(x.vat_amt) > 0)) return flash("ส่งเข้า FlowAccount ได้เฉพาะใบที่มี VAT (ใบกำกับภาษี) — ใบนี้ไม่มี VAT", true);
+    // (2) ส่งแล้วห้ามส่งอีก — บล็อกที่ปุ่มอยู่แล้ว กันชั้นนี้เผื่อหน้าเก่า/กดเร็ว
+    if (x.flowaccount_no) return flash(`ใบนี้ส่ง FlowAccount ไปแล้ว (เลขที่ ${x.flowaccount_no}) — ส่งซ้ำไม่ได้`, true);
+    if (!await confirmDialog(`ส่งใบกำกับภาษีของ ${x.receipt_no} เข้า FlowAccount?`)) return;
     setFaBusy(x.receipt_no);
     try {
+      // (3) จองใบก่อนยิง — กันสองแท็บ/สองคนส่งใบเดียวกันพร้อมกัน (atomic ที่ฐานข้อมูล mig 175)
+      const claim = await claimReceiptFlowAccount(x.receipt_no);
+      if (claim !== "claimed") { flash("ใบนี้ถูกส่ง/กำลังส่งอยู่แล้ว — รีเฟรชแล้วเช็กเลขที่ FlowAccount ก่อน", true); await load(); setFaBusy(null); return; }
+      const q = quoteByNo[x.quote_no];
       // full receipt (≈ whole quote) → detailed line items; partial installment → one summary line for งวดนี้
       const isFull = q && Math.abs((Number(x.total) || 0) - (Number(q.grand) || 0)) < 1;
       let items, discountAmount;
@@ -126,19 +131,49 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
         items = [{ name: `รับชำระตามใบแจ้งหนี้ ${x.invoice_no || ""}${pct ? ` · งวดนี้ ${pct}%` : ""}`, quantity: 1, unitName: "งวด", pricePerUnit: base, total: base }];
         discountAmount = 0;
       }
-      const res = await flowaccountSendDoc({
-        // ที่อยู่บนใบกำกับภาษี = ที่อยู่หลักที่จดทะเบียนไว้เสมอ (ห้ามใช้ที่อยู่ไซต์งาน — สรรพากรดูที่อยู่จดทะเบียน)
-        docType: "tax-invoice", contactName: x.customerName, contactAddress: x.customerAddr,
-        contactTaxId: x.customerTaxId, contactCode: custCode(x.customerCode), contactNumber: x.mainContactPhone || x.contactPhone,
-        publishedOn: x.issue_date, dueDate: x.issue_date, isVat: !!q?.vat, isVatInclusive: false,
-        discountAmount, items,
-        remarks: `อ้างอิงใบเสร็จ ${x.receipt_no}` + (x.wht_amt > 0 ? ` · หัก ณ ที่จ่าย ${x.wht_rate || 3}% = ${fmtBaht(x.wht_amt)} · รับสุทธิ ${fmtBaht(x.net)}` : ""),
-      });
+      let res;
+      try {
+        res = await flowaccountSendDoc({
+          // ที่อยู่บนใบกำกับภาษี = ที่อยู่หลักที่จดทะเบียนไว้เสมอ (ห้ามใช้ที่อยู่ไซต์งาน — สรรพากรดูที่อยู่จดทะเบียน)
+          docType: "tax-invoice", contactName: x.customerName, contactAddress: x.customerAddr,
+          contactTaxId: x.customerTaxId, contactCode: custCode(x.customerCode), contactNumber: x.mainContactPhone || x.contactPhone,
+          publishedOn: x.issue_date, dueDate: x.issue_date, isVat: true, isVatInclusive: false,
+          discountAmount, items,
+          remarks: `อ้างอิงใบเสร็จ ${x.receipt_no}` + (x.wht_amt > 0 ? ` · หัก ณ ที่จ่าย ${x.wht_rate || 3}% = ${fmtBaht(x.wht_amt)} · รับสุทธิ ${fmtBaht(x.net)}` : ""),
+        });
+      } catch (e) { await releaseReceiptFlowAccount(x.receipt_no); throw e; }   // ยิงไม่ถึง FA → ปล่อยจอง ให้ลองใหม่ได้
       setFaRes({ x, res });
-      if (res.ok) { try { await saveReceiptFlowAccount(x.receipt_no, res.id, res.serial); } catch (_) {} await load(); flash(`ส่งเข้า FlowAccount แล้ว ✓${res.serial ? " เลขที่ " + res.serial : ""}`); }
-      else flash("FlowAccount ไม่สำเร็จ — ดูรายละเอียดในกล่อง", true);
+      if (res.ok) {
+        try { await saveReceiptFlowAccount(x.receipt_no, res.id, res.serial); }
+        catch (se) {
+          // ⚠️ FA สร้างเอกสารแล้ว แต่บันทึกเลขกลับไม่สำเร็จ — "ห้ามปล่อยจอง" (กันกดใหม่แล้วซ้ำ) และเตือนดัง ๆ
+          await load();
+          flash(`⚠️ สร้างใน FlowAccount แล้ว (เลขที่ ${res.serial || res.id || "-"}) แต่บันทึกเลขกลับเข้าระบบไม่สำเร็จ — จดเลขนี้ไว้ อย่ากดส่งซ้ำ`, true);
+          setFaBusy(null); return;
+        }
+        await load(); flash(`ส่งเข้า FlowAccount แล้ว ✓${res.serial ? " เลขที่ " + res.serial : ""}`);
+      } else {
+        await releaseReceiptFlowAccount(x.receipt_no);   // FlowAccount ปฏิเสธ → ปล่อยจอง ให้แก้แล้วส่งใหม่ได้
+        flash("FlowAccount ไม่สำเร็จ — ดูรายละเอียดในกล่อง", true);
+      }
     } catch (e) { setFaRes({ x, res: { ok: false, msg: e.message || String(e) } }); flash("ผิดพลาด: " + (e.message || e), true); }
     setFaBusy(null);
+  }
+  // ใบที่ค้างสถานะ "กำลังส่ง" (จองแล้วแต่ยังไม่มีเลขกลับ) — ไม่ให้กดส่งซ้ำอัตโนมัติ (เสี่ยงเอกสารซ้ำ)
+  // ให้คนเช็ก FlowAccount ก่อนแล้วเลือกเอง: มีใบแล้ว → กรอกเลขเพื่อบันทึก · ยังไม่มี → เว้นว่างเพื่อปลดล็อกส่งใหม่
+  async function resolvePending(x) {
+    const no = await confirmDialog({
+      title: `ใบ ${x.receipt_no} ค้างสถานะ "กำลังส่ง FlowAccount"`,
+      message: "เช็กใน FlowAccount ก่อนว่ามีใบกำกับของใบเสร็จนี้แล้วหรือยัง\n• มีแล้ว → กรอกเลขที่ FlowAccount เพื่อบันทึก (จะถือว่าส่งแล้ว ส่งซ้ำไม่ได้)\n• ยังไม่มี → เว้นช่องว่างไว้ เพื่อปลดล็อกให้ส่งใหม่",
+      confirmText: "ยืนยัน",
+      prompt: { label: "เลขที่ FlowAccount (ถ้ามีใบแล้ว)", placeholder: "เว้นว่าง = ยังไม่มี ปลดล็อกส่งใหม่", required: false },
+    });
+    if (no === false) return;   // กดยกเลิก
+    try {
+      if (no && String(no).trim()) { await saveReceiptFlowAccount(x.receipt_no, null, String(no).trim()); flash("บันทึกเลข FlowAccount แล้ว ✓ (ส่งซ้ำไม่ได้)"); }
+      else { await releaseReceiptFlowAccount(x.receipt_no); flash("ปลดล็อกแล้ว — ส่งใหม่ได้"); }
+      await load();
+    } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
 
   // ---------- EDITOR ----------
@@ -265,7 +300,15 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> รายการ / หัก ณ ที่จ่าย</button>
               {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => setNotesEd({ kind: "receipt", docNo: x.receipt_no, title: x.title, note: x.note, internalNote: x.internal_note })}><UIcon name="edit" size={14} /> หมายเหตุ</button>}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintR(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-              {canSendFlow && recVat(x) && x.status !== "cancelled" && <button className={"btn-ghost sm" + (x.flowaccount_no ? " fa-sent" : "")} disabled={faBusy === x.receipt_no} title={x.flowaccount_no ? `ส่งแล้ว เลขที่ ${x.flowaccount_no} · กดเพื่อส่งซ้ำ` : "ส่งใบกำกับภาษีเข้า FlowAccount"} onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : x.flowaccount_no ? "✓ FlowAccount" : "↗ FlowAccount"}</button>}
+              {/* ส่ง FlowAccount ได้เฉพาะใบที่มี VAT จริง (ยอด VAT บนใบ) · ส่งแล้วบล็อกถาวร ไม่มีปุ่มส่งซ้ำ
+                  ใบที่เคยกดส่งแต่ยังไม่ได้เลขกลับ (จองค้าง) → ป้ายเตือนให้เช็ก FlowAccount ก่อนส่งใหม่ */}
+              {canSendFlow && Number(x.vat_amt) > 0 && x.status !== "cancelled" && (
+                x.flowaccount_no
+                  ? <span className="fa-sent-badge vat-badge vat-on" title={`ส่ง FlowAccount แล้ว เลขที่ ${x.flowaccount_no} · ส่งซ้ำไม่ได้`}>✓ ส่ง FlowAccount แล้ว</span>
+                  : x.flowaccount_at
+                    ? <button className="btn-ghost sm" style={{ color: "#b45309" }} disabled={faBusy === x.receipt_no} title="ค้างสถานะกำลังส่ง — เช็กใน FlowAccount ว่ามีเอกสารใบนี้แล้วหรือยัง แล้วบันทึกเลข/ปลดล็อก (ไม่ส่งซ้ำอัตโนมัติ)" onClick={() => resolvePending(x)}>⚠️ ค้างส่ง — จัดการ</button>
+                    : <button className="btn-ghost sm" disabled={faBusy === x.receipt_no} title="ส่งใบกำกับภาษีเข้า FlowAccount" onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : "↗ FlowAccount"}</button>
+              )}
               {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
               {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
             </div></div>
