@@ -8,6 +8,7 @@
 
 - [วัสดุOS app](vatsadu-os-app.md) — what this project is; index.html is precompiled single-file React, runs by double-click (no Node/Python here).
 - [Company website](company-website.md) — live storefront www.amcair.net (company-website/, Vercel amc-air-497i): Supabase-wired catalog+cart, SSR /a/:id article + /p/:code product pages, sitemap/SEO; content managed via app's จัดการเว็บไซต์.
+- [FlowAccount MCP](flowaccount-mcp.md) — FA เชื่อม Claude แล้ว (อ่านอย่างเดียว, บริษัท N498831); งานค้าง = กระทบยอดขาย ERP↔FA (ฝั่ง FA ได้ 59 ใบ ฿4.5M แล้ว รอฝั่ง ERP)
 - [Air shop site](air-shop-site.md) — single-file e-commerce site air-shop/index.html; catalog+prices scraped from แอร์บ้านราคาถูก.com; LINE-checkout cart.
 - [Production plan](production-plan.md) — going live via Cloud + CODE (React/Vite + Supabase, reusing the prototype UI). supabase/schema.sql done. Needs Node installed + user's Supabase account. (Earlier No-code/AppSheet attempt set aside.)
 - [LINE OA chat](line-oa-chat.md) — in-app chat board via Vercel edge functions + Supabase Realtime; env vars + activation steps + migration 023.
