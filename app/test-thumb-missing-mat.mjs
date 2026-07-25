@@ -17,7 +17,9 @@ const api = fs.readFileSync("src/lib/api.js", "utf8");
 console.log("\nรูปสินค้าเมื่อหาสินค้าไม่เจอ (สินค้าถูกปิดใช้งาน):");
 
 // ---------- ต้นทาง: MaterialThumb ห้ามพังเมื่อไม่มีข้อมูลสินค้า ----------
-const body = icons.slice(icons.indexOf("export function MaterialThumb"), icons.indexOf("export function MaterialThumb") + 400);
+// ต้องครอบทั้งฟังก์ชัน ไม่ใช่แค่ 400 ตัวแรก — เคยพลาด mat.icon ที่บรรทัดท้าย (เกินหน้าต่างเดิม)
+const _mtStart = icons.indexOf("export function MaterialThumb");
+const body = icons.slice(_mtStart, icons.indexOf("\nexport ", _mtStart + 10));
 check("MaterialThumb อ่าน color แบบไม่พังถ้า mat เป็น undefined", /const c = mat\?\.color/.test(body),
   "mat.color ตรง ๆ = ทั้งหน้าตายด้วย Cannot read properties of undefined (reading 'color')");
 check("MaterialThumb อ่านรูปแบบไม่พังเช่นกัน", /mat\?\.photoUrl \|\| mat\?\.photo_url/.test(body),

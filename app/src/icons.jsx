@@ -98,7 +98,7 @@ export function MaterialThumb({ mat, size = 48, radius = 12 }) {
       border: `1px solid color-mix(in srgb, ${c} 28%, white)`,
       color: c, flex: "none", display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <MatIcon name={mat.icon || "couple"} size={size * 0.56} color={c} strokeWidth={1.6} />
+      <MatIcon name={mat?.icon || "couple"} size={size * 0.56} color={c} strokeWidth={1.6} />
     </div>
   );
 }
