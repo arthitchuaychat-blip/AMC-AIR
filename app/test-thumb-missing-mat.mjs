@@ -34,7 +34,7 @@ check("เตือนตอน prefill จากใบสั่งซื้อ�
   "ไม่เตือน = ผู้ใช้เห็นแถวประหลาดแล้วเดาเองว่าระบบเพี้ยน");
 
 // ---------- ยืนยันว่าเหตุยังอยู่จริง (ถ้าวันหนึ่งเลิกกรอง active ค่อยรื้อเทสต์นี้) ----------
-const lite = api.slice(api.indexOf("export async function listMaterialsLite"), api.indexOf("export async function listMaterialsLite") + 1600);
+const lite = api.slice(api.indexOf("async function _loadMaterialsLite"), api.indexOf("async function _loadMaterialsLite") + 1600);
 check("listMaterialsLite ยังกรอง active = true (ที่มาของ mat undefined)", /\.eq\("active", true\)/.test(lite),
   "ถ้าไม่กรองแล้ว สาเหตุเปลี่ยน — กลับมาทบทวนเทสต์นี้");
 

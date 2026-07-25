@@ -6,48 +6,52 @@ import { NAV_MY, LangContext } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
 import { hasUnsaved } from "./lib/formDraft";
 import InstallBanner from "./components/InstallBanner";
-import Attendance from "./components/Attendance";
-import HR from "./components/HR";
-import Subcontractor from "./components/Subcontractor";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
 import { ConfirmHost, confirmDialog } from "./components/ConfirmDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
-import Catalog from "./components/Catalog";
-import Movements from "./components/Movements";
-import StockCount from "./components/StockCount";
-import Dashboard from "./components/Dashboard";
-import Settings from "./components/Settings";
-import Jobs from "./components/Jobs";
-import PurchaseOrders from "./components/PurchaseOrders";
-import Customers from "./components/Customers";
-import Suppliers from "./components/Suppliers";
-import BOQ from "./components/BOQ";
-import Quotation from "./components/Quotation";
-import Profit from "./components/Profit";
-import CashFlow from "./components/CashFlow";
-import Expenses from "./components/Expenses";
-import BillingNotes from "./components/BillingNotes";
-import JobOrders from "./components/JobOrders";
-import Handover from "./components/Handover";
-import WebManage from "./components/WebManage";
-import Schedule from "./components/Schedule";
-import Chat from "./components/Chat";
-import TeamChat from "./components/TeamChat";
-import TaskBoard from "./components/TaskBoard";
+// เปลือกแอปที่ติดตามทุกเมนู (โหลดทันที ไม่ต้องแยกก้อน)
 import TaskReminder from "./components/TaskReminder";
 import ChatDock from "./components/ChatDock";
 import NotificationBell from "./components/NotificationBell";
-import MyJobs from "./components/MyJobs";
-import Invoices from "./components/Invoices";
-import Receipts from "./components/Receipts";
-import Receivables from "./components/Receivables";
-import Payables from "./components/Payables";
-import MaterialPrep from "./components/MaterialPrep";
-import Tools from "./components/Tools";
-import TaxReport from "./components/TaxReport";
-import CustomerFollowup from "./components/CustomerFollowup";
-import WebOrders from "./components/WebOrders";
+
+// หน้าแต่ละเมนู = แยกก้อน (code-split) โหลดตอนกดเข้าเมนูนั้นครั้งแรก
+// → เปิดแอปครั้งแรกโหลดบันเดิลเล็กลงมาก (เดิมรวมทุกหน้าไว้ก้อนเดียว ~2.3MB)
+const Attendance = React.lazy(() => import("./components/Attendance"));
+const HR = React.lazy(() => import("./components/HR"));
+const Subcontractor = React.lazy(() => import("./components/Subcontractor"));
+const Catalog = React.lazy(() => import("./components/Catalog"));
+const Movements = React.lazy(() => import("./components/Movements"));
+const StockCount = React.lazy(() => import("./components/StockCount"));
+const Dashboard = React.lazy(() => import("./components/Dashboard"));
+const Settings = React.lazy(() => import("./components/Settings"));
+const Jobs = React.lazy(() => import("./components/Jobs"));
+const PurchaseOrders = React.lazy(() => import("./components/PurchaseOrders"));
+const Customers = React.lazy(() => import("./components/Customers"));
+const Suppliers = React.lazy(() => import("./components/Suppliers"));
+const BOQ = React.lazy(() => import("./components/BOQ"));
+const Quotation = React.lazy(() => import("./components/Quotation"));
+const Profit = React.lazy(() => import("./components/Profit"));
+const CashFlow = React.lazy(() => import("./components/CashFlow"));
+const Expenses = React.lazy(() => import("./components/Expenses"));
+const BillingNotes = React.lazy(() => import("./components/BillingNotes"));
+const JobOrders = React.lazy(() => import("./components/JobOrders"));
+const Handover = React.lazy(() => import("./components/Handover"));
+const WebManage = React.lazy(() => import("./components/WebManage"));
+const Schedule = React.lazy(() => import("./components/Schedule"));
+const Chat = React.lazy(() => import("./components/Chat"));
+const TeamChat = React.lazy(() => import("./components/TeamChat"));
+const TaskBoard = React.lazy(() => import("./components/TaskBoard"));
+const MyJobs = React.lazy(() => import("./components/MyJobs"));
+const Invoices = React.lazy(() => import("./components/Invoices"));
+const Receipts = React.lazy(() => import("./components/Receipts"));
+const Receivables = React.lazy(() => import("./components/Receivables"));
+const Payables = React.lazy(() => import("./components/Payables"));
+const MaterialPrep = React.lazy(() => import("./components/MaterialPrep"));
+const Tools = React.lazy(() => import("./components/Tools"));
+const TaxReport = React.lazy(() => import("./components/TaxReport"));
+const CustomerFollowup = React.lazy(() => import("./components/CustomerFollowup"));
+const WebOrders = React.lazy(() => import("./components/WebOrders"));
 
 const NAV = {
   myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
@@ -104,7 +108,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-25·ส่งใบกำกับเข้า FlowAccount: เฉพาะใบมี VAT + ส่งแล้วส่งซ้ำไม่ได้ (จองใบก่อนยิง atomic · ใบค้างส่งให้คนเช็ก FA แล้วบันทึกเลข/ปลดล็อกเอง) — ต้องรัน SQL 175 v505";
+const BUILD = "2026-07-25·เร่งแอปให้โหลดเร็วขึ้น: แยกก้อนโค้ดตามเมนู (code-split React.lazy บันเดิลแรก 2.3MB→0.65MB) + แคชตัวคงที่ companies/teams/materials-lite ไม่ดึงซ้ำทุกหน้า v506";
 
 function SetupNotice() {
   return (
@@ -452,6 +456,7 @@ export default function App() {
         {/* แผงแชตทีมลอยขวามือ — ตามไปทุกเมนู (ซ่อนเมื่ออยู่หน้าแชตทีมเอง · ซ่อนบนจอเล็ก) */}
         {profile?.id && can(role, "teamchat") && <ChatDock me={profile} hidden={view === "teamchat"} onOpenFull={() => go("teamchat")} />}
         <InstallBanner />
+        <React.Suspense fallback={<div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)" }}>กำลังโหลด…</div>}>
         {view === "dashboard" && <Dashboard role={role} onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} onOpenDoc={openDoc} />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
@@ -538,6 +543,7 @@ export default function App() {
         {view === "hr" && <HR role={role} />}
         {view === "subcontract" && <Subcontractor role={role} onOpenDoc={openDoc} />}
         {view === "settings" && <Settings role={role} />}
+        </React.Suspense>
         </ErrorBoundary>
       </main>
       <ConfirmHost />

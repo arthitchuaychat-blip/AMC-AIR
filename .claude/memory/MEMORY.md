@@ -30,4 +30,4 @@
 - [Supabase 1000-row cap](supabase-1000-row-cap.md) — every select capped at 1000 rows; page growing tables with _fetchAll or new docs' lines silently vanish on read (v324 BOQ incident)
 - [Tools system](tools-system.md) — เครื่องมือช่าง: registry สต๊อก/ประจำรถ/ประจำตัว + เบิก-คืน-แจ้งชำรุดแบบรออนุมัติ; Tools.jsx, mig 122
 - [Build ผ่าน ≠ หน้าเปิดได้](build-passes-page-dead.md) — Vite ไม่ตรวจตัวแปรอิสระ ต้องรัน npm test (test-undefined-vars.mjs) ก่อน commit ทุกครั้ง ไม่ใช่แค่ build
-- [App performance](app-performance.md) — งานค้าง: ทำแอปโหลดเร็วขึ้น (เริ่ม code-split บันเดิล + เพิ่ม index · หน้าเอกสารดึงหลายตารางเต็มทุกครั้ง); รอผลนับแถวจากเจ้าของ
+- [App performance](app-performance.md) — เร่งแอป: code-split (บันเดิลแรก 2.3MB→0.65MB) + แคช companies/teams/materials-lite ทำแล้ว v506; เหลือ index/แคช doc-list ถ้ายังอืด

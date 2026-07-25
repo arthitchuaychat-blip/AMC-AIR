@@ -9,6 +9,20 @@ const posLabel = (p) => (p && (ROLE_LABEL[p.role] || p.department)) || "";
 const _url = import.meta.env.VITE_SUPABASE_URL;
 const _anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// ---------- แคชระดับแอป: ตารางที่แทบไม่เปลี่ยน (company_profile / teams / materials-lite) ----------
+// สลับเมนูไป-มาไม่ต้องดึงซ้ำทุกครั้ง · เก็บ "โปรมิส" เพื่อรวมคำขอที่ยิงพร้อมกันเป็นครั้งเดียว (dedupe) ·
+// เขียนทับตารางไหน = ล้างแคชคีย์นั้นทันที (bustCache) · TTL กันข้อมูลค้างนานเกินจากการแก้ที่เครื่องอื่น
+const _CACHE_TTL = 5 * 60 * 1000; // 5 นาที
+const _cache = new Map(); // key -> { at:number, p:Promise }
+function bustCache(key) { if (key) _cache.delete(key); else _cache.clear(); }
+function _cached(key, loader) {
+  const hit = _cache.get(key);
+  if (hit && (Date.now() - hit.at) < _CACHE_TTL) return hit.p;
+  const p = loader().catch((e) => { _cache.delete(key); throw e; }); // ล้มแล้วอย่าแคชความล้มเหลว
+  _cache.set(key, { at: Date.now(), p });
+  return p;
+}
+
 // default icon per category (materials table doesn't store an icon)
 const CAT_ICON = { pipe: "pipe", fit: "elbow", ref: "tank", ins: "foam", wire: "wire", elec: "breaker" };
 
@@ -103,10 +117,12 @@ export async function updateCategory(oldId, c) {
 
 // auto color palette so teams get distinct chart colors without storing one
 const TEAM_PALETTE = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#0891b2", "#db2777", "#ca8a04", "#0d9488"];
-export async function listTeams() {
-  const { data, error } = await supabase.from("teams").select("*").order("id");
-  if (error) throw error;
-  return (data || []).map((t, i) => ({ ...t, color: t.color || TEAM_PALETTE[i % TEAM_PALETTE.length] }));
+export function listTeams() {
+  return _cached("teams", async () => {
+    const { data, error } = await supabase.from("teams").select("*").order("id");
+    if (error) throw error;
+    return (data || []).map((t, i) => ({ ...t, color: t.color || TEAM_PALETTE[i % TEAM_PALETTE.length] }));
+  });
 }
 
 // ---------- AC brands + BTU lists (managed, for filtering) ----------
@@ -156,7 +172,10 @@ export async function listMaterials() {
 
 // lightweight catalog for document item-pickers (BOQ/quotation): reads `materials` directly,
 // skipping the material_stock view's transaction join/aggregation → much faster with a large catalog.
-export async function listMaterialsLite() {
+export function listMaterialsLite() {
+  return _cached("materials-lite", _loadMaterialsLite);
+}
+async function _loadMaterialsLite() {
   const cats = await listCategories();
   const catMap = Object.fromEntries(cats.map((c) => [c.id, c]));
   const PAGE = 1000;
@@ -269,6 +288,7 @@ export async function saveMaterial(row, isNew) {
     ({ error } = await supabase.from("materials").upsert(payload, { onConflict: "code" }));
   }
   if (error) throw error;
+  bustCache("materials-lite");
 }
 
 // ---------- ข้อมูลระดับ "รุ่นแอร์" (ac_series — mig 106): คุณสมบัติ + โบรชัวร์ ใช้ร่วมทุกขนาด ----------
@@ -332,6 +352,7 @@ export async function setMaterialsPhoto(codes, url) {
     touched += (data || []).length;
   }
   if (!touched) throw new Error("ไม่มีรายการถูกอัปเดต (ไม่มีสิทธิ์แก้คลังสินค้า?)");
+  bustCache("materials-lite");
 }
 
 // แก้เฉพาะ "คุณสมบัติ" ของสินค้ารายตัว (แอร์ที่ไม่มีซีรีส์ ใช้ materials.features แทน ac_series)
@@ -339,6 +360,7 @@ export async function setMaterialFeatures(code, features) {
   const { data, error } = await supabase.from("materials").update({ features: (features || "").trim() || null }).eq("code", code).select("code");
   if (error) throw error;
   if (!(data || []).length) throw new Error("ไม่มีรายการถูกอัปเดต (ไม่มีสิทธิ์แก้คลังสินค้า?)");
+  bustCache("materials-lite");
 }
 
 // ✨ ให้ AI ร่างคุณสมบัติของรุ่นแอร์ (ผ่าน /api/ai-features ฝั่งเซิร์ฟเวอร์) — ได้ข้อความร่างมาให้ผู้ใช้ตรวจก่อนบันทึก
@@ -359,6 +381,7 @@ export async function aiDraftSeriesFeatures(brand, series, items) {
 export async function updateMaterialCost(code, cost) {
   const { error } = await supabase.from("materials").update({ cost }).eq("code", code);
   if (error) throw error;
+  bustCache("materials-lite");
 }
 
 // Shrink a photo before upload so timelines/galleries don't load multi-MB originals
@@ -408,6 +431,7 @@ export async function uploadMaterialPhoto(file, code) {
 export async function deactivateMaterial(code) {
   const { error } = await supabase.from("materials").update({ active: false }).eq("code", code);
   if (error) throw error;
+  bustCache("materials-lite");
 }
 // bulk show/hide items on the public website (materials.web_published) for many codes at once.
 // chunked: a single .in() with hundreds of codes overflows the request URL → "Bad Request".
@@ -419,6 +443,7 @@ export async function setMaterialsWebPublished(codes, published) {
     const { error } = await supabase.from("materials").update({ web_published: !!published }).in("code", slice);
     if (error) throw error;
   }
+  bustCache("materials-lite");
 }
 
 // bulk import (upsert by code) — admin only via RLS.
@@ -452,6 +477,7 @@ export async function bulkUpsertMaterials(rows) {
   }
   await upsertChunked(inserts);
   await upsertChunked(updates);
+  bustCache("materials-lite");
   return { inserted: inserts.length, updated: updates.length };
 }
 
@@ -471,6 +497,7 @@ export async function deleteAllMaterials() {
   if (ep) throw ep;
   const { error } = await supabase.from("materials").delete().neq("code", "");
   if (error) throw error;
+  bustCache("materials-lite");
 }
 
 // ---------- PHASE 2: movements ----------
@@ -1458,11 +1485,13 @@ export async function listBoqs(opts = {}) {
 }
 
 // ---------- COMPANY PROFILE (หัวเอกสาร 2 ชุด: id=1 มี VAT · id=2 ไม่มี VAT) ----------
-export async function getCompanies() {
-  const { data, error } = await supabase.from("company_profile").select("*").in("id", [1, 2]);
-  if (error) throw error;
-  const m = {}; (data || []).forEach((r) => { m[r.id === 2 ? "novat" : "vat"] = r; });
-  return { vat: m.vat || {}, novat: m.novat || {} };
+export function getCompanies() {
+  return _cached("companies", async () => {
+    const { data, error } = await supabase.from("company_profile").select("*").in("id", [1, 2]);
+    if (error) throw error;
+    const m = {}; (data || []).forEach((r) => { m[r.id === 2 ? "novat" : "vat"] = r; });
+    return { vat: m.vat || {}, novat: m.novat || {} };
+  });
 }
 // kind: "vat" (id=1) | "novat" (id=2)
 export async function saveCompany(c, kind) {
@@ -1473,6 +1502,7 @@ export async function saveCompany(c, kind) {
     website: c.website?.trim() || null, bank_info: c.bank_info?.trim() || null, default_terms: c.default_terms?.trim() || null,
   }, { onConflict: "id" });
   if (error) throw error;
+  bustCache("companies");
 }
 
 // test the FlowAccount OpenAPI connection (sandbox) via our serverless function
@@ -2963,6 +2993,7 @@ export async function saveTeam(t) {
   if (t.payout_rate !== undefined) row.payout_rate = Number(t.payout_rate) || 0;
   const { error } = await supabase.from("teams").upsert(row, { onConflict: "id" });
   if (error) throw error;
+  bustCache("teams");
 }
 
 // ===================== SUBCONTRACTOR (labor + payout) =====================
@@ -3151,6 +3182,7 @@ export async function deleteSubPayout(id, reason) {
 export async function deleteTeam(id) {
   const { error } = await supabase.from("teams").delete().eq("id", id);
   if (error) throw error;
+  bustCache("teams");
 }
 
 // ---------- ADMIN: manage users / profiles ----------
