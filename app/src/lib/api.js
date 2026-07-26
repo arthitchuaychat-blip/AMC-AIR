@@ -1478,6 +1478,36 @@ export async function docNoTaken(table, no) {
   if (error) throw error;
   return (count || 0) > 0;
 }
+
+// สร้างใบเสนอราคาย้อนหลังจากใบงาน (ลูกค้าเก่าก่อนใช้ระบบ) — งานมีต้นทุนจริงแต่ไม่มีใบเสนอให้คิดกำไร
+// ทำตามสายเอกสาร: สร้าง BOQ → ใบเสนอ(อนุมัติ ลงวันที่ตามใบงาน) → ผูก quote_no กลับใบงาน
+// saleAmount = ราคาขายก่อน VAT · ทำเป็นบรรทัดเดียว kind=service "งานเดิม (ก่อนใช้ระบบ)"
+export async function backfillQuoteForJob(jo, { saleAmount, vat = false } = {}) {
+  const amt = Number(saleAmount) || 0;
+  if (amt <= 0) throw new Error("กรอกราคาขาย (ก่อน VAT) มากกว่า 0");
+  if (!jo || !jo.job_no) throw new Error("ไม่พบใบงาน");
+  if (jo.quote_no) throw new Error("ใบงานนี้มีใบเสนอราคาผูกอยู่แล้ว");
+  const date = jo.issue_date || _today();
+  const p2 = (n) => String(n).padStart(2, "0");
+  const stamp = () => { const d = new Date(); return `${String(d.getFullYear()).slice(2)}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`; };
+  const uniqueNo = async (table, prefix) => { const base = prefix + stamp(); let n = base, i = 1; while (await docNoTaken(table, n)) n = base + "-" + (++i); return n; };
+  const lineName = `งานเดิม (ก่อนใช้ระบบ) · ${jo.job_no}`;
+  const jt = jo.job_type || "other";
+  const boqNo = await uniqueNo("boqs", "BOQ-");
+  await saveBoq(
+    { boq_no: boqNo, customer_id: jo.customer_id || null, site_id: jo.site_id || null, issue_date: date, job_type: jt, title: jo.title || "งานเดิม (ก่อนใช้ระบบ)", note: `สร้างย้อนหลังจากใบงาน ${jo.job_no}`, status: "open" },
+    [{ section: "service", code: "", name: lineName, description: "", unit: "งาน", qty: 1, unit_cost: 0 }]
+  );
+  const quoteNo = await uniqueNo("quotations", "QT-");
+  await saveQuotation(
+    { quote_no: quoteNo, customer_id: jo.customer_id || null, site_id: jo.site_id || null, boq_no: boqNo, title: jo.title || "งานเดิม (ก่อนใช้ระบบ)", status: "approved", approved_at: date, job_type: jt, issue_date: date, discount_type: "amount", discount_value: 0, vat: !!vat, wht: false, wht_rate: 3, pay_method: "cash", note: `ใบเสนอราคาย้อนหลัง — สร้างจากใบงาน ${jo.job_no} (งานก่อนใช้ระบบ)` },
+    [{ code: "", name: lineName, kind: "service", description: "", unit: "งาน", qty: 1, unit_price: amt, discount: 0 }]
+  );
+  // ผูกกลับใบงาน — อัปเดตคอลัมน์เดียว (ไม่ผ่าน saveJobOrder เพื่อไม่เขียนทับ field อื่น/ไม่คิดสถานะใหม่)
+  const { error } = await supabase.from("job_orders").update({ quote_no: quoteNo }).eq("job_no", jo.job_no);
+  if (error) throw error;
+  return { boqNo, quoteNo };
+}
 export function listBoqs(opts = {}) { return _cached("listBoqs:" + JSON.stringify(opts || {}), () => _loadBoqs(opts), _SHORT_TTL); }
 async function _loadBoqs(opts = {}) {
   const nos = _scopeNos(opts);

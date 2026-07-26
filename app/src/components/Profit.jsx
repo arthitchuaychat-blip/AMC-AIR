@@ -9,7 +9,7 @@ import { UIcon } from "../icons";
 // กำไรสุทธิ/งาน = กำไรขั้นต้น − วัสดุที่เบิกใช้จริง (เบิก−คืน รวมทุกใบงาน) − ค่าแรงช่างซัพ (รวมทุกใบงาน)
 const ST = { pending: "รอเริ่ม", in_progress: "กำลังทำ", awaiting_approval: "รออนุมัติ", reschedule: "ตั้งนัดเพิ่ม", done: "เสร็จ", cancelled: "ยกเลิก" };
 
-export default function Profit() {
+export default function Profit({ onOpenJob }) {
   const [rows, setRows] = React.useState([]);
   const [orphans, setOrphans] = React.useState([]);
   const [open, setOpen] = React.useState({});       // quote_no → expanded breakdown
@@ -159,10 +159,11 @@ export default function Profit() {
               <div style={{ fontWeight: 700, fontSize: 13, color: "var(--down)", marginBottom: 6 }}>
                 ⚠️ ต้นทุนที่ยังไม่ผูกใบเสนอราคา ({orphans.length} ใบงาน · รวม {fmtBaht(orphans.reduce((a, o) => a + o.net, 0))})
               </div>
-              <div className="page-sub" style={{ marginTop: 0, marginBottom: 8 }}>เงินที่จ่ายออกไปจริงเหล่านี้ยัง<b>ไม่ถูกนำไปคิดกำไร</b> เพราะใบงานไม่ได้อ้างใบเสนอราคา — ให้ผูกใบงานกับใบเสนอราคา หรือใช้ปุ่ม “ใบงานเชื่อม” กับงานหลัก</div>
+              <div className="page-sub" style={{ marginTop: 0, marginBottom: 8 }}>เงินที่จ่ายออกไปจริงเหล่านี้ยัง<b>ไม่ถูกนำไปคิดกำไร</b> เพราะใบงานไม่ได้อ้างใบเสนอราคา — {onOpenJob ? "กดที่ใบงานเพื่อเปิด แล้วใช้ปุ่ม “🧾 ใบเสนอย้อนหลัง” (ลูกค้าเก่าก่อนใช้ระบบ)" : "ให้ผูกใบงานกับใบเสนอราคา หรือใช้ปุ่ม “ใบงานเชื่อม” กับงานหลัก"}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {orphans.map((o) => (
-                  <span key={o.jobNo} style={{ fontSize: 12, background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, padding: "3px 9px" }}>
+                  <span key={o.jobNo} onClick={() => onOpenJob && onOpenJob(o.jobNo)} title={onOpenJob ? "เปิดใบงานนี้" : undefined}
+                    style={{ fontSize: 12, background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, padding: "3px 9px", cursor: onOpenJob ? "pointer" : "default" }}>
                     {o.jobNo}{o.job?.customerName ? ` · ${o.job.customerName}` : ""} · <b style={{ color: "var(--down)" }}>{fmtBaht(o.net)}</b>
                     {/* แยกให้เห็นว่าตกหล่นจากทางไหน จะได้ตามถูกที่ */}
                     <span style={{ color: "var(--ink-3)" }}>

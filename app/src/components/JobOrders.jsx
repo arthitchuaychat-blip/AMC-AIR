@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate, listHandoverFlags, saveJobReview } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, backfillQuoteForJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate, listHandoverFlags, saveJobReview } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES, ymd } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline, { Linkify } from "./JobTimeline";
@@ -49,6 +49,21 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const [viewing, setViewing] = React.useState(null); // job being viewed (detail modal)
   const [peek, setPeek] = React.useState(null);       // {type,no} — พรีวิวเอกสารเชื่อมโยงเป็นแผงด้านขวา ก่อนเปิดหน้าเต็ม
   const [approveCtx, setApproveCtx] = React.useState(null); // { jo, v } → approval choice popup
+  const [backfill, setBackfill] = React.useState(null);     // ใบงานที่กำลังสร้างใบเสนอย้อนหลัง (ลูกค้าเก่าก่อนใช้ระบบ)
+  const [bfAmt, setBfAmt] = React.useState("");
+  const [bfVat, setBfVat] = React.useState(false);
+  const [bfBusy, setBfBusy] = React.useState(false);
+  async function doBackfill() {
+    const jo = backfill; if (!jo) return;
+    setBfBusy(true);
+    try {
+      const { quoteNo } = await backfillQuoteForJob(jo, { saleAmount: bfAmt, vat: bfVat });
+      flash(`สร้างใบเสนอราคาย้อนหลัง ${quoteNo} + ผูกกับ ${jo.job_no} แล้ว`);
+      setBackfill(null); setBfAmt(""); setBfVat(false);
+      const fresh = await reloadJobs(); setList(fresh);
+    } catch (e) { flash(e.message || String(e), true); }
+    setBfBusy(false);
+  }
   // คะแนนงาน/ธงเคลม — เดิมตั้งได้เฉพาะหน้าช่างซัพ ทีมประจำจึงกรอกไม่ได้เลย
   // ทั้งที่สกอร์การ์ด HR หักคะแนน "งานเคลม" ของทุกทีมเท่ากัน
   const [apRating, setApRating] = React.useState(0);
@@ -768,6 +783,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 {canDelete && <button className="btn-ghost danger" style={{ marginRight: "auto" }} onClick={() => { const j = jo; setViewing(null); del(j); }}><UIcon name="trash" size={15} /> ลบ</button>}
                 {onHandover && <button className="btn-ghost" onClick={() => { const j = jo; setViewing(null); onHandover(j); }}><UIcon name="catalog" size={15} /> ใบส่งมอบงาน</button>}
                 {jo.locked && canOverrideLock && <button className="btn-ghost" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
+                {!jo.quote_no && canEditJob(jo) && can(role, "quote", "edit") && <button className="btn-ghost" title="ลูกค้าเก่าก่อนใช้ระบบ — สร้างใบเสนอราคาย้อนหลังแล้วผูกให้ต้นทุนเข้าการคิดกำไร" onClick={() => { const j = jo; setViewing(null); setBackfill(j); setBfAmt(""); setBfVat(false); }}>🧾 ใบเสนอย้อนหลัง</button>}
                 {canEditJob(jo) && <button className="btn-ghost" onClick={() => addLinked(jo)}><UIcon name="plus" size={15} /> ใบงานเชื่อม</button>}
                 {canEditJob(jo) && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
               </div>
@@ -806,6 +822,29 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
           </div>
         );
       })()}
+
+      {backfill && (
+        <div className="confirm-overlay" onMouseDown={() => !bfBusy && setBackfill(null)}>
+          <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="confirm-icon">🧾</div>
+            <div className="confirm-title">สร้างใบเสนอราคาย้อนหลัง</div>
+            <div className="confirm-msg" style={{ textAlign: "left" }}>
+              {backfill.job_no}{backfill.customerName ? ` · ${backfill.customerName}` : ""}<br />
+              <span style={{ color: "var(--ink-3)", fontSize: 13 }}>สำหรับลูกค้าเก่าที่ตกลงราคาก่อนใช้ระบบ — ระบบจะสร้าง BOQ + ใบเสนอราคา (อนุมัติ ลงวันที่ {backfill.issue_date || "ตามใบงาน"}) แล้วผูกกับใบงานนี้ เพื่อให้ต้นทุนที่จ่ายไปแล้วเข้าการคิดกำไร</span>
+            </div>
+            <div className="fld" style={{ marginBottom: 10 }}><span>ราคาขายจริง (ก่อน VAT) *</span>
+              <input className="inp" type="number" inputMode="decimal" min="0" step="0.01" value={bfAmt} autoFocus
+                onChange={(e) => setBfAmt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && Number(bfAmt) > 0 && !bfBusy) doBackfill(); }}
+                placeholder="เช่น 20700" />
+            </div>
+            <label className="sub-claim" style={{ marginBottom: 12 }}><input type="checkbox" checked={bfVat} onChange={(e) => setBfVat(e.target.checked)} /> ใบนี้มี VAT 7% (ออกใบกำกับภาษี)</label>
+            <div className="confirm-acts" style={{ flexDirection: "column" }}>
+              <button className="btn-primary ok" style={{ width: "100%" }} disabled={bfBusy || !(Number(bfAmt) > 0)} onClick={doBackfill}>{bfBusy ? "กำลังสร้าง…" : "🧾 สร้าง + ผูกกับใบงาน"}</button>
+              <button className="btn-ghost" style={{ width: "100%" }} disabled={bfBusy} onClick={() => setBackfill(null)}>ยกเลิก</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {peek && <DocPeek type={peek.type} no={peek.no} onClose={() => setPeek(null)}
         onOpenFull={() => { const p = peek; setPeek(null); onOpenDoc && onOpenDoc(p.type, p.no); }} />}

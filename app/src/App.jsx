@@ -108,7 +108,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-26·การ์ดรายได้แยกหมวด: กดแต่ละหมวดเปิดแผงดูรายการสินค้า/บริการที่ขายรายตัว (จำนวน+จำนวนครั้ง+ยอด) + Export v514";
+const BUILD = "2026-07-26·ใบเสนอราคาย้อนหลัง: ลูกค้าเก่าก่อนใช้ระบบ (ใบงานไม่มีใบเสนอ ต้นทุนลอย) → ปุ่มในใบงานสร้าง BOQ+ใบเสนอ(อนุมัติ ลงวันที่ตามงาน)+ผูกให้อัตโนมัติ เข้าการคิดกำไร v515";
 
 function SetupNotice() {
   return (
@@ -497,7 +497,7 @@ export default function App() {
           onOpenCustomer={(cid) => { setCustFocus(String(cid)); go("customers"); }}
           onCreateBoq={(d) => { setBoqDraft(d); go("boq"); }} />}
         {view === "website" && <WebManage role={role} />}
-        {view === "profit" && <Profit />}
+        {view === "profit" && <Profit onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
         {view === "cashflow" && <CashFlow />}
         {view === "expenses" && <Expenses role={role} me={profile} onOpenDoc={(t, no) => {
           if (t === "po") { setPoFocus(no); go("po"); }
