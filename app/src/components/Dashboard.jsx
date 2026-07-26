@@ -11,6 +11,7 @@ import BillingSummary from "./BillingSummary";
 import CrmJobsSummary from "./CrmJobsSummary";
 import TrendCharts from "./TrendCharts";
 import ExecReports from "./ExecReports";
+import PnLReport from "./PnLReport";
 
 // รายได้แยกหมวด (เฟส 2) — 8 หมวด · เครื่อง=kind ac · บริการ=kind service + หมวด sv-* · วัสดุ/อะไหล่=หมวดวัสดุ+mat_group
 const REV_CATS = [
@@ -275,7 +276,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       </div>
 
       <div className="cat-filter" style={{ marginTop: 2 }}>
-        {[["overview", "🏠 ภาพรวม"], ["sales", "ขาย & กำไร"], ["fin", "การเงิน & เอกสาร"], ...(can(role, "profit") ? [["exec", "📊 รายงานผู้บริหาร"]] : []), ["trend", "กราฟแนวโน้ม"], ["inv", "คลังวัสดุ & เบิกใช้"]].map(([v, l]) => (
+        {[["overview", "🏠 ภาพรวม"], ["sales", "ขาย & กำไร"], ["fin", "การเงิน & เอกสาร"], ...(can(role, "profit") ? [["pnl", "📉 กำไร-ขาดทุน"], ["exec", "📊 รายงานผู้บริหาร"]] : []), ["trend", "กราฟแนวโน้ม"], ["inv", "คลังวัสดุ & เบิกใช้"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
             style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
@@ -388,6 +389,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
         </>
       )}
 
+      {tab === "pnl" && <PnLReport from={from} to={to} periodLabel={periodLabel} />}
       {tab === "exec" && <ExecReports act={act} accounts={accounts} from={from} to={to} periodLabel={periodLabel} />}
 
       {tab === "trend" && <TrendCharts from={from} to={to} />}

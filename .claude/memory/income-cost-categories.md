@@ -1,11 +1,11 @@
 ---
 name: income-cost-categories
-description: "โปรเจกต์ 3 เฟส — ประเภทงาน+แยกหมวดรายได้/ต้นทุนบนแดชบอร์ด (เฟส1-2 เสร็จ v510, เหลือเฟส3 ต้นทุน)"
+description: "โปรเจกต์ 3 เฟส เสร็จครบ v511 — ประเภทงาน + รายได้แยกหมวด + P&L ต้นทุน/ค่าใช้จ่ายบนแดชบอร์ด (ต้องรัน SQL 176+177)"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 9e3e3c98-8673-47b0-99ce-ee3aa866d22b
-  modified: 2026-07-26T01:57:01.968Z
+  modified: 2026-07-26T02:20:36.037Z
 ---
 
 เจ้าของสั่ง (2026-07-26) ปรับ 3 อย่าง ทำเป็น**เฟส**: (1) ประเภทงาน → (2) หมวดรายได้บนแดชบอร์ด → (3) หมวดต้นทุน/ค่าใช้จ่าย.
@@ -39,7 +39,16 @@ survey=สำรวจงาน · ac_sale(ใหม่)=เครื่อง�
 - ⚠️ รายการพิมพ์เอง (item_code=null) มีแค่ kind — service ad-hoc ตกเป็น "อื่นๆ", material ad-hoc แยกวัสดุ/อะไหล่ไม่ได้
 - ทางเลือกทน: snapshot category ลง quotation_items (migration + แก้ saveQuotation api.js:1874)
 
-## ⬜ เฟส 3 — หมวดต้นทุน/ค่าใช้จ่าย (P&L รวมบริษัท)
+## ✅ เฟส 3 เสร็จ (v511, 2026-07-26) — P&L ต้นทุน/ค่าใช้จ่าย
+- **แท็บใหม่ "📉 กำไร-ขาดทุน"** บนแดชบอร์ด (gate ด้วย can(role,"profit")) → `PnLReport.jsx` (โหลดข้อมูลเอง ตาม from/to)
+- โครง 2 ชั้น: รายได้(ยอดขายอนุมัติ ก่อน VAT) − ต้นทุนขาย(เครื่อง/วัสดุ/อะไหล่/ค่าแรงช่างซับ) = กำไรขั้นต้น(%) − ค่าใช้จ่าย(เงินเดือน + หมวดเบิกจ่าย) = กำไรสุทธิ(%)
+- **เกณฑ์ = "เกิดจริงในช่วง"** (ไม่ใช่จับคู่รายบิล): COGS ของ = ต้นทุนที่เบิกเข้างานในช่วง · ค่าแรงซับ = payout จ่ายแล้วในช่วง (gross) · เงินเดือน = สลิปงวดในช่วง (net) · OPEX = ใบเบิก approved/paid created_at ในช่วง group by category
+- **api ใหม่**: `costOfGoodsByGroup(from,to)` → {ac,material,part} (transactions withdraw+damage−return, join materials→kind/mat_group, service=null ข้าม) · `listPayslipsRange(fromYM,toYM)` (period 'YYYY-MM' string compare)
+- **กันนับซ้ำ**: EXCLUDE_OPEX = {"ซื้อสินค้า (PO)"} (ต้นทุนของนับทาง transactions แล้ว) · ค่าแรงซับใช้ sub_payouts.gross ไม่ใช่ job_orders.labor_total (กัน double กับ Profit.jsx)
+- **migration 177** (`177_expense_categories_seed.sql`): seed หมวดเบิกจ่ายใหม่ (ค่าอาหาร/ค่าบำรุงรักษารถ/ค่าประกันรถ/ภาษี-พรบ.รถ/เครื่องมือช่าง) on conflict do nothing — **เจ้าของต้องรัน**
+- ⚠️ ข้อจำกัดที่บอกเจ้าของแล้ว: รายได้(accrual จากใบเสนอ) vs ต้นทุน(เบิก/จ่ายจริง) คนละ event = ภาพรวม ไม่ใช่บัญชีแม่นบิลต่อบิล · ค่าแรง/เงินเดือนแยกรายบริการ(ล้าง/ซ่อม/ย้าย)ไม่ได้ · ถ้าลงเงินเดือน/ค่าแรงเป็นใบเบิกด้วยจะเห็นซ้ำ
+
+## (เดิม) เฟส 3 บันทึกวิเคราะห์ — หมวดต้นทุน/ค่าใช้จ่าย (P&L รวมบริษัท)
 ต้องรวมจาก **4 แหล่ง** เป็นมิติ "หมวด" เดียว:
 - COGS เครื่อง/วัสดุ/อะไหล่ ← `transactions.value` (ต้นทุนเฉลี่ย moving avg) group by materials.category-group · `jobMaterialCost()` api.js:3003
 - ค่าแรงช่างซัพ ← `sub_payouts` / `job_orders.labor_total`

@@ -3070,6 +3070,47 @@ export async function listSubPayouts() {
   const { data, error } = await _allRows((f, t) => supabase.from("sub_payouts").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t));
   if (error) throw error; return data || [];
 }
+
+// ---------- รายงานกำไร-ขาดทุน (P&L เฟส 3) ----------
+// ต้นทุนของที่ "เบิกเข้างานจริง" ในช่วง (COGS) แยก เครื่อง/วัสดุ/อะไหล่ · value = qty×unit_cost (ต้นทุนเฉลี่ย ณ เวลานั้น)
+// withdraw+damage = ต้นทุนที่ใช้ไป · return = คืนกลับ (ลบ) · adjust_* ไม่นับ (ปรับนับสต๊อก ไม่ใช่ต้นทุนงาน)
+// service ไม่นับ (ต้นทุนบริการ = ค่าแรง คิดจาก sub_payouts/เงินเดือนแยก)
+export async function costOfGoodsByGroup(from, to) {
+  const [txs, mats, cats] = await Promise.all([
+    _fetchAll((f, t) => {
+      let b = supabase.from("transactions").select("material_code,type,value", { count: "exact" }).in("type", ["withdraw", "damage", "return"]).order("id").range(f, t);
+      if (from) b = b.gte("txn_date", from);
+      if (to) b = b.lte("txn_date", to);
+      return b;
+    }),
+    listMaterialsLite(),
+    listCategories(),
+  ]);
+  const catGroup = Object.fromEntries(cats.map((c) => [c.id, c.mat_group]));
+  const gOf = Object.fromEntries(mats.map((m) => {
+    let g = null;
+    if (m.kind === "ac") g = "ac";
+    else if (m.kind === "material" || !m.kind) g = catGroup[m.category] === "part" ? "part" : "material";
+    return [m.code, g];   // service → null (ไม่นับใน COGS ของ)
+  }));
+  const acc = { ac: 0, material: 0, part: 0 };
+  txs.forEach((x) => {
+    const g = gOf[x.material_code];
+    if (!g) return;
+    acc[g] += (x.type === "return" ? -1 : 1) * (Number(x.value) || 0);
+  });
+  return acc;
+}
+
+// สลิปเงินเดือนของงวด (period 'YYYY-MM') ที่อยู่ในช่วง — เทียบสตริงปลอดภัยเพราะ zero-padded
+export async function listPayslipsRange(fromYM, toYM) {
+  return _fetchAll((f, t) => {
+    let b = supabase.from("payslips").select("period,net,status,paid_at", { count: "exact" }).order("period").range(f, t);
+    if (fromYM) b = b.gte("period", fromYM);
+    if (toYM) b = b.lte("period", toYM);
+    return b;
+  });
+}
 const _r2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
 // create a payout batch for a sub team from per-job allocation lines (supports partial / split payments).
 // lines: [{job_no, amount, vat, total, customerName}]  → wht 3% applies only to the VAT-billed jobs' allocated amount.
