@@ -149,6 +149,12 @@ nav.menu{display:flex;align-items:center;gap:6px}
 nav.menu a{font-weight:600;font-size:15px;color:var(--ink-2);padding:9px 14px;border-radius:10px}
 nav.menu a:hover{color:var(--primary);background:var(--bg-soft)}
 .header-cta{display:flex;align-items:center;gap:10px}
+.lang-btn{height:46px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:#fff;color:var(--ink);font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer;letter-spacing:.3px;transition:.15s}
+.lang-btn:hover{border-color:var(--primary);color:var(--primary)}
+/* ป้ายปุ่มตามภาษา (ผ่าน <html lang>) — เชื่อถือได้กว่าตั้งด้วย JS: TH โชว์ "EN" (กดไปอังกฤษ), EN โชว์ "ไทย" */
+.lang-btn::after{content:"EN"}
+html[lang="en"] .lang-btn::after{content:"ไทย"}
+@media(max-width:560px){.lang-btn{padding:0 11px;height:44px}}
 .cart-btn{position:relative;width:46px;height:46px;border-radius:12px;border:1.5px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .cart-btn:hover{border-color:var(--primary)}
 .cart-btn svg{width:22px;height:22px;color:var(--ink-2)}
@@ -583,6 +589,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <a href="#contact">ติดต่อ</a>
     </nav>
     <div class="header-cta">
+      <button class="lang-btn" id="langBtn" aria-label="Language / ภาษา" title="English / ไทย"></button>
       <button class="cart-btn" id="cartBtn" aria-label="ตะกร้า">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>
         <span class="cart-count" id="cartCount">0</span>
@@ -1654,6 +1661,172 @@ route();
     $("fltGoAc")?.click();
   });
   if ($("bcSlider")) bcCalc();
+})();
+</script>
+
+<!-- ============================================================
+     🌐 สลับภาษา TH / EN สำหรับลูกค้าต่างชาติ
+     แปลเฉพาะข้อความ "คงที่" (เมนู/หัวข้อ/บริการ/FAQ/ปุ่ม/ฟอร์ม) ผ่านพจนานุกรม
+     เนื้อหาจากฐานข้อมูล (ชื่อรุ่นสินค้า/ราคา/บทความ) คงเป็นไทยตามที่เก็บ
+     เพิ่มคำแปลใหม่: ใส่บรรทัด "ข้อความไทย": "English", ใน EN ด้านล่างได้เลย
+============================================================ -->
+<script>
+(function () {
+  const EN = {
+    // เมนู / หัวเว็บ
+    "บริการ": "Services", "สินค้า": "Products", "ผลงาน": "Portfolio", "รีวิว": "Reviews", "ติดต่อ": "Contact",
+    "ขอใบเสนอราคา": "Get a Quote", "ตะกร้า": "Cart", "เมนู": "Menu",
+    // ค้นหาแถบข้าง
+    "ค้นหาเครื่องปรับอากาศ": "Find an Air Conditioner", "ยี่ห้อเครื่องปรับอากาศ": "AC Brand",
+    "ประเภทเครื่องปรับอากาศ": "AC Type", "ขนาด BTU": "BTU Size", "ค้นหา →": "Search →",
+    "ค้นหาบริการต่าง ๆ": "Find a Service", "ค้นหา": "Search",
+    "ติดตั้งแอร์": "AC Installation", "ล้างแอร์": "AC Cleaning", "ซ่อม/แก้ไข": "Repair / Fix",
+    "ย้ายแอร์": "AC Relocation", "รื้อถอนแอร์": "AC Removal", "บริการอื่น ๆ": "Other Services",
+    "แขวน/ตั้งพื้น": "Ceiling/Floor", "แขวนใต้ฝ้า": "Ceiling-suspended", "ต่อท่อลม": "Ducted",
+    "ติดผนัง": "Wall-mounted", "ตู้ตั้งพื้น": "Floor-standing", "ฝังฝ้า 1 ทิศ": "1-way Cassette", "ฝังฝ้า 4 ทิศ": "4-way Cassette",
+    "ทุกยี่ห้อ": "All Brands", "ทุกประเภท": "All Types", "ทุกขนาด": "All Sizes",
+    "รุ่นแอร์ทั้งหมด": "All AC Models", "ทุกขนาด BTU": "All BTU Sizes", "บริการทั้งหมด": "All Services",
+    // Hero
+    "AMC AIR · แอร์ครบทุกยี่ห้อ · ติดตั้ง ล้าง ย้าย ซ่อม": "AMC AIR · All AC brands · Install · Clean · Relocate · Repair",
+    "เย็นทั่วถึง คุ้มทุกบาท": "Cool Everywhere, Worth Every Baht",
+    "ติดตั้งโดยช่างมืออาชีพ": "Installed by Professional Technicians",
+    "ซื่อสัตย์": "Honest", "จริงใจ": "Sincere", "งานไว": "Fast Service", "ราคาดี": "Fair Price",
+    "ขายพร้อมติดตั้ง แจ้งราคารวมค่าแรงชัดเจน ประเมินหน้างานฟรี รับประกันงานติดตั้งทุกเครื่อง": "Sold with installation · clear all-in pricing · free on-site survey · warranty on every installation.",
+    "ขอใบเสนอราคาฟรี": "Get a Free Quote", "☎ โทรเลย": "☎ Call Now",
+    "ยี่ห้อ": "Brand", "ประเภทแอร์": "AC Type",
+    // บริการ
+    "บริการของเรา": "Our Services", "ครบทุกเรื่องแอร์ จบที่เดียว": "Everything About AC — All in One Place",
+    "ตั้งแต่ติดตั้งเครื่องใหม่ ดูแลรักษา ไปจนถึงซ่อมแก้ไข ด้วยทีมช่างผู้ชำนาญ": "From new installations and maintenance to repairs — by our skilled technicians.",
+    "ล้างแอร์ / บำรุงรักษา": "AC Cleaning / Maintenance",
+    "ล้างใหญ่ เป่าโฟม ถึงแผงคอยล์ เย็นเต็มระบบ": "Deep foam cleaning down to the coil — full cooling restored.",
+    "ตรวจเช็กน้ำยา/ระบบ": "Refrigerant & system check", "แนะนำรอบล้างทุก 6 เดือน": "Cleaning recommended every 6 months",
+    "มีบริการสัญญารายปี": "Annual service contracts available",
+    "บ้าน/สำนักงาน เดินท่อเรียบร้อย ทดสอบก่อนส่งมอบ": "Homes & offices — neat piping, tested before handover.",
+    "สำรวจหน้างานฟรี": "Free on-site survey", "แถมชุดวัสดุติดตั้งมาตรฐาน": "Standard installation kit included",
+    "รับประกันงานติดตั้ง": "Installation warranty",
+    "ถอด–ติดตั้งจุดใหม่ ครบวงจร": "Full removal & re-installation at the new spot.",
+    "เก็บน้ำยาก่อนถอด": "Refrigerant recovered before removal", "ติดตั้งใหม่พร้อมทดสอบ": "Re-installed and tested",
+    "ซ่อม / แก้ไข": "Repair / Fix", "แอร์ไม่เย็น น้ำหยด เสียงดัง วินิจฉัยทุกอาการ": "Not cooling, dripping, or noisy — we diagnose every symptom.",
+    "ประเมินอาการก่อนซ่อม": "Diagnosis before repair", "อะไหล่แท้": "Genuine parts", "รับประกันงานซ่อม": "Repair warranty",
+    // เครื่องคิด BTU
+    "เครื่องมือช่วยเลือก": "Selection Tool", "คำนวณ BTU + ค่าไฟต่อเดือน": "BTU + Monthly Electricity Calculator",
+    "เลื่อนปรับขนาดห้อง ระบบจะแนะนำขนาดแอร์ที่พอดี พร้อมประมาณค่าไฟ เพื่อเลือกได้คุ้มที่สุด": "Slide to set your room size — we'll suggest the right AC size and estimate the electricity cost.",
+    "ขนาดห้อง": "Room Size", "ตร.ม.": "sq.m.", "BTU ที่ต้องการ": "BTU Needed", "แนะนำ": "Recommended",
+    "ค่าไฟ/ด. โดยประมาณ": "Est. Electricity/mo.",
+    // ลูกค้า / ผลงาน / รีวิว
+    "ลูกค้าของเรา": "Our Clients", "องค์กรที่ไว้วางใจเรา": "Organizations That Trust Us",
+    "หน่วยงานราชการ โรงพยาบาล และองค์กรชั้นนำ เลือกใช้บริการ AMC AIR": "Government agencies, hospitals, and leading organizations choose AMC AIR.",
+    "ผลงานของเรา": "Our Work", "อัลบั้มผลงานของเรา": "Our Project Gallery",
+    "งานติดตั้งและบริการจริงจากหน้างาน โดยทีมช่าง AMC AIR": "Real on-site installations and services by the AMC AIR team.",
+    "ดูผลงานทั้งหมด →": "View All Work →", "ผลงานทั้งหมด": "All Work",
+    "เสียงจากลูกค้า": "Customer Voices", "ลูกค้าพูดถึงเรา": "What Our Customers Say", "★ รีวิวเราบน Google": "★ Review Us on Google",
+    // ข่าว / พื้นที่บริการ
+    "ข่าว & สื่อ": "News & Media", "AMC AIR ในสื่อ": "AMC AIR in the News", "อ่านข่าวฉบับเต็ม →": "Read Full Article →", "ข่าว": "News",
+    "พื้นที่ให้บริการ": "Service Areas", "เราไปถึงคุณ": "We Come to You",
+    "กรุงเทพฯ": "Bangkok", "นนทบุรี": "Nonthaburi", "ปทุมธานี": "Pathum Thani", "สมุทรปราการ": "Samut Prakan", "นครปฐม": "Nakhon Pathom", "สมุทรสาคร": "Samut Sakhon",
+    // FAQ
+    "คำถามที่พบบ่อย": "FAQ", "เรื่องที่ลูกค้าถามบ่อย": "Frequently Asked Questions",
+    "ล้างแอร์ควรทำบ่อยแค่ไหน?": "How often should I clean my AC?",
+    "แนะนำล้างทุก 6 เดือน (บ้านพักอาศัย) หรือ 3 เดือน (ร้านอาหาร/ที่ใช้งานหนัก) เพื่อให้แอร์เย็นเต็มที่ ประหยัดไฟ และยืดอายุเครื่อง": "We recommend every 6 months (homes) or 3 months (restaurants / heavy use) to keep it cooling well, save energy, and extend its life.",
+    "มีค่าสำรวจหน้างานไหม?": "Is there an on-site survey fee?",
+    "สำรวจหน้างานเพื่อเสนอราคาติดตั้ง": "On-site surveys for installation quotes are", "ฟรี": "free",
+    "ในพื้นที่ให้บริการ — นัดหมายล่วงหน้าผ่านโทร/LINE ได้เลย": "within our service areas — just book ahead by phone or LINE.",
+    "รับประกันงานอย่างไร?": "What is your warranty?",
+    "งานติดตั้งและซ่อมรับประกันทุกชิ้น อะไหล่เป็นของแท้ หากมีปัญหาจากการติดตั้ง/ซ่อม เรากลับไปแก้ไขให้": "All installation and repair work is warranted, with genuine parts. If any issue arises from our work, we come back and fix it.",
+    "ออกใบกำกับภาษีได้ไหม?": "Can you issue a tax invoice?",
+    "ได้ครับ ออกใบเสร็จ/ใบกำกับภาษีถูกต้องตามระบบ เหมาะกับทั้งลูกค้าบุคคลและนิติบุคคล": "Yes — we issue proper receipts and tax invoices, suitable for both individuals and companies.",
+    "สั่งซื้อผ่านเว็บแล้วต้องจ่ายเงินเลยไหม?": "Do I have to pay when ordering online?",
+    "ยังไม่ต้องจ่ายผ่านเว็บ — เมื่อส่งคำสั่งซื้อ/ขอใบเสนอราคา ทีมงานจะติดต่อกลับเพื่อยืนยันรายการ ราคา ค่าติดตั้ง และนัดหมายก่อนเสมอ": "No online payment needed — after you send an order or quote request, our team always calls back to confirm items, prices, installation fee, and schedule first.",
+    // บทความ
+    "สาระน่ารู้": "Good to Know", "บทความเรื่องแอร์": "AC Articles",
+    "เกร็ดความรู้ดูแลแอร์ ใช้แอร์ให้เย็นสบาย ประหยัดไฟ": "Tips for AC care — stay cool and save energy.",
+    "อ่านเพิ่ม ▾": "Read more ▾", "อ่านบทความ →": "Read Article →",
+    // ติดต่อ
+    "ติดต่อเรา": "Contact Us", "ขอใบเสนอราคา / นัดหมาย": "Request a Quote / Appointment", "โทร": "Call",
+    "จันทร์–เสาร์ 08.00–17.00": "Mon–Sat 08:00–17:00", "แชตผ่าน LINE": "Chat on LINE", "แชต LINE": "LINE Chat", "โทรเลย": "Call Now",
+    "ชื่อ-สกุล *": "Full Name *", "เบอร์โทร *": "Phone *", "ที่อยู่ / พื้นที่หน้างาน": "Address / Job Site",
+    "รายละเอียดที่ต้องการ": "What You Need", "ส่งคำขอ": "Send Request",
+    // หน้าสินค้า
+    "สินค้าของเรา": "Our Products", "สินค้า & บริการ": "Products & Services",
+    "เลือกรุ่นที่ต้องการ ใส่ตะกร้า แล้วส่งคำขอ — ทีมงานจะติดต่อยืนยันราคาและนัดติดตั้ง": "Choose a model, add to cart, and send your request — our team will confirm the price and schedule installation.",
+    "← กลับหน้าแรก": "← Back to Home", "ทั้งหมด": "All", "❄️ แอร์": "❄️ AC", "🔩 อะไหล่/วัสดุ": "🔩 Parts / Materials", "🛠️ บริการ": "🛠️ Services",
+    // การ์ดสินค้า (UI ไดนามิก)
+    "📄 ดาวน์โหลดโบรชัวร์": "📄 Download Brochure", "เลือกขนาด:": "Select size:",
+    "รหัสรุ่น": "Model code", "ขนาด": "Size", "กำลังไฟ": "Power", "น้ำยา": "Refrigerant", "ท่อน้ำยา": "Pipe size", "ฉลาก": "Label",
+    "⚡ ค่าไฟ/ปี": "⚡ Elec/yr", "/เครื่อง": "/unit", "/หน่วย": "/unit",
+    "💳 รูดเต็ม": "💳 Card (full)", "· ผ่อน 10 ด.": "· 10-mo installment", "+ เพิ่มลงตะกร้า": "+ Add to Cart", "สอบถามราคา": "Ask for Price",
+    // ตะกร้า
+    "ตะกร้า / ขอใบเสนอราคา": "Cart / Request a Quote", "ยังไม่มีสินค้าในตะกร้า": "Your cart is empty",
+    "เลือกสินค้าจากหน้าเว็บ หรือกรอกฟอร์มขอใบเสนอราคาด้านล่างได้เลย": "Pick products from the site, or fill in the quote form below.",
+    "รวมโดยประมาณ": "Estimated total",
+    "* ราคาเป็นการประมาณการ ทีมงานจะติดต่อยืนยันราคาจริง ค่าติดตั้ง และนัดหมาย": "* Prices are estimates. Our team will confirm the actual price, installation fee, and schedule.",
+    "ที่อยู่จัดส่ง/ติดตั้ง": "Delivery / Installation Address", "หมุดโลเคชั่น · Google Maps (ไม่บังคับ)": "Location pin · Google Maps (optional)",
+    "หมายเหตุ": "Note", "ส่งคำสั่งซื้อ": "Send Order",
+    // Footer
+    "จำหน่าย ติดตั้ง ล้าง ซ่อมแอร์ครบวงจร โดยทีมช่างมืออาชีพ": "Full-service AC sales, installation, cleaning, and repair by professional technicians.",
+    "ซ่อมแอร์": "AC Repair", "บริษัท": "Company", "AMC AIR · สงวนลิขสิทธิ์": "AMC AIR · All rights reserved",
+    // aria-label / placeholder
+    "ก่อนหน้า": "Previous", "ถัดไป": "Next", "สไลด์ 1": "Slide 1", "สไลด์ 2": "Slide 2",
+    "ขนาดห้อง (ตารางเมตร)": "Room size (sq.m.)", "ปิด": "Close",
+    "ชื่อของคุณ": "Your name", "เขต/อำเภอ จังหวัด": "District, Province",
+    "เช่น ติดตั้งแอร์ 2 เครื่อง / ล้างแอร์ 5 ตัว / แอร์ไม่เย็น": "e.g. install 2 ACs / clean 5 ACs / AC not cooling",
+    "ค้นหาสินค้า…": "Search products…", "ที่อยู่": "Address",
+    "วางลิงก์แผนที่ หรือกด 📍 ใช้ตำแหน่งปัจจุบัน": "Paste a map link or tap 📍 for current location", "รายละเอียดเพิ่มเติม": "Additional details",
+  };
+
+  const ATTRS = ["placeholder", "aria-label"];
+  const _bak = new WeakMap();   // เก็บค่าไทยเดิมของ attribute (อย่าใช้ dataset — คีย์มี "-" ตามด้วยตัวพิมพ์เล็ก throw)
+  function tText(n, toEN) {
+    const cur = n.nodeValue, key = cur.trim();
+    if (!key) return;
+    if (toEN) { if (EN[key] !== undefined) { if (n.__th === undefined) n.__th = cur; n.nodeValue = cur.replace(key, EN[key]); } }
+    else if (n.__th !== undefined) { n.nodeValue = n.__th; n.__th = undefined; }
+  }
+  function tAttr(el, toEN) {
+    ATTRS.forEach((a) => {
+      if (!el.hasAttribute(a)) return;
+      const cur = el.getAttribute(a), key = cur.trim();
+      let bk = _bak.get(el);
+      if (toEN) { if (EN[key] !== undefined) { if (!bk) { bk = {}; _bak.set(el, bk); } if (bk[a] === undefined) bk[a] = cur; el.setAttribute(a, EN[key]); } }
+      else if (bk && bk[a] !== undefined) { el.setAttribute(a, bk[a]); }
+    });
+  }
+  const skipEl = (el) => !el || el.id === "langBtn" || el.tagName === "SCRIPT" || el.tagName === "STYLE";
+  function walk(root, toEN) {
+    if (root.nodeType === 3) { if (!skipEl(root.parentElement)) tText(root, toEN); return; }
+    if (root.nodeType !== 1) return;
+    if (root.tagName === "SCRIPT" || root.tagName === "STYLE" || root.id === "langBtn") return;
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = []; while (w.nextNode()) { if (!skipEl(w.currentNode.parentElement)) nodes.push(w.currentNode); }
+    nodes.forEach((n) => tText(n, toEN));
+    if (root.matches && root.matches("[placeholder],[aria-label]")) tAttr(root, toEN);
+    root.querySelectorAll && root.querySelectorAll("[placeholder],[aria-label]").forEach((el) => tAttr(el, toEN));
+  }
+
+  let cur = "th";
+  function apply(lang) {
+    cur = lang; const toEN = lang === "en";
+    document.documentElement.lang = lang;
+    walk(document.body, toEN);
+    try { localStorage.setItem("amc_lang", lang); } catch (_) {}
+    // ป้ายปุ่มโชว์ผ่าน CSS ::after ตาม <html lang> (ตั้งด้านบนแล้ว) — ไม่ต้องแตะ textContent
+  }
+  // แปลเนื้อหาที่โหลด/เรนเดอร์ภายหลัง (สินค้า/รีวิว/บทความ) เมื่ออยู่โหมด EN
+  // re-walk ทั้งหน้าแบบ debounce เมื่อ DOM เปลี่ยน — จับได้ครบทุกจังหวะเรนเดอร์ (idempotent: ข้อความที่แปลแล้วไม่ตรงคีย์ = ไม่แตะ)
+  // ไม่วนลูป: walk แก้ nodeValue/attribute (characterData/attributes) ไม่ใช่ childList ที่เฝ้าดูอยู่
+  let reWalk;
+  new MutationObserver(() => {
+    if (cur !== "en") return;
+    clearTimeout(reWalk);
+    reWalk = setTimeout(() => { try { walk(document.body, true); } catch (_) {} }, 120);
+  }).observe(document.body, { childList: true, subtree: true });
+
+  // toggle: อ่านภาษาปัจจุบันจาก <html lang> เป็นหลัก (กัน state เพี้ยน)
+  document.addEventListener("click", (e) => { if (e.target.closest("#langBtn")) apply(document.documentElement.lang === "en" ? "th" : "en"); });
+  const qs = new URLSearchParams(location.search).get("lang");
+  let saved = null; try { saved = localStorage.getItem("amc_lang"); } catch (_) {}
+  const initial = (qs === "en" || qs === "th") ? qs : (saved || "th");
+  apply(initial);
 })();
 </script>
 </body>
