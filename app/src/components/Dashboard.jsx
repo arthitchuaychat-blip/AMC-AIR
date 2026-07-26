@@ -1,5 +1,5 @@
 import React from "react";
-import { listMaterials, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, dashboardActionLite, vatSummary, listAccounts, listProfiles, quoteAttribution } from "../lib/api";
+import { listMaterials, listCategories, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, dashboardActionLite, vatSummary, listAccounts, listProfiles, quoteAttribution } from "../lib/api";
 import { downloadCsv } from "../lib/format";
 import { can } from "../lib/permissions";
 import { fmtBaht, fmtNum, fmtCompact, inRange } from "../lib/format";
@@ -11,6 +11,27 @@ import BillingSummary from "./BillingSummary";
 import CrmJobsSummary from "./CrmJobsSummary";
 import TrendCharts from "./TrendCharts";
 import ExecReports from "./ExecReports";
+
+// รายได้แยกหมวด (เฟส 2) — 8 หมวด · เครื่อง=kind ac · บริการ=kind service + หมวด sv-* · วัสดุ/อะไหล่=หมวดวัสดุ+mat_group
+const REV_CATS = [
+  ["ac", "เครื่องปรับอากาศ", "#0ea5e9"],
+  ["material", "วัสดุ", "#16a34a"],
+  ["part", "อุปกรณ์เสริม / อะไหล่", "#ca8a04"],
+  ["svc_install", "ค่าบริการติดตั้ง", "#2563eb"],
+  ["svc_clean", "ค่าบริการล้าง", "#0891b2"],
+  ["svc_move", "ค่าบริการย้าย", "#7c3aed"],
+  ["svc_repair", "ค่าบริการซ่อม", "#d97706"],
+  ["svc_other", "ค่าบริการอื่น ๆ", "#6b7280"],
+];
+const SV_TO_CAT = { "sv-install": "svc_install", "sv-clean": "svc_clean", "sv-move": "svc_move", "sv-repair": "svc_repair" };
+// จัดหมวดของ 1 บรรทัดในใบเสนอ → คีย์หมวดรายได้ (matBy: code→material · catGroup: หมวด→mat_group)
+function revBucketOf(x, matBy, catGroup) {
+  const m = matBy[x.item_code];
+  const kind = x.kind || m?.kind || "material";
+  if (kind === "ac") return "ac";
+  if (kind === "service") return SV_TO_CAT[m?.category] || "svc_other";
+  return catGroup[m?.category] === "part" ? "part" : "material";   // material/ไม่รู้จัก/พิมพ์เอง → วัสดุ
+}
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -86,7 +107,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     const opt = from ? { since: from } : {};
     (async () => {
       try {
-        const [qs, rcs] = await Promise.all([listQuotations(opt), listReceipts(opt).catch(() => [])]);
+        const [qs, rcs, cats] = await Promise.all([listQuotations(opt), listReceipts(opt).catch(() => []), listCategories().catch(() => [])]);
         const boqNos = [...new Set(qs.map((q) => q.boq_no).filter(Boolean))];
         const bs = await listBoqs(from && boqNos.length ? { nos: boqNos } : {});
         // ใบเสร็จที่ผูกใบเสนอนอกช่วง → ขอแค่ "ใครขาย/ทีมไหน" ของใบเสนอพวกนั้นมาเพิ่ม (ตารางบาง 2 คอลัมน์)
@@ -94,7 +115,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
         const inWin = new Set(qs.map((q) => q.quote_no));
         const missing = [...new Set(rcs.map((r) => r.quote_no).filter((n) => n && !inWin.has(n)))];
         const extra = missing.length ? await quoteAttribution(missing).catch(() => ({})) : {};
-        if (alive) setOv({ qs, bs, rcs, attrExtra: extra });
+        if (alive) setOv({ qs, bs, rcs, attrExtra: extra, cats });
       } catch (e) { if (alive) setOvErr(e.message || String(e)); }
     })();
     return () => { alive = false; };
@@ -142,6 +163,25 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     });
     return { sale, count, est, vatSale, vatCount, novatSale, novatCount };
   }, [ov, fq, from, to]);
+  // รายได้แยก 8 หมวด — ฐานเดียวกับการ์ด "ยอดขายอนุมัติ" (ผลรวมทุกหมวด = ovStat.sale)
+  // เฉลี่ยส่วนลดรวมท้ายบิลลงแต่ละบรรทัดตามสัดส่วน (afterDisc/subtotal) → ผลรวมตรงกับยอดก่อน VAT ต่อใบ
+  const revByCat = React.useMemo(() => {
+    const acc = Object.fromEntries(REV_CATS.map(([k]) => [k, 0]));
+    if (!ov) return acc;
+    const matBy = Object.fromEntries(mats.map((m) => [m.code, m]));   // code → {kind, category} (จาก listMaterials เต็ม)
+    const catGroup = Object.fromEntries((ov.cats || []).map((c) => [c.id, c.mat_group]));
+    fq.forEach((qo) => {
+      if (qo.status !== "approved" || !inRange(qo.approved_at || qo.issue_date, from, to)) return;
+      const items = qo.items || [];
+      const lineNet = items.map((x) => Number(x.qty) * (x.price_show ?? x.unit_price ?? 0) - (Number(x.discount) || 0));
+      const subtotal = lineNet.reduce((a, n) => a + n, 0);
+      if (subtotal <= 0) return;
+      const ratio = (qo.afterDisc || 0) / subtotal;   // เฉลี่ยส่วนลดรวม/ค่าธรรมเนียมท้ายบิลลงบรรทัด
+      items.forEach((x, i) => { acc[revBucketOf(x, matBy, catGroup)] += lineNet[i] * ratio; });
+    });
+    return acc;
+  }, [ov, fq, from, to, mats]);
+  const revTotal = REV_CATS.reduce((s, [k]) => s + revByCat[k], 0);
   // ยอดขายที่ออกใบเสร็จ + รับเงินแล้ว (ใบเสร็จสถานะ "ชำระเงินแล้ว" ตามวันที่รับเงิน) — ยอดก่อน VAT ให้เทียบกับการ์ดยอดขายอนุมัติได้ตรง ๆ
   const rcStat = React.useMemo(() => {
     const z = { sale: 0, count: 0, net: 0, wht: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
@@ -285,6 +325,33 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
                 onClick={() => setDocList("rc_all")} />
             )}
           </div>
+
+          {/* รายได้แยกหมวด (เฟส 2) — จากยอดขายอนุมัติ ผลรวมทุกหมวด = การ์ด "ยอดขายอนุมัติ" */}
+          {revTotal > 0 && (
+            <>
+              <div className="sec-head" style={{ margin: "20px 0 10px" }}>
+                <div><div className="sec-title">รายได้แยกหมวด · {periodLabel}</div>
+                  <div className="sec-sub">จากยอดขายอนุมัติ (ยอดก่อน VAT) · รวม {fmtBaht(revTotal)} · ตั้งกลุ่ม วัสดุ/อะไหล่ ได้ที่ ตั้งค่า</div></div>
+                <button className="btn-ghost sm" onClick={() => downloadCsv(`รายได้แยกหมวด-${new Date().toISOString().slice(0, 10)}`,
+                  ["หมวด", "ยอดก่อน VAT", "%"], REV_CATS.map(([k, l]) => [l, Math.round(revByCat[k] * 100) / 100, revTotal ? Math.round(revByCat[k] / revTotal * 1000) / 10 : 0]))}>⬇ Export</button>
+              </div>
+              <div className="card">
+                {REV_CATS.map(([k, l, c]) => {
+                  const v = revByCat[k], pct = revTotal ? v / revTotal * 100 : 0;
+                  return (
+                    <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 2px" }}>
+                      <span style={{ width: 150, minWidth: 150, fontSize: 13.5, fontWeight: 600 }}>{l}</span>
+                      <div style={{ flex: 1, height: 14, background: "var(--line)", borderRadius: 7, overflow: "hidden" }}>
+                        <div style={{ width: `${Math.max(pct, 0)}%`, height: "100%", background: c, borderRadius: 7 }} />
+                      </div>
+                      <span style={{ width: 116, minWidth: 116, textAlign: "right", fontSize: 13.5, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(v)}</span>
+                      <span style={{ width: 44, minWidth: 44, textAlign: "right", fontSize: 12, color: "var(--ink-3)" }}>{pct.toFixed(0)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           {/* เงินคงเหลือแต่ละบัญชี (เฉพาะ role การเงิน) — ตัวเลขเดียวกับเมนูเบิกจ่าย → เดินบัญชี */}
           {accounts && accounts.length > 0 && (

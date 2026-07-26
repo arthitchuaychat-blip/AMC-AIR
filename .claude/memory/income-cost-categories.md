@@ -1,11 +1,11 @@
 ---
 name: income-cost-categories
-description: "โปรเจกต์ 3 เฟส — ประเภทงานชุดใหม่ + แยกหมวดรายได้/ต้นทุนบนแดชบอร์ด (เฟส1 เสร็จ v509, เหลือ 2-3)"
+description: "โปรเจกต์ 3 เฟส — ประเภทงาน+แยกหมวดรายได้/ต้นทุนบนแดชบอร์ด (เฟส1-2 เสร็จ v510, เหลือเฟส3 ต้นทุน)"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 9e3e3c98-8673-47b0-99ce-ee3aa866d22b
-  modified: 2026-07-25T17:33:18.820Z
+  modified: 2026-07-26T01:57:01.968Z
 ---
 
 เจ้าของสั่ง (2026-07-26) ปรับ 3 อย่าง ทำเป็น**เฟส**: (1) ประเภทงาน → (2) หมวดรายได้บนแดชบอร์ด → (3) หมวดต้นทุน/ค่าใช้จ่าย.
@@ -21,7 +21,15 @@ survey=สำรวจงาน · ac_sale(ใหม่)=เครื่อง�
 - แก้ตาม: `handover.js` JOBTYPE_TO_WORK (ac_sale/remove→other, move→move, fix→repair) · `DocPeek.jsx` + `ExecReports.jsx` เลิก hardcode map เปลี่ยนไปดึง `jobTypeDef()` · `JobOrders.jsx` ป้าย "🛒 ยังไม่สั่งของ" ครอบ install+ac_sale · jobTypeDef fallback ค่าไม่รู้จัก→"อื่นๆ" (เดิม→install)
 - dropdown BOQ/JobOrders + filter + ปฏิทิน = .map(JOB_TYPES) auto ได้ตัวเลือกใหม่เอง
 
-## ⬜ เฟส 2 — หมวดรายได้บนแดชบอร์ด (8 หมวด)
+## ✅ เฟส 2 เสร็จ (v510, 2026-07-26) — หมวดรายได้บนแดชบอร์ด (8 หมวด)
+- **migration 176** (`176_category_mat_group.sql`): `categories.mat_group text check(null|material|part)` — null/material=วัสดุ, part=อะไหล่ · **เจ้าของต้องรัน SQL เอง**
+- api.js: `saveCategory` เขียน mat_group (มี fallback ถ้ายังไม่รัน 176) + `setCategoryMatGroup(id,group)` ใหม่ · `updateCategory` ไม่แตะ mat_group (ปลอดภัย)
+- ติดป้าย UI: `Settings.jsx` Fold "📦 จัดกลุ่มหมวดวัสดุ" (MatGroupCard) — list หมวดที่ไม่ใช่ sv-* + Combo วัสดุ/อะไหล่ บันทึกทันที (ต้องรัน 176 ก่อนถึงกดได้)
+- แดชบอร์ด: `Dashboard.jsx` การ์ด "รายได้แยกหมวด" (หลัง kpi-grid หลัก) — REV_CATS 8 หมวด + `revBucketOf(item, matBy, catGroup)` + `revByCat` useMemo. **ฐาน = fq (ยอดขายอนุมัติในช่วง) · ผลรวม = ovStat.sale** (กระจายส่วนลดท้ายบิลลงหมวดตามสัดส่วน afterDisc/subtotal). ใช้ `mats` (listMaterials เต็ม ที่โหลดอยู่แล้ว) สร้าง code→{kind,category} — **ห้ามใช้ listMaterialsLite ใน Dashboard** (test-stock-source เตือน + double-fetch) · โหลด listCategories เพิ่มใน ov
+- bucket: kind=ac→ac · kind=service+category sv-install/clean/move/repair→svc_* · sv-remove/other/พิมพ์เอง→svc_other · material→catGroup[cat]==='part'?อะไหล่:วัสดุ
+- ⚠️ ก่อนติดป้าย: material ทุกหมวด = "วัสดุ", อะไหล่=0 (graceful) · รายการพิมพ์เอง item_code=null แยกวัสดุ/อะไหล่ไม่ได้ (→วัสดุ)
+
+## (เดิม) เฟส 2 บันทึกวิเคราะห์ — หมวดรายได้บนแดชบอร์ด (8 หมวด)
 เครื่องปรับอากาศ · วัสดุ · อุปกรณ์เสริม/อะไหล่ · ค่าบริการติดตั้ง/ล้าง/ย้าย/ซ่อม/อื่นๆ
 - รายได้ปัจจุบันแยกแค่ VAT/ไม่VAT (`Dashboard.jsx` ovStat/rcStat) — ยังไม่เคยแยกตามหมวด
 - **map ได้ 6/8 จาก** `quotation_items.kind` (ac/service/material — copy จาก materials ตอนเพิ่มรายการ) + join `item_code→materials.category`:

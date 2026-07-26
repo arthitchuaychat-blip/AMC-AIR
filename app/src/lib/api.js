@@ -125,10 +125,19 @@ export async function listCategories() {
   return (data || []).map((c, i) => ({ ...c, color: c.color || CAT_PALETTE[i % CAT_PALETTE.length] }));
 }
 export async function saveCategory(c) {
-  const { error } = await supabase.from("categories").upsert(
-    { id: c.id.trim(), name_th: c.name_th.trim(), name_en: c.name_en?.trim() || null },
-    { onConflict: "id" }
-  );
+  const row = { id: c.id.trim(), name_th: c.name_th.trim(), name_en: c.name_en?.trim() || null };
+  if (c.mat_group !== undefined) row.mat_group = c.mat_group || null;  // 'part' = อะไหล่ · null/'material' = วัสดุ
+  let { error } = await supabase.from("categories").upsert(row, { onConflict: "id" });
+  // ยังไม่รัน mig 176 → ถอย mat_group ออก ไม่งั้นบันทึกหมวดไม่ได้ทั้งระบบ
+  if (error && /mat_group/i.test(error.message || "")) {
+    delete row.mat_group;
+    ({ error } = await supabase.from("categories").upsert(row, { onConflict: "id" }));
+  }
+  if (error) throw error;
+}
+// ตั้งกลุ่มวัสดุ/อะไหล่ให้หมวดเดียว (ใช้ในหน้าตั้งค่า — ติดป้ายครั้งเดียว)
+export async function setCategoryMatGroup(id, group) {
+  const { error } = await supabase.from("categories").update({ mat_group: group || null }).eq("id", id);
   if (error) throw error;
 }
 export async function deleteCategory(id) {

@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, setCategoryMatGroup, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -346,6 +346,35 @@ function CategoryRow({ c, onChanged, flash }) {
   );
 }
 
+// จัดกลุ่มหมวดวัสดุ เป็น "วัสดุ" หรือ "อุปกรณ์เสริม/อะไหล่" — ใช้แยกรายได้/ต้นทุนบนแดชบอร์ด (ติดป้ายครั้งเดียว)
+// หมวดบริการ (sv-*) ไม่แสดง เพราะแยกด้วยชนิดบริการอยู่แล้ว · เครื่องปรับอากาศไม่มีหมวด
+function MatGroupCard({ cats, onChanged, flash }) {
+  const mats = (cats || []).filter((c) => !String(c.id).startsWith("sv-"));
+  const [busy, setBusy] = React.useState("");
+  async function setGroup(c, v) {
+    setBusy(c.id);
+    try { await setCategoryMatGroup(c.id, v || null); flash(`ตั้ง "${c.name_th}" เป็น ${v === "part" ? "อุปกรณ์เสริม/อะไหล่" : "วัสดุ"} แล้ว`); onChanged(); }
+    catch (e) { flash("ผิดพลาด: " + (e.message || e), true); }
+    setBusy("");
+  }
+  if (!mats.length) return <div className="empty" style={{ padding: 12 }}>ยังไม่มีหมวดวัสดุ (สร้างอัตโนมัติเมื่ออัปโหลดสินค้า)</div>;
+  return (
+    <div>
+      <p className="sec-sub" style={{ marginBottom: 12 }}>เลือกว่าแต่ละหมวดนับเป็น “วัสดุ” หรือ “อุปกรณ์เสริม/อะไหล่” — ใช้แยกยอดในการ์ด “รายได้แยกหมวด” บนแดชบอร์ด (ตั้งครั้งเดียว มีผลย้อนหลังทุกใบ)</p>
+      {mats.map((c) => (
+        <div key={c.id} className="set-row set-row-cat">
+          <span className="set-cat-dot" style={{ background: c.color }} />
+          <span style={{ flex: 1, fontWeight: 600 }}>{c.name_th} <span style={{ color: "var(--ink-3)", fontWeight: 400, fontSize: 12 }}>({c.id})</span></span>
+          <Combo className="inp" style={{ maxWidth: 200, flex: "none" }} value={c.mat_group === "part" ? "part" : ""} disabled={busy === c.id} onChange={(e) => setGroup(c, e.target.value)}>
+            <option value="">วัสดุ</option>
+            <option value="part">อุปกรณ์เสริม / อะไหล่</option>
+          </Combo>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // FlowAccount OpenAPI — sandbox connection test
 function FlowAccountCard() {
   const [res, setRes] = React.useState(null);
@@ -684,6 +713,7 @@ export default function Settings({ role }) {
             <CompanyCard kind="novat" title="หัวกระดาษ — แบบไม่มี VAT" sub="ใช้กับใบที่ไม่คิด VAT · บัญชีธนาคารชุดไม่มี VAT" flash={flash} />
           </div>
         </Fold>
+        {can(role, "settings", "edit") && <Fold icon="📦" title="จัดกลุ่มหมวดวัสดุ (วัสดุ / อะไหล่)" sub="แยกหมวดสินค้าเป็น วัสดุ หรือ อุปกรณ์เสริม-อะไหล่ สำหรับการ์ดรายได้-ต้นทุนแยกหมวด"><MatGroupCard cats={cats} onChanged={load} flash={flash} /></Fold>}
         <Fold icon="🛠️" title="ทีมช่าง & ผู้ใช้งาน" sub={`${teams.length} ทีม · ${profiles.length} คน — เพิ่ม/แก้ทีม บัญชีพนักงาน รหัสผ่าน`}>
         <div className="damage-layout">
           {/* TEAMS */}
