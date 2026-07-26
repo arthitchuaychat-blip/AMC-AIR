@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 9e3e3c98-8673-47b0-99ce-ee3aa866d22b
-  modified: 2026-07-26T02:42:29.053Z
+  modified: 2026-07-26T03:22:25.692Z
 ---
 
 เจ้าของสั่ง (2026-07-26) ปรับ 3 อย่าง ทำเป็น**เฟส**: (1) ประเภทงาน → (2) หมวดรายได้บนแดชบอร์ด → (3) หมวดต้นทุน/ค่าใช้จ่าย.
@@ -28,6 +28,11 @@ survey=สำรวจงาน · ac_sale(ใหม่)=เครื่อง�
 - แดชบอร์ด: `Dashboard.jsx` การ์ด "รายได้แยกหมวด" (หลัง kpi-grid หลัก) — REV_CATS 8 หมวด + `revBucketOf(item, matBy, catGroup)` + `revByCat` useMemo. **ฐาน = fq (ยอดขายอนุมัติในช่วง) · ผลรวม = ovStat.sale** (กระจายส่วนลดท้ายบิลลงหมวดตามสัดส่วน afterDisc/subtotal). ใช้ `mats` (listMaterials เต็ม ที่โหลดอยู่แล้ว) สร้าง code→{kind,category} — **ห้ามใช้ listMaterialsLite ใน Dashboard** (test-stock-source เตือน + double-fetch) · โหลด listCategories เพิ่มใน ov
 - bucket: kind=ac→ac · kind=service+category sv-install/clean/move/repair→svc_* · sv-remove/other/พิมพ์เอง→svc_other · material→catGroup[cat]==='part'?อะไหล่:วัสดุ
 - ⚠️ ก่อนติดป้าย: material ทุกหมวด = "วัสดุ", อะไหล่=0 (graceful) · รายการพิมพ์เอง item_code=null แยกวัสดุ/อะไหล่ไม่ได้ (→วัสดุ)
+
+## ✅ ต่อยอด (v514) — กดหมวดรายได้ดูรายการสินค้า/บริการรายตัว
+การ์ด "รายได้แยกหมวด" (Dashboard overview) แต่ละแถวกดได้ → เปิด `RevItemsDrawer.jsx` แสดงรายการที่ขายในหมวดนั้น (รวมต่อสินค้า: จำนวน+จำนวนครั้ง+ยอด เรียงมาก→น้อย + Export)
+- `Dashboard.jsx`: state revDrill · memo `revItemsByCat` (key=item_code หรือ ~ชื่อ ถ้าพิมพ์เอง) · ใช้ ratio/bucket เดียวกับ revByCat → **ผลรวมรายการ = ยอดหมวด** เป๊ะ
+- drawer ใช้ class มาตรฐาน drawer-overlay/drawer/ddoc-row (เหมือน DashDocDrawer)
 
 ## (เดิม) เฟส 2 บันทึกวิเคราะห์ — หมวดรายได้บนแดชบอร์ด (8 หมวด)
 เครื่องปรับอากาศ · วัสดุ · อุปกรณ์เสริม/อะไหล่ · ค่าบริการติดตั้ง/ล้าง/ย้าย/ซ่อม/อื่นๆ

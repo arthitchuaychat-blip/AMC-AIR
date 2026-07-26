@@ -13,6 +13,7 @@ import TrendCharts from "./TrendCharts";
 import ExecReports from "./ExecReports";
 import PnLReport from "./PnLReport";
 import StockAsOf from "./StockAsOf";
+import RevItemsDrawer from "./RevItemsDrawer";
 
 // รายได้แยกหมวด (เฟส 2) — 8 หมวด · เครื่อง=kind ac · บริการ=kind service + หมวด sv-* · วัสดุ/อะไหล่=หมวดวัสดุ+mat_group
 const REV_CATS = [
@@ -76,6 +77,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
   const [to, setTo] = React.useState("");
   const [detail, setDetail] = React.useState(null);
   const [docList, setDocList] = React.useState(null); // การ์ดขาย/รับเงิน/กำไร → แผงรายการเอกสาร + Export
+  const [revDrill, setRevDrill] = React.useState(null); // หมวดรายได้ที่กดดูรายการสินค้า/บริการรายตัว
   const [mats, setMats] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [txns, setTxns] = React.useState([]);
@@ -184,6 +186,28 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     return acc;
   }, [ov, fq, from, to, mats]);
   const revTotal = REV_CATS.reduce((s, [k]) => s + revByCat[k], 0);
+  // รายการสินค้า/บริการรายตัวต่อหมวด (สำหรับกดดูรายละเอียด) — รวมยอดต่อสินค้า (จำนวน+ยอดขาย+จำนวนครั้ง)
+  const revItemsByCat = React.useMemo(() => {
+    const out = Object.fromEntries(REV_CATS.map(([k]) => [k, {}]));
+    if (!ov) return out;
+    const matBy = Object.fromEntries(mats.map((m) => [m.code, m]));
+    const catGroup = Object.fromEntries((ov.cats || []).map((c) => [c.id, c.mat_group]));
+    fq.forEach((qo) => {
+      if (qo.status !== "approved" || !inRange(qo.approved_at || qo.issue_date, from, to)) return;
+      const items = qo.items || [];
+      const lineNet = items.map((x) => Number(x.qty) * (x.price_show ?? x.unit_price ?? 0) - (Number(x.discount) || 0));
+      const subtotal = lineNet.reduce((a, n) => a + n, 0);
+      if (subtotal <= 0) return;
+      const ratio = (qo.afterDisc || 0) / subtotal;
+      items.forEach((x, i) => {
+        const bag = out[revBucketOf(x, matBy, catGroup)];
+        const key = x.item_code || ("~" + (x.name || "-"));   // รวมสินค้ารหัสเดียวกัน · รายการพิมพ์เองรวมตามชื่อ
+        const a = bag[key] || (bag[key] = { code: x.item_code || "", name: x.name || matBy[x.item_code]?.th || x.item_code || "-", unit: x.unit || matBy[x.item_code]?.unit || "", qty: 0, amount: 0, count: 0 });
+        a.qty += Number(x.qty) || 0; a.amount += lineNet[i] * ratio; a.count += 1;
+      });
+    });
+    return Object.fromEntries(Object.entries(out).map(([k, bag]) => [k, Object.values(bag).sort((a, b) => b.amount - a.amount)]));
+  }, [ov, fq, from, to, mats]);
   // ยอดขายที่ออกใบเสร็จ + รับเงินแล้ว (ใบเสร็จสถานะ "ชำระเงินแล้ว" ตามวันที่รับเงิน) — ยอดก่อน VAT ให้เทียบกับการ์ดยอดขายอนุมัติได้ตรง ๆ
   const rcStat = React.useMemo(() => {
     const z = { sale: 0, count: 0, net: 0, wht: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
@@ -338,16 +362,22 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
                   ["หมวด", "ยอดก่อน VAT", "%"], REV_CATS.map(([k, l]) => [l, Math.round(revByCat[k] * 100) / 100, revTotal ? Math.round(revByCat[k] / revTotal * 1000) / 10 : 0]))}>⬇ Export</button>
               </div>
               <div className="card">
+                <div className="sec-sub" style={{ marginBottom: 4 }}>กดแต่ละหมวดเพื่อดูรายการสินค้า/บริการที่ขายในหมวดนั้น</div>
                 {REV_CATS.map(([k, l, c]) => {
                   const v = revByCat[k], pct = revTotal ? v / revTotal * 100 : 0;
+                  const clickable = v > 0;
                   return (
-                    <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 2px" }}>
+                    <div key={k} onClick={() => clickable && setRevDrill(k)} role={clickable ? "button" : undefined} tabIndex={clickable ? 0 : undefined}
+                      onKeyDown={(e) => { if (clickable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setRevDrill(k); } }}
+                      style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 6px", borderRadius: 8, cursor: clickable ? "pointer" : "default" }}
+                      className={clickable ? "rev-row-click" : undefined}>
                       <span style={{ width: 150, minWidth: 150, fontSize: 13.5, fontWeight: 600 }}>{l}</span>
                       <div style={{ flex: 1, height: 14, background: "var(--line)", borderRadius: 7, overflow: "hidden" }}>
                         <div style={{ width: `${Math.max(pct, 0)}%`, height: "100%", background: c, borderRadius: 7 }} />
                       </div>
                       <span style={{ width: 116, minWidth: 116, textAlign: "right", fontSize: 13.5, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(v)}</span>
-                      <span style={{ width: 44, minWidth: 44, textAlign: "right", fontSize: 12, color: "var(--ink-3)" }}>{pct.toFixed(0)}%</span>
+                      <span style={{ width: 40, minWidth: 40, textAlign: "right", fontSize: 12, color: "var(--ink-3)" }}>{pct.toFixed(0)}%</span>
+                      <UIcon name="chevR" size={14} color={clickable ? "var(--ink-3)" : "transparent"} />
                     </div>
                   );
                 })}
@@ -519,6 +549,9 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       {detail && <DashDrawer kind={detail} periodLabel={periodLabel} txns={rangeTxns} teams={teams} mats={mats} onClose={() => setDetail(null)} />}
       {docList && <DashDocDrawer kind={docList} periodLabel={periodLabel + (byPerson ? ` · ${byPerson}` : "") + (byTeam ? ` · ทีม ${teams.find((t) => t.id === byTeam)?.name || byTeam}` : "")} from={from} to={to}
         quotes={fq} receipts={fRcs} boqs={ov?.bs || []} onClose={() => setDocList(null)} onOpenDoc={onOpenDoc} />}
+      {revDrill && (() => { const rc = REV_CATS.find(([k]) => k === revDrill) || []; return (
+        <RevItemsDrawer label={rc[1]} color={rc[2]} items={revItemsByCat[revDrill] || []} total={revByCat[revDrill] || 0}
+          periodLabel={periodLabel + (byPerson ? ` · ${byPerson}` : "") + (byTeam ? ` · ทีม ${teams.find((t) => t.id === byTeam)?.name || byTeam}` : "")} onClose={() => setRevDrill(null)} />); })()}
     </div>
   );
 }
