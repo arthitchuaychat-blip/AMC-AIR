@@ -12,6 +12,7 @@ import CrmJobsSummary from "./CrmJobsSummary";
 import TrendCharts from "./TrendCharts";
 import ExecReports from "./ExecReports";
 import PnLReport from "./PnLReport";
+import StockAsOf from "./StockAsOf";
 
 // รายได้แยกหมวด (เฟส 2) — 8 หมวด · เครื่อง=kind ac · บริการ=kind service + หมวด sv-* · วัสดุ/อะไหล่=หมวดวัสดุ+mat_group
 const REV_CATS = [
@@ -397,6 +398,9 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       {tab === "inv" && (
       <>
       <div className="sec-head" style={{ margin: "8px 0 10px" }}><div><div className="sec-title">คลังวัสดุ & การเบิกใช้</div><div className="sec-sub">Inventory & usage · {periodLabel}</div></div></div>
+
+      {/* สต๊อกคงเหลือย้อนหลัง ณ วันที่เลือก (โหลดข้อมูลเอง แยกจากการ์ดปัจจุบันด้านล่าง) */}
+      <StockAsOf />
 
       {err && <div className="empty" style={{ color: "var(--down)" }}>โหลดไม่สำเร็จ: {err}</div>}
       {loading && <div className="empty">กำลังโหลด…</div>}

@@ -3023,6 +3023,33 @@ export async function jobMaterialCost() {
   return m;
 }
 
+// สต๊อกคงเหลือย้อนหลัง ณ วันที่ (asOf 'YYYY-MM-DD' รวมวันนั้น · null/ว่าง = ปัจจุบัน/ทั้งหมด)
+// สูตรตรงกับ view material_stock (mig 086): init_stock + (purchase+return+adjust_in) − withdraw − adjust_out − damage(เฉพาะ job_no ว่าง)
+// คืนสินค้าที่มีสต๊อกได้ (kind ≠ service) พร้อม onHand (จำนวน) · value คิดด้วยต้นทุนปัจจุบัน (ประมาณ — ไม่เก็บต้นทุนย้อนหลังต่อวัน)
+export async function stockAsOf(asOf) {
+  const [mats, txs] = await Promise.all([
+    listMaterialsLite(),
+    _fetchAll((f, t) => {
+      let b = supabase.from("transactions").select("material_code,type,qty,job_no", { count: "exact" }).order("id").range(f, t);
+      if (asOf) b = b.lte("txn_date", asOf);
+      return b;
+    }),
+  ]);
+  const delta = {};
+  txs.forEach((x) => {
+    const c = x.material_code; if (!c) return;
+    let s = 0;
+    if (x.type === "purchase" || x.type === "return" || x.type === "adjust_in") s = Number(x.qty) || 0;
+    else if (x.type === "withdraw" || x.type === "adjust_out") s = -(Number(x.qty) || 0);
+    else if (x.type === "damage" && !x.job_no) s = -(Number(x.qty) || 0);
+    delta[c] = (delta[c] || 0) + s;
+  });
+  return mats.filter((m) => m.kind !== "service").map((m) => {
+    const onHand = (Number(m.init_stock) || 0) + (delta[m.code] || 0);
+    return { code: m.code, th: m.th, kind: m.kind, cat: m.cat, catName: m.catName, unit: m.unit, cost: Number(m.cost) || 0, tracked: m.tracked, onHand, value: onHand * (Number(m.cost) || 0) };
+  });
+}
+
 // all movements for one material (for the detail drawer)
 export async function listMaterialMovements(code) {
   // ครบทุกแถวจริง (เดิม limit 300 แต่หัวข้อบอก "ตลอดอายุ" — ของหมุนเร็วยอดสรุปขาด) · กรองรายรหัส ไม่หนัก

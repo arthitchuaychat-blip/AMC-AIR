@@ -108,7 +108,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-26·คลังสินค้า: 'อุปกรณ์เสริม/อะไหล่' ขึ้นเป็นแท็บหลัก (แยกจากวัสดุ ใช้ป้าย mat_group=part เดียวกับรายได้/ต้นทุน) — ตั้งกลุ่มที่ ตั้งค่า · SQL 178 ตั้งหมวดชื่ออะไหล่ให้อัตโนมัติ (ต้องรัน 176+178) v512";
+const BUILD = "2026-07-26·สต๊อกคงเหลือย้อนหลัง: เลือกวันที่ดูจำนวน+มูลค่าคงเหลือ ณ สิ้นวันนั้น แยกหมวด แอร์/วัสดุ/อะไหล่/อื่นๆ + Export (แดชบอร์ด→คลังวัสดุ) v513";
 
 function SetupNotice() {
   return (

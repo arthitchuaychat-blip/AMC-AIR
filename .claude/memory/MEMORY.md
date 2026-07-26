@@ -30,5 +30,6 @@
 - [Supabase 1000-row cap](supabase-1000-row-cap.md) — every select capped at 1000 rows; page growing tables with _fetchAll or new docs' lines silently vanish on read (v324 BOQ incident)
 - [Tools system](tools-system.md) — เครื่องมือช่าง: registry สต๊อก/ประจำรถ/ประจำตัว + เบิก-คืน-แจ้งชำรุดแบบรออนุมัติ; Tools.jsx, mig 122
 - [Build ผ่าน ≠ หน้าเปิดได้](build-passes-page-dead.md) — Vite ไม่ตรวจตัวแปรอิสระ ต้องรัน npm test (test-undefined-vars.mjs) ก่อน commit ทุกครั้ง ไม่ใช่แค่ build
+- [Stock as-of](stock-as-of.md) — สต๊อกคงเหลือย้อนหลัง ณ วันที่ (v513): สูตร init_stock + เคลื่อนไหวถึงวันนั้น (ตรง view mat_stock), stockAsOf()+StockAsOf.jsx ในแท็บคลังวัสดุ
 - [Income/cost categories](income-cost-categories.md) — เสร็จครบ 3 เฟส v511: ประเภทงาน + รายได้แยกหมวด + P&L ต้นทุน/ค่าใช้จ่าย (แท็บ กำไร-ขาดทุน); ต้องรัน SQL 176+177; แหล่งข้อมูล+เกณฑ์+กับดักครบ
 - [App performance](app-performance.md) — เร่งแอป: code-split (บันเดิลแรก 2.3MB→0.65MB) + แคชลิสต์เอกสาร 45 วิ (ตัวดัก supabase.from/rpc ล้างแคชอัตโนมัติ = เซฟแล้วสด) ทำแล้ว v507; เหลือแค่ index ตอนตารางโต
