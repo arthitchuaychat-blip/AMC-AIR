@@ -10,7 +10,9 @@ import MaterialDrawer from "./MaterialDrawer";
 import BulkImportModal from "./BulkImportModal";
 import AcMediaManager from "./AcMediaManager";
 
-const KINDS = [{ v: "all", l: "ทั้งหมด" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }, { v: "material", l: "วัสดุ" }];
+// แท็บ "อุปกรณ์เสริม/อะไหล่" (part) = สินค้า kind=material ที่หมวดติดป้าย mat_group='part' (ตั้งใน ตั้งค่า)
+// เป็น pseudo-kind สำหรับ "กรองมุมมอง" เท่านั้น — ใน DB สินค้ายังเป็น kind=material (ไม่แตะ) · ผูกป้ายเดียวกับรายได้/ต้นทุนแยกหมวด
+const KINDS = [{ v: "all", l: "ทั้งหมด" }, { v: "ac", l: "เครื่องปรับอากาศ" }, { v: "service", l: "บริการ" }, { v: "material", l: "วัสดุ" }, { v: "part", l: "อุปกรณ์เสริม/อะไหล่" }];
 const KIND_LABEL = { ac: "แอร์", service: "บริการ", material: "วัสดุ" };
 
 // หมวดค่าบริการ — id คงที่ ตรงกับแถวในตาราง categories (migration 102) · รายการเก่าที่ยังไม่จัดหมวด = อื่นๆ
@@ -149,12 +151,18 @@ export default function Catalog({ role }) {
   }, [svcMats, btuOpts]);
   // One shared collator (th) — far faster than calling String.localeCompare per comparison.
   const collator = React.useMemo(() => new Intl.Collator("th"), []);
+  // หมวดไหน = "อุปกรณ์เสริม/อะไหล่" (mat_group='part') · สินค้า part = kind material ที่หมวดถูกติดป้าย part
+  const catGroup = React.useMemo(() => Object.fromEntries(cats.map((c) => [c.id, c.mat_group])), [cats]);
+  const isPart = React.useCallback((m) => m.kind === "material" && catGroup[m.cat] === "part", [catGroup]);
   // Memoized so it only recomputes when a filter actually changes — not on every unrelated render
   // (modal open, toast, hover). Uses `q` directly (NOT useDeferredValue) so a filter/search change
   // updates the list immediately — deferring it made the list look "stuck" until another action.
   const list = React.useMemo(() => mats.filter((m) =>
-    (kind === "all" || m.kind === kind) &&
-    (kind !== "material" || cat === "all" || m.cat === cat) &&
+    (kind === "all" ? true
+      : kind === "part" ? isPart(m)                              // อะไหล่ = material + หมวด part
+      : kind === "material" ? (m.kind === "material" && !isPart(m)) // วัสดุ = material ที่ไม่ใช่ part
+      : m.kind === kind) &&
+    ((kind !== "material" && kind !== "part") || cat === "all" || m.cat === cat) &&
     (kind !== "service" || cat === "all" || svcCatMatch(m, cat)) &&
     (kind !== "service" || acType === "all" || eqi(m.ac_type, acType)) &&
     (kind !== "service" || btu === "all" || svcBtuHit(m, btu)) &&
@@ -167,7 +175,7 @@ export default function Catalog({ role }) {
     (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) ||                       // ชนิด: แอร์ → วัสดุ → บริการ
     collator.compare(a.brand || a.catName || "", b.brand || b.catName || "") ||   // ยี่ห้อ (แอร์) / หมวด (วัสดุ)
     collator.compare(a.th || "", b.th || "")                                       // แล้วเรียงตามตัวอักษรชื่อไทย
-  ), [mats, kind, cat, brand, series, btu, acType, q, collator]);
+  ), [mats, kind, cat, brand, series, btu, acType, q, collator, isPart]);
   // Render in chunks — drawing the whole catalog at once is what made the page lag. Filtering/sort
   // still run over the FULL catalog (search never misses anything); we just paint `limit` cards and
   // grow on demand. Reset back to one page whenever the filter/search changes.
@@ -262,10 +270,11 @@ export default function Catalog({ role }) {
       </div>
 
       {/* sub-filters */}
-      {kind === "material" && (
+      {(kind === "material" || kind === "part") && (
         <div className="cat-filter">
           <button className={"cat-chip" + (cat === "all" ? " on" : "")} onClick={() => setCat("all")} style={cat === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกหมวด</button>
-          {cats.filter((c) => !String(c.id).startsWith("sv-")).map((c) => (
+          {/* วัสดุ = หมวดที่ไม่ใช่ part · อุปกรณ์เสริม/อะไหล่ = หมวด part (ตั้งป้ายที่ ตั้งค่า → จัดกลุ่มหมวดวัสดุ) */}
+          {cats.filter((c) => !String(c.id).startsWith("sv-") && (kind === "part" ? c.mat_group === "part" : c.mat_group !== "part")).map((c) => (
             <button key={c.id} className={"cat-chip" + (cat === c.id ? " on" : "")} onClick={() => setCat(c.id)}
               style={cat === c.id ? { background: c.color, color: "#fff", borderColor: c.color } : { color: c.color }}>{c.name_th}</button>
           ))}
@@ -406,7 +415,7 @@ export default function Catalog({ role }) {
         onEdit={canEdit ? () => { const m = openMat; setOpenMat(null); setEditing(m); } : null} />}
       {editing !== undefined && (
         <MaterialModal initial={editing} categories={cats.filter((c) => !String(c.id).startsWith("sv-"))} brands={brands} btus={btus} acTypes={acTypes} seriesList={seriesAll} onAddCategory={addProductCategory}
-          defaultKind={kind === "all" ? "material" : kind}
+          defaultKind={kind === "all" || kind === "part" ? "material" : kind}
           onSave={handleSaveMaterial}
           onSaved={(savedKind) => { setEditing(undefined); if (savedKind) { setKind(savedKind); setCat("all"); setBrand("all"); setSeries("all"); setBtu("all"); setAcType("all"); flash(`บันทึกสำเร็จ ✓ — อยู่ในแท็บ "${KINDS.find((k) => k.v === savedKind)?.l || savedKind}"`); } load(); }}
           onClose={() => setEditing(undefined)} />
