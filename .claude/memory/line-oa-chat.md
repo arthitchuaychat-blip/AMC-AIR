@@ -5,9 +5,12 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 85b6d010-27bd-419a-ad75-1ac380626a9a
+  modified: 2026-07-28T02:59:36.680Z
 ---
 
 In-app LINE OA chat board (added 2026-06-13). Lets office staff see/reply to LINE OA customer chats inside the app, with live updates and CRM linking. See [[amc-management-erp]] / [[production-plan]].
+
+**Facebook Messenger chat → inbox เดียวกัน (แก้ให้ใช้งานได้ 2026-07-28):** ไฟล์ `app/api/fb-webhook.js` (รับ) · `fb-send.js` (ตอบ) · `fb-subscribe.js` (ต่อ webhook: เปิด `app.amcair.net/api/fb-subscribe?token=<FB_VERIFY_TOKEN>` ในเบราว์เซอร์) · เก็บใน `fb_contacts`/`fb_messages`. **สำคัญ — โทเค็นต้องเป็น System User token (ถาวร ไม่หมดอายุ) ไม่ใช่ page token ที่หมดทุก 60 วัน:** สร้างที่ Business Settings → ผู้ใช้ระบบ (system user `amc-bot`) → มอบเพจ + เพิ่มเข้าแอป AMC Chat (App ID 929565060176819) → สร้างโทเค็น (Never expire + `pages_messaging`,`pages_manage_metadata`,`pages_read_engagement`). ⚠️ System user token `/me` = system user ไม่ใช่เพจ → เพิ่ม `app/api/_fb.js` `pageToken()` แลกเป็น Page token จาก **`FB_PAGE_ID`** (แคช 50น.) ทั้ง 3 ไฟล์ใช้ `/{PAGE_ID}/...`. **env บน Vercel (โปรเจกต์ amc-air):** `FB_PAGE_ACCESS_TOKEN`=system user token · `FB_PAGE_ID`=`727110487432967` (เพจ "AMC AIR แอร์บ้าน ติดตั้งฟรี") · `FB_VERIFY_TOKEN` · `FB_APP_SECRET`(optional). **ไม่ต้องทำ Facebook App Review** — เพจตัวเองใช้ system user token พอ. รับเพจเดียว (หลายเพจต้องแก้โค้ดเพิ่ม). ⚠️ Vercel ตั้ง env เป็น Sensitive = ดูค่าซ้ำไม่ได้ (ตั้งใหม่แทน).
 
 **STATUS 2026-06-13: FULLY WORKING end-to-end.** Inbound messages flow into the app live, store in DB, customer-linking works, profile names/photos populate, and replies (push) send successfully. (Earlier blocker — a stray Thai char in `LINE_CHANNEL_ACCESS_TOKEN` — was fixed by re-pasting the token cleanly; `?linetest=1` now returns reached:true status 400 for dummy id = token valid.) Remaining optional polish: the "ส่งคอนเฟิมจากใบงาน" button (push job-order confirmation text straight into the chat). Debug probes (`?check/dbcheck/selftest/linetest`) are still in `line-webhook.js` — harmless, can be removed later.
 
