@@ -1,6 +1,6 @@
 ---
 name: tools-system
-description: "เครื่องมือช่าง (Tools) module — tool registry per stock/vehicle/person + withdraw/return/report approval flow; Tools.jsx, mig 122, module id \"tools\""
+description: "เครื่องมือช่าง (Tools) module — tool registry per stock/vehicle/person + withdraw/return/report + tool_types master catalog & standard-kit gap check; Tools.jsx, mig 122/179/180, module id \"tools\""
 metadata: 
   node_type: memory
   type: project
@@ -8,3 +8,5 @@ metadata:
 ---
 
 Tools tracking (v338, mig 122): `tools` registry — location `stock` (สำรอง/เฉพาะงาน) / `vehicle` (+team, หัวหน้าทีมรับผิดชอบ) / `person` (+holder uuid), status normal/broken/repair/lost. `tool_moves` = requests (withdraw/return/report/transfer) pending→approved/rejected; approval (decideToolMove in api.js) applies the move to the tools row (return→stock, report→status). RLS: all authenticated read + insert own requests; admin/exec/stock write registry + decide. UI [Tools.jsx](app/src/components/Tools.jsx) tabs ของฉัน/สต๊อกเบิกได้/คำขอ/ทะเบียน; lead_tech's "ของฉัน" includes their team's vehicle tools. Perms: module "tools" — admin/exec/stock=E, most=V, graphic/maid=N. Visibility (v339, per owner): stock tab only lead_tech/stock/admin/exec (canSeeStock); tech sees only own tools + own requests; requests tab shows all only to managers. Seed: mig 123 = standard kits from owner's CSV (51 vehicle + 19 personal), all start in stock tagged 'ชุดประจำรถ/ชุดประจำตัว (มาตรฐาน)'.
+
+**Redesign v517 (2026-07-28, mig 179+180):** เพิ่มเมนูหลัก `tool_types` (id text, name, emoji, `std_personal`/`std_vehicle` = จำนวนมาตรฐานต่อคน/ต่อทีม = นิยาม "ชุดมาตรฐาน", sort, active) + `tools.type_id` FK. api.js: `listToolTypes/saveToolType/deleteToolType`, `addToolsBatch` (ปุ่มเติมชุด), `listTools` แนบ typeName/typeEmoji, `saveTool` มี pre-179 fallback ถ้าไม่มี type_id. Tools.jsx แท็บใหม่: **ประจำตัว(รายคน)** + **ประจำรถ(รายทีม)** (KitCard กางดู, ทุก role ที่เห็นโมดูลดูได้ — ช่าง/หัวหน้าดูของทุกคน/ทุกทีม read-only), **ชนิดเครื่องมือ** (จัดการเมนูหลัก+ตั้ง std, canManage เท่านั้น). Gap "มี/ขาด": นับ tools ที่ holder/team+type_id & status∈{normal,broken,repair} (lost=ขาด) เทียบ std; ปุ่ม "เติมชุดมาตรฐาน" สร้าง tools ที่ขาด. Modal เพิ่มเครื่องมือมี dropdown ชนิด + "＋ ชนิดใหม่" inline (auto เติมชื่อ). **เปลี่ยน gate จาก array hardcode → `can(role,"tools","edit")`** (import ROLE_LABEL,can จาก permissions) = admin/exec/stock, เคารพ override ใน ตั้งค่า. 180 seed tool_types จาก 123 (id=`tt-`||md5(name), merge flag ด้วย ON CONFLICT) + backfill type_id ด้วยชื่อตรงกัน (~68 ชนิด). RLS tool_types = read all / write admin,exec,stock (mig 179). Visibility ไม่แตะ RLS (select=using(true) อยู่แล้ว).

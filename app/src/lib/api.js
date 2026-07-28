@@ -5070,30 +5070,69 @@ async function _loadDocLinks() {
 const _toolErr = (e) => new Error(/tool/.test(e.message || "") && /relation|find|exist/i.test(e.message || "") ? "ยังไม่ได้รัน migration 122 ใน Supabase" : e.message || e);
 
 export async function listTools() {
-  const [t, tm, pf] = await Promise.all([
+  const [t, tm, pf, ty] = await Promise.all([
     supabase.from("tools").select("*").order("name"),
     supabase.from("teams").select("id,name"),
     supabase.from("profiles").select("id,name,email"),
+    supabase.from("tool_types").select("id,name,emoji").then((r) => r, () => ({ data: [] })),  // pre-179 → ว่าง
   ]);
   if (t.error) throw _toolErr(t.error);
   const tn = Object.fromEntries((tm.data || []).map((x) => [x.id, x.name]));
   const pn = Object.fromEntries((pf.data || []).map((x) => [x.id, x.name || x.email]));
-  return (t.data || []).map((x) => ({ ...x, teamName: x.team ? (tn[x.team] || x.team) : null, holderName: x.holder ? (pn[x.holder] || "—") : null }));
+  const tyMap = Object.fromEntries((ty.data || []).map((x) => [x.id, x]));
+  return (t.data || []).map((x) => ({ ...x,
+    teamName: x.team ? (tn[x.team] || x.team) : null,
+    holderName: x.holder ? (pn[x.holder] || "—") : null,
+    typeName: x.type_id ? (tyMap[x.type_id]?.name || null) : null,
+    typeEmoji: x.type_id ? (tyMap[x.type_id]?.emoji || null) : null,
+  }));
 }
 
 export async function saveTool(t) {
   const row = { code: t.code?.trim() || null, name: t.name?.trim(), brand: t.brand?.trim() || null, detail: t.detail?.trim() || null, photo_url: t.photo_url || null,
+    type_id: t.type_id || null,
     location: t.location || "stock", team: t.location === "vehicle" ? (t.team || null) : null,
     holder: t.location === "person" ? (t.holder || null) : null, status: t.status || "normal", note: t.note?.trim() || null };
   const run = () => (t.id ? supabase.from("tools").update(row).eq("id", t.id) : supabase.from("tools").insert(row));
   let { error } = await run();
-  if (error && /brand/i.test(error.message || "")) { delete row.brand; ({ error } = await run()); } // pre-124 fallback
+  if (error && /brand/i.test(error.message || "")) { delete row.brand; ({ error } = await run()); }       // pre-124 fallback
+  if (error && /type_id/i.test(error.message || "")) { delete row.type_id; ({ error } = await run()); }    // pre-179 fallback
   if (error) throw _toolErr(error);
 }
 
 export async function deleteTool(id) {
   const { error } = await supabase.from("tools").delete().eq("id", id);
   if (error) throw _toolErr(error);
+}
+
+// เพิ่มเครื่องมือหลายชิ้นรวดเดียว (ปุ่ม "เติมชุดมาตรฐาน")
+export async function addToolsBatch(rows) {
+  if (!rows?.length) return;
+  const clean = rows.map((r) => ({ name: r.name?.trim(), type_id: r.type_id || null, photo_url: r.photo_url || null,
+    location: r.location || "stock", team: r.location === "vehicle" ? (r.team || null) : null,
+    holder: r.location === "person" ? (r.holder || null) : null, status: r.status || "normal", note: r.note?.trim() || null }));
+  let { error } = await supabase.from("tools").insert(clean);
+  if (error && /type_id/i.test(error.message || "")) { clean.forEach((r) => delete r.type_id); ({ error } = await supabase.from("tools").insert(clean)); }
+  if (error) throw _toolErr(error);
+}
+
+// ---------- เมนูหลัก "ชนิดเครื่องมือ" + ชุดมาตรฐาน (mig 179) ----------
+export async function listToolTypes() {
+  const { data, error } = await supabase.from("tool_types").select("*").order("sort").order("name");
+  if (error) { if (/relation|exist|find/i.test(error.message || "")) return []; throw error; }  // pre-179 → ว่าง
+  return data || [];
+}
+export async function saveToolType(t) {
+  const row = { id: (t.id || "tt" + Date.now().toString(36)).trim(), name: t.name?.trim(), emoji: t.emoji?.trim() || null,
+    std_personal: Number(t.std_personal) || 0, std_vehicle: Number(t.std_vehicle) || 0,
+    sort: Number(t.sort) || 0, active: t.active === false ? false : true };
+  const { error } = await supabase.from("tool_types").upsert(row, { onConflict: "id" });
+  if (error) throw error;
+  return row.id;
+}
+export async function deleteToolType(id) {
+  const { error } = await supabase.from("tool_types").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // คำขอเบิก/คืน/แจ้งชำรุด — สร้างโดยใครก็ได้ รออนุมัติโดยธุรการวัสดุ/ธุรการ/ผู้บริหาร
