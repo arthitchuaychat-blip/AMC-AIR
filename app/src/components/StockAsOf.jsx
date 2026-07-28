@@ -19,6 +19,8 @@ export default function StockAsOf() {
   const [err, setErr] = React.useState(null);
   const [g, setG] = React.useState("all");
   const [hideZero, setHideZero] = React.useState(true);
+  const [expanded, setExpanded] = React.useState(false);
+  const LIMIT = 5;
 
   React.useEffect(() => {
     let alive = true;
@@ -51,6 +53,10 @@ export default function StockAsOf() {
     if (g !== "all") list = list.filter((m) => groupOf(m) === g);
     return list.sort((a, b) => b.value - a.value || String(a.code).localeCompare(b.code));
   }, [rows, g, groupOf, hideZero]);
+
+  // ย่อกลับเป็น 5 แถวทุกครั้งที่เปลี่ยนหมวด / วันที่ / ตัวกรอง
+  React.useEffect(() => { setExpanded(false); }, [g, hideZero, date]);
+  const shown = expanded ? view : view.slice(0, LIMIT);
 
   const totalUnits = view.reduce((a, m) => a + m.onHand, 0);
   const totalValue = view.reduce((a, m) => a + m.value, 0);
@@ -104,7 +110,7 @@ export default function StockAsOf() {
                 </tr>
               </thead>
               <tbody>
-                {view.map((m) => (
+                {shown.map((m) => (
                   <tr key={m.code} style={{ borderBottom: "1px solid var(--line-soft, #f1f5f9)" }}>
                     <td style={{ padding: "6px 8px", color: "var(--ink-3)", whiteSpace: "nowrap" }}>{m.code}</td>
                     <td style={{ padding: "6px 8px" }}>{m.th}{m.tracked === false && <span style={{ fontSize: 11, color: "var(--ink-3)" }}> · ไม่นับสต๊อก</span>}</td>
@@ -118,6 +124,14 @@ export default function StockAsOf() {
               </tbody>
             </table>
           </div>
+
+          {view.length > LIMIT && (
+            <div style={{ textAlign: "center", marginTop: 10 }}>
+              <button className="btn-ghost sm" onClick={() => setExpanded((v) => !v)}>
+                {expanded ? "▲ ย่อลง" : `▼ ดูทั้งหมด (${fmtNum(view.length)} รายการ)`}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
