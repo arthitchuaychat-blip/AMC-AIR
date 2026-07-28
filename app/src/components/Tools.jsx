@@ -93,6 +93,13 @@ export default function Tools({ role, me }) {
     catch (ex) { flash("อัปโหลดรูปไม่สำเร็จ: " + (ex.message || ex), true); }
     setUploading(false); e.target.value = "";
   }
+  async function onPhotoType(e) {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploading(true);
+    try { const url = await uploadMaterialPhoto(file, "tooltype-" + (edType.name || "x")); setEdType((s) => ({ ...s, photo_url: url })); }
+    catch (ex) { flash("อัปโหลดรูปไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUploading(false); e.target.value = "";
+  }
   async function delTool(t) {
     if (!await confirmDialog(`ลบเครื่องมือ "${t.name}" ออกจากทะเบียน? (ประวัติเบิก/คืนของมันจะหายด้วย)`)) return;
     try { await deleteTool(t.id); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
@@ -134,10 +141,12 @@ export default function Tools({ role, me }) {
   };
   const stChip = (t) => { const S = TST[t.status] || TST.normal; return t.status === "normal" ? null : <span className={"job-badge " + S.c}>{S.th}</span>; };
 
-  const ToolRow = ({ t, actions }) => (
+  const ToolRow = ({ t, actions }) => {
+    const pic = t.photo_url || t.typePhoto;   // รูปถ่ายจริงของชิ้นนี้ ถ้าไม่มีใช้รูปอ้างอิงของชนิด
+    return (
     <div className="set-row" style={{ alignItems: "center", gap: 10 }}>
-      {t.photo_url
-        ? <img src={t.photo_url} alt="" style={{ width: 46, height: 46, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line-2)", flex: "none", cursor: "zoom-in" }} onClick={() => window.open(t.photo_url, "_blank")} />
+      {pic
+        ? <img src={pic} alt="" style={{ width: 46, height: 46, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line-2)", flex: "none", cursor: "zoom-in" }} onClick={() => window.open(pic, "_blank")} />
         : <div style={{ width: 46, height: 46, borderRadius: 10, background: "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: 20 }}>{t.typeEmoji || "🛠️"}</div>}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700 }}>{t.name}{t.brand ? <span style={{ fontWeight: 600, color: "#0369a1" }}> · {t.brand}</span> : null}{t.code ? <span className="jo-dim" style={{ fontWeight: 400 }}> · {t.code}</span> : null}</div>
@@ -150,7 +159,8 @@ export default function Tools({ role, me }) {
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{actions}</div>
     </div>
-  );
+    );
+  };
 
   // การ์ดรายคน/รายทีม (กางดูเครื่องมือ + สรุป มี/ขาด)
   const KitCard = ({ id, keyPrefix, title, subtitle, gap, list, scope }) => {
@@ -277,7 +287,10 @@ export default function Tools({ role, me }) {
             {types.length === 0 && <div className="empty sm">ยังไม่มีชนิดในเมนูหลัก — ถ้ายังไม่ได้รัน migration 179/180 ให้รันก่อน</div>}
             {types.map((ty) => (
               <div className="set-row" key={ty.id} style={{ alignItems: "center", gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 0, fontWeight: 600 }}>{ty.emoji ? ty.emoji + " " : ""}{ty.name}</div>
+                {ty.photo_url
+                  ? <img src={ty.photo_url} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", border: "1px solid var(--line-2)", flex: "none" }} />
+                  : <div style={{ width: 40, height: 40, borderRadius: 8, background: "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: 18 }}>{ty.emoji || "🛠️"}</div>}
+                <div style={{ flex: 1, minWidth: 0, fontWeight: 600 }}>{ty.name}</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                   {(ty.std_personal || 0) > 0 && <span className="job-badge b-purple">👤 ประจำตัว ×{ty.std_personal}</span>}
                   {(ty.std_vehicle || 0) > 0 && <span className="job-badge b-blue">🚚 ประจำรถ ×{ty.std_vehicle}</span>}
@@ -375,7 +388,19 @@ export default function Tools({ role, me }) {
                 <label className="fld"><span>มาตรฐาน / ทีม 1 ทีม</span><input className="inp" type="number" min="0" value={edType.std_vehicle} onChange={(e) => setEdType({ ...edType, std_vehicle: e.target.value })} /></label>
               </div>
               <div className="sec-sub" style={{ fontSize: 12, padding: "2px 0 0" }}>ใส่ 0 = ไม่อยู่ในชุดมาตรฐานนั้น</div>
-              <button className="btn-primary" style={{ width: "100%", marginTop: 12 }} disabled={busy} onClick={saveType}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> บันทึก</button>
+              <label className="fld"><span>รูปอ้างอิงของชนิดนี้ (เครื่องมือทุกชิ้นของชนิดนี้จะใช้รูปนี้ ถ้าไม่มีรูปถ่ายจริง)</span>
+                <div className="photo-field">
+                  {edType.photo_url ? <img src={edType.photo_url} className="photo-thumb" alt="" /> : <div className="photo-thumb empty"><UIcon name="camera" size={22} color="var(--ink-3)" /></div>}
+                  <div className="photo-actions">
+                    <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
+                      <UIcon name="camera" size={14} /> {uploading ? "กำลังอัปโหลด…" : (edType.photo_url ? "เปลี่ยนรูป" : "อัปโหลด/ถ่ายรูป")}
+                      <input type="file" accept="image/*" onChange={onPhotoType} style={{ display: "none" }} disabled={uploading} />
+                    </label>
+                    {edType.photo_url && <button type="button" className="btn-ghost sm danger" onClick={() => setEdType((s) => ({ ...s, photo_url: "" }))}>ลบรูป</button>}
+                  </div>
+                </div>
+              </label>
+              <button className="btn-primary" style={{ width: "100%", marginTop: 12 }} disabled={busy || uploading} onClick={saveType}><UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> บันทึก</button>
             </div>
           </div>
         </div>

@@ -5074,7 +5074,8 @@ export async function listTools() {
     supabase.from("tools").select("*").order("name"),
     supabase.from("teams").select("id,name"),
     supabase.from("profiles").select("id,name,email"),
-    supabase.from("tool_types").select("id,name,emoji").then((r) => r, () => ({ data: [] })),  // pre-179 → ว่าง
+    supabase.from("tool_types").select("id,name,emoji,photo_url")
+      .then((r) => r.error ? supabase.from("tool_types").select("id,name,emoji") : r, () => ({ data: [] })),  // pre-181 → ไม่มี photo_url · pre-179 → ว่าง
   ]);
   if (t.error) throw _toolErr(t.error);
   const tn = Object.fromEntries((tm.data || []).map((x) => [x.id, x.name]));
@@ -5085,6 +5086,7 @@ export async function listTools() {
     holderName: x.holder ? (pn[x.holder] || "—") : null,
     typeName: x.type_id ? (tyMap[x.type_id]?.name || null) : null,
     typeEmoji: x.type_id ? (tyMap[x.type_id]?.emoji || null) : null,
+    typePhoto: x.type_id ? (tyMap[x.type_id]?.photo_url || null) : null,
   }));
 }
 
@@ -5124,9 +5126,11 @@ export async function listToolTypes() {
 }
 export async function saveToolType(t) {
   const row = { id: (t.id || "tt" + Date.now().toString(36)).trim(), name: t.name?.trim(), emoji: t.emoji?.trim() || null,
+    photo_url: t.photo_url || null,
     std_personal: Number(t.std_personal) || 0, std_vehicle: Number(t.std_vehicle) || 0,
     sort: Number(t.sort) || 0, active: t.active === false ? false : true };
-  const { error } = await supabase.from("tool_types").upsert(row, { onConflict: "id" });
+  let { error } = await supabase.from("tool_types").upsert(row, { onConflict: "id" });
+  if (error && /photo_url/i.test(error.message || "")) { delete row.photo_url; ({ error } = await supabase.from("tool_types").upsert(row, { onConflict: "id" })); }  // pre-181 fallback
   if (error) throw error;
   return row.id;
 }
