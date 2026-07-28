@@ -44,10 +44,10 @@ function buildGroups(rows) {
 
 export default function Movements({ role, myTeam, prefill, onPrefillConsumed, withdrawCtx, onWithdrawCtxConsumed }) {
   // ซื้อเข้า/ตัดเสีย = สิทธิ์ระดับสโตร์ (ต้องมีสิทธิ์แก้ไข movements และไม่ใช่ช่างภาคสนาม)
-  const isAdmin = can(role, "movements", "edit") && role !== "tech" && role !== "lead_tech";
+  const isAdmin = can(role, "movements", "edit") && role !== "tech" && role !== "assistant" && role !== "lead_tech";
   // แก้ไข/ยกเลิกรายการที่บันทึกไปแล้ว — เฉพาะผู้บริหาร/ธุรการ/การเงิน · ธุรการวัสดุ (stock) เห็นได้แต่แก้/ลบไม่ได้
   const canEditPast = ["admin", "exec", "finance"].includes(role);
-  const isTech = role === "tech";
+  const isTech = role === "tech" || role === "assistant";
   const isLead = role === "lead_tech"; // หัวหน้าช่าง: เบิก/คืนได้ทุกทีม (แต่ไม่ซื้อ/ตัดเสีย)
   // ช่าง + หัวหน้าช่าง ทำได้เฉพาะ เบิกออก/รับคืน — no ซื้อ/ตัดเสีย
   const allowedTypes = (isTech || isLead) ? TYPES.filter((t) => t.id === "withdraw" || t.id === "return") : TYPES;

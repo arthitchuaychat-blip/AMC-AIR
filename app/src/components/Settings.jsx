@@ -299,7 +299,7 @@ function UserRow({ p, teams, onChanged, flash }) {
         <Combo className="inp" value={role} onChange={(e) => setRole(e.target.value)}>
           {ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
         </Combo>
-        <Combo className="inp" value={team} onChange={(e) => setTeam(e.target.value)} disabled={role !== "tech"}>
+        <Combo className="inp" value={team} onChange={(e) => setTeam(e.target.value)} disabled={!["tech", "assistant"].includes(role)}>
           <option value="">— ทีม —</option>
           {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </Combo>
@@ -746,7 +746,7 @@ export default function Settings({ role }) {
               <Combo className="inp" value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })}>
                 {ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
               </Combo>
-              <Combo className="inp" value={nu.team} onChange={(e) => setNu({ ...nu, team: e.target.value })} disabled={nu.role !== "tech"}>
+              <Combo className="inp" value={nu.team} onChange={(e) => setNu({ ...nu, team: e.target.value })} disabled={!["tech", "assistant"].includes(nu.role)}>
                 <option value="">— ทีม —</option>
                 {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Combo>

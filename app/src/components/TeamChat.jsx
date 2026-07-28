@@ -674,7 +674,7 @@ function GroupModal({ staff, jobs, onCreate, onClose }) {
   const [q, setQ]         = React.useState("");
   const [techOnly, setTechOnly] = React.useState(false);
 
-  const techRoles = ["lead_tech", "tech"];
+  const techRoles = ["lead_tech", "tech", "assistant"];
   const listBase  = techOnly ? staff.filter((s) => techRoles.includes(s.role)) : staff;
   const list      = listBase.filter((s) => matchText(q, s.name, s.email));
   const ids       = Object.keys(sel).filter((k) => sel[k]);

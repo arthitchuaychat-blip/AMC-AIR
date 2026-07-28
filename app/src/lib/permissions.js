@@ -12,10 +12,12 @@
 // Team-scoping (ช่างเห็นเฉพาะทีมตัวเอง, หัวหน้าช่างเห็นทุกทีม) stays in the components — that is job
 // logic, not a togglable permission.
 
-export const ROLES = ["admin", "exec", "finance", "hr", "sales", "graphic", "stock", "lead_tech", "tech", "maid"];
+// ลำดับนี้ = ลำดับที่โชว์ในดรอปดาวน์ตำแหน่ง + คอลัมน์ตารางสิทธิ์ (ตามที่เจ้าของกำหนด 2026-07-28)
+export const ROLES = ["exec", "admin", "finance", "hr", "sales", "graphic", "stock", "maid", "lead_tech", "tech", "assistant"];
 export const ROLE_LABEL = {
-  admin: "ธุรการ", exec: "ผู้บริหาร", finance: "บัญชี/การเงิน", hr: "ฝ่ายบุคคล (HR)", sales: "ฝ่ายขาย",
-  graphic: "กราฟิก", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง", maid: "แม่บ้าน",
+  exec: "ผู้บริหาร", admin: "ธุรการ", finance: "บัญชีการเงิน", hr: "บุคคล", sales: "ขาย",
+  graphic: "การตลาดและกราฟิก", stock: "คลังสินค้าวัสดุ", maid: "แม่บ้าน",
+  lead_tech: "หัวหน้าช่าง", tech: "ช่าง", assistant: "ผู้ช่วยช่าง",
 };
 
 // master sidebar order + which modules support an "edit" level (vs view-only)
@@ -71,6 +73,7 @@ export const DEFAULT_PERMS = {
   stock:     { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: E, handover: E, schedule: V, catalog: E, movements: E, stockcount: E, jobs: E, subcontract: N, suppliers: E, prep: E, po: E, tools: E, settings: N },
   lead_tech: { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: V, handover: E, schedule: V, catalog: V, movements: E, jobs: V, subcontract: N, suppliers: N, prep: N, po: N, tools: V, settings: N },
   tech:      { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: V, handover: E, schedule: V, catalog: N, movements: E, jobs: N, subcontract: N, suppliers: N, prep: N, po: N, tools: V, settings: N },
+  assistant: { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: V, handover: E, schedule: V, catalog: N, movements: E, jobs: N, subcontract: N, suppliers: N, prep: N, po: N, tools: V, settings: N },  // ผู้ช่วยช่าง = เหมือนช่างทุกอย่าง
   hr:        { dashboard: V, customers: E, followup: V, weborders: V, website: E, chat: E, teamchat: E, tasks: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, billing: E, receivables: V, payables: V, tax: N, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, handover: E, schedule: E, catalog: E, movements: N, jobs: N, subcontract: E, suppliers: N, prep: E, po: E, tools: V, settings: N },
   graphic:   { dashboard: N, customers: N, followup: N, weborders: V, website: E, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: N, handover: N, schedule: N, catalog: V, movements: N, jobs: N, subcontract: N, suppliers: N, prep: N, po: N, tools: N, settings: N },
   maid:      { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: N, handover: N, schedule: N, catalog: N, movements: N, jobs: N, subcontract: N, suppliers: N, prep: N, po: N, tools: N, settings: N },

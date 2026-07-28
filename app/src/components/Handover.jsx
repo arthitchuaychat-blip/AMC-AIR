@@ -70,7 +70,7 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
     catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
   }
   // แก้ใบที่ส่งแล้ว (มีลายเซ็นลูกค้า) — ช่างแก้ไม่ได้ (RLS mig 150 บล็อกอยู่แล้ว — ซ่อนปุ่มไม่ให้เสียแรงกรอกฟรี) · ออฟฟิศแก้ได้แต่ต้องยืนยัน
-  const canEditRow = (h) => canEdit && !(role === "tech" && h.status === "submitted");
+  const canEditRow = (h) => canEdit && !((role === "tech" || role === "assistant") && h.status === "submitted");
   async function startEdit(h) {
     if (h.status === "submitted" && !await confirmDialog("ใบนี้ส่งแล้ว (มีลายเซ็นลูกค้า) — ยืนยันเปิดแก้ไข?")) return;
     setEditing(h);

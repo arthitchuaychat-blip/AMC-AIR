@@ -178,7 +178,7 @@ function MineTab({ role, flash, onOpenDoc }) {
   const [q, setQ] = React.useState("");
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   async function load() { try { setList(await listMyExpenses()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setList([]); } }
-  React.useEffect(() => { load(); listJobOrders(role === "tech" || role === "lead_tech" ? { fieldOnly: true, team: null } : {}).then((j) => setJobs(j.filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
+  React.useEffect(() => { load(); listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: null } : {}).then((j) => setJobs(j.filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
   const pendRcpt = (list || []).filter(needReceipt).length;
   return (
     <div className="card">

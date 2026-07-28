@@ -62,7 +62,7 @@ export default function Tools({ role, me }) {
   const toolsOfTeam = (tid) => (tools || []).filter((t) => t.location === "vehicle" && t.team === tid);
 
   const holderHasTool = React.useMemo(() => { const s = new Set(); (tools || []).forEach((t) => { if (t.location === "person" && t.holder) s.add(t.holder); }); return s; }, [tools]);
-  const people = (staff || []).filter((s) => ["tech", "lead_tech"].includes(s.role) || holderHasTool.has(s.id));
+  const people = (staff || []).filter((s) => ["tech", "assistant", "lead_tech"].includes(s.role) || holderHasTool.has(s.id));
 
   async function submitRequest(m, doneMsg) {
     setBusy(true);

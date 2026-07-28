@@ -3908,7 +3908,7 @@ export async function jobExpenseCost() {
   return m;
 }
 export async function updateProfile(id, fields) {
-  const payload = { role: fields.role, name: fields.name || null, team: fields.role === "tech" ? (fields.team || null) : null };
+  const payload = { role: fields.role, name: fields.name || null, team: ["tech", "assistant"].includes(fields.role) ? (fields.team || null) : null };
   const { error } = await supabase.from("profiles").update(payload).eq("id", id);
   if (error) throw error;
 }
@@ -3921,7 +3921,7 @@ export async function createUser({ email, password, name, role, team }) {
   const uid = data.user?.id;
   if (!uid) throw new Error("สร้างบัญชีไม่สำเร็จ (อาจต้องปิด Confirm email ใน Supabase)");
   const { error: e2 } = await supabase.from("profiles").upsert(
-    { id: uid, email: email.trim(), name: name?.trim() || email.trim(), role: role || "tech", team: role === "tech" ? (team || null) : null },
+    { id: uid, email: email.trim(), name: name?.trim() || email.trim(), role: role || "tech", team: ["tech", "assistant"].includes(role) ? (team || null) : null },
     { onConflict: "id" }
   );
   if (e2) throw e2;

@@ -17,7 +17,7 @@ const weekStart = (d) => { const x = new Date(d); const dow = (x.getDay() + 6) %
 
 export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
   const canEdit = can(role, "schedule", "edit");
-  const myTeamOnly = role === "tech"; // ช่างเห็นเฉพาะทีมตัวเอง · หัวหน้าช่าง/ออฟฟิศเห็นทุกทีม
+  const myTeamOnly = role === "tech" || role === "assistant"; // ช่าง/ผู้ช่วยช่างเห็นเฉพาะทีมตัวเอง · หัวหน้าช่าง/ออฟฟิศเห็นทุกทีม
   const [view, setView] = React.useState("week");
   const [anchor, setAnchor] = React.useState(today0());
   const [teamF, setTeamF] = React.useState("all");
@@ -30,7 +30,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
 
   React.useEffect(() => { (async () => {
     setLoading(true);
-    try { const [j, t] = await Promise.all([listJobOrders(role === "tech" || role === "lead_tech" ? { fieldOnly: true, team: role === "lead_tech" ? null : team } : {}), listTeams()]); setJobs(j); setTeams(t); }
+    try { const [j, t] = await Promise.all([listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: role === "lead_tech" ? null : team } : {}), listTeams()]); setJobs(j); setTeams(t); }
     catch (e) { console.error(e); }
     setLoading(false);
   })(); }, []);

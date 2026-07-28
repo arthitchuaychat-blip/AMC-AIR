@@ -25,7 +25,7 @@ const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id
 export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onHandover, onCreatePrep, onMovement, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
   // ช่าง/หัวหน้าช่าง เห็นเฉพาะงานของทีมตัวเอง (งานตัวเอง) — ทีมหลังบ้านเห็นทุกงาน
-  const fieldOnly = role === "tech" || role === "lead_tech";
+  const fieldOnly = role === "tech" || role === "assistant" || role === "lead_tech";
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   // งานที่ถูกล็อก (อนุมัติ/ปิดงานแล้ว) แก้ไข/ปลดล็อกได้เฉพาะทีมออฟฟิศที่ดูแลใบงาน (ธุรการ/ผู้บริหาร/ฝ่ายขาย)
   const canOverrideLock = role === "admin" || role === "exec" || role === "sales";
@@ -710,7 +710,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                     onClick={() => onMovement(jo, "withdraw")}>📦 เบิกวัสดุ</button>}
                 {onMovement && can(role, "movements", "edit") && jo.status !== "cancelled" &&
                   <button className="btn-ghost sm" style={{ color: "#16a34a" }} title="คืนวัสดุที่เบิกไปสำหรับงานนี้กลับเข้าคลัง" onClick={() => onMovement(jo, "return")}>↩️ คืนวัสดุ</button>}
-                {onMovement && can(role, "movements", "edit") && !["tech", "lead_tech"].includes(role) && jo.status !== "cancelled" &&
+                {onMovement && can(role, "movements", "edit") && !["tech", "assistant", "lead_tech"].includes(role) && jo.status !== "cancelled" &&
                   <button className="btn-ghost sm" style={{ color: "#dc2626" }} title="บันทึกวัสดุตัดเสีย/เสียหายของงานนี้" onClick={() => onMovement(jo, "damage")}>⚠️ ตัดเสีย</button>}
                 {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
                 {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}

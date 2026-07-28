@@ -44,7 +44,7 @@ export function InternalNoteField({ value, onChange, placeholder }) {
 
 // compact display on a staff-facing card/list (hidden when empty)
 // เห็นได้ทุกคนยกเว้น "ช่าง" (tech/lead_tech/แม่บ้าน) และลูกค้า — ส่ง role มาด้วยเพื่อซ่อนจากช่าง
-const FIELD_ROLES = ["tech", "lead_tech", "maid"];
+const FIELD_ROLES = ["tech", "assistant", "lead_tech", "maid"];
 export function InternalNoteTag({ note, role }) {
   if (!note || FIELD_ROLES.includes(role)) return null;
   return <div className="int-note-tag" title="หมายเหตุภายใน — ไม่แสดงให้ลูกค้า">🔒 <b>ภายใน:</b> {note}</div>;
