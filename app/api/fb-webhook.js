@@ -1,11 +1,11 @@
 // Facebook Messenger webhook — verify (GET) + receive messages (POST), store into fb_contacts/fb_messages.
 // Env: FB_VERIFY_TOKEN, FB_PAGE_ACCESS_TOKEN, FB_APP_SECRET (optional, for signature check), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 import crypto from "crypto";
+import { GRAPH, pageToken } from "./_fb.js";
 
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
-const GRAPH = "https://graph.facebook.com/v19.0";
 
 async function rawBody(req) {
   const chunks = []; for await (const c of req) chunks.push(typeof c === "string" ? Buffer.from(c) : c);
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(buf.toString("utf8") || "{}"); } catch {}
   if (body.object !== "page") return res.status(200).json({ ok: true });
 
-  const token = process.env.FB_PAGE_ACCESS_TOKEN;
+  const token = await pageToken();
   for (const entry of body.entry || []) {
     for (const ev of entry.messaging || []) {
       const psid = ev.sender && ev.sender.id;
