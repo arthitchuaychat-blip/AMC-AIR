@@ -52,6 +52,7 @@ const Tools = React.lazy(() => import("./components/Tools"));
 const TaxReport = React.lazy(() => import("./components/TaxReport"));
 const CustomerFollowup = React.lazy(() => import("./components/CustomerFollowup"));
 const WebOrders = React.lazy(() => import("./components/WebOrders"));
+const Handbook = React.lazy(() => import("./components/Handbook"));
 
 const NAV = {
   myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
@@ -64,6 +65,7 @@ const NAV = {
   teamchat: { th: "แชตทีม", en: "Team Chat", icon: "chat" },
   tasks: { th: "กระดานสั่งงาน", en: "Task Board", icon: "clipboard" },
   attendance: { th: "เข้างาน/ลา", en: "Attendance", icon: "calendar" },
+  handbook: { th: "คู่มือตำแหน่งงาน", en: "Job Handbook", icon: "clipboard" },
   hr: { th: "บุคคล (HR)", en: "HR", icon: "user" },
   subcontract: { th: "ช่างซัพ", en: "Subcontractors", icon: "purchase" },
   catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
@@ -94,7 +96,7 @@ const NAV = {
 // sidebar sections — group the (long) menu into collapsible categories so it's not overwhelming.
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
 const NAV_GROUPS = [
-  { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "hr"] },
+  { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "customers", "followup", "weborders", "website"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses"] },
@@ -108,7 +110,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-07-28·สิทธิ์: ตำแหน่งบุคคลทำงานจัดซื้อได้ (ผู้ขาย+รับของเข้าสต๊อก) v520";
+const BUILD = "2026-07-29·เมนูใหม่ คู่มือตำแหน่งงาน (หน้าที่/ขั้นตอน/KPI + พิมพ์ PDF) ทุกตำแหน่งดูได้ v521";
 
 function SetupNotice() {
   return (
@@ -540,6 +542,7 @@ export default function App() {
         {view === "jobs" && <Jobs role={role} />}
         {view === "catalog" && <Catalog role={role} />}
         {view === "attendance" && <Attendance me={profile} />}
+        {view === "handbook" && <Handbook role={role} me={profile} />}
         {view === "hr" && <HR role={role} />}
         {view === "subcontract" && <Subcontractor role={role} onOpenDoc={openDoc} />}
         {view === "settings" && <Settings role={role} />}
