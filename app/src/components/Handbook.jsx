@@ -1,5 +1,5 @@
 import React from "react";
-import { ROLE_GUIDE, GUIDE_ORDER, DEPT_COLOR, DEPT_LABEL, PROCESS_FLOWS } from "../lib/handbook";
+import { ROLE_GUIDE, GUIDE_ORDER, DEPT_COLOR, DEPT_LABEL, PROCESS_FLOWS, COMPANY_TARGETS } from "../lib/handbook";
 import { UIcon } from "../icons";
 
 // คู่มือตำแหน่งงาน — ทุกตำแหน่งเปิดดูของตัวเองได้ + บันทึก/พิมพ์ PDF
@@ -56,6 +56,17 @@ export default function Handbook({ role, me }) {
         })}
       </div>
 
+      <div style={{ marginTop: 4, marginBottom: 12, background: "var(--surface-2, #f3f7f8)", border: "1px solid var(--line, #e2e8f0)", borderRadius: 12, padding: "12px 14px" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3, #718890)", marginBottom: 9 }}>🧭 เป้าบริษัท (North-Star) · ทุกตำแหน่งเล็งไปที่นี่</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "8px 16px" }}>
+          {COMPANY_TARGETS.map((ct, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13, borderLeft: "3px solid #0d9488", paddingLeft: 9 }}>
+              <span>{ct.m}</span><b style={{ whiteSpace: "nowrap", color: "#0a6f66" }}>{ct.t}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="card" style={{ borderTop: `3px solid ${c}`, marginTop: 4 }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
           <div style={{ width: 52, height: 52, borderRadius: 13, display: "grid", placeItems: "center", fontSize: 28, flex: "none", background: `color-mix(in srgb, ${c} 15%, transparent)` }}>{g.icon}</div>
@@ -69,17 +80,19 @@ export default function Handbook({ role, me }) {
           </div>
         </div>
 
-        {/* KPI ไฮไลต์ */}
-        <div style={{ marginTop: 16, background: `color-mix(in srgb, ${c} 7%, var(--surface, #fff))`, border: `1px solid color-mix(in srgb, ${c} 28%, var(--line, #e2e8f0))`, borderRadius: 12, padding: "13px 15px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: c, marginBottom: 9 }}>🎯 ตัวชี้วัด (KPI)</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 8 }}>
-            {g.kpis.map((k, i) => (
-              <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13.5 }}>
-                <span style={{ fontFamily: "var(--mono, monospace)", fontSize: 11, fontWeight: 700, color: c, border: `1px solid color-mix(in srgb, ${c} 40%, transparent)`, borderRadius: 5, padding: "1px 6px", flex: "none", marginTop: 1 }}>K{i + 1}</span>
-                <span>{k}</span>
+        {/* KPI + เป้าหมาย */}
+        <div style={{ marginTop: 16, background: `color-mix(in srgb, ${c} 7%, var(--surface, #fff))`, border: `1px solid color-mix(in srgb, ${c} 28%, var(--line, #e2e8f0))`, borderRadius: 12, padding: "4px 15px 10px" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: c, margin: "10px 0 2px" }}>🎯 ตัวชี้วัด (KPI) &amp; เป้าหมาย</div>
+          {g.kpis.map((k, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: i ? `1px solid color-mix(in srgb, ${c} 18%, transparent)` : "none" }}>
+              <span style={{ fontFamily: "var(--mono, monospace)", fontSize: 10.5, fontWeight: 700, color: c, border: `1px solid color-mix(in srgb, ${c} 40%, transparent)`, borderRadius: 5, padding: "1px 5px", flex: "none", marginTop: 2 }}>K{i + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.8, fontWeight: 600 }}>{k.m}</div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-3, #718890)", marginTop: 2 }}>⏱ {k.f} · 📍 {k.src}{k.w ? ` · น้ำหนัก ${k.w}%` : ""}</div>
               </div>
-            ))}
-          </div>
+              <span style={{ fontWeight: 800, fontSize: 13.5, color: c, background: `color-mix(in srgb, ${c} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 35%, transparent)`, borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap", flex: "none" }}>{k.t}</span>
+            </div>
+          ))}
         </div>
 
         <Block label="หน้าที่หลัก" items={g.duties} />
@@ -102,7 +115,7 @@ function roleSection(r) {
   const c = DEPT_COLOR[g.dept] || "#0d9488";
   const ul = (items) => `<ul>${items.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`;
   const ol = (items) => `<ol>${items.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>`;
-  const kpi = `<div class="kpi"><div class="kpi-h">🎯 ตัวชี้วัด (KPI)</div>${g.kpis.map((k, i) => `<div class="kpi-i"><span class="kt">K${i + 1}</span>${esc(k)}</div>`).join("")}</div>`;
+  const kpi = `<div class="kpi"><div class="kpi-h">🎯 ตัวชี้วัด (KPI) &amp; เป้าหมาย</div>${g.kpis.map((k, i) => `<div class="kpi-i${i === 0 ? " first" : ""}"><span class="kt">K${i + 1}</span><span class="km">${esc(k.m)}<span class="kf">${esc(k.f)} · ${esc(k.src)}${k.w ? " · น้ำหนัก " + k.w + "%" : ""}</span></span><span class="ktg">${esc(k.t)}</span></div>`).join("")}</div>`;
   return `<section class="role" style="--c:${c}">
     <div class="rh"><span class="ic">${g.icon}</span><div><div class="th">${esc(g.th)}</div><div class="en">${esc(g.en)} · ${esc(DEPT_LABEL[g.dept])}</div><div class="rp">${esc(g.reports)}</div></div></div>
     ${kpi}
@@ -110,6 +123,10 @@ function roleSection(r) {
     <div class="lab">วิธีการทำงาน</div>${ul(g.method)}
     <div class="lab">ขั้นตอนงานประจำ</div>${ol(g.steps)}
   </section>`;
+}
+
+function companySection() {
+  return `<section class="company"><div class="ch">🧭 เป้าบริษัท (North-Star)</div>${COMPANY_TARGETS.map((ct) => `<div class="ci"><span>${esc(ct.m)}</span><b>${esc(ct.t)}</b></div>`).join("")}</section>`;
 }
 
 function processSection() {
@@ -120,7 +137,7 @@ function processSection() {
 
 function printHandbook(roles) {
   const many = roles.length > 1;
-  const body = roles.map(roleSection).join("") + (many ? processSection() : "");
+  const body = companySection() + roles.map(roleSection).join("") + (many ? processSection() : "");
   const html = `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>คู่มือตำแหน่งงาน AMC AIR</title>
   <style>
     @page{size:A4;margin:14mm}
@@ -138,8 +155,16 @@ function printHandbook(roles) {
     .rh .rp{font-size:11.5px;color:#71858b;margin-top:2px}
     .kpi{background:color-mix(in srgb,var(--c) 8%,#fff);border:1px solid color-mix(in srgb,var(--c) 30%,#dbe3e6);border-radius:9px;padding:10px 12px;margin-bottom:10px}
     .kpi-h{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c);margin-bottom:6px}
-    .kpi-i{font-size:12.5px;margin:3px 0;padding-left:2px}
-    .kpi-i .kt{font-family:ui-monospace,Consolas,monospace;font-size:10px;font-weight:700;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 40%,#dbe3e6);border-radius:4px;padding:1px 5px;margin-right:6px}
+    .kpi-i{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;padding:5px 0;border-top:1px solid color-mix(in srgb,var(--c) 15%,transparent)}
+    .kpi-i.first{border-top:none}
+    .kpi-i .kt{font-family:ui-monospace,Consolas,monospace;font-size:9.5px;font-weight:700;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 40%,#dbe3e6);border-radius:4px;padding:1px 5px;flex:none;margin-top:1px}
+    .kpi-i .km{flex:1}
+    .kpi-i .kf{display:block;font-size:10px;color:#8a9a9f;margin-top:1px}
+    .kpi-i .ktg{font-weight:800;color:var(--c);white-space:nowrap;flex:none}
+    .company{border:1px solid #0d9488;background:#f0faf8;border-radius:10px;padding:12px 14px;margin-bottom:16px;break-inside:avoid}
+    .company .ch{font-size:12px;font-weight:800;color:#0a6f66;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+    .company .ci{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;padding:3px 0;border-bottom:1px dashed #cfe3df}
+    .company .ci b{color:#0a6f66;white-space:nowrap}
     .lab{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#71858b;margin:11px 0 3px}
     .lab::before{content:"";display:inline-block;width:6px;height:6px;border-radius:2px;background:var(--c);margin-right:6px;vertical-align:middle}
     ul,ol{margin:0;padding-left:20px}
