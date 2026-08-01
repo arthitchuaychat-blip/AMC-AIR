@@ -4394,6 +4394,119 @@ export async function deleteAdvance(id) {
   if (error) throw error;
 }
 
+// ---------- OT REQUESTS (ใบขอ OT) — พนักงานขอ · HR อนุมัติ · คิดเงินเฉพาะที่อนุมัติ (mig 184) ----------
+// ชั่วโมง OT จากเวลา "HH:MM"–"HH:MM" → บล็อกครึ่งชั่วโมง (ปัดลง) · รองรับข้ามเที่ยงคืน
+export function otHoursFromTimes(from, to) {
+  const mm = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ""); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  const a = mm(from), b = mm(to); if (a == null || b == null) return 0;
+  let diff = b - a; if (diff < 0) diff += 24 * 60;
+  return Math.floor(diff / 30) / 2;
+}
+export async function submitOt({ ot_date, time_from, time_to, reason }) {
+  const uid = await _uid();
+  const hours = otHoursFromTimes(time_from, time_to);
+  const { error } = await supabase.from("hr_ot").insert({ user_id: uid, ot_date, time_from: time_from || null, time_to: time_to || null, hours, reason: reason || null, created_by: uid });
+  if (error) throw error;
+  const me = await _meSafe();
+  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `⏱️ ${me?.name || "พนักงาน"} ขอทำ OT ${hours} ชม. (${ot_date})`, body: reason || "", url: "hr", ref_type: "ot" });
+}
+export async function listMyOt() {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("hr_ot").select("*").eq("user_id", uid).order("ot_date", { ascending: false });
+  if (error) throw error; return data || [];
+}
+export async function cancelMyOt(id) {
+  const { error } = await supabase.from("hr_ot").delete().eq("id", id).eq("status", "pending");
+  if (error) throw error;
+}
+export async function listOt(status) {
+  const build = (f, t) => { let q = supabase.from("hr_ot").select("*", { count: "exact" }).order("ot_date", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
+  const [rows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,role,department")]);
+  const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
+  return rows.map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]) }));
+}
+export async function decideOt(id, status, note) {
+  const uid = await _uid();
+  const { error } = await supabase.from("hr_ot").update({ status, decided_by: uid, decided_at: new Date().toISOString(), decide_note: note || null }).eq("id", id);
+  if (error) throw error;
+  const { data: ot } = await supabase.from("hr_ot").select("user_id,hours,ot_date").eq("id", id).maybeSingle();
+  const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
+  if (ot) notify([ot.user_id], { category: "hr", title: `⏱️ OT ${ot.hours || 0} ชม. (${ot.ot_date}): ${lbl}`, body: note || "", url: "attendance", ref_type: "ot" });
+}
+// settle approved OT once its payroll run is paid (so it isn't re-counted)
+export async function markOtPaid(period, ids) {
+  if (!ids || !ids.length) return;
+  const { error } = await supabase.from("hr_ot").update({ status: "paid", period }).in("id", ids);
+  if (error) throw error;
+}
+
+// ---------- LOANS (เงินยืม — ผ่อนอัตโนมัติจนครบ, mig 184) ----------
+export async function listLoans(activeOnly) {
+  let q = supabase.from("hr_loans").select("*").order("created_at", { ascending: false });
+  if (activeOnly) q = q.eq("status", "active");
+  const [rows, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,role,department")]);
+  if (rows.error) throw rows.error;
+  const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
+  return (rows.data || []).map((l) => ({ ...l, name: pm[l.user_id]?.name || "-", department: posLabel(pm[l.user_id]) }));
+}
+export async function listMyLoans() {
+  const uid = await _uid();
+  const { data, error } = await supabase.from("hr_loans").select("*").eq("user_id", uid).order("created_at", { ascending: false });
+  if (error) throw error; return data || [];
+}
+export async function saveLoan({ id, user_id, principal, installment, note }) {
+  const uid = await _uid();
+  const P = Number(principal) || 0, I = Number(installment) || 0;
+  if (id) {   // แก้ยอด/ค่างวด → recompute balance = ยอดยืม − ที่หักไปแล้ว
+    const { data: pays } = await supabase.from("hr_loan_payments").select("amount").eq("loan_id", id);
+    const paid = (pays || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const bal = Math.max(0, P - paid);
+    const { error } = await supabase.from("hr_loans").update({ principal: P, installment: I, note: note || null, balance: bal, status: bal <= 0 ? "closed" : "active" }).eq("id", id);
+    if (error) throw error; return;
+  }
+  const { error } = await supabase.from("hr_loans").insert({ user_id, principal: P, installment: I, balance: P, status: P <= 0 ? "closed" : "active", note: note || null, created_by: uid });
+  if (error) throw error;
+}
+export async function deleteLoan(id) {
+  const { error } = await supabase.from("hr_loans").delete().eq("id", id);
+  if (error) throw error;
+}
+// ยกเลิกจ่ายรอบ — คืน OT ที่ปิดไปให้เป็น approved อีกครั้ง
+export async function unsettleOt(period) {
+  const { error } = await supabase.from("hr_ot").update({ status: "approved", period: null }).eq("period", period).eq("status", "paid");
+  if (error) throw error;
+}
+// ยกเลิกจ่ายรอบ — ลบงวดผ่อนของรอบนั้น แล้ว recompute balance เงินยืมที่กระทบ
+export async function unsettleLoan(period) {
+  const { data: pays } = await supabase.from("hr_loan_payments").select("loan_id").eq("period", period);
+  const loanIds = [...new Set((pays || []).map((p) => p.loan_id))];
+  await supabase.from("hr_loan_payments").delete().eq("period", period);
+  for (const lid of loanIds) {
+    const [{ data: loan }, { data: ps }] = await Promise.all([
+      supabase.from("hr_loans").select("principal").eq("id", lid).maybeSingle(),
+      supabase.from("hr_loan_payments").select("amount").eq("loan_id", lid),
+    ]);
+    const paid = (ps || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const bal = Math.max(0, (Number(loan?.principal) || 0) - paid);
+    await supabase.from("hr_loans").update({ balance: bal, status: bal <= 0 ? "closed" : "active" }).eq("id", lid);
+  }
+}
+// ตอนทำจ่ายทั้งรอบ — บันทึกงวดผ่อน (idempotent ต่อ period ผ่าน unique loan+period) แล้ว recompute balance
+export async function markLoanPaid(period, items) {
+  if (!items || !items.length) return;
+  for (const it of items) {
+    if (!it.id || !(Number(it.amount) > 0)) continue;
+    await supabase.from("hr_loan_payments").upsert({ loan_id: it.id, period, amount: Number(it.amount) || 0 }, { onConflict: "loan_id,period", ignoreDuplicates: true });
+    const [{ data: loan }, { data: pays }] = await Promise.all([
+      supabase.from("hr_loans").select("principal").eq("id", it.id).maybeSingle(),
+      supabase.from("hr_loan_payments").select("amount").eq("loan_id", it.id),
+    ]);
+    const paid = (pays || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const bal = Math.max(0, (Number(loan?.principal) || 0) - paid);
+    await supabase.from("hr_loans").update({ balance: bal, status: bal <= 0 ? "closed" : "active" }).eq("id", it.id);
+  }
+}
+
 // per-person leave quota (per year). Falls back to hr_settings defaults in the UI when no row.
 export async function getLeaveQuotas(year) {
   const { data, error } = await supabase.from("hr_leave_quota").select("*").eq("year", year);
@@ -4478,6 +4591,7 @@ const _payslipRow = (p, uid, now) => ({
   late_min: p.late_min || 0, ot_min: p.ot_min || 0,
   d_late: p.d_late || 0, d_absent: p.d_absent || 0, d_leave: p.d_leave || 0, d_sso: p.d_sso || 0, d_advance: p.d_advance || 0,
   d_tax: p.d_tax || 0,   // ภาษีหัก ณ ที่จ่าย (mig 161) — แช่แข็งไว้กับสลิป
+  d_loan: p.d_loan || 0, d_water: p.d_water || 0, d_electric: p.d_electric || 0,   // เงินยืม/ค่าน้ำ/ค่าไฟ (mig 184)
   bonus: p.bonus || 0, other_deduct: p.other_deduct || 0, other_note: p.other_note || null,
   net: p.net || 0, status: p.status || "draft", note: p.note || null, created_by: uid, updated_at: now,
 });
@@ -4487,6 +4601,7 @@ export async function savePayslip(p) {
   let { error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" });
   if (error && /hol_pay/i.test(error.message || "")) { delete row.hol_pay; ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); } // pre-148 fallback
   if (error && /d_tax/i.test(error.message || "")) { delete row.d_tax; ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); }   // pre-161 fallback
+  if (error && /(d_loan|d_water|d_electric)/i.test(error.message || "")) { delete row.d_loan; delete row.d_water; delete row.d_electric; ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); }   // pre-184 fallback
   if (error) throw error;
 }
 // บันทึกสลิปทั้งรอบใน "คำสั่งเดียว" — เดิมวนทีละคน เน็ตหลุดกลางทางแล้วได้รอบครึ่ง ๆ กลาง ๆ
@@ -4496,6 +4611,7 @@ export async function savePayslips(list) {
   let { error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" });
   if (error && /hol_pay/i.test(error.message || "")) { rows.forEach((r) => delete r.hol_pay); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); } // pre-148 fallback
   if (error && /d_tax/i.test(error.message || "")) { rows.forEach((r) => delete r.d_tax); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); }   // pre-161 fallback
+  if (error && /(d_loan|d_water|d_electric)/i.test(error.message || "")) { rows.forEach((r) => { delete r.d_loan; delete r.d_water; delete r.d_electric; }); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); }   // pre-184 fallback
   if (error) throw error;
 }
 export async function setPayslipPaid(period, paid, meta = {}) {

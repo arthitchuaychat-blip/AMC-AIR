@@ -85,6 +85,7 @@ export function computePayslip(emp, st, opt = {}) {
   const ssoBase = monthly ? basePay : base;
   const dSso = emp.sso ? r0(Math.min(ssoBase, SSO_BASE_CAP) * 0.05) : 0;
   const bonus = Number(emp.bonus) || 0, otherDeduct = Number(emp.other_deduct) || 0;
+  const dLoan = Number(emp.loan) || 0, dWater = Number(emp.water) || 0, dElectric = Number(emp.electric) || 0;   // เงินยืม(ผ่อน)/ค่าน้ำ/ค่าไฟ (mig 184)
   const dAdvance = Number(emp.advance) || 0;   // เบิกเงินล่วงหน้า ที่อนุมัติแล้ว → หักในรอบนี้
   // ค่าทำงานวันหยุด (พ.ร.บ.คุ้มครองแรงงาน ม.62–63 · เจ้าของเคาะ 2026-07-17 จ่ายตามกฎหมายเต็ม):
   //   8 ชม.แรก → รายเดือนได้ "เพิ่ม 1 เท่า" ของรายชั่วโมง (เงินเดือนจ่ายฐานวันหยุดไว้แล้ว) · รายวันได้ 2 เท่า
@@ -99,12 +100,12 @@ export function computePayslip(emp, st, opt = {}) {
   const dTax = Number(emp.tax_wht) || 0;
   // ต้องอยู่ใน dedBefore ไม่ใช่บวกท้าย ded — เพื่อให้เพดานหักเบิกล่วงหน้า (advCap) ลดลงตาม
   // คือหักเบิกล่วงหน้าได้ไม่เกินเงินที่เหลือ "หลังหักภาษีแล้ว" จริง ๆ
-  const dedBefore = dLate + dAbsent + dLeave + dSso + dTax + otherDeduct;
+  const dedBefore = dLate + dAbsent + dLeave + dSso + dTax + dLoan + dWater + dElectric + otherDeduct;
   const advCap = Math.max(0, gross - dedBefore);
   const dAdvanceApplied = Math.min(dAdvance, advCap);
   const advanceCarry = r0(dAdvance - dAdvanceApplied);   // > 0 = ยังค้าง ต้องยกไปรอบหน้า
   const ded = dedBefore + dAdvanceApplied;
-  return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso, dTax,
+  return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso, dTax, dLoan, dWater, dElectric,
     dAdvance: dAdvanceApplied, advanceCarry, bonus, otherDeduct, gross, ded, net: r0(gross - ded) };
 }
 
@@ -118,6 +119,7 @@ export function frozenPayslip(s) {
     holPay: Number(s.hol_pay) || 0, holNormHours: 0, holOtHours: 0,
     dLate: Number(s.d_late) || 0, dAbsent: Number(s.d_absent) || 0, dLeave: Number(s.d_leave) || 0,
     dSso: Number(s.d_sso) || 0, dTax: Number(s.d_tax) || 0, dAdvance: Number(s.d_advance) || 0, advanceCarry: 0,
+    dLoan: Number(s.d_loan) || 0, dWater: Number(s.d_water) || 0, dElectric: Number(s.d_electric) || 0,
     bonus: Number(s.bonus) || 0, otherDeduct: Number(s.other_deduct) || 0,
     gross: (Number(s.base) || 0) + (Number(s.ot_pay) || 0) + (Number(s.hol_pay) || 0) + (Number(s.bonus) || 0),
     // ⚠️ ห้ามใส่ 0 ตายตัว — เดิม ded: 0 ทำให้สลิปที่จ่ายแล้วพิมพ์ "รวมรายการหัก −฿0.00"
@@ -125,7 +127,8 @@ export function frozenPayslip(s) {
     //    และปุ่มส่งสลิปให้พนักงานทำงานเฉพาะรอบที่จ่ายแล้ว = ทุกใบที่ส่งออกไปถือเลข 0 นี้
     //    รวมจากรายการหักที่เก็บไว้จริง (ควรเท่ากับ gross − net ของสลิปที่บันทึกถูกต้อง)
     ded: (Number(s.d_late) || 0) + (Number(s.d_absent) || 0) + (Number(s.d_leave) || 0)
-       + (Number(s.d_sso) || 0) + (Number(s.d_tax) || 0) + (Number(s.d_advance) || 0) + (Number(s.other_deduct) || 0),
+       + (Number(s.d_sso) || 0) + (Number(s.d_tax) || 0) + (Number(s.d_advance) || 0) + (Number(s.other_deduct) || 0)
+       + (Number(s.d_loan) || 0) + (Number(s.d_water) || 0) + (Number(s.d_electric) || 0),
     net: Number(s.net) || 0, _frozen: true,
   };
 }

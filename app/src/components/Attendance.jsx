@@ -1,5 +1,5 @@
 import React from "react";
-import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance, cancelMyLeave, listPayslips } from "../lib/api";
+import { myAttendanceToday, checkIn, checkOut, listMyAttendance, listMyLeaves, submitLeave, getHrSettings, listHolidays, uploadAttendancePhoto, getMyLeaveQuota, submitAdvance, listMyAdvances, cancelMyAdvance, cancelMyLeave, listPayslips, submitOt, listMyOt, cancelMyOt, listMyLoans, otHoursFromTimes } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, leaveDays, leaveDaysInYear, leaveDaysInRange, leaveLabel, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, minutesOf, hrYmd, hrParseYmd, todayYmd } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
@@ -39,6 +39,13 @@ function inAppBrowser() {
   return m;
 }
 
+const OT_BADGE = {
+  pending: { th: "รออนุมัติ", my: "စောင့်ဆိုင်း", cls: "b-amber" },
+  approved: { th: "อนุมัติ", my: "အတည်ပြု", cls: "b-green" },
+  rejected: { th: "ไม่อนุมัติ", my: "ပယ်", cls: "b-red" },
+  paid: { th: "คิดเงินแล้ว", my: "တွက်ပြီး", cls: "b-grey" },
+};
+
 export default function Attendance({ me }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);          // Thai default, Burmese when toggled
@@ -48,6 +55,8 @@ export default function Attendance({ me }) {
   const [recent, setRecent] = React.useState([]);
   const [leaves, setLeaves] = React.useState([]);
   const [advances, setAdvances] = React.useState([]);
+  const [ots, setOts] = React.useState([]);        // ใบขอ OT ของฉัน (mig 184)
+  const [loans, setLoans] = React.useState([]);    // เงินยืมของฉัน
   const [holidays, setHolidays] = React.useState(new Set());
   const [myQuota, setMyQuota] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
@@ -69,8 +78,8 @@ export default function Attendance({ me }) {
   async function load() {
     try {
       const since = new Date(); since.setDate(since.getDate() - 30);
-      const [t, s, r, lv, hol, q, av] = await Promise.all([myAttendanceToday(), getHrSettings(), listMyAttendance(hrYmd(since)), listMyLeaves(), listHolidays(), getMyLeaveQuota(new Date().getFullYear()), listMyAdvances()]);
-      setToday(t); setSettings(s || DEFAULT_HR_SETTINGS); setRecent(r); setLeaves(lv); setHolidays(new Set((hol || []).map((h) => h.day))); setMyQuota(q); setAdvances(av);
+      const [t, s, r, lv, hol, q, av, ot, ln] = await Promise.all([myAttendanceToday(), getHrSettings(), listMyAttendance(hrYmd(since)), listMyLeaves(), listHolidays(), getMyLeaveQuota(new Date().getFullYear()), listMyAdvances(), listMyOt().catch(() => []), listMyLoans().catch(() => [])]);
+      setToday(t); setSettings(s || DEFAULT_HR_SETTINGS); setRecent(r); setLeaves(lv); setHolidays(new Set((hol || []).map((h) => h.day))); setMyQuota(q); setAdvances(av); setOts(ot); setLoans(ln);
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setToday(null); }
   }
   React.useEffect(() => { load(); }, []);
@@ -106,9 +115,10 @@ export default function Attendance({ me }) {
     setPayBusy(true);
     try {
       const { from, to } = payPeriod(payYm);
-      const [attRows, lvAll, hols, hs, advs, slips, myQ] = await Promise.all([
+      const [attRows, lvAll, hols, hs, advs, slips, myQ, myOt] = await Promise.all([
         listMyAttendance(from), listMyLeaves(), listHolidays(), getHrSettings().catch(() => null),
         listMyAdvances(), listPayslips(payYm).catch(() => []), getMyLeaveQuota(Number(payYm.slice(0, 4))).catch(() => null),
+        listMyOt().catch(() => []),
       ]);
       const hset = { ...DEFAULT_HR_SETTINGS, ...(hs || {}) };
       const holSet = new Set((hols || []).map((h) => h.day));
@@ -117,6 +127,10 @@ export default function Attendance({ me }) {
       const approved = lvAll.filter((l) => l.status === "approved");
       const leaveDaySet = buildLeaveDaySet(approved, from, to);
       const stp = periodStats(me, attByUserDay, leaveDaySet, from, to, holSet, hset);
+      // OT คิดจากใบขอที่ HR อนุมัติเท่านั้น (mig 184) — override OT อัตโนมัติจากเช็คเอาท์
+      const otIn = (myOt || []).filter((o) => o.ot_date >= from && o.ot_date <= to && (o.status === "approved" || (o.status === "paid" && o.period === payYm)));
+      stp.otHours = Math.round(otIn.reduce((s, o) => s + (Number(o.hours) || 0), 0) * 100) / 100;
+      stp.otMin = Math.round(stp.otHours * 60);
       // ลาเกินโควตา: สูตรเดียวกับ HR — เฉพาะส่วนเกินที่ "เกิดในรอบนี้" แยกรายประเภท
       const yearStart = `${payYm.slice(0, 4)}-01-01`;
       const dayBefore = (s) => { const d = hrParseYmd(s); d.setDate(d.getDate() - 1); return hrYmd(d); };
@@ -256,6 +270,52 @@ export default function Attendance({ me }) {
         </div>
       </div>
 
+      {/* OT request + my OT (mig 184) */}
+      <div className="damage-layout">
+        <div className="card">
+          <div className="sec-head"><div><div className="sec-title">⏱️ {L("ขอทำ OT", "OT တောင်းဆိုရန်")}</div>
+            <div className="sec-sub">{L("กรอกวันและเวลาเริ่ม-เลิก · คิดเงินเมื่อ HR อนุมัติ", "ရက်နှင့်အချိန် ဖြည့်ပါ · HR အတည်ပြုမှ တွက်မည်")}</div></div></div>
+          <OtForm onDone={(m) => { flash(m); load(); }} flash={flash} L={L} />
+        </div>
+        <div className="card">
+          <div className="sec-head"><div><div className="sec-title">{L("ใบขอ OT ของฉัน", "ကျွန်ုပ်၏ OT တောင်းဆိုမှု")}</div></div></div>
+          <div className="set-list">
+            {ots.length === 0 && <div className="empty sm">{L("ยังไม่มีใบขอ OT", "OT တောင်းဆိုမှု မရှိသေးပါ")}</div>}
+            {ots.map((o) => { const b = OT_BADGE[o.status] || OT_BADGE.pending; return (
+              <div className="att-leave-row" key={o.id}>
+                <div><b>{o.hours} {L("ชม.", "နာရီ")}</b> <span className="jo-dim">· {thDate(o.ot_date)} · {o.time_from}–{o.time_to}</span>
+                  {o.reason && <div className="jo-dim">{o.reason}</div>}
+                  {o.status === "paid" && o.period && <div className="jo-dim">{L("คิดในรอบ", "တွက်သည့်လ")} {o.period}</div>}
+                  {o.decide_note && <div className="jo-dim">{L("หมายเหตุ", "မှတ်ချက်")}: {o.decide_note}</div>}</div>
+                <div className="hr-leave-act">
+                  <span className={"job-badge " + b.cls}>{L(b.th, b.my)}</span>
+                  {o.status === "pending" && <button className="btn-ghost sm" onClick={async () => { try { await cancelMyOt(o.id); flash(L("ยกเลิกแล้ว", "ပယ်ဖျက်ပြီး")); load(); } catch (e) { flash((e.message || e), true); } }}>{L("ยกเลิก", "ပယ်ဖျက်")}</button>}
+                </div>
+              </div>
+            ); })}
+          </div>
+        </div>
+      </div>
+
+      {/* my loans (read-only) */}
+      {loans.length > 0 && (
+        <div className="card">
+          <div className="sec-head"><div><div className="sec-title">🏦 {L("เงินยืมของฉัน", "ကျွန်ုပ်၏ ချေးငွေ")}</div>
+            <div className="sec-sub">{L("หักผ่อนอัตโนมัติจากเงินเดือนทุกเดือนจนครบ", "လစဉ် အလိုအလျောက် နုတ်ယူမည်")}</div></div></div>
+          <div className="set-list">
+            {loans.map((l) => (
+              <div className="att-leave-row" key={l.id}>
+                <div><b>{L("ยืม", "ချေး")} {fmtBaht(l.principal)}</b> <span className="jo-dim">· {L("ผ่อนเดือนละ", "လစဉ်")} {fmtBaht(l.installment)}</span>
+                  {l.note && <div className="jo-dim">{l.note}</div>}</div>
+                <div className="hr-leave-act">
+                  <span className={"job-badge " + (l.status === "closed" ? "b-green" : "b-amber")}>{l.status === "closed" ? L("ครบแล้ว", "ပြီးပြီ") : L("คงเหลือ", "ကျန်") + " " + fmtBaht(l.balance)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* signature toggle — only for staff who already have an uploaded signature (HR uploads it) */}
       {me?.signature_url && (
         <div className="card">
@@ -327,6 +387,34 @@ function AdvanceForm({ onDone, flash, L }) {
         <span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" step="100" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" /></span></label>
       <label className="fld"><span>{L("เหตุผล", "အကြောင်းပြချက်")}</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={L("เช่น ค่ารักษา / เหตุฉุกเฉิน", "ဥပမာ - ဆေးကုသစရိတ် / အရေးပေါ်")} /></label>
       <button className="btn-primary" disabled={busy || !(Number(amount) > 0)} onClick={submit}>{L("ส่งคำขอเบิก", "တောင်းဆိုရန်")}</button>
+    </div>
+  );
+}
+
+function OtForm({ onDone, flash, L }) {
+  const [date, setDate] = React.useState(todayYmd());
+  const [from, setFrom] = React.useState("17:00");
+  const [to, setTo] = React.useState("20:00");
+  const [reason, setReason] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const hrs = otHoursFromTimes(from, to);
+  async function submit() {
+    if (!(hrs > 0)) return flash(L("เวลาเลิกต้องมากกว่าเวลาเริ่ม", "အဆုံးအချိန်က အစထက် များရမည်"), true);
+    setBusy(true);
+    try { await submitOt({ ot_date: date, time_from: from, time_to: to, reason }); setReason(""); onDone(L("ส่งใบขอ OT แล้ว รออนุมัติ ✓", "OT တောင်းဆိုပြီး · အတည်ပြုရန် စောင့်ဆိုင်း ✓")); }
+    catch (e) { flash(L("ส่งไม่สำเร็จ: ", "မရပါ: ") + (e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="att-leaveform">
+      <label className="fld"><span>{L("วันที่", "ရက်စွဲ")}</span><input className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+      <div className="fld-row">
+        <label className="fld"><span>{L("เวลาเริ่ม", "စချိန်")}</span><input className="inp" type="time" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+        <label className="fld"><span>{L("เวลาเลิก", "ဆုံးချိန်")}</span><input className="inp" type="time" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+      </div>
+      <label className="fld"><span>{L("เหตุผล", "အကြောင်းပြချက်")}</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={L("เช่น งานเร่งด่วน", "ဥပမာ - အရေးပေါ်")} /></label>
+      <div className="jo-dim" style={{ fontSize: 13 }}>{L("คิดเป็น", "တွက်ချက်")} <b>{hrs} {L("ชม.", "နာရီ")}</b> ({L("บล็อกครึ่งชั่วโมง", "မိနစ်၃၀ ဘလောက်")})</div>
+      <button className="btn-primary" disabled={busy || !(hrs > 0)} onClick={submit}>{L("ส่งใบขอ OT", "OT တောင်းဆိုရန်")}</button>
     </div>
   );
 }

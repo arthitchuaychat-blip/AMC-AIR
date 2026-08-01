@@ -5,11 +5,12 @@ import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
+import { listOt, decideOt, markOtPaid, unsettleOt, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184)
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 import PayDetailModal from "./PayDetail";
 
-const TABS = [["today", "วันนี้"], ["calendar", "ปฏิทิน"], ["leaves", "อนุมัติลา"], ["advances", "เบิกล่วงหน้า"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
+const TABS = [["today", "วันนี้"], ["calendar", "ปฏิทิน"], ["leaves", "อนุมัติลา"], ["ot", "อนุมัติ OT"], ["advances", "เบิกล่วงหน้า"], ["loans", "เงินยืม"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
@@ -44,7 +45,9 @@ export default function HR({ role }) {
       {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "calendar" && <CalendarTab staff={staff} settings={settings} holidays={holidays} holSet={holSet} flash={flash} />}
       {tab === "leaves" && <LeavesTab staff={staff} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
+      {tab === "ot" && <OtTab canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "advances" && <AdvancesTab canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
+      {tab === "loans" && <LoansTab staff={staff} canManage={canManage} flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
@@ -493,6 +496,112 @@ function AdvancesTab({ canManage, lockSelfId, flash }) {
   );
 }
 
+// ---- อนุมัติ OT (mig 184) — mirror AdvancesTab ----
+function OtTab({ canManage, lockSelfId, flash }) {
+  const [list, setList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  async function load() { try { setList(await listOt()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
+  React.useEffect(() => { load(); }, []);
+  async function decide(o, status) {
+    const lbl = { approved: "อนุมัติ", rejected: "ไม่อนุมัติ", pending: "คืนเป็นรออนุมัติ" }[status];
+    if (!await confirmDialog(`${lbl} OT ${o.hours} ชม. ของ ${o.name} (${thDate(o.ot_date)})?`)) return;
+    try { await decideOt(o.id, status); flash(lbl + "แล้ว"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  const B = { pending: { t: "รออนุมัติ", c: "b-amber" }, approved: { t: "อนุมัติ · รอคิดเงิน", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", c: "b-red" }, paid: { t: "คิดเงินแล้ว", c: "b-green" } };
+  if (loading) return <div className="empty">กำลังโหลด…</div>;
+  const pending = list.filter((o) => o.status === "pending");
+  const apprHours = list.filter((o) => o.status === "approved").reduce((s, o) => s + (Number(o.hours) || 0), 0);
+  return (
+    <div className="card">
+      <div className="sec-head"><div><div className="sec-title">อนุมัติ OT</div>
+        <div className="sec-sub">รออนุมัติ {pending.length} รายการ · อนุมัติแล้วรอคิดในรอบถัดไป {apprHours.toFixed(1)} ชม.</div></div></div>
+      <div className="set-list">
+        {list.length === 0 && <div className="empty sm">ยังไม่มีใบขอ OT</div>}
+        {list.map((o) => { const b = B[o.status] || B.pending; return (
+          <div className="hr-leave-row" key={o.id}>
+            <div><b>{o.name}</b> <span className="jo-dim">{o.department}</span><br />
+              <b>{o.hours} ชม.</b> · {thDate(o.ot_date)} · {o.time_from}–{o.time_to}
+              {o.reason && <div className="jo-dim">เหตุผล: {o.reason}</div>}
+              {o.status === "paid" && o.period && <div className="jo-dim">คิดในรอบ {o.period}</div>}</div>
+            <div className="hr-leave-act">
+              <span className={"job-badge " + b.c}>{b.t}</span>
+              {o.user_id === lockSelfId ? <span className="jo-dim" style={{ fontSize: 11 }} title="ใบของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ">🔒 ของตัวเอง</span> : <>
+                {o.status !== "paid" && o.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(o, "approved")}>อนุมัติ</button>}
+                {o.status !== "paid" && o.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(o, "rejected")}>ไม่อนุมัติ</button>}
+                {o.status !== "paid" && o.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(o, "pending")}>คืนรออนุมัติ</button>}
+              </>}
+            </div>
+          </div>
+        ); })}
+      </div>
+      <p className="page-sub" style={{ marginTop: 8 }}>* OT ที่ “อนุมัติ” จะถูกนำไปคิดเงินในรอบเงินเดือนถัดไป (ชม. × เรต OT ต่อคน) แล้วเปลี่ยนเป็น “คิดเงินแล้ว” เมื่อทำจ่ายทั้งรอบ</p>
+    </div>
+  );
+}
+
+// ---- เงินยืมพนักงาน (mig 184) — HR เปิดยืม, ผ่อนอัตโนมัติจนครบ ----
+function LoansTab({ staff, canManage, flash }) {
+  const [list, setList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [ed, setEd] = React.useState(null);
+  async function load() { try { setList(await listLoans()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
+  React.useEffect(() => { load(); }, []);
+  async function save() {
+    if (!ed.user_id) return flash("เลือกพนักงานก่อน", true);
+    try { await saveLoan(ed); setEd(null); flash("บันทึกแล้ว ✓"); load(); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function del(l) {
+    if (!await confirmDialog(`ลบเงินยืมของ ${l.name}? (ประวัติผ่อนจะหายด้วย)`)) return;
+    try { await deleteLoan(l.id); flash("ลบแล้ว"); load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  if (loading) return <div className="empty">กำลังโหลด…</div>;
+  const active = list.filter((l) => l.status === "active");
+  return (
+    <div className="card">
+      <div className="sec-head"><div><div className="sec-title">เงินยืมพนักงาน</div>
+        <div className="sec-sub">กำลังผ่อน {active.length} คน · หักผ่อนอัตโนมัติทุกรอบเงินเดือนจนครบ</div></div>
+        {canManage && <button className="btn-primary" onClick={() => setEd({ user_id: "", principal: "", installment: "", note: "" })}><UIcon name="plus" size={15} color="#fff" /> เปิดเงินยืม</button>}
+      </div>
+      <div className="set-list">
+        {list.length === 0 && <div className="empty sm">ยังไม่มีเงินยืม</div>}
+        {list.map((l) => (
+          <div className="hr-leave-row" key={l.id}>
+            <div><b>{l.name}</b> <span className="jo-dim">{l.department}</span><br />
+              ยืม <b>{fmtBaht(l.principal)}</b> · ผ่อนเดือนละ {fmtBaht(l.installment)}
+              {l.note && <div className="jo-dim">{l.note}</div>}</div>
+            <div className="hr-leave-act">
+              <span className={"job-badge " + (l.status === "closed" ? "b-green" : "b-amber")}>{l.status === "closed" ? "ครบแล้ว" : "คงเหลือ " + fmtBaht(l.balance)}</span>
+              {canManage && <button className="btn-ghost sm" onClick={() => setEd({ id: l.id, user_id: l.user_id, principal: l.principal, installment: l.installment, note: l.note || "" })}><UIcon name="edit" size={13} /></button>}
+              {canManage && <button className="btn-ghost sm danger" onClick={() => del(l)}><UIcon name="trash" size={13} /></button>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {ed && (
+        <div className="modal-overlay" onClick={() => setEd(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
+            <div className="modal-head"><div className="modal-title">{ed.id ? "แก้ไขเงินยืม" : "เปิดเงินยืม"}</div><button className="modal-x" onClick={() => setEd(null)}><UIcon name="x" size={18} /></button></div>
+            <div className="modal-body">
+              <label className="fld"><span>พนักงาน</span>
+                <select className="inp" value={ed.user_id} onChange={(e) => setEd({ ...ed, user_id: e.target.value })} disabled={!!ed.id}>
+                  <option value="">— เลือกพนักงาน —</option>
+                  {(staff || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select></label>
+              <div className="fld-row">
+                <label className="fld"><span>ยอดยืมรวม (บาท)</span><input className="inp" type="number" min="0" value={ed.principal} onChange={(e) => setEd({ ...ed, principal: e.target.value })} /></label>
+                <label className="fld"><span>ผ่อนเดือนละ (บาท)</span><input className="inp" type="number" min="0" value={ed.installment} onChange={(e) => setEd({ ...ed, installment: e.target.value })} /></label>
+              </div>
+              <label className="fld"><span>หมายเหตุ</span><input className="inp" value={ed.note} onChange={(e) => setEd({ ...ed, note: e.target.value })} /></label>
+              <button className="btn-primary" style={{ width: "100%", marginTop: 10 }} onClick={save}>บันทึก</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <p className="page-sub" style={{ marginTop: 8 }}>* หักผ่อนอัตโนมัติทุกรอบ (ไม่เกินยอดคงเหลือ) เมื่อกดทำจ่ายทั้งรอบ · ครบแล้วปิดเอง</p>
+    </div>
+  );
+}
+
 // โอนเงินเบิกล่วงหน้าให้พนักงานจริง — เลือกบัญชี + วันที่ + แนบสลิป (จำเป็น) เหมือนจ่ายช่างซัพ
 function PayAdvanceModal({ adv, onClose, onPaid, flash }) {
   const [accounts, setAccounts] = React.useState(null);
@@ -865,7 +974,11 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const { from, to } = payPeriod(ym);
   const [rows, setRows] = React.useState(null);
   const [paidStatus, setPaidStatus] = React.useState("draft");
-  const [adj, setAdj] = React.useState({});     // user_id → { bonus, other_deduct }
+  const [adj, setAdj] = React.useState({});     // user_id → { bonus, other_deduct, water, electric }
+  const [otByUser, setOtByUser] = React.useState({});     // user_id → OT ชม.ที่อนุมัติในรอบ (mig 184)
+  const [otIdsByUser, setOtIdsByUser] = React.useState({}); // user_id → [ot ids] to settle
+  const [loanByUser, setLoanByUser] = React.useState({});   // user_id → งวดผ่อนเงินยืมรอบนี้
+  const [loanItemsByUser, setLoanItemsByUser] = React.useState({}); // user_id → [{id, amount}] to settle
   const [advByUser, setAdvByUser] = React.useState({});   // user_id → approved-unsettled advance total
   const [advIdsByUser, setAdvIdsByUser] = React.useState({}); // user_id → [advance ids] to settle on pay
   const [advRowsByUser, setAdvRowsByUser] = React.useState({}); // user_id → [advance rows] ไว้กางดูรายละเอียด
@@ -888,7 +1001,16 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   async function load() {
     setLoading(true);
     try {
-      const [att, leaves, slips, advs, qOverRows] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym), listAdvances("approved"), getLeaveQuotas(ym.slice(0, 4)).catch(() => [])]);
+      const [att, leaves, slips, advs, qOverRows, otApproved, loansActive] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym), listAdvances("approved"), getLeaveQuotas(ym.slice(0, 4)).catch(() => []), listOt("approved").catch(() => []), listLoans(true).catch(() => [])]);
+      // OT: คิดจากใบขอที่อนุมัติในรอบนี้ (mig 184) — ผลรวมชั่วโมง + ไอดีไว้ปิดตอนจ่าย
+      const otH = {}, otIdByUser = {};
+      (otApproved || []).filter((o) => o.ot_date >= from && o.ot_date <= to && o.status === "approved").forEach((o) => { otH[o.user_id] = (otH[o.user_id] || 0) + (Number(o.hours) || 0); (otIdByUser[o.user_id] = otIdByUser[o.user_id] || []).push(o.id); });
+      Object.keys(otH).forEach((k) => { otH[k] = Math.round(otH[k] * 100) / 100; });
+      setOtByUser(otH); setOtIdsByUser(otIdByUser);
+      // เงินยืม: งวดผ่อนรอบนี้ = min(ค่างวด, คงเหลือ) ต่อคน (active)
+      const loanH = {}, loanItByUser = {};
+      (loansActive || []).filter((l) => l.status === "active" && Number(l.balance) > 0).forEach((l) => { const amt = Math.min(Number(l.installment) || 0, Number(l.balance) || 0); if (amt > 0) { loanH[l.user_id] = (loanH[l.user_id] || 0) + amt; (loanItByUser[l.user_id] = loanItByUser[l.user_id] || []).push({ id: l.id, amount: amt }); } });
+      setLoanByUser(loanH); setLoanItemsByUser(loanItByUser);
       // โควตาลารายคน (HR ตั้งเองใน กะ & ตั้งค่า) — ต้องใช้คิดหักลาเกินให้ตรงกับการ์ดยอดคงเหลือ ไม่งั้นจอบอกเหลือ 2 วันแต่หักเงินเหมือนเกินโควตา
       const qOver = Object.fromEntries((qOverRows || []).map((r) => [r.user_id, r]));
       // approved advances not yet settled (period not set) → deduct in this run
@@ -898,7 +1020,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
       // โหมดรับรอง OT: รวบวันที่มี OT ค้างรับรองของทั้งรอบมาไว้หน้าเดียว
       const pend = [];
-      if (settings.otNeedsApproval) att.forEach((a) => { if (!a.check_in_at || a.ot_ok) return; const s = dayStat(a, settings); if (s.otHours > 0) pend.push({ a, s }); });
+      // OT คิดจากใบขอที่อนุมัติแล้ว (mig 184) — เลิกใช้การรับรอง OT อัตโนมัติจากเช็คเอาท์
       pend.sort((x, y) => (x.a.work_date < y.a.work_date ? -1 : 1));
       setPendingOt(pend);
       // วันที่เช็คอินแล้วไม่มีเวลาออก — สแกน "ทั้งรอบ" ไม่ใช่ 7 วันหลังแบบแบนเนอร์ในแท็บวันนี้
@@ -918,6 +1040,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       const initAdj = {};
       const result = staff.map((p) => {
         const st = periodStats(p, attByUserDay, leaveDaySet, from, to, holSet, settings);
+        st.otHours = otH[p.id] || 0; st.otMin = Math.round(st.otHours * 60);   // OT จากใบขอที่อนุมัติ (mig 184)
         let over = 0;
         ["vacation", "personal", "sick"].forEach((t) => {
           const q = (qOver[p.id]?.[t] ?? quota[t]) ?? 0;
@@ -926,7 +1049,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         // หักค่าแรง = ส่วนเกินโควตาที่เกิดในรอบนี้ + ลาไม่รับค่าแรงทั้งหมดในรอบ (เต็มวัน/ราย ชม. คิดเศษวัน)
         st.overLeave = Math.round((Math.min(st.leaveDays - (st.unpaidLeave || 0), Math.max(0, over)) + (st.unpaidLeave || 0)) * 100) / 100;
         const slip = slipBy[p.id];
-        initAdj[p.id] = { bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0 };
+        initAdj[p.id] = { bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0, water: Number(slip?.d_water) || 0, electric: Number(slip?.d_electric) || 0 };
         return { p, st, slip };
       });
       setAdj(initAdj); setRows(result);
@@ -938,7 +1061,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   // รอบที่จ่ายแล้วอ่านจากสลิปที่บันทึก — สูตรอยู่ที่ lib/payroll.js frozenPayslip() ใช้ร่วมกับหน้า เข้างาน/ลา
 
   const calcOf = (r) => (r.slip?.status === "paid" ? frozenPayslip(r.slip)
-    : computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0 }, r.st, {}));
+    : computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0,
+        loan: loanByUser[r.p.id] || 0, water: adj[r.p.id]?.water || 0, electric: adj[r.p.id]?.electric || 0 }, r.st, {}));
   // ---- export CSV ราชการ (BOM นำหน้าให้ Excel อ่านไทยถูก) ----
   const dlCsv = (name, rowsArr) => { const csv = "﻿" + rowsArr.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = name; a.click(); };
   function exportSso() {
@@ -970,7 +1094,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         ${line(c._frozen ? "ค่าทำงานวันหยุด" : `ค่าทำงานวันหยุด (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`, c.holPay)}
         ${line("โบนัส/เบี้ยเลี้ยง", c.bonus)}
         ${line("หักมาสาย", c.dLate, 1)}${line("หักขาดงาน", c.dAbsent, 1)}${line("หักลาเกินโควต้า/ลาไม่รับค่าแรง", c.dLeave, 1)}
-        ${line("ประกันสังคม", c.dSso, 1)}${line("ภาษีหัก ณ ที่จ่าย", c.dTax, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
+        ${line("ประกันสังคม", c.dSso, 1)}${line("ภาษีหัก ณ ที่จ่าย", c.dTax, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักเงินยืม", c.dLoan, 1)}${line("หักค่าน้ำ", c.dWater, 1)}${line("หักค่าไฟ", c.dElectric, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
         <tr><td style="padding:8px 10px;border-top:2px solid #0ea5e9;font-weight:800">รับสุทธิ</td><td style="padding:8px 12px;border-top:2px solid #0ea5e9;text-align:right;font-weight:800;font-size:16px;color:#0a6b3d">${fmtBaht(c.net)}</td></tr>
       </table></div>`;
     const host = document.createElement("div"); host.style.cssText = "position:fixed;left:-99999px;top:0;background:#fff;"; host.innerHTML = html; document.body.appendChild(host);
@@ -1005,6 +1129,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           // ⚠️ เก็บนาที OT "ที่จ่ายจริง" (ปัดครึ่ง ชม.แล้ว = c.otHours) ไม่ใช่นาทีดิบ r.st.otMin
           //    frozenPayslip อ่าน ot_min/60 กลับมาโชว์ชั่วโมง ถ้าเก็บดิบ สลิปจะโชว์ ชม.มากกว่าที่จ่าย (3.3 ชม. × 60 ≠ 150)
           late_min: r.st.lateMin, ot_min: Math.round((c.otHours || 0) * 60), d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
+          d_loan: c.dLoan || 0, d_water: c.dWater || 0, d_electric: c.dElectric || 0,   // เงินยืม/ค่าน้ำ/ค่าไฟ (mig 184)
           bonus: c.bonus, other_deduct: c.otherDeduct, d_tax: c.dTax || 0, net: c.net, status: markPaid ? "paid" : "draft" };
       });
       await savePayslips(rows);
@@ -1014,6 +1139,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         // ⚠️ ปิดเฉพาะคนที่หักได้ครบจริง — ถ้าเงินไม่พอหัก (advanceCarry > 0) ต้องคงใบไว้ให้ยกไปหักรอบหน้า
         const ids = payable.filter((r) => !(calcOf(r).advanceCarry > 0)).flatMap((r) => advIdsByUser[r.p.id] || []);
         await markAdvancesPaid(ym, ids);
+        // ปิด OT ที่อนุมัติ (→ paid) + บันทึกงวดผ่อนเงินยืม (ลด balance) ของคนที่จ่ายรอบนี้ (mig 184)
+        await markOtPaid(ym, payable.flatMap((r) => otIdsByUser[r.p.id] || [])).catch(() => {});
+        await markLoanPaid(ym, payable.flatMap((r) => loanItemsByUser[r.p.id] || [])).catch(() => {});
         const carried = payable.filter((r) => calcOf(r).advanceCarry > 0);
         if (carried.length) flash(`⚠️ ${carried.length} คนเบิกล่วงหน้าเกินยอดที่หักได้ในรอบนี้ — ใบเบิกยังค้างไว้ ยกไปหักรอบถัดไปให้อัตโนมัติ`, true);
         // เดินบัญชี: เงินเดือนทั้งรอบ = เงินออกจากบัญชีที่เลือก (best-effort — hr อาจไม่มีสิทธิ์)
@@ -1042,6 +1170,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       await logAudit({ action: "cancel_pay", target_type: "payroll", target_no: ym, reason }).catch(() => {});
       await setPayslipPaid(ym, false);
       await unsettleAdvances(ym);
+      await unsettleOt(ym).catch(() => {});      // คืน OT ที่ปิดไปให้ approved (mig 184)
+      await unsettleLoan(ym).catch(() => {});    // คืนงวดผ่อนเงินยืม + balance กลับ
       await removeSalaryEntry(ym).catch(() => {});        // ลบรายการเดินบัญชีของรอบ (best-effort)
       await removePayrollCashEntry(ym).catch(() => {});   // best-effort (hr อาจไม่มีสิทธิ์กระแสเงินสด)
       flash("ยกเลิกการจ่ายแล้ว — แก้ไขข้อมูลแล้วกด “ทำจ่ายทั้งรอบ” ใหม่ได้"); await load();
@@ -1117,7 +1247,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       {loading ? <div className="empty">กำลังคำนวณ…</div> : payable.length === 0 ? <div className="empty">ยังไม่มีพนักงานที่ตั้งฐานเงินเดือน — ไปตั้งที่แท็บ “กะ & ตั้งค่า”</div> : (
         <div style={{ overflowX: "auto" }}>
           <table className="hr-table pay-table">
-            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>ค่าวันหยุด</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>ภาษี</th><th>หักเบิกล่วงหน้า</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
+            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>ค่าวันหยุด</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>ภาษี</th><th>หักเบิกล่วงหน้า</th><th>เงินยืม</th><th>ค่าน้ำ</th><th>ค่าไฟ</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
             <tbody>
               {payable.map((r) => { const c = calcOf(r); const openD = { onClick: () => setDetailFor(r), style: { cursor: "zoom-in" }, title: "กดดูรายละเอียดรายวัน" }; return (
                 <tr key={r.p.id}>
@@ -1131,6 +1261,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                   <td className={c.dSso ? "hr-bad" : ""} {...openD}>{c.dSso ? "−" + fmtBaht(c.dSso) : "—"}</td>
                   <td className={c.dTax ? "hr-bad" : ""} {...openD}>{c.dTax ? "−" + fmtBaht(c.dTax) : "—"}</td>
                   <td className={c.dAdvance ? "hr-bad" : ""} {...openD}>{c.dAdvance ? "−" + fmtBaht(c.dAdvance) : "—"}</td>
+                  <td className={c.dLoan ? "hr-bad" : ""} {...openD} title="งวดผ่อนเงินยืมรอบนี้ (อัตโนมัติ)">{c.dLoan ? "−" + fmtBaht(c.dLoan) : "—"}</td>
+                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.water || 0} onChange={(e) => setA(r.p.id, "water", e.target.value)} /></span></td>
+                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.electric || 0} onChange={(e) => setA(r.p.id, "electric", e.target.value)} /></span></td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
                   <td style={{ fontWeight: 800, color: "var(--up)", cursor: "zoom-in" }} onClick={() => setDetailFor(r)} title="กดดูรายละเอียดรายวัน">{fmtBaht(c.net)}</td>
@@ -1141,7 +1274,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                 </tr>
               ); })}
             </tbody>
-            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={11} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td><td /></tr></tfoot>
+            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={14} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td><td /></tr></tfoot>
           </table>
         </div>
       )}
@@ -1176,6 +1309,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
               {c.dSso > 0 && <tr><td>ประกันสังคม 5%</td><td className="r">−{fmtBaht(c.dSso)}</td></tr>}
               {c.dAdvance > 0 && <tr><td>หักเบิกเงินล่วงหน้า</td><td className="r">−{fmtBaht(c.dAdvance)}</td></tr>}
               {c.dTax > 0 && <tr><td>ภาษีหัก ณ ที่จ่าย</td><td className="r">−{fmtBaht(c.dTax)}</td></tr>}
+              {c.dLoan > 0 && <tr><td>หักเงินยืม</td><td className="r">−{fmtBaht(c.dLoan)}</td></tr>}
+              {c.dWater > 0 && <tr><td>หักค่าน้ำ</td><td className="r">−{fmtBaht(c.dWater)}</td></tr>}
+              {c.dElectric > 0 && <tr><td>หักค่าไฟ</td><td className="r">−{fmtBaht(c.dElectric)}</td></tr>}
               {c.otherDeduct > 0 && <tr><td>หักอื่นๆ</td><td className="r">−{fmtBaht(c.otherDeduct)}</td></tr>}
               <tr className="ps-sub"><td>รวมรายการหัก</td><td className="r">−{fmtBaht(c.ded)}</td></tr>
               <tr className="ps-net"><td>เงินได้สุทธิ</td><td className="r">{fmtBaht(c.net)}</td></tr>
