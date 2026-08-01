@@ -197,6 +197,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     getProfile().then((p) => setMyId(p?.id || null)).catch(() => {});
   }, []);
   const staffMap = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
+  // ผู้รับผิดชอบลูกค้า = เฉพาะทีมหลังบ้านที่เข้าถึงแชตได้ (admin/exec/บัญชี/บุคคล/ขาย) — ไม่รวมช่างหน้างาน
+  const ownerStaff = React.useMemo(() => staff.filter((s) => can(s.role, "chat", "view")), [staff]);
   const staffColor = React.useMemo(() => Object.fromEntries(staff.map((s, i) => [s.id, STAFF_COLORS[i % STAFF_COLORS.length]])), [staff]);
   async function changeStage(s) { if (isFb) return; try { await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
   async function changeOwner(uid) { if (isFb) return; try { await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
@@ -320,6 +322,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       }
       for (const u of imgs) await chSendImage(sel, u);   // รูปแนบจากข้อความสำเร็จรูป — ตามหลังข้อความ
       if (isFb) setMsgs(await chListMessages(sel));      // FB: no realtime; refresh
+      // คนตอบคนแรก = ผู้รับผิดชอบลูกค้าโดยอัตโนมัติ (เฉพาะแชตลูกค้า LINE ที่ยังไม่มีผู้รับผิดชอบ)
+      if (!isFb && !isSup && myId && selContact && selContact.kind !== "supplier" && !selContact.assigned_to) {
+        try { await setLineOwner(sel, myId); await loadContacts(); } catch (e2) { /* ไม่ให้ล้มการส่ง */ }
+      }
       setText(""); setReplyTo(null); setQrPendImgs([]);
     }
     catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
@@ -645,7 +651,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                 <div className="chat-av sm">{selContact.picture_url ? <img src={selContact.picture_url} alt="" /> : initial(selContact.display_name)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="chat-thread-name">{selContact.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</div>
-                  <div className="chat-thread-sub">{selContact.customerName ? `🔗 ${selContact.customerName}` : "ยังไม่เชื่อมลูกค้า"}</div>
+                  <div className="chat-thread-sub" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 8px" }}>
+                    <span>{selContact.customerName ? `🔗 ${selContact.customerName}` : "ยังไม่เชื่อมลูกค้า"}</span>
+                    {!isFb && !isSup && <span className="conv-owner">👤 {(selContact.assigned_to && staffMap[selContact.assigned_to]) || "ยังไม่มีผู้รับผิดชอบ"}</span>}
+                  </div>
                 </div>
                 {canSend && onCreateTask && <button className="chat-info-toggle" onClick={() => onCreateTask(selContact.customer_id || null, selContact.customerName || selContact.display_name)} title="สร้างงานในกระดานสั่งงาน">✅</button>}
                 <button className="chat-info-toggle" onClick={() => setShowInfo((s) => !s)} title="ข้อมูลลูกค้า"><UIcon name="building" size={18} /></button>
@@ -841,7 +850,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   </label>
                   <label className="ci-field"><span>ผู้รับผิดชอบ</span>
                     {canSend
-                      ? <Combo className="inp" value={selContact.assigned_to || ""} onChange={(e) => changeOwner(e.target.value || null)}><option value="">— ยังไม่มอบหมาย —</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Combo>
+                      ? <Combo className="inp" value={selContact.assigned_to || ""} onChange={(e) => changeOwner(e.target.value || null)}><option value="">— ยังไม่มอบหมาย —</option>{ownerStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Combo>
                       : <span style={{ fontSize: 13 }}>{(selContact.assigned_to && staffMap[selContact.assigned_to]) || "—"}</span>}
                   </label>
                   {/* บอทมีเบรกอยู่แล้ว (เงียบอัตโนมัติหลังพนักงานตอบ) แต่บางห้องอยากปิดถาวรระหว่างปิดการขาย */}
