@@ -32,20 +32,25 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
     }
     if (!isWork) {
       // มาทำงานวันหยุด — คิดค่าวันหยุดตามกฎหมาย (ม.62–63): แยกชั่วโมงเป็น 8 ชม.แรก กับส่วนเกิน (OT วันหยุด)
+      // ⚠️ ต้อง "รับรองก่อนถึงจ่าย" (mig 191): คิดค่าวันหยุดเฉพาะวันที่ HR กดรับรองแล้ว (hol_ok)
+      //    วันที่ยังไม่รับรอง = โชว์ว่ามาทำงาน (holidayDays/holidayMin) แต่ยังไม่คิดเงิน (holNorm/holOt = 0)
       const a = attByUserDay[emp.id]?.[k];
       if (a?.check_in_at) {
         holidayDays++;
+        const okHol = !!a.hol_ok;
         let dayNormMin = 0, dayOtH = 0, spanH = 0;
         if (a.check_out_at) {
           const span = Math.max(0, (minutesOf(a.check_out_at) ?? 0) - (minutesOf(a.check_in_at) ?? 0));
           holidayMin += span; spanH = r2(span / 60);   // ชั่วโมงดิบไว้โชว์บนป้าย (เหมือนเดิม)
-          // ชั่วโมงงานจริง = ช่วงเวลาอยู่ − พักเที่ยง 1 ชม. เมื่ออยู่เกิน 5 ชม. (กะปกติ 08–17 = ช่วง 9 ชม. = งาน 8 ชม.)
-          const workMin = span > 300 ? span - 60 : span;
-          dayNormMin = Math.min(workMin, 480);
-          dayOtH = otCreditHours(Math.max(0, workMin - 480));  // OT วันหยุด นับบล็อกครึ่ง ชม. เหมือน OT ปกติ
-          holNormMin += dayNormMin; holOtHours += dayOtH;
+          if (okHol) {
+            // ชั่วโมงงานจริง = ช่วงเวลาอยู่ − พักเที่ยง 1 ชม. เมื่ออยู่เกิน 5 ชม. (กะปกติ 08–17 = ช่วง 9 ชม. = งาน 8 ชม.)
+            const workMin = span > 300 ? span - 60 : span;
+            dayNormMin = Math.min(workMin, 480);
+            dayOtH = otCreditHours(Math.max(0, workMin - 480));  // OT วันหยุด นับบล็อกครึ่ง ชม. เหมือน OT ปกติ
+            holNormMin += dayNormMin; holOtHours += dayOtH;
+          }
         }
-        days.push({ d: k, kind: "holiday", hours: spanH, normH: r2(dayNormMin / 60), otH: r2(dayOtH), noOut: !a.check_out_at });
+        days.push({ d: k, kind: "holiday", hours: spanH, normH: r2(dayNormMin / 60), otH: r2(dayOtH), noOut: !a.check_out_at, holOk: okHol });
       }
       continue;
     }

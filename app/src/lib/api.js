@@ -4526,6 +4526,34 @@ export async function decideOt(id, status, note) {
   const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
   if (ot) notify([ot.user_id], { category: "hr", title: `⏱️ OT ${ot.hours || 0} ชม. (${ot.ot_date}): ${lbl}`, body: note || "", url: "attendance", ref_type: "ot" });
 }
+// แนว A (mig 191 · เจ้าของเคาะ 2026-08-02): HR/หัวหน้า "อนุมัติเป็น OT" จากเวลาเข้างานจริง
+// พนักงานยุ่งจนไม่ได้ยื่นใบ OT เอง → HR ดูเวลาที่อยู่เกิน แล้วกดปุ่มเดียว = สร้างใบ hr_ot อนุมัติทันที
+// ใช้ reason นี้เป็นตัวระบุว่าเป็น "ใบที่ HR ออกจากเวลาจริง" (ถอนได้ · แยกจากใบที่พนักงานยื่นเอง)
+export const AUTO_OT_REASON = "อนุมัติจากเวลาเข้างานจริง (HR)";
+export async function createAutoOt({ user_id, ot_date, time_from, time_to, hours }) {
+  const me = await _uid();
+  const h = Math.round((Number(hours) || 0) * 100) / 100;
+  if (!(h > 0)) throw new Error("ไม่มีชั่วโมง OT ให้อนุมัติ (ต้องเช็คเอาท์ก่อน)");
+  const { error } = await supabase.from("hr_ot").insert({
+    user_id, ot_date, time_from: time_from || null, time_to: time_to || null,
+    hours: h, reason: AUTO_OT_REASON, status: "approved",
+    decided_by: me, decided_at: new Date().toISOString(), created_by: me,
+  });
+  if (error) throw error;
+  notify([user_id], { category: "hr", title: `✅ HR อนุมัติ OT ให้ ${h} ชม. (${ot_date})`, body: "อนุมัติจากเวลาเข้างานจริง", url: "attendance", ref_type: "ot" });
+}
+// ถอนใบ OT ที่ HR ออกจากเวลาจริง (เฉพาะที่ยังไม่ปิดจ่าย)
+export async function removeAutoOt(user_id, ot_date) {
+  const { error } = await supabase.from("hr_ot").delete()
+    .eq("user_id", user_id).eq("ot_date", ot_date).eq("reason", AUTO_OT_REASON).neq("status", "paid");
+  if (error) throw error;
+}
+// ใบ OT ทั้งหมดของวันเดียว — ไว้เช็คว่าคนไหนถูก HR อนุมัติ OT จากเวลาจริงแล้ว (หน้า HR วันนี้)
+export async function listOtOn(day) {
+  const { data, error } = await supabase.from("hr_ot").select("user_id, hours, reason, status").eq("ot_date", day);
+  if (error) throw error;
+  return data || [];
+}
 // settle approved OT once its payroll run is paid (so it isn't re-counted)
 export async function markOtPaid(period, ids) {
   if (!ids || !ids.length) return;
@@ -4663,6 +4691,11 @@ export async function adminSaveAttendance(userId, workDate, checkInAt, checkOutA
 // HR รับรอง/ถอนรับรอง OT ของคน+วันนั้น (mig 144) — มีผลเมื่อเปิดตั้งค่า "OT ต้องรับรองก่อนคิดเงิน"
 export async function setAttendanceOtOk(userId, workDate, ok) {
   const { error } = await supabase.from("hr_attendance").update({ ot_ok: !!ok }).eq("user_id", userId).eq("work_date", workDate);
+  if (error) throw error;
+}
+// HR รับรอง/ถอนรับรอง "งานวันหยุด" ของคน+วันนั้น (mig 191) — ต้องรับรองก่อน ค่าวันหยุดถึงคิดเข้าเงินเดือน
+export async function setAttendanceHolOk(userId, workDate, ok) {
+  const { error } = await supabase.from("hr_attendance").update({ hol_ok: !!ok }).eq("user_id", userId).eq("work_date", workDate);
   if (error) throw error;
 }
 // HR/admin delete a day's attendance record (clears it back to "ยังไม่เข้า")

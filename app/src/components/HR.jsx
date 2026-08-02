@@ -1,11 +1,11 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
-import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, hrEditOt, otHoursFromTimes, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186)
+import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, hrEditOt, otHoursFromTimes, createAutoOt, removeAutoOt, listOtOn, AUTO_OT_REASON, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186/191)
 import { fmtBaht } from "../lib/format";
 import { ROLE_GUIDE, DEPT_COLOR } from "../lib/handbook";   // KPI ตามตำแหน่ง (แสดงในรายงานประสิทธิผล)
 import { UIcon } from "../icons";
@@ -67,11 +67,13 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
   const [edit, setEdit] = React.useState(null); // { p, a, day? } row being corrected (day = แก้ย้อนหลังจากแถบลืมเช็คเอาท์)
   const [day, setDay] = React.useState(todayYmd());   // เลือกดูวันไหนก็ได้ ไม่ใช่แค่วันนี้
   const [missing, setMissing] = React.useState([]);   // 7 วันหลัง: เช็คอินแล้วแต่ไม่ได้เช็คเอาท์ — เตือนให้ HR ตามแก้
+  const [autoOt, setAutoOt] = React.useState(new Set());   // คนที่ HR อนุมัติ OT จากเวลาจริงของวันนี้แล้ว (mig 191)
   async function load() {
     try {
-      const [a, lv] = await Promise.all([listAttendance(day, day), listLeaves("approved")]);
+      const [a, lv, ots] = await Promise.all([listAttendance(day, day), listLeaves("approved"), listOtOn(day).catch(() => [])]);
       setAtt(a);
       const m = {}; lv.forEach((l) => { if (l.start_date <= day && l.end_date >= day) m[l.user_id] = { t: l.type, h: Number(l.hours) > 0 ? Number(l.hours) : null }; }); setOnLeave(m);
+      setAutoOt(new Set((ots || []).filter((o) => o.reason === AUTO_OT_REASON && o.status !== "rejected").map((o) => o.user_id)));
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -85,10 +87,20 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
   }
   React.useEffect(() => { load(); }, [day]);
   React.useEffect(() => { loadMissing(); }, []);
-  // รับรอง/ถอนรับรอง OT รายวัน (โหมด settings.otNeedsApproval)
-  async function otOk(p, a, ok) {
-    try { await setAttendanceOtOk(p.id, a.work_date || day, ok); flash(ok ? `รับรอง OT ของ ${p.name || p.email} แล้ว ✓` : `ถอนการรับรอง OT ของ ${p.name || p.email} แล้ว`); load(); }
-    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน migration 144 แล้วหรือยัง?)", true); }
+  // แนว A: HR อนุมัติ OT วันทำงานจากเวลาที่อยู่จริง = สร้างใบ hr_ot อนุมัติ (พนักงานไม่ต้องยื่นเอง)
+  async function approveAsOt(p, a, s) {
+    const to = a?.check_out_at ? `${String(new Date(a.check_out_at).getHours()).padStart(2, "0")}:${String(new Date(a.check_out_at).getMinutes()).padStart(2, "0")}` : null;
+    try { await createAutoOt({ user_id: p.id, ot_date: day, time_from: settings.end || "17:00", time_to: to, hours: s.otHours }); flash(`อนุมัติ OT ${s.otHours} ชม. ให้ ${p.name || p.email} แล้ว ✓`); load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function unapproveOt(p) {
+    try { await removeAutoOt(p.id, day); flash(`ถอน OT ของ ${p.name || p.email} แล้ว`); load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // วันหยุด: รับรอง/ถอนรับรอง งานวันหยุด (mig 191) — ต้องรับรองก่อน ค่าวันหยุดถึงคิดเข้าเงินเดือน
+  async function toggleHol(p, a, ok) {
+    try { await setAttendanceHolOk(p.id, a.work_date || day, ok); flash(ok ? `รับรองงานวันหยุดของ ${p.name || p.email} แล้ว ✓` : `ถอนการรับรองวันหยุดของ ${p.name || p.email}`); load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน migration 191 แล้วหรือยัง?)", true); }
   }
   async function delAtt(p) {
     if (!await confirmDialog(`ลบเวลาเข้า-ออกของ ${p.name || p.email} วันนี้?\n(กลับเป็น “ยังไม่เข้า”)`)) return;
@@ -103,7 +115,7 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
     if (onLeave[p.id] && !onLeave[p.id].h) status = "leave";   // ลาราย ชม. — วันนั้นยังต้องเข้างาน จึงนับสถานะตามปกติ
     else if (a?.check_in_at) status = a?.check_out_at ? "out" : (s.isLate ? "late" : "in");
     else if (work) status = "absent";
-    return { p, a, s, status };
+    return { p, a, s, status, work };
   });
   const order = { in: 0, late: 1, out: 2, absent: 3, leave: 4, off: 5 };
   rows.sort((x, y) => order[x.status] - order[y.status] || (x.p.name || "").localeCompare(y.p.name || "", "th"));
@@ -138,20 +150,29 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
           {day !== todayYmd() && <button className="btn-ghost sm" onClick={() => { setLoading(true); setDay(todayYmd()); }}>วันนี้</button>}
         </div></div>
       <div className="set-list">
-        {rows.map(({ p, a, s, status }) => { const b = ST[status];
+        {rows.map(({ p, a, s, status, work }) => { const b = ST[status];
           const rowManage = canManage && p.id !== lockSelfId;   // ฝ่ายบุคคลแก้เวลาได้ทุกคน ยกเว้นของตัวเอง
           return (
           <div className="hr-today-row" key={p.id}>
             <div className="hr-name"><b>{p.name || p.email}</b><span className="jo-dim">{p.department || "-"}</span></div>
             <div className="hr-times">
               <span>เข้า <b>{fmtTime(a?.check_in_at)}</b>{s?.isLate && <span className="att-tag late sm">+{fmtMin(s.lateMin)}</span>}{clockSkewFlag(a) && <span className="att-tag sm" style={{ background: "#fef3c7", color: "#b45309" }} title={clockSkewFlag(a)}>⏱</span>} {thumb(a?.check_in_photo, "เซลฟี่ตอนเช็คอิน — กดดูเต็ม")}{pin(a?.check_in_lat, a?.check_in_lng, "พิกัดตอนเช็คอิน — เปิดแผนที่")}{farTag(a?.check_in_lat, a?.check_in_lng)}</span>
-              <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{s?.otHours > 0 && <span className="att-tag ot sm">OT {s.otHours} ชม.{settings.otNeedsApproval ? (a?.ot_ok ? " ✓" : " · รอรับรอง") : ""}</span>} {thumb(a?.check_out_photo, "เซลฟี่ตอนเช็คเอาท์ — กดดูเต็ม")}{pin(a?.check_out_lat, a?.check_out_lng, "พิกัดตอนเช็คเอาท์ — เปิดแผนที่")}{farTag(a?.check_out_lat, a?.check_out_lng)}</span>
+              <span>ออก <b>{fmtTime(a?.check_out_at)}</b>{work && s?.otHours > 0 && <span className="att-tag ot sm" title="เวลาที่อยู่เกินเวลาเลิกงาน — คิดเป็นเงิน OT เฉพาะที่ HR กดอนุมัติ">OT {s.otHours} ชม.{autoOt.has(p.id) ? " ✓" : " · รออนุมัติ"}</span>}{!work && a?.check_in_at && <span className="att-tag sm" style={{ background: a?.hol_ok ? "#dcfce7" : "#fef3c7", color: a?.hol_ok ? "#15803d" : "#b45309" }} title="ทำงานวันหยุด — คิดค่าวันหยุดเฉพาะที่ HR กดรับรอง">วันหยุด{a?.hol_ok ? " ✓" : " · รอรับรอง"}</span>} {thumb(a?.check_out_photo, "เซลฟี่ตอนเช็คเอาท์ — กดดูเต็ม")}{pin(a?.check_out_lat, a?.check_out_lng, "พิกัดตอนเช็คเอาท์ — เปิดแผนที่")}{farTag(a?.check_out_lat, a?.check_out_lng)}</span>
             </div>
             <span className={"job-badge " + b.c}>{status === "leave" ? leaveLabel(onLeave[p.id]?.t) : b.t}</span>
             {status !== "leave" && onLeave[p.id]?.h > 0 && <span className="job-badge b-blue">{leaveLabel(onLeave[p.id].t)} {onLeave[p.id].h} ชม.</span>}
-            {canManage && settings.otNeedsApproval && s?.otHours > 0 && (a?.ot_ok
-              ? <button className="btn-ghost sm" title="รับรองแล้ว — กดเพื่อถอนการรับรอง OT วันนี้" onClick={() => otOk(p, a, false)}>OT ✓</button>
-              : <button className="btn-primary sm ok" title="กดรับรองให้คิด OT วันนี้เข้าเงินเดือน" onClick={() => otOk(p, a, true)}>รับรอง OT</button>)}
+            {/* แนว A: OT วันทำงาน — HR อนุมัติจากเวลาที่อยู่จริง (พนักงานไม่ต้องยื่นเอง) */}
+            {canManage && work && s?.otHours > 0 && (autoOt.has(p.id)
+              ? <button className="btn-ghost sm" title="อนุมัติแล้ว — กดเพื่อถอน OT วันนี้" onClick={() => unapproveOt(p)}>OT ✓ {s.otHours} ชม.</button>
+              : (a?.check_out_at
+                  ? <button className="btn-primary sm ok" title="อนุมัติเวลาที่อยู่เกินเป็น OT เข้าเงินเดือน" onClick={() => approveAsOt(p, a, s)}>อนุมัติเป็น OT {s.otHours} ชม.</button>
+                  : <span className="jo-dim" style={{ fontSize: 11 }} title="ต้องเช็คเอาท์ก่อนจึงคิดชั่วโมง OT ได้">รอเช็คเอาท์</span>))}
+            {/* วันหยุด — ต้องรับรองก่อน ค่าวันหยุดถึงคิดเข้าเงินเดือน (mig 191) */}
+            {canManage && !work && a?.check_in_at && (a?.hol_ok
+              ? <button className="btn-ghost sm" title="รับรองแล้ว — กดเพื่อถอนการรับรองวันหยุด" onClick={() => toggleHol(p, a, false)}>วันหยุด ✓</button>
+              : (a?.check_out_at
+                  ? <button className="btn-primary sm ok" title="รับรองงานวันหยุดให้คิดค่าวันหยุดเข้าเงินเดือน" onClick={() => toggleHol(p, a, true)}>รับรองวันหยุด</button>
+                  : <span className="jo-dim" style={{ fontSize: 11 }} title="ต้องเช็คเอาท์ก่อนจึงคิดค่าวันหยุดได้">รอเช็คเอาท์</span>))}
             {rowManage && <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>}
             {rowManage && a && <button className="btn-ghost sm danger" title="ลบเวลาเข้า-ออก" onClick={() => delAtt(p)}><UIcon name="trash" size={13} /></button>}
             {canManage && !rowManage && <span className="jo-dim" title="ฝ่ายบุคคลแก้เวลาของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารแก้ให้" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span>}
@@ -1115,7 +1136,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [advIdsByUser, setAdvIdsByUser] = React.useState({}); // user_id → [advance ids] to settle on pay
   const [advRowsByUser, setAdvRowsByUser] = React.useState({}); // user_id → [advance rows] ไว้กางดูรายละเอียด
   const [detailFor, setDetailFor] = React.useState(null); // แถวที่กดดูรายละเอียดรายวัน (r)
-  const [pendingOt, setPendingOt] = React.useState([]);   // โหมดรับรอง OT: วันที่มี OT แต่ยังไม่กดรับรองในรอบนี้ — กันลืมแล้วพนักงานเสีย OT เงียบ ๆ
+  const [pendingHol, setPendingHol] = React.useState([]);   // งานวันหยุดที่ยังไม่กดรับรองในรอบนี้ (mig 191) — กันลืมแล้วพนักงานเสียค่าวันหยุดเงียบ ๆ
   const [noOut, setNoOut] = React.useState([]);           // วันที่เช็คอินแล้วไม่มีเวลาออก ทั้งรอบ — กันทั้งจ่ายเกิน (รายวัน) และจ่ายขาด (ค่าวันหยุด)
   const [attEdit, setAttEdit] = React.useState(null);     // { p, a, day } → เปิดโมดัลใส่เวลาออกจากแบนเนอร์ได้เลย
   const [loading, setLoading] = React.useState(true);
@@ -1153,11 +1174,15 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       advs.filter((a) => !a.period).forEach((a) => { advSum[a.user_id] = (advSum[a.user_id] || 0) + (Number(a.amount) || 0); (advIds[a.user_id] = advIds[a.user_id] || []).push(a.id); (advRows[a.user_id] = advRows[a.user_id] || []).push(a); });
       setAdvByUser(advSum); setAdvIdsByUser(advIds); setAdvRowsByUser(advRows);
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
-      // โหมดรับรอง OT: รวบวันที่มี OT ค้างรับรองของทั้งรอบมาไว้หน้าเดียว
-      const pend = [];
-      // OT คิดจากใบขอที่อนุมัติแล้ว (mig 184) — เลิกใช้การรับรอง OT อัตโนมัติจากเช็คเอาท์
-      pend.sort((x, y) => (x.a.work_date < y.a.work_date ? -1 : 1));
-      setPendingOt(pend);
+      // งานวันหยุดค้างรับรอง (mig 191): มาทำงานวันหยุด + เช็คเอาท์แล้ว แต่ยังไม่กด hol_ok → ค่าวันหยุดยังเป็น 0
+      // รวบทั้งรอบมาไว้หน้าเดียว ให้ HR กดรับรองก่อนปิดรอบ (ไม่งั้นพนักงานเสียค่าวันหยุดเงียบ ๆ)
+      const holPend = att
+        .filter((a) => a.check_in_at && a.check_out_at && !a.hol_ok)
+        .map((a) => ({ a, p: staff.find((x) => x.id === a.user_id) }))
+        .filter(({ a, p }) => p && !isWorkday(a.work_date, p.work_pattern || "mon_sat", p.sat_group, holSet))
+        .map(({ a, p }) => ({ a, name: p.name || p.email, hours: Math.round(Math.max(0, ((minutesOf(a.check_out_at) ?? 0) - (minutesOf(a.check_in_at) ?? 0))) / 60 * 10) / 10 }))
+        .sort((x, y) => (x.a.work_date < y.a.work_date ? -1 : 1));
+      setPendingHol(holPend);
       // วันที่เช็คอินแล้วไม่มีเวลาออก — สแกน "ทั้งรอบ" ไม่ใช่ 7 วันหลังแบบแบนเนอร์ในแท็บวันนี้
       const nOut = att.filter((a) => a.check_in_at && !a.check_out_at)
         .map((a) => ({ a, name: staff.find((p) => p.id === a.user_id)?.name || a.user_id }))
@@ -1357,23 +1382,24 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       )}
       {attEdit && <AttEditModal day={attEdit.day} row={{ p: attEdit.p, a: attEdit.a }} flash={flash}
         onClose={() => setAttEdit(null)} onSaved={() => { setAttEdit(null); load(); }} />}
-      {!loading && pendingOt.length > 0 && paidStatus !== "paid" && (
+      {!loading && pendingHol.length > 0 && paidStatus !== "paid" && (
         <div style={{ border: "1.5px solid #f59e0b", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-            <span style={{ fontWeight: 800, color: "#b45309" }}>⏳ OT รอรับรอง {pendingOt.length} วัน · รวม {pendingOt.reduce((x, y) => x + y.s.otHours, 0).toFixed(1)} ชม. — วันที่ไม่รับรองจะไม่ถูกคิดเงินในรอบนี้</span>
+            <span style={{ fontWeight: 800, color: "#b45309" }}>🏖️ งานวันหยุดรอรับรอง {pendingHol.length} วัน — วันที่ยังไม่รับรอง ค่าวันหยุดจะยังไม่ถูกคิดเงินในรอบนี้</span>
             <button className="btn-primary sm ok" disabled={busy} onClick={async () => {
-              if (!await confirmDialog(`รับรอง OT ทั้งหมด ${pendingOt.length} วัน?`)) return;
+              if (!await confirmDialog(`รับรองงานวันหยุดทั้งหมด ${pendingHol.length} วัน?`)) return;
               setBusy(true);
-              try { for (const x of pendingOt) await setAttendanceOtOk(x.a.user_id, x.a.work_date, true); flash("รับรอง OT ทั้งหมดแล้ว ✓"); await load(); }
-              catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน migration 144 แล้วหรือยัง?)", true); }
+              try { for (const x of pendingHol) await setAttendanceHolOk(x.a.user_id, x.a.work_date, true); flash("รับรองงานวันหยุดทั้งหมดแล้ว ✓"); await load(); }
+              catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน migration 191 แล้วหรือยัง?)", true); }
               setBusy(false);
             }}>✓ รับรองทั้งหมด</button>
           </div>
+          <div className="jo-dim" style={{ marginBottom: 6 }}>ตรวจก่อนรับรองว่ามาทำงานจริงในวันหยุด (ไม่ใช่แค่แวะเข้ามา) — รับรองแยกรายวันได้ที่ปุ่มด้านล่าง หรือในแท็บ “วันนี้” (เลือกวันที่)</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {pendingOt.map((x) => (
-              <button key={x.a.id} className="btn-ghost sm" style={{ borderColor: "#f59e0b" }} disabled={busy} title="กดเพื่อรับรอง OT วันนี้วันเดียว"
-                onClick={async () => { try { await setAttendanceOtOk(x.a.user_id, x.a.work_date, true); flash(`รับรอง OT ${x.a.name} ✓`); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }}>
-                {x.a.name} · {thDate(x.a.work_date)} · {x.s.otHours} ชม.
+            {pendingHol.map((x) => (
+              <button key={x.a.id} className="btn-ghost sm" style={{ borderColor: "#f59e0b" }} disabled={busy} title="กดเพื่อรับรองงานวันหยุดวันนี้วันเดียว"
+                onClick={async () => { try { await setAttendanceHolOk(x.a.user_id, x.a.work_date, true); flash(`รับรองวันหยุด ${x.name} ✓`); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }}>
+                {x.name} · {thDate(x.a.work_date)} · {x.hours} ชม.
               </button>
             ))}
           </div>

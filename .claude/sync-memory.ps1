@@ -1,6 +1,7 @@
 ﻿# sync-memory.ps1 — ซิงก์ "ความจำของ Claude" ระหว่าง repo (.claude/memory) กับความจำเครื่องนี้
-#   ความจำเครื่องนี้: %USERPROFILE%\.claude\projects\C--Users-User-OneDrive-Desktop-Inventory-Management\memory
-#   (บนคอมเครื่องนี้เป็น junction ไป G:\My Drive\claude-memory\Inventory-Management)
+#   ความจำเครื่องนี้: %USERPROFILE%\.claude\projects\<project-id>\memory
+#   (<project-id> = พาธเต็มของโปรเจกต์ แทน : และ \ ด้วย - — สคริปต์คำนวณให้อัตโนมัติตามเครื่องที่รัน)
+#   (บนคอมเจ้าของทั้งสองเครื่องตั้งเป็น junction ไป G:\My Drive\claude-memory\Inventory-Management)
 #
 # ใช้ยังไง (รันจากโฟลเดอร์โปรเจกต์):
 #   .\.claude\sync-memory.ps1 -Push   # ความจำเครื่อง  → repo   (ทำก่อน git push ตอนจบงานบนคอม)
@@ -11,7 +12,10 @@ param([switch]$Push, [switch]$Pull)
 
 $ErrorActionPreference = 'Stop'
 $repoMem  = Join-Path $PSScriptRoot 'memory'
-$localMem = Join-Path $env:USERPROFILE '.claude\projects\C--Users-User-OneDrive-Desktop-Inventory-Management\memory'
+# หา project-id ของเครื่องนี้อัตโนมัติจากพาธโปรเจกต์ (ใช้ได้ทุกเครื่อง ไม่ต้อง hardcode)
+$repoRoot = Split-Path $PSScriptRoot -Parent
+$projId   = $repoRoot -replace '[:\\]','-'
+$localMem = Join-Path $env:USERPROFILE ".claude\projects\$projId\memory"
 
 if (-not $Push -and -not $Pull) { Write-Host "ระบุ -Push (เครื่อง→repo) หรือ -Pull (repo→เครื่อง)"; exit 1 }
 
