@@ -57,11 +57,13 @@ export default async function handler(req, res) {
   const teamFilter = (req.query.team || "").toString() || null;
 
   try {
-    const [jobs, visits, customers, teams] = await Promise.all([
+    const [jobs, visits, customers, teams, reminders] = await Promise.all([
       sbGetAll("job_orders", "job_no,customer_id,assigned_team,scheduled_at,end_date,slot,status,title,job_type,address,contact_name,contact_phone,map_url,details", "job_no.asc"),
       sbGetAll("job_visits", "job_no,assigned_team,scheduled_at,end_date,slot,status,visit_date", "id.asc"),
       sbGetAll("customers", "id,name", "id.asc"),
       sbGet("teams?select=id,name"),
+      // นัดบริการรอบถัดไป (mig 192) — โผล่เฉพาะฟีดรวมทุกทีม (ไม่ผูกทีม) · pre-192 ตารางยังไม่มี → คืน []
+      teamFilter ? Promise.resolve([]) : sbGet("service_reminders?select=id,due_date,kind,customer_name,contact_phone,job_no,note&status=eq.open&order=due_date.asc").catch(() => []),
     ]);
     const cn = Object.fromEntries(customers.map((c) => [c.id, c.name]));
     const tn = Object.fromEntries(teams.map((t) => [t.id, (t.name || "").replace("Team ", "")]));
@@ -118,6 +120,26 @@ export default async function handler(req, res) {
         lines.push("END:VEVENT");
         n++;
       });
+    });
+    // นัดบริการรอบถัดไป — all-day event (Google เตือนวันนั้นเอง) · DTEND = วันถัดไป (exclusive)
+    const dstamp = utc(now);
+    (reminders || []).forEach((r) => {
+      if (!r.due_date) return;
+      const d = String(r.due_date).slice(0, 10).replace(/-/g, "");
+      const nd = new Date(`${r.due_date}T00:00:00Z`); nd.setUTCDate(nd.getUTCDate() + 1);
+      const dEnd = `${nd.getUTCFullYear()}${pad(nd.getUTCMonth() + 1)}${pad(nd.getUTCDate())}`;
+      const label = r.kind === "wash" ? "นัดล้างแอร์" : r.kind === "pmc" ? "นัด PM ตามสัญญา" : (r.note || "นัดบริการ");
+      const summary = `🔔 ${label} · ${r.customer_name || r.job_no || "ลูกค้า"}`;
+      const desc = [r.note, r.job_no ? `จากงาน ${r.job_no}` : "", r.contact_phone ? `โทร ${r.contact_phone}` : ""].filter(Boolean).join("\n");
+      lines.push("BEGIN:VEVENT");
+      lines.push(`UID:reminder-${r.id}@amc-air.vercel.app`);
+      lines.push(`DTSTAMP:${dstamp}`);
+      lines.push(`DTSTART;VALUE=DATE:${d}`);
+      lines.push(`DTEND;VALUE=DATE:${dEnd}`);
+      lines.push(fold(`SUMMARY:${esc(summary)}`));
+      if (desc) lines.push(fold(`DESCRIPTION:${esc(desc)}`));
+      lines.push("END:VEVENT");
+      n++;
     });
     lines.push("END:VCALENDAR");
 

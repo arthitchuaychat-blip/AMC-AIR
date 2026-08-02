@@ -2723,7 +2723,37 @@ export async function saveHandover(h) {
       notify(await _jobWatchers(fields.job_no), { category: "job", title: `📝 งาน ${fields.job_no} ส่งใบส่งมอบงานแล้ว`, url: "joborders", ref_type: "job", ref_no: fields.job_no });
     } catch { /* ignore */ }
   }
+  // นัดบริการรอบถัดไป (mig 192): ช่างกรอก next_date ในฟอร์มล้าง/PM → สร้างนัด + แจ้งออฟฟิศ (best-effort · pre-192 ข้าม)
+  if (fields.status === "submitted" && !wasSubmitted) {
+    try {
+      const uid = await _uid();
+      const rems = (fields.forms || []).filter((f) => f && f.next_date && (f.kind === "wash" || f.kind === "pmc"))
+        .map((f) => ({ due_date: f.next_date, kind: f.kind, customer_name: fields.customer_name, contact_phone: fields.contact_phone, job_no: fields.job_no, handover_id: saved?.id || null, note: f.kind === "wash" ? "นัดล้างรอบถัดไป" : "นัด PM รอบถัดไป", created_by: uid }));
+      if (rems.length) {
+        const { error } = await supabase.from("service_reminders").insert(rems);
+        if (!error) notify(await _usersByRole(["admin", "exec", "sales", "hr"]), { category: "job", title: `🔔 นัดบริการรอบถัดไป ${rems.length} รายการ · ${fields.customer_name || fields.job_no || "-"}`, body: rems.map((r) => `${r.note} ${r.due_date}`).join(" · "), url: "handover", ref_type: "handover" });
+      }
+    } catch { /* ignore — best-effort */ }
+  }
   return saved;
+}
+
+// นัดบริการรอบถัดไป (service reminders · mig 192) — สร้าง/ดู/อัปเดตสถานะ
+export async function createServiceReminder(r) {
+  const uid = await _uid();
+  const { error } = await supabase.from("service_reminders").insert({ ...r, created_by: uid });
+  if (error) throw error;
+}
+export async function listServiceReminders(status = "open") {
+  let q = supabase.from("service_reminders").select("*").order("due_date", { ascending: true });
+  if (status) q = q.eq("status", status);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+export async function setReminderStatus(id, status) {
+  const { error } = await supabase.from("service_reminders").update({ status }).eq("id", id);
+  if (error) throw error;
 }
 
 // ลบใบส่งมอบ: กติกาบ้าน — ต้องมีเหตุผล + ลง audit พร้อม snapshot (ใบที่ส่งแล้วมีลายเซ็นลูกค้า เป็นหลักฐานงาน)

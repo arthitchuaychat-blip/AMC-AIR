@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listHandovers, deleteHandover, getCompanies } from "../lib/api";
+import { listHandovers, deleteHandover, getCompanies, listServiceReminders, setReminderStatus } from "../lib/api";
 import { blankHandover } from "../lib/handover";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtDocDate, matchText, matchPhone } from "../lib/format";
@@ -24,14 +24,22 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   const [search, setSearch] = React.useState("");
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
+  const [reminders, setReminders] = React.useState([]);   // นัดบริการรอบถัดไป (mig 192)
   const printWin = React.useRef(null);
 
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   async function load() {
     setLoading(true);
-    try { const [hs, co] = await Promise.all([listHandovers(), getCompanies().catch(() => null)]); setList(hs); if (co) setCompanies(co); }
+    try {
+      const [hs, co, rem] = await Promise.all([listHandovers(), getCompanies().catch(() => null), listServiceReminders("open").catch(() => [])]);
+      setList(hs); if (co) setCompanies(co); setReminders(rem || []);
+    }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
+  }
+  async function reminderDone(r, status) {
+    try { await setReminderStatus(r.id, status); setReminders((s) => s.filter((x) => x.id !== r.id)); flash(status === "done" ? "ทำเครื่องหมายว่าจัดการแล้ว ✓" : "ปิดนัดแล้ว"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   React.useEffect(() => { load(); }, []);
 
@@ -88,6 +96,22 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
           <p className="page-sub">{list.length} ใบ · {list.filter((h) => h.status === "submitted").length} ส่งแล้ว</p></div>
         {canEdit && <button className="btn-primary" onClick={() => setEditing(blankHandover(null))}><UIcon name="plus" size={16} color="#fff" /> สร้างใบส่งมอบงาน</button>}
       </div>
+
+      {reminders.length > 0 && (
+        <div style={{ border: "1.5px solid #38bdf8", background: "#f0f9ff", borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, color: "#0369a1", marginBottom: 6 }}>🔔 นัดบริการรอบถัดไป {reminders.length} รายการ — ตามลูกค้ากลับมาล้าง/PM (รายได้ต่อเนื่อง)</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {reminders.map((r) => { const overdue = r.due_date <= new Date().toISOString().slice(0, 10); return (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
+                <span style={{ fontWeight: 700, color: overdue ? "#b91c1c" : "#0369a1", minWidth: 96 }}>{fmtDocDate(r.due_date)}{overdue ? " ⚠️" : ""}</span>
+                <span style={{ flex: "1 1 200px" }}>{r.note || (r.kind === "wash" ? "นัดล้าง" : "นัด PM")} · <b>{r.customer_name || "—"}</b>{r.contact_phone ? ` · ${r.contact_phone}` : ""}{r.job_no ? ` · ${r.job_no}` : ""}</span>
+                <button className="btn-ghost sm ok" onClick={() => reminderDone(r, "done")}>✓ นัดแล้ว/เสร็จ</button>
+                <button className="btn-ghost sm" onClick={() => reminderDone(r, "dismissed")}>ปิด</button>
+              </div>
+            ); })}
+          </div>
+        </div>
+      )}
 
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["draft", "ฉบับร่าง"], ["submitted", "ส่งแล้ว"]].map(([v, l]) => (
