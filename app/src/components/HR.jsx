@@ -804,11 +804,15 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
       const [from, to] = monthRange(ym);
       const today = todayYmd();
       const calcTo = to < today ? to : today;     // don't count future days as absent
-      const [att, leaves] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved")]);
+      const [att, leaves, otAll] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved"), listOt().catch(() => [])]);
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
       const leaveDaySet = buildLeaveDaySet(leaves, from, calcTo);
+      // OT = ใบขอ OT ที่อนุมัติ+เช็คเอาท์ หรือจ่ายปิดแล้ว (ตรงกับเงินเดือน) — ไม่ใช่ OT อัตโนมัติจากเช็คเอาท์
+      const otByUser = {};
+      (otAll || []).filter((o) => o.ot_date >= from && o.ot_date <= calcTo && (o.status === "approved" || o.status === "paid") && Number(o.hours) > 0).forEach((o) => { otByUser[o.user_id] = (otByUser[o.user_id] || 0) + Number(o.hours); });
       const result = staff.map((p) => {
-        let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveCnt = 0, holDays = 0, holMin = 0;
+        let present = 0, lateCnt = 0, lateMin = 0, absent = 0, workdays = 0, leaveCnt = 0, holDays = 0, holMin = 0;
+        const otHours = Math.round((otByUser[p.id] || 0) * 100) / 100;
         for (let d = hrParseYmd(from); d <= hrParseYmd(calcTo); d.setDate(d.getDate() + 1)) {
           const k = hrYmd(d);
           const onLeave = leaveDaySet[p.id]?.[k];
@@ -821,11 +825,11 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
           }
           workdays++;
           const a = attByUserDay[p.id]?.[k];
-          if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } if (!settings.otNeedsApproval || a.ot_ok) { otMin += s.otMin; otHours += s.otHours; } } // โหมดรับรอง OT: นับเฉพาะวันที่รับรองแล้ว (ตรงกับ periodStats ฝั่งเงินเดือน)
+          if (a?.check_in_at) { present++; const s = dayStat(a, settings); if (s.isLate) { lateCnt++; lateMin += s.lateMin; } } // OT ไม่คิดจากเช็คเอาท์แล้ว — ดึงจากใบขอ OT (otByUser)
           else absent++;
         }
         leaveCnt = Math.round(leaveCnt * 100) / 100;
-        return { p, present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveCnt, holDays, holHours: Math.round(holMin / 60 * 100) / 100 };
+        return { p, present, lateCnt, lateMin, otHours, absent, workdays, leaveCnt, holDays, holHours: Math.round(holMin / 60 * 100) / 100 };
       });
       result.sort((a, b) => b.absent - a.absent || b.lateCnt - a.lateCnt); // worst first (for review)
       setRows(result); setRaw({ attByUserDay, leaveDaySet, from, calcTo });
@@ -930,7 +934,7 @@ function PersonDetail({ row, days, onClose, canManage, flash, onChanged, otNeeds
                   {d.kind === "leave" ? leaveLabel(d.leaveType)
                     : d.a?.check_in_at ? <>เข้า <b>{fmtTime(d.a.check_in_at)}</b> · ออก <b>{fmtTime(d.a.check_out_at)}</b>
                       {d.s?.isLate && <span className="att-tag late sm">สาย {fmtMin(d.s.lateMin)}</span>}
-                      {d.s?.otHours > 0 && <span className="att-tag ot sm">OT {d.s.otHours} ชม.{otNeeds ? (d.a?.ot_ok ? " ✓" : " · รอรับรอง") : ""}</span>}</>
+                      {d.s?.otHours > 0 && <span className="att-tag sm" style={{ color: "var(--ink-3)" }} title="อยู่เกินเวลางาน — ไม่ใช่ OT จ่ายจริง (OT ต้องยื่นใบขอ+เช็คเอาท์)">เกินเวลา {d.s.otHours} ชม.</span>}</>
                     : "—"}
                   {d.kind !== "leave" && d.leaveHours > 0 && <span className="att-tag sm" style={{ color: "#2563eb" }}>{leaveLabel(d.leaveType)} {d.leaveHours} ชม.</span>}
                 </span>
@@ -959,18 +963,32 @@ function PerfTab({ staff, settings, holSet, flash }) {
     try {
       const [from, to] = monthRange(ym);
       const today = todayYmd(); const calcTo = to < today ? to : today;
-      const [att, leaves, jobs, teams] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved"), listJobOrders(), listTeams()]);
+      const [att, leaves, jobs, teams, otAll] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved"), listJobOrders(), listTeams(), listOt().catch(() => [])]);
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
       const leaveDaySet = buildLeaveDaySet(leaves, from, calcTo);
       const teamName = Object.fromEntries(teams.map((t) => [t.id, (t.name || "").replace("Team ", "")]));
+      // OT = ใบขอ OT ที่อนุมัติ+เช็คเอาท์ (hours>0) หรือจ่ายปิดแล้ว — ตรงกับระบบเงินเดือน (ไม่ใช่ OT อัตโนมัติจากเช็คเอาท์)
+      const otByUser = {};
+      (otAll || []).filter((o) => o.ot_date >= from && o.ot_date <= calcTo && (o.status === "approved" || o.status === "paid") && Number(o.hours) > 0).forEach((o) => { otByUser[o.user_id] = (otByUser[o.user_id] || 0) + Number(o.hours); });
+      // งานของทีม: ทีม = ทีมระดับใบ ถ้าไม่มี → ดูจากรอบนัด (job_visits) · วันงาน = วันใบหรือวันของรอบนัด (นับถ้ามีวันใดตกในเดือน)
       const jm = {};
-      jobs.forEach((j) => { if (!j.assigned_team) return; const d = j.scheduled_at ? hrYmd(new Date(j.scheduled_at)) : null; if (!d || d < from || d > to) return; const m = jm[j.assigned_team] || (jm[j.assigned_team] = { done: 0, ratingSum: 0, ratingN: 0, claims: 0, resched: 0 }); if (j.status === "done") m.done++; if (j.rating > 0) { m.ratingSum += j.rating; m.ratingN++; } if (j.is_claim) m.claims++; if (j.status === "reschedule") m.resched++; });
+      jobs.forEach((j) => {
+        const team = j.assigned_team || (j.visits || []).map((v) => v.assigned_team).find(Boolean) || null;
+        if (!team) return;
+        const dates = [];
+        if (j.scheduled_at) dates.push(hrYmd(new Date(j.scheduled_at)));
+        (j.visits || []).forEach((v) => { if (v.scheduled_at) dates.push(hrYmd(new Date(v.scheduled_at))); else if (v.visit_date) dates.push(v.visit_date); });
+        if (!dates.some((d) => d >= from && d <= to)) return;
+        const m = jm[team] || (jm[team] = { done: 0, ratingSum: 0, ratingN: 0, claims: 0, resched: 0 });
+        if (j.status === "done") m.done++; if (j.rating > 0) { m.ratingSum += j.rating; m.ratingN++; } if (j.is_claim) m.claims++; if (j.status === "reschedule") m.resched++;
+      });
       const result = staff.map((p) => {
         const st = periodStats(p, attByUserDay, leaveDaySet, from, calcTo, holSet, settings);
-        const onTime = st.workdays ? Math.round((st.present - st.lateCnt) / st.workdays * 100) : null;
+        // ตรงเวลา = สัดส่วน "วันที่มาตรงเวลา" จากวันที่มาทำงานจริง (ไม่ปนการขาด — การขาดคิดในหมวด "มาทำงาน" แล้ว)
+        const onTime = st.present ? Math.round((st.present - st.lateCnt) / st.present * 100) : null;
         const m = jm[p.team] || { done: 0, ratingSum: 0, ratingN: 0, claims: 0, resched: 0 };
         const avgRating = m.ratingN ? (m.ratingSum / m.ratingN) : null;
-        const otHours = st.otHours || 0;
+        const otHours = Math.round((otByUser[p.id] || 0) * 100) / 100;
         let score = 0, wsum = 0;
         if (onTime != null) { score += onTime * 0.5; wsum += 0.5; }
         if (st.workdays) { score += (st.present / st.workdays * 100) * 0.2; wsum += 0.2; }
@@ -989,7 +1007,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
   return (
     <div className="card">
       <div className="sec-head">
-        <div><div className="sec-title">ประสิทธิผลพนักงาน · {ym}</div><div className="sec-sub">ตรงเวลา + งานของทีม (เสร็จ/คะแนน/เคลม) + OT · เรียงคะแนนสูงสุดก่อน</div></div>
+        <div><div className="sec-title">ประสิทธิผลพนักงาน · {ym}</div><div className="sec-sub">คะแนน = ตรงเวลา + มาทำงาน + คะแนนงานของทีม − เคลม · (OT/เลื่อนนัด = ข้อมูลประกอบ ไม่คิดคะแนน) · เรียงคะแนนสูงสุดก่อน</div></div>
         <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} />
       </div>
       {loading ? <div className="empty">กำลังคำนวณ…</div> : !rows.length ? <div className="empty">ไม่มีข้อมูล</div> : (
@@ -1016,7 +1034,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
           </table>
         </div>
       )}
-      <p className="page-sub" style={{ marginTop: 10 }}>* งาน/คะแนน/เคลม นับจากงานของ “ทีม” ที่พนักงานสังกัด (งานผูกกับทีม ไม่ใช่รายคน) · คะแนนรวม = ตรงเวลา 50% + มาทำงาน 20% + คะแนนงาน 30% − เคลม×5</p>
+      <p className="page-sub" style={{ marginTop: 10 }}>* งาน/คะแนน/เคลม นับจากงานของ “ทีม” ที่พนักงานสังกัด (นับจากรอบนัด job_visits ด้วย ไม่ใช่แค่ทีมระดับใบ) · คะแนนรวม = ตรงเวลา 50% + มาทำงาน 20% + คะแนนงาน 30% − เคลม×5 (หมวดที่ไม่มีข้อมูลจะถูกตัดออกแล้วเฉลี่ยใหม่) · <b>ตรงเวลา = สัดส่วนวันมาตรงเวลาจากวันที่มาทำงาน · OT/เลื่อนนัด แสดงเป็นข้อมูลประกอบ ไม่คิดคะแนน · OT ดึงจากใบขอที่อนุมัติ+เช็คเอาท์</b></p>
     </div>
   );
 }
