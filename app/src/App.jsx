@@ -92,6 +92,15 @@ const NAV = {
   tools: { th: "เครื่องมือช่าง", en: "Tools", icon: "box" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
+// ไอคอน emoji ของแต่ละเมนู (สีสดในตัว · แทนไอคอนเส้นเดิม) — เจ้าของเลือกชุดนี้ (v545)
+const NAV_EMOJI = {
+  myjobs: "👷", dashboard: "📊", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
+  chat: "💚", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "🧑‍💼",
+  subcontract: "🧑‍🔧", catalog: "📦", boq: "📐", quote: "📝", invoice: "🧾", receipt: "💵", billing: "📑",
+  receivables: "💰", payables: "💸", tax: "🧮", profit: "📈", cashflow: "💹", expenses: "💳",
+  joborders: "🔧", handover: "🤝", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🧱",
+  suppliers: "🏭", prep: "🗃️", po: "🛍️", tools: "🧰", settings: "⚙️",
+};
 
 // sidebar sections — group the (long) menu into collapsible categories so it's not overwhelming.
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
@@ -110,7 +119,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·ปุ่มลอยสูง+เงาเข้มขึ้น + เมนูซ้ายลอยเมื่อชี้ v544";
+const BUILD = "2026-08-02·ไอคอนเมนู emoji สีสด (36 เมนู) + ปรับไอคอนประเภทงาน v545";
 
 function SetupNotice() {
   return (
@@ -397,7 +406,7 @@ export default function App() {
                 // real link → can Ctrl/กลางคลิก/คลิกขวา "เปิดในแท็บใหม่" ได้ · คลิกปกติยังเป็น SPA แท็บเดิม
                 <a key={id} href={"#" + id} style={{ textDecoration: "none" }} className={"nav-item" + (view === id ? " on" : "")}
                   onClick={(e) => { if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); go(id); }}>
-                  <UIcon name={n.icon} size={18} strokeWidth={1.9} />
+                  <span className="nav-emoji" aria-hidden="true">{NAV_EMOJI[id] || "•"}</span>
                   <span className="nav-th">{primary}</span>
                   <span className="nav-en">{secondary}</span>
                   {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
