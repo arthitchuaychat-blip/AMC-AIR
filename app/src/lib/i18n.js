@@ -81,7 +81,7 @@ export const QR_MY = [
   { title: "ขอบคุณ", text: "ကျေးဇူးတင်ပါတယ်။ နောက်ထပ် လိုအပ်တာရှိရင် ပြောပါ ခင်ဗျာ။" },
 ];
 
-const JOB_TYPE_MY = { install: "တပ်ဆင်ခြင်း", repair: "ပြုပြင်ခြင်း", service: "ပြုပြင်ထိန်းသိမ်းခြင်း", survey: "ကြိုတင်စစ်ဆေးခြင်း", maintenance: "ထိန်းသိမ်းခြင်း" };
+const JOB_TYPE_MY = { install: "တပ်ဆင်ခြင်း", install_only: "တပ်ဆင်ရုံသာ", repair: "ပြုပြင်ခြင်း", service: "ပြုပြင်ထိန်းသိမ်းခြင်း", survey: "ကြိုတင်စစ်ဆေးခြင်း", maintenance: "ထိန်းသိမ်းခြင်း" };
 
 // a job brief in Burmese for the technician (data stays as entered; labels in Burmese)
 export function buildJobBriefMy(jo, scheduleText) {

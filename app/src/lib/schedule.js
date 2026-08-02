@@ -17,11 +17,12 @@ export const BUCKETS = [
 
 // job categories — [value, label, icon, color] · shared by the editor, list filter and calendar
 // ⚠️ value (รหัส) ห้ามเปลี่ยน — เก็บใน boqs/quotations/job_orders.job_type แล้ว (เปลี่ยนป้ายได้ เปลี่ยนรหัสงานเก่าเพี้ยน)
-// รหัสเดิม 5: survey/install/repair/maintenance/other · เพิ่มใหม่ 4: ac_sale/move/fix/remove
+// รหัสเดิม 5: survey/install/repair/maintenance/other · เพิ่มใหม่ 4: ac_sale/move/fix/remove · เพิ่ม install_only (ลูกค้าซื้อแอร์เอง เราติดตั้งอย่างเดียว)
 export const JOB_TYPES = [
   ["survey", "สำรวจงาน", "🔍", "#2563eb"],
   ["ac_sale", "เครื่องปรับอากาศ", "❄️", "#0ea5e9"],
   ["install", "เครื่องปรับอากาศพร้อมติดตั้ง", "🔧", "#16a34a"],
+  ["install_only", "ติดตั้งเท่านั้น", "🪛", "#14b8a6"],
   ["maintenance", "ล้าง", "🧊", "#0891b2"],
   ["move", "ย้าย", "🚚", "#7c3aed"],
   ["repair", "ซ่อม", "🛠️", "#d97706"],
