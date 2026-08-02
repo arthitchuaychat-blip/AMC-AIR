@@ -638,7 +638,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
           && (!byPerson || (jo.createdByName || "") === byPerson)
           && inDateRange(jo)
           && (matchText(q, jo.job_no, jo.customerName, jo.teamName, jo.title, jo.quote_no, jo.address) || matchPhone(q, jo.contact_phone)))
-          .sort((a, b) => jobAt(a) - jobAt(b) || a.job_no.localeCompare(b.job_no)); // วันใกล้ → ไกล (ไม่มีวันอยู่ท้าย)
+          .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "") || (b.job_no || "").localeCompare(a.job_no || "")); // ล่าสุดบนสุด (ตามวันที่สร้างใบ)
         return (<>
           {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบงาน" : "ไม่พบใบงานที่ตรงเงื่อนไข"}</div>}
           <div className="job-cards">

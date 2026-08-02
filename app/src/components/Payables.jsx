@@ -31,7 +31,7 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
     try {
       const list = await listPayables();
       setRows(list.filter((r) => r.amount > 0).map((r) => ({ ...r, days: r.date ? daysSince(r.date, today) : null }))
-        .sort((a, b) => (b.days || 0) - (a.days || 0)));
+        .sort((a, b) => (b.date || "").localeCompare(a.date || ""))); // ล่าสุดบนสุด (ตามวันที่เอกสาร)
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setRows([]); }
   }
   React.useEffect(() => { load(); }, []);
