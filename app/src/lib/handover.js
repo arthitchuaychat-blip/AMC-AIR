@@ -132,6 +132,16 @@ export const AC_BRANDS = [
 // ขนาด BTU มาตรฐาน — ค่าตั้งต้น (จอกรอกจะดึงขนาดจริงจากสินค้าแอร์ในแคตตาล็อกมาแทน ถ้าโหลดได้)
 export const BTU_SIZES = ["9000", "12000", "15000", "18000", "24000", "28000", "30000", "32000", "36000", "40000", "45000", "48000", "50000", "60000", "100000"];
 
+// แยกชื่อสินค้าแอร์จากใบเสนอ → {brand, model, btu} แบบ best-effort (จับยี่ห้อจาก AC_BRANDS + BTU จาก regex)
+// ชื่อในใบเสนอเป็นข้อความอิสระ ("แอร์ Daikin Inverter 18000 BTU รุ่น FTKM18") ไม่มีคอลัมน์แยก จึงเดาให้เท่าที่ได้ ที่เหลือช่างเติม
+export function parseAcMachine(name) {
+  const s = String(name || "");
+  const btu = (s.match(/(\d[\d,]{2,6})\s*(?:btu|บีทียู)/i) || [])[1]?.replace(/[,\s]/g, "") || "";
+  const brand = AC_BRANDS.find((b) => new RegExp(b.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(s)) || "";
+  const model = (s.match(/(?:รุ่น|model)\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9/\-]{2,})/i) || [])[1] || "";
+  return { brand, model, btu };
+}
+
 // map a job_orders.job_type → the handover work-type value to pre-tick
 // (job_type ใหม่: ac_sale=ขายเครื่องอย่างเดียว→other · move→move · fix=แก้ไขงาน→repair · remove=รื้อถอน→other)
 export const JOBTYPE_TO_WORK = { survey: "survey_install", ac_sale: "other", install: "install", install_only: "install", maintenance: "maintenance", move: "move", repair: "repair", fix: "repair", remove: "other", other: "other" };

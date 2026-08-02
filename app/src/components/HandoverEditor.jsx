@@ -2,8 +2,8 @@ import React from "react";
 import { UIcon } from "../icons";
 import { confirmDialog } from "./ConfirmDialog";
 import SignaturePad from "./SignaturePad";
-import { saveHandover, uploadSignatureDataUrl, uploadMaterialPhoto, listMaterialsLite } from "../lib/api";
-import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, AC_BRANDS, BTU_SIZES, FORM_KINDS, ADD_KINDS, blankForm, ACCEPT_GROUPS, ACCEPT_ROWS, ACCEPT_OVERALL, blankAcceptMachine,
+import { saveHandover, uploadSignatureDataUrl, uploadMaterialPhoto, listMaterialsLite, getQuoteItems } from "../lib/api";
+import { PERF_ROWS, PM_ROWS, CLEAN_ROWS, REPAIR_ROWS, WORK_TYPES, AC_TYPES, AC_BRANDS, BTU_SIZES, FORM_KINDS, ADD_KINDS, blankForm, parseAcMachine, ACCEPT_GROUPS, ACCEPT_ROWS, ACCEPT_OVERALL, blankAcceptMachine,
   REFRIGERANTS, INST_WORKKINDS, INST_SECTIONS, INST_MEAS, WASH_WORKKINDS, WASH_SECTIONS, WASH_MEAS,
   FIX_SYMPTOMS, FIX_DIAG, FIX_REPAIR, FIX_MEAS, FIX_RESULTS, PMC_FREQS, PMC_ACTS, PMC_REF, blankPmcMachine } from "../lib/handover";
 
@@ -89,6 +89,23 @@ export default function HandoverEditor({ initial, me, onClose, onSaved, flash })
       if (s.length) setBtuList(s);
     }).catch(() => {});
   }, []);
+  // เครื่องแอร์จากใบเสนอของงานนี้ (ดึงจาก quotation_items) — ไว้กดสร้างฟอร์มพร้อมยี่ห้อ/BTU ให้เลย ไม่ต้องพิมพ์เอง
+  const [acUnits, setAcUnits] = React.useState([]);
+  React.useEffect(() => {
+    const q = initial.doc_ref;
+    if (!q) return;
+    getQuoteItems(q).then((items) => {
+      const acs = (items || []).filter((it) => it.kind === "ac" || /btu|บีทียู/i.test(it.name || ""));
+      const units = acs.flatMap((it) => { const qty = Math.max(1, Math.min(30, Math.round(Number(it.qty) || 1))); return Array.from({ length: qty }, () => ({ name: it.name || "", ...parseAcMachine(it.name) })); });
+      setAcUnits(units);
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // สร้างฟอร์มชนิด kind หนึ่งใบต่อเครื่องในใบเสนอ — เติม ยี่ห้อ/รุ่น/BTU + ชื่อสินค้าเต็มในหมายเหตุ (ช่างเติม Serial/ห้อง)
+  const makeFromQuote = (kind) => {
+    const forms = acUnits.map((u) => { const f = blankForm(kind); if (f.machine) f.machine = { ...f.machine, brand: u.brand, model: u.model, btu: u.btu }; f.note = `จากใบเสนอ: ${u.name}`; return f; });
+    if (forms.length) { setH((s) => ({ ...s, forms: [...s.forms, ...forms] })); setAddOpen(false); }
+  };
+
   const set = (k, v) => setH((s) => ({ ...s, [k]: v }));
 
   const toggleWork = (v) => setH((s) => ({ ...s, work_types: s.work_types.includes(v) ? s.work_types.filter((x) => x !== v) : [...s.work_types, v] }));
@@ -206,6 +223,15 @@ export default function HandoverEditor({ initial, me, onClose, onSaved, flash })
           <div className="confirm-overlay" onMouseDown={() => setAddOpen(false)}>
             <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
               <div className="confirm-title">เพิ่มแบบฟอร์ม</div>
+              {acUnits.length > 0 && (
+                <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 12.5, color: "#1d4ed8", marginBottom: 5 }}>🧾 ดึงเครื่องจากใบเสนอ ({acUnits.length} เครื่อง) — เติมยี่ห้อ/BTU ให้อัตโนมัติ</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button className="btn-primary sm" onClick={() => makeFromQuote("inst")}>🧰 สร้างฟอร์มติดตั้ง ×{acUnits.length}</button>
+                    <button className="btn-ghost sm" onClick={() => makeFromQuote("wash")}>🧊 สร้างฟอร์มล้าง ×{acUnits.length}</button>
+                  </div>
+                </div>
+              )}
               <div className="he-add-list">
                 {FORM_KINDS.filter((k) => ADD_KINDS.includes(k.kind)).map((k) => (
                   <button key={k.kind} className="he-add-opt" onClick={() => addForm(k.kind)}>
