@@ -4427,6 +4427,18 @@ export async function checkoutOt(id, time_to) {
   const me = await _meSafe();
   notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `✅ ${me?.name || "พนักงาน"} เช็คเอาท์ OT ${hours} ชม. (${ot.ot_date})`, body: "", url: "hr", ref_type: "ot" });
 }
+// HR เช็คเอาท์ OT แทนพนักงาน (เผื่อลืม/ไม่สะดวก) — ใช้สิทธิ์ผู้จัดการ (RLS mig 184), ไม่จำกัด user_id
+export async function hrCheckoutOt(id, time_to) {
+  const { data: ot, error: e0 } = await supabase.from("hr_ot").select("time_from, ot_date, status, user_id").eq("id", id).maybeSingle();
+  if (e0) throw e0;
+  if (!ot) throw new Error("ไม่พบใบขอ OT");
+  if (ot.status !== "approved") throw new Error("เช็คเอาท์ได้เฉพาะ OT ที่อนุมัติแล้ว");
+  const hours = otHoursFromTimes(ot.time_from, time_to);
+  if (!(hours > 0)) throw new Error("เวลาเลิกต้องมากกว่าเวลาเริ่ม");
+  const { error } = await supabase.from("hr_ot").update({ time_to, hours }).eq("id", id).eq("status", "approved");
+  if (error) throw error;
+  if (ot.user_id) notify([ot.user_id], { category: "hr", title: `✅ HR เช็คเอาท์ OT ให้ ${hours} ชม. (${ot.ot_date})`, body: "", url: "attendance", ref_type: "ot" });
+}
 export async function listMyOt() {
   const uid = await _uid();
   const { data, error } = await supabase.from("hr_ot").select("*").eq("user_id", uid).order("ot_date", { ascending: false });

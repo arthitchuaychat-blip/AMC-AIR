@@ -5,7 +5,7 @@ import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
-import { listOt, decideOt, markOtPaid, unsettleOt, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184)
+import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, otHoursFromTimes, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186)
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 import PayDetailModal from "./PayDetail";
@@ -526,6 +526,7 @@ function OtTab({ canManage, lockSelfId, flash }) {
               {o.status === "paid" && o.period && <div className="jo-dim">คิดในรอบ {o.period}</div>}</div>
             <div className="hr-leave-act">
               <span className={"job-badge " + (awaitCheckout ? "b-amber" : b.c)}>{awaitCheckout ? "อนุมัติ · รอเช็คเอาท์" : b.t}</span>
+              {awaitCheckout && <HrOtCheckout ot={o} onDone={(m) => { flash(m); load(); }} flash={flash} />}
               {o.user_id === lockSelfId ? <span className="jo-dim" style={{ fontSize: 11 }} title="ใบของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ">🔒 ของตัวเอง</span> : <>
                 {o.status !== "paid" && o.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(o, "approved")}>อนุมัติ</button>}
                 {o.status !== "paid" && o.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(o, "rejected")}>ไม่อนุมัติ</button>}
@@ -537,6 +538,31 @@ function OtTab({ canManage, lockSelfId, flash }) {
       </div>
       <p className="page-sub" style={{ marginTop: 8 }}>* พนักงานขอ OT (วัน+เวลาเริ่ม) → HR “อนุมัติ” → พนักงานกด “เช็คเอาท์ OT” เมื่อทำเสร็จ (ระบบคิดชั่วโมง) → เข้าคิดเงินรอบถัดไป (ชม. × เรต OT) แล้วเปลี่ยนเป็น “คิดเงินแล้ว” เมื่อทำจ่ายทั้งรอบ · <b>อนุมัติแล้วแต่ยังไม่เช็คเอาท์ = ยังไม่คิดเงิน</b></p>
     </div>
+  );
+}
+
+// HR เช็คเอาท์ OT แทนพนักงาน (เผื่อลืม/ไม่สะดวก) — เลือกเวลาเลิก แล้วคิดชั่วโมง
+function HrOtCheckout({ ot, onDone, flash }) {
+  const nowHm = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const [open, setOpen] = React.useState(false);
+  const [to, setTo] = React.useState(nowHm());
+  const [busy, setBusy] = React.useState(false);
+  const hrs = otHoursFromTimes(ot.time_from, to);
+  async function submit() {
+    if (!(hrs > 0)) return flash("เวลาเลิกต้องมากกว่าเวลาเริ่ม", true);
+    setBusy(true);
+    try { await hrCheckoutOt(ot.id, to); onDone(`เช็คเอาท์ OT ให้ ${ot.name} แล้ว`); }
+    catch (e) { flash((e.message || e), true); }
+    setBusy(false);
+  }
+  if (!open) return <button className="btn-primary sm ok" onClick={() => { setTo(nowHm()); setOpen(true); }}>🏁 เช็คเอาท์แทน</button>;
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <input className="inp" type="time" value={to} onChange={(e) => setTo(e.target.value)} style={{ width: 108 }} />
+      <span className="jo-dim" style={{ fontSize: 12 }}>= <b>{hrs}</b> ชม.</span>
+      <button className="btn-primary sm ok" disabled={busy || !(hrs > 0)} onClick={submit}>ยืนยัน</button>
+      <button className="btn-ghost sm" disabled={busy} onClick={() => setOpen(false)}>ยกเลิก</button>
+    </span>
   );
 }
 

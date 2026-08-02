@@ -279,6 +279,12 @@ export default function Attendance({ me }) {
         </div>
         <div className="card">
           <div className="sec-head"><div><div className="sec-title">{L("ใบขอ OT ของฉัน", "ကျွန်ုပ်၏ OT တောင်းဆိုမှု")}</div></div></div>
+          {(() => { const stale = ots.filter((o) => o.status === "approved" && !(Number(o.hours) > 0) && o.ot_date < todayYmd()); return stale.length > 0 && (
+            <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 10, padding: "10px 12px", margin: "0 0 10px", fontSize: 13, fontWeight: 600 }}>
+              ⚠️ {L(`คุณมี OT ที่อนุมัติแล้วแต่ยังไม่ได้เช็คเอาท์ ${stale.length} ใบ (ล่าสุด ${thDate(stale[0].ot_date)}) — กดปุ่ม 🏁 เช็คเอาท์ OT ด้านล่าง ไม่งั้นชั่วโมง OT วันนั้นจะไม่ถูกคิดเงิน`,
+                `အတည်ပြုပြီး OT ${stale.length} စောင် မထွက်ရသေး — အောက်က 🏁 OT ထွက် နှိပ်ပါ`)}
+            </div>
+          ); })()}
           <div className="set-list">
             {ots.length === 0 && <div className="empty sm">{L("ยังไม่มีใบขอ OT", "OT တောင်းဆိုမှု မရှိသေးပါ")}</div>}
             {ots.map((o) => { const b = OT_BADGE[o.status] || OT_BADGE.pending; const awaitCheckout = o.status === "approved" && !(Number(o.hours) > 0); return (
