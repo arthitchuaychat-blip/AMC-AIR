@@ -92,14 +92,16 @@ const NAV = {
   tools: { th: "เครื่องมือช่าง", en: "Tools", icon: "box" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
-// ไอคอน emoji ของแต่ละเมนู (สีสดในตัว · แทนไอคอนเส้นเดิม) — เจ้าของเลือกชุดนี้ (v545)
+// ไอคอน emoji ของแต่ละเมนู (สีสดในตัว · แทนไอคอนเส้นเดิม) — v545 เลือกชุดนี้
+// ⚠️ v546: ใช้เฉพาะ emoji รุ่นเก่า (Emoji 1.0 ปี 2015) ที่รองรับทุกเครื่อง/มือถือ —
+//    เลี่ยง Emoji 11+ (🧱🧰🧮🧾🧼) และแบบ ZWJ (🧑‍🔧🧑‍💼) ที่ font เก่าขึ้นเป็นกล่องว่าง
 const NAV_EMOJI = {
   myjobs: "👷", dashboard: "📊", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
-  chat: "💚", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "🧑‍💼",
-  subcontract: "🧑‍🔧", catalog: "📦", boq: "📐", quote: "📝", invoice: "🧾", receipt: "💵", billing: "📑",
-  receivables: "💰", payables: "💸", tax: "🧮", profit: "📈", cashflow: "💹", expenses: "💳",
-  joborders: "🔧", handover: "🤝", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🧱",
-  suppliers: "🏭", prep: "🗃️", po: "🛍️", tools: "🧰", settings: "⚙️",
+  chat: "💚", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
+  subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", billing: "📑",
+  receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", expenses: "💳",
+  joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
+  suppliers: "🏭", prep: "📥", po: "🛍️", tools: "🔨", settings: "⚙️",
 };
 
 // sidebar sections — group the (long) menu into collapsible categories so it's not overwhelming.
@@ -119,7 +121,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·ไอคอนเมนู emoji สีสด (36 เมนู) + ปรับไอคอนประเภทงาน v545";
+const BUILD = "2026-08-02·แก้ไอคอนที่ขึ้นกล่อง → ใช้ emoji รุ่นเก่ารองรับทุกเครื่อง v546";
 
 function SetupNotice() {
   return (
