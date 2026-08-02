@@ -99,6 +99,8 @@ export default function HandoverEditor({ initial, me, onClose, onSaved, flash })
   const updateRow = (i, ri, val) => setH((s) => ({ ...s, forms: s.forms.map((f, j) => j === i ? { ...f, rows: f.rows.map((r, k) => k === ri ? val : r) } : f) }));
   const addForm = (kind) => { setH((s) => ({ ...s, forms: [...s.forms, blankForm(kind)] })); setAddOpen(false); };
   const removeForm = async (i) => { if (!await confirmDialog("ลบแบบฟอร์มนี้?")) return; setH((s) => ({ ...s, forms: s.forms.filter((_, j) => j !== i) })); };
+  // ทำซ้ำฟอร์ม (สำหรับเครื่องถัดไปที่คล้ายกัน) — คัดลอกทั้งใบแล้วให้ช่างแก้เฉพาะจุดต่าง · งานติดตั้ง/ล้างหลายเครื่องเร็วขึ้นมาก
+  const dupForm = (i) => setH((s) => { const c = JSON.parse(JSON.stringify(s.forms[i])); return { ...s, forms: [...s.forms.slice(0, i + 1), c, ...s.forms.slice(i + 1)] }; });
 
   async function persist(status) {
     // ก่อน "บันทึก & ส่ง" (ครั้งแรก): เตือนเมื่อยังไม่มีแบบฟอร์ม/ลายเซ็นลูกค้า — กันมือลั่นส่งใบเปล่า (ส่งได้ถ้าตั้งใจ เช่น ลูกค้าไม่สะดวกเซ็น)
@@ -172,7 +174,7 @@ export default function HandoverEditor({ initial, me, onClose, onSaved, flash })
           </div>
           {h.forms.length === 0 && <div className="he-empty">ยังไม่มีแบบฟอร์ม — กด “เพิ่มแบบฟอร์ม” เพื่อเริ่มบันทึกเครื่องแรก</div>}
           {h.forms.map((f, i) => (
-            <FormCard key={i} f={f} idx={i} onMachine={updateMachine} onRow={updateRow} onNote={(v) => updateForm(i, { note: v })} onPatch={(patch) => updateForm(i, patch)} onRemove={() => removeForm(i)} />
+            <FormCard key={i} f={f} idx={i} onMachine={updateMachine} onRow={updateRow} onNote={(v) => updateForm(i, { note: v })} onPatch={(patch) => updateForm(i, patch)} onRemove={() => removeForm(i)} onDup={() => dupForm(i)} />
           ))}
 
           {/* ── การแก้ไข/หมายเหตุ ── */}
@@ -286,19 +288,20 @@ function PickChips({ label, options, value, onChange }) {
 }
 
 // one sub-form card (perf / pm / accept) with its machine fields + rows + note
-function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
+function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove, onDup }) {
   const meta = FORM_KINDS.find((k) => k.kind === f.kind) || FORM_KINDS[0];
-  if (f.kind === "accept") return <AcceptCard f={f} idx={idx} meta={meta} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
-  if (f.kind === "inst") return <InstCard f={f} idx={idx} meta={meta} onMachine={onMachine} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
-  if (f.kind === "wash") return <WashCard f={f} idx={idx} meta={meta} onMachine={onMachine} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
-  if (f.kind === "fix") return <FixCard f={f} idx={idx} meta={meta} onMachine={onMachine} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
-  if (f.kind === "pmc") return <PmcCard f={f} idx={idx} meta={meta} onPatch={onPatch} onNote={onNote} onRemove={onRemove} />;
+  if (f.kind === "accept") return <AcceptCard f={f} idx={idx} meta={meta} onPatch={onPatch} onNote={onNote} onRemove={onRemove} onDup={onDup} />;
+  if (f.kind === "inst") return <InstCard f={f} idx={idx} meta={meta} onMachine={onMachine} onPatch={onPatch} onNote={onNote} onRemove={onRemove} onDup={onDup} />;
+  if (f.kind === "wash") return <WashCard f={f} idx={idx} meta={meta} onMachine={onMachine} onPatch={onPatch} onNote={onNote} onRemove={onRemove} onDup={onDup} />;
+  if (f.kind === "fix") return <FixCard f={f} idx={idx} meta={meta} onMachine={onMachine} onPatch={onPatch} onNote={onNote} onRemove={onRemove} onDup={onDup} />;
+  if (f.kind === "pmc") return <PmcCard f={f} idx={idx} meta={meta} onPatch={onPatch} onNote={onNote} onRemove={onRemove} onDup={onDup} />;
   const m = f.machine || {};
   return (
     <div className="he-form">
       <div className="he-form-h">
         <span className="he-form-badge">{meta.icon} {meta.label}</span>
         <span className="he-form-no">#{idx + 1}</span>
+        <button type="button" className="he-form-x" title="ทำซ้ำฟอร์มนี้ (สำหรับเครื่องถัดไป)" onClick={onDup} style={{ marginLeft: "auto" }}>⧉</button>
         <button type="button" className="he-form-x" onClick={onRemove}><UIcon name="trash" size={14} /></button>
       </div>
 
@@ -395,7 +398,7 @@ function FormCard({ f, idx, onMachine, onRow, onNote, onPatch, onRemove }) {
 }
 
 // ตรวจรับงานรวม (หลายเครื่อง) — ตารางเครื่อง + เมทริกซ์ติ๊ก ✓/✕ รายเครื่องต่อข้อ + ความเรียบร้อยรวม
-function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove }) {
+function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove, onDup }) {
   const machines = f.machines || [];
   const n = machines.length;
   const setMachine = (mi, k, v) => onPatch({ machines: machines.map((m, j) => (j === mi ? { ...m, [k]: v } : m)) });
@@ -416,6 +419,7 @@ function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove }) {
       <div className="he-form-h">
         <span className="he-form-badge">{meta.icon} {meta.label}</span>
         <span className="he-form-no">#{idx + 1}</span>
+        {onDup && <button type="button" className="he-form-x" title="ทำซ้ำฟอร์มนี้" onClick={onDup} style={{ marginLeft: "auto" }}>⧉</button>}
         <button type="button" className="he-form-x" onClick={onRemove}><UIcon name="trash" size={14} /></button>
       </div>
 
@@ -497,12 +501,13 @@ function AcceptCard({ f, idx, meta, onPatch, onNote, onRemove }) {
 }
 
 // เปลือกการ์ดฟอร์มใหม่ — หัว badge + ปุ่มลบ + หมายเหตุท้ายฟอร์ม ใช้ร่วม 4 ชนิด
-function NewFormShell({ meta, idx, onRemove, onNote, note, children }) {
+function NewFormShell({ meta, idx, onRemove, onDup, onNote, note, children }) {
   return (
     <div className="he-form">
       <div className="he-form-h">
         <span className="he-form-badge">{meta.icon} {meta.label}</span>
         <span className="he-form-no">#{idx + 1}</span>
+        {onDup && <button type="button" className="he-form-x" title="ทำซ้ำฟอร์มนี้ (สำหรับเครื่องถัดไป)" onClick={onDup} style={{ marginLeft: "auto" }}>⧉</button>}
         <button type="button" className="he-form-x" onClick={onRemove}><UIcon name="trash" size={14} /></button>
       </div>
       {children}
@@ -512,9 +517,9 @@ function NewFormShell({ meta, idx, onRemove, onNote, note, children }) {
 }
 
 // ── เช็คลิสต์ติดตั้ง (AMC-IN) ──
-function InstCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
+function InstCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove, onDup }) {
   return (
-    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onNote={onNote} note={f.note}>
+    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onDup={onDup} onNote={onNote} note={f.note}>
       <MachineHead m={f.machine || {}} onSet={(k, v) => onMachine(idx, k, v)} />
       <div className="he-machine">
         <input className="inp sm" placeholder="S/N คอยล์ร้อน · Outdoor S/N" value={f.serial_out || ""} onChange={(e) => onPatch({ serial_out: e.target.value })} />
@@ -537,9 +542,9 @@ function InstCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
 }
 
 // ── เช็คลิสต์ล้าง (AMC-CL) ──
-function WashCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
+function WashCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove, onDup }) {
   return (
-    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onNote={onNote} note={f.note}>
+    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onDup={onDup} onNote={onNote} note={f.note}>
       <MachineHead m={f.machine || {}} onSet={(k, v) => onMachine(idx, k, v)} />
       <div className="he-machine">
         <input className="inp sm" placeholder="อายุการใช้งานโดยประมาณ · Approx. age" value={f.age || ""} onChange={(e) => onPatch({ age: e.target.value })} />
@@ -559,13 +564,13 @@ function WashCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
 }
 
 // ── รายงานซ่อม (AMC-RP) ──
-function FixCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
+function FixCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove, onDup }) {
   const parts = f.parts || [];
   const setPart = (pi, k, v) => onPatch({ parts: parts.map((p, j) => (j === pi ? { ...p, [k]: v } : p)) });
   const partTotal = parts.reduce((a, p) => a + (Number(p.qty) || 0) * (Number(p.price) || 0), 0);
   const toggleSym = (si) => onPatch({ symptoms: (f.symptoms || FIX_SYMPTOMS.map(() => false)).map((v, j) => (j === si ? !v : v)) });
   return (
-    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onNote={onNote} note={f.note}>
+    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onDup={onDup} onNote={onNote} note={f.note}>
       <MachineHead m={f.machine || {}} onSet={(k, v) => onMachine(idx, k, v)} />
       <PickChips label="น้ำยา · Refrigerant" options={REFRIGERANTS} value={f.refrigerant || ""} onChange={(v) => onPatch({ refrigerant: v })} />
       <PickChips label="งานในประกัน · Under warranty" options={[["yes", "ใช่ · Yes"], ["no", "ไม่ใช่ · No"]]} value={f.in_warranty || ""} onChange={(v) => onPatch({ in_warranty: v })} />
@@ -621,11 +626,11 @@ function FixCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
 }
 
 // ── บันทึก PM ตามสัญญา (AMC-PM) — หลายเครื่องใน 1 ฟอร์ม ──
-function PmcCard({ f, idx, meta, onPatch, onNote, onRemove }) {
+function PmcCard({ f, idx, meta, onPatch, onNote, onRemove, onDup }) {
   const machines = f.machines || [];
   const setM = (mi, k, v) => onPatch({ machines: machines.map((m, j) => (j === mi ? { ...m, [k]: v } : m)) });
   return (
-    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onNote={onNote} note={f.note}>
+    <NewFormShell meta={meta} idx={idx} onRemove={onRemove} onDup={onDup} onNote={onNote} note={f.note}>
       <div className="he-machine">
         <input className="inp sm" placeholder="เลขที่สัญญา · Contract no." value={f.contract_no || ""} onChange={(e) => onPatch({ contract_no: e.target.value })} />
         <input className="inp sm" placeholder="รอบครั้งที่ · Visit no." value={f.round || ""} onChange={(e) => onPatch({ round: e.target.value })} />
