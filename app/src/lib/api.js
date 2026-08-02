@@ -4404,13 +4404,28 @@ export function otHoursFromTimes(from, to) {
 }
 export async function submitOt({ ot_date, time_from, time_to, reason, job_no }) {
   const uid = await _uid();
-  const hours = otHoursFromTimes(time_from, time_to);
+  // flow ใหม่ (mig 186): ขอแค่วัน+เวลาเริ่ม · ชั่วโมงคิดตอนเช็คเอาท์ · time_to อาจว่างได้
+  const hours = time_to ? otHoursFromTimes(time_from, time_to) : 0;
   const row = { user_id: uid, ot_date, time_from: time_from || null, time_to: time_to || null, hours, reason: reason || null, job_no: job_no || null, created_by: uid };
   let { error } = await supabase.from("hr_ot").insert(row);
   if (error && /job_no/i.test(error.message || "")) { delete row.job_no; ({ error } = await supabase.from("hr_ot").insert(row)); } // ก่อนรัน mig 185
   if (error) throw error;
   const me = await _meSafe();
-  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `⏱️ ${me?.name || "พนักงาน"} ขอทำ OT ${hours} ชม. (${ot_date})${job_no ? ` · งาน ${job_no}` : ""}`, body: reason || "", url: "hr", ref_type: "ot" });
+  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `⏱️ ${me?.name || "พนักงาน"} ขอทำ OT (${ot_date} เริ่ม ${time_from || "-"})${job_no ? ` · งาน ${job_no}` : ""}`, body: reason || "", url: "hr", ref_type: "ot" });
+}
+// เช็คเอาท์ OT ที่อนุมัติแล้ว — บันทึกเวลาเลิก + คิดชั่วโมง (พนักงานกดเองเมื่อทำเสร็จ · mig 186)
+export async function checkoutOt(id, time_to) {
+  const uid = await _uid();
+  const { data: ot, error: e0 } = await supabase.from("hr_ot").select("time_from, ot_date, status").eq("id", id).maybeSingle();
+  if (e0) throw e0;
+  if (!ot) throw new Error("ไม่พบใบขอ OT");
+  if (ot.status !== "approved") throw new Error("เช็คเอาท์ได้เฉพาะ OT ที่อนุมัติแล้ว");
+  const hours = otHoursFromTimes(ot.time_from, time_to);
+  if (!(hours > 0)) throw new Error("เวลาเลิกต้องมากกว่าเวลาเริ่ม");
+  const { error } = await supabase.from("hr_ot").update({ time_to, hours }).eq("id", id).eq("user_id", uid).eq("status", "approved");
+  if (error) throw error;
+  const me = await _meSafe();
+  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `✅ ${me?.name || "พนักงาน"} เช็คเอาท์ OT ${hours} ชม. (${ot.ot_date})`, body: "", url: "hr", ref_type: "ot" });
 }
 export async function listMyOt() {
   const uid = await _uid();

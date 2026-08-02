@@ -517,15 +517,15 @@ function OtTab({ canManage, lockSelfId, flash }) {
         <div className="sec-sub">รออนุมัติ {pending.length} รายการ · อนุมัติแล้วรอคิดในรอบถัดไป {apprHours.toFixed(1)} ชม.</div></div></div>
       <div className="set-list">
         {list.length === 0 && <div className="empty sm">ยังไม่มีใบขอ OT</div>}
-        {list.map((o) => { const b = B[o.status] || B.pending; return (
+        {list.map((o) => { const b = B[o.status] || B.pending; const awaitCheckout = o.status === "approved" && !(Number(o.hours) > 0); return (
           <div className="hr-leave-row" key={o.id}>
             <div><b>{o.name}</b> <span className="jo-dim">{o.department}</span><br />
-              <b>{o.hours} ชม.</b> · {thDate(o.ot_date)} · {o.time_from}–{o.time_to}
+              <b>{Number(o.hours) > 0 ? `${o.hours} ชม.` : "รอเช็คเอาท์"}</b> · {thDate(o.ot_date)} · เริ่ม {o.time_from}{o.time_to ? `–${o.time_to}` : ""}
               {o.job_no && <div className="jo-dim">🔧 งาน {o.job_no}</div>}
               {o.reason && <div className="jo-dim">เหตุผล: {o.reason}</div>}
               {o.status === "paid" && o.period && <div className="jo-dim">คิดในรอบ {o.period}</div>}</div>
             <div className="hr-leave-act">
-              <span className={"job-badge " + b.c}>{b.t}</span>
+              <span className={"job-badge " + (awaitCheckout ? "b-amber" : b.c)}>{awaitCheckout ? "อนุมัติ · รอเช็คเอาท์" : b.t}</span>
               {o.user_id === lockSelfId ? <span className="jo-dim" style={{ fontSize: 11 }} title="ใบของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ">🔒 ของตัวเอง</span> : <>
                 {o.status !== "paid" && o.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(o, "approved")}>อนุมัติ</button>}
                 {o.status !== "paid" && o.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(o, "rejected")}>ไม่อนุมัติ</button>}
@@ -535,7 +535,7 @@ function OtTab({ canManage, lockSelfId, flash }) {
           </div>
         ); })}
       </div>
-      <p className="page-sub" style={{ marginTop: 8 }}>* OT ที่ “อนุมัติ” จะถูกนำไปคิดเงินในรอบเงินเดือนถัดไป (ชม. × เรต OT ต่อคน) แล้วเปลี่ยนเป็น “คิดเงินแล้ว” เมื่อทำจ่ายทั้งรอบ</p>
+      <p className="page-sub" style={{ marginTop: 8 }}>* พนักงานขอ OT (วัน+เวลาเริ่ม) → HR “อนุมัติ” → พนักงานกด “เช็คเอาท์ OT” เมื่อทำเสร็จ (ระบบคิดชั่วโมง) → เข้าคิดเงินรอบถัดไป (ชม. × เรต OT) แล้วเปลี่ยนเป็น “คิดเงินแล้ว” เมื่อทำจ่ายทั้งรอบ · <b>อนุมัติแล้วแต่ยังไม่เช็คเอาท์ = ยังไม่คิดเงิน</b></p>
     </div>
   );
 }
@@ -1005,7 +1005,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       const [att, leaves, slips, advs, qOverRows, otApproved, loansActive] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym), listAdvances("approved"), getLeaveQuotas(ym.slice(0, 4)).catch(() => []), listOt("approved").catch(() => []), listLoans(true).catch(() => [])]);
       // OT: คิดจากใบขอที่อนุมัติในรอบนี้ (mig 184) — ผลรวมชั่วโมง + ไอดีไว้ปิดตอนจ่าย
       const otH = {}, otIdByUser = {};
-      (otApproved || []).filter((o) => o.ot_date >= from && o.ot_date <= to && o.status === "approved").forEach((o) => { otH[o.user_id] = (otH[o.user_id] || 0) + (Number(o.hours) || 0); (otIdByUser[o.user_id] = otIdByUser[o.user_id] || []).push(o.id); });
+      // นับเฉพาะที่เช็คเอาท์แล้ว (hours>0) — อนุมัติแต่ยังไม่เช็คเอาท์จะยังไม่คิดเงิน/ไม่ถูกปิด (mig 186)
+      (otApproved || []).filter((o) => o.ot_date >= from && o.ot_date <= to && o.status === "approved" && Number(o.hours) > 0).forEach((o) => { otH[o.user_id] = (otH[o.user_id] || 0) + (Number(o.hours) || 0); (otIdByUser[o.user_id] = otIdByUser[o.user_id] || []).push(o.id); });
       Object.keys(otH).forEach((k) => { otH[k] = Math.round(otH[k] * 100) / 100; });
       setOtByUser(otH); setOtIdsByUser(otIdByUser);
       // เงินยืม: งวดผ่อนรอบนี้ = min(ค่างวด, คงเหลือ) ต่อคน (active)

@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listJobOrders, updateJobStatus, updateVisitStatus, addJobLog, submitOt, otHoursFromTimes } from "../lib/api";
+import { listJobOrders, updateJobStatus, updateVisitStatus, addJobLog, submitOt } from "../lib/api";
 import { UIcon } from "../icons";
 import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel, JOB_STATUSES, ymd } from "../lib/schedule";
 import JobTimeline, { Linkify } from "./JobTimeline";
@@ -274,15 +274,13 @@ function OtQuick({ jobNo, t, flash }) {
   const [open, setOpen] = React.useState(false);
   const [date, setDate] = React.useState(ymd(new Date()));
   const [from, setFrom] = React.useState("17:00");
-  const [to, setTo] = React.useState("20:00");
   const [reason, setReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const hrs = otHoursFromTimes(from, to);
   async function submit() {
-    if (!(hrs > 0)) return flash(t("เวลาเลิกต้องมากกว่าเวลาเริ่ม", "အဆုံးအချိန်က အစထက် များရမည်"), true);
+    if (!from) return flash(t("ระบุเวลาเริ่ม", "စချိန် ဖြည့်ပါ"), true);
     setBusy(true);
     try {
-      await submitOt({ ot_date: date, time_from: from, time_to: to, reason: reason || `OT งาน ${jobNo}`, job_no: jobNo });
+      await submitOt({ ot_date: date, time_from: from, reason: reason || `OT งาน ${jobNo}`, job_no: jobNo });
       flash(t("ส่งใบขอ OT แล้ว รอ HR อนุมัติ ✓", "OT တောင်းဆိုပြီး · HR အတည်ပြုရန် စောင့် ✓"));
       setOpen(false); setReason("");
     } catch (e) { flash(t("ส่งไม่สำเร็จ: ", "မရပါ: ") + (e.message || e), true); }
@@ -292,15 +290,14 @@ function OtQuick({ jobNo, t, flash }) {
   return (
     <div className="myjob-otform" style={{ border: "1px dashed #ea8a04", borderRadius: 12, padding: 12, marginTop: 6, background: "#fffbeb" }}>
       <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 8 }}>⏱️ {t("ขอทำ OT", "OT တောင်းဆို")} · <span className="jo-dim">{jobNo}</span></div>
-      <label className="fld"><span>{t("วันที่", "ရက်စွဲ")}</span><input className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
       <div className="fld-row">
+        <label className="fld"><span>{t("วันที่", "ရက်စွဲ")}</span><input className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
         <label className="fld"><span>{t("เวลาเริ่ม", "စချိန်")}</span><input className="inp" type="time" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-        <label className="fld"><span>{t("เวลาเลิก", "ဆုံးချိန်")}</span><input className="inp" type="time" value={to} onChange={(e) => setTo(e.target.value)} /></label>
       </div>
       <label className="fld"><span>{t("เหตุผล (ไม่บังคับ)", "အကြောင်းပြချက် (မဖြစ်မနေမဟုတ်)")}</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("เช่น งานเกินเวลา", "ဥပမာ - အချိန်ကျော်")} /></label>
-      <div className="jo-dim" style={{ fontSize: 13, margin: "6px 0" }}>{t("คิดเป็น", "တွက်ချက်")} <b>{hrs} {t("ชม.", "နာရီ")}</b> ({t("บล็อกครึ่งชั่วโมง", "မိနစ်၃၀ ဘလောက်")})</div>
+      <div className="jo-dim" style={{ fontSize: 12.5, margin: "6px 0" }}>⏱️ {t("ไม่ต้องระบุเวลาเลิก — พอทำเสร็จไปกด“เช็คเอาท์ OT” ที่เมนู เข้างาน/ลา", "ဆုံးချိန်မလို — ပြီးရင် “OT ထွက်” နှိပ်ပါ")}</div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn-primary sm" disabled={busy || !(hrs > 0)} onClick={submit}>{t("ส่งใบขอ OT", "OT တောင်းဆို")}</button>
+        <button className="btn-primary sm" disabled={busy || !from} onClick={submit}>{t("ส่งใบขอ OT", "OT တောင်းဆို")}</button>
         <button className="btn-ghost sm" disabled={busy} onClick={() => setOpen(false)}>{t("ยกเลิก", "ပယ်ဖျက်")}</button>
       </div>
     </div>
