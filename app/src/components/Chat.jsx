@@ -124,6 +124,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [qrEdit, setQrEdit] = React.useState(null); // { id, title, text, images } while editing one reply
   const [qrUploading, setQrUploading] = React.useState(false);
   const [qrPendImgs, setQrPendImgs] = React.useState([]);  // รูปจากข้อความสำเร็จรูปที่กดไว้ — ส่งพร้อมข้อความตอนกดส่ง
+  const [pending, setPending] = React.useState([]);        // รูป/ไฟล์ที่เลือกไว้ "พักก่อนส่ง" [{type:'image'|'file', url, name}] — กดตรวจแล้วค่อยส่ง
+  const [uploading, setUploading] = React.useState(false); // กำลังอัปโหลดไฟล์เข้าที่พัก
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
   const [qrSearch, setQrSearch] = React.useState("");
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
   const [teams, setTeams] = React.useState([]);       // permanent teams for the queue panel
@@ -312,8 +315,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   }
 
   async function send() {
-    const t = text.trim(), imgs = qrPendImgs;
-    if ((!t && !imgs.length) || !sel || sending) return;
+    const t = text.trim(), imgs = qrPendImgs, pend = pending;
+    if ((!t && !imgs.length && !pend.length) || !sel || sending) return;
     setSending(true);
     try {
       if (t) {
@@ -321,12 +324,16 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         else await sendLineMessage(sel, t, replyTo ? { quoteToken: replyTo.quote_token, quotedMessageId: replyTo.line_message_id } : undefined); // LINE appends via realtime
       }
       for (const u of imgs) await chSendImage(sel, u);   // รูปแนบจากข้อความสำเร็จรูป — ตามหลังข้อความ
+      for (const a of pend) {                            // ของที่ "พักไว้" ตรวจแล้ว → ส่งตามลำดับ
+        if (a.type === "file" && !isFb) await sendLineFile(sel, a.url, a.name);
+        else await chSendImage(sel, a.url);              // รูป (ทั้ง LINE/FB) · ไฟล์บน FB ส่งเป็นรูปลิงก์ไม่ได้ → ส่งเป็นรูป
+      }
       if (isFb) setMsgs(await chListMessages(sel));      // FB: no realtime; refresh
       // คนตอบคนแรก = ผู้รับผิดชอบลูกค้าโดยอัตโนมัติ (เฉพาะแชตลูกค้า LINE ที่ยังไม่มีผู้รับผิดชอบ)
       if (!isFb && !isSup && myId && selContact && selContact.kind !== "supplier" && !selContact.assigned_to) {
         try { await setLineOwner(sel, myId); await loadContacts(); } catch (e2) { /* ไม่ให้ล้มการส่ง */ }
       }
-      setText(""); setReplyTo(null); setQrPendImgs([]);
+      setText(""); setReplyTo(null); setQrPendImgs([]); setPending([]);
     }
     catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setSending(false);
@@ -377,21 +384,21 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     if (!pos.length) { try { setPos(await listPurchaseOrders()); } catch (e) { flash("โหลดใบสั่งซื้อไม่สำเร็จ: " + (e.message || e), true); } }
   }
 
-  // send an image: upload to storage → push the public URL to LINE
+  // เลือกรูป → อัปโหลดแล้ว "พักไว้" ในช่องแชต (ยังไม่ส่ง) → ตรวจแล้วกดส่ง
   async function onImage(e) {
-    const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel || sending) return;
-    setSending(true);
-    try { const url = await uploadChatImage(f); await chSendImage(sel, url); if (isFb) setMsgs(await chListMessages(sel)); }
-    catch (ex) { flash("ส่งรูปไม่สำเร็จ: " + (ex.message || ex), true); }
-    setSending(false);
+    const fs = Array.from(e.target.files || []); e.target.value = ""; if (!fs.length || !sel) return;
+    setUploading(true);
+    try { for (const f of fs) { const url = await uploadChatImage(f); setPending((p) => [...p, { type: "image", url, name: f.name }]); } }
+    catch (ex) { flash("อัปโหลดรูปไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUploading(false);
   }
-  // send a document/file: upload → push a clickable link to the customer on LINE
+  // เลือกไฟล์ → อัปโหลดแล้วพักไว้ (ยังไม่ส่ง) → ตรวจแล้วกดส่ง (LINE ส่งเป็นลิงก์ให้กด)
   async function onFile(e) {
-    const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel || sending) return;
-    setSending(true);
-    try { const url = await uploadChatImage(f); await sendLineFile(sel, url, f.name); }
-    catch (ex) { flash("ส่งไฟล์ไม่สำเร็จ: " + (ex.message || ex), true); }
-    setSending(false);
+    const fs = Array.from(e.target.files || []); e.target.value = ""; if (!fs.length || !sel) return;
+    setUploading(true);
+    try { for (const f of fs) { const url = await uploadChatImage(f); setPending((p) => [...p, { type: "file", url, name: f.name }]); } }
+    catch (ex) { flash("อัปโหลดไฟล์ไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUploading(false);
   }
   // pick a product/service from the catalog → choose the payment-method price → send to the customer
   async function openAcPicker() {
@@ -727,13 +734,14 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   <div className="chat-tools">
                     {selContact.kind === "supplier" && <button className="chat-tool primary" disabled={sending} title="เลือกใบสั่งซื้อ ส่งเป็นรูป/PDF เข้าแชตซัพ" onClick={openPoPicker}>🛒 ส่ง PO</button>}
                     {selContact.customer_id && <button className="chat-tool primary" onClick={openConfirm} disabled={sending}>🧾 ส่งคอนเฟิม</button>}
-                    <label className={"chat-tool" + (sending ? " disabled" : "")}>📷 รูป
-                      <input type="file" accept="image/*" hidden disabled={sending} onChange={onImage} />
+                    <label className={"chat-tool" + (sending || uploading ? " disabled" : "")}>📷 รูป
+                      <input type="file" accept="image/*" multiple hidden disabled={sending || uploading} onChange={onImage} />
                     </label>
-                    {!isFb && <label className={"chat-tool" + (sending ? " disabled" : "")}>📎 ไฟล์
-                      <input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} />
+                    {!isFb && <label className={"chat-tool" + (sending || uploading ? " disabled" : "")}>📎 ไฟล์
+                      <input type="file" accept={ATTACH_ACCEPT} multiple hidden disabled={sending || uploading} onChange={onFile} />
                     </label>}
-                    {!isFb && <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => setStickerOpen((o) => !o)}>😊 สติกเกอร์</button>}
+                    <button className={"chat-tool" + (emojiOpen ? " primary" : "")} disabled={sending} onClick={() => { setEmojiOpen((o) => !o); setStickerOpen(false); }}>😀 อีโมจิ</button>
+                    {!isFb && <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => { setStickerOpen((o) => !o); setEmojiOpen(false); }}>😊 สติกเกอร์</button>}
                     {selContact.kind !== "supplier" && <button className="chat-tool" disabled={sending} onClick={openAcPicker}>❄️ ส่งแอร์</button>}
                     {quickReplies.map((qr) => {
                       const label = qr.title || qr.text;
@@ -760,6 +768,32 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                           </button>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {emojiOpen && (
+                    <div className="chat-sticker-box">
+                      <div className="chat-stickers" style={{ fontSize: 22 }}>
+                        {["😀", "😁", "😂", "🤣", "😊", "😍", "😘", "😅", "🙂", "😉", "😎", "🤔", "😴", "😢", "😭", "😡", "👍", "🙏", "👌", "👏", "🙌", "💪", "👋", "✅", "❤️", "🔥", "⭐", "🎉", "💯", "📞", "📍", "🚗", "🚚", "📦", "❄️", "☎️"].map((em) => (
+                          <button key={em} className="chat-sticker-pick" style={{ fontSize: 22 }} onClick={() => setText((t) => t + em)} title="ใส่อีโมจิ">{em}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(pending.length > 0 || uploading) && (
+                    <div className="chat-reply-bar" style={{ alignItems: "flex-start" }}>
+                      <span className="chat-reply-icon">📎</span>
+                      <div className="chat-reply-info">
+                        <b>แนบไว้ {pending.length} รายการ — ตรวจแล้วกด “ส่ง”{uploading ? " · กำลังอัปโหลด…" : ""}</b>
+                        <span className="qr-imgrow">
+                          {pending.map((a, i) => (
+                            <span className="qr-imgchip" key={a.url + i} title={a.name || ""}>
+                              {a.type === "image" ? <img src={a.url} alt="" /> : <span style={{ fontSize: 11, padding: "0 7px", display: "inline-flex", alignItems: "center", height: "100%", whiteSpace: "nowrap" }}>📄 {(a.name || "ไฟล์").slice(0, 12)}</span>}
+                              <button title="เอาออก" onClick={() => setPending((s) => s.filter((_, j) => j !== i))}>✕</button>
+                            </span>
+                          ))}
+                        </span>
+                      </div>
+                      {pending.length > 0 && <button className="chat-reply-cancel" title="ล้างที่แนบทั้งหมด" onClick={() => setPending([])}>✕</button>}
                     </div>
                   )}
                   {replyTo && (
@@ -793,7 +827,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <textarea className="inp chat-input" rows={4} value={text} placeholder={sending ? "กำลังส่ง…" : (replyTo ? "พิมพ์คำตอบ…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)")}
                       onChange={(e) => setText(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
-                    <button className="btn-primary" disabled={sending || (!text.trim() && !qrPendImgs.length)} onClick={send}>{sending ? "…" : "ส่ง"}</button>
+                    <button className="btn-primary" disabled={sending || uploading || (!text.trim() && !qrPendImgs.length && !pending.length)} onClick={send}>{sending ? "…" : uploading ? "…" : "ส่ง"}</button>
                   </div>
                 </div>
               ) : <div className="chat-readonly">ดูได้อย่างเดียว — เฉพาะฝ่ายออฟฟิศตอบกลับได้</div>}
