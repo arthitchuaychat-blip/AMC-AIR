@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, searchFbMessages, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
@@ -127,6 +127,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [pending, setPending] = React.useState([]);        // รูป/ไฟล์ที่เลือกไว้ "พักก่อนส่ง" [{type:'image'|'file', url, name}] — กดตรวจแล้วค่อยส่ง
   const [uploading, setUploading] = React.useState(false); // กำลังอัปโหลดไฟล์เข้าที่พัก
   const [emojiOpen, setEmojiOpen] = React.useState(false);
+  const [qrButtons, setQrButtons] = React.useState([]);    // ปุ่มให้ลูกค้ากด (LINE quick-reply) [{label,text}] — แนบกับข้อความถัดไป
+  const [qrbOpen, setQrbOpen] = React.useState(false);
   const [qrSearch, setQrSearch] = React.useState("");
   const [jobs, setJobs] = React.useState(null);       // cached job orders (loaded on first "ส่งคอนเฟิม")
   const [teams, setTeams] = React.useState([]);       // permanent teams for the queue panel
@@ -203,8 +205,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   // ผู้รับผิดชอบลูกค้า = เฉพาะทีมหลังบ้านที่เข้าถึงแชตได้ (admin/exec/บัญชี/บุคคล/ขาย) — ไม่รวมช่างหน้างาน
   const ownerStaff = React.useMemo(() => staff.filter((s) => can(s.role, "chat", "view")), [staff]);
   const staffColor = React.useMemo(() => Object.fromEntries(staff.map((s, i) => [s.id, STAFF_COLORS[i % STAFF_COLORS.length]])), [staff]);
-  async function changeStage(s) { if (isFb) return; try { await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
-  async function changeOwner(uid) { if (isFb) return; try { await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeStage(s) { try { if (isFb) await setFbStage(sel, s); else await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeOwner(uid) { try { if (isFb) await setFbOwner(sel, uid || null); else await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeNote(note) { try { if (isFb) await setFbNote(sel, note); else await setLineNote(sel, note); await loadContacts(); } catch (e) { flash("บันทึกโน้ตไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeTags(tags) { try { if (isFb) await setFbTags(sel, tags); else await setLineTags(sel, tags); await loadContacts(); } catch (e) { flash("บันทึกแท็กไม่สำเร็จ: " + (e.message || e), true); } }
   // ปิดบอทเฉพาะห้องนี้ — ใช้ตอนกำลังคุยปิดการขายเอง ไม่อยากให้บอทแทรก (mig 164)
   async function toggleAiOff(off) {
     if (isFb) return;
@@ -319,21 +323,22 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     if ((!t && !imgs.length && !pend.length) || !sel || sending) return;
     setSending(true);
     try {
+      const qrb = (!isFb && qrButtons.filter((x) => x.label.trim() && x.text.trim())) || [];   // ปุ่มให้ลูกค้ากด (LINE เท่านั้น)
       if (t) {
-        if (isFb) await sendFbMessage(sel, t);
-        else await sendLineMessage(sel, t, replyTo ? { quoteToken: replyTo.quote_token, quotedMessageId: replyTo.line_message_id } : undefined); // LINE appends via realtime
+        if (isFb) await sendFbMessage(sel, t, replyTo ? { replyToMid: replyTo.fb_message_id } : undefined);
+        else await sendLineMessage(sel, t, { ...(replyTo ? { quoteToken: replyTo.quote_token, quotedMessageId: replyTo.line_message_id } : {}), ...(qrb.length ? { quickReplies: qrb } : {}) }); // LINE appends via realtime
       }
       for (const u of imgs) await chSendImage(sel, u);   // รูปแนบจากข้อความสำเร็จรูป — ตามหลังข้อความ
       for (const a of pend) {                            // ของที่ "พักไว้" ตรวจแล้ว → ส่งตามลำดับ
         if (a.type === "file" && !isFb) await sendLineFile(sel, a.url, a.name);
         else await chSendImage(sel, a.url);              // รูป (ทั้ง LINE/FB) · ไฟล์บน FB ส่งเป็นรูปลิงก์ไม่ได้ → ส่งเป็นรูป
       }
-      if (isFb) setMsgs(await chListMessages(sel));      // FB: no realtime; refresh
-      // คนตอบคนแรก = ผู้รับผิดชอบลูกค้าโดยอัตโนมัติ (เฉพาะแชตลูกค้า LINE ที่ยังไม่มีผู้รับผิดชอบ)
-      if (!isFb && !isSup && myId && selContact && selContact.kind !== "supplier" && !selContact.assigned_to) {
-        try { await setLineOwner(sel, myId); await loadContacts(); } catch (e2) { /* ไม่ให้ล้มการส่ง */ }
+      if (isFb) setMsgs(await chListMessages(sel));      // FB: เผื่อ realtime ไม่ทัน → รีเฟรช
+      // คนตอบคนแรก = ผู้รับผิดชอบลูกค้าโดยอัตโนมัติ (แชตลูกค้าที่ยังไม่มีผู้รับผิดชอบ · LINE + FB)
+      if (!isSup && myId && selContact && selContact.kind !== "supplier" && !selContact.assigned_to) {
+        try { if (isFb) await setFbOwner(sel, myId); else await setLineOwner(sel, myId); await loadContacts(); } catch (e2) { /* ไม่ให้ล้มการส่ง */ }
       }
-      setText(""); setReplyTo(null); setQrPendImgs([]); setPending([]);
+      setText(""); setReplyTo(null); setQrPendImgs([]); setPending([]); setQrButtons([]);
     }
     catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setSending(false);
@@ -555,13 +560,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     let dropped = false;
     setSearching(true);
     const t = setTimeout(() => {
-      searchLineMessages(term)
+      (isFb ? searchFbMessages(term) : searchLineMessages(term))   // ค้นข้อความในประวัติ — ตามช่อง (LINE/FB)
         .then((hits) => { if (!dropped) setMsgHits(hits || {}); })
         .catch(() => { if (!dropped) setMsgHits({}); })
         .finally(() => { if (!dropped) setSearching(false); });
     }, 300);
     return () => { dropped = true; clearTimeout(t); };
-  }, [q]);
+  }, [q, channel]);
   const shown = contacts.filter((c) =>
     (stageF === "all" || (c.stage || "new") === stageF)
     && (!mineOnly || c.assigned_to === myId)
@@ -663,7 +668,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   <div className="chat-thread-name">{selContact.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</div>
                   <div className="chat-thread-sub" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 8px" }}>
                     <span>{selContact.customerName ? `🔗 ${selContact.customerName}` : "ยังไม่เชื่อมลูกค้า"}</span>
-                    {!isFb && !isSup && <span className="conv-owner">👤 {(selContact.assigned_to && staffMap[selContact.assigned_to]) || "ยังไม่มีผู้รับผิดชอบ"}</span>}
+                    {!isSup && <span className="conv-owner">👤 {(selContact.assigned_to && staffMap[selContact.assigned_to]) || "ยังไม่มีผู้รับผิดชอบ"}</span>}
                   </div>
                 </div>
                 {canSend && onCreateTask && <button className="chat-info-toggle" onClick={() => onCreateTask(selContact.customer_id || null, selContact.customerName || selContact.display_name)} title="สร้างงานในกระดานสั่งงาน">✅</button>}
@@ -703,7 +708,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                             </div>
                           );
                         })()}
-                        {canSend && !isFb && m.line_message_id &&
+                        {canSend && (isFb ? m.fb_message_id : m.line_message_id) &&
                           <button type="button" className="chat-reply-btn" title="ตอบกลับข้อความนี้" onClick={() => setReplyTo(m)}>↩</button>}
                         {m.type === "sticker" && m.image_url ? (
                           <img className="chat-sticker" src={m.image_url} alt="สติกเกอร์" loading="lazy" />
@@ -745,6 +750,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     </label>}
                     <button className={"chat-tool" + (emojiOpen ? " primary" : "")} disabled={sending} onClick={() => { setEmojiOpen((o) => !o); setStickerOpen(false); }}>😀 อีโมจิ</button>
                     {!isFb && <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => { setStickerOpen((o) => !o); setEmojiOpen(false); }}>😊 สติกเกอร์</button>}
+                    {!isFb && <button className={"chat-tool" + (qrbOpen || qrButtons.length ? " primary" : "")} disabled={sending} title="เพิ่มปุ่มให้ลูกค้ากดตอบ (LINE) — แนบกับข้อความถัดไป" onClick={() => setQrbOpen((o) => !o)}>🔘 ปุ่มลูกค้า{qrButtons.length ? ` (${qrButtons.length})` : ""}</button>}
                     {selContact.kind !== "supplier" && <button className="chat-tool" disabled={sending} onClick={openAcPicker}>❄️ ส่งแอร์</button>}
                     {quickReplies.map((qr) => {
                       const label = qr.title || qr.text;
@@ -780,6 +786,19 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                           <button key={em} className="chat-sticker-pick" style={{ fontSize: 22 }} onClick={() => setText((t) => t + em)} title="ใส่อีโมจิ">{em}</button>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {!isFb && qrbOpen && (
+                    <div className="chat-sticker-box" style={{ padding: 10 }}>
+                      <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 6, fontWeight: 700 }}>🔘 ปุ่มให้ลูกค้ากด (สูงสุด 13) — กดแล้วส่งข้อความนั้นกลับมา · แนบกับข้อความที่พิมพ์</div>
+                      {qrButtons.map((b, i) => (
+                        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 5, alignItems: "center" }}>
+                          <input className="inp" style={{ width: 130, flex: "none", fontSize: 12.5 }} maxLength={20} placeholder="ป้ายปุ่ม (≤20)" value={b.label} onChange={(e) => setQrButtons((s) => s.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
+                          <input className="inp" style={{ flex: 1, fontSize: 12.5 }} placeholder="ข้อความที่ลูกค้าจะส่งกลับเมื่อกด" value={b.text} onChange={(e) => setQrButtons((s) => s.map((x, j) => j === i ? { ...x, text: e.target.value } : x))} />
+                          <button className="chat-reply-cancel" title="ลบปุ่มนี้" onClick={() => setQrButtons((s) => s.filter((_, j) => j !== i))}>✕</button>
+                        </div>
+                      ))}
+                      {qrButtons.length < 13 && <button className="btn-ghost sm" onClick={() => setQrButtons((s) => [...s, { label: "", text: "" }])}>+ เพิ่มปุ่ม</button>}
                     </div>
                   )}
                   {(pending.length > 0 || uploading) && (
@@ -890,6 +909,19 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       ? <Combo className="inp" value={selContact.assigned_to || ""} onChange={(e) => changeOwner(e.target.value || null)}><option value="">— ยังไม่มอบหมาย —</option>{ownerStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Combo>
                       : <span style={{ fontSize: 13 }}>{(selContact.assigned_to && staffMap[selContact.assigned_to]) || "—"}</span>}
                   </label>
+                  <label className="ci-field"><span>📝 โน้ต (ภายใน · ลูกค้าไม่เห็น)</span>
+                    {canSend
+                      ? <textarea key={"note" + sel} className="inp" rows={2} style={{ resize: "vertical" }} defaultValue={selContact.note || ""} placeholder="โน้ตเกี่ยวกับลูกค้ารายนี้… (บันทึกเมื่อคลิกออกจากช่อง)" onBlur={(e) => { const v = e.target.value.trim(); if (v !== (selContact.note || "")) changeNote(v); }} />
+                      : (selContact.note ? <span style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{selContact.note}</span> : <span style={{ fontSize: 13, color: "var(--ink-3)" }}>—</span>)}
+                  </label>
+                  <div className="ci-field"><span>🏷️ แท็ก/ป้าย</span>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+                      {(selContact.tags || []).map((tg) => (
+                        <span key={tg} className="chat-tag">{tg}{canSend && <button title="เอาแท็กนี้ออก" onClick={() => changeTags((selContact.tags || []).filter((x) => x !== tg))}>✕</button>}</span>
+                      ))}
+                      {canSend && <input className="inp" style={{ width: 116, flex: "none", padding: "5px 9px", fontSize: 12 }} placeholder="+ เพิ่มแท็ก" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const v = e.target.value.trim(); if (v && !(selContact.tags || []).includes(v)) changeTags([...(selContact.tags || []), v]); e.target.value = ""; } }} />}
+                    </div>
+                  </div>
                   {/* บอทมีเบรกอยู่แล้ว (เงียบอัตโนมัติหลังพนักงานตอบ) แต่บางห้องอยากปิดถาวรระหว่างปิดการขาย */}
                   {!isFb && canSend && (
                     <label className="ci-field" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}

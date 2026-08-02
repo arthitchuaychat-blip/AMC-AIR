@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   const prof = (pr.ok ? await pr.json() : [])[0];
   if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
 
-  const { to, text, imageUrl, fileUrl, fileName, packageId, stickerId, quoteToken, quotedMessageId } = await readJson(req);
+  const { to, text, imageUrl, fileUrl, fileName, packageId, stickerId, quoteToken, quotedMessageId, quickReplies } = await readJson(req);
   if (!to || (!text?.trim() && !imageUrl && !fileUrl && !stickerId)) return res.status(400).json({ error: "missing to/text" });
 
   // LINE bots can't push a raw file → send the file as a clickable link in a text message
@@ -34,13 +34,17 @@ export default async function handler(req, res) {
   const stickerImg = stickerId ? `https://stickershop.line-scdn.net/stickershop/v1/sticker/${stickerId}/android/sticker.png` : null;
   // quoteToken makes the reply appear as a quote on the customer's LINE (text messages only)
   const qt = quoteToken ? { quoteToken: String(quoteToken) } : {};
+  // ปุ่ม Quick Reply ให้ลูกค้ากด (LINE native) — กดแล้วส่งข้อความ text นั้นกลับมา · สูงสุด 13 ปุ่ม · label ≤ 20 ตัว
+  const qr = Array.isArray(quickReplies) && quickReplies.length
+    ? { quickReply: { items: quickReplies.slice(0, 13).filter((x) => x && x.label && x.text).map((x) => ({ type: "action", action: { type: "message", label: String(x.label).slice(0, 20), text: String(x.text) } })) } }
+    : {};
   const messages = stickerId
     ? [{ type: "sticker", packageId: String(packageId), stickerId: String(stickerId), ...qt }]
     : imageUrl
       ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }]
       : fileUrl
-        ? [{ type: "text", text: `📄 ${fname}\n${fileUrl}`, ...qt }]
-        : [{ type: "text", text, ...qt }];
+        ? [{ type: "text", text: `📄 ${fname}\n${fileUrl}`, ...qt, ...qr }]
+        : [{ type: "text", text, ...qt, ...qr }];
   const r = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },

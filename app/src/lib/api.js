@@ -4096,7 +4096,7 @@ async function _fbSend(to, payload) {
   if (!r.ok || j.ok === false) throw new Error(j.error || j.msg || "ส่งไม่สำเร็จ");
   return j;
 }
-export const sendFbMessage = (psid, text) => _fbSend(psid, { text });
+export const sendFbMessage = (psid, text, opts) => _fbSend(psid, { text, ...(opts || {}) });
 export const sendFbImage = (psid, imageUrl) => _fbSend(psid, { imageUrl });
 // CRM: set a contact's stage / responsible staff
 export async function setLineStage(uid, stage) {
@@ -4111,6 +4111,24 @@ export async function setLineAiOff(uid, off) {
 export async function setLineOwner(uid, userId) {
   const { error } = await supabase.from("line_contacts").update({ assigned_to: userId || null }).eq("line_user_id", uid);
   if (error) throw error;
+}
+// โน้ต + แท็กผู้ติดต่อ (mig 189) — LINE + FB
+const _noteErr = (e) => new Error(/note|tags|PGRST204/i.test(e?.message || "") ? "ต้องรัน migration 189 ใน Supabase ก่อน" : e.message);
+export async function setLineNote(uid, note) { const { error } = await supabase.from("line_contacts").update({ note: note || null }).eq("line_user_id", uid); if (error) throw _noteErr(error); }
+export async function setLineTags(uid, tags) { const { error } = await supabase.from("line_contacts").update({ tags: (tags && tags.length) ? tags : null }).eq("line_user_id", uid); if (error) throw _noteErr(error); }
+// FB: stage/owner/note/tags (fb_contacts มีคอลัมน์ครบตั้งแต่ mig 043 + note/tags ที่ 189)
+export async function setFbStage(psid, stage) { const { error } = await supabase.from("fb_contacts").update({ stage }).eq("psid", psid); if (error) throw error; }
+export async function setFbOwner(psid, userId) { const { error } = await supabase.from("fb_contacts").update({ assigned_to: userId || null }).eq("psid", psid); if (error) throw error; }
+export async function setFbNote(psid, note) { const { error } = await supabase.from("fb_contacts").update({ note: note || null }).eq("psid", psid); if (error) throw _noteErr(error); }
+export async function setFbTags(psid, tags) { const { error } = await supabase.from("fb_contacts").update({ tags: (tags && tags.length) ? tags : null }).eq("psid", psid); if (error) throw _noteErr(error); }
+// ค้นหาข้อความ FB (mirror searchLineMessages) — คืน map keyed by psid (= line_user_id ที่ alias ไว้)
+export async function searchFbMessages(term, { limit = 300 } = {}) {
+  const t = String(term || "").trim(); if (t.length < 2) return {};
+  const esc = t.replace(/[\\%_]/g, (m) => "\\" + m);
+  const { data, error } = await supabase.from("fb_messages").select("psid,text,created_at,direction").ilike("text", `%${esc}%`).order("created_at", { ascending: false }).limit(limit);
+  if (error) throw error;
+  const byRoom = {}; (data || []).forEach((m) => { if (!byRoom[m.psid]) byRoom[m.psid] = m; });
+  return byRoom;
 }
 // staff list (for owner dropdown + showing who replied)
 export async function listStaff() {

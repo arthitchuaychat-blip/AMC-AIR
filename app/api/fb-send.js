@@ -26,20 +26,28 @@ export default async function handler(req, res) {
   const page = await pageToken();
   if (!page) return res.status(200).json({ ok: false, reason: "no-config", msg: "ยังไม่ได้ตั้ง FB_PAGE_ACCESS_TOKEN ใน Vercel" });
 
-  const { to, text, imageUrl } = await readJson(req);
+  const { to, text, imageUrl, replyToMid } = await readJson(req);
   if (!to || (!text?.trim() && !imageUrl)) return res.status(400).json({ error: "missing to/text" });
 
   const message = imageUrl
     ? { attachment: { type: "image", payload: { url: imageUrl, is_reusable: true } } }
     : { text };
-  const r = await fetch(`${GRAPH}/${pageId() || "me"}/messages?access_token=${page}`, {
+  // ตอบกลับอ้างข้อความ (FB reply) — ได้ผลเฉพาะในกรอบ 24 ชม. · นอกกรอบ API จะปฏิเสธ reply แต่ข้อความปกติยังส่งได้
+  const replyField = replyToMid ? { reply_to: { mid: String(replyToMid) } } : {};
+  let r = await fetch(`${GRAPH}/${pageId() || "me"}/messages?access_token=${page}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message }),
+    body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message, ...replyField }),
   });
+  if (!r.ok && replyToMid) {   // reply ถูกปฏิเสธ (นอกกรอบ 24 ชม.) → ส่งแบบไม่อ้างอิงแทน ไม่ให้ล้ม
+    r = await fetch(`${GRAPH}/${pageId() || "me"}/messages?access_token=${page}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message }),
+    });
+  }
   if (!r.ok) return res.status(502).json({ error: "fb: " + (await r.text().catch(() => r.status)) });
   const out = await r.json().catch(() => ({}));
 
-  await fetch(`${SB()}/rest/v1/fb_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ psid: to, direction: "out", type: imageUrl ? "image" : "text", text: imageUrl ? null : text, image_url: imageUrl || null, fb_message_id: out.message_id || null, sent_by: user.id }) });
+  await fetch(`${SB()}/rest/v1/fb_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ psid: to, direction: "out", type: imageUrl ? "image" : "text", text: imageUrl ? null : text, image_url: imageUrl || null, fb_message_id: out.message_id || null, quoted_message_id: replyToMid || null, sent_by: user.id }) });
   await fetch(`${SB()}/rest/v1/fb_contacts?psid=eq.${encodeURIComponent(to)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ last_message: imageUrl ? "[รูปภาพ]" : text, last_message_at: new Date().toISOString(), unread: 0 }) });
   return res.status(200).json({ ok: true });
 }
