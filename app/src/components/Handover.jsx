@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listHandovers, deleteHandover, getCompanies, listServiceReminders, setReminderStatus } from "../lib/api";
+import { listHandovers, deleteHandover, getCompanies, listServiceReminders, setReminderStatus, sendHandoverLine } from "../lib/api";
 import { blankHandover } from "../lib/handover";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtDocDate, matchText, matchPhone } from "../lib/format";
@@ -83,6 +83,18 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
     if (h.status === "submitted" && !await confirmDialog("ใบนี้ส่งแล้ว (มีลายเซ็นลูกค้า) — ยืนยันเปิดแก้ไข?")) return;
     setEditing(h);
   }
+  const [sending, setSending] = React.useState(null);
+  async function sendLine(h) {
+    setSending(h.id);
+    try {
+      const out = await sendHandoverLine(h.id);
+      if (out.sent) flash("ส่งให้ลูกค้าทาง LINE แล้ว ✓");
+      else { try { await navigator.clipboard.writeText(out.url); } catch { /* ignore */ } flash((out.reason || "ยังไม่ได้ผูก LINE") + " — คัดลอกลิงก์ให้แล้ว วางส่งเองได้เลย", true); }
+    } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    setSending(null);
+  }
+  // ส่ง LINE ได้เฉพาะฝ่ายออฟฟิศ (ตรงกับสิทธิ์ฝั่ง serverless) และเฉพาะใบที่ส่งแล้ว
+  const canSendLine = ["admin", "sales", "exec", "finance", "hr"].includes(role);
 
   const shown = list.filter((h) =>
     (statusF === "all" || h.status === statusF)
@@ -145,6 +157,7 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
               </div>
               <div className="ho-card-acts">
                 <button className="btn-ghost sm" onClick={() => print(h)}><UIcon name="catalog" size={14} /> พิมพ์/PDF</button>
+                {canSendLine && h.status === "submitted" && <button className="btn-ghost sm" disabled={sending === h.id} onClick={() => sendLine(h)} title="ส่งลิงก์ใบส่งมอบงานให้ลูกค้าทาง LINE">{sending === h.id ? "กำลังส่ง…" : "💬 ส่ง LINE"}</button>}
                 {canEditRow(h) && <button className="btn-ghost sm" onClick={() => startEdit(h)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canDelete && <button className="btn-ghost sm danger" onClick={() => del(h)}><UIcon name="trash" size={14} /></button>}
               </div>

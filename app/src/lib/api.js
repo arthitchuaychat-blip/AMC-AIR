@@ -2755,6 +2755,17 @@ export async function setReminderStatus(id, status) {
   const { error } = await supabase.from("service_reminders").update({ status }).eq("id", id);
   if (error) throw error;
 }
+// ส่งลิงก์ใบส่งมอบงาน (หน้า public) ให้ลูกค้าทาง LINE — คืน {sent, url, reason} · ไม่ผูก LINE = คืน url ให้คัดลอกเอง
+export async function sendHandoverLine(id) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const r = await fetch("/api/handover-send", {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+    body: JSON.stringify({ id }),
+  });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(out.error || ("ส่งไม่สำเร็จ (" + r.status + ")"));
+  return out;
+}
 
 // ลบใบส่งมอบ: กติกาบ้าน — ต้องมีเหตุผล + ลง audit พร้อม snapshot (ใบที่ส่งแล้วมีลายเซ็นลูกค้า เป็นหลักฐานงาน)
 export async function deleteHandover(id, reason) {

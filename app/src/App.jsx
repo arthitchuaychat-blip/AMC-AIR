@@ -8,6 +8,7 @@ import { hasUnsaved } from "./lib/formDraft";
 import InstallBanner from "./components/InstallBanner";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
+import PublicHandover from "./components/PublicHandover";
 import { ConfirmHost, confirmDialog } from "./components/ConfirmDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
 // เปลือกแอปที่ติดตามทุกเมนู (โหลดทันที ไม่ต้องแยกก้อน)
@@ -121,7 +122,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·ใบส่งมอบงาน: นัดล้าง/PM รอบถัดไป → แจ้งเตือน+ปฏิทิน+รายการตามงาน v560";
+const BUILD = "2026-08-02·ใบส่งมอบงาน: หน้า public + ส่งให้ลูกค้าทาง LINE v561";
 
 function SetupNotice() {
   return (
@@ -140,6 +141,8 @@ function SetupNotice() {
 
 export default function App() {
   const [ready, setReady] = React.useState(false);
+  // ลิงก์ public ใบส่งมอบงานสำหรับลูกค้า (?ho=<id>&t=<token>) — เปิดดูได้โดยไม่ต้องล็อกอิน
+  const publicHo = React.useMemo(() => { try { const p = new URLSearchParams(window.location.search); const id = p.get("ho"), t = p.get("t"); return id && t ? { id, t } : null; } catch { return null; } }, []);
   const [session, setSession] = React.useState(null);
   const [profile, setProfile] = React.useState(null);
   const [teams, setTeams] = React.useState([]); // to tell if the logged-in user is on a subcontractor team
@@ -320,6 +323,7 @@ export default function App() {
   // so refreshing or "open link in new tab" lands on the same menu
   React.useEffect(() => { if (view) { try { window.history.replaceState(null, "", "#" + view); } catch (_) {} } }, [view]);
 
+  if (publicHo) return <PublicHandover id={publicHo.id} token={publicHo.t} />;   // ลูกค้าเปิดจากลิงก์ LINE — ไม่ต้องล็อกอิน
   if (!hasConfig) return <SetupNotice />;
   if (!ready) return <div className="login-stage"><div className="page-sub">กำลังโหลด…</div></div>;
   if (!session) return <Login />;
