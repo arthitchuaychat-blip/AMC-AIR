@@ -105,27 +105,29 @@ function parseJobCard(text) {
 }
 
 function NotifyButton() {
+  const lang = useLang();
+  const L = (th, my) => (lang === "my" ? my : th);
   const [perm, setPerm] = React.useState(notifyPermission());
   const [busy, setBusy] = React.useState(false);
   if (!pushSupported()) return null;
-  if (perm === "denied") return <span className="tc-notify off" title="เปิดสิทธิ์ในตั้งค่าเบราว์เซอร์">🔕 ปิดแจ้งเตือน</span>;
-  if (perm === "granted") return <span className="tc-notify on">🔔 เปิดอยู่</span>;
+  if (perm === "denied") return <span className="tc-notify off" title={L("เปิดสิทธิ์ในตั้งค่าเบราว์เซอร์", "ဘရောက်ဆာ ဆက်တင်တွင် ခွင့်ပြုပါ")}>🔕 {L("ปิดแจ้งเตือน", "အသိပေးချက် ပိတ်")}</span>;
+  if (perm === "granted") return <span className="tc-notify on">🔔 {L("เปิดอยู่", "ဖွင့်ထား")}</span>;
   return (
     <button className="btn-primary sm" disabled={busy} onClick={async () => {
       setBusy(true);
       try { await enablePush(); setPerm(notifyPermission()); }
-      catch (e) { alert(e.message || "เปิดแจ้งเตือนไม่สำเร็จ"); }
+      catch (e) { alert(e.message || L("เปิดแจ้งเตือนไม่สำเร็จ", "အသိပေးချက် ဖွင့်၍မရ")); }
       setBusy(false);
-    }}>🔔 เปิดแจ้งเตือน</button>
+    }}>🔔 {L("เปิดแจ้งเตือน", "အသိပေးချက် ဖွင့်")}</button>
   );
 }
 
 const TYPE_TABS = [
-  { k: "all",     label: "ทุกห้อง" },
-  { k: "company", label: "🏢 บริษัท" },
-  { k: "dm",      label: "👤 ส่วนตัว" },
-  { k: "group",   label: "👥 กลุ่ม" },
-  { k: "project", label: "🧰 งาน" },
+  { k: "all",     th: "ทุกห้อง",     my: "အခန်းအားလုံး" },
+  { k: "company", th: "🏢 บริษัท",   my: "🏢 ကုမ္ပဏီ" },
+  { k: "dm",      th: "👤 ส่วนตัว",  my: "👤 ကိုယ်ရေး" },
+  { k: "group",   th: "👥 กลุ่ม",    my: "👥 အုပ်စု" },
+  { k: "project", th: "🧰 งาน",      my: "🧰 အလုပ်" },
 ];
 
 export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
@@ -149,6 +151,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   const [trMap, setTrMap] = React.useState({});           // msg id → คำแปล ("…" = กำลังแปล)
   const [trBusy, setTrBusy] = React.useState(false);      // กำลังแปลข้อความในช่องพิมพ์
   const lang = useLang();                                 // ภาษา UI ของฉัน (th/my) — กำหนดทิศทางการแปล
+  const L = (th, my) => (lang === "my" ? my : th);        // Thai default, Burmese when toggled
   const endRef  = React.useRef(null);
   const selRef  = React.useRef(null);
   const taRef   = React.useRef(null);
@@ -164,13 +167,13 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   async function reloadMe() { try { const [p, s] = await Promise.all([getProfile(), listStaff()]); setMe(p); setStaff(s); } catch { /* ignore */ } }
   async function onMyAvatar(e) {
     const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
-    try { const url = await uploadAvatar(f); await setMyAvatar(url); await reloadMe(); loadRooms(); flash("เปลี่ยนรูปโปรไฟล์แล้ว ✓"); }
-    catch (err) { flash("เปลี่ยนรูปไม่สำเร็จ: " + (err?.message || err)); }
+    try { const url = await uploadAvatar(f); await setMyAvatar(url); await reloadMe(); loadRooms(); flash(L("เปลี่ยนรูปโปรไฟล์แล้ว ✓", "ပရိုဖိုင်ဓာတ်ပုံ ပြောင်းပြီး ✓")); }
+    catch (err) { flash(L("เปลี่ยนรูปไม่สำเร็จ: ", "ဓာတ်ပုံ ပြောင်း၍မရ: ") + (err?.message || err)); }
   }
   async function onRoomAvatar(e) {
     const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel) return;
-    try { const url = await uploadAvatar(f); await setRoomAvatar(sel, url); await loadRooms(); flash("เปลี่ยนรูปกลุ่มแล้ว ✓"); }
-    catch (err) { flash("เปลี่ยนรูปกลุ่มไม่สำเร็จ: " + (err?.message || err)); }
+    try { const url = await uploadAvatar(f); await setRoomAvatar(sel, url); await loadRooms(); flash(L("เปลี่ยนรูปกลุ่มแล้ว ✓", "အုပ်စုဓာတ်ပုံ ပြောင်းပြီး ✓")); }
+    catch (err) { flash(L("เปลี่ยนรูปกลุ่มไม่สำเร็จ: ", "အုပ်စုဓာတ်ပုံ ပြောင်း၍မရ: ") + (err?.message || err)); }
   }
 
   // members eligible for @mention in current room
@@ -224,7 +227,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
       const older = await listChatMessages(sel, { before: msgs[0].created_at });
       setMsgs((cur) => [...older, ...cur]);
       setHasMore(older.length >= CHAT_PAGE);
-    } catch { keepScrollRef.current = null; flash("โหลดข้อความเก่าไม่สำเร็จ"); }
+    } catch { keepScrollRef.current = null; flash(L("โหลดข้อความเก่าไม่สำเร็จ", "စာဟောင်း ဖွင့်၍မရ")); }
   }
   async function ensureJobs() { if (!jobs.length) { try { setJobs(await listJobOrders()); } catch { } } }
   // ดัชนีโน้ตไว้ให้ช่องค้นหาห้องหาเนื้อโน้ตเจอ — โหลดเมื่อเริ่มพิมพ์ค้นหาครั้งแรก (force = รีเฟรชหลังโน้ตเปลี่ยน)
@@ -278,7 +281,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     const t = text.trim(); if (!t || !sel || sending) return;
     const ids = extractMentionIds(t);
     setText(""); setMentionQ(null); setSending(true);
-    try { await sendChatMessage(sel, t, ids); await loadMsgs(sel); } catch { flash("ส่งไม่สำเร็จ"); setText(t); }
+    try { await sendChatMessage(sel, t, ids); await loadMsgs(sel); } catch { flash(L("ส่งไม่สำเร็จ", "ပို့၍မရ")); setText(t); }
     setSending(false);
   }
   const isImg = (f) => (f.type || "").startsWith("image/") || /\.(heic|heif)$/i.test(f.name || "");
@@ -287,7 +290,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     if (!files.length || !sel || sending) return;
     setSending(true);
     try { for (const f of files) { const url = await uploadChatImage(f); await sendChatImage(sel, url); } await loadMsgs(sel); }
-    catch { flash("ส่งรูปไม่สำเร็จ"); }
+    catch { flash(L("ส่งรูปไม่สำเร็จ", "ဓာတ်ပုံ ပို့၍မရ")); }
     setSending(false);
   }
   function onImage(e) { const fs = Array.from(e.target.files || []); e.target.value = ""; sendImages(fs); }
@@ -299,7 +302,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sel) return;
     if (isImg(f)) return sendImages([f]);   // รูป (รวม HEIC จากไอโฟน) → ส่งเป็นรูปดูในแชตได้เลย ไม่ใช่ลิงก์ไฟล์
     setSending(true);
-    try { const url = await uploadChatImage(f); await sendChatFile(sel, url, f.name); await loadMsgs(sel); } catch (err) { flash("ส่งไฟล์ไม่สำเร็จ: " + (err?.message || err)); }
+    try { const url = await uploadChatImage(f); await sendChatFile(sel, url, f.name); await loadMsgs(sel); } catch (err) { flash(L("ส่งไฟล์ไม่สำเร็จ: ", "ဖိုင် ပို့၍မရ: ") + (err?.message || err)); }
     setSending(false);
   }
   async function sendJobCard(j) {
@@ -307,12 +310,12 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     const safe = (s) => (s || "").replace(/[|[\]]/g, "");
     const msg = `[JOBCARD|${safe(j.job_no)}|${safe(j.customerName)}|${safe(j.status)}|${safe(j.title)}]`;
     setModal(null); setSending(true);
-    try { await sendChatMessage(sel, msg); await loadMsgs(sel); } catch { flash("ส่งลิงก์งานไม่สำเร็จ"); }
+    try { await sendChatMessage(sel, msg); await loadMsgs(sel); } catch { flash(L("ส่งลิงก์งานไม่สำเร็จ", "အလုပ်လင့်ခ် ပို့၍မရ")); }
     setSending(false);
   }
   async function openDm(otherId) {
     try { const id = await createDmRoom(otherId); setModal(null); await loadRooms(); setSel(id); }
-    catch (e) { flash("เปิดแชตไม่สำเร็จ: " + (e?.message || e)); }
+    catch (e) { flash(L("เปิดแชตไม่สำเร็จ: ", "စကားပြော ဖွင့်၍မရ: ") + (e?.message || e)); }
   }
   // ── แปลภาษา ไทย↔พม่า (ทิศทางตามภาษา UI ของฉัน) ──
   // แปลข้อความที่ได้รับ → เป็นภาษาของฉัน (ไทยเห็นไทย · พม่าเห็นพม่า)
@@ -325,7 +328,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     catch (e) {
       trDoneRef.current.delete(m.id);
       setTrMap((s) => { const n = { ...s }; delete n[m.id]; return n; });
-      if (!quiet) flash("แปลไม่สำเร็จ: " + (e?.message || e));
+      if (!quiet) flash(L("แปลไม่สำเร็จ: ", "ဘာသာပြန်၍မရ: ") + (e?.message || e));
     }
   }
   // แปลอัตโนมัติ: ข้อความที่เป็นภาษาอีกฝั่งล้วน ๆ (พม่าเข้ามา → ไทยเห็นคำแปลทันที และกลับกัน)
@@ -349,22 +352,22 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     try {
       const out = await translateText(t, lang === "my" ? "th" : "my");
       if (out && out.trim() && out.trim() !== t) setText(t + "\n" + out.trim());
-    } catch (e) { flash("แปลไม่สำเร็จ: " + (e?.message || e)); }
+    } catch (e) { flash(L("แปลไม่สำเร็จ: ", "ဘာသာပြန်၍မရ: ") + (e?.message || e)); }
     setTrBusy(false);
   }
 
   // แก้ชื่อห้องกลุ่ม/ห้องงาน (ทีมหลังบ้าน)
   async function saveRename() {
     const nm = (rename || "").trim(); if (!nm || !selRoom) return;
-    try { await renameChatRoom(selRoom.id, nm); setRename(null); await loadRooms(); flash("แก้ชื่อกลุ่มแล้ว ✓"); }
-    catch (e) { flash("แก้ชื่อไม่สำเร็จ: " + (e?.message || e)); }
+    try { await renameChatRoom(selRoom.id, nm); setRename(null); await loadRooms(); flash(L("แก้ชื่อกลุ่มแล้ว ✓", "အုပ်စုအမည် ပြင်ပြီး ✓")); }
+    catch (e) { flash(L("แก้ชื่อไม่สำเร็จ: ", "အမည်ပြင်၍မရ: ") + (e?.message || e)); }
   }
   // ธุรการ/ผู้บริหาร ลบห้องกลุ่ม/ห้องงานถาวร (ข้อความ+สมาชิกหายทั้งชุด)
   async function delRoom() {
     if (!selRoom) return;
-    if (!await confirmDialog(`ลบห้อง "${selRoom.title}" ถาวร?\nข้อความ รูป และไฟล์ในห้องจะถูกลบทั้งหมด สมาชิกทุกคนจะไม่เห็นห้องนี้อีก`)) return;
-    try { await deleteChatRoom(selRoom.id); setSel(null); await loadRooms(); flash("ลบห้องแล้ว ✓"); }
-    catch (e) { flash("ลบไม่สำเร็จ: " + (e?.message || e)); }
+    if (!await confirmDialog(L(`ลบห้อง "${selRoom.title}" ถาวร?\nข้อความ รูป และไฟล์ในห้องจะถูกลบทั้งหมด สมาชิกทุกคนจะไม่เห็นห้องนี้อีก`, `"${selRoom.title}" အခန်းကို အပြီးဖျက်မလား?\nအခန်းထဲက စာ၊ ဓာတ်ပုံနှင့် ဖိုင်များ အားလုံး ဖျက်ခံရမည်။ အဖွဲ့ဝင်အားလုံး ဤအခန်းကို မမြင်တော့ပါ`))) return;
+    try { await deleteChatRoom(selRoom.id); setSel(null); await loadRooms(); flash(L("ลบห้องแล้ว ✓", "အခန်း ဖျက်ပြီး ✓")); }
+    catch (e) { flash(L("ลบไม่สำเร็จ: ", "ဖျက်၍မရ: ") + (e?.message || e)); }
   }
 
   const selRoom = rooms.find((r) => r.id === sel);
@@ -387,11 +390,11 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     <div className="adm tc-wrap">
       <div className="adm-head">
         <div>
-          <h1 className="page-title">แชตทีม <span className="page-title-en">Team Chat</span></h1>
-          <p className="page-sub">คุยกันภายในองค์กร · ห้องรวม · ทักตัวต่อตัว · กลุ่ม · ห้องงาน</p>
+          <h1 className="page-title">{L("แชตทีม", "အဖွဲ့ စကားပြော")} <span className="page-title-en">Team Chat</span></h1>
+          <p className="page-sub">{L("คุยกันภายในองค์กร · ห้องรวม · ทักตัวต่อตัว · กลุ่ม · ห้องงาน", "အဖွဲ့အတွင်း စကားပြော · ဘုံအခန်း · တစ်ဦးချင်း · အုပ်စု · အလုပ်အခန်း")}</p>
         </div>
         <div className="cat-head-actions">
-          <label className="tc-myav" title="เปลี่ยนรูปโปรไฟล์ของฉัน">
+          <label className="tc-myav" title={L("เปลี่ยนรูปโปรไฟล์ของฉัน", "ကျွန်ုပ်၏ ပရိုဖိုင်ဓာတ်ပုံ ပြောင်း")}>
             <Avatar url={me?.avatar_url} name={me?.name} id={me?.id} size={46} />
             <span className="tc-myav-cam" style={{ width: 19, height: 19, fontSize: 11 }}>📷</span>
             <input type="file" accept="image/*" hidden onChange={onMyAvatar} />
@@ -406,7 +409,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           <div className="tc-rooms-top">
             <div className="cat-search" style={{ flex: 1 }}>
               <UIcon name="search" size={16} color="var(--ink-3)" />
-              <input placeholder="ค้นหาห้อง / โน้ต" value={q} onChange={(e) => { setQ(e.target.value); if (e.target.value) ensureNoteIdx(); }} />
+              <input placeholder={L("ค้นหาห้อง / โน้ต", "အခန်း / မှတ်စု ရှာဖွေ")} value={q} onChange={(e) => { setQ(e.target.value); if (e.target.value) ensureNoteIdx(); }} />
             </div>
           </div>
 
@@ -414,7 +417,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           <div className="tc-type-tabs">
             {TYPE_TABS.filter((t) => t.k === "all" || kindCounts[t.k]).map((t) => (
               <button key={t.k} className={"tc-type-tab" + (kindF === t.k ? " on" : "")} onClick={() => setKindF(t.k)}>
-                {t.label}
+                {L(t.th, t.my)}
                 {t.k !== "all" && kindCounts[t.k]
                   ? <span className="tc-type-cnt">{kindCounts[t.k]}</span> : null}
               </button>
@@ -423,15 +426,15 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
 
           <div className="tc-rooms-acts">
             <button className="btn-ghost sm" onClick={() => setModal("dm")}>
-              <UIcon name="plus" size={13} /> ทักตัวต่อตัว
+              <UIcon name="plus" size={13} /> {L("ทักตัวต่อตัว", "တစ်ဦးချင်း စကားပြော")}
             </button>
             <button className="btn-ghost sm" onClick={() => { setModal("group"); ensureJobs(); }}>
-              <UIcon name="plus" size={13} /> สร้างกลุ่ม
+              <UIcon name="plus" size={13} /> {L("สร้างกลุ่ม", "အုပ်စု ဖန်တီး")}
             </button>
           </div>
 
           <div className="tc-room-list">
-            {shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ยังไม่มีห้องแชต</div>}
+            {shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>{L("ยังไม่มีห้องแชต", "စကားပြောခန်း မရှိသေး")}</div>}
             {shown.map((r) => {
               const nh = noteHitOf(r);
               return (
@@ -441,7 +444,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                     <span className="tc-room-title">
                       {r.title}
                       {r.kind !== "dm" && r.memberCount
-                        ? <span className="tc-room-cnt"> · {r.memberCount} คน</span> : null}
+                        ? <span className="tc-room-cnt"> · {r.memberCount} {L("คน", "ဦး")}</span> : null}
                     </span>
                     <span className="tc-room-last">{nh ? `📝 ${nh.slice(0, 70)}` : (r.lastText || "—")}</span>
                   </span>
@@ -457,16 +460,16 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           {!selRoom ? (
             <div className="tc-empty">
               <div style={{ fontSize: 52, lineHeight: 1 }}>💬</div>
-              <p style={{ fontWeight: 800, fontSize: 16 }}>เลือกห้องแชตเพื่อเริ่มคุย</p>
+              <p style={{ fontWeight: 800, fontSize: 16 }}>{L("เลือกห้องแชตเพื่อเริ่มคุย", "စကားပြောရန် အခန်းရွေးပါ")}</p>
               <p style={{ fontSize: 12.5, color: "var(--ink-3)", textAlign: "center", lineHeight: 1.7 }}>
-                ทักตัวต่อตัว · สร้างกลุ่มทีมช่าง<br />หรือเลือกห้องบริษัทด้านซ้าย
+                {L("ทักตัวต่อตัว · สร้างกลุ่มทีมช่าง", "တစ်ဦးချင်း · ကျွမ်းကျင်သမားအဖွဲ့ ဖန်တီး")}<br />{L("หรือเลือกห้องบริษัทด้านซ้าย", "သို့မဟုတ် ဘယ်ဘက်ရှိ ကုမ္ပဏီအခန်း ရွေးပါ")}
               </p>
             </div>
           ) : (
             <>
               <div className="tc-main-head" style={{ borderTop: `3px solid ${accentColor}` }}>
                 {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") ? (
-                  <label className="tc-roomav-edit" title="เปลี่ยนรูปกลุ่ม">
+                  <label className="tc-roomav-edit" title={L("เปลี่ยนรูปกลุ่ม", "အုပ်စုဓာတ်ပုံ ပြောင်း")}>
                     <RoomIcon room={selRoom} size={42} staffById={staffById} />
                     <span className="tc-myav-cam">📷</span>
                     <input type="file" accept="image/*" hidden onChange={onRoomAvatar} />
@@ -475,17 +478,17 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {rename !== null ? (
                     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                      <input className="inp sm" autoFocus value={rename} placeholder="ชื่อกลุ่ม"
+                      <input className="inp sm" autoFocus value={rename} placeholder={L("ชื่อกลุ่ม", "အုပ်စုအမည်")}
                         style={{ maxWidth: 240 }} onChange={(e) => setRename(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") saveRename(); if (e.key === "Escape") setRename(null); }} />
-                      <button className="btn-primary sm" disabled={!(rename || "").trim()} onClick={saveRename}>บันทึก</button>
-                      <button className="btn-ghost sm" onClick={() => setRename(null)}>ยกเลิก</button>
+                      <button className="btn-primary sm" disabled={!(rename || "").trim()} onClick={saveRename}>{L("บันทึก", "သိမ်း")}</button>
+                      <button className="btn-ghost sm" onClick={() => setRename(null)}>{L("ยกเลิก", "မလုပ်တော့")}</button>
                     </div>
                   ) : (
                     <div className="tc-main-title">
                       {selRoom.title}
                       {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") && (
-                        <button className="btn-ghost sm" title="แก้ชื่อกลุ่ม" style={{ marginLeft: 6, padding: "1px 6px", verticalAlign: "middle" }}
+                        <button className="btn-ghost sm" title={L("แก้ชื่อกลุ่ม", "အုပ်စုအမည် ပြင်")} style={{ marginLeft: 6, padding: "1px 6px", verticalAlign: "middle" }}
                           onClick={() => setRename(selRoom.name || selRoom.title || "")}>
                           <UIcon name="edit" size={13} />
                         </button>
@@ -493,27 +496,27 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                     </div>
                   )}
                   <div className="tc-main-sub">
-                    {selRoom.kind === "company" ? "ทุกคนในองค์กร"
-                      : selRoom.kind === "dm" ? "แชตส่วนตัว"
+                    {selRoom.kind === "company" ? L("ทุกคนในองค์กร", "အဖွဲ့အတွင်း အားလုံး")
+                      : selRoom.kind === "dm" ? L("แชตส่วนตัว", "ကိုယ်ရေး စကားပြော")
                       : (selRoom.memberNames || []).concat(me?.name ? [me.name] : []).join(", ")}
-                    {selRoom.ref_no ? ` · งาน ${selRoom.ref_no}` : ""}
+                    {selRoom.ref_no ? ` · ${L("งาน", "အလုပ်")} ${selRoom.ref_no}` : ""}
                   </div>
                 </div>
-                <button className="btn-ghost sm" title="โน้ตประจำห้อง — ปักข้อมูลสำคัญ แนบรูปได้ไม่จำกัด" onClick={() => setModal("notes")}>📝 โน้ต</button>
+                <button className="btn-ghost sm" title={L("โน้ตประจำห้อง — ปักข้อมูลสำคัญ แนบรูปได้ไม่จำกัด", "အခန်းမှတ်စု — အရေးကြီးအချက် ပင်ထား၊ ဓာတ်ပုံ အကန့်အသတ်မဲ့ တွဲနိုင်")} onClick={() => setModal("notes")}>📝 {L("โน้ต", "မှတ်စု")}</button>
                 {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") &&
                   <button className="btn-ghost sm" onClick={() => setModal("members")}>
-                    <UIcon name="user" size={14} /> สมาชิก
+                    <UIcon name="user" size={14} /> {L("สมาชิก", "အဖွဲ့ဝင်")}
                   </button>}
                 {["admin", "exec"].includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") &&
-                  <button className="btn-ghost sm danger" title="ลบห้องนี้ถาวร (ธุรการ/ผู้บริหาร)" onClick={delRoom}>
-                    <UIcon name="trash" size={14} /> ลบกลุ่ม
+                  <button className="btn-ghost sm danger" title={L("ลบห้องนี้ถาวร (ธุรการ/ผู้บริหาร)", "ဤအခန်း အပြီးဖျက် (ရုံး/စီမံ)")} onClick={delRoom}>
+                    <UIcon name="trash" size={14} /> {L("ลบกลุ่ม", "အုပ်စုဖျက်")}
                   </button>}
               </div>
 
               <div className="tc-msgs" ref={msgsRef}>
                 {hasMore && (
                   <button className="btn-ghost sm" style={{ alignSelf: "center", margin: "2px auto 10px", display: "block" }} onClick={loadOlder}>
-                    ⌃ ดูข้อความเก่าก่อนหน้า
+                    ⌃ {L("ดูข้อความเก่าก่อนหน้า", "အရင်စာဟောင်းများ ကြည့်")}
                   </button>
                 )}
                 {msgs.map((m) => {
@@ -527,12 +530,12 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                       <div className={"chat-bubble " + (out ? "out" : "in")} style={jc ? { maxWidth: 280, padding: 0, background: "none", boxShadow: "none" } : {}}>
                         {!out && !jc && (
                           <span className="chat-sender" style={{ color: avColor(m.sender) }}>
-                            {staffName[m.sender] || "ทีมงาน"}
+                            {staffName[m.sender] || L("ทีมงาน", "အဖွဲ့သား")}
                           </span>
                         )}
                         {jc ? (
                           <div className={"tc-job-card" + (out ? " out" : "")}>
-                            <div className="tc-job-card-tag">📋 ลิงก์ใบงาน</div>
+                            <div className="tc-job-card-tag">📋 {L("ลิงก์ใบงาน", "အလုပ်လင့်ခ်")}</div>
                             <div className="tc-job-card-no">{jc.job_no}</div>
                             <div className="tc-job-card-cust">{jc.customer || "—"}</div>
                             {jc.title && <div className="tc-job-card-title">{jc.title}</div>}
@@ -542,7 +545,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                               </span>
                               {onJobClick && (
                                 <button className="tc-job-card-btn" onClick={() => onJobClick(jc.job_no)}>
-                                  เปิดดูงาน →
+                                  {L("เปิดดูงาน", "အလုပ်ဖွင့်ကြည့်")} →
                                 </button>
                               )}
                             </div>
@@ -555,13 +558,13 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                             <img className="chat-img" src={m.image_url} alt="" />
                           </a>
                         ) : m.file_url ? (
-                          <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || "เปิดไฟล์"}</a>
+                          <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || L("เปิดไฟล์", "ဖိုင်ဖွင့်")}</a>
                         ) : (
                           <>
                             <span>{renderRich(m.text)}</span>
                             {trMap[m.id]
                               ? <span className="tc-tr">🌐 {trMap[m.id]}</span>
-                              : <button type="button" className="tc-tr-btn" title="แปลเป็นภาษาของฉัน · ဘာသာပြန်" onClick={() => translateMsg(m)}>🌐 แปล · ဘာသာပြန်</button>}
+                              : <button type="button" className="tc-tr-btn" title={L("แปลเป็นภาษาของฉัน · ဘာသာပြန်", "ကျွန်ုပ်ဘာသာသို့ ပြန်ဆို")} onClick={() => translateMsg(m)}>🌐 แปล · ဘာသာပြန်</button>}
                           </>
                         )}
                         {!jc && (
@@ -588,13 +591,13 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                 </div>
               )}
               <div className="chat-compose">
-                <label className={"chat-tool" + (sending ? " disabled" : "")} title="ส่งรูป (เลือกได้หลายรูป)">
+                <label className={"chat-tool" + (sending ? " disabled" : "")} title={L("ส่งรูป (เลือกได้หลายรูป)", "ဓာတ်ပုံ ပို့ (အများကြီး ရွေးနိုင်)")}>
                   📷<input type="file" accept="image/*" multiple hidden disabled={sending} onChange={onImage} />
                 </label>
-                <label className={"chat-tool" + (sending ? " disabled" : "")} title="ส่งไฟล์">
+                <label className={"chat-tool" + (sending ? " disabled" : "")} title={L("ส่งไฟล์", "ဖိုင် ပို့")}>
                   📎<input type="file" accept={ATTACH_ACCEPT} hidden disabled={sending} onChange={onFile} />
                 </label>
-                <button className={"chat-tool" + (!sel || sending ? " disabled" : "")} title="ส่งลิงก์ใบงาน"
+                <button className={"chat-tool" + (!sel || sending ? " disabled" : "")} title={L("ส่งลิงก์ใบงาน", "အလုပ်လင့်ခ် ပို့")}
                   onClick={() => { if (sel && !sending) { ensureJobs(); setModal("joblink"); } }}>
                   🔗
                 </button>
@@ -604,7 +607,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                   {trBusy ? "…" : "🌐"}
                 </button>
                 <textarea ref={taRef} className="inp" rows={3} value={text} onPaste={onPaste}
-                  placeholder={sending ? "กำลังส่ง…" : "พิมพ์ข้อความ… (Enter ส่ง · @ แท็กสมาชิก · วางรูปได้)"}
+                  placeholder={sending ? L("กำลังส่ง…", "ပို့နေသည်…") : L("พิมพ์ข้อความ… (Enter ส่ง · @ แท็กสมาชิก · วางรูปได้)", "စာ ရိုက်ရန်… (Enter ပို့ · @ အဖွဲ့ဝင် တက်ဂ် · ဓာတ်ပုံ ကူးထည့်နိုင်)")}
                   onChange={(e) => {
                     const val = e.target.value; setText(val);
                     const pos = e.target.selectionStart;
@@ -617,7 +620,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                     if (e.key === "Escape") { setMentionQ(null); return; }
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (mentionQ !== null && mentionMembers.length) { pickMention(mentionMembers[0]); } else { send(); } }
                   }} />
-                <button className="btn-primary" disabled={!text.trim() || sending} onClick={send}>ส่ง</button>
+                <button className="btn-primary" disabled={!text.trim() || sending} onClick={send}>{L("ส่ง", "ပို့")}</button>
               </div>
             </>
           )}
@@ -628,7 +631,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
       {modal === "group"   && <GroupModal staff={staff.filter((s) => s.id !== me?.id)} jobs={jobs}
         onCreate={async (payload) => {
           try { const id = await createChatRoom(payload); setModal(null); await loadRooms(); setSel(id); }
-          catch (e) { flash("สร้างกลุ่มไม่สำเร็จ: " + (e?.message || e)); }
+          catch (e) { flash(L("สร้างกลุ่มไม่สำเร็จ: ", "အုပ်စု ဖန်တီး၍မရ: ") + (e?.message || e)); }
         }} onClose={() => setModal(null)} />}
       {modal === "members" && selRoom && <MembersModal room={selRoom} staff={staff} onClose={() => setModal(null)} onChanged={loadRooms} flash={flash} />}
       {modal === "notes" && selRoom && <NotesModal room={selRoom} me={me} staffById={staffById} flash={flash} onClose={() => setModal(null)} onPosted={() => loadMsgs(sel)} onChanged={() => { if (noteIdx !== null) ensureNoteIdx(true); }} />}
@@ -640,17 +643,19 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
 
 /* ─── DM Modal ─── */
 function DmModal({ staff, onPick, onClose }) {
+  const lang = useLang();
+  const L = (th, my) => (lang === "my" ? my : th);
   const [q, setQ] = React.useState("");
   const list = staff.filter((s) => matchText(q, s.name, s.email));
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
         <div className="modal-head">
-          <div className="modal-title">👤 ทักตัวต่อตัว</div>
+          <div className="modal-title">👤 {L("ทักตัวต่อตัว", "တစ်ဦးချင်း စကားပြော")}</div>
           <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
         </div>
         <div className="modal-body">
-          <input className="inp" placeholder="ค้นหาชื่อพนักงาน" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 10 }} />
+          <input className="inp" placeholder={L("ค้นหาชื่อพนักงาน", "ဝန်ထမ်းအမည် ရှာဖွေ")} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 10 }} />
           <div className="tc-picklist">
             {list.map((s) => (
               <button key={s.id} className="tc-pickrow" onClick={() => onPick(s.id)}>
@@ -668,6 +673,8 @@ function DmModal({ staff, onPick, onClose }) {
 
 /* ─── Group/Tech-team Modal ─── */
 function GroupModal({ staff, jobs, onCreate, onClose }) {
+  const lang = useLang();
+  const L = (th, my) => (lang === "my" ? my : th);
   const [name, setName]   = React.useState("");
   const [sel, setSel]     = React.useState({});
   const [jobNo, setJobNo] = React.useState("");
@@ -692,7 +699,7 @@ function GroupModal({ staff, jobs, onCreate, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
         <div className="modal-head">
-          <div className="modal-title">👥 สร้างกลุ่ม / ห้องงาน</div>
+          <div className="modal-title">👥 {L("สร้างกลุ่ม / ห้องงาน", "အုပ်စု / အလုပ်အခန်း ဖန်တီး")}</div>
           <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
         </div>
         <div className="modal-body">
@@ -700,23 +707,23 @@ function GroupModal({ staff, jobs, onCreate, onClose }) {
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             <button className="btn-ghost sm" onClick={applyPreset("group")}
               style={{ background: "linear-gradient(135deg,#10b981,#059669)", color: "#fff", border: "none" }}>
-              👥 กลุ่มทั่วไป
+              👥 {L("กลุ่มทั่วไป", "ရိုးရိုးအုပ်စု")}
             </button>
             <button className="btn-ghost sm" onClick={applyTechPreset}
               style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "#fff", border: "none" }}>
-              🔧 ทีมช่างทั้งหมด
+              🔧 {L("ทีมช่างทั้งหมด", "ကျွမ်းကျင်သမား အားလုံး")}
             </button>
           </div>
 
           <label className="fld">
-            <span>ชื่อกลุ่ม</span>
-            <input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="เช่น ทีมหน้างาน A หรือ ทีมช่าง B" />
+            <span>{L("ชื่อกลุ่ม", "အုပ်စုအမည်")}</span>
+            <input className="inp" value={name} onChange={(e) => setName(e.target.value)} placeholder={L("เช่น ทีมหน้างาน A หรือ ทีมช่าง B", "ဥပမာ လက်တွေ့အဖွဲ့ A သို့ ကျွမ်းကျင်သမားအဖွဲ့ B")} />
           </label>
 
           <label className="fld" style={{ marginTop: 8 }}>
-            <span>ผูกกับใบงาน (ไม่บังคับ → กลายเป็นห้องงาน 🧰)</span>
+            <span>{L("ผูกกับใบงาน (ไม่บังคับ → กลายเป็นห้องงาน 🧰)", "အလုပ်လင့်ခ်နှင့် ချိတ် (မဖြစ်မနေ မဟုတ် → အလုပ်အခန်း ဖြစ်သွား 🧰)")}</span>
             <select className="inp" value={jobNo} onChange={(e) => setJobNo(e.target.value)}>
-              <option value="">— ไม่ผูก —</option>
+              <option value="">{L("— ไม่ผูก —", "— မချိတ် —")}</option>
               {jobs.slice(0, 200).map((j) => (
                 <option key={j.job_no} value={j.job_no}>
                   {j.job_no} · {j.customerName || "-"}{j.title ? ` · ${j.title}` : ""}
@@ -727,13 +734,13 @@ function GroupModal({ staff, jobs, onCreate, onClose }) {
 
           <div className="fld" style={{ marginTop: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <span>สมาชิก ({ids.length} คน)</span>
+              <span>{L("สมาชิก", "အဖွဲ့ဝင်")} ({ids.length} {L("คน", "ဦး")})</span>
               <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--ink-3)", marginLeft: "auto", cursor: "pointer" }}>
                 <input type="checkbox" checked={techOnly} onChange={(e) => setTechOnly(e.target.checked)} />
-                แสดงเฉพาะช่าง
+                {L("แสดงเฉพาะช่าง", "ကျွမ်းကျင်သမား သာပြ")}
               </label>
             </div>
-            <input className="inp" placeholder="ค้นหาพนักงาน" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 6 }} />
+            <input className="inp" placeholder={L("ค้นหาพนักงาน", "ဝန်ထမ်း ရှာဖွေ")} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 6 }} />
             <div className="tc-picklist">
               {list.map((s) => (
                 <label key={s.id} className="tc-checkrow">
@@ -749,7 +756,7 @@ function GroupModal({ staff, jobs, onCreate, onClose }) {
           <button className="btn-primary" style={{ width: "100%", marginTop: 12 }}
             disabled={!name.trim() && !job}
             onClick={() => onCreate({ name: name || (job ? `งาน ${job.job_no}` : "กลุ่ม"), memberIds: ids, refType: job ? "job" : null, refNo: job ? job.job_no : null })}>
-            <UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> สร้างห้อง
+            <UIcon name="check" size={15} color="#fff" strokeWidth={2.4} /> {L("สร้างห้อง", "အခန်း ဖန်တီး")}
           </button>
         </div>
       </div>
@@ -763,49 +770,51 @@ function GroupModal({ staff, jobs, onCreate, onClose }) {
 
 /* ─── Members Modal ─── */
 function MembersModal({ room, staff, onClose, onChanged, flash }) {
+  const lang = useLang();
+  const L = (th, my) => (lang === "my" ? my : th);
   const [memberIds, setMemberIds] = React.useState(null);
   const [q, setQ]     = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const nameById = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s])), [staff]);
-  async function load() { try { setMemberIds(await listRoomMembers(room.id)); } catch (e) { flash("โหลดสมาชิกไม่สำเร็จ"); setMemberIds([]); } }
+  async function load() { try { setMemberIds(await listRoomMembers(room.id)); } catch (e) { flash(L("โหลดสมาชิกไม่สำเร็จ", "အဖွဲ့ဝင် ဖွင့်၍မရ")); setMemberIds([]); } }
   React.useEffect(() => { load(); }, [room.id]);
   const set = new Set(memberIds || []);
-  const add    = async (uid) => { setBusy(true); try { await addChatMember(room.id, uid); await load(); onChanged && onChanged(); } catch (e) { flash("เพิ่มไม่สำเร็จ: " + (e?.message || e)); } setBusy(false); };
-  const remove = async (uid) => { setBusy(true); try { await removeChatMember(room.id, uid); await load(); onChanged && onChanged(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e?.message || e)); } setBusy(false); };
+  const add    = async (uid) => { setBusy(true); try { await addChatMember(room.id, uid); await load(); onChanged && onChanged(); } catch (e) { flash(L("เพิ่มไม่สำเร็จ: ", "ထည့်၍မရ: ") + (e?.message || e)); } setBusy(false); };
+  const remove = async (uid) => { setBusy(true); try { await removeChatMember(room.id, uid); await load(); onChanged && onChanged(); } catch (e) { flash(L("ลบไม่สำเร็จ: ", "ဖျက်၍မရ: ") + (e?.message || e)); } setBusy(false); };
   const others = staff.filter((s) => !set.has(s.id) && matchText(q, s.name, s.email));
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
         <div className="modal-head">
-          <div className="modal-title">👤 สมาชิก · {room.title}</div>
+          <div className="modal-title">👤 {L("สมาชิก", "အဖွဲ့ဝင်")} · {room.title}</div>
           <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
         </div>
         <div className="modal-body">
-          {memberIds === null ? <div className="empty">กำลังโหลด…</div> : (
+          {memberIds === null ? <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div> : (
             <>
               <div className="fld">
-                <span>ในห้องนี้ ({memberIds.length} คน)</span>
+                <span>{L("ในห้องนี้", "ဤအခန်းတွင်")} ({memberIds.length} {L("คน", "ဦး")})</span>
                 <div className="tc-picklist" style={{ marginTop: 6 }}>
-                  {memberIds.length === 0 && <div className="empty sm">ยังไม่มีสมาชิก</div>}
+                  {memberIds.length === 0 && <div className="empty sm">{L("ยังไม่มีสมาชิก", "အဖွဲ့ဝင် မရှိသေး")}</div>}
                   {memberIds.map((uid) => (
                     <div key={uid} className="tc-checkrow">
                       <Avatar url={nameById[uid]?.avatar_url} name={nameById[uid]?.name} id={uid} />
                       <span style={{ flex: 1 }}>{nameById[uid]?.name || uid}</span>
-                      <button className="btn-ghost sm danger" disabled={busy} onClick={() => remove(uid)}>นำออก</button>
+                      <button className="btn-ghost sm danger" disabled={busy} onClick={() => remove(uid)}>{L("นำออก", "ဖယ်ထုတ်")}</button>
                     </div>
                   ))}
                 </div>
               </div>
               <div className="fld" style={{ marginTop: 10 }}>
-                <span>เพิ่มสมาชิก</span>
-                <input className="inp" placeholder="ค้นหาชื่อ" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 6, marginTop: 4 }} />
+                <span>{L("เพิ่มสมาชิก", "အဖွဲ့ဝင် ထည့်")}</span>
+                <input className="inp" placeholder={L("ค้นหาชื่อ", "အမည် ရှာဖွေ")} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 6, marginTop: 4 }} />
                 <div className="tc-picklist">
-                  {others.length === 0 && <div className="empty sm">ไม่พบ</div>}
+                  {others.length === 0 && <div className="empty sm">{L("ไม่พบ", "မတွေ့")}</div>}
                   {others.map((s) => (
                     <div key={s.id} className="tc-checkrow">
                       <Avatar url={s.avatar_url} name={s.name} id={s.id} />
                       <span style={{ flex: 1 }}>{s.name}</span>
-                      <button className="btn-ghost sm" disabled={busy} onClick={() => add(s.id)}>＋ เพิ่ม</button>
+                      <button className="btn-ghost sm" disabled={busy} onClick={() => add(s.id)}>＋ {L("เพิ่ม", "ထည့်")}</button>
                     </div>
                   ))}
                 </div>
@@ -820,6 +829,8 @@ function MembersModal({ room, staff, onClose, onChanged, flash }) {
 
 /* ─── Notes Modal — โน้ตประจำห้อง (แบบ Note ของ LINE): ข้อความ + รูปแนบไม่จำกัด ─── */
 function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }) {
+  const lang = useLang();
+  const L = (th, my) => (lang === "my" ? my : th);
   const OFFICE_ROLES = ["admin", "exec", "finance", "sales"];
   const [notes, setNotes] = React.useState(null);
   const [ed, setEd] = React.useState(null);          // { id|null, text, images[] } — กำลังสร้าง/แก้
@@ -829,7 +840,7 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }
 
   async function load() {
     try { setNotes(await listChatNotes(room.id)); }
-    catch (e) { flash("โหลดโน้ตไม่สำเร็จ: " + (e?.message || e)); setNotes([]); }
+    catch (e) { flash(L("โหลดโน้ตไม่สำเร็จ: ", "မှတ်စု ဖွင့်၍မရ: ") + (e?.message || e)); setNotes([]); }
   }
   React.useEffect(() => { load(); }, [room.id]);
 
@@ -844,11 +855,11 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }
       const urls = [];
       for (const f of files) urls.push(await uploadChatImage(f));   // ย่อรูป + แปลง HEIC ให้อัตโนมัติ · ไม่จำกัดจำนวน
       setEd((s) => (s ? { ...s, images: [...s.images, ...urls] } : s));
-    } catch (ex) { flash("อัปโหลดรูปไม่สำเร็จ: " + (ex?.message || ex)); }
+    } catch (ex) { flash(L("อัปโหลดรูปไม่สำเร็จ: ", "ဓာတ်ပုံ တင်၍မရ: ") + (ex?.message || ex)); }
     setUploading(false);
   }
   async function save() {
-    if (!ed || (!ed.text.trim() && !ed.images.length)) return flash("พิมพ์ข้อความหรือแนบรูปก่อน");
+    if (!ed || (!ed.text.trim() && !ed.images.length)) return flash(L("พิมพ์ข้อความหรือแนบรูปก่อน", "စာ ရိုက်ရန် သို့ ဓာတ်ပုံ တွဲပါ"));
     setBusy(true);
     try {
       const isNew = !ed.id;
@@ -856,14 +867,14 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }
       if (isNew) {   // แจ้งในห้องให้สมาชิกเห็นว่ามีโน้ตใหม่ (ขึ้นแชต + push ตามระบบเดิม)
         try { await sendChatMessage(room.id, `📝 โน้ตใหม่: ${ed.text.trim().slice(0, 80) || "(รูปภาพ)"}${ed.images.length ? ` · ${ed.images.length} รูป` : ""}`); onPosted && onPosted(); } catch (_) {}
       }
-      setEd(null); await load(); onChanged && onChanged(); flash(isNew ? "สร้างโน้ตแล้ว ✓" : "บันทึกโน้ตแล้ว ✓");
-    } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e?.message || e)); }
+      setEd(null); await load(); onChanged && onChanged(); flash(isNew ? L("สร้างโน้ตแล้ว ✓", "မှတ်စု ဖန်တီးပြီး ✓") : L("บันทึกโน้ตแล้ว ✓", "မှတ်စု သိမ်းပြီး ✓"));
+    } catch (e) { flash(L("บันทึกไม่สำเร็จ: ", "သိမ်း၍မရ: ") + (e?.message || e)); }
     setBusy(false);
   }
   async function remove(n) {
-    if (!await confirmDialog("ลบโน้ตนี้?")) return;
-    try { await deleteChatNote(n.id); await load(); onChanged && onChanged(); flash("ลบโน้ตแล้ว"); }
-    catch (e) { flash("ลบไม่สำเร็จ: " + (e?.message || e)); }
+    if (!await confirmDialog(L("ลบโน้ตนี้?", "ဤမှတ်စု ဖျက်မလား?"))) return;
+    try { await deleteChatNote(n.id); await load(); onChanged && onChanged(); flash(L("ลบโน้ตแล้ว", "မှတ်စု ဖျက်ပြီး")); }
+    catch (e) { flash(L("ลบไม่สำเร็จ: ", "ဖျက်၍မရ: ") + (e?.message || e)); }
   }
   const shownNotes = (notes || []).filter((n) => matchText(nq, n.text, (staffById[n.author] || {}).name));
 
@@ -871,7 +882,7 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 560, maxWidth: "95vw" }}>
         <div className="modal-head">
-          <div className="modal-title">📝 โน้ต · {room.title}</div>
+          <div className="modal-title">📝 {L("โน้ต", "မှတ်စု")} · {room.title}</div>
           <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
         </div>
         <div className="modal-body" style={{ maxHeight: "72vh", overflowY: "auto" }}>
@@ -879,14 +890,14 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }
           {(notes || []).length > 0 && (
             <div className="cat-search" style={{ marginBottom: 10 }}>
               <UIcon name="search" size={15} color="var(--ink-3)" />
-              <input placeholder="ค้นหาโน้ต / ชื่อคนเขียน…" value={nq} onChange={(e) => setNq(e.target.value)} />
+              <input placeholder={L("ค้นหาโน้ต / ชื่อคนเขียน…", "မှတ်စု / ရေးသူအမည် ရှာဖွေ…")} value={nq} onChange={(e) => setNq(e.target.value)} />
               {nq && <button className="cat-search-x" onClick={() => setNq("")}><UIcon name="x" size={14} /></button>}
             </div>
           )}
           {/* ── ฟอร์มสร้าง/แก้โน้ต ── */}
           {ed ? (
             <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-              <textarea className="inp" rows={4} autoFocus value={ed.text} placeholder="พิมพ์โน้ต… (นัดหมาย กติกา ข้อมูลสำคัญของห้อง)"
+              <textarea className="inp" rows={4} autoFocus value={ed.text} placeholder={L("พิมพ์โน้ต… (นัดหมาย กติกา ข้อมูลสำคัญของห้อง)", "မှတ်စု ရိုက်ရန်… (ချိန်းဆို၊ စည်းကမ်း၊ အခန်းအရေးကြီးအချက်)")}
                 onChange={(e) => setEd((s) => ({ ...s, text: e.target.value }))} style={{ resize: "vertical" }} />
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
                 {ed.images.map((u, i) => (
@@ -897,38 +908,38 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }
                   </span>
                 ))}
                 <label className="btn-ghost sm" style={{ cursor: "pointer", height: 62, width: 62, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2, borderStyle: "dashed" }}>
-                  <span style={{ fontSize: 18 }}>{uploading ? "…" : "📷"}</span><span style={{ fontSize: 10.5 }}>{uploading ? "กำลังอัป" : "เพิ่มรูป"}</span>
+                  <span style={{ fontSize: 18 }}>{uploading ? "…" : "📷"}</span><span style={{ fontSize: 10.5 }}>{uploading ? L("กำลังอัป", "တင်နေ") : L("เพิ่มรูป", "ဓာတ်ပုံ ထည့်")}</span>
                   <input type="file" accept="image/*" multiple hidden disabled={uploading} onChange={onPics} />
                 </label>
-                <span className="jo-dim" style={{ fontSize: 11 }}>แนบได้ไม่จำกัด ({ed.images.length} รูป)</span>
+                <span className="jo-dim" style={{ fontSize: 11 }}>{L("แนบได้ไม่จำกัด", "အကန့်အသတ်မဲ့ တွဲနိုင်")} ({ed.images.length} {L("รูป", "ပုံ")})</span>
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
-                <button className="btn-ghost sm" disabled={busy} onClick={() => setEd(null)}>ยกเลิก</button>
-                <button className="btn-primary sm" disabled={busy || uploading} onClick={save}>{busy ? "กำลังบันทึก…" : ed.id ? "บันทึกการแก้ไข" : "สร้างโน้ต"}</button>
+                <button className="btn-ghost sm" disabled={busy} onClick={() => setEd(null)}>{L("ยกเลิก", "မလုပ်တော့")}</button>
+                <button className="btn-primary sm" disabled={busy || uploading} onClick={save}>{busy ? L("กำลังบันทึก…", "သိမ်းနေသည်…") : ed.id ? L("บันทึกการแก้ไข", "ပြင်ဆင်ချက် သိမ်း") : L("สร้างโน้ต", "မှတ်စု ဖန်တီး")}</button>
               </div>
             </div>
           ) : (
             <button className="btn-primary" style={{ width: "100%", justifyContent: "center", marginBottom: 12 }} onClick={() => setEd({ id: null, text: "", images: [] })}>
-              <UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> สร้างโน้ตใหม่
+              <UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> {L("สร้างโน้ตใหม่", "မှတ်စုအသစ် ဖန်တီး")}
             </button>
           )}
 
           {/* ── รายการโน้ต (ใหม่สุดอยู่บน) ── */}
-          {notes === null && <div className="empty sm">กำลังโหลด…</div>}
-          {notes && notes.length === 0 && <div className="empty" style={{ padding: 26 }}>ยังไม่มีโน้ตในห้องนี้ — ปักนัดหมาย กติกา หรือข้อมูลสำคัญไว้ให้ทุกคนเห็น</div>}
-          {notes && notes.length > 0 && shownNotes.length === 0 && <div className="empty sm">ไม่พบโน้ตตามที่ค้นหา</div>}
+          {notes === null && <div className="empty sm">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div>}
+          {notes && notes.length === 0 && <div className="empty" style={{ padding: 26 }}>{L("ยังไม่มีโน้ตในห้องนี้ — ปักนัดหมาย กติกา หรือข้อมูลสำคัญไว้ให้ทุกคนเห็น", "ဤအခန်းတွင် မှတ်စု မရှိသေး — ချိန်းဆို၊ စည်းကမ်း သို့ အရေးကြီးအချက်များ ပင်ထားပါ")}</div>}
+          {notes && notes.length > 0 && shownNotes.length === 0 && <div className="empty sm">{L("ไม่พบโน้ตตามที่ค้นหา", "ရှာဖွေမှုအရ မှတ်စု မတွေ့")}</div>}
           {shownNotes.map((n) => {
             const a = staffById[n.author] || {};
             return (
               <div key={n.id} className="card" style={{ padding: "10px 12px", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Avatar url={a.avatar_url} name={a.name || "ทีมงาน"} id={n.author} size={26} />
-                  <b style={{ fontSize: 12.5 }}>{a.name || "ทีมงาน"}</b>
-                  <span className="jo-dim" style={{ fontSize: 11 }}>{fmtWhen(n.created_at)}{n.updated_at && n.updated_at !== n.created_at ? " · แก้ไขแล้ว" : ""}</span>
+                  <Avatar url={a.avatar_url} name={a.name || L("ทีมงาน", "အဖွဲ့သား")} id={n.author} size={26} />
+                  <b style={{ fontSize: 12.5 }}>{a.name || L("ทีมงาน", "အဖွဲ့သား")}</b>
+                  <span className="jo-dim" style={{ fontSize: 11 }}>{fmtWhen(n.created_at)}{n.updated_at && n.updated_at !== n.created_at ? ` · ${L("แก้ไขแล้ว", "ပြင်ဆင်ပြီး")}` : ""}</span>
                   {canEdit(n) && (
                     <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-                      <button className="btn-ghost sm" style={{ padding: "1px 7px" }} title="แก้ไข" onClick={() => setEd({ id: n.id, text: n.text || "", images: Array.isArray(n.images) ? n.images : [] })}><UIcon name="edit" size={13} /></button>
-                      <button className="btn-ghost sm danger" style={{ padding: "1px 7px" }} title="ลบ" onClick={() => remove(n)}><UIcon name="trash" size={13} /></button>
+                      <button className="btn-ghost sm" style={{ padding: "1px 7px" }} title={L("แก้ไข", "ပြင်")} onClick={() => setEd({ id: n.id, text: n.text || "", images: Array.isArray(n.images) ? n.images : [] })}><UIcon name="edit" size={13} /></button>
+                      <button className="btn-ghost sm danger" style={{ padding: "1px 7px" }} title={L("ลบ", "ဖျက်")} onClick={() => remove(n)}><UIcon name="trash" size={13} /></button>
                     </span>
                   )}
                 </div>
@@ -951,19 +962,21 @@ function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }
 
 /* ─── Job Picker Modal (send job link) ─── */
 function JobPickerModal({ jobs, onPick, onClose }) {
+  const lang = useLang();
+  const L = (th, my) => (lang === "my" ? my : th);
   const [q, setQ] = React.useState("");
   const list = jobs.filter((j) => matchText(q, j.job_no, j.customerName, j.title)).slice(0, 60);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 500 }}>
         <div className="modal-head">
-          <div className="modal-title">🔗 ส่งลิงก์ใบงาน</div>
+          <div className="modal-title">🔗 {L("ส่งลิงก์ใบงาน", "အလုပ်လင့်ခ် ပို့")}</div>
           <button className="drawer-close" onClick={onClose}><UIcon name="x" size={20} /></button>
         </div>
         <div className="modal-body">
-          <input className="inp" placeholder="ค้นหาเลขใบงาน หรือชื่อลูกค้า…" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 8 }} />
+          <input className="inp" placeholder={L("ค้นหาเลขใบงาน หรือชื่อลูกค้า…", "အလုပ်နံပါတ် သို့ ဖောက်သည်အမည် ရှာဖွေ…")} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 8 }} />
           <div className="tc-picklist">
-            {list.length === 0 && <div className="empty sm">ไม่พบใบงาน</div>}
+            {list.length === 0 && <div className="empty sm">{L("ไม่พบใบงาน", "အလုပ် မတွေ့")}</div>}
             {list.map((j) => (
               <button key={j.job_no} className="tc-pickrow" onClick={() => onPick(j)}>
                 <span style={{

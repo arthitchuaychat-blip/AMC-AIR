@@ -29,6 +29,9 @@ export const LV_STATUS_MY = { pending: "အတည်ပြုရန် စော
 // nav key → Burmese label (keys match NAV in App.jsx)
 export const NAV_MY = {
   myjobs: "ကျွန်ုပ်၏ အလုပ်များ",
+  tasks: "အလုပ် ဘုတ်",
+  expenses: "ကုန်ကျစရိတ် တောင်းခံ",
+  handbook: "လုပ်ငန်း လက်စွဲ",
   dashboard: "ဒက်ရှ်ဘုတ်",
   customers: "ဖောက်သည်များ",
   chat: "LINE စကားပြော",

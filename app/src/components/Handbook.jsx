@@ -1,12 +1,16 @@
 import React from "react";
-import { ROLE_GUIDE, GUIDE_ORDER, DEPT_COLOR, DEPT_LABEL, PROCESS_FLOWS, COMPANY_TARGETS } from "../lib/handbook";
+import { ROLE_GUIDE, ROLE_GUIDE_MY, GUIDE_ORDER, DEPT_COLOR, DEPT_LABEL, PROCESS_FLOWS, COMPANY_TARGETS } from "../lib/handbook";
+import { useLang } from "../lib/i18n";
 import { UIcon } from "../icons";
 
 // คู่มือตำแหน่งงาน — ทุกตำแหน่งเปิดดูของตัวเองได้ + บันทึก/พิมพ์ PDF
 export default function Handbook({ role, me }) {
+  const lang = useLang();
+  const L = (th, my) => (lang === "my" ? my : th);          // ไทยเป็นค่าเริ่มต้น พม่าเมื่อสลับภาษา
   const myRole = me?.role || role;
   const [sel, setSel] = React.useState(ROLE_GUIDE[myRole] ? myRole : "exec");
-  const g = ROLE_GUIDE[sel] || ROLE_GUIDE.exec;
+  // เนื้อหาคู่มือ: ถ้าเลือกภาษาพม่า และตำแหน่งนั้นมีคำแปล → ใช้ช่องพม่าทับ (ช่องที่ไม่มียังเป็นไทย)
+  const g = (lang === "my" && ROLE_GUIDE_MY[sel]) ? { ...(ROLE_GUIDE[sel] || ROLE_GUIDE.exec), ...ROLE_GUIDE_MY[sel] } : (ROLE_GUIDE[sel] || ROLE_GUIDE.exec);
   const c = DEPT_COLOR[g.dept] || "#0d9488";
   const secLab = { fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3, #718890)", display: "flex", alignItems: "center", gap: 6, marginBottom: 7 };
   const dot = (col) => ({ width: 7, height: 7, borderRadius: 2, background: col, display: "inline-block" });
@@ -36,12 +40,12 @@ export default function Handbook({ role, me }) {
     <div className="adm">
       <div className="adm-head">
         <div>
-          <h1 className="page-title">คู่มือตำแหน่งงาน <span className="page-title-en">Job Handbook</span></h1>
-          <p className="page-sub">SOP: วัตถุประสงค์ · หน้าที่ · ขั้นตอนการทำงาน · กิจวัตร · กฎ · KPI ของแต่ละตำแหน่ง — เปิดดูของคุณ หรือเลือกดูตำแหน่งอื่นได้</p>
+          <h1 className="page-title">{L("คู่มือตำแหน่งงาน", "လုပ်ငန်း လက်စွဲ")} <span className="page-title-en">Job Handbook</span></h1>
+          <p className="page-sub">{L("SOP: วัตถุประสงค์ · หน้าที่ · ขั้นตอนการทำงาน · กิจวัตร · กฎ · KPI ของแต่ละตำแหน่ง — เปิดดูของคุณ หรือเลือกดูตำแหน่งอื่นได้", "SOP: ရည်ရွယ်ချက် · တာဝန် · လုပ်ငန်းအဆင့်ဆင့် · ပုံမှန်လုပ်ငန်း · စည်းကမ်း · KPI — ကိုယ့်ရာထူး ဒါမှမဟုတ် အခြားရာထူးများ ကြည့်နိုင်သည်")}</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn-ghost" onClick={() => printHandbook([sel])}>🖨️ บันทึก/พิมพ์ PDF (ตำแหน่งนี้)</button>
-          <button className="btn-primary" onClick={() => printHandbook(GUIDE_ORDER)}>📚 พิมพ์ทั้งเล่ม</button>
+          <button className="btn-ghost" onClick={() => printHandbook([sel])}>🖨️ {L("บันทึก/พิมพ์ PDF (ตำแหน่งนี้)", "PDF သိမ်း/ပရင့် (ဤရာထူး)")}</button>
+          <button className="btn-primary" onClick={() => printHandbook(GUIDE_ORDER)}>📚 {L("พิมพ์ทั้งเล่ม", "အားလုံး ပရင့်")}</button>
         </div>
       </div>
 
@@ -52,14 +56,14 @@ export default function Handbook({ role, me }) {
           return (
             <button key={r} className={"cat-chip" + (on ? " on" : "")} onClick={() => setSel(r)}
               style={on ? { background: DEPT_COLOR[rg.dept], color: "#fff", borderColor: DEPT_COLOR[rg.dept] } : {}}>
-              {rg.icon} {rg.th}{r === myRole ? " ★" : ""}
+              {rg.icon} {lang === "my" && ROLE_GUIDE_MY[r]?.th_my ? ROLE_GUIDE_MY[r].th_my : rg.th}{r === myRole ? " ★" : ""}
             </button>
           );
         })}
       </div>
 
       <div style={{ marginTop: 4, marginBottom: 12, background: "var(--surface-2, #f3f7f8)", border: "1px solid var(--line, #e2e8f0)", borderRadius: 12, padding: "12px 14px" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3, #718890)", marginBottom: 9 }}>🧭 เป้าบริษัท (North-Star) · ทุกตำแหน่งเล็งไปที่นี่</div>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3, #718890)", marginBottom: 9 }}>🧭 {L("เป้าบริษัท (North-Star) · ทุกตำแหน่งเล็งไปที่นี่", "ကုမ္ပဏီ ပန်းတိုင် (North-Star) · ရာထူးတိုင်း ဤသို့ ဦးတည်")}</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "8px 16px" }}>
           {COMPANY_TARGETS.map((ct, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13, borderLeft: "3px solid #0d9488", paddingLeft: 9 }}>
@@ -74,9 +78,9 @@ export default function Handbook({ role, me }) {
           <div style={{ width: 52, height: 52, borderRadius: 13, display: "grid", placeItems: "center", fontSize: 28, flex: "none", background: `color-mix(in srgb, ${c} 15%, transparent)` }}>{g.icon}</div>
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 21, fontWeight: 800 }}>{g.th}</span>
+              <span style={{ fontSize: 21, fontWeight: 800 }}>{lang === "my" && g.th_my ? g.th_my : g.th}</span>
               <span className="job-badge" style={{ background: `color-mix(in srgb, ${c} 14%, transparent)`, color: c }}>{DEPT_LABEL[g.dept]}</span>
-              {sel === myRole && <span className="job-badge b-green">ตำแหน่งของคุณ</span>}
+              {sel === myRole && <span className="job-badge b-green">{L("ตำแหน่งของคุณ", "သင့် ရာထူး")}</span>}
             </div>
             <div className="jo-dim" style={{ fontSize: 13, marginTop: 3 }}>{g.en} · {g.reports}</div>
           </div>
@@ -84,29 +88,29 @@ export default function Handbook({ role, me }) {
 
         {/* วัตถุประสงค์ */}
         <div style={{ marginTop: 12, fontSize: 14, color: "var(--ink-2, #3f545a)", background: `color-mix(in srgb, ${c} 6%, transparent)`, borderLeft: `3px solid ${c}`, borderRadius: 8, padding: "9px 12px" }}>
-          <b style={{ color: c }}>วัตถุประสงค์: </b>{g.purpose}
+          <b style={{ color: c }}>{L("วัตถุประสงค์", "ရည်ရွယ်ချက်")}: </b>{g.purpose}
         </div>
 
         {/* KPI + เป้าหมาย */}
         <div style={{ marginTop: 16, background: `color-mix(in srgb, ${c} 7%, var(--surface, #fff))`, border: `1px solid color-mix(in srgb, ${c} 28%, var(--line, #e2e8f0))`, borderRadius: 12, padding: "4px 15px 10px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: c, margin: "10px 0 2px" }}>🎯 ตัวชี้วัด (KPI) &amp; เป้าหมาย</div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: c, margin: "10px 0 2px" }}>🎯 {L("ตัวชี้วัด (KPI) & เป้าหมาย", "KPI & ပန်းတိုင်")}</div>
           {g.kpis.map((k, i) => (
             <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: i ? `1px solid color-mix(in srgb, ${c} 18%, transparent)` : "none" }}>
               <span style={{ fontFamily: "var(--mono, monospace)", fontSize: 10.5, fontWeight: 700, color: c, border: `1px solid color-mix(in srgb, ${c} 40%, transparent)`, borderRadius: 5, padding: "1px 5px", flex: "none", marginTop: 2 }}>K{i + 1}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.8, fontWeight: 600 }}>{k.m}</div>
-                <div style={{ fontSize: 11.5, color: "var(--ink-3, #718890)", marginTop: 2 }}>⏱ {k.f} · 📍 {k.src}{k.w ? ` · น้ำหนัก ${k.w}%` : ""}</div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-3, #718890)", marginTop: 2 }}>⏱ {k.f} · 📍 {k.src}{k.w ? ` · ${L("น้ำหนัก", "အလေးချိန်")} ${k.w}%` : ""}</div>
               </div>
               <span style={{ fontWeight: 800, fontSize: 13.5, color: c, background: `color-mix(in srgb, ${c} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 35%, transparent)`, borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap", flex: "none" }}>{k.t}</span>
             </div>
           ))}
         </div>
 
-        <Block label="หน้าที่ความรับผิดชอบ" items={g.resp} />
+        <Block label={L("หน้าที่ความรับผิดชอบ", "တာဝန်နှင့် လုပ်ပိုင်ခွင့်")} items={g.resp} />
 
         {/* ขั้นตอนการทำงาน (SOP) */}
         <div style={{ marginTop: 16 }}>
-          <div style={secLab}><span style={dot(c)} />ขั้นตอนการทำงาน (SOP)</div>
+          <div style={secLab}><span style={dot(c)} />{L("ขั้นตอนการทำงาน (SOP)", "လုပ်ငန်း အဆင့်ဆင့် (SOP)")}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {g.procedures.map((p, pi) => (
               <div key={pi} style={{ border: "1px solid var(--line, #e2e8f0)", borderRadius: 10, padding: "10px 12px" }}>
@@ -127,9 +131,9 @@ export default function Handbook({ role, me }) {
 
         {/* กิจวัตร */}
         <div style={{ marginTop: 16 }}>
-          <div style={secLab}><span style={dot(c)} />กิจวัตรการทำงาน</div>
+          <div style={secLab}><span style={dot(c)} />{L("กิจวัตรการทำงาน", "ပုံမှန် လုပ်ငန်းစဉ်")}</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
-            {[["📅 รายวัน", g.routines.d], ["🗓️ รายสัปดาห์", g.routines.w], ["📆 รายเดือน", g.routines.m]].map(([lab, items], ri) => (
+            {[["📅 " + L("รายวัน", "နေ့စဉ်"), g.routines.d], ["🗓️ " + L("รายสัปดาห์", "အပတ်စဉ်"), g.routines.w], ["📆 " + L("รายเดือน", "လစဉ်"), g.routines.m]].map(([lab, items], ri) => (
               <div key={ri} style={{ background: "var(--surface-2, #f3f7f8)", border: "1px solid var(--line, #e2e8f0)", borderRadius: 10, padding: "10px 12px" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: c, marginBottom: 6 }}>{lab}</div>
                 <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
@@ -140,11 +144,11 @@ export default function Handbook({ role, me }) {
           </div>
         </div>
 
-        <Block label="กฎ & ข้อควรระวัง" items={g.rules} accent="#d97706" />
+        <Block label={L("กฎ & ข้อควรระวัง", "စည်းကမ်း & သတိပြုရန်")} items={g.rules} accent="#d97706" />
 
         {/* เมนู/เอกสารที่ใช้ */}
         <div style={{ marginTop: 16 }}>
-          <div style={secLab}><span style={dot(c)} />เมนู/เอกสารที่ใช้ในระบบ</div>
+          <div style={secLab}><span style={dot(c)} />{L("เมนู/เอกสารที่ใช้ในระบบ", "စနစ်တွင် သုံးသော မီနူး/စာရွက်စာတမ်း")}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {g.menus.map((m, i) => <span key={i} style={{ fontSize: 12.5, background: `color-mix(in srgb, ${c} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 30%, var(--line, #e2e8f0))`, borderRadius: 999, padding: "3px 10px" }}>{m}</span>)}
           </div>
@@ -152,7 +156,8 @@ export default function Handbook({ role, me }) {
       </div>
 
       <p className="jo-dim" style={{ fontSize: 12.5, marginTop: 12 }}>
-        💡 กด “บันทึก/พิมพ์ PDF” แล้วเลือกปลายทางเป็น <b>Save as PDF</b> เพื่อได้ไฟล์ PDF · “พิมพ์ทั้งเล่ม” = คู่มือครบทุกตำแหน่ง + กระบวนการหลัก
+        {L(<>💡 กด “บันทึก/พิมพ์ PDF” แล้วเลือกปลายทางเป็น <b>Save as PDF</b> เพื่อได้ไฟล์ PDF · “พิมพ์ทั้งเล่ม” = คู่มือครบทุกตำแหน่ง + กระบวนการหลัก</>,
+          <>💡 “PDF သိမ်း/ပရင့်” ကိုနှိပ်ပြီး ဦးတည်ရာကို <b>Save as PDF</b> ရွေးပါ · “အားလုံး ပရင့်” = ရာထူးအားလုံး လက်စွဲ + အဓိက လုပ်ငန်းစဉ်များ · <b>(ပရင့်ထုတ်စာရွက်မှာ ထိုင်းဘာသာဖြင့်သာ)</b></>)}
       </p>
     </div>
   );

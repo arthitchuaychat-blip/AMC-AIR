@@ -110,7 +110,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·ประสิทธิผล/รายงาน: OT ระบบใหม่ + ผูกทีมผ่านรอบนัด + ตรงเวลาไม่ปนขาด v531";
+const BUILD = "2026-08-02·แม่บ้านใช้ภาษาพม่าได้: TaskBoard/Expenses/TeamChat/คู่มือ + toggle v532";
 
 function SetupNotice() {
   return (
@@ -314,8 +314,8 @@ export default function App() {
   if (!session) return <Login />;
 
   const role = profile?.role || "tech";
-  // เฉพาะทีมช่าง (ช่าง/หัวหน้าช่าง) เท่านั้นที่เลือกภาษาพม่าได้ · ฝั่งหลังบ้านเป็นไทยเสมอ
-  const canBurmese = role === "tech" || role === "assistant" || role === "lead_tech";
+  // ทีมช่าง (ช่าง/ผู้ช่วยช่าง/หัวหน้าช่าง) + แม่บ้าน เลือกภาษาพม่าได้ (แรงงานพม่า) · ฝั่งหลังบ้าน/ออฟฟิศเป็นไทยเสมอ
+  const canBurmese = role === "tech" || role === "assistant" || role === "lead_tech" || role === "maid";
   const effLang = canBurmese ? lang : "th";
 
   async function go(id) {
