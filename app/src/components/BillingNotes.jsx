@@ -9,6 +9,7 @@ import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
 import NotesEditModal from "./NotesEditModal";
 import { useDocPeek } from "./DocPeek";
+import FilterBar from "./FilterBar";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
@@ -94,7 +95,10 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
           : v === "unpaid" ? (b.status !== "cancelled" && b.invoices.some((iv) => iv.status === "unpaid"))
           : bnStatus(b) === v;
         const shown = fl0.filter((b) => stPred(b, statusF)).filter((b) => !byPerson || (b.createdByName || "") === byPerson);
+        // จำนวนตัวกรองที่ใช้อยู่ (ไม่ใช่ค่าเริ่มต้น) → โชว์บนแถบตัวกรองยุบได้
+        const activeCount = (statusF !== "all" ? 1 : 0) + (byPerson ? 1 : 0);   // ไม่นับช่วงวันที่ (มี default 6 เดือนอยู่แล้ว)
         return (<>
+      <FilterBar id="billing" count={activeCount}>
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["open", "วางบิล"], ["unpaid", "ค้างชำระ"], ["done", "ออกใบเสร็จครบ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
@@ -108,6 +112,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
           </select>
         )}
       </div>
+      </FilterBar>
       {shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบวางบิล" : "ไม่พบใบวางบิล"}</div>}
       <div className="job-cards">
         {shown.map((b) => (

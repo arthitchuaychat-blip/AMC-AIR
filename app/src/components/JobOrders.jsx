@@ -8,6 +8,7 @@ import JobTimeline, { Linkify } from "./JobTimeline";
 import DocChips from "./DocChips";
 import DocPeek from "./DocPeek";
 import ChatCustomerLink from "./ChatCustomerLink";
+import FilterBar from "./FilterBar";
 import AttachThumb from "./AttachThumb";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { ATTACH_ACCEPT, matchText, matchPhone } from "../lib/format";
@@ -547,6 +548,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     ? list.filter((j) => (j.visits && j.visits.length) ? j.visits.some((v) => v.assigned_team === myTeam) : j.assigned_team === myTeam)
     : list;
   const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
+  // จำนวนตัวกรองที่ใช้อยู่ (ต่างจากค่าเริ่มต้น) — โชว์บนแถบตัวกรองยุบได้ · ช่วงวันที่ที่นี่ค่าเริ่มต้นว่าง นับตรง ๆ ได้
+  const activeCount = (statusF !== "all" ? 1 : 0) + (typeF !== "all" ? 1 : 0) + (teamF !== "all" ? 1 : 0) + (byPerson ? 1 : 0) + ((dateFrom || dateTo) ? 1 : 0);
   return (
     <div className="adm">
       <div className="adm-head">
@@ -569,6 +572,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
         </div>
       </div>
 
+      <FilterBar id="joborders" count={activeCount}>
       <div className="cat-filter">
         <button className={"cat-chip" + (statusF === "all" ? " on" : "")} onClick={() => setStatusF("all")}
           style={statusF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทั้งหมด ({baseList.length})</button>
@@ -622,6 +626,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
           )}
         </div>
       ); })()}
+      </FilterBar>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {

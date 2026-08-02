@@ -13,6 +13,7 @@ import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
+import FilterBar from "./FilterBar";
 import GrowArea from "./GrowArea";
 import DocSlip from "./DocSlip";
 import NumIn from "./NumIn";
@@ -307,7 +308,13 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
         const fl0 = list.filter((bo) => inDateRange(bo.issue_date || bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title, bo.note, bo.internal_note) || matchPhone(search, bo.contactPhone)));
         const nType = (v) => fl0.filter((bo) => v === "all" || bo.job_type === v).length;
         const fl = fl0.filter((bo) => (typeF === "all" || bo.job_type === typeF) && (!byPerson || (bo.createdByName || "") === byPerson));
+        // จำนวนตัวกรองที่ใช้อยู่ (ต่างจากค่าเริ่มต้น) — โชว์บนแถบตัวกรองยุบได้
+        // ช่วงวันที่นับเป็น active เฉพาะเมื่อต่างจากค่าเริ่มต้น 6 เดือนล่าสุด (ไม่งั้นจะขึ้น 1 ตลอด)
+        const _dfltR = defaultDocRange();
+        const dateActive = (dateR.from || dateR.to) && !(dateR.from === _dfltR.from && dateR.to === _dfltR.to);
+        const activeCount = (typeF !== "all" ? 1 : 0) + (byPerson ? 1 : 0) + (dateActive ? 1 : 0);
         return (<>
+      <FilterBar id="boq" count={activeCount}>
       <div className="cat-filter">
         {[["all", "ทุกประเภทงาน"], ...JOB_TYPES.map(([v, l, ic]) => [v, `${ic} ${l}`])].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (typeF === v ? " on" : "")} onClick={() => setTypeF(v)}
@@ -321,6 +328,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
           </select>
         )}
       </div>
+      </FilterBar>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">

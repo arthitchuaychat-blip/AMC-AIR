@@ -2,6 +2,7 @@ import React from "react";
 import { listPayables } from "../lib/api";
 import { fmtBaht, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
+import FilterBar from "./FilterBar";
 
 // เมนู "ค้างจ่าย" — กระจกเงาของ "เงินค้างรับ" ฝั่งเจ้าหนี้: ใครที่เรายังไม่ได้จ่าย รวมเท่าไหร่ ค้างมากี่วัน
 // 4 ประเภท (ไม่นับซ้ำกัน): ใบสั่งซื้อยังไม่จ่าย · เบิกจ่ายอนุมัติแล้วรอจ่าย · ใบจ่ายช่างซัพรอจ่าย · ค่าแรงซัพยังไม่ตั้งเบิก
@@ -122,10 +123,12 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
         <div className="stat-card"><div className="stat-val">{credCount}</div><div className="stat-label">เจ้าหนี้/ทีมที่ค้าง</div></div>
       </div>
 
-      <div className="cat-search" style={{ maxWidth: 380, marginBottom: 14 }}>
-        <UIcon name="search" size={16} color="var(--ink-3)" />
-        <input placeholder="ค้นหา ผู้ขาย / เลขเอกสาร / ทีม" value={q} onChange={(e) => setQ(e.target.value)} />
-      </div>
+      <FilterBar id="payables" count={q ? 1 : 0}>
+        <div className="cat-search" style={{ maxWidth: 380, marginBottom: 14 }}>
+          <UIcon name="search" size={16} color="var(--ink-3)" />
+          <input placeholder="ค้นหา ผู้ขาย / เลขเอกสาร / ทีม" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+      </FilterBar>
 
       {rows === null ? <div className="empty">กำลังโหลด…</div>
         : shown.length === 0 ? <div className="empty" style={{ padding: 40 }}>🎉 ไม่มียอดค้างจ่าย — จ่ายครบทุกรายการแล้ว</div>

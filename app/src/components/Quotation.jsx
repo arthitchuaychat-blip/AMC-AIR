@@ -12,6 +12,7 @@ import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
+import FilterBar from "./FilterBar";
 import GrowArea from "./GrowArea";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { jobTypeDef } from "../lib/schedule";
@@ -404,6 +405,11 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const nStatus = (v) => fl0.filter((q) => v === "all" || q.status === v).length;
   const nVat = (v) => fl0.filter((q) => v === "all" || (v === "vat" ? !!q.vat : !q.vat)).length;
   const nDoc = (v) => fl0.filter((q) => docPred(q, v)).length;
+  // จำนวนตัวกรองที่ใช้อยู่ (ต่างจากค่าเริ่มต้น) — โชว์บนแถบตัวกรองยุบได้
+  // ช่วงวันที่นับเป็น active เฉพาะเมื่อต่างจากค่าเริ่มต้น 6 เดือนล่าสุด (ไม่งั้นจะขึ้น 1 ตลอด)
+  const _dfltR = defaultDocRange();
+  const dateActive = (dateR.from || dateR.to) && !(dateR.from === _dfltR.from && dateR.to === _dfltR.to);
+  const activeCount = (statusF !== "all" ? 1 : 0) + (vatF !== "all" ? 1 : 0) + (docF !== "all" ? 1 : 0) + (byPerson ? 1 : 0) + (dateActive ? 1 : 0);
   return (
     <div className="adm">
       <div className="adm-head">
@@ -417,6 +423,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         </div>
       </div>
 
+      <FilterBar id="quote" count={activeCount}>
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ...STATUS_OPTS, ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
@@ -442,6 +449,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             style={docF === v ? { background: v === "no_ac_po" ? "#7c3aed" : "#0891b2", color: "#fff", borderColor: v === "no_ac_po" ? "#7c3aed" : "#0891b2" } : {}}>{l} ({nDoc(v)})</button>
         ))}
       </div>
+      </FilterBar>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {

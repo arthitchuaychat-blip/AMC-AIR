@@ -8,6 +8,7 @@ import { fmtBaht, ATTACH_ACCEPT, matchText } from "../lib/format";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
 import { UIcon } from "../icons";
 import { useLang } from "../lib/i18n";
+import FilterBar from "./FilterBar";
 
 const OFFICE = ["admin", "exec", "finance", "hr"]; // hr: อนุมัติ/จ่ายเบิก + คุมเงินสดย่อย (v249)
 const EST = { pending: { t: "รออนุมัติ", m: "အတည်ပြုရန် စောင့်", c: "b-amber" }, approved: { t: "อนุมัติ · รอจ่าย", m: "အတည်ပြုပြီး · ငွေပေးရန် စောင့်", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", m: "ပယ်ချ", c: "b-red" }, paid: { t: "จ่ายแล้ว", m: "ပေးပြီး", c: "b-green" } };
@@ -191,15 +192,18 @@ function MineTab({ role, flash, onOpenDoc }) {
   async function load() { try { setList(await listMyExpenses()); } catch (e) { flash(L("โหลดไม่สำเร็จ: ", "ဖွင့်မရ: ") + (e.message || e), true); setList([]); } }
   React.useEffect(() => { load(); listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: null } : {}).then((j) => setJobs(j.filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
   const pendRcpt = (list || []).filter(needReceipt).length;
+  const activeCount = (q ? 1 : 0) + (dateR.from || dateR.to ? 1 : 0);
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">{L("คำขอเบิกของฉัน", "ကျွန်ုပ်၏ တောင်းခံစာရင်း")}</div><div className="sec-sub">{L("เบิกค่าใช้จ่ายทั่วไป หรือเบิกจากใบงาน (ค่าใช้จ่ายงานจะรวมเป็นต้นทุนงาน)", "ယေဘုယျ ကုန်ကျစရိတ် သို့မဟုတ် အလုပ်လွှာမှ တောင်းခံ (အလုပ်စရိတ်ကို အလုပ်ကုန်ကျစရိတ်တွင် ပေါင်းမည်)")}
         {pendRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 {L(`ค้างแนบใบเสร็จ ${pendRcpt} รายการ`, `ဘောက်ချာ တွဲရန်ကျန် ${pendRcpt} ခု`)}</b>}</div></div>
         <button className="btn-primary" onClick={() => setForm({ title: "", amount: "", category: "", job_no: "", note: "", attachments: [] })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> {L("ขอเบิกใหม่", "အသစ် တောင်းခံ")}</button></div>
-      <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
-        <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("ค้นหา ลูกค้า / เลข PO / ชื่อรายการ…", "ရှာဖွေ ဖောက်သည် / PO နံပါတ် / အမည်…")} /></div>
-        <DateRangeBar value={dateR} onChange={setDateR} />
-      </div>
+      <FilterBar id="expenses-mine" count={activeCount}>
+        <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
+          <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("ค้นหา ลูกค้า / เลข PO / ชื่อรายการ…", "ရှာဖွေ ဖောက်သည် / PO နံပါတ် / အမည်…")} /></div>
+          <DateRangeBar value={dateR} onChange={setDateR} />
+        </div>
+      </FilterBar>
       {list === null && <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div>}
       {list && list.length === 0 && <div className="empty">{L("ยังไม่มีคำขอเบิก", "တောင်းခံစာရင်း မရှိသေးပါ")}</div>}
       {list && list.length > 0 && (list || []).filter((x) => expMatch(x, q, dateR)).length === 0 && <div className="empty">{L("ไม่พบรายการตามที่ค้นหา", "ရှာဖွေမှုနှင့် ကိုက်ညီသည် မတွေ့ပါ")}</div>}
@@ -304,12 +308,14 @@ function ApproveTab({ flash, onOpenDoc }) {
   const nRcpt = (list || []).filter(needReceipt).length;
   const shown = (list || []).filter((x) => (statusF === "needReceipt" ? needReceipt(x) : (statusF === "all" || x.status === statusF)) && expMatch(x, q, dateR));
   const cnt = (s) => (list || []).filter((x) => x.status === s).length;
+  const activeCount = (statusF !== "pending" ? 1 : 0) + (q ? 1 : 0) + (dateR.from || dateR.to ? 1 : 0);
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">{L("อนุมัติ / จ่ายเงินเบิก", "အတည်ပြု / တောင်းခံငွေ ပေးချေ")}</div>
         <div className="sec-sub">{L(`รออนุมัติ ${cnt("pending")} · รอจ่าย ${cnt("approved")}`, `အတည်ပြုရန် စောင့် ${cnt("pending")} · ငွေပေးရန် စောင့် ${cnt("approved")}`)}{nRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 {L(`ค้างแนบใบเสร็จ ${nRcpt}`, `ဘောက်ချာ တွဲရန်ကျန် ${nRcpt}`)}</b>}</div></div>
         <button className="btn-primary" onClick={() => setVendorPay(true)} title={L("เลือกใบสั่งซื้อค้างจ่ายของร้านเดียวกันหลายใบ ตั้งเบิกจ่ายครั้งเดียว (เหมือนใบวางบิลฝั่งซื้อ)", "တူညီသော ရောင်းသူ၏ ငွေပေးရန်ကျန် ဝယ်ယူလွှာ များစွာကို ရွေး၍ တစ်ကြိမ်တည်း တောင်းခံ (ဝယ်ဘက် ငွေတောင်းခံစာကဲ့သို့)")}>🏭 {L("จ่ายเจ้าหนี้หลายใบ", "မြီရှင် များစွာ ပေးချေ")}</button></div>
-      <div className="cat-filter">
+      <FilterBar id="expenses-approve" count={activeCount}>
+        <div className="cat-filter">
         {[["pending", L("รออนุมัติ", "အတည်ပြုရန် စောင့်")], ["approved", L("รอจ่าย", "ငွေပေးရန် စောင့်")], ["paid", L("จ่ายแล้ว", "ပေးပြီး")], ["needReceipt", `📎 ${L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန်ကျန်")}${nRcpt ? ` (${nRcpt})` : ""}`], ["rejected", L("ไม่อนุมัติ", "ပယ်ချ")], ["all", L("ทั้งหมด", "အားလုံး")]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)} style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
         ))}
@@ -318,6 +324,7 @@ function ApproveTab({ flash, onOpenDoc }) {
         <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("ค้นหา ลูกค้า / เลข PO / พนักงานผู้ขอ / หมายเหตุ…", "ရှာဖွေ ဖောက်သည် / PO နံပါတ် / တောင်းခံသူ / မှတ်ချက်…")} /></div>
         <DateRangeBar value={dateR} onChange={setDateR} />
       </div>
+      </FilterBar>
       {list === null && <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div>}
       {list && shown.length === 0 && <div className="empty">{L("ไม่มีรายการ", "စာရင်း မရှိပါ")}</div>}
       <div className="job-cards">

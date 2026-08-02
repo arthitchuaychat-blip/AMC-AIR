@@ -16,6 +16,7 @@ import { mySignature, defaultSignOn } from "../lib/sign";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
 import LineWhtModal from "./LineWhtModal";
+import FilterBar from "./FilterBar";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 const fmtBaht = fmtBaht2; // receipts show 2 decimals
@@ -251,6 +252,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const shown = fl0.filter((x) => (statusF === "all" || x.status === statusF)
     && (vatF === "all" || (vatF === "vat" ? recVat(x) : !recVat(x)))
     && (!byPerson || (x.createdByName || "") === byPerson));
+  // จำนวนตัวกรองที่ใช้อยู่ (ไม่ใช่ค่าเริ่มต้น) → โชว์บนแถบตัวกรองยุบได้
+  const activeCount = (statusF !== "all" ? 1 : 0) + (vatF !== "all" ? 1 : 0)
+    + (byPerson ? 1 : 0);   // ไม่นับช่วงวันที่ (มี default 6 เดือนอยู่แล้ว)
   return (
     <div className="adm">
       <div className="adm-head">
@@ -263,6 +267,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> ออกใบเสร็จ</button>}
         </div>
       </div>
+      <FilterBar id="receipts" count={activeCount}>
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["pending", "รอชำระเงิน"], ["paid", "ชำระเงินแล้ว"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
@@ -282,6 +287,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           </select>
         )}
       </div>
+      </FilterBar>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสร็จ" : "ไม่พบใบเสร็จ"}</div>}
       <div className="job-cards">

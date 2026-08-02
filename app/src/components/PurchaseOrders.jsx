@@ -15,6 +15,7 @@ import DocCardHead from "./DocCard";
 import NumIn from "./NumIn";
 import { useDocPeek } from "./DocPeek";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
+import FilterBar from "./FilterBar";
 
 const STATUS = { open: { th: "รอรับของ", cls: "b-amber" }, received: { th: "รับแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" } };
 const PO_FILTERS = [{ id: "all", label: "ทั้งหมด" }, { id: "open", label: "รอรับของ" }, { id: "received", label: "รับแล้ว" }, { id: "cancelled", label: "ยกเลิก" }];
@@ -116,6 +117,11 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     && (typeF === "all" || poTypeOf(po) === typeF)
     && (!byPerson || (po.createdByName || "") === byPerson)
     && isVatMatch(po, vatF));
+  // จำนวนตัวกรองที่ใช้อยู่ (ต่างจากค่าเริ่มต้น) — โชว์เป็นตัวเลขบนแถบตัวกรองยุบได้ · ช่วงวันที่ default = 6 เดือนล่าสุด
+  const poDefRange = defaultDocRange();
+  const activeCount = (statusF !== "all" ? 1 : 0) + (payF !== "all" ? 1 : 0) + (typeF !== "all" ? 1 : 0)
+    + (vatF !== "all" ? 1 : 0) + (byPerson ? 1 : 0)
+    + ((dateR.from !== poDefRange.from || dateR.to !== poDefRange.to) ? 1 : 0);
 
   async function load() {
     setLoading(true);
@@ -381,7 +387,15 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
         {isAdmin && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบสั่งซื้อ</button>}
       </div>
 
-      <div className="cat-filter" style={{ justifyContent: "space-between" }}>
+      {/* ช่องค้นหาอยู่นอกแถบตัวกรอง (เห็นตลอด) · ชิปตัวกรองยุบเก็บใน FilterBar เพื่อประหยัดพื้นที่ */}
+      <div className="cat-filter" style={{ justifyContent: "flex-end" }}>
+        <div className="cat-search">
+          <UIcon name="search" size={17} color="var(--ink-3)" />
+          <input placeholder="ค้นหาเลข PO / ร้าน / วัสดุ / หมายเหตุ" value={q} onChange={(e) => setQ(e.target.value)} />
+          {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
+        </div>
+      </div>
+      <FilterBar id="po" count={activeCount}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {PO_FILTERS.map((f) => (
             <button key={f.id} className={"cat-chip" + (statusF === f.id ? " on" : "")} onClick={() => setStatusF(f.id)}
@@ -410,12 +424,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
             </select>
           )}
         </div>
-        <div className="cat-search">
-          <UIcon name="search" size={17} color="var(--ink-3)" />
-          <input placeholder="ค้นหาเลข PO / ร้าน / วัสดุ / หมายเหตุ" value={q} onChange={(e) => setQ(e.target.value)} />
-          {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
-        </div>
-      </div>
+      </FilterBar>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && pos.length === 0 && <div className="empty">ยังไม่มีใบสั่งซื้อ</div>}

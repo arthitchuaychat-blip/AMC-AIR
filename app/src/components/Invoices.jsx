@@ -17,6 +17,7 @@ import { mySignature, defaultSignOn } from "../lib/sign";
 import ChatCustomerLink from "./ChatCustomerLink";
 import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
 import LineWhtModal from "./LineWhtModal";
+import FilterBar from "./FilterBar";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 // snapshot a quote's line items with default หัก ณ ที่จ่าย flag (services only · เฉพาะลูกค้านิติบุคคล)
@@ -314,6 +315,10 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     && (!billIncomplete || notFullyBilled(x))
     && (!noReceiptF || (x.status !== "cancelled" && !x.hasReceipt))
     && (!noDueF || noDue(x)));
+  // จำนวนตัวกรองที่ใช้อยู่ (ไม่ใช่ค่าเริ่มต้น) → โชว์บนแถบตัวกรองยุบได้
+  const activeCount = (statusF !== "all" ? 1 : 0) + (vatF !== "all" ? 1 : 0)
+    + (noReceiptF ? 1 : 0) + (billIncomplete ? 1 : 0) + (noDueF ? 1 : 0)
+    + (byPerson ? 1 : 0);   // ไม่นับช่วงวันที่ (มี default 6 เดือนอยู่แล้ว)
   return (
     <div className="adm">
       <div className="adm-head">
@@ -326,6 +331,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบส่งของ/ใบแจ้งหนี้</button>}
         </div>
       </div>
+      <FilterBar id="invoices" count={activeCount}>
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["unpaid", "ค้างชำระ"], ["paid", "ชำระแล้ว"], ["bad_debt", "ตัดหนี้สูญ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
@@ -351,6 +357,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         )}
         <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
       </div>
+      </FilterBar>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบส่งของ/ใบแจ้งหนี้" : "ไม่พบใบส่งของ/ใบแจ้งหนี้"}</div>}
       <div className="job-cards">
