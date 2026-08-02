@@ -352,8 +352,8 @@ function LeavesTab({ staff, holSet, canManage, lockSelfId, flash }) {
               <span className={"job-badge " + b.c}>{b.t}</span>
               {/* ฝ่ายบุคคลอนุมัติ/แก้/ลบใบลาของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารเป็นคนตัดสิน (แบบเดียวกับล็อกเวลาเข้างาน) */}
               {l.user_id === lockSelfId ? <span className="jo-dim" title="ใบลาของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span> : <>
-                {l.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(l, "approved")}>อนุมัติ</button>}
-                {l.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(l, "rejected")}>ไม่อนุมัติ</button>}
+                {l.status === "pending" && <button className="btn-primary sm ok" onClick={() => decide(l, "approved")}>อนุมัติ</button>}
+                {l.status === "pending" && <button className="btn-ghost sm" onClick={() => decide(l, "rejected")}>ไม่อนุมัติ</button>}
                 {l.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(l, "pending")}>คืนรออนุมัติ</button>}
                 {canManage && <button className="btn-ghost sm" title="แก้ไขใบลา" onClick={() => setEdit(l)}><UIcon name="edit" size={13} /></button>}
                 {canManage && <button className="btn-ghost sm danger" title="ลบใบลา" onClick={() => del(l)}><UIcon name="trash" size={13} /></button>}
@@ -478,8 +478,8 @@ function AdvancesTab({ canManage, lockSelfId, flash }) {
               {/* 🔒 โอนเงินให้พนักงานแล้ว ห้ามเปลี่ยนสถานะ/แก้/ลบ — ไม่งั้นเงินออกไปแล้วแต่ไม่ถูกหักเงินเดือน */}
               {/* ฝ่ายบุคคลอนุมัติ/แก้คำขอเบิกของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารตัดสิน */}
               {a.user_id === lockSelfId ? <span className="jo-dim" title="คำขอของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span> : <>
-                {a.status !== "paid" && a.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
-                {!a.paid_out_at && a.status !== "paid" && a.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
+                {a.status === "pending" && <button className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
+                {a.status === "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
                 {!a.paid_out_at && a.status !== "paid" && a.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
                 {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm" title="แก้ไขคำขอ" onClick={() => setEdit(a)}><UIcon name="edit" size={13} /></button>}
                 {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm danger" title="ลบคำขอ" onClick={() => del(a)}><UIcon name="trash" size={13} /></button>}
@@ -530,8 +530,8 @@ function OtTab({ canManage, lockSelfId, flash }) {
               {awaitCheckout && <HrOtCheckout ot={o} onDone={(m) => { flash(m); load(); }} flash={flash} />}
               {o.status !== "paid" && <HrOtEdit ot={o} onDone={(m) => { flash(m); load(); }} flash={flash} />}
               {o.user_id === lockSelfId ? <span className="jo-dim" style={{ fontSize: 11 }} title="ใบของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ">🔒 ของตัวเอง</span> : <>
-                {o.status !== "paid" && o.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(o, "approved")}>อนุมัติ</button>}
-                {o.status !== "paid" && o.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(o, "rejected")}>ไม่อนุมัติ</button>}
+                {o.status === "pending" && <button className="btn-primary sm ok" onClick={() => decide(o, "approved")}>อนุมัติ</button>}
+                {o.status === "pending" && <button className="btn-ghost sm" onClick={() => decide(o, "rejected")}>ไม่อนุมัติ</button>}
                 {o.status !== "paid" && o.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(o, "pending")}>คืนรออนุมัติ</button>}
               </>}
             </div>
