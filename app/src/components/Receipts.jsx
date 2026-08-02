@@ -47,9 +47,12 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const [notesEd, setNotesEd] = React.useState(null);   // แก้หมายเหตุใบที่ออกไปแล้ว (ไม่แตะยอดเงิน)
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
+  const [byPerson, setByPerson] = React.useState("");   // กรองตามผู้สร้างเอกสาร
   const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
   // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
   const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
+  // ตัวเลือกผู้สร้างเอกสาร = รายชื่อที่ปรากฏจริงในใบทั้งหมดที่โหลดมา (ไม่ยิง API เพิ่ม)
+  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
   const [faBusy, setFaBusy] = React.useState(null);   // receipt_no being sent to FlowAccount
   const [faRes, setFaRes] = React.useState(null);     // { x, res } result modal
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
@@ -246,7 +249,8 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const nStatus = (v) => fl0.filter((x) => v === "all" || x.status === v).length;
   const nVat = (v) => fl0.filter((x) => v === "all" || (v === "vat" ? recVat(x) : !recVat(x))).length;
   const shown = fl0.filter((x) => (statusF === "all" || x.status === statusF)
-    && (vatF === "all" || (vatF === "vat" ? recVat(x) : !recVat(x))));
+    && (vatF === "all" || (vatF === "vat" ? recVat(x) : !recVat(x)))
+    && (!byPerson || (x.createdByName || "") === byPerson));
   return (
     <div className="adm">
       <div className="adm-head">
@@ -271,6 +275,12 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
             style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l} ({nVat(v)})</button>
         ))}
+        {creatorOpts.length > 0 && (
+          <select className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
+            <option value="">👤 ผู้สร้างทั้งหมด</option>
+            {creatorOpts.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสร็จ" : "ไม่พบใบเสร็จ"}</div>}

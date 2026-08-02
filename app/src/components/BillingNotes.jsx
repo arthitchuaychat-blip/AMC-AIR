@@ -46,6 +46,8 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
   const [search, setSearch] = React.useState("");
   const [notesEd, setNotesEd] = React.useState(null);   // แก้หมายเหตุใบที่ออกไปแล้ว (ไม่แตะยอดเงิน)
   const [statusF, setStatusF] = React.useState("all");
+  const [byPerson, setByPerson] = React.useState("");
+  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
   const [docLinks, setDocLinks] = React.useState({ byQuote: {}, invToQuote: {} });
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
@@ -91,7 +93,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
         const stPred = (b, v) => v === "all" ? true
           : v === "unpaid" ? (b.status !== "cancelled" && b.invoices.some((iv) => iv.status === "unpaid"))
           : bnStatus(b) === v;
-        const shown = fl0.filter((b) => stPred(b, statusF));
+        const shown = fl0.filter((b) => stPred(b, statusF)).filter((b) => !byPerson || (b.createdByName || "") === byPerson);
         return (<>
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["open", "วางบิล"], ["unpaid", "ค้างชำระ"], ["done", "ออกใบเสร็จครบ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
@@ -99,6 +101,12 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
             style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} ({fl0.filter((b) => stPred(b, v)).length})</button>
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
+        {creatorOpts.length > 0 && (
+          <select className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
+            <option value="">👤 ผู้สร้างทั้งหมด</option>
+            {creatorOpts.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
       </div>
       {shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบวางบิล" : "ไม่พบใบวางบิล"}</div>}
       <div className="job-cards">

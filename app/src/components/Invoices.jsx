@@ -46,10 +46,13 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [notesEd, setNotesEd] = React.useState(null);   // แก้หมายเหตุใบที่ออกไปแล้ว (ไม่แตะยอดเงิน)
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
+  const [byPerson, setByPerson] = React.useState("");   // กรองตามผู้สร้างเอกสาร
   const [noDueF, setNoDueF] = React.useState(false);   // ไล่เก็บใบเก่าที่ไม่ได้ใส่วันครบกำหนด (หลุดจาก KPI เกินกำหนด)
   const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
   // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
   const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
+  // ตัวเลือกผู้สร้างเอกสาร = รายชื่อที่ปรากฏจริงในใบทั้งหมดที่โหลดมา (ไม่ยิง API เพิ่ม)
+  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
   const [billIncomplete, setBillIncomplete] = React.useState(false); // เฉพาะงานที่วางบิลยังไม่ครบ 100%
   const [noReceiptF, setNoReceiptF] = React.useState(false);         // เฉพาะใบที่ยังไม่ออกใบเสร็จ (ยังไม่รับเงิน)
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
@@ -307,6 +310,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const nNoDue = fl0.filter(noDue).length;
   const shown = fl0.filter((x) => (statusF === "all" || x.status === statusF)
     && (vatF === "all" || (vatF === "vat" ? invVat(x) : !invVat(x)))
+    && (!byPerson || (x.createdByName || "") === byPerson)
     && (!billIncomplete || notFullyBilled(x))
     && (!noReceiptF || (x.status !== "cancelled" && !x.hasReceipt))
     && (!noDueF || noDue(x)));
@@ -339,6 +343,12 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           style={billIncomplete ? { background: "#d97706", color: "#fff", borderColor: "#d97706" } : {}}>วางบิลยังไม่ครบ 100% ({nBillInc})</button>
         {nNoDue > 0 && <button className={"cat-chip" + (noDueF ? " on" : "")} onClick={() => setNoDueF((v) => !v)}
           style={noDueF ? { background: "#dc2626", color: "#fff", borderColor: "#dc2626" } : { borderColor: "#dc2626", color: "#dc2626" }}>⚠️ ไม่ระบุวันครบกำหนด ({nNoDue})</button>}
+        {creatorOpts.length > 0 && (
+          <select className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
+            <option value="">👤 ผู้สร้างทั้งหมด</option>
+            {creatorOpts.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
         <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}

@@ -7,6 +7,7 @@ import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS
 import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
 import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, hrEditOt, otHoursFromTimes, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186)
 import { fmtBaht } from "../lib/format";
+import { ROLE_GUIDE, DEPT_COLOR } from "../lib/handbook";   // KPI ตามตำแหน่ง (แสดงในรายงานประสิทธิผล)
 import { UIcon } from "../icons";
 import PayDetailModal from "./PayDetail";
 
@@ -958,6 +959,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
   const [ym, setYm] = React.useState(() => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; });
   const [rows, setRows] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+  const [kpiDetail, setKpiDetail] = React.useState(null);   // แถวพนักงานที่กดดู KPI ตามตำแหน่ง
   async function load() {
     setLoading(true);
     try {
@@ -1007,7 +1009,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
   return (
     <div className="card">
       <div className="sec-head">
-        <div><div className="sec-title">ประสิทธิผลพนักงาน · {ym}</div><div className="sec-sub">คะแนน = ตรงเวลา + มาทำงาน + คะแนนงานของทีม − เคลม · (OT/เลื่อนนัด = ข้อมูลประกอบ ไม่คิดคะแนน) · เรียงคะแนนสูงสุดก่อน</div></div>
+        <div><div className="sec-title">ประสิทธิผลพนักงาน · {ym}</div><div className="sec-sub">คะแนน = ตรงเวลา + มาทำงาน + คะแนนงานของทีม − เคลม · (OT/เลื่อนนัด = ข้อมูลประกอบ ไม่คิดคะแนน) · <b>👆 คลิกชื่อพนักงานเพื่อดู KPI ตามตำแหน่ง</b></div></div>
         <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} />
       </div>
       {loading ? <div className="empty">กำลังคำนวณ…</div> : !rows.length ? <div className="empty">ไม่มีข้อมูล</div> : (
@@ -1017,7 +1019,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.p.id}>
-                  <td style={{ textAlign: "left" }}><b>{r.p.name || r.p.email}</b></td>
+                  <td style={{ textAlign: "left" }}><button type="button" onClick={() => setKpiDetail(r)} title="ดู KPI ตามตำแหน่ง" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", font: "inherit", textAlign: "left" }}><b style={{ borderBottom: "1px dotted var(--ink-3)" }}>{r.p.name || r.p.email}</b> 🎯</button></td>
                   <td>{r.team}</td>
                   <td>{r.st.present}/{r.st.absent}/{r.st.leaveDays}</td>
                   <td className={r.st.lateCnt ? "hr-warn" : ""}>{r.st.lateCnt || "—"}</td>
@@ -1035,6 +1037,63 @@ function PerfTab({ staff, settings, holSet, flash }) {
         </div>
       )}
       <p className="page-sub" style={{ marginTop: 10 }}>* งาน/คะแนน/เคลม นับจากงานของ “ทีม” ที่พนักงานสังกัด (นับจากรอบนัด job_visits ด้วย ไม่ใช่แค่ทีมระดับใบ) · คะแนนรวม = ตรงเวลา 50% + มาทำงาน 20% + คะแนนงาน 30% − เคลม×5 (หมวดที่ไม่มีข้อมูลจะถูกตัดออกแล้วเฉลี่ยใหม่) · <b>ตรงเวลา = สัดส่วนวันมาตรงเวลาจากวันที่มาทำงาน · OT/เลื่อนนัด แสดงเป็นข้อมูลประกอบ ไม่คิดคะแนน · OT ดึงจากใบขอที่อนุมัติ+เช็คเอาท์</b></p>
+      {kpiDetail && <KpiDetailModal r={kpiDetail} ym={ym} onClose={() => setKpiDetail(null)} />}
+    </div>
+  );
+}
+
+// ---------- KPI ตามตำแหน่ง (จากคู่มือ handbook) + เติมค่าจริงที่วัดได้จากข้อมูลในหน้าประสิทธิผล ----------
+// คืน { txt, tone: "ok"|"bad"|"warn"|"neutral", auto:true } ถ้าวัดค่าจริงได้ · คืน null ถ้าเป็น KPI ที่วัดเอง/นอกระบบ
+function kpiActual(k, r) {
+  const key = `${k.m || ""} ${k.src || ""}`;
+  const on = r.onTime;                                  // % ตรงเวลา (จากเข้างาน)
+  const attRatio = (r.st.present + r.st.absent) > 0 ? Math.round(r.st.present / (r.st.present + r.st.absent) * 100) : null;
+  if (/ตรงเวลา|เข้างาน|มาตรงเวลา|สาย/.test(key) && /เข้างาน|ลา|ตรงเวลา|สาย/.test(key)) {
+    if (on != null) return { txt: on + "%", tone: on >= 95 ? "ok" : on >= 85 ? "warn" : "bad", auto: true };
+  }
+  if (/มาทำงาน|ขาดงาน|เข้างานครบ/.test(key) && attRatio != null) return { txt: attRatio + "%", tone: attRatio >= 95 ? "ok" : attRatio >= 85 ? "warn" : "bad", auto: true };
+  if (/เคลม|แก้ซ้ำ/.test(key)) return { txt: `${r.m.claims} ครั้ง`, tone: r.m.claims === 0 ? "ok" : "bad", auto: true };
+  if (/คะแนน|ดาว|รีวิว|ความพึงพอใจ|ประเมิน/.test(key)) { if (r.avgRating != null) return { txt: `★ ${r.avgRating.toFixed(1)}`, tone: r.avgRating >= 4 ? "ok" : r.avgRating >= 3 ? "warn" : "bad", auto: true }; }
+  if (/งานเสร็จ|จำนวนงาน|งานต่อวัน|ปริมาณงาน/.test(key)) return { txt: `${r.m.done} งาน (ทีม)`, tone: "neutral", auto: true };
+  if (/เลื่อนนัด|เลื่อน/.test(key)) return { txt: `${r.m.resched} ครั้ง`, tone: r.m.resched === 0 ? "ok" : "warn", auto: true };
+  if (/OT|ล่วงเวลา/.test(key)) return { txt: `${(r.otHours || 0).toFixed(1)} ชม.`, tone: "neutral", auto: true };
+  return null;   // วัดเอง/นอกระบบ (เช่น ยอดขาย, DSO, checklist) — โชว์เป้า + เมนูที่ต้องไปวัด
+}
+
+function KpiDetailModal({ r, ym, onClose }) {
+  const g = ROLE_GUIDE[r.p.role];
+  const c = (g && DEPT_COLOR[g.dept]) || "#0d9488";
+  const toneColor = { ok: "var(--up)", bad: "var(--down)", warn: "#d97706", neutral: "var(--ink-2)" };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 620, maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+        <div className="modal-head"><div className="modal-title">🎯 KPI ตามตำแหน่ง · {r.p.name || r.p.email}</div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body" style={{ overflowY: "auto" }}>
+          {!g ? <div className="empty">ตำแหน่งนี้ยังไม่มี KPI ในคู่มือ</div> : (<>
+            <div className="jo-dim" style={{ fontSize: 13, marginBottom: 10 }}>{g.icon} <b style={{ color: c }}>{g.th}</b> · รอบ {ym} · <span style={{ color: "var(--up)" }}>●</span> ผ่าน <span style={{ color: "var(--down)" }}>●</span> ต่ำกว่าเป้า · ค่าที่ระบบวัดให้มีป้าย “ระบบ”, ที่เหลือหัวหน้าประเมินเองจากเมนูที่ระบุ</div>
+            {g.kpis.map((k, i) => { const a = kpiActual(k, r); return (
+              <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: i ? "1px solid var(--line)" : "none" }}>
+                <span style={{ fontFamily: "monospace", fontSize: 10.5, fontWeight: 700, color: c, border: `1px solid ${c}`, borderRadius: 5, padding: "1px 5px", flex: "none", marginTop: 2 }}>K{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.8, fontWeight: 600 }}>{k.m}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>🎯 เป้า {k.t} · ⏱ {k.f} · 📍 {k.src}{k.w ? ` · น้ำหนัก ${k.w}%` : ""}</div>
+                </div>
+                <div style={{ textAlign: "right", flex: "none", minWidth: 92 }}>
+                  {a ? <>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: toneColor[a.tone] }}>{a.txt}</div>
+                    <div style={{ fontSize: 10, color: "var(--ink-3)" }}>🟢 ระบบวัดให้</div>
+                  </> : <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>ประเมินเอง<br /><span style={{ fontSize: 10 }}>ดูที่ “{k.src}”</span></div>}
+                </div>
+              </div>
+            ); })}
+            <div style={{ marginTop: 12, background: "var(--surface-2, #f3f7f8)", borderRadius: 10, padding: "10px 12px", fontSize: 12.5, color: "var(--ink-2)" }}>
+              <b>คะแนนรวมงวดนี้: {r.comp != null ? r.comp : "—"}</b> · สรุปจาก ตรงเวลา {r.onTime != null ? r.onTime + "%" : "—"} · มา/ขาด/ลา {r.st.present}/{r.st.absent}/{r.st.leaveDays} · คะแนนงานทีม {r.avgRating != null ? "★ " + r.avgRating.toFixed(1) : "—"} · เคลม {r.m.claims}
+            </div>
+          </>)}
+        </div>
+        <div className="modal-foot"><button className="btn-primary" onClick={onClose}>ปิด</button></div>
+      </div>
     </div>
   );
 }

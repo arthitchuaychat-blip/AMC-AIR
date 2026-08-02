@@ -882,6 +882,7 @@ async function _loadPurchaseOrders() {
   const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
   const quoteInfo = Object.fromEntries((qRes.data || []).map((x) => [x.quote_no, x]));
   const teamName = Object.fromEntries((tmRes.data || []).map((t) => [t.id, t.name]));
+  const cb = await _creators((poRes.data || []).map((p) => p.created_by));   // ชื่อผู้สร้างใบ (ให้ตัวกรอง "ผู้สร้างเอกสาร" ใช้)
   const jobByQuote = {};
   (joRes.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
   return (poRes.data || []).map((po) => {
@@ -893,6 +894,7 @@ async function _loadPurchaseOrders() {
     const qi = po.quote_no ? quoteInfo[po.quote_no] : null;
     const job = po.quote_no ? jobByQuote[po.quote_no] : null;
     return { ...po, items, subtotal, vatAmt, total: Math.round((subtotal + vatAmt) * 100) / 100, paymentStatus,
+      createdByName: cb[po.created_by] || null,
       customerName: qi ? custName[qi.customer_id] || null : null,
       jobNo: job?.job_no || null, teamName: job ? teamName[job.assigned_team] || job.assigned_team || null : null };
   });
@@ -996,11 +998,11 @@ export async function deleteMaterialPrep(prep_no, cascade, reason) {
 
 export async function savePurchaseOrder(po, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, prep_no: po.prep_no || null, issue_date: po.issue_date || null, po_type: po.po_type || null, created_by: user?.id || null };
+  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, prep_no: po.prep_no || null, issue_date: po.issue_date || null, po_type: po.po_type || null, delivery_date: po.delivery_date || null, delivery_method: po.delivery_method || null, created_by: user?.id || null };
   let e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
-  // pre-096/097/100/115/119/139 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
+  // pre-096/097/100/115/119/139/187 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
   // ห้ามเหมารวม: เคยตัด vat ทิ้งไปด้วยตอน price_incl ยังไม่รัน migration → ใบสั่งซื้อโหมดรวม VAT ถูกเก็บเป็นไม่มี VAT
-  for (const c of ["price_incl", "vat", "quote_no", "prep_no", "issue_date", "po_type"]) {
+  for (const c of ["price_incl", "vat", "quote_no", "prep_no", "issue_date", "po_type", "delivery_date", "delivery_method"]) {
     if (e1 && c in head && (e1.message || "").includes(c)) {
       delete head[c];
       e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;

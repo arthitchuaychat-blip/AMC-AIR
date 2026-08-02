@@ -44,6 +44,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const [statusF, setStatusF] = React.useState("all");
   const [typeF, setTypeF] = React.useState("all");
   const [teamF, setTeamF] = React.useState("all");
+  const [byPerson, setByPerson] = React.useState("");
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
   const [viewing, setViewing] = React.useState(null); // job being viewed (detail modal)
@@ -544,6 +545,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const baseList = fieldOnly && role !== "lead_tech" && myTeam
     ? list.filter((j) => (j.visits && j.visits.length) ? j.visits.some((v) => v.assigned_team === myTeam) : j.assigned_team === myTeam)
     : list;
+  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
   return (
     <div className="adm">
       <div className="adm-head">
@@ -593,15 +595,23 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
         if (fieldOnly) return null; // ช่างเห็นเฉพาะทีมตัวเองอยู่แล้ว ไม่ต้องมีตัวกรองทีม
         const jobTeamIds = new Set(baseList.map((j) => j.assigned_team).filter(Boolean));
         const teamOpts = teams.filter((t) => jobTeamIds.has(t.id));
-        if (!teamOpts.length) return null;
+        if (!teamOpts.length && creatorOpts.length === 0) return null;
         return (
         <div className="cat-filter">
+          {teamOpts.length > 0 && <>
           <button className={"cat-chip" + (teamF === "all" ? " on" : "")} onClick={() => setTeamF("all")}
             style={teamF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทุกทีม</button>
           {teamOpts.map((t) => (
             <button key={t.id} className={"cat-chip" + (teamF === t.id ? " on" : "")} onClick={() => setTeamF(t.id)}
               style={teamF === t.id ? { background: t.color, color: "#fff", borderColor: t.color } : {}}>{(t.name || t.id).replace("Team ", "")}</button>
           ))}
+          </>}
+          {creatorOpts.length > 0 && (
+            <select className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
+              <option value="">👤 ผู้สร้างทั้งหมด</option>
+              {creatorOpts.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
         </div>
       ); })()}
 
@@ -625,6 +635,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
         const fl = baseList.filter((jo) => (statusF === "all" || jo.status === statusF)
           && (typeF === "all" || (jo.job_type || "install") === typeF)
           && (teamF === "all" || jo.assigned_team === teamF)
+          && (!byPerson || (jo.createdByName || "") === byPerson)
           && inDateRange(jo)
           && (matchText(q, jo.job_no, jo.customerName, jo.teamName, jo.title, jo.quote_no, jo.address) || matchPhone(q, jo.contact_phone)))
           .sort((a, b) => jobAt(a) - jobAt(b) || a.job_no.localeCompare(b.job_no)); // วันใกล้ → ไกล (ไม่มีวันอยู่ท้าย)

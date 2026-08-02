@@ -78,6 +78,9 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const [ed, setEd] = React.useState(null); // {boq_no, customer_id, site_id, title, note, items{}}
   const [search, setSearch] = React.useState("");
   const [typeF, setTypeF] = React.useState("all"); // กรองตามประเภทงาน (CRM)
+  const [byPerson, setByPerson] = React.useState(""); // กรองตามผู้สร้างเอกสาร
+  // ตัวเลือกผู้สร้าง = ชื่อผู้สร้างที่มีจริงในใบทั้งหมด (ก่อนกรอง) — ไม่ยิง API เพิ่ม
+  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [printB, setPrintB] = React.useState(null);
   const [saving, setSaving] = React.useState(false);   // กันกดบันทึกซ้ำตอนเน็ตช้า (เดิมกด 2 ที = ได้ 2 ใบ)
@@ -303,7 +306,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
         // เคยหลุดช่วงที่เลือกทั้งที่บนการ์ดขึ้นวันที่ในช่วง · ใบเก่าก่อน mig 119 ไม่มี issue_date → ใช้ created_at
         const fl0 = list.filter((bo) => inDateRange(bo.issue_date || bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title, bo.note, bo.internal_note) || matchPhone(search, bo.contactPhone)));
         const nType = (v) => fl0.filter((bo) => v === "all" || bo.job_type === v).length;
-        const fl = fl0.filter((bo) => typeF === "all" || bo.job_type === typeF);
+        const fl = fl0.filter((bo) => (typeF === "all" || bo.job_type === typeF) && (!byPerson || (bo.createdByName || "") === byPerson));
         return (<>
       <div className="cat-filter">
         {[["all", "ทุกประเภทงาน"], ...JOB_TYPES.map(([v, l, ic]) => [v, `${ic} ${l}`])].map(([v, l]) => (
@@ -311,6 +314,12 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
             style={typeF === v ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>{l} ({nType(v)})</button>
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
+        {creatorOpts.length > 0 && (
+          <select className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
+            <option value="">👤 ผู้สร้างทั้งหมด</option>
+            {creatorOpts.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
       </div>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}

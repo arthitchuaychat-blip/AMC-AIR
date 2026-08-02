@@ -90,6 +90,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const fl0 = pos.filter((po) => inDateRange(po.issue_date || po.created_at, dateR)
     && (matchText(q, po.po_no, po.supplier, po.note, po.internal_note, po.quote_no, po.customerName, po.jobNo, po.teamName) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
   const [vatF, setVatF] = React.useState("all");   // งาน VAT / NOVAT (ตามธง vat ของใบ)
+  const [byPerson, setByPerson] = React.useState("");   // ตัวกรอง "ผู้สร้างเอกสาร"
+  const creatorOpts = React.useMemo(() => Array.from(new Set((pos || []).map((p) => p.createdByName).filter(Boolean))).sort(), [pos]);
   const isVatMatch = (po, v) => v === "all" || (v === "vat" ? !!po.vat : !po.vat);
   const nStatus = (v) => fl0.filter((po) => v === "all" || po.status === v).length;
   const nPay = (v) => fl0.filter((po) => v === "all" || po.paymentStatus === v).length;
@@ -98,6 +100,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const shown = fl0.filter((po) => (statusF === "all" || po.status === statusF)
     && (payF === "all" || po.paymentStatus === payF)
     && (typeF === "all" || poTypeOf(po) === typeF)
+    && (!byPerson || (po.createdByName || "") === byPerson)
     && isVatMatch(po, vatF));
 
   async function load() {
@@ -124,7 +127,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     const src = Array.isArray(prefill) ? prefill : (prefill.items || []);
     const quoteNo = Array.isArray(prefill) ? "" : (prefill.quoteNo || "");
     if (!src.length && !quoteNo) { onPrefillConsumed && onPrefillConsumed(); return; }
-    setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: quoteNo, prep_no: (Array.isArray(prefill) ? "" : prefill.prepNo) || "", issue_date: todayStr(),
+    setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: quoteNo, prep_no: (Array.isArray(prefill) ? "" : prefill.prepNo) || "", issue_date: todayStr(), delivery_date: "", delivery_method: "",
       // ประเภทสินค้า: มากับ prefill (สั่งซื้อแอร์ = "ac") หรือเดาจากรายการ (มีแอร์ → ac) — ผู้ใช้เปลี่ยนได้ก่อนบันทึก
       po_type: (!Array.isArray(prefill) && prefill.poType) || (src.some((p) => matMap[p.code]?.kind === "ac") ? "ac" : "material"),
       // จำนวนจากใบเสนอราคาเป็น "หน่วยหลัก" (เมตร/ชุด) → ตั้งหน่วยบรรทัดเป็นหน่วยหลัก + ราคา = ต้นทุน/หน่วยหลัก
@@ -134,10 +137,10 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
 
-  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", po_type: "", issue_date: todayStr(), items: [] }); }
+  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", po_type: "", issue_date: todayStr(), delivery_date: "", delivery_method: "", items: [] }); }
   function startEdit(po) {
     const incl = !!po.vat && !!po.price_incl;   // stored price is pre-VAT → show gross in the field when incl mode
-    setEditing({ _edit: true, _paymentStatus: po.paymentStatus || "unpaid", po_no: po.po_no, status: po.status, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", po_type: po.po_type || po.poType || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10),
+    setEditing({ _edit: true, _paymentStatus: po.paymentStatus || "unpaid", po_no: po.po_no, status: po.status, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", po_type: po.po_type || po.poType || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10), delivery_date: po.delivery_date || "", delivery_method: po.delivery_method || "",
       items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0), unit: i.unit || null })) });
   }
 
@@ -212,7 +215,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     const incl = !!editing.vat && !!editing.priceIncl;
     const items = editing.items.map((it) => ({ ...it, price: incl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0) })); // store pre-VAT price
     try {
-      await savePurchaseOrder({ po_no: poNo, supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, status: editing.status || "open" }, items);
+      await savePurchaseOrder({ po_no: poNo, supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, delivery_date: editing.delivery_date || null, delivery_method: editing.delivery_method || null, status: editing.status || "open" }, items);
       // ใบที่รับของเข้าคลังไปแล้ว: แก้ราคาตามบิลซัพฯ ต้องไล่แก้ต้นทุนที่บันทึกไว้ในคลัง/ต้นทุนงานด้วย
       let repriced = 0, repriceErr = null;
       // ห้ามกลืน error เงียบ ๆ — ถ้าปรับต้นทุนไม่ผ่าน (สิทธิ์ไม่พอ) ต้องบอก ไม่งั้นใบโชว์ราคาใหม่
@@ -289,6 +292,16 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               {quotes.map((x) => <option key={x.quote_no} value={x.quote_no}>{x.label}</option>)}
             </Combo>
           </label>
+          <div className="fld-row">
+            <label className="fld"><span>วันกำหนดรับ/ส่งสินค้า <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(คาดว่าจะได้ของ)</span></span>
+              <input className="inp" type="date" value={editing.delivery_date || ""} onChange={(e) => setEditing({ ...editing, delivery_date: e.target.value })} /></label>
+            <label className="fld"><span>วิธีรับสินค้า</span>
+              <select className="inp" value={editing.delivery_method || ""} onChange={(e) => setEditing({ ...editing, delivery_method: e.target.value })}>
+                <option value="">— ยังไม่ระบุ —</option>
+                <option value="pickup">🚗 ไปรับเอง (ที่ผู้ขาย)</option>
+                <option value="delivery">🚚 ผู้ขายมาส่งที่ออฟฟิศ</option>
+              </select></label>
+          </div>
           <div className="fld-row">
             <label className="fld"><span>หมายเหตุ</span><input className="inp" value={editing.note} onChange={(e) => setEditing({ ...editing, note: e.target.value })} placeholder="(ไม่บังคับ)" /></label>
             <label className="fld"><span>ราคาที่กรอก / VAT</span>
@@ -376,6 +389,12 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               style={vatF === v ? { background: "#16a34a", color: "#fff", borderColor: "#16a34a" } : {}}>{l} ({nVat(v)})</button>
           ))}
           <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
+          {creatorOpts.length > 0 && (
+            <select className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
+              <option value="">👤 ผู้สร้างทั้งหมด</option>
+              {creatorOpts.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
         </div>
         <div className="cat-search">
           <UIcon name="search" size={17} color="var(--ink-3)" />
@@ -407,6 +426,14 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 amountLabel={"มูลค่ารวม" + (po.vat ? " (รวม VAT)" : "")} amount={po.total}
                 customer={{ name: po.supplier || "ไม่ระบุร้าน" }} />
               <InternalNoteTag note={po.internal_note} role={role} />
+              {(po.delivery_date || po.delivery_method || po.createdByName) && (
+                <div className="jo-dim" style={{ fontSize: 12.5, padding: "2px 2px 0", display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {po.delivery_method === "pickup" && <span>🚗 ไปรับเอง</span>}
+                  {po.delivery_method === "delivery" && <span>🚚 ผู้ขายมาส่งที่ออฟฟิศ</span>}
+                  {po.delivery_date && <span>📅 กำหนดรับ/ส่ง {new Date(po.delivery_date + "T00:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span>}
+                  {po.createdByName && <span>✍️ {po.createdByName}</span>}
+                </div>
+              )}
               <div className="job-lines">
                 {(expanded.has(po.po_no) ? po.items : po.items.slice(0, 3)).map((it) => { const m = matMap[it.material_code]; return (
                   <div className="po-view-row" key={it.material_code}>

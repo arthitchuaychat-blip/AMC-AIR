@@ -55,6 +55,9 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
   const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
   const [search, setSearch] = React.useState("");
+  const [byPerson, setByPerson] = React.useState(""); // กรองตามผู้สร้างเอกสาร
+  // ตัวเลือกผู้สร้าง = ชื่อผู้สร้างที่มีจริงในใบทั้งหมด (ก่อนกรอง) — ไม่ยิง API เพิ่ม
+  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
@@ -426,6 +429,12 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l} ({nVat(v)})</button>
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
+        {creatorOpts.length > 0 && (
+          <select className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
+            <option value="">👤 ผู้สร้างทั้งหมด</option>
+            {creatorOpts.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
         {[["all", "ทุกใบ"], ["no_invoice", "ยังไม่สร้างใบส่งของ/ใบแจ้งหนี้"], ["no_job", "ยังไม่สร้างใบงาน"], ["no_ac_po", "ยังไม่สั่งซื้อแอร์"]].map(([v, l]) => (
@@ -438,6 +447,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       {(() => {
         const fl = fl0.filter((q) => (statusF === "all" || q.status === statusF)
           && (vatF === "all" || (vatF === "vat" ? !!q.vat : !q.vat))
+          && (!byPerson || (q.createdByName || "") === byPerson)
           && docPred(q, docF));
         return (<>
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสนอราคา" : "ไม่พบใบเสนอราคาที่ตรงเงื่อนไข"}</div>}
