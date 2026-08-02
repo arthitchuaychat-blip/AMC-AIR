@@ -14,7 +14,7 @@ import { UIcon, MaterialThumb } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
 import { useDocPeek } from "./DocPeek";
-import { sendDocFromNode } from "../lib/sendDoc";
+import { captureDocToStage } from "../lib/sendDoc";
 import html2canvas from "html2canvas";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
@@ -424,7 +424,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const chatQty = (code, d) => setChatCart((c) => c.map((x) => (x.code === code ? { ...x, qty: Math.max(0, x.qty + d) } : x)).filter((x) => x.qty > 0));
   // ส่งสรุปราคาเป็น "รูปตาราง" อ่านง่าย (capture การ์ด HTML → PNG → ส่งเข้าแชต) · สร้างรูปพลาด → ส่งข้อความแทน
   async function sendChatCart() {
-    if (!sel || sending || !chatCart.length) return;
+    if (!sel || uploading || !chatCart.length) return;
     const pm = CHAT_PAY.find((x) => x.v === chatPay) || CHAT_PAY[0];
     const total = chatCart.reduce((a, x) => a + chatAdj(x.price, pm) * x.qty, 0);
     const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -448,7 +448,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       </div>
       <div style="padding:0 16px 12px;font-size:12px;color:#94a3b8">* ราคาโดยประมาณ ทีมงานยืนยันราคา ค่าติดตั้ง และนัดหมายก่อนเสมอ · โทร 099-262-9090</div>
     </div>`;
-    setSending(true);
+    setUploading(true);
     const host = document.createElement("div");
     host.style.cssText = "position:fixed;left:-99999px;top:0;background:#fff;";
     host.innerHTML = cardHtml;
@@ -458,33 +458,36 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       await new Promise((r) => setTimeout(r, 60));
       const canvas = await html2canvas(host.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
       const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
-      // รูปสินค้าแอร์ทุกรุ่นในตะกร้า (ไม่ซ้ำ · อย่างมาก 4 รูป) → ตามด้วยตารางสรุปราคา
+      // รูปสินค้าแอร์ทุกรุ่นในตะกร้า (ไม่ซ้ำ · อย่างมาก 4 รูป) → ตามด้วยตารางสรุปราคา · "พักไว้" ในช่องแชต ไม่ส่งทันที
       const photos = [...new Set(chatCart.filter((x) => x.kind === "ac" && x.photo).map((x) => x.photo))].slice(0, 4);
       const single = chatCart.length === 1 && chatCart[0].photo ? [chatCart[0].photo] : [];
-      for (const p of (photos.length ? photos : single)) await chSendImage(sel, p);
+      const stage = [];
+      for (const p of (photos.length ? photos : single)) stage.push({ type: "image", url: p, name: "รูปสินค้า" });
       const url = await uploadDocFile(blob, "png", "image/png");
-      await chSendImage(sel, url);
-      // โบรชัวร์ของแต่ละรุ่นแอร์ (ระดับซีรีส์ · ไม่ซ้ำ · อย่างมาก 3 รุ่น) — ส่งเป็นลิงก์ต่อท้าย
+      stage.push({ type: "image", url, name: "ตารางราคา" });
+      setPending((s) => [...s, ...stage]);
+      // โบรชัวร์ของแต่ละรุ่นแอร์ (ระดับซีรีส์ · ไม่ซ้ำ · อย่างมาก 3 รุ่น) — ใส่เป็นลิงก์ในช่องข้อความ (ส่งพร้อมกันตอนกดส่ง)
       const seriesList = [...new Map(chatCart.filter((x) => x.kind === "ac" && x.series).map((x) => [`${x.brand}|${x.series}`, x])).values()].slice(0, 3);
+      const brs = [];
       for (const s of seriesList) {
-        try { const sr = await getAcSeries(s.brand, s.series); if (sr?.brochure_url) await chSendText(sel, `📄 โบรชัวร์ ${s.brand} ${s.series}\n${sr.brochure_url}`); } catch { /* ไม่มีโบรชัวร์ก็ข้าม */ }
+        try { const sr = await getAcSeries(s.brand, s.series); if (sr?.brochure_url) brs.push(`📄 โบรชัวร์ ${s.brand} ${s.series}\n${sr.brochure_url}`); } catch { /* ไม่มีโบรชัวร์ก็ข้าม */ }
       }
-      if (isFb) setMsgs(await chListMessages(sel));
+      if (brs.length) setText((cur) => (cur ? cur + "\n" : "") + brs.join("\n"));
       setChatCart([]); setAcPicker(false);
-      flash("ส่งรูปสินค้า + ตารางราคา + โบรชัวร์ให้ลูกค้าแล้ว ✓");
+      flash("แนบรูปสินค้า + ตารางราคาไว้ในช่องแชตแล้ว — ตรวจแล้วกด “ส่ง” ✓");
     } catch (ex) {
-      // สร้าง/ส่งรูปไม่สำเร็จ → ส่งแบบข้อความ ลูกค้ายังได้ราคาครบ
+      // สร้างรูปไม่สำเร็จ → พักเป็นข้อความสรุปในช่องแทน ลูกค้ายังได้ราคาครบตอนกดส่ง
       try {
         const lines = chatCart.map((x, i) => `${i + 1}. ${x.name}${x.qty > 1 ? ` × ${x.qty}` : ""} = ${fmtBaht(chatAdj(x.price, pm) * x.qty)}`);
-        await chSendText(sel, [`สรุปราคา (${pm.l.replace(/^[^ ]+ /, "")})`, ...lines, `รวมทั้งสิ้น ${fmtBaht(total)}`,
-          ...(pm.v === "card_inst10" ? [`(≈ ${fmtBaht(Math.ceil(total / 10))}/เดือน × 10 งวด)`] : [])].join("\n"));
-        if (isFb) setMsgs(await chListMessages(sel));
+        const txt = [`สรุปราคา (${pm.l.replace(/^[^ ]+ /, "")})`, ...lines, `รวมทั้งสิ้น ${fmtBaht(total)}`,
+          ...(pm.v === "card_inst10" ? [`(≈ ${fmtBaht(Math.ceil(total / 10))}/เดือน × 10 งวด)`] : [])].join("\n");
+        setText((cur) => (cur ? cur + "\n" : "") + txt);
         setChatCart([]); setAcPicker(false);
-        flash("ส่งแบบข้อความแทน (สร้างรูปไม่สำเร็จ) ✓");
-      } catch (e2) { flash("ส่งไม่สำเร็จ: " + (e2.message || e2), true); }
+        flash("แนบเป็นข้อความแทน (สร้างรูปไม่สำเร็จ) — ตรวจแล้วกด “ส่ง”");
+      } catch (e2) { flash("แนบไม่สำเร็จ: " + (e2.message || e2), true); }
     }
     document.body.removeChild(host);
-    setSending(false);
+    setUploading(false);
   }
   // send a LINE sticker (basic bot-sendable set)
   async function sendSticker(s) {
@@ -1231,7 +1234,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                         {chatPay === "card_inst10" && <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)" }}> · ≈{fmtBaht(Math.ceil(total / 10))}/เดือน</span>}
                       </div>
                       <button type="button" className="btn-ghost sm" onClick={() => setChatCart([])}>ล้าง</button>
-                      <button type="button" className="btn-primary sm" disabled={sending} onClick={sendChatCart}>📤 ส่งให้ลูกค้า</button>
+                      <button type="button" className="btn-primary sm" disabled={uploading} onClick={sendChatCart}>{uploading ? "กำลังแนบ…" : "📎 แนบเข้าแชต (ตรวจก่อนส่ง)"}</button>
                     </div>
                   </div>
                 );
@@ -1245,8 +1248,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       {capJob && <DocCapture type={capJob.type} no={capJob.no}
         onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
         onReady={async (node) => {
-          try { await sendDocFromNode(node, capJob.to, capJob.mode, capJob.label); flash(capJob.mode === "image" ? "ส่งรูปเอกสารเข้าแชตแล้ว ✓" : "ส่งลิงก์ PDF เข้าแชตแล้ว ✓"); }
-          catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+          try {
+            const { attachments, text: txt } = await captureDocToStage(node, capJob.mode, capJob.label);
+            if (attachments.length) setPending((s) => [...s, ...attachments]);
+            if (txt) setText((cur) => (cur ? cur + "\n" : "") + txt);
+            flash("แนบเอกสารไว้ในช่องแชตแล้ว — ตรวจแล้วกด “ส่ง” ✓");
+          }
+          catch (e) { flash("เตรียมเอกสารไม่สำเร็จ: " + (e.message || e), true); }
           setCapJob(null);
         }} />}
       {peekEl}

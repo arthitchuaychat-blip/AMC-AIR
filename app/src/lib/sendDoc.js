@@ -56,6 +56,24 @@ function pagesToPdfBlob(pages) {
   return pdf.output("blob");
 }
 
+// capture `node` → คืนไฟล์แนบไว้ "พักก่อนส่ง" (ไม่ส่งทันที) ให้ตรวจแล้วค่อยกดส่ง
+// image → คืน attachments (รูปทุกหน้า) · pdf → คืนลิงก์ PDF เป็นข้อความ (LINE ส่งไฟล์เนทีฟไม่ได้)
+export async function captureDocToStage(node, mode, label) {
+  const printArea = node.querySelector(".print-area") || node;
+  const pages = await renderPages(printArea.outerHTML);
+  if (!pages.length) throw new Error("สร้างเอกสารไม่สำเร็จ");
+  if (mode === "image") {
+    const attachments = [];
+    for (let i = 0; i < pages.length; i++) {
+      const url = await uploadDocFile(dataUrlToBlob(pages[i].dataUrl), "png", "image/png");
+      attachments.push({ type: "image", url, name: `${label}${pages.length > 1 ? ` (${i + 1}/${pages.length})` : ""}` });
+    }
+    return { attachments, text: "" };
+  }
+  const url = await uploadDocFile(pagesToPdfBlob(pages), "pdf", "application/pdf");
+  return { attachments: [], text: `📄 ${label}\n${url}` };
+}
+
 // capture `node` (.print-area or its wrapper), then send to the customer on LINE — mode: "image" | "pdf"
 export async function sendDocFromNode(node, lineUserId, mode, label) {
   const printArea = node.querySelector(".print-area") || node;

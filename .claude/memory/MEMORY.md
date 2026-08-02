@@ -8,6 +8,7 @@
 - [FlowAccount MCP](flowaccount-mcp.md) — FA เชื่อม Claude แล้ว (อ่านอย่างเดียว, บริษัท N498831); งานค้าง = กระทบยอดขาย ERP↔FA (ฝั่ง FA ได้ 59 ใบ ฿4.5M แล้ว รอฝั่ง ERP)
 - [Air shop site](air-shop-site.md) — single-file e-commerce site air-shop/index.html; catalog+prices scraped from แอร์บ้านราคาถูก.com; LINE-checkout cart.
 - [LINE OA chat](line-oa-chat.md) — in-app chat board via Vercel edge functions + Supabase Realtime; env vars + activation steps + migration 023.
+- [Customer chat](customer-chat.md) — เมนูแชตลูกค้า (LINE+FB+ซัพ): พักรูป/ไฟล์/การ์ด/เอกสารก่อนส่ง, emoji, แจ้งเตือนผู้รับผิดชอบ+FB; แผนยกระดับให้เหมือน LINE + ข้อจำกัด OA
 - [AI LINE bot](ai-line-bot.md) — บอท Claude Sonnet 5 ตอบลูกค้านอกเวลาทำการใน line-webhook.js (aiAnswer, แคตตาล็อก web_products, ai_enabled/ai_extra ใน app_config.autoreply); ต้องมี ANTHROPIC_API_KEY บน Vercel, maxDuration 60.
 - [Stale-cache deploys](stale-cache-deploys.md) — "broken" filters/search are usually a cached old bundle; how to verify the live bundle; cache headers in app/vercel.json.
 - [Print pagination](print-pagination.md) — printed docs repeat the letterhead via JS pagination in printDoc.js (NOT thead/fixed — both fail in Chrome); verify print changes in a browser harness.

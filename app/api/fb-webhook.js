@@ -1,11 +1,38 @@
 // Facebook Messenger webhook — verify (GET) + receive messages (POST), store into fb_contacts/fb_messages.
 // Env: FB_VERIFY_TOKEN, FB_PAGE_ACCESS_TOKEN, FB_APP_SECRET (optional, for signature check), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 import crypto from "crypto";
+import webpush from "web-push";
 import { GRAPH, pageToken } from "./_fb.js";
 
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
+
+// แจ้งเตือนออฟฟิศ (ขาย/ธุรการ/ผู้บริหาร) + ผู้รับผิดชอบแชตนี้ ว่ามีข้อความ FB เข้า — bell + web push (best-effort)
+async function notifyFbChat(psid, name, preview) {
+  try {
+    const cfgR = await fetch(`${SB()}/rest/v1/app_config?key=eq.notify_settings&select=value`, { headers: sbH() });
+    const cfg = (cfgR.ok ? ((await cfgR.json())[0]?.value) : null) || {};
+    const pr = await fetch(`${SB()}/rest/v1/profiles?role=in.("sales","admin","exec")&select=id,role`, { headers: sbH() });
+    const profs = pr.ok ? await pr.json() : [];
+    const roleIds = profs.filter((p) => { const s = cfg[p.role]; return !s || s.customer_chat !== false; }).map((p) => p.id);
+    let assignedTo = null;
+    try { const cr = await fetch(`${SB()}/rest/v1/fb_contacts?psid=eq.${encodeURIComponent(psid)}&select=assigned_to`, { headers: sbH() }); if (cr.ok) assignedTo = (await cr.json())[0]?.assigned_to || null; } catch (_) { /* ignore */ }
+    const ids = [...new Set([...roleIds, ...(assignedTo ? [assignedTo] : [])])];
+    if (!ids.length) return;
+    const title = `💬 ${name || "ลูกค้า Facebook"}`;
+    await fetch(`${SB()}/rest/v1/notifications`, { method: "POST", headers: sbH(), body: JSON.stringify(ids.map((id) => ({ user_id: id, category: "customer_chat", title, body: (preview || "").slice(0, 180), url: "chat", ref_type: "fb", ref_no: psid || null }))) });
+    const pub = process.env.VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
+    if (!pub || !priv) return;
+    const inList = ids.map((id) => `"${id}"`).join(",");
+    const sr = await fetch(`${SB()}/rest/v1/push_subscriptions?user_id=in.(${inList})&select=endpoint,p256dh,auth`, { headers: sbH() });
+    const subs = sr.ok ? await sr.json() : [];
+    if (!subs.length) return;
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:admin@amcair.net", pub, priv);
+    const payload = JSON.stringify({ title, body: (preview || "").slice(0, 180), url: "/#chat", tag: "notif" });
+    await Promise.all(subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 1800 }).catch(() => {})));
+  } catch (_) { /* ignore */ }
+}
 
 async function rawBody(req) {
   const chunks = []; for await (const c of req) chunks.push(typeof c === "string" ? Buffer.from(c) : c);
@@ -63,6 +90,7 @@ export default async function handler(req, res) {
         await fetch(`${SB()}/rest/v1/fb_contacts?psid=eq.${encodeURIComponent(psid)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify(patch) });
       }
       await fetch(`${SB()}/rest/v1/fb_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ psid, direction: "in", type: imageUrl ? "image" : "text", text, image_url: imageUrl, fb_message_id: ev.message.mid || null }) });
+      await notifyFbChat(psid, exist[0]?.display_name || null, preview);   // แจ้งเตือนออฟฟิศ + ผู้รับผิดชอบ
     }
   }
   return res.status(200).json({ ok: true });
