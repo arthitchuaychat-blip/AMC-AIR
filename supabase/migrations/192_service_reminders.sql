@@ -10,7 +10,7 @@ create table if not exists service_reminders (
   customer_name text,
   contact_phone text,
   job_no       text,                           -- ใบงานเดิมที่ทำให้เกิดนัด
-  handover_id  bigint references job_handovers(id) on delete set null,
+  handover_id  uuid references job_handovers(id) on delete set null,   -- job_handovers.id เป็น uuid
   note         text,
   status       text not null default 'open' check (status in ('open','done','dismissed')),
   created_by   uuid, created_at timestamptz not null default now()
