@@ -168,6 +168,12 @@ export default function Attendance({ me }) {
   const baseQuota = (settings && settings.quota) || DEFAULT_HR_SETTINGS.quota;
   // per-person override (HR-set) wins over the company default
   const quota = { vacation: myQuota?.vacation ?? baseQuota.vacation, personal: myQuota?.personal ?? baseQuota.personal, sick: myQuota?.sick ?? baseQuota.sick };
+  // วันลาคงเหลือต่อประเภท (ตามที่ HR ตั้งให้) − ที่ใช้ไปแล้ว − ที่ยื่นค้างอนุมัติ · ลาไม่รับค่าแรง (unpaid) ไม่มีลิมิต
+  const remainByType = {
+    vacation: Math.max(0, (quota.vacation || 0) - (usedByType.vacation || 0) - (pendByType.vacation || 0)),
+    personal: Math.max(0, (quota.personal || 0) - (usedByType.personal || 0) - (pendByType.personal || 0)),
+    sick: Math.max(0, (quota.sick || 0) - (usedByType.sick || 0) - (pendByType.sick || 0)),
+  };
 
   return (
     <div className="adm">
@@ -231,7 +237,7 @@ export default function Attendance({ me }) {
             ); })}
             {usedByType.unpaid > 0 && <div className="att-bal-item"><span>{lvType("unpaid")}</span><b>{usedByType.unpaid}</b><small>{L("วัน (ไม่มีโควตา)", "ရက်")}</small></div>}
           </div>
-          <LeaveForm pattern={pattern} satGroup={satGroup} holidays={holidays} onDone={(m) => { flash(m); load(); }} flash={flash} L={L} lvType={lvType} />
+          <LeaveForm pattern={pattern} satGroup={satGroup} holidays={holidays} remain={remainByType} onDone={(m) => { flash(m); load(); }} flash={flash} L={L} lvType={lvType} />
         </div>
 
         <div className="card">
@@ -466,7 +472,7 @@ function OtCheckout({ ot, onDone, flash, L, big }) {
   );
 }
 
-function LeaveForm({ pattern, satGroup, holidays, onDone, flash, L, lvType }) {
+function LeaveForm({ pattern, satGroup, holidays, remain, onDone, flash, L, lvType }) {
   const [type, setType] = React.useState("vacation");
   const [start, setStart] = React.useState(todayYmd());
   const [end, setEnd] = React.useState(todayYmd());
@@ -480,7 +486,14 @@ function LeaveForm({ pattern, satGroup, holidays, onDone, flash, L, lvType }) {
   const days = mode === "hour"
     ? Math.round(hours / LEAVE_HOURS_PER_DAY * 100) / 100
     : ((start && end && end >= start) ? leaveDays(start, end, pattern, satGroup, holidays) : 0);
+  // สิทธิ์คงเหลือของประเภทที่เลือก (ตาม HR) — ลาไม่รับค่าแรง (unpaid) ไม่มีลิมิต
+  const unlimited = type === "unpaid";
+  const avail = unlimited ? Infinity : (remain?.[type] ?? 0);
+  const noQuota = !unlimited && avail <= 0;                 // ประเภทนี้ใช้ครบแล้ว
+  const overLimit = !unlimited && days > avail + 1e-9;      // ยื่นเกินสิทธิ์คงเหลือ
   async function submit() {
+    if (noQuota) return flash(L(`ลา${lvType ? lvType(type) : type}เต็มสิทธิ์แล้ว (เหลือ 0 วัน) — กดลาประเภทนี้เพิ่มไม่ได้`, "ဤခွင့်အမျိုးအစား ကုန်သွားပြီ"), true);
+    if (overLimit) return flash(L(`${lvType ? lvType(type) : type} เหลือ ${avail} วัน แต่ยื่น ${days} วัน — เกินสิทธิ์คงเหลือ`, `ကျန်ရှိ ${avail} ရက်သာ`), true);
     if (mode === "hour") {
       if (!start) return flash(L("เลือกวันที่ลา", "ခွင့်ရက် ရွေးပါ"), true);
       if (hours <= 0) return flash(L("ช่วงเวลาไม่ถูกต้อง (เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม)", "အချိန် မမှန်ပါ"), true);
@@ -498,7 +511,7 @@ function LeaveForm({ pattern, satGroup, holidays, onDone, flash, L, lvType }) {
     <div className="att-leaveform">
       <div className="fld-row">
         <label className="fld"><span>{L("ประเภท", "အမျိုးအစား")}</span>
-          <select className="inp" value={type} onChange={(e) => setType(e.target.value)}>{LEAVE_TYPES.map((t) => <option key={t.id} value={t.id}>{lvType ? lvType(t.id) : t.label}</option>)}</select></label>
+          <select className="inp" value={type} onChange={(e) => setType(e.target.value)}>{LEAVE_TYPES.map((t) => { const un = t.id === "unpaid"; const rm = remain?.[t.id] ?? 0; const full = !un && rm <= 0; return <option key={t.id} value={t.id} disabled={full}>{(lvType ? lvType(t.id) : t.label)}{un ? ` (${L("ไม่จำกัด", "ကန့်သတ်မဲ့")})` : full ? ` — ${L("เต็มแล้ว", "ကုန်ပြီ")}` : ` (${L("เหลือ", "ကျန်")} ${rm} ${L("วัน", "ရက်")})`}</option>; })}</select></label>
         <label className="fld"><span>{L("ช่วงการลา", "ခွင့်ပုံစံ")}</span>
           <select className="inp" value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="day">{L("เต็มวัน", "တစ်နေ့လုံး")}</option>
@@ -519,7 +532,14 @@ function LeaveForm({ pattern, satGroup, holidays, onDone, flash, L, lvType }) {
         <label className="fld"><span>{L("ถึง", "အထိ")}</span><input className="inp" type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} /></label>
       </div>}
       <label className="fld"><span>{L("เหตุผล", "အကြောင်းပြချက်")}</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={L("เช่น ไปธุระ / ป่วย", "ဥပမာ - ကိစ္စရှိ / ဖျားနာ")} /></label>
-      <button className="btn-primary" disabled={busy || (mode === "hour" ? hours <= 0 : days < 1)} onClick={submit}>{L("ส่งใบลา", "ခွင့်တင်ရန်")}</button>
+      {!unlimited && (
+        <div className="jo-dim" style={{ fontSize: 13, color: (noQuota || overLimit) ? "#dc2626" : "var(--ink-3)", fontWeight: (noQuota || overLimit) ? 700 : 500 }}>
+          {noQuota ? `⛔ ${L("ลาประเภทนี้เต็มสิทธิ์แล้ว — เลือกประเภทอื่น หรือใช้ลาไม่รับค่าแรง", "ဤအမျိုးအစား ကုန်ပြီ")}`
+            : overLimit ? `⛔ ${L(`เกินสิทธิ์ — เหลือ ${avail} วัน แต่ยื่น ${days} วัน`, `ကျန် ${avail} ရက်သာ`)}`
+            : `🗓️ ${L(`คงเหลือ ${avail} วัน (ตามที่ HR ตั้งไว้)`, `ကျန် ${avail} ရက်`)}`}
+        </div>
+      )}
+      <button className="btn-primary" disabled={busy || noQuota || overLimit || (mode === "hour" ? hours <= 0 : days < 1)} onClick={submit}>{L("ส่งใบลา", "ခွင့်တင်ရန်")}</button>
     </div>
   );
 }
