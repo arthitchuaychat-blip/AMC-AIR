@@ -5,7 +5,7 @@ import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
-import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, otHoursFromTimes, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186)
+import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, hrEditOt, otHoursFromTimes, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186)
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 import PayDetailModal from "./PayDetail";
@@ -521,12 +521,13 @@ function OtTab({ canManage, lockSelfId, flash }) {
           <div className="hr-leave-row" key={o.id}>
             <div><b>{o.name}</b> <span className="jo-dim">{o.department}</span><br />
               <b>{Number(o.hours) > 0 ? `${o.hours} ชม.` : "รอเช็คเอาท์"}</b> · {thDate(o.ot_date)} · เริ่ม {o.time_from}{o.time_to ? `–${o.time_to}` : ""}
-              {o.job_no && <div className="jo-dim">🔧 งาน {o.job_no}</div>}
+              {o.job_no && <div className="jo-dim">🔧 งาน {o.job_no}{o.jobCustomer ? ` · ${o.jobCustomer}` : ""}{o.jobDetails ? ` · ${o.jobDetails}` : ""}</div>}
               {o.reason && <div className="jo-dim">เหตุผล: {o.reason}</div>}
               {o.status === "paid" && o.period && <div className="jo-dim">คิดในรอบ {o.period}</div>}</div>
             <div className="hr-leave-act">
               <span className={"job-badge " + (awaitCheckout ? "b-amber" : b.c)}>{awaitCheckout ? "อนุมัติ · รอเช็คเอาท์" : b.t}</span>
               {awaitCheckout && <HrOtCheckout ot={o} onDone={(m) => { flash(m); load(); }} flash={flash} />}
+              {o.status !== "paid" && <HrOtEdit ot={o} onDone={(m) => { flash(m); load(); }} flash={flash} />}
               {o.user_id === lockSelfId ? <span className="jo-dim" style={{ fontSize: 11 }} title="ใบของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ">🔒 ของตัวเอง</span> : <>
                 {o.status !== "paid" && o.status !== "approved" && <button className="btn-primary sm ok" onClick={() => decide(o, "approved")}>อนุมัติ</button>}
                 {o.status !== "paid" && o.status !== "rejected" && <button className="btn-ghost sm" onClick={() => decide(o, "rejected")}>ไม่อนุมัติ</button>}
@@ -561,6 +562,32 @@ function HrOtCheckout({ ot, onDone, flash }) {
       <input className="inp" type="time" value={to} onChange={(e) => setTo(e.target.value)} style={{ width: 108 }} />
       <span className="jo-dim" style={{ fontSize: 12 }}>= <b>{hrs}</b> ชม.</span>
       <button className="btn-primary sm ok" disabled={busy || !(hrs > 0)} onClick={submit}>ยืนยัน</button>
+      <button className="btn-ghost sm" disabled={busy} onClick={() => setOpen(false)}>ยกเลิก</button>
+    </span>
+  );
+}
+
+// HR แก้เวลา OT (เวลาเริ่ม/เลิก) — เผื่อพนักงานกรอกผิด · คิดชั่วโมงใหม่
+function HrOtEdit({ ot, onDone, flash }) {
+  const [open, setOpen] = React.useState(false);
+  const [from, setFrom] = React.useState(ot.time_from || "17:00");
+  const [to, setTo] = React.useState(ot.time_to || "");
+  const [busy, setBusy] = React.useState(false);
+  const hrs = to ? otHoursFromTimes(from, to) : 0;
+  async function submit() {
+    setBusy(true);
+    try { await hrEditOt(ot.id, { time_from: from, time_to: to || null }); onDone("แก้เวลา OT แล้ว"); }
+    catch (e) { flash((e.message || e), true); }
+    setBusy(false);
+  }
+  if (!open) return <button className="btn-ghost sm" onClick={() => { setFrom(ot.time_from || "17:00"); setTo(ot.time_to || ""); setOpen(true); }}>✏️ แก้เวลา</button>;
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <input className="inp" type="time" value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: 104 }} title="เวลาเริ่ม" />
+      <span className="jo-dim">–</span>
+      <input className="inp" type="time" value={to} onChange={(e) => setTo(e.target.value)} style={{ width: 104 }} title="เวลาเลิก (เว้นว่าง = ยังไม่เช็คเอาท์)" />
+      <span className="jo-dim" style={{ fontSize: 12 }}>= <b>{hrs}</b> ชม.</span>
+      <button className="btn-primary sm ok" disabled={busy} onClick={submit}>บันทึก</button>
       <button className="btn-ghost sm" disabled={busy} onClick={() => setOpen(false)}>ยกเลิก</button>
     </span>
   );
@@ -1004,6 +1031,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [adj, setAdj] = React.useState({});     // user_id → { bonus, other_deduct, water, electric }
   const [otByUser, setOtByUser] = React.useState({});     // user_id → OT ชม.ที่อนุมัติในรอบ (mig 184)
   const [otIdsByUser, setOtIdsByUser] = React.useState({}); // user_id → [ot ids] to settle
+  const [otRowsByUser, setOtRowsByUser] = React.useState({}); // user_id → [ot rows] ไว้กางดูรายละเอียด (เลขงาน+รายละเอียด)
   const [loanByUser, setLoanByUser] = React.useState({});   // user_id → งวดผ่อนเงินยืมรอบนี้
   const [loanItemsByUser, setLoanItemsByUser] = React.useState({}); // user_id → [{id, amount}] to settle
   const [advByUser, setAdvByUser] = React.useState({});   // user_id → approved-unsettled advance total
@@ -1028,13 +1056,15 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   async function load() {
     setLoading(true);
     try {
-      const [att, leaves, slips, advs, qOverRows, otApproved, loansActive] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym), listAdvances("approved"), getLeaveQuotas(ym.slice(0, 4)).catch(() => []), listOt("approved").catch(() => []), listLoans(true).catch(() => [])]);
+      const [att, leaves, slips, advs, qOverRows, otAll, loansActive] = await Promise.all([listAttendance(from, to), listLeaves("approved"), listPayslips(ym), listAdvances("approved"), getLeaveQuotas(ym.slice(0, 4)).catch(() => []), listOt().catch(() => []), listLoans(true).catch(() => [])]);
       // OT: คิดจากใบขอที่อนุมัติในรอบนี้ (mig 184) — ผลรวมชั่วโมง + ไอดีไว้ปิดตอนจ่าย
-      const otH = {}, otIdByUser = {};
+      const otH = {}, otIdByUser = {}, otRows = {};
       // นับเฉพาะที่เช็คเอาท์แล้ว (hours>0) — อนุมัติแต่ยังไม่เช็คเอาท์จะยังไม่คิดเงิน/ไม่ถูกปิด (mig 186)
-      (otApproved || []).filter((o) => o.ot_date >= from && o.ot_date <= to && o.status === "approved" && Number(o.hours) > 0).forEach((o) => { otH[o.user_id] = (otH[o.user_id] || 0) + (Number(o.hours) || 0); (otIdByUser[o.user_id] = otIdByUser[o.user_id] || []).push(o.id); });
+      (otAll || []).filter((o) => o.ot_date >= from && o.ot_date <= to && o.status === "approved" && Number(o.hours) > 0).forEach((o) => { otH[o.user_id] = (otH[o.user_id] || 0) + (Number(o.hours) || 0); (otIdByUser[o.user_id] = otIdByUser[o.user_id] || []).push(o.id); });
       Object.keys(otH).forEach((k) => { otH[k] = Math.round(otH[k] * 100) / 100; });
-      setOtByUser(otH); setOtIdsByUser(otIdByUser);
+      // รายการ OT ที่เข้าเงินเดือนรอบนี้ (อนุมัติ+เช็คเอาท์ หรือ จ่ายปิดแล้วในรอบนี้) — ไว้กางรายละเอียดพร้อมเลขงาน
+      (otAll || []).filter((o) => o.ot_date >= from && o.ot_date <= to && ((o.status === "approved" && Number(o.hours) > 0) || (o.status === "paid" && o.period === ym))).forEach((o) => { (otRows[o.user_id] = otRows[o.user_id] || []).push(o); });
+      setOtByUser(otH); setOtIdsByUser(otIdByUser); setOtRowsByUser(otRows);
       // เงินยืม: งวดผ่อนรอบนี้ = min(ค่างวด, คงเหลือ) ต่อคน (active)
       const loanH = {}, loanItByUser = {};
       (loansActive || []).filter((l) => l.status === "active" && Number(l.balance) > 0).forEach((l) => { const amt = Math.min(Number(l.installment) || 0, Number(l.balance) || 0); if (amt > 0) { loanH[l.user_id] = (loanH[l.user_id] || 0) + amt; (loanItByUser[l.user_id] = loanItByUser[l.user_id] || []).push({ id: l.id, amount: amt }); } });
@@ -1312,7 +1342,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       {payModal && <PayRunModal total={totalNet} count={payable.length} defaultDate={payDate}
         onClose={() => setPayModal(false)} onConfirm={(meta) => { setPayModal(false); saveRun(true, meta); }} flash={flash} />}
 
-      {detailFor && <PayDetailModal r={detailFor} c={calcOf(detailFor)} advRows={advRowsByUser[detailFor.p.id] || []}
+      {detailFor && <PayDetailModal r={detailFor} c={calcOf(detailFor)} advRows={advRowsByUser[detailFor.p.id] || []} otRows={otRowsByUser[detailFor.p.id] || []}
         settings={settings} period={`${from} ถึง ${to}`} onClose={() => setDetailFor(null)} />}
 
       {printSlip && (() => { const r = printSlip.row, c = printSlip.calc, p = r.p; return (

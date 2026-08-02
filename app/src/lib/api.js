@@ -4448,11 +4448,29 @@ export async function cancelMyOt(id) {
   const { error } = await supabase.from("hr_ot").delete().eq("id", id).eq("status", "pending");
   if (error) throw error;
 }
+// ดึงลูกค้า+รายละเอียดของใบงานตามเลขงาน (ผู้จัดการ HR มีสิทธิ์อ่าน job_orders) — ไว้โชว์ท้ายเลขงาน OT
+async function _jobBriefMap(jobNos) {
+  const ids = [...new Set((jobNos || []).filter(Boolean))];
+  if (!ids.length) return {};
+  const { data: jobs } = await supabase.from("job_orders").select("job_no, details, contact_name, customer_id").in("job_no", ids);
+  const custIds = [...new Set((jobs || []).map((j) => j.customer_id).filter(Boolean))];
+  let cn = {};
+  if (custIds.length) { const { data: cs } = await supabase.from("customers").select("id,name").in("id", custIds); cn = Object.fromEntries((cs || []).map((c) => [c.id, c.name])); }
+  return Object.fromEntries((jobs || []).map((j) => [j.job_no, { customer: j.customer_id ? (cn[j.customer_id] || null) : (j.contact_name || null), details: j.details || null }]));
+}
 export async function listOt(status) {
   const build = (f, t) => { let q = supabase.from("hr_ot").select("*", { count: "exact" }).order("ot_date", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
   const [rows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,role,department")]);
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
-  return rows.map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]) }));
+  const jm = await _jobBriefMap(rows.map((r) => r.job_no)).catch(() => ({}));
+  return rows.map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]), jobCustomer: jm[a.job_no]?.customer || null, jobDetails: jm[a.job_no]?.details || null }));
+}
+// HR แก้เวลา OT (เวลาเริ่ม/เลิก) — คิดชั่วโมงใหม่ · ใช้สิทธิ์ผู้จัดการ (RLS mig 184)
+export async function hrEditOt(id, { time_from, time_to }) {
+  const hours = time_to ? otHoursFromTimes(time_from, time_to) : 0;
+  if (time_to && !(hours > 0)) throw new Error("เวลาเลิกต้องมากกว่าเวลาเริ่ม");
+  const { error } = await supabase.from("hr_ot").update({ time_from: time_from || null, time_to: time_to || null, hours }).eq("id", id).neq("status", "paid");
+  if (error) throw error;
 }
 export async function decideOt(id, status, note) {
   const uid = await _uid();
