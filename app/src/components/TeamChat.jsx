@@ -1,7 +1,7 @@
 import React from "react";
 import { supabase } from "../lib/supabase";
 import { confirmDialog } from "./ConfirmDialog";
-import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, renameChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar, listChatNotes, saveChatNote, deleteChatNote, listAllChatNotes, translateText } from "../lib/api";
+import { listChatRooms, listChatMessages, CHAT_PAGE, sendChatMessage, sendChatImage, sendChatFile, createDmRoom, createChatRoom, deleteChatRoom, renameChatRoom, markChatRead, listStaff, getProfile, uploadChatImage, listJobOrders, listRoomMembers, addChatMember, removeChatMember, uploadAvatar, setMyAvatar, setRoomAvatar, listChatNotes, saveChatNote, deleteChatNote, listAllChatNotes, translateText, toggleReaction, deleteChatMessage } from "../lib/api";
 import { useLang } from "../lib/i18n";
 import { matchText, ATTACH_ACCEPT } from "../lib/format";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
@@ -255,7 +255,10 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
           markChatRead(m.room_id).catch(() => {});
         }
         queueLoadRooms();
-      }).subscribe();
+      })
+      // รีแอกชันของคนอื่น (mig 190) → โหลดข้อความห้องที่เปิดอยู่ใหม่เพื่ออัปเดตตัวเลข
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_reactions" }, () => { if (selRef.current) loadMsgs(selRef.current); })
+      .subscribe();
     return () => { supabase.removeChannel(ch); clearTimeout(roomsTimer.current); };
   }, []);
 
@@ -277,13 +280,22 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     }
   }, [msgs]);
 
+  const [replyTo, setReplyTo] = React.useState(null);   // ข้อความที่กำลังตอบกลับ (mig 190)
+  const [rxFor, setRxFor] = React.useState(null);        // ข้อความที่เปิดตัวเลือกรีแอกชันอยู่
   async function send() {
     const t = text.trim(); if (!t || !sel || sending) return;
     const ids = extractMentionIds(t);
-    setText(""); setMentionQ(null); setSending(true);
-    try { await sendChatMessage(sel, t, ids); await loadMsgs(sel); } catch { flash(L("ส่งไม่สำเร็จ", "ပို့၍မရ")); setText(t); }
+    const rt = replyTo?.id || null;
+    setText(""); setMentionQ(null); setReplyTo(null); setSending(true);
+    try { await sendChatMessage(sel, t, ids, rt); await loadMsgs(sel); } catch { flash(L("ส่งไม่สำเร็จ", "ပို့၍မရ")); setText(t); }
     setSending(false);
   }
+  // รีแอกชัน + ลบข้อความตัวเอง (mig 190)
+  async function react(m, emoji) { const on = !(m.reactions?.[emoji]?.mine); setRxFor(null); try { await toggleReaction(m.id, emoji, on); await loadMsgs(sel); } catch (e) { flash(e.message || String(e)); } }
+  async function delMsg(m) { if (!await confirmDialog(L("ลบข้อความนี้? (ลบให้ทุกคนในห้อง)", "ဒီစာ ဖျက်မလား?"))) return; try { await deleteChatMessage(m.id); await loadMsgs(sel); } catch (e) { flash(e.message || String(e)); } }
+  const RX_SET = ["👍", "❤️", "😂", "🙏", "✅", "🔥"];   // อีโมจิรีแอกชัน (Emoji รุ่นเก่า รองรับทุกเครื่อง)
+  const msgById = React.useMemo(() => Object.fromEntries((msgs || []).map((m) => [m.id, m])), [msgs]);
+  const msgSnippet = (m) => m ? (m.deleted_at ? L("ข้อความถูกลบ", "ဖျက်ပြီး") : m.image_url ? "[รูปภาพ]" : m.file_url ? `📎 ${m.file_name || "ไฟล์"}` : (parseJobCard(m.text) ? "📋 ลิงก์ใบงาน" : String(m.text || "").slice(0, 60))) : L("ข้อความ", "စာ");
   const isImg = (f) => (f.type || "").startsWith("image/") || /\.(heic|heif)$/i.test(f.name || "");
   // ส่งรูปได้ทีละหลายรูป (เลือกหลายไฟล์ / วางจากคลิปบอร์ด) — อัปโหลดย่อ+แปลง HEIC ให้อัตโนมัติ
   async function sendImages(files) {
@@ -528,12 +540,19 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                         <Avatar url={staffById[m.sender]?.avatar_url} name={staffName[m.sender] || "T"} id={m.sender} cls="tc-msg-av" />
                       )}
                       <div className={"chat-bubble " + (out ? "out" : "in")} style={jc ? { maxWidth: 280, padding: 0, background: "none", boxShadow: "none" } : {}}>
-                        {!out && !jc && (
+                        {!out && !jc && !m.deleted_at && (
                           <span className="chat-sender" style={{ color: avColor(m.sender) }}>
                             {staffName[m.sender] || L("ทีมงาน", "အဖွဲ့သား")}
                           </span>
                         )}
-                        {jc ? (
+                        {m.reply_to && !m.deleted_at && (
+                          <div className="tc-reply-quote" title={msgSnippet(msgById[m.reply_to])}>
+                            ↩ {msgById[m.reply_to] ? (staffName[msgById[m.reply_to].sender] || "ทีม") + ": " : ""}{msgSnippet(msgById[m.reply_to])}
+                          </div>
+                        )}
+                        {m.deleted_at ? (
+                          <span style={{ fontStyle: "italic", color: "var(--ink-3)" }}>🚫 {L("ข้อความถูกลบแล้ว", "ဖျက်ပြီးသော စာ")}</span>
+                        ) : jc ? (
                           <div className={"tc-job-card" + (out ? " out" : "")}>
                             <div className="tc-job-card-tag">📋 {L("ลิงก์ใบงาน", "အလုပ်လင့်ခ်")}</div>
                             <div className="tc-job-card-no">{jc.job_no}</div>
@@ -572,7 +591,22 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                             {new Date(m.created_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                           </span>
                         )}
+                        {!m.deleted_at && m.reactions && Object.keys(m.reactions).length > 0 && (
+                          <div className="tc-rx-row">
+                            {Object.entries(m.reactions).map(([em, r]) => (
+                              <button key={em} className={"tc-rx" + (r.mine ? " mine" : "")} onClick={() => react(m, em)} title={L("กด/เอาออก", "နှိပ်/ဖြုတ်")}>{em} {r.count}</button>
+                            ))}
+                          </div>
+                        )}
                       </div>
+                      {!m.deleted_at && (
+                        <div className="tc-msg-acts">
+                          <button title={L("ตอบกลับ", "ပြန်ဖြေ")} onClick={() => setReplyTo(m)}>↩</button>
+                          <button title={L("รีแอกชัน", "react")} onClick={() => setRxFor(rxFor === m.id ? null : m.id)}>😊</button>
+                          {out && <button title={L("ลบข้อความ", "ဖျက်")} onClick={() => delMsg(m)}>🗑</button>}
+                          {rxFor === m.id && <div className="tc-rx-pick">{RX_SET.map((em) => <button key={em} onClick={() => react(m, em)}>{em}</button>)}</div>}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -588,6 +622,13 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                       <span className="mention-nick">@{nickOf(s.name)}</span>
                     </button>
                   ))}
+                </div>
+              )}
+              {replyTo && (
+                <div className="tc-reply-bar">
+                  <span className="tc-reply-icon">↩</span>
+                  <div className="tc-reply-info"><b>{L("ตอบกลับ", "ပြန်ဖြေ")} {staffName[replyTo.sender] || L("ทีม", "အဖွဲ့")}</b><span>{msgSnippet(replyTo)}</span></div>
+                  <button className="tc-reply-x" title={L("ยกเลิก", "ဖျက်")} onClick={() => setReplyTo(null)}>✕</button>
                 </div>
               )}
               <div className="chat-compose">

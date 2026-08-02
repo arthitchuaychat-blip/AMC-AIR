@@ -5123,7 +5123,19 @@ export async function listChatMessages(roomId, { before, limit = CHAT_PAGE } = {
   if (before) q = q.lt("created_at", before);
   const { data, error } = await q;
   if (error) throw error;
-  return (data || []).reverse();
+  const msgs = (data || []).reverse();
+  // แนบรีแอกชัน (mig 190) — { emoji: {count, mine} } ต่อข้อความ · ไม่มีตาราง (ยังไม่รัน) = ข้าม
+  const ids = msgs.map((m) => m.id);
+  if (ids.length) {
+    try {
+      const uid = await _uid().catch(() => null);
+      const { data: rx } = await supabase.from("chat_reactions").select("message_id,user_id,emoji").in("message_id", ids);
+      const byMsg = {};
+      (rx || []).forEach((r) => { const g = byMsg[r.message_id] = byMsg[r.message_id] || {}; const e = g[r.emoji] = g[r.emoji] || { count: 0, mine: false }; e.count++; if (r.user_id === uid) e.mine = true; });
+      msgs.forEach((m) => { m.reactions = byMsg[m.id] || {}; });
+    } catch (_) { /* ยังไม่รัน mig 190 */ }
+  }
+  return msgs;
 }
 
 // fire-and-forget Web Push to the room's other members (no-op if VAPID isn't configured)
@@ -5143,9 +5155,11 @@ async function _firePush(roomId, body) {
 // หมายเหตุ: เลิกสร้าง in-app notification ให้สมาชิกทุกคนทุกข้อความแล้ว (กระดิ่งสแปม)
 // — แชตทีมมี unread badge ของตัวเองในเมนู + Web Push (_firePush) ตอนไม่ได้เปิดแอปอยู่แล้ว
 // เหลือแจ้งเตือนเฉพาะคนถูก @แท็ก (ใน sendChatMessage ด้านล่าง)
-export async function sendChatMessage(roomId, text, mentionIds = []) {
+export async function sendChatMessage(roomId, text, mentionIds = [], replyTo = null) {
   const uid = await _uid();
-  const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, text: text.trim() });
+  const row = { room_id: roomId, sender: uid, text: text.trim(), ...(replyTo ? { reply_to: replyTo } : {}) };
+  let { error } = await supabase.from("chat_messages").insert(row);
+  if (error && /reply_to|PGRST204/i.test(error.message || "") && replyTo) { delete row.reply_to; ({ error } = await supabase.from("chat_messages").insert(row)); }   // pre-190 fallback
   if (error) throw error;
   _firePush(roomId, text.trim());
   if (mentionIds.length) {
@@ -5167,6 +5181,17 @@ export async function sendChatFile(roomId, fileUrl, fileName) {
   const { error } = await supabase.from("chat_messages").insert({ room_id: roomId, sender: uid, file_url: fileUrl, file_name: fileName || "ไฟล์", text: null });
   if (error) throw error;
   _firePush(roomId, `[ไฟล์] ${fileName || "ไฟล์"}`);
+}
+// รีแอกชัน (mig 190) — on=ใส่ / off=เอาออก (1 คน 1 อีโมจิต่อข้อความ)
+export async function toggleReaction(messageId, emoji, on) {
+  const uid = await _uid();
+  if (on) { const { error } = await supabase.from("chat_reactions").insert({ message_id: messageId, user_id: uid, emoji }); if (error && !/duplicate|unique|already/i.test(error.message || "")) throw new Error(/chat_reactions|relation|PGRST20/i.test(error.message || "") ? "ต้องรัน migration 190 ใน Supabase ก่อน" : error.message); }
+  else { const { error } = await supabase.from("chat_reactions").delete().eq("message_id", messageId).eq("user_id", uid).eq("emoji", emoji); if (error) throw error; }
+}
+// ลบข้อความตัวเอง (ซอฟต์ ผ่าน RPC — เฉพาะเจ้าของ)
+export async function deleteChatMessage(messageId) {
+  const { error } = await supabase.rpc("chat_delete_message", { p_msg: messageId });
+  if (error) throw new Error(/chat_delete_message|function|schema cache/i.test(error.message || "") ? "ต้องรัน migration 190 ใน Supabase ก่อน" : error.message);
 }
 
 // find-or-create a 1:1 DM room — done in a SECURITY DEFINER RPC so it isn't blocked by insert RLS
