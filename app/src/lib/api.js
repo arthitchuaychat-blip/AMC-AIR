@@ -1893,6 +1893,7 @@ export async function saveQuotation(q, items) {
     discount_type: q.discount_type || "amount", discount_value: Number(q.discount_value) || 0,
     vat: !!q.vat, wht: !!q.wht, wht_rate: Number(q.wht_rate) || 3, note: q.note?.trim() || null, internal_note: q.internal_note?.trim() || null, ..._termCols(q), ..._signCols(q),
     pay_method: q.pay_method && q.pay_method !== "cash" ? q.pay_method : null,   // เงินสด = ค่าเริ่มต้น (เก็บ null)
+    variation_of: q.variation_of || null,   // ใบเสนอเพิ่มเติม (mig 188) → ผูกใบแม่ · กำไรรวมงานเดียว
     approved_at: q.status === "approved" ? (q.approved_at || new Date().toISOString()) : null,
     created_by: user?.id || null,
   };
@@ -1901,8 +1902,8 @@ export async function saveQuotation(q, items) {
   //    (created_at ไม่ได้ส่งไป แถวเลยดูปกติ ไม่มีอะไรส่อว่าเพี้ยน) — กติกาเดียวกับ saveJobOrder
   if (cur) delete head.created_by;
   let e1 = (await supabase.from("quotations").upsert(head, { onConflict: "quote_no" })).error;
-  // ยังไม่รัน migration 105/139 → บันทึกต่อได้ (แค่ยังไม่เก็บคอลัมน์นั้น)
-  for (const c of ["pay_method", "job_type"]) {
+  // ยังไม่รัน migration 105/139/188 → บันทึกต่อได้ (แค่ยังไม่เก็บคอลัมน์นั้น)
+  for (const c of ["pay_method", "job_type", "variation_of"]) {
     if (e1 && c in head && (e1.message || "").includes(c)) {
       delete head[c];
       e1 = (await supabase.from("quotations").upsert(head, { onConflict: "quote_no" })).error;
@@ -2950,6 +2951,31 @@ export async function createLinkedJob(base) {
     sales_photos: base.sales_photos || [], status: "pending", created_by: user?.id || null,
   };
   const e = (await supabase.from("job_orders").insert(row)).error; if (e) throw e;
+  return newNo;
+}
+
+// งานแก้ไข/เคลม (mig 188): แตกใบงานเชื่อม ประเภท "แก้ไขงาน" ผูกใบต้นเรื่อง (rework_of)
+// + ติดธงเคลมที่ "ใบต้นเรื่อง" → KPI ตัดเคลม −5 ให้ทีมที่ทำพลาด · ใบแก้ไม่ติดธง = ทีมที่ไปแก้ไม่โดนตัด
+// ต้นทุนงานแก้ไหลเข้ากำไรงานเดิม (quote เดียวกัน) = ต้นทุนแก้กินมาร์จินงานเดิม (ไม่เก็บเงินลูกค้าเพิ่ม)
+export async function createReworkJob(base, { markClaim = true } = {}) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const group = base.group_no || base.job_no;
+  if (!base.group_no) await supabase.from("job_orders").update({ group_no: group }).eq("job_no", base.job_no);
+  const { data: sibs } = await supabase.from("job_orders").select("job_no").like("job_no", group + "%");
+  const used = new Set((sibs || []).map((s) => s.job_no).filter((n) => n.startsWith(group) && /^[A-Z]$/.test(n.slice(group.length))).map((n) => n.slice(group.length)));
+  let suffix = "A"; for (let i = 0; i < 26; i++) { const c = String.fromCharCode(65 + i); if (!used.has(c)) { suffix = c; break; } }
+  const newNo = group + suffix;
+  const row = {
+    job_no: newNo, group_no: group, quote_no: base.quote_no || null, customer_id: base.customer_id || null, site_id: base.site_id || null,
+    title: `🔁 แก้ไขงาน ${base.job_no}` + (base.title ? ` · ${base.title}` : ""), job_type: "fix", rework_of: base.job_no,
+    contact_name: base.contact_name || null, contact_phone: base.contact_phone || null,
+    address: base.address || null, map_url: base.map_url || null, details: base.details || null,
+    sales_photos: [], status: "pending", is_claim: false, created_by: user?.id || null,
+  };
+  let e = (await supabase.from("job_orders").insert(row)).error;
+  if (e && /rework_of/.test(e.message || "")) { delete row.rework_of; e = (await supabase.from("job_orders").insert(row)).error; }  // pre-188 fallback
+  if (e) throw e;
+  if (markClaim) await supabase.from("job_orders").update({ is_claim: true }).eq("job_no", base.job_no);   // เคลมติดที่ใบต้นเรื่อง
   return newNo;
 }
 

@@ -32,46 +32,52 @@ export default function Profit({ onOpenJob }) {
       // group job orders by quote (1 ใบเสนอราคา = 1 งาน)
       const jobsByQuote = {};
       jos.forEach((j) => { if (j.quote_no) (jobsByQuote[j.quote_no] = jobsByQuote[j.quote_no] || []).push(j); });
-
-      const out = [];
-      qs.forEach((q) => {
-        if (q.status !== "approved") return;             // นับเฉพาะใบเสนอที่อนุมัติ — กติกาเดียวกับหน้ารายงานขาย (เจ้าของเคาะ 2026-07-17)
+      // ใบเสนอเพิ่มเติม (mig 188): ยุบใบลูกเข้าใบแม่ → กำไรงานเดียว (รวมรายได้ + ต้นทุนทุกใบงานใต้ทั้งกลุ่ม)
+      const childrenOf = {}; qs.forEach((q) => { if (q.variation_of) (childrenOf[q.variation_of] = childrenOf[q.variation_of] || []).push(q); });
+      // ตัวเลขดิบต่อ 1 ใบเสนอ (รายได้ + ต้นทุนใบงานของใบนั้น)
+      const quoteRaw = (q) => {
         const jobs = jobsByQuote[q.quote_no] || [];
-        if (!jobs.length) return;                                   // ยังไม่มีใบงาน → ยังไม่ใช่งานที่ทำ
-        const active = jobs.filter((j) => j.status !== "cancelled");
-        const done = active.length > 0 && active.every((j) => j.status === "done");
-        if (!done) return;                                          // งานยังไม่เสร็จครบทุกใบ → ข้าม
-
-        // ต่อใบงาน: วัสดุเบิก/คืน + ค่าแรงช่างซัพ (เพื่อกางดูรายละเอียดได้)
-        const detail = jobs.map((j) => {
-          const m = mat[j.job_no] || { withdraw: 0, return: 0 };
-          return { job: j, withdraw: m.withdraw, ret: m.return, matNet: m.withdraw - m.return, labor: Number(j.labor_total) || 0, expense: Number(exp[j.job_no]) || 0 };
-        });
-        const withdraw = detail.reduce((a, d) => a + d.withdraw, 0);
-        const ret = detail.reduce((a, d) => a + d.ret, 0);
-        const matNet = withdraw - ret;                              // วัสดุที่ใช้จริงสุทธิ (รวมทุกใบงาน)
-        const labor = detail.reduce((a, d) => a + d.labor, 0);      // ค่าแรงช่างซัพ (รวมทุกใบงาน)
-        const expenses = detail.reduce((a, d) => a + d.expense, 0); // ค่าใช้จ่ายเบิกจ่ายของงาน (รวมทุกใบงาน)
-
-        const sale = q.afterDisc;                                   // ยอดขายสุทธิ ก่อน VAT (นับครั้งเดียว)
-        // ค่าธรรมเนียมบัตร = ส่วนต่างระหว่างยอดขายราคาบัตร (price_show) กับยอดขายราคาเงินสด — เงินส่วนนี้จ่ายธนาคาร ไม่ใช่กำไร (เจ้าของเคาะ 2026-07-17)
+        const detail = jobs.map((j) => { const m = mat[j.job_no] || { withdraw: 0, return: 0 }; return { job: j, withdraw: m.withdraw, ret: m.return, matNet: m.withdraw - m.return, labor: Number(j.labor_total) || 0, expense: Number(exp[j.job_no]) || 0 }; });
+        // ค่าธรรมเนียมบัตร = ส่วนต่างยอดขายราคาบัตร − ราคาเงินสด (จ่ายธนาคาร ไม่ใช่กำไร)
         let cardFee = 0;
         if (q.payMethod && q.payMethod !== "cash") {
           const subCash = (q.items || []).reduce((a, x) => a + Number(x.qty) * (Number(x.unit_price) || 0) - (Number(x.discount) || 0), 0);
           const discCash = q.discount_type === "percent" ? subCash * Number(q.discount_value || 0) / 100 : Number(q.discount_value || 0);
-          cardFee = Math.max(0, Math.round((sale - (subCash - discCash)) * 100) / 100);
+          cardFee = Math.max(0, Math.round((q.afterDisc - (subCash - discCash)) * 100) / 100);
         }
-        const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : null;
-        // สูตรต้นทุนจริง (เลือกโดยผู้ใช้ 2026-07-04): กำไรสุทธิ = ขาย − ต้นทุนจริง
-        // ต้นทุนจริง = เบิกจริง−คืน + ค่าแรงซัพ + เบิกจ่าย + ค่าสินค้าตาม PO ผูกงานที่ยังรอรับของ + ค่าธรรมเนียมบัตร
-        // BOQ = กำไรตามประมาณการ ไว้เทียบเท่านั้น — ห้ามหักซ้อน
+        return { jobs, detail, sale: q.afterDisc, cardFee, poPend: poPendByQuote[q.quote_no] || 0, boq_no: q.boq_no };
+      };
+
+      const out = [];
+      qs.forEach((q) => {
+        if (q.variation_of) return;                      // ใบลูก (ใบเสนอเพิ่มเติม) → ยุบเข้าใบแม่ ไม่โชว์แถวแยก
+        if (q.status !== "approved") return;             // นับเฉพาะใบเสนอที่อนุมัติ — กติกาเดียวกับหน้ารายงานขาย
+        const kids = (childrenOf[q.quote_no] || []).filter((k) => k.status === "approved");   // ใบเสริมที่อนุมัติแล้ว
+        const group = [q, ...kids];
+        const raws = group.map(quoteRaw);
+        const jobs = raws.flatMap((r) => r.jobs);
+        if (!jobs.length) return;                                   // ยังไม่มีใบงาน → ยังไม่ใช่งานที่ทำ
+        const active = jobs.filter((j) => j.status !== "cancelled");
+        if (!(active.length && active.every((j) => j.status === "done"))) return;   // งานยังไม่เสร็จครบทุกใบ (รวมใบงานของใบเสริม)
+
+        const detail = raws.flatMap((r) => r.detail);
+        const withdraw = detail.reduce((a, d) => a + d.withdraw, 0);
+        const ret = detail.reduce((a, d) => a + d.ret, 0);
+        const matNet = withdraw - ret;                              // วัสดุใช้จริงสุทธิ (รวมทุกใบงานในกลุ่ม)
+        const labor = detail.reduce((a, d) => a + d.labor, 0);      // ค่าแรงช่างซัพ (รวมทุกใบงานในกลุ่ม)
+        const expenses = detail.reduce((a, d) => a + d.expense, 0); // เบิกจ่ายของงาน (รวมทุกใบงานในกลุ่ม)
+        const sale = raws.reduce((a, r) => a + r.sale, 0);          // รายได้ = ใบแม่ + ใบเสริมที่อนุมัติ (ก่อน VAT)
+        const cardFee = raws.reduce((a, r) => a + r.cardFee, 0);
+        const poPend = raws.reduce((a, r) => a + r.poPend, 0);
+        // ต้นทุน BOQ = รวมทุก BOQ ในกลุ่ม (distinct — ใบเสริมที่ใช้ BOQ เดียวกับใบแม่ไม่นับซ้ำ)
+        let cost = null; const boqSeen = new Set();
+        group.forEach((g) => { if (g.boq_no && !boqSeen.has(g.boq_no) && boqCost[g.boq_no] != null) { boqSeen.add(g.boq_no); cost = (cost || 0) + boqCost[g.boq_no]; } });
         const gross = cost == null ? null : sale - cost;            // กำไรตามประมาณการ (BOQ)
-        const poPend = poPendByQuote[q.quote_no] || 0;
-        const hasRealCost = matNet + labor + expenses + poPend > 0; // ค่าธรรมเนียมบัตรอย่างเดียวยังไม่นับว่า "มีต้นทุนจริง"
+        const hasRealCost = matNet + labor + expenses + poPend > 0;
         const actualCost = matNet + labor + expenses + poPend + cardFee;
         const net = hasRealCost ? sale - actualCost : null;         // ยังไม่มีต้นทุนจริง → ไม่โชว์กำไรลวง
         const margin = net == null || sale <= 0 ? null : (net / sale) * 100;
-        out.push({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin });
+        out.push({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin });
       });
       setRows(out);
 
@@ -182,13 +188,13 @@ export default function Profit({ onOpenJob }) {
           {shown.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ (ประมาณ)</span><span className="r">กำไรประมาณการ</span><span className="r">วัสดุ/แอร์เบิกจริง</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ (จริง)</span><span className="r">%</span></div>
-              {shown.map(({ q, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin }) => {
+              {shown.map(({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin }) => {
                 const isOpen = !!open[q.quote_no];
                 return (
                   <React.Fragment key={q.quote_no}>
                     <div className="jp-row" style={{ cursor: "pointer" }} onClick={() => toggle(q.quote_no)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && toggle(q.quote_no)}>
                       <span className="jp-name"><b>{isOpen ? "▾ " : "▸ "}{q.quote_no}</b><br />
-                        <span className="jp-cust">{q.customerName || "-"} · {jobs.length} ใบงาน{cost == null ? " · ไม่อ้าง BOQ" : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · 💳 ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}</span></span>
+                        <span className="jp-cust">{q.customerName || "-"} · {jobs.length} ใบงาน{kids && kids.length > 0 ? ` · ➕ รวมส่วนเพิ่ม ${kids.length} ใบ (${kids.map((k) => k.quote_no).join(", ")})` : ""}{cost == null ? " · ไม่อ้าง BOQ" : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · 💳 ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}</span></span>
                       <span className="r">{fmtBaht(sale)}</span>
                       <span className="r">{cost == null ? "—" : fmtBaht(cost)}</span>
                       <span className="r" style={{ color: gross == null ? "var(--ink-3)" : gross >= 0 ? "var(--ink)" : "var(--down)" }}>{gross == null ? "—" : fmtBaht(gross)}</span>

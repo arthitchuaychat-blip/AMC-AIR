@@ -79,6 +79,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
+  // ใบเสนอราคาเพิ่มเติม (mig 188): งานเสริมหน้างาน — ผูกใบแม่ (variation_of) · กำไรรวมงานเดียว · ไม่ต้องมี BOQ ของตัวเอง
+  function startVariation(q) { setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", job_type: q.job_type || "", title: `งานเพิ่มเติม (จาก ${q.quote_no})`, status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: !!q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.payMethod || "cash", note: "", internal_note: `งานเสริมหน้างานของ ${q.quote_no}`, sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", variation_of: q.quote_no, items: [] }); }
   // create a new quotation prefilled from a BOQ (customer/site + pulled items)
   function startFromBoq(boqNo) {
     const b = boqs.find((x) => x.boq_no === boqNo); if (!b) return;
@@ -98,7 +100,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     // ล็อกใบอนุมัติแล้ว — ราคา/รายการคือสัญญากับลูกค้า ถ้าจำเป็นต้องแก้ ให้ "คืนสถานะแก้ไข" ก่อน (ลงประวัติ)
     if (q.status === "approved") return alert(`ใบเสนอราคา ${q.quote_no} อนุมัติแล้ว — แก้ไขไม่ได้\nถ้าจำเป็นต้องแก้ กดปุ่ม "คืนสถานะแก้ไข" บนการ์ดก่อน (ระบบบันทึกเหตุผลไว้ในประวัติ)`);
     const lk = lockMsg(q); if (lk) return alert(lk);
-    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", job_type: q.job_type || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at,
+    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", job_type: q.job_type || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at, variation_of: q.variation_of || null,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), discount: Number(x.discount) || 0, kind: x.kind, description: x.description || "" })) });
   }
   // ไม่มี "สร้างซ้ำ" ในใบเสนอราคา — กติกาบริษัท: เอกสารขายเริ่มจาก BOQ เสมอ (อยากได้ใบคล้ายกัน → สร้างซ้ำที่ BOQ แล้วออกใบเสนอจากตรงนั้น)
@@ -164,7 +166,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     const dk = draftKey;   // เก็บไว้ก่อน — setEd(null) ตอนท้ายทำให้ draftKey กลายเป็น null
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
     // กติกาบริษัท: เอกสารขายทุกใบต้องเริ่มจาก BOQ — ใบใหม่ต้องอ้าง BOQ เสมอ (ใบเก่าที่ไม่มีแก้ไขต่อได้)
-    if (!ed._edit && !ed.boq_no) return flash("ใบเสนอราคาต้องเริ่มจาก BOQ — เลือก BOQ ที่ช่อง 'อ้างอิง BOQ' หรือไปสร้างจากเมนู BOQ (ปุ่ม 'สร้างใบเสนอราคา' บนการ์ด)", true);
+    if (!ed._edit && !ed.boq_no && !ed.variation_of) return flash("ใบเสนอราคาต้องเริ่มจาก BOQ — เลือก BOQ ที่ช่อง 'อ้างอิง BOQ' หรือไปสร้างจากเมนู BOQ (ปุ่ม 'สร้างใบเสนอราคา' บนการ์ด)", true);   // ใบเสริม (variation) ไม่ต้องมี BOQ
     // ไม่มีลูกค้า = เอกสารทั้งสายไม่มีชื่อลูกค้า (ตามหนี้ไม่ได้ · ใบกำกับภาษีใช้ไม่ได้ · เงินเข้าธนาคารไม่รู้ของใคร)
     if (!ed.customer_id) return flash("เลือกลูกค้าก่อนบันทึก — ใบเสนอราคาที่ไม่มีลูกค้าจะทำให้ใบแจ้งหนี้/ใบเสร็จที่ออกต่อไม่มีชื่อลูกค้า ตามหนี้และใช้ทางภาษีไม่ได้", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
@@ -465,7 +467,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           return (
             <div className={"card job-card doc2" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
               <DocCardHead no={q.quote_no} onClick={() => openPeek("quote", q.quote_no)}
-                badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q.vat ? "vat-on" : "vat-off")}>{q.vat ? "VAT" : "NO VAT"}</span>{q.job_type && (() => { const d = jobTypeDef(q.job_type); return <span className="job-badge" style={{ background: d[3] }}>{d[2]} {d[1]}</span>; })()}</>}
+                badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q.vat ? "vat-on" : "vat-off")}>{q.vat ? "VAT" : "NO VAT"}</span>{q.job_type && (() => { const d = jobTypeDef(q.job_type); return <span className="job-badge" style={{ background: d[3] }}>{d[2]} {d[1]}</span>; })()}{q.variation_of && <span className="job-badge" style={{ background: "#0891b2" }} title="ใบเสนอราคาเพิ่มเติม — กำไรรวมกับใบแม่">➕ เพิ่มเติมของ {q.variation_of}</span>}</>}
                 title={q.title} sub={`${q.items.length} รายการ`} by={q.createdByName}
                 date={q.issue_date || q.created_at} amountLabel="ยอดสุทธิ" amount={q.grand}
                 customer={{ name: q.customerName, contactName: q.contactName, phone: q.contactPhone, addr: q.customerAddr, siteAddress: q.siteAddress, mapUrl: q.map_url }} />
@@ -475,6 +477,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob || q.status === "approved"} title={q.status === "approved" ? "อนุมัติแล้ว — กด 'คืนสถานะแก้ไข' ก่อน" : (lockMsg(q) || "")} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEdit && q.status === "approved" && !q.variation_of && <button className="btn-ghost sm" style={{ color: "#0891b2", borderColor: "#a5f0f5", background: "#ecfeff" }} title="งานเสริมหน้างาน — สร้างใบเสนอราคาเพิ่มเติม กำไรรวมกับงานนี้เป็นก้อนเดียว (ทำงานเสริมบนใบงานเดิม ไม่ต้องเปิดใบงานใหม่)" onClick={() => startVariation(q)}>➕ ใบเสนอเพิ่มเติม</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {canEdit && q.status === "approved" && !q.hasInvoice && !q.hasJob && !(docLinks.byQuote[q.quote_no]?.poNos || []).length &&
                   <button className="btn-ghost sm" title="คืนสถานะเป็น 'ส่งแล้ว' เพื่อแก้ไขใบที่อนุมัติแล้ว (บังคับเหตุผล + ลงประวัติ)" onClick={() => unapprove(q)}>คืนสถานะแก้ไข</button>}

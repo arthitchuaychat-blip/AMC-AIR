@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, backfillQuoteForJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate, listHandoverFlags, saveJobReview } from "../lib/api";
+import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, createReworkJob, backfillQuoteForJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate, listHandoverFlags, saveJobReview } from "../lib/api";
 import { SLOTS, slotStartTime, jobsOverlap, scheduleLabel, JOB_TYPES, jobTypeDef, deriveJobStatus, JOB_STATUSES, ymd } from "../lib/schedule";
 import { UIcon } from "../icons";
 import JobTimeline, { Linkify } from "./JobTimeline";
@@ -300,6 +300,13 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   async function addLinked(jo) {
     if (!await confirmDialog({ title: "สร้างใบงานเชื่อม (มอบทีมเพิ่ม) ?", message: `จาก ${jo.job_no} · คัดลอกลูกค้า/งาน แล้วให้กำหนดทีม+รอบของใบใหม่`, danger: false, confirmText: "สร้างใบเชื่อม" })) return;
     try { const newNo = await createLinkedJob(jo); flash(`สร้างใบงานเชื่อม ${newNo} แล้ว`); await load(); setViewing(null); const fresh = await reloadJobs(); setList(fresh); startEdit(fresh.find((x) => x.job_no === newNo)); }
+    catch (e) { flash("สร้างไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // งานแก้ไข/เคลม (mig 188): แตกใบงานเชื่อมประเภท "แก้ไขงาน" ผูกใบต้นเรื่อง + ติดธงเคลมที่ใบต้นเรื่อง
+  // → KPI ตัดเคลมที่ทีมของใบต้นเรื่อง (คนทำพลาด) · ใบแก้มอบทีมไหนก็ได้ ไม่โดนตัดคะแนน
+  async function addRework(jo) {
+    if (!await confirmDialog({ title: "เปิดงานแก้ไข/เคลม ?", message: `จาก ${jo.job_no}\n\n• ระบบจะติดธง "งานเคลม" ที่ใบต้นเรื่อง ${jo.job_no} → KPI ตัด −5 ให้ทีมที่ทำงานนี้ (ทีม ${jo.teamName || "-"})\n• สร้างใบงานแก้ไขใหม่ (ผูกงานเดิม) แล้วให้กำหนดทีมที่จะไปแก้ + รอบเอง — ทีมที่ไปแก้จะไม่โดนตัดคะแนน\n• ต้นทุนงานแก้จะกินกำไรงานเดิม (ไม่เก็บเงินลูกค้าเพิ่ม)`, danger: true, confirmText: "เปิดงานแก้ไข + ติดเคลม" })) return;
+    try { const newNo = await createReworkJob(jo); flash(`เปิดงานแก้ไข ${newNo} + ติดธงเคลมที่ ${jo.job_no} แล้ว`); await load(); setViewing(null); const fresh = await reloadJobs(); setList(fresh); startEdit(fresh.find((x) => x.job_no === newNo)); }
     catch (e) { flash("สร้างไม่สำเร็จ: " + (e.message || e), true); }
   }
   // ก่อนปิดงาน: เตือนถ้ายังไม่มีใบส่งมอบงานที่ส่งแล้วและลูกค้าเซ็นรับ
@@ -739,6 +746,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 {onMovement && can(role, "movements", "edit") && !["tech", "assistant", "lead_tech"].includes(role) && jo.status !== "cancelled" &&
                   <button className="btn-ghost sm" style={{ color: "#dc2626" }} title="บันทึกวัสดุตัดเสีย/เสียหายของงานนี้" onClick={() => onMovement(jo, "damage")}>⚠️ ตัดเสีย</button>}
                 {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => addLinked(jo)}><UIcon name="plus" size={14} /> ใบงานเชื่อม</button>}
+                {canEditJob(jo) && jo.status !== "cancelled" && !jo.rework_of && <button className="btn-ghost sm" onClick={() => addRework(jo)} title="เปิดงานแก้ไข + ติดธงเคลมที่งานนี้">🔁 งานแก้ไข/เคลม</button>}
                 {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => startEdit(jo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEditJob(jo) && jo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancelJob(jo)}>ยกเลิก</button>}
                 {jo.locked && canOverrideLock && <button className="btn-ghost sm" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
@@ -811,6 +819,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 {jo.locked && canOverrideLock && <button className="btn-ghost" onClick={() => doUnlock(jo)}>🔓 ปลดล็อก</button>}
                 {!jo.quote_no && canEditJob(jo) && can(role, "quote", "edit") && <button className="btn-ghost" title="ลูกค้าเก่าก่อนใช้ระบบ — สร้างใบเสนอราคาย้อนหลังแล้วผูกให้ต้นทุนเข้าการคิดกำไร" onClick={() => { const j = jo; setViewing(null); setBackfill(j); setBfAmt(""); setBfVat(false); }}>🧾 ใบเสนอย้อนหลัง</button>}
                 {canEditJob(jo) && <button className="btn-ghost" onClick={() => addLinked(jo)}><UIcon name="plus" size={15} /> ใบงานเชื่อม</button>}
+                {canEditJob(jo) && jo.status !== "cancelled" && !jo.rework_of && <button className="btn-ghost" onClick={() => addRework(jo)} title="เปิดงานแก้ไข + ติดธงเคลมที่งานนี้">🔁 งานแก้ไข/เคลม</button>}
                 {canEditJob(jo) && <button className="btn-primary" onClick={() => { const j = jo; setViewing(null); startEdit(j); }}><UIcon name="edit" size={15} color="#fff" /> แก้ไข</button>}
               </div>
             </div>
