@@ -129,7 +129,7 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
         })}
       </div>
 
-      {editing && <HandoverEditor initial={editing} onClose={() => setEditing(null)} onSaved={onSaved} flash={flash} />}
+      {editing && <HandoverEditor initial={editing} me={me} onClose={() => setEditing(null)} onSaved={onSaved} flash={flash} />}
       {printing && <JobHandover handover={printing} company={co} />}
       {toast && <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", background: toast.bad ? "#dc2626" : "#16a34a", color: "#fff", fontSize: 13.5, fontWeight: 600, padding: "12px 22px", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 200 }}>{toast.m}</div>}
     </div>

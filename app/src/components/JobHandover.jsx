@@ -265,16 +265,18 @@ export default function JobHandover({ handover = {}, company = {} }) {
                 {(f.parts || []).some((p) => p.name) && (
                   <>
                     <div style={{ fontWeight: 700, fontSize: "0.92em", margin: "5px 0 2px" }}>รายการอะไหล่ / วัสดุที่ใช้ · Parts / materials used</div>
+                    {/* ราคาโชว์บนใบลูกค้าเฉพาะเมื่อช่างติ๊ก show_price — ปกติซ่อน (ราคาจริงคิดที่ใบแจ้งหนี้) */}
                     <table className="ho-tbl">
-                      <thead><tr><th className="n">#</th><th>รายการ · Item</th><th style={{ width: 60 }}>จำนวน · Qty</th><th style={{ width: 80 }}>ราคา/หน่วย · Price</th><th style={{ width: 80 }}>รวม · Total</th></tr></thead>
+                      <thead><tr><th className="n">#</th><th>รายการ · Item</th><th style={{ width: 60 }}>จำนวน · Qty</th>
+                        {f.show_price && <><th style={{ width: 80 }}>ราคา/หน่วย · Price</th><th style={{ width: 80 }}>รวม · Total</th></>}</tr></thead>
                       <tbody>
                         {(f.parts || []).filter((p) => p.name).map((p, pi) => (
                           <tr key={pi}><td className="n">{pi + 1}</td><td className="lbl">{p.name}</td><td className="u">{p.qty || ""}</td>
-                            <td className="u">{p.price ? Number(p.price).toLocaleString("en-US") : ""}</td>
-                            <td className="u">{((Number(p.qty) || 0) * (Number(p.price) || 0)).toLocaleString("en-US")}</td></tr>
+                            {f.show_price && <><td className="u">{p.price ? Number(p.price).toLocaleString("en-US") : ""}</td>
+                            <td className="u">{((Number(p.qty) || 0) * (Number(p.price) || 0)).toLocaleString("en-US")}</td></>}</tr>
                         ))}
-                        <tr><td colSpan={4} style={{ textAlign: "right", fontWeight: 700, padding: "2px 8px" }}>รวมค่าอะไหล่/วัสดุ · Parts total (฿)</td>
-                          <td className="u" style={{ fontWeight: 700 }}>{(f.parts || []).reduce((a, p) => a + (Number(p.qty) || 0) * (Number(p.price) || 0), 0).toLocaleString("en-US")}</td></tr>
+                        {f.show_price && <tr><td colSpan={4} style={{ textAlign: "right", fontWeight: 700, padding: "2px 8px" }}>รวมค่าอะไหล่/วัสดุ · Parts total (฿)</td>
+                          <td className="u" style={{ fontWeight: 700 }}>{(f.parts || []).reduce((a, p) => a + (Number(p.qty) || 0) * (Number(p.price) || 0), 0).toLocaleString("en-US")}</td></tr>}
                       </tbody>
                     </table>
                   </>

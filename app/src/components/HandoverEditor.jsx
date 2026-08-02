@@ -29,16 +29,37 @@ function MachineHead({ m = {}, onSet }) {
   );
 }
 
+// ตรวจว่าฟอร์มยัง "ว่างเปล่า" (ยังไม่ได้ติ๊ก/กรอกอะไรที่เป็นสาระเลย) — ใช้เตือนก่อนส่ง กันส่งใบเช็คลิสต์เปล่า
+function formEmpty(f) {
+  const anyChk = (arr) => (arr || []).some((sec) => Array.isArray(sec) ? sec.some(Boolean) : Boolean(sec));
+  const anyMeas = (arr) => (arr || []).some((v) => v && (typeof v === "string" ? v.trim() : (v.b || v.a)));
+  switch (f.kind) {
+    case "inst": return !anyChk(f.checks) && !anyMeas(f.meas);
+    case "wash": return !anyChk(f.checks) && !anyMeas(f.meas);
+    case "fix": return !anyChk([f.diag, f.rep].flat()) && !(f.symptoms || []).some(Boolean) && !anyMeas(f.meas) && !(f.symptom_detail || f.rootcause);
+    case "pmc": return !(f.acts || []).some(Boolean) && !(f.machines || []).some((m) => m.out || m.amp);
+    case "accept": return !(f.rows || []).some((r) => (r || []).some(Boolean)) && !(f.overall || []).some(Boolean);
+    case "clean": return !(f.acts || []).some(Boolean) && !anyMeas(f.rows);
+    case "repair": case "perf": return !anyMeas(f.rows) && !f.fix;
+    case "pm": return !(f.rows || []).some(Boolean);
+    default: return false;
+  }
+}
+
 // Full-screen editor where the technician fills in a handover sheet while on the job.
-// props: initial (a handover object), onClose(), onSaved(saved), flash(msg, bad)
-export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
-  const [h, setH] = React.useState(initial);
+// props: initial (a handover object), me (logged-in name), onClose(), onSaved(saved), flash(msg, bad)
+export default function HandoverEditor({ initial, me, onClose, onSaved, flash }) {
+  // เติมชื่อช่างจากผู้ที่ล็อกอินให้อัตโนมัติ (ถ้ายังว่าง) — ทำใน baseline เพื่อไม่ให้ถูกนับเป็น "แก้ค้าง" ทันที
+  const base = React.useMemo(() => (initial.tech_name || !me || initial.status === "submitted") ? initial : { ...initial, tech_name: me }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [h, setH] = React.useState(base);
   const [busy, setBusy] = React.useState(false);
+  // ลายเซ็นช่างล่าสุดบนเครื่องนี้ (จำไว้หลังส่งใบ) — ให้กด "ใช้ลายเซ็นเดิม" ไม่ต้องวาดใหม่ทุกครั้ง
+  const [lastSig] = React.useState(() => { try { return localStorage.getItem("amc_tech_sign") || ""; } catch { return ""; } });
   const wasSubmitted = initial.status === "submitted";   // ใบที่ส่งแล้ว: บันทึกซ้ำได้ แต่ห้ามหล่นกลับเป็นฉบับร่าง (ช่างจะกลับมาแก้/ลบได้)
   // กันงานกรอกหน้างานหาย: (1) สแนปช็อตลง localStorage ทุก 1 วิ — แบตหมด/เบราว์เซอร์รีโหลดหลังเปิดกล้อง กลับมากู้ได้
   // (2) แตะฉากหลัง/กด ✕ ตอนมีของค้าง ให้ถามก่อนปิด
   const draftKey = `ho-draft-${initial.id || initial.job_no || "new"}`;
-  const dirty = React.useMemo(() => JSON.stringify(h) !== JSON.stringify(initial), [h, initial]);
+  const dirty = React.useMemo(() => JSON.stringify(h) !== JSON.stringify(base), [h, base]);
   React.useEffect(() => {
     if (!dirty) return;
     const tm = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify(h)); } catch { /* เต็ม/ปิดใช้ — ข้าม */ } }, 1000);
@@ -49,7 +70,7 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
       const raw = localStorage.getItem(draftKey);
       if (!raw) return;
       const saved = JSON.parse(raw);
-      if (JSON.stringify(saved) === JSON.stringify(initial)) { localStorage.removeItem(draftKey); return; }
+      if (JSON.stringify(saved) === JSON.stringify(base)) { localStorage.removeItem(draftKey); return; }
       (async () => { if (await confirmDialog("พบข้อมูลที่กรอกค้างไว้ของใบนี้ (ยังไม่ได้บันทึก) — กู้กลับมาไหม?")) { setH(saved); setAddOpen(false); } else localStorage.removeItem(draftKey); })();
     } catch { /* ignore */ }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -84,9 +105,14 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
     if (status === "submitted" && !wasSubmitted) {
       const miss = [];
       if (!(h.forms || []).length) miss.push("ยังไม่มีแบบฟอร์มสักแผ่น");
+      // เตือนฟอร์มที่ยังไม่ได้ติ๊ก/กรอกเช็คลิสต์เลย (กันส่งใบเปล่า — ส่งต่อได้ถ้าตั้งใจ)
+      const blanks = (h.forms || []).map((f, i) => formEmpty(f) ? i + 1 : 0).filter(Boolean);
+      if (blanks.length) miss.push(`ฟอร์มที่ยังไม่ได้ติ๊ก/กรอกเลย: #${blanks.join(", #")}`);
       if (!h.cust_sign_url) miss.push("ยังไม่มีลายเซ็นลูกค้า");
       if (!h.tech_sign_url) miss.push("ยังไม่มีลายเซ็นช่าง");
-      const msg = miss.length ? `⚠️ ${miss.join(" · ")}\n\nยืนยันส่งใบส่งมอบงานเลยหรือไม่?` : "ยืนยันส่งใบส่งมอบงาน? (ส่งแล้วช่างแก้ไขเองไม่ได้ — ต้องให้ออฟฟิศแก้)";
+      const msg = miss.length
+        ? `⚠️ ตรวจก่อนส่ง:\n• ${miss.join("\n• ")}\n\nยืนยันส่งใบส่งมอบงานเลยหรือไม่?`
+        : "ยืนยันส่งใบส่งมอบงาน? (ส่งแล้วช่างแก้ไขเองไม่ได้ — ต้องให้ออฟฟิศแก้)";
       if (!await confirmDialog(msg)) return;
     }
     setBusy(true);
@@ -96,6 +122,8 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
       if (out.tech_sign_url && out.tech_sign_url.startsWith("data:")) out.tech_sign_url = await uploadSignatureDataUrl(out.tech_sign_url);
       if (out.cust_sign_url && out.cust_sign_url.startsWith("data:")) out.cust_sign_url = await uploadSignatureDataUrl(out.cust_sign_url);
       const saved = await saveHandover(out);
+      // จำลายเซ็นช่างล่าสุดบนเครื่องนี้ (เป็น URL แล้ว) → ครั้งหน้ากด "ใช้ลายเซ็นเดิม" ได้เลย
+      if (out.tech_sign_url && !out.tech_sign_url.startsWith("data:")) { try { localStorage.setItem("amc_tech_sign", out.tech_sign_url); } catch { /* ignore */ } }
       clearDraft();
       flash && flash(status === "submitted" ? (wasSubmitted ? "บันทึกแล้ว ✓" : "บันทึก & ส่งใบส่งมอบงานแล้ว ✓") : "บันทึกฉบับร่างแล้ว ✓");
       onSaved && onSaved(saved);
@@ -115,7 +143,7 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
           {/* datalist กลาง — ช่องยี่ห้อ/BTU ของทุกแบบฟอร์มชี้มาที่นี่ (เลือกจากรายการ หรือพิมพ์เองได้) */}
           <datalist id="ho-brand-list">{AC_BRANDS.map((b) => <option key={b} value={b} />)}</datalist>
           <datalist id="ho-btu-list">{btuList.map((b) => <option key={b} value={b} />)}</datalist>
-          <div className="he-hint">📋 <b>ก่อนเริ่มงาน:</b> กรอกค่าช่อง “ก่อน” แล้วกด <b>บันทึกร่าง</b> · <b>ทำเสร็จแล้ว:</b> กลับเข้ามากรอกช่อง “หลัง” + เช็คลิสต์ แล้วกด <b>บันทึก &amp; ส่ง</b></div>
+          <div className="he-hint">📋 กรอกเช็คลิสต์ + ค่าที่วัด + รูป แล้วให้ลูกค้าเซ็น กด <b>บันทึก &amp; ส่ง</b> · งานล้าง/ซ่อมที่วัด “ก่อน–หลัง”: กรอกช่อง “ก่อน” แล้ว <b>บันทึกร่าง</b> ระหว่างทำ ค่อยกลับมากรอก “หลัง” ตอนเสร็จ</div>
           {/* ── ผู้รับบริการ ── */}
           <div className="he-sec-t">ผู้รับบริการ · Customer</div>
           <div className="he-grid2">
@@ -156,6 +184,7 @@ export default function HandoverEditor({ initial, onClose, onSaved, flash }) {
           <div className="he-signs">
             <div className="he-sign-col">
               <SignaturePad label="ลายเซ็นช่างผู้ให้บริการ · Technician" value={h.tech_sign_url} onChange={(d) => set("tech_sign_url", d)} />
+              {lastSig && !h.tech_sign_url && <button type="button" className="btn-ghost sm" style={{ alignSelf: "flex-start" }} onClick={() => set("tech_sign_url", lastSig)}>↩ ใช้ลายเซ็นเดิม</button>}
               <input className="inp" placeholder="ชื่อช่าง · Technician name" value={h.tech_name || ""} onChange={(e) => set("tech_name", e.target.value)} />
             </div>
             <div className="he-sign-col">
@@ -569,6 +598,12 @@ function FixCard({ f, idx, meta, onMachine, onPatch, onNote, onRemove }) {
         </div>
       ))}
       {partTotal > 0 && <div style={{ textAlign: "right", fontWeight: 800, fontSize: 12.5 }}>รวมค่าอะไหล่/วัสดุ · Parts total: ฿{partTotal.toLocaleString("en-US")}</div>}
+      {parts.some((p) => p.name) && (
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, margin: "3px 0 2px", color: "var(--ink-2)" }}>
+          <input type="checkbox" checked={!!f.show_price} onChange={(e) => onPatch({ show_price: e.target.checked })} />
+          แสดงราคาอะไหล่บนใบที่พิมพ์ให้ลูกค้า · Show prices on printed copy <span className="jo-dim">(ค่าเริ่มต้น: ซ่อน — ราคาจริงคิดที่ใบแจ้งหนี้)</span>
+        </label>
+      )}
       <MeasTable title="ค่าที่วัดหลังซ่อม (ยืนยันเครื่องกลับมาปกติ) · Post-repair measurements" rows={FIX_MEAS} values={f.meas || []} onChange={(v) => onPatch({ meas: v })} />
       <PickChips label="ผลการซ่อม · Repair result" options={FIX_RESULTS} value={f.result || ""} onChange={(v) => onPatch({ result: v })} />
       <div className="he-grid2">
