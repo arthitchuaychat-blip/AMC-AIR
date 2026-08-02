@@ -8,6 +8,8 @@ export default function Handbook({ role, me }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);          // ไทยเป็นค่าเริ่มต้น พม่าเมื่อสลับภาษา
   const myRole = me?.role || role;
+  // พนักงานทั่วไปเห็นเฉพาะคู่มือตำแหน่งตัวเอง · เฉพาะ ธุรการ/ผู้บริหาร/บุคคล ดูทุกตำแหน่ง + พิมพ์ทั้งเล่มได้
+  const canBrowseAll = ["admin", "exec", "hr"].includes(myRole);
   const [sel, setSel] = React.useState(ROLE_GUIDE[myRole] ? myRole : "exec");
   // เนื้อหาคู่มือ: ถ้าเลือกภาษาพม่า และตำแหน่งนั้นมีคำแปล → ใช้ช่องพม่าทับ (ช่องที่ไม่มียังเป็นไทย)
   const g = (lang === "my" && ROLE_GUIDE_MY[sel]) ? { ...(ROLE_GUIDE[sel] || ROLE_GUIDE.exec), ...ROLE_GUIDE_MY[sel] } : (ROLE_GUIDE[sel] || ROLE_GUIDE.exec);
@@ -41,14 +43,15 @@ export default function Handbook({ role, me }) {
       <div className="adm-head">
         <div>
           <h1 className="page-title">{L("คู่มือตำแหน่งงาน", "လုပ်ငန်း လက်စွဲ")} <span className="page-title-en">Job Handbook</span></h1>
-          <p className="page-sub">{L("SOP: วัตถุประสงค์ · หน้าที่ · ขั้นตอนการทำงาน · กิจวัตร · กฎ · KPI ของแต่ละตำแหน่ง — เปิดดูของคุณ หรือเลือกดูตำแหน่งอื่นได้", "SOP: ရည်ရွယ်ချက် · တာဝန် · လုပ်ငန်းအဆင့်ဆင့် · ပုံမှန်လုပ်ငန်း · စည်းကမ်း · KPI — ကိုယ့်ရာထူး ဒါမှမဟုတ် အခြားရာထူးများ ကြည့်နိုင်သည်")}</p>
+          <p className="page-sub">{canBrowseAll ? L("SOP: วัตถุประสงค์ · หน้าที่ · ขั้นตอนการทำงาน · กิจวัตร · กฎ · KPI ของแต่ละตำแหน่ง — เปิดดูของคุณ หรือเลือกดูตำแหน่งอื่นได้", "SOP: ရည်ရွယ်ချက် · တာဝန် · လုပ်ငန်းအဆင့်ဆင့် · ပုံမှန်လုပ်ငန်း · စည်းကမ်း · KPI — ကိုယ့်ရာထူး ဒါမှမဟုတ် အခြားရာထူးများ ကြည့်နိုင်သည်") : L("SOP ประจำตำแหน่งของคุณ: วัตถุประสงค์ · หน้าที่ · ขั้นตอนการทำงาน · กิจวัตร · กฎ · KPI", "သင့်ရာထူးအတွက် SOP: ရည်ရွယ်ချက် · တာဝန် · လုပ်ငန်းအဆင့်ဆင့် · ပုံမှန်လုပ်ငန်း · စည်းကမ်း · KPI")}</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn-ghost" onClick={() => printHandbook([sel])}>🖨️ {L("บันทึก/พิมพ์ PDF (ตำแหน่งนี้)", "PDF သိမ်း/ပရင့် (ဤရာထူး)")}</button>
-          <button className="btn-primary" onClick={() => printHandbook(GUIDE_ORDER)}>📚 {L("พิมพ์ทั้งเล่ม", "အားလုံး ပရင့်")}</button>
+          {canBrowseAll && <button className="btn-primary" onClick={() => printHandbook(GUIDE_ORDER)}>📚 {L("พิมพ์ทั้งเล่ม", "အားလုံး ပရင့်")}</button>}
         </div>
       </div>
 
+      {canBrowseAll && (
       <div className="cat-filter">
         {GUIDE_ORDER.map((r) => {
           const rg = ROLE_GUIDE[r]; if (!rg) return null;
@@ -61,6 +64,7 @@ export default function Handbook({ role, me }) {
           );
         })}
       </div>
+      )}
 
       <div style={{ marginTop: 4, marginBottom: 12, background: "var(--surface-2, #f3f7f8)", border: "1px solid var(--line, #e2e8f0)", borderRadius: 12, padding: "12px 14px" }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3, #718890)", marginBottom: 9 }}>🧭 {L("เป้าบริษัท (North-Star) · ทุกตำแหน่งเล็งไปที่นี่", "ကုမ္ပဏီ ပန်းတိုင် (North-Star) · ရာထူးတိုင်း ဤသို့ ဦးတည်")}</div>

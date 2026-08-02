@@ -207,6 +207,16 @@ export default function Attendance({ me }) {
               {today?.check_in_at && today?.check_out_at && <div className="att-done">✅ {L("บันทึกเวลาวันนี้ครบแล้ว", "ဒီနေ့ အချိန်မှတ်တမ်း ပြည့်စုံပါပြီ")}</div>}
             </div>
             <p className="page-sub" style={{ margin: 0 }}>{L("ระบบจะถ่ายเซลฟี่ + บันทึกพิกัด GPS ตอนเช็คอิน/เอาท์", "Check-in/out တွင် Selfie ရိုက်ပြီး GPS တည်နေရာ မှတ်တမ်းတင်ပါမည်")}</p>
+            {(() => {
+              // ใบ OT ของวันนี้ที่อนุมัติแล้วแต่ยังไม่เช็คเอาท์ → ปุ่ม "ทำ OT เสร็จ" ตรงนี้ (ใต้เมนูเวลาปกติ) กดเมื่อทำ OT เสร็จ
+              const todayOt = ots.find((o) => o.ot_date === todayYmd() && o.status === "approved" && !(Number(o.hours) > 0));
+              return todayOt ? (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line, #e2e8f0)", display: "flex", flexDirection: "column", gap: 7 }}>
+                  <div className="jo-dim" style={{ fontSize: 13, fontWeight: 600, color: "#0a6f66" }}>⏱️ {L(`วันนี้คุณมีใบ OT ที่อนุมัติแล้ว (เริ่ม ${todayOt.time_from}) — ทำเสร็จแล้วกดปุ่มนี้`, `ဒီနေ့ အတည်ပြုပြီး OT ရှိသည် (စ ${todayOt.time_from}) — ပြီးရင် ဤခလုတ် နှိပ်ပါ`)}</div>
+                  <OtCheckout ot={todayOt} big onDone={(m) => { flash(m); load(); }} flash={flash} L={L} />
+                </div>
+              ) : null;
+            })()}
           </>
         )}
       </div>
@@ -275,7 +285,7 @@ export default function Attendance({ me }) {
         <div className="card">
           <div className="sec-head"><div><div className="sec-title">⏱️ {L("ขอทำ OT", "OT တောင်းဆိုရန်")}</div>
             <div className="sec-sub">{L("กรอกวันและเวลาเริ่ม-เลิก · คิดเงินเมื่อ HR อนุมัติ", "ရက်နှင့်အချိန် ဖြည့်ပါ · HR အတည်ပြုမှ တွက်မည်")}</div></div></div>
-          <OtForm onDone={(m) => { flash(m); load(); }} flash={flash} L={L} />
+          <OtForm settings={settings} pattern={pattern} satGroup={satGroup} holidays={holidays} onDone={(m) => { flash(m); load(); }} flash={flash} L={L} />
         </div>
         <div className="card">
           <div className="sec-head"><div><div className="sec-title">{L("ใบขอ OT ของฉัน", "ကျွန်ုပ်၏ OT တောင်းဆိုမှု")}</div></div></div>
@@ -399,13 +409,18 @@ function AdvanceForm({ onDone, flash, L }) {
   );
 }
 
-function OtForm({ onDone, flash, L }) {
+function OtForm({ settings, pattern, satGroup, holidays, onDone, flash, L }) {
   const [date, setDate] = React.useState(todayYmd());
   const [from, setFrom] = React.useState("17:00");
   const [reason, setReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  // ตัวกันเวลา OT ทับเวลางานปกติ: วันทำงาน เวลาเริ่ม OT ต้องไม่ก่อนเวลาเลิกงาน (settings.end) · วันหยุดทำได้ทั้งวัน
+  const workEnd = settings?.end || DEFAULT_HR_SETTINGS.end;
+  const isWork = date ? isWorkday(date, pattern || "mon_sat", satGroup, holidays || new Set()) : false;
+  const overlap = !!(from && isWork && workEnd && from < workEnd);
   async function submit() {
     if (!from) return flash(L("ระบุเวลาเริ่ม", "စချိန် ဖြည့်ပါ"), true);
+    if (overlap) return flash(L(`เวลาเริ่ม OT ${from} ทับเวลางานปกติ — วันทำงานต้องเริ่ม OT ไม่ก่อนเวลาเลิกงาน ${workEnd} น. (ถ้าทำ OT วันหยุด ให้เลือกวันหยุด)`, `OT စချိန် ${from} သည် ပုံမှန်အလုပ်ချိန်နှင့် ထပ်နေသည် — အလုပ်ရက်တွင် အလုပ်ဆင်းချိန် ${workEnd} နောက်မှသာ OT စနိုင်သည်`), true);
     setBusy(true);
     try { await submitOt({ ot_date: date, time_from: from, reason }); setReason(""); onDone(L("ส่งใบขอ OT แล้ว รออนุมัติ ✓", "OT တောင်းဆိုပြီး · အတည်ပြုရန် စောင့်ဆိုင်း ✓")); }
     catch (e) { flash(L("ส่งไม่สำเร็จ: ", "မရပါ: ") + (e.message || e), true); }
@@ -415,17 +430,19 @@ function OtForm({ onDone, flash, L }) {
     <div className="att-leaveform">
       <div className="fld-row">
         <label className="fld"><span>{L("วันที่", "ရက်စွဲ")}</span><input className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-        <label className="fld"><span>{L("เวลาเริ่ม", "စချိန်")}</span><input className="inp" type="time" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+        <label className="fld"><span>{L("เวลาเริ่ม", "စချိန်")}</span><input className="inp" style={overlap ? { borderColor: "#dc2626" } : undefined} type="time" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
       </div>
       <label className="fld"><span>{L("เหตุผล", "အကြောင်းပြချက်")}</span><input className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={L("เช่น งานเร่งด่วน", "ဥပမာ - အရေးပေါ်")} /></label>
-      <div className="jo-dim" style={{ fontSize: 13 }}>⏱️ {L("ยังไม่ต้องระบุเวลาเลิก — พอทำ OT เสร็จ กดปุ่ม “เช็คเอาท์ OT” ระบบจะคิดชั่วโมงให้", "ဆုံးချိန် မဖြည့်ရသေး — OT ပြီးရင် “OT ထွက်” နှိပ်ပါ")}</div>
-      <button className="btn-primary" disabled={busy || !from} onClick={submit}>{L("ส่งใบขอ OT", "OT တောင်းဆိုရန်")}</button>
+      {overlap
+        ? <div className="jo-dim" style={{ fontSize: 13, color: "#dc2626", fontWeight: 600 }}>⚠️ {L(`เวลาเริ่ม OT ทับเวลางานปกติ — วันทำงานต้องเริ่มไม่ก่อน ${workEnd} น.`, `OT စချိန်သည် ပုံမှန်အလုပ်ချိန်နှင့် ထပ်နေသည် — ${workEnd} နောက်မှ စပါ`)}</div>
+        : <div className="jo-dim" style={{ fontSize: 13 }}>⏱️ {L("ยังไม่ต้องระบุเวลาเลิก — พอทำ OT เสร็จ กดปุ่ม “เช็คเอาท์ OT” ระบบจะคิดชั่วโมงให้", "ဆုံးချိန် မဖြည့်ရသေး — OT ပြီးရင် “OT ထွက်” နှိပ်ပါ")}</div>}
+      <button className="btn-primary" disabled={busy || !from || overlap} onClick={submit}>{L("ส่งใบขอ OT", "OT တောင်းဆိုရန်")}</button>
     </div>
   );
 }
 
 // ปุ่มเช็คเอาท์ OT (พนักงานกดตอนทำเสร็จ) — เวลาเลิก default = ตอนนี้ (mig 186)
-function OtCheckout({ ot, onDone, flash, L }) {
+function OtCheckout({ ot, onDone, flash, L, big }) {
   const nowHm = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
   const [open, setOpen] = React.useState(false);
   const [to, setTo] = React.useState(nowHm());
@@ -438,7 +455,7 @@ function OtCheckout({ ot, onDone, flash, L }) {
     catch (e) { flash((e.message || e), true); }
     setBusy(false);
   }
-  if (!open) return <button className="btn-primary sm ok" onClick={() => { setTo(nowHm()); setOpen(true); }}>🏁 {L("เช็คเอาท์ OT", "OT ထွက်")}</button>;
+  if (!open) return <button className={big ? "btn-primary att-big ok" : "btn-primary sm ok"} onClick={() => { setTo(nowHm()); setOpen(true); }}>🏁 {L("ทำ OT เสร็จ (เช็คเอาท์)", "OT ပြီးပြီ (ထွက်)")}</button>;
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
       <input className="inp" type="time" value={to} onChange={(e) => setTo(e.target.value)} style={{ width: 110 }} />

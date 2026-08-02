@@ -25,6 +25,7 @@ const L = (th, my) => (lang === "my" ? my : th);   // ไทย=default, ไท�
 - ✅ แปลครบ: Attendance (เดิม), MyJobs (เดิม, ช่าง), **TaskBoard, Expenses, TeamChat chrome, Handbook** (ทำใหม่ v532)
 - TeamChat: chrome แปลแล้ว + ข้อความแชตแปลสด (translateText) เดิม
 - **ChatDock ข้าม** — ซ่อนบนมือถืออยู่แล้ว (แม่บ้านใช้มือถือ)
-- **Handbook คู่มือ:** เนื้อหา SOP ภาษาพม่าอยู่ใน `lib/handbook.js` → `ROLE_GUIDE_MY` (ตอนนี้มีแค่ `maid` เต็ม + `th_my`). Handbook.jsx merge `{...ROLE_GUIDE[sel], ...ROLE_GUIDE_MY[sel]}` เมื่อ lang==="my" (ช่องไม่มี=fallback ไทย) + chrome แปลด้วย L(). **ตำแหน่งอื่นยังเป็นไทย** (แม่บ้านไม่ค่อยอ่าน) — เพิ่มได้โดยเติม entry ใน ROLE_GUIDE_MY. **พิมพ์ PDF ยังเป็นไทยเสมอ** (ฟังก์ชันออฟฟิศ — footer บอกผู้ใช้แล้ว).
+- **Handbook คู่มือ:** เนื้อหา SOP ภาษาพม่าอยู่ใน `lib/handbook.js` → `ROLE_GUIDE_MY` (v533 มี `lead_tech/tech/assistant/maid` เต็ม + `th_my`). Handbook.jsx merge `{...ROLE_GUIDE[sel], ...ROLE_GUIDE_MY[sel]}` เมื่อ lang==="my" (ช่องไม่มี=fallback ไทย) + chrome แปลด้วย L(). **ตำแหน่งออฟฟิศยังเป็นไทย** — เพิ่มได้โดยเติม entry ใน ROLE_GUIDE_MY. **พิมพ์ PDF ยังเป็นไทยเสมอ** (ฟังก์ชันออฟฟิศ — footer บอกผู้ใช้แล้ว).
+- **คู่มือเห็นเฉพาะตำแหน่งตัวเอง (v533):** Handbook.jsx `canBrowseAll = role∈{admin,exec,hr}` — เฉพาะ 3 role นี้เห็นชิปเลือกตำแหน่ง + ปุ่ม "พิมพ์ทั้งเล่ม"; พนักงานอื่นล็อกที่ตำแหน่งตัวเอง (sel=myRole, ซ่อนชิป/พิมพ์ทั้งเล่ม).
 
 **ข้อควรรู้:** คำแปลพม่าเป็น machine-assisted (header i18n.js เตือนให้เจ้าของภาษา proofread ก่อนใช้หนัก). ไม่มีคอลัมน์ภาษาใน DB — เก็บ localStorage อย่างเดียว (ถ้าจะ per-user ข้ามเครื่องต้องเพิ่มคอลัมน์ profiles + migration). ดู [[permissions-system]] เรื่อง role.

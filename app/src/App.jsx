@@ -110,7 +110,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·แม่บ้านใช้ภาษาพม่าได้: TaskBoard/Expenses/TeamChat/คู่มือ + toggle v532";
+const BUILD = "2026-08-02·กันเวลา OT ทับงาน + ปุ่มทำ OT เสร็จ + คู่มือเฉพาะตำแหน่งตัวเอง + คู่มือช่างพม่า v533";
 
 function SetupNotice() {
   return (
