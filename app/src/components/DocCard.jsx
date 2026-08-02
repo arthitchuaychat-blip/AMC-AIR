@@ -5,7 +5,7 @@ import { fmtBaht, fmtDocDate } from "../lib/format";
 //   ช่อง 1 เลขที่+สถานะ · ช่อง 2 ชื่องาน · ช่อง 3 แถบข้อมูลลูกค้า · ช่อง 4 ผู้สร้าง+วันที่+ยอด
 // ใช้คู่กับคลาส .doc2 บนการ์ด: <div className="card job-card doc2"><DocCardHead …/>…chips/actions…</div>
 // partyIcon: ไอคอนแถบคู่ค้า (ค่าเริ่ม 🏢 ลูกค้า · ใช้ 🏭 ผู้ขาย สำหรับใบสั่งซื้อ ฯลฯ) · titleFallback: ข้อความชื่องานเมื่อว่าง
-export default function DocCardHead({ no, badges, title, sub, by, date, amountLabel, amount, amountNode, customer, onClick, partyIcon = "🏢", titleFallback = "— ไม่ระบุชื่องาน —" }) {
+export default function DocCardHead({ no, badges, title, sub, by, date, amountLabel, amount, amountNode, customer, onClick, partyIcon = "🏢", titleFallback = "— ไม่ระบุชื่องาน —", rightExtra = null }) {
   const c = customer || {};
   const addr = c.siteAddress || c.addr;
   const showContact = c.contactName && c.contactName !== c.name;
@@ -21,6 +21,7 @@ export default function DocCardHead({ no, badges, title, sub, by, date, amountLa
         {sub ? <div className="dch-sub">{sub}</div> : null}
       </div>
       <div className="dch-right">
+        {rightExtra}
         {by ? <span className="dch-by">👤 {by}</span> : null}
         {date ? <span className="dch-date">📅 {fmtDocDate(date)}</span> : null}
         {amountNode || <div className="dch-amt"><span>{amountLabel}</span><b>{fmtBaht(amount)}</b></div>}
