@@ -2452,22 +2452,29 @@ button.card.set-fold-head.open{border-color:var(--primary);box-shadow:0 2px 10px
 .ho-card-acts .danger{ color:#dc2626 }
 @media (max-width:560px){ .he-grid2{ grid-template-columns:1fr } .he-machine{ grid-template-columns:repeat(2,1fr) } }
 
-/* ═══════════ v538 — การ์ดกระชับ + กลอสลอยเด่น + ตัวกรองบีบเตี้ย (คุมทั้งแอป) ═══════════ */
-/* การ์ดทุกใบ: พื้นไล่เฉดกลอส + เงาสีฟ้าลอยเด่น + ขอบเนียน */
+/* ═══════════ v538/v541 — การ์ดกระชับ + กลอสลอยเด่น (เงาเข้ม) + ตัวกรองบีบเตี้ย (คุมทั้งแอป) ═══════════ */
+/* การ์ดทุกใบ: พื้นไล่เฉดกลอส + เงาเข้มลอยเด่นจากพื้นหลัง + ขอบเนียน */
 .card{
-  background:linear-gradient(168deg,#ffffff 0%, #eff5ff 100%);
-  border:1px solid color-mix(in srgb, var(--primary) 12%, var(--line));
+  background:linear-gradient(168deg,#ffffff 0%, #eef4ff 100%);
+  border:1px solid color-mix(in srgb, var(--primary) 13%, var(--line));
   border-radius:14px;
-  padding:calc(15px * var(--dunit));
-  box-shadow:0 1px 2px rgba(16,24,40,.05), 0 8px 22px rgba(31,116,224,.09);
+  padding:calc(13px * var(--dunit));
+  box-shadow:0 2px 5px rgba(16,24,40,.10), 0 14px 30px rgba(31,116,224,.16);
 }
-/* การ์ดรายการ (ใบงาน/เอกสาร/PO/ฯลฯ): กระชับลง + ลอยเด่น + ยกตัวเมื่อชี้ */
-.job-cards{gap:9px}
+/* การ์ดรายการ (ใบงาน/เอกสาร/PO/ฯลฯ): บีบระยะทุกจุด + ลอยเด่น + ยกตัวเมื่อชี้ */
+.job-cards{gap:7px}
 .job-card{transition:transform .15s ease, box-shadow .15s ease}
-.job-card:hover{transform:translateY(-3px); box-shadow:0 16px 34px rgba(31,116,224,.17)}
-.dch{padding:10px 15px}
-.job-card-head{padding:11px 15px}
-.cat-card{border-radius:13px; transition:transform .15s ease, box-shadow .15s ease}
+.job-card:hover{transform:translateY(-3px); box-shadow:0 18px 38px rgba(31,116,224,.22)}
+.job-card-head{padding:9px 14px}
+.dch{padding:8px 14px}
+.dch-cust{padding:5px 14px;gap:2px}
+.job-lines{padding:0 14px 10px}
+.doc2>.job-lines{margin-top:7px}
+.doc2>.doc-links{margin:7px 14px 2px}
+.doc2>.int-note-tag{margin:6px 14px 2px}
+.po-view-row{padding:5px 0}
+.job-actions{margin-top:9px;gap:8px}
+.cat-card{border-radius:13px; transition:transform .15s ease, box-shadow .15s ease; box-shadow:0 2px 5px rgba(16,24,40,.10), 0 12px 26px rgba(31,116,224,.14)}
 .cat-card.clickable:hover{transform:translateY(-3px)}
 /* ตัวกรองบีบเตี้ยลง: ชิปเล็กลง ระยะห่างน้อยลง → เห็นการ์ดมากขึ้น */
 .cat-filter,.cat-scroll{gap:6px;margin-bottom:9px}
