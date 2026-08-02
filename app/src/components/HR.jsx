@@ -521,6 +521,7 @@ function OtTab({ canManage, lockSelfId, flash }) {
           <div className="hr-leave-row" key={o.id}>
             <div><b>{o.name}</b> <span className="jo-dim">{o.department}</span><br />
               <b>{o.hours} ชม.</b> · {thDate(o.ot_date)} · {o.time_from}–{o.time_to}
+              {o.job_no && <div className="jo-dim">🔧 งาน {o.job_no}</div>}
               {o.reason && <div className="jo-dim">เหตุผล: {o.reason}</div>}
               {o.status === "paid" && o.period && <div className="jo-dim">คิดในรอบ {o.period}</div>}</div>
             <div className="hr-leave-act">

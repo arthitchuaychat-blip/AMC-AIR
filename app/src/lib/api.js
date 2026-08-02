@@ -4402,13 +4402,15 @@ export function otHoursFromTimes(from, to) {
   let diff = b - a; if (diff < 0) diff += 24 * 60;
   return Math.floor(diff / 30) / 2;
 }
-export async function submitOt({ ot_date, time_from, time_to, reason }) {
+export async function submitOt({ ot_date, time_from, time_to, reason, job_no }) {
   const uid = await _uid();
   const hours = otHoursFromTimes(time_from, time_to);
-  const { error } = await supabase.from("hr_ot").insert({ user_id: uid, ot_date, time_from: time_from || null, time_to: time_to || null, hours, reason: reason || null, created_by: uid });
+  const row = { user_id: uid, ot_date, time_from: time_from || null, time_to: time_to || null, hours, reason: reason || null, job_no: job_no || null, created_by: uid };
+  let { error } = await supabase.from("hr_ot").insert(row);
+  if (error && /job_no/i.test(error.message || "")) { delete row.job_no; ({ error } = await supabase.from("hr_ot").insert(row)); } // ก่อนรัน mig 185
   if (error) throw error;
   const me = await _meSafe();
-  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `⏱️ ${me?.name || "พนักงาน"} ขอทำ OT ${hours} ชม. (${ot_date})`, body: reason || "", url: "hr", ref_type: "ot" });
+  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `⏱️ ${me?.name || "พนักงาน"} ขอทำ OT ${hours} ชม. (${ot_date})${job_no ? ` · งาน ${job_no}` : ""}`, body: reason || "", url: "hr", ref_type: "ot" });
 }
 export async function listMyOt() {
   const uid = await _uid();

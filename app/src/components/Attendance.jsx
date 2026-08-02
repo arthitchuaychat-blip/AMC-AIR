@@ -284,6 +284,7 @@ export default function Attendance({ me }) {
             {ots.map((o) => { const b = OT_BADGE[o.status] || OT_BADGE.pending; return (
               <div className="att-leave-row" key={o.id}>
                 <div><b>{o.hours} {L("ชม.", "နာရီ")}</b> <span className="jo-dim">· {thDate(o.ot_date)} · {o.time_from}–{o.time_to}</span>
+                  {o.job_no && <div className="jo-dim">🔧 {L("งาน", "အလုပ်")} {o.job_no}</div>}
                   {o.reason && <div className="jo-dim">{o.reason}</div>}
                   {o.status === "paid" && o.period && <div className="jo-dim">{L("คิดในรอบ", "တွက်သည့်လ")} {o.period}</div>}
                   {o.decide_note && <div className="jo-dim">{L("หมายเหตุ", "မှတ်ချက်")}: {o.decide_note}</div>}</div>
