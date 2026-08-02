@@ -61,7 +61,7 @@ const NAV = {
   followup: { th: "ติดตามลูกค้า", en: "Follow-up", icon: "user" },
   weborders: { th: "คำสั่งซื้อจากเว็บ", en: "Web Orders", icon: "purchase" },
   website: { th: "จัดการเว็บไซต์", en: "Website", icon: "catalog" },
-  chat: { th: "แชต LINE", en: "Chat", icon: "chat" },
+  chat: { th: "แชตลูกค้า", en: "Customer Chat", icon: "chat" },
   teamchat: { th: "แชตทีม", en: "Team Chat", icon: "chat" },
   tasks: { th: "กระดานสั่งงาน", en: "Task Board", icon: "clipboard" },
   attendance: { th: "เข้างาน/ลา", en: "Attendance", icon: "calendar" },
@@ -121,7 +121,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·ใบเสนอเพิ่มเติม(กำไรรวมงานเดียว) + งานแก้ไข/เคลม(KPI ตัดทีมต้นเรื่อง) v547";
+const BUILD = "2026-08-02·เปลี่ยนชื่อเมนู 'แชต LINE' → 'แชตลูกค้า' v548";
 
 function SetupNotice() {
   return (

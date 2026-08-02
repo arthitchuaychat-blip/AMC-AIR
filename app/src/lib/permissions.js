@@ -27,7 +27,7 @@ export const MODULES = [
   { id: "followup", label: "ติดตามลูกค้า (ขายซ้ำ)", editable: false },
   { id: "weborders", label: "คำสั่งซื้อจากเว็บ", editable: false },
   { id: "website", label: "จัดการเว็บไซต์ (กราฟิก)", editable: true },
-  { id: "chat", label: "แชต LINE (ลูกค้า)", editable: true },
+  { id: "chat", label: "แชตลูกค้า (LINE/FB)", editable: true },
   { id: "teamchat", label: "แชตทีม (ภายใน)", editable: false },
   { id: "tasks", label: "กระดานสั่งงาน", editable: true },
   { id: "attendance", label: "เข้างาน/ลา (ของฉัน)", editable: true },
