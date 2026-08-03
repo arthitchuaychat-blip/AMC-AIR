@@ -122,7 +122,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·keepNames (ไล่บั๊กหน้าจอพัง) + bust บันเดิลเก่า v562";
+const BUILD = "2026-08-02·แก้ใบงานพัง #300: ย้าย useMemo ขึ้นก่อน early return editor v563";
 
 function SetupNotice() {
   return (

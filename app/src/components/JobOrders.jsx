@@ -171,6 +171,9 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     setEd({ ...blankEd(), assigned_team: schedule.assigned_team || "", visits: [{ ...blankVisit(), date: schedule.date || "", end_date: schedule.end_date || "", slot: schedule.slot || "morning" }] });
     onScheduleConsumed && onScheduleConsumed();
   }, [schedule]);
+  // ⚠️ ต้องอยู่ตรงนี้ (กับ hooks อื่น) — เดิมวางไว้ล่างสุดหลัง early return ของหน้า editor
+  //    พอเปิด editor (ed มีค่า) component return ก่อนถึง useMemo → hooks หายไป 1 = React #300 หน้าจอพัง
+  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
 
   // turn a stored job_visit row into the editor's visit shape (keep assigned_team so a done รอบ keeps its team)
   function visitFromRow(v) {
@@ -554,7 +557,6 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const baseList = fieldOnly && role !== "lead_tech" && myTeam
     ? list.filter((j) => (j.visits && j.visits.length) ? j.visits.some((v) => v.assigned_team === myTeam) : j.assigned_team === myTeam)
     : list;
-  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
   // จำนวนตัวกรองที่ใช้อยู่ (ต่างจากค่าเริ่มต้น) — โชว์บนแถบตัวกรองยุบได้ · ช่วงวันที่ที่นี่ค่าเริ่มต้นว่าง นับตรง ๆ ได้
   const activeCount = (statusF !== "all" ? 1 : 0) + (typeF !== "all" ? 1 : 0) + (teamF !== "all" ? 1 : 0) + (byPerson ? 1 : 0) + ((dateFrom || dateTo) ? 1 : 0);
   return (
