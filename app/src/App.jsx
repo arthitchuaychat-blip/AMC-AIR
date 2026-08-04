@@ -122,7 +122,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·คอมเมนต์ Facebook เข้าแชตลูกค้า (รับ/ตอบ/ซ่อน) — เตรียมโค้ดรอสิทธิ์ Meta v566";
+const BUILD = "2026-08-02·แก้แอปค้างหน้าโหลด: โปรไฟล์โหลดไม่ได้ = เด้งลองใหม่/ออก ไม่ค้าง v567";
 
 function SetupNotice() {
   return (
@@ -188,9 +188,11 @@ export default function App() {
     return n;
   });
 
+  const [profileFailed, setProfileFailed] = React.useState(false);   // โหลดโปรไฟล์ล้มครบรอบ → โชว์ปุ่มลองใหม่/ออก แทนค้าง
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
+    // .finally → ready=true เสมอแม้ getSession ล้ม (ไม่ค้างหน้า "กำลังโหลด" · ไม่มี session ก็เด้ง Login)
+    supabase.auth.getSession().then(({ data }) => setSession(data.session)).catch(() => {}).finally(() => setReady(true));
     // อัปเดต session เฉพาะเมื่อ "ผู้ใช้เปลี่ยน" (เข้า/ออกระบบ) — ไม่ใช่ทุกครั้งที่ token refresh
     //   ทุก ~1 ชม. Supabase ยิง TOKEN_REFRESHED · sync ข้ามแท็บ · focus → ถ้า setSession ทุกครั้ง = re-render ทั้งแอปรัว ๆ
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) =>
@@ -210,9 +212,9 @@ export default function App() {
     //   อาจได้ user=null → คืน null · ห้าม setProfile(null) เด็ดขาด ไม่งั้น role ตกเป็น "tech" (ธุรการเห็นสิทธิช่าง)
     //   ⇒ ได้โปรไฟล์จริงเท่านั้นถึง set · null/พลาด = เก็บของเดิมไว้แล้ว retry (สูงสุด ~4 ครั้ง)
     const load = (tries) => getProfile()
-      .then((p) => { if (!alive) return; if (p) setProfile(p); else if (tries < 4) setTimeout(() => load(tries + 1), 900); })
-      .catch(() => { if (alive && tries < 4) setTimeout(() => load(tries + 1), 900); });
-    load(0);
+      .then((p) => { if (!alive) return; if (p) { setProfile(p); setProfileFailed(false); } else if (tries < 4) setTimeout(() => load(tries + 1), 900); else setProfileFailed(true); })
+      .catch(() => { if (!alive) return; if (tries < 4) setTimeout(() => load(tries + 1), 900); else setProfileFailed(true); });
+    setProfileFailed(false); load(0);
     return () => { alive = false; };
   }, [uid]);
 
@@ -347,7 +349,19 @@ export default function App() {
   if (!session) return <Login />;
   // ล็อกอินแล้วแต่โปรไฟล์ยังโหลดไม่เสร็จ → โชว์ "กำลังโหลด" · ห้าม render แอปด้วย role fallback "tech"
   //   (ไม่งั้นธุรการเห็นสิทธิช่างแว้บ ๆ ระหว่างโหลด) — profile จะมาชัวร์เพราะ effect ด้านบน retry ให้
-  if (!profile) return <div className="login-stage"><div className="page-sub">กำลังโหลดสิทธิ์การใช้งาน…</div></div>;
+  if (!profile) {
+    // โหลดโปรไฟล์ล้มครบรอบ (token หมดอายุ/เน็ตสะดุด) → ห้ามค้าง · ให้ทางออก (ลองใหม่/ออกจากระบบ)
+    if (profileFailed) return (
+      <div className="login-stage"><div style={{ textAlign: "center" }}>
+        <div className="page-sub" style={{ marginBottom: 12 }}>โหลดข้อมูลผู้ใช้ไม่สำเร็จ — เน็ตอาจสะดุดหรือหมดเวลาเข้าสู่ระบบ</div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+          <button className="btn-primary" onClick={() => window.location.reload()}>ลองใหม่</button>
+          <button className="btn-ghost" onClick={() => { signOut().finally(() => window.location.reload()); }}>ออกจากระบบ</button>
+        </div>
+      </div></div>
+    );
+    return <div className="login-stage"><div className="page-sub">กำลังโหลดสิทธิ์การใช้งาน…</div></div>;
+  }
 
   const role = profile.role || "tech";
   // ทีมช่าง (ช่าง/ผู้ช่วยช่าง/หัวหน้าช่าง) + แม่บ้าน เลือกภาษาพม่าได้ (แรงงานพม่า) · ฝั่งหลังบ้าน/ออฟฟิศเป็นไทยเสมอ
