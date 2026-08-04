@@ -122,7 +122,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·แก้ใบงานพัง #300: ย้าย useMemo ขึ้นก่อน early return editor v563";
+const BUILD = "2026-08-02·แก้แอปรวน/สิทธิดีด: refetch เฉพาะตอน user เปลี่ยน + ไม่ downgrade สิทธิตอนดึงพลาด v564";
 
 function SetupNotice() {
   return (
@@ -191,24 +191,34 @@ export default function App() {
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    // อัปเดต session เฉพาะเมื่อ "ผู้ใช้เปลี่ยน" (เข้า/ออกระบบ) — ไม่ใช่ทุกครั้งที่ token refresh
+    //   ทุก ~1 ชม. Supabase ยิง TOKEN_REFRESHED · sync ข้ามแท็บ · focus → ถ้า setSession ทุกครั้ง = re-render ทั้งแอปรัว ๆ
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) =>
+      setSession((prev) => (prev?.user?.id === (s?.user?.id || null) ? prev : s)));
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // ⚠️ key ข้อมูลผู้ใช้ (profile/perms/teams) ด้วย "user id" ไม่ใช่ทั้ง session object —
+  //   Supabase ยิง onAuthStateChange ทุกครั้งที่รีเฟรช token (ทุก ~1 ชม.) + sync ข้ามแท็บ + focus
+  //   ถ้า key ด้วย session ตรง ๆ จะรีเฟรชทุกอย่างใหม่ทุกครั้ง = แอปรวน/ค้าง โดยที่ user เดิม
+  const uid = session?.user?.id || null;
+
   React.useEffect(() => {
-    if (session) getProfile().then(setProfile);
+    if (uid) getProfile().then(setProfile);
     else setProfile(null);
-  }, [session]);
+  }, [uid]);
 
   // load the editable role→module permission overrides (falls back to the shipped defaults)
   React.useEffect(() => {
-    if (!session) return;
+    if (!uid) return;
     getRolePermissions()
       .then((o) => { setPerms(mergePerms(o)); setPermsV((v) => v + 1); })
-      .catch(() => { setPerms(mergePerms(null)); setPermsV((v) => v + 1); });
-  }, [session]);
+      // ⚠️ ดึงพลาด (เน็ตสะดุด/token refresh) → "เก็บสิทธิเดิมไว้" ห้าม setPerms(default)
+      //   ไม่งั้นสิทธิที่ตั้งเองถูกเขียนทับด้วยค่าเริ่มต้นชั่วขณะ = สิทธิดีดไปกลับ (ค่าเริ่มต้นอยู่ที่ _perms แล้วตอนโหลดครั้งแรก)
+      .catch(() => {});
+  }, [uid]);
 
-  React.useEffect(() => { if (session) listTeams().then(setTeams).catch(() => {}); }, [session]);
+  React.useEffect(() => { if (uid) listTeams().then(setTeams).catch(() => {}); }, [uid]);
   // subcontractor-team members don't belong in HR/attendance — hide those menus for them
   const mySub = !!(profile && teams.some((t) => t.id === profile.team && t.type === "sub"));
   const navIds = (r) => navForRole(r).filter((id) => !(mySub && (id === "attendance" || id === "hr")));
@@ -262,7 +272,7 @@ export default function App() {
 
   // register the service worker + (re)subscribe to push if already permitted
   React.useEffect(() => { registerSW().catch(() => {}); }, []);
-  React.useEffect(() => { if (session) autoResubscribe(); }, [session]);
+  React.useEffect(() => { if (uid) autoResubscribe(); }, [uid]);
   // keep the signature (for printed docs) in localStorage so DocSlip can pick it up on any print
   React.useEffect(() => {
     if (!profile) return;
