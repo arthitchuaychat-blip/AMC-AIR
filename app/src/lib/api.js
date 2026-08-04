@@ -4139,6 +4139,32 @@ async function _fbSend(to, payload) {
 }
 export const sendFbMessage = (psid, text, opts) => _fbSend(psid, { text, ...(opts || {}) });
 export const sendFbImage = (psid, imageUrl) => _fbSend(psid, { imageUrl });
+
+// ── คอมเมนต์ Facebook (mig 193) — รับผ่าน webhook · ตอบ/ซ่อน/ปิด ผ่าน /api/fb-comment ──
+export async function listFbComments(status = "open") {
+  let q = supabase.from("fb_comments").select("*").order("commented_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
+  if (status && status !== "all") q = q.eq("status", status);
+  const { data, error } = await q.limit(500);
+  if (error) throw error;
+  return data || [];
+}
+export async function countOpenFbComments() {
+  const { count, error } = await supabase.from("fb_comments").select("id", { count: "exact", head: true }).eq("status", "open");
+  if (error) return 0;
+  return count || 0;
+}
+// action: reply | hide | unhide | private | done · reply/private ต้องมี text
+export async function fbCommentAction(action, comment_id, text) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("ยังไม่ได้เข้าสู่ระบบ");
+  const r = await fetch("/api/fb-comment", {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action, comment_id, text }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.ok === false) throw new Error(j.error || j.msg || "ไม่สำเร็จ");
+  return j;
+}
 // CRM: set a contact's stage / responsible staff
 export async function setLineStage(uid, stage) {
   const { error } = await supabase.from("line_contacts").update({ stage }).eq("line_user_id", uid);

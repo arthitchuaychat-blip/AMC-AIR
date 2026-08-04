@@ -2,7 +2,7 @@
 // Env: FB_VERIFY_TOKEN, FB_PAGE_ACCESS_TOKEN, FB_APP_SECRET (optional, for signature check), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 import crypto from "crypto";
 import webpush from "web-push";
-import { GRAPH, pageToken } from "./_fb.js";
+import { GRAPH, pageToken, pageId } from "./_fb.js";
 
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -91,6 +91,30 @@ export default async function handler(req, res) {
       }
       await fetch(`${SB()}/rest/v1/fb_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ psid, direction: "in", type: imageUrl ? "image" : "text", text, image_url: imageUrl, fb_message_id: ev.message.mid || null }) });
       await notifyFbChat(psid, exist[0]?.display_name || null, preview);   // แจ้งเตือนออฟฟิศ + ผู้รับผิดชอบ
+    }
+
+    // ── คอมเมนต์ใต้โพสต์ (field 'feed' · mig 193) — ต้องมีสิทธิ์ pages_read_engagement ──
+    for (const ch of entry.changes || []) {
+      if (ch.field !== "feed") continue;
+      const v = ch.value || {};
+      if (v.item !== "comment") continue;                      // เอาเฉพาะคอมเมนต์ (ข้าม reaction/like/post)
+      const commentId = v.comment_id; if (!commentId) continue;
+      if (v.verb === "remove" || v.verb === "hide") {          // ลูกค้าลบ/ซ่อนคอมเมนต์เอง → อัปสถานะ
+        await fetch(`${SB()}/rest/v1/fb_comments?comment_id=eq.${encodeURIComponent(commentId)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ status: v.verb === "remove" ? "done" : "hidden", is_hidden: v.verb === "hide" }) }).catch(() => {});
+        continue;
+      }
+      const fromId = v.from && v.from.id;
+      if (fromId && fromId === pageId()) continue;             // คอมเมนต์ของเพจเราเอง (ที่เราตอบ) — ไม่ต้องเก็บ/เตือน
+      const fromName = (v.from && v.from.name) || null;
+      const message = v.message || null;
+      // upsert (comment_id unique) — คอมเมนต์เดิมแก้ไข = อัปทับ
+      await fetch(`${SB()}/rest/v1/fb_comments`, { method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" }, body: JSON.stringify({
+        comment_id: commentId, post_id: v.post_id || null,
+        parent_id: (v.parent_id && v.parent_id !== v.post_id) ? v.parent_id : null,
+        from_id: fromId || null, from_name: fromName, message, permalink: v.permalink_url || null,
+        commented_at: v.created_time ? new Date(v.created_time * 1000).toISOString() : new Date().toISOString(),
+      }) }).catch(() => {});
+      await notifyFbChat(null, `[คอมเมนต์] ${fromName || "Facebook"}`, message);
     }
   }
   return res.status(200).json({ ok: true });

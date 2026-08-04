@@ -21,7 +21,8 @@ export default async function handler(req, res) {
   // มี page id แล้ว → แลกโทเค็นเพจ แล้วสมัคร webhook ให้เพจนั้น
   const token = await pageToken();
   const who = await fetch(`${GRAPH}/${pid}?fields=id,name&access_token=${token}`).then((r) => r.json()).catch((e) => ({ error: String(e) }));
-  const sub = await fetch(`${GRAPH}/${pid}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,message_echoes&access_token=${token}`, { method: "POST" })
+  // feed = คอมเมนต์/โพสต์ (ต้องมีสิทธิ์ pages_read_engagement · ตอบต้อง pages_manage_engagement)
+  const sub = await fetch(`${GRAPH}/${pid}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,message_echoes,feed&access_token=${token}`, { method: "POST" })
     .then((r) => r.json()).catch((e) => ({ error: String(e) }));
   const check = await fetch(`${GRAPH}/${pid}/subscribed_apps?access_token=${token}`).then((r) => r.json()).catch((e) => ({ error: String(e) }));
 

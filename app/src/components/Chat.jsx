@@ -3,6 +3,7 @@ import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, searchFbMessages, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
+import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
@@ -151,9 +152,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [sups, setSups] = React.useState([]);            // ทะเบียนผู้ขาย (โหลดเมื่อใช้แท็บซัพ/ผูกผู้ขาย)
   const [poPicker, setPoPicker] = React.useState(false); // โมดัลเลือก PO ส่งเข้าแชตซัพ
   const [pos, setPos] = React.useState([]);              // ใบสั่งซื้อ (โหลดครั้งแรกที่กดส่ง PO)
-  const [channel, setChannel] = React.useState("line"); // "line" | "fb" | "sup" — unified inbox switch
+  const [channel, setChannel] = React.useState("line"); // "line" | "fb" | "sup" | "cm" — unified inbox switch
   const isFb = channel === "fb";
   const isSup = channel === "sup";   // แท็บซัพพลายเออร์ = ผู้ติดต่อ LINE ที่ kind='supplier' (mig 138)
+  const isCm = channel === "cm";     // แท็บคอมเมนต์ Facebook (mig 193) — แยกจากระบบแชต/contact เดิม
   // channel-aware data calls (FB returns the same shape, psid aliased to line_user_id)
   const chListContacts = () => (isFb ? listFbContacts() : listLineContacts());
   const chListMessages = (id, opt) => (isFb ? listFbMessages(id, opt) : listLineMessages(id, opt));
@@ -220,11 +222,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   React.useEffect(() => { listTeams().then(setTeams).catch(() => {}); listJobOrders().then(setJobs).catch(() => {}); }, []);
   React.useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
-  // reload + reset when switching channel (LINE ↔ FB)
-  React.useEffect(() => { setSel(null); setMsgs([]); setShowThread(false); setQrPendImgs([]); loadContacts(); }, [channel]);
+  // reload + reset when switching channel (LINE ↔ FB) · แท็บคอมเมนต์ไม่ใช้ระบบ contact เดิม → ข้าม
+  React.useEffect(() => { if (isCm) return; setSel(null); setMsgs([]); setShowThread(false); setQrPendImgs([]); loadContacts(); }, [channel]);
 
   // realtime: new messages + contact changes (subscribes to the active channel's tables)
   React.useEffect(() => {
+    if (isCm) return;   // คอมเมนต์มี realtime/โหลดเองใน FbComments
     const msgTable = isFb ? "fb_messages" : "line_messages";
     const contactTable = isFb ? "fb_contacts" : "line_contacts";
     const ch = supabase.channel(channel + "-rt")
@@ -556,7 +559,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [searching, setSearching] = React.useState(false);
   React.useEffect(() => {
     const term = q.trim();
-    if (term.length < 2) { setMsgHits({}); setSearching(false); return; }
+    if (isCm || term.length < 2) { setMsgHits({}); setSearching(false); return; }
     let dropped = false;
     setSearching(true);
     const t = setTimeout(() => {
@@ -604,7 +607,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         )}
       </div>
 
-      <div className={"chat-wrap" + (showThread ? " show-thread" : "") + (showInfo ? " show-info" : "")}>
+      <div className={"chat-wrap" + (showThread ? " show-thread" : "") + (showInfo ? " show-info" : "")} style={{ position: "relative" }}>
+        {/* คอมเมนต์ Facebook — overlay เต็มพื้นที่แชต (แยกจากระบบ contact เดิม) · กด "← แชต" กลับ */}
+        {isCm && (
+          <div style={{ position: "absolute", inset: 0, zIndex: 6, background: "#fff", display: "flex" }}>
+            <FbComments flash={flash} onBack={() => setChannel("line")} />
+          </div>
+        )}
         {/* conversation list */}
         <div className="chat-list">
           <div className="chat-channel-tabs">
@@ -613,6 +622,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             </button>
             <button className={"chat-ch" + (isFb ? " on fb" : "")} onClick={() => setChannel("fb")}>
               Facebook{tabUnread.fb > 0 && <span className="chat-ch-cnt">{tabUnread.fb > 99 ? "99+" : tabUnread.fb}</span>}
+            </button>
+            <button className={"chat-ch" + (isCm ? " on fb" : "")} title="คอมเมนต์ใต้โพสต์ Facebook" onClick={() => setChannel("cm")}>
+              💬 คอมเมนต์
             </button>
             <button className={"chat-ch" + (isSup ? " on sup" : "")} title="แชตซัพพลายเออร์ (LINE เดียวกัน แยกกระดาน)" onClick={() => setChannel("sup")}>
               🏭 ซัพฯ{tabUnread.sup > 0 && <span className="chat-ch-cnt">{tabUnread.sup > 99 ? "99+" : tabUnread.sup}</span>}
