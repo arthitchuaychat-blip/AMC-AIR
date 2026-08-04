@@ -122,7 +122,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·แก้แอปรวน/สิทธิดีด: refetch เฉพาะตอน user เปลี่ยน + ไม่ downgrade สิทธิตอนดึงพลาด v564";
+const BUILD = "2026-08-02·แก้ธุรการดีดเป็นช่าง: โปรไฟล์พลาด/null = เก็บของเดิม+retry · โหลดไม่เสร็จโชว์กำลังโหลด v565";
 
 function SetupNotice() {
   return (
@@ -204,8 +204,16 @@ export default function App() {
   const uid = session?.user?.id || null;
 
   React.useEffect(() => {
-    if (uid) getProfile().then(setProfile);
-    else setProfile(null);
+    if (!uid) { setProfile(null); return; }
+    let alive = true;
+    // ⚠️ getProfile() เรียก supabase.auth.getUser() (ตรวจ token กับเซิร์ฟเวอร์) — ช่วง token refresh/เน็ตสะดุด
+    //   อาจได้ user=null → คืน null · ห้าม setProfile(null) เด็ดขาด ไม่งั้น role ตกเป็น "tech" (ธุรการเห็นสิทธิช่าง)
+    //   ⇒ ได้โปรไฟล์จริงเท่านั้นถึง set · null/พลาด = เก็บของเดิมไว้แล้ว retry (สูงสุด ~4 ครั้ง)
+    const load = (tries) => getProfile()
+      .then((p) => { if (!alive) return; if (p) setProfile(p); else if (tries < 4) setTimeout(() => load(tries + 1), 900); })
+      .catch(() => { if (alive && tries < 4) setTimeout(() => load(tries + 1), 900); });
+    load(0);
+    return () => { alive = false; };
   }, [uid]);
 
   // load the editable role→module permission overrides (falls back to the shipped defaults)
@@ -337,8 +345,11 @@ export default function App() {
   if (!hasConfig) return <SetupNotice />;
   if (!ready) return <div className="login-stage"><div className="page-sub">กำลังโหลด…</div></div>;
   if (!session) return <Login />;
+  // ล็อกอินแล้วแต่โปรไฟล์ยังโหลดไม่เสร็จ → โชว์ "กำลังโหลด" · ห้าม render แอปด้วย role fallback "tech"
+  //   (ไม่งั้นธุรการเห็นสิทธิช่างแว้บ ๆ ระหว่างโหลด) — profile จะมาชัวร์เพราะ effect ด้านบน retry ให้
+  if (!profile) return <div className="login-stage"><div className="page-sub">กำลังโหลดสิทธิ์การใช้งาน…</div></div>;
 
-  const role = profile?.role || "tech";
+  const role = profile.role || "tech";
   // ทีมช่าง (ช่าง/ผู้ช่วยช่าง/หัวหน้าช่าง) + แม่บ้าน เลือกภาษาพม่าได้ (แรงงานพม่า) · ฝั่งหลังบ้าน/ออฟฟิศเป็นไทยเสมอ
   const canBurmese = role === "tech" || role === "assistant" || role === "lead_tech" || role === "maid";
   const effLang = canBurmese ? lang : "th";
