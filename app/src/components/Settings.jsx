@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, listCategories, saveCategory, deleteCategory, updateCategory, setCategoryMatGroup, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, setProfileActive, listCategories, saveCategory, deleteCategory, updateCategory, setCategoryMatGroup, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -274,21 +274,37 @@ function UserRow({ p, teams, onChanged, flash }) {
     setBusy(false);
   }
   async function del() {
-    if (!await confirmDialog(`ลบผู้ใช้ ${p.email}?\nบัญชีนี้จะเข้าระบบไม่ได้อีก (ลบถาวร)`)) return;
+    if (!await confirmDialog(`ลบผู้ใช้ ${p.email}?\nบัญชีนี้จะเข้าระบบไม่ได้อีก (ลบถาวร)\n\n⚠️ ถ้าเคยสร้างเอกสาร/ทำงานไว้ ลบไม่ได้ — ใช้ "พ้นสภาพ" แทน`)) return;
     setBusy(true);
     try { await adminDeleteUser(p.id); flash(`ลบ ${p.email} แล้ว`); onChanged(); }
-    catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+    catch (e) { flash("ลบไม่สำเร็จ (น่าจะเคยผูกเอกสาร) — ใช้ 'พ้นสภาพ' แทน: " + (e.message || e), true); }
     setBusy(false);
   }
+  // พ้นสภาพ / คืนสภาพ (mig 196) — วิธีที่ถูกสำหรับพนักงานลาออกที่เคยสร้างเอกสาร (ลบไม่ได้)
+  async function toggleActive(next) {
+    if (!await confirmDialog(next
+      ? `คืนสภาพ ${p.name || p.email}?\nกลับมาเข้าระบบได้ + โผล่ในรายชื่อพนักงานอีกครั้ง`
+      : `ทำให้ ${p.name || p.email} พ้นสภาพ?\n\n• เข้าระบบไม่ได้อีก\n• หายจากรายชื่อพนักงาน / มอบหมายงาน / เงินเดือน\n• ✅ ชื่อยังอยู่บนเอกสาร/ประวัติเก่าทุกอย่าง (ไม่หาย)`)) return;
+    setBusy(true);
+    try { await setProfileActive(p.id, next); flash(next ? "คืนสภาพแล้ว ✓" : "ทำให้พ้นสภาพแล้ว ✓ (ชื่อยังอยู่บนเอกสารเก่า)"); onChanged(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e) + " (รัน migration 196 แล้วหรือยัง?)", true); }
+    setBusy(false);
+  }
+  const off = p.active === false;
   if (!edit) return (
-    <div className="set-item">
+    <div className="set-item" style={off ? { opacity: 0.55 } : undefined}>
       <span className="set-user-av">{((p.name || p.email || "?").trim()[0] || "?").toUpperCase()}</span>
       <span className="set-item-main">
-        <b>{p.name || "(ไม่มีชื่อ)"}</b>
+        <b>{p.name || "(ไม่มีชื่อ)"}{off && <span className="job-badge b-grey" style={{ marginLeft: 6, fontWeight: 600 }}>พ้นสภาพ</span>}</b>
         <small>{roleLabel}{teamLabel ? ` · ${teamLabel}` : ""} · {p.email}</small>
       </span>
-      <button className="btn-ghost sm" onClick={startEdit}><UIcon name="edit" size={13} /> แก้ไข</button>
-      <button className="btn-ghost sm danger" disabled={busy} onClick={del} title="ลบผู้ใช้"><UIcon name="trash" size={13} /></button>
+      {off
+        ? <button className="btn-ghost sm ok" disabled={busy} onClick={() => toggleActive(true)}>↩ คืนสภาพ</button>
+        : <>
+            <button className="btn-ghost sm" onClick={startEdit}><UIcon name="edit" size={13} /> แก้ไข</button>
+            <button className="btn-ghost sm" disabled={busy} onClick={() => toggleActive(false)} title="ทำให้พ้นสภาพ (ลาออก) — เข้าระบบไม่ได้ · ชื่อยังอยู่บนเอกสารเก่า">🚪 พ้นสภาพ</button>
+          </>}
+      <button className="btn-ghost sm danger" disabled={busy} onClick={del} title="ลบถาวร (ได้เฉพาะบัญชีที่ไม่เคยผูกเอกสาร)"><UIcon name="trash" size={13} /></button>
     </div>
   );
   return (

@@ -122,7 +122,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·optimize แชต: RPC นับแชตทีม (เลิก N+1) + หน่วง reload รายชื่อ/badge (mig 195) v569";
+const BUILD = "2026-08-02·พนักงานพ้นสภาพ (แทนลบ): ซ่อนจากรายชื่อ+ล็อกอินไม่ได้ ชื่อยังอยู่บนเอกสาร (mig 196) v570";
 
 function SetupNotice() {
   return (
@@ -366,6 +366,15 @@ export default function App() {
     );
     return <div className="login-stage"><div className="page-sub">กำลังโหลดสิทธิ์การใช้งาน…</div></div>;
   }
+
+  // พนักงานพ้นสภาพ (mig 196) — เข้าระบบไม่ได้ · ชื่อยังอยู่บนเอกสารเก่า
+  if (profile.active === false) return (
+    <div className="login-stage"><div style={{ textAlign: "center", maxWidth: 340 }}>
+      <div style={{ fontSize: 44, marginBottom: 8 }}>🔒</div>
+      <div className="page-sub" style={{ marginBottom: 14, lineHeight: 1.7 }}>บัญชีนี้ถูกปิดการใช้งาน<br />กรุณาติดต่อฝ่ายบุคคล/ธุรการ</div>
+      <button className="btn-primary" onClick={() => signOut().finally(() => window.location.reload())}>ออกจากระบบ</button>
+    </div></div>
+  );
 
   const role = profile.role || "tech";
   // ทีมช่าง (ช่าง/ผู้ช่วยช่าง/หัวหน้าช่าง) + แม่บ้าน เลือกภาษาพม่าได้ (แรงงานพม่า) · ฝั่งหลังบ้าน/ออฟฟิศเป็นไทยเสมอ

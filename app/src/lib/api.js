@@ -4716,9 +4716,11 @@ export async function saveLeaveQuota(userId, year, q) {
 export async function listHrStaff() {
   // HR covers permanent staff only — subcontractor-team members are excluded (managed on the ช่างซัพ page)
   let [pr, tm] = await Promise.all([
-    supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso,citizen_id").order("name"),
+    supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso,citizen_id,active").order("name"),
     supabase.from("teams").select("id,type"),
   ]);
+  // pre-196 fallback — ยังไม่มีคอลัมน์ active (สถานะพ้นสภาพ)
+  if (pr.error && /active/i.test(pr.error.message || "")) pr = await supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso,citizen_id").order("name");
   // pre-130 fallback — ยังไม่มีคอลัมน์เลขบัตรประชาชน
   if (pr.error && /citizen_id/i.test(pr.error.message || "")) pr = await supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso").order("name");
   // post-154 fallback — คอลัมน์ค่าจ้างถูกย้ายออกจาก profiles แล้ว
@@ -4727,9 +4729,14 @@ export async function listHrStaff() {
   const subIds = new Set((tm.data || []).filter((t) => t.type === "sub").map((t) => t.id));
   // ข้อมูลค่าจ้างมาจาก hr_pay (RLS กันคนนอก) — คนที่ไม่มีสิทธิ์จะได้เฉพาะแถวของตัวเอง
   const pay = await _payByUser((pr.data || []).map((p) => p.id));
-  // permanent staff only (drop subcontractor-team members); position label follows the Settings role
-  return (pr.data || []).filter((p) => !subIds.has(p.team))
+  // permanent staff ที่ยัง active (พ้นสภาพ = ซ่อนจากรายชื่อปัจจุบัน · pre-196 = active undefined → โชว์หมด)
+  return (pr.data || []).filter((p) => !subIds.has(p.team) && p.active !== false)
     .map((p) => ({ ...p, ...(pay ? (pay[p.id] || {}) : {}), department: posLabel(p) }));
+}
+// ทำให้พ้นสภาพ / คืนสภาพ (mig 196) — ไม่ลบข้อมูล · ชื่อยังอยู่บนเอกสารเก่า
+export async function setProfileActive(userId, active) {
+  const { error } = await supabase.from("profiles").update({ active: !!active }).eq("id", userId);
+  if (error) throw error;
 }
 // แยกฟิลด์: ข้อมูลค่าจ้าง/เลขบัตร → hr_pay (mig 154) · ที่เหลือ (กะ/แผนก/วันเริ่มงาน) → profiles
 const _PAY_FIELDS = ["pay_type", "base_pay", "ot_rate", "sso", "citizen_id", "tax_wht"];
