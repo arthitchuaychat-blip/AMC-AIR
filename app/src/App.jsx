@@ -122,7 +122,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·optimize ลดภาระ DB: poll 20→60วิ + index หลายตาราง (mig 194) v568";
+const BUILD = "2026-08-02·optimize แชต: RPC นับแชตทีม (เลิก N+1) + หน่วง reload รายชื่อ/badge (mig 195) v569";
 
 function SetupNotice() {
   return (
@@ -246,10 +246,12 @@ export default function App() {
     if (!profile) { setNotifCounts({}); return; }
     refreshNavNotif();
     const iv = setInterval(refreshNavNotif, 60000);
+    // หน่วง realtime: เหตุการณ์รัว ๆ (แจ้งเตือนหลายอันพร้อมกัน) → นับครั้งเดียวใน 4 วิ · ลดยิง query
+    let t = null; const soon = () => { if (t) return; t = setTimeout(() => { t = null; refreshNavNotif(); }, 4000); };
     const ch = supabase.channel("nav-notif")
-      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, refreshNavNotif)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, soon)
       .subscribe();
-    return () => { clearInterval(iv); supabase.removeChannel(ch); };
+    return () => { clearInterval(iv); if (t) clearTimeout(t); supabase.removeChannel(ch); };
   }, [profile, refreshNavNotif]);
 
   // sidebar badge: count of chats with unread messages — live via realtime, with a polling fallback
@@ -259,10 +261,11 @@ export default function App() {
     const refresh = () => countUnreadChats().then((n) => { if (alive) setChatUnread(n); }).catch(() => {});
     refresh();
     const iv = setInterval(refresh, 60000);
+    let t = null; const soon = () => { if (t) return; t = setTimeout(() => { t = null; refresh(); }, 4000); };
     const ch = supabase.channel("nav-chat-unread")
-      .on("postgres_changes", { event: "*", schema: "public", table: "line_contacts" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "line_contacts" }, soon)
       .subscribe();
-    return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
+    return () => { alive = false; clearInterval(iv); if (t) clearTimeout(t); supabase.removeChannel(ch); };
   }, [profile, permsV]);
 
   // sidebar badge: unread team-chat messages — live via realtime, polling fallback
@@ -272,10 +275,11 @@ export default function App() {
     const refresh = () => countUnreadTeamChats().then((n) => { if (alive) setTeamUnread(n); }).catch(() => {});
     refresh();
     const iv = setInterval(refresh, 60000);
+    let t = null; const soon = () => { if (t) return; t = setTimeout(() => { t = null; refresh(); }, 4000); };
     const ch = supabase.channel("nav-team-unread")
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, soon)
       .subscribe();
-    return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
+    return () => { alive = false; clearInterval(iv); if (t) clearTimeout(t); supabase.removeChannel(ch); };
   }, [profile, permsV, view]);
 
   React.useEffect(() => { try { localStorage.setItem("amc_lang", lang); } catch (_) {} }, [lang]);

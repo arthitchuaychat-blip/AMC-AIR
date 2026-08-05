@@ -5210,6 +5210,10 @@ export async function listChatRooms() {
 
 // total unread team-chat messages across my rooms — for the sidebar badge + app-icon badge
 export async function countUnreadTeamChats() {
+  // นับใน query เดียวผ่าน RPC (mig 195) — เลี่ยง listChatRooms ที่วน chat_messages N+1 ต่อห้อง
+  const { data, error } = await supabase.rpc("team_unread_count");
+  if (!error && typeof data === "number") return data;
+  // fallback ก่อนรัน mig 195
   const rooms = await listChatRooms();
   return rooms.reduce((a, r) => a + (r.unread || 0), 0);
 }

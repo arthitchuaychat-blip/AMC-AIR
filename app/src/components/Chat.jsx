@@ -230,15 +230,19 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     if (isCm) return;   // คอมเมนต์มี realtime/โหลดเองใน FbComments
     const msgTable = isFb ? "fb_messages" : "line_messages";
     const contactTable = isFb ? "fb_contacts" : "line_contacts";
+    // ⚠️ ห้าม loadContacts() (โหลดทั้งตาราง line_contacts + join) ทุกข้อความ — LINE OA คุยรัว = ยิงหมื่นครั้ง/CPU ตัน
+    //   หน่วงรวมเป็นครั้งเดียวทุก 3 วิ (รายการอัปช้า 3 วิ ไม่มีใครสังเกต · ข้อความในห้องที่เปิดยัง append ทันที)
+    let t = null;
+    const reloadSoon = () => { if (t) return; t = setTimeout(() => { t = null; loadContacts(); }, 3000); };
     const ch = supabase.channel(channel + "-rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: msgTable }, (p) => {
         const row = p.new; const uid = row.line_user_id || row.psid;
-        loadContacts();
+        reloadSoon();
         if (uid === selRef.current) { setMsgs((m) => m.some((x) => x.id === row.id) ? m : [...m, { ...row, line_user_id: uid }]); chMarkRead(uid); }
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: contactTable }, () => loadContacts())
+      .on("postgres_changes", { event: "*", schema: "public", table: contactTable }, () => reloadSoon())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { if (t) clearTimeout(t); supabase.removeChannel(ch); };
   }, [channel]);
 
   // document + job history for the linked customer (right info panel)
