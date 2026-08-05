@@ -3197,6 +3197,16 @@ export async function listSubPayouts() {
   if (error) throw error; return data || [];
 }
 
+// หัวหน้าทีมช่างซัพดู "งานค้างจ่าย" ของทีมตัวเอง (อ่านอย่างเดียว) — ผ่าน RPC security definer (mig 197)
+// คืน { jobs:[งานยืนยันค่าแรงแล้วยังจ่ายไม่ครบ], payouts:[ใบจ่ายที่ออกแล้วรอโอน] } เฉพาะทีมของผู้เรียก
+// ถ้ายังไม่รัน mig 197 → คืนโครงว่าง (หน้าจอไม่พัง)
+export async function listMySubPending() {
+  const { data, error } = await supabase.rpc("sub_pending_for_team");
+  if (error) { if (/function|does not exist|schema cache|PGRST202/i.test(error.message || "")) return { jobs: [], payouts: [] }; throw error; }
+  const d = data || {};
+  return { jobs: Array.isArray(d.jobs) ? d.jobs : [], payouts: Array.isArray(d.payouts) ? d.payouts : [] };
+}
+
 // ---------- รายงานกำไร-ขาดทุน (P&L เฟส 3) ----------
 // ต้นทุนของที่ "เบิกเข้างานจริง" ในช่วง (COGS) แยก เครื่อง/วัสดุ/อะไหล่ · value = qty×unit_cost (ต้นทุนเฉลี่ย ณ เวลานั้น)
 // withdraw+damage = ต้นทุนที่ใช้ไป · return = คืนกลับ (ลบ) · adjust_* ไม่นับ (ปรับนับสต๊อก ไม่ใช่ต้นทุนงาน)

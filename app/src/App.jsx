@@ -122,7 +122,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-02·พนักงานพ้นสภาพ (แทนลบ): ซ่อนจากรายชื่อ+ล็อกอินไม่ได้ ชื่อยังอยู่บนเอกสาร (mig 196) v570";
+const BUILD = "2026-08-05·หัวหน้าทีมช่างซัพเปิดดูงานค้างจ่ายของทีมตัวเองได้ (อ่านอย่างเดียว · mig 197) v571";
 
 function SetupNotice() {
   return (
@@ -231,7 +231,14 @@ export default function App() {
   React.useEffect(() => { if (uid) listTeams().then(setTeams).catch(() => {}); }, [uid]);
   // subcontractor-team members don't belong in HR/attendance — hide those menus for them
   const mySub = !!(profile && teams.some((t) => t.id === profile.team && t.type === "sub"));
-  const navIds = (r) => navForRole(r).filter((id) => !(mySub && (id === "attendance" || id === "hr")));
+  const navIds = (r) => {
+    let ids = navForRole(r);
+    if (mySub) {
+      ids = ids.filter((id) => id !== "attendance" && id !== "hr");   // ช่างซัพไม่เข้าเมนู HR/เข้างานของบริษัท
+      if (!ids.includes("subcontract")) ids = [...ids, "subcontract"]; // แต่เปิด "งานค้างจ่าย" (มุมมองอ่านอย่างเดียวของทีมตัวเอง)
+    }
+    return ids;
+  };
 
   React.useEffect(() => {
     if (!profile) return;
@@ -607,7 +614,7 @@ export default function App() {
         {view === "attendance" && <Attendance me={profile} />}
         {view === "handbook" && <Handbook role={role} me={profile} />}
         {view === "hr" && <HR role={role} />}
-        {view === "subcontract" && <Subcontractor role={role} onOpenDoc={openDoc} />}
+        {view === "subcontract" && <Subcontractor role={role} onOpenDoc={openDoc} mySub={mySub} />}
         {view === "settings" && <Settings role={role} />}
         </React.Suspense>
         </ErrorBoundary>

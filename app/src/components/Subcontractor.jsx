@@ -1,7 +1,7 @@
 import React from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listAccounts, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage, uploadExpenseFile } from "../lib/api";
+import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listAccounts, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage, uploadExpenseFile, listMySubPending } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { Linkify } from "./JobTimeline";
 import { fmtBaht, round2 } from "../lib/format";
@@ -32,7 +32,114 @@ const sumLabor = (lines) => round2((lines || []).reduce((a, l) => a + (Number(l.
 const remaining = (j) => round2((Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0));
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }) : "";
 
-export default function Subcontractor({ role, onOpenDoc }) {
+// ตัวห่อ: หัวหน้าทีมช่างซัพ (สมาชิกทีม type='sub') เห็น "งานค้างจ่าย" ของทีมตัวเองแบบอ่านอย่างเดียว
+// ออฟฟิศ (admin/exec/finance/sales…) เห็นหน้าจัดการเต็มเหมือนเดิม
+export default function Subcontractor({ role, onOpenDoc, mySub }) {
+  if (mySub) return <SubLeaderView />;
+  return <OfficeSubcontractor role={role} onOpenDoc={onOpenDoc} />;
+}
+
+// ---------- มุมมองหัวหน้าทีมช่างซัพ (อ่านอย่างเดียว · เห็นเฉพาะทีมตัวเองผ่าน RPC mig 197) ----------
+function SubLeaderView() {
+  const [data, setData] = React.useState(null);   // { jobs, payouts }
+  const [err, setErr] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  async function load() {
+    setLoading(true); setErr(null);
+    try { setData(await listMySubPending()); }
+    catch (e) { setErr(e.message || String(e)); }
+    setLoading(false);
+  }
+  React.useEffect(() => { load(); }, []);
+
+  const jobs = data?.jobs || [];
+  const payouts = data?.payouts || [];
+  const jobsOwed = round2(jobs.reduce((a, j) => a + (Number(j.remaining) || 0), 0));       // ก่อนหัก ณ ที่จ่าย
+  const payoutsOwed = round2(payouts.reduce((a, p) => a + (Number(p.net) || 0), 0));         // สุทธิรอโอน
+  const grand = round2(jobsOwed + payoutsOwed);
+
+  return (
+    <div className="adm">
+      <div className="adm-head"><div>
+        <h1 className="page-title">งานค้างจ่าย <span className="page-title-en">My pending payments</span></h1>
+        <p className="page-sub">ค่าแรงของทีมที่รอทางบริษัทจ่าย · อัปเดตตามที่ออฟฟิศยืนยันค่าแรง/ออกใบจ่าย</p>
+      </div>
+        <button className="btn-ghost sm" onClick={load} disabled={loading}>↻ รีเฟรช</button>
+      </div>
+
+      {loading && <div className="card"><div className="empty">กำลังโหลด…</div></div>}
+      {!loading && err && <div className="card"><div className="empty">โหลดไม่สำเร็จ: {err}</div></div>}
+
+      {!loading && !err && <>
+        {/* สรุปยอดค้างรวม */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="sub-owed-grand">
+            <span>ยอดค้างจ่ายทั้งหมดของทีม</span>
+            <b>{fmtBaht(grand)}</b>
+          </div>
+          <div className="jo-dim" style={{ marginTop: 6, fontSize: 12.5 }}>
+            รอออฟฟิศตั้งจ่าย {fmtBaht(jobsOwed)} · ออกใบจ่ายแล้วรอโอน {fmtBaht(payoutsOwed)}
+          </div>
+        </div>
+
+        {/* งานที่ยืนยันค่าแรงแล้ว รอตั้งใบจ่าย */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="sec-head"><div>
+            <div className="sec-title">รอออฟฟิศตั้งจ่าย</div>
+            <div className="sec-sub">งานที่ยืนยันค่าแรงแล้ว ยังจ่ายไม่ครบ (ยอดก่อนหัก ณ ที่จ่าย 3% เฉพาะงาน VAT)</div>
+          </div></div>
+          <div className="set-list">
+            {jobs.length === 0 && <div className="empty sm">ไม่มีงานรอตั้งจ่าย</div>}
+            {jobs.map((j) => {
+              const partial = (Number(j.labor_paid_amt) || 0) > 0;
+              return (
+                <div className="sub-owed-row" key={j.job_no}>
+                  <div className="sub-owed-main">
+                    <div>
+                      {j.scheduled_at && <span className="jo-dim" style={{ fontSize: 11, marginRight: 5 }}>{fmtDate(j.scheduled_at)}</span>}
+                      <b>{j.job_no}</b>{" "}
+                      {j.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}
+                      {partial && <span className="job-badge b-amber" style={{ marginLeft: 5 }}>จ่ายบางส่วน</span>}
+                    </div>
+                    <div className="jo-dim">{j.customer_name || "-"}</div>
+                  </div>
+                  <div className="sub-owed-amt">
+                    <b>{fmtBaht(j.remaining)}</b>
+                    {partial && <span className="jo-dim" style={{ fontSize: 11 }}> / เต็ม {fmtBaht(j.labor_total)}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ใบจ่ายที่ออกแล้ว รอโอนเงิน */}
+        <div className="card">
+          <div className="sec-head"><div>
+            <div className="sec-title">ออกใบจ่ายแล้ว · รอโอน</div>
+            <div className="sec-sub">ออฟฟิศตั้งใบจ่ายแล้ว กำลังรอโอนเข้าบัญชีทีม (ยอดสุทธิหลังหัก ณ ที่จ่าย)</div>
+          </div></div>
+          <div className="set-list">
+            {payouts.length === 0 && <div className="empty sm">ไม่มีใบจ่ายรอโอน</div>}
+            {payouts.map((p) => (
+              <div className="sub-owed-row" key={p.id}>
+                <div className="sub-owed-main">
+                  <div><b>ใบจ่าย</b> · {p.job_count || 0} งาน <span className="jo-dim">· {fmtDate(p.created_at)}</span></div>
+                  <div className="jo-dim">รวม {fmtBaht(p.gross)} − หัก ณ ที่จ่าย {fmtBaht(p.wht_amt)}</div>
+                </div>
+                <div className="sub-owed-amt"><span className="job-badge b-orange" style={{ marginRight: 6 }}>รอโอน</span><b>{fmtBaht(p.net)}</b></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="page-sub" style={{ marginTop: 12 }}>* ยอดนี้อ้างอิงจากที่ออฟฟิศยืนยันค่าแรง หากมีข้อสงสัยแจ้งฝ่ายบัญชี/ธุรการได้เลย</p>
+      </>}
+    </div>
+  );
+}
+
+function OfficeSubcontractor({ role, onOpenDoc }) {
   const canPay = PAY_ROLES.includes(role);
   const canLabor = LABOR_ROLES.includes(role);
   const tabs = TABS.filter(([v]) => v !== "pay" || canPay);

@@ -1065,6 +1065,14 @@ select.inp{cursor:pointer}
 .sub-pay-split{margin-top:8px}
 .sub-split-modes{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .sub-payout-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--surface-2);font-size:13px}
+/* มุมมองหัวหน้าทีมช่างซัพ (งานค้างจ่ายของฉัน) — อ่านอย่างเดียว */
+.sub-owed-grand{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:15px;font-weight:600}
+.sub-owed-grand b{font-size:22px;color:var(--down,#c2410c)}
+.sub-owed-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--surface-2)}
+.sub-owed-row:last-child{border-bottom:none}
+.sub-owed-main{min-width:0;flex:1}
+.sub-owed-main>div:first-child{font-size:13.5px}
+.sub-owed-amt{text-align:right;white-space:nowrap;font-size:14px}
 /* subcontractor payout slip (download / send to team chat) */
 .payout-slip{background:#fff;color:#1f2733;border:1px solid var(--line);border-radius:10px;padding:18px 18px 14px;font-size:13px}
 .ps-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #1f2733;padding-bottom:7px;margin-bottom:8px}
