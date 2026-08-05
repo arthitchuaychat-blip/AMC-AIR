@@ -35,12 +35,12 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numer
 // ตัวห่อ: หัวหน้าทีมช่างซัพ (สมาชิกทีม type='sub') เห็น "งานค้างจ่าย" ของทีมตัวเองแบบอ่านอย่างเดียว
 // ออฟฟิศ (admin/exec/finance/sales…) เห็นหน้าจัดการเต็มเหมือนเดิม
 export default function Subcontractor({ role, onOpenDoc, mySub }) {
-  if (mySub) return <SubLeaderView />;
+  if (mySub) return <SubLeaderView onOpenDoc={onOpenDoc} />;
   return <OfficeSubcontractor role={role} onOpenDoc={onOpenDoc} />;
 }
 
 // ---------- มุมมองหัวหน้าทีมช่างซัพ (อ่านอย่างเดียว · เห็นเฉพาะทีมตัวเองผ่าน RPC mig 197) ----------
-function SubLeaderView() {
+function SubLeaderView({ onOpenDoc }) {
   const [data, setData] = React.useState(null);   // { jobs, payouts }
   const [err, setErr] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -97,7 +97,9 @@ function SubLeaderView() {
                   <div className="sub-owed-main">
                     <div>
                       {j.scheduled_at && <span className="jo-dim" style={{ fontSize: 11, marginRight: 5 }}>{fmtDate(j.scheduled_at)}</span>}
-                      <b>{j.job_no}</b>{" "}
+                      {onOpenDoc
+                        ? <button type="button" className="sub-job-link" onClick={() => onOpenDoc("job", j.job_no)} title="เปิดหน้าใบงาน">{j.job_no}</button>
+                        : <b>{j.job_no}</b>}{" "}
                       {j.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}
                       {partial && <span className="job-badge b-amber" style={{ marginLeft: 5 }}>จ่ายบางส่วน</span>}
                     </div>
