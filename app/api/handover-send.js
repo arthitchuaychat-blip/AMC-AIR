@@ -2,11 +2,17 @@
 //   POST /api/handover-send   body: { id }   headers: Authorization: Bearer <supabase jwt>
 // Looks up the customer's linked LINE user, pushes the read-only link. If not linked, returns the
 // link so the office can copy/send it manually. Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, LINE_CHANNEL_ACCESS_TOKEN
-const { shareToken } = require("./handover-view");
+// ⚠️ ห้าม require ไฟล์ api ข้ามกัน (เช่น ./handover-view) — Vercel ไม่ bundle ไปด้วย → FUNCTION_INVOCATION_FAILED
+//    ต้อง inline shareToken เอง (ต้องได้ token เดียวกับ handover-view: HMAC "ho:<id>")
+const crypto = require("crypto");
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
 const OFFICE = ["admin", "sales", "exec", "finance", "hr"];
+const SECRET = () => process.env.HANDOVER_SHARE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+function shareToken(id) {
+  return crypto.createHmac("sha256", SECRET()).update("ho:" + String(id)).digest("hex").slice(0, 24);
+}
 
 async function readJson(req) {
   if (req.body && typeof req.body === "object") return req.body;
