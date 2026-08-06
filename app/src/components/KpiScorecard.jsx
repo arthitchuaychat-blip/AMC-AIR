@@ -115,8 +115,8 @@ export default function KpiScorecard() {
                 </tr></thead>
                 <tbody>
                   {teams.map((t) => {
-                    const rv = t.cust_rating_avg ?? t.rating_avg;   // คะแนนลูกค้าก่อน · ไม่มีก็ตกไปคะแนนรีวิวช่างซัพเดิม
-                    const isCust = t.cust_rating_avg != null;
+                    // เฉพาะคะแนน "ลูกค้า" จริงเท่านั้น — ไม่ปนกับคะแนนรีวิวช่างซัพของออฟฟิศ (rating_avg)
+                    const rv = t.cust_rating_avg;
                     return (
                       <tr key={t.team_id}>
                         <td style={{ textAlign: "left" }}>
@@ -126,9 +126,9 @@ export default function KpiScorecard() {
                         <td>{fmtInt(t.jobs_done)}</td>
                         <td>{fmtInt(t.claims)}</td>
                         <td><span className={"job-badge " + rag(t.claim_rate, 3, 7, true)}>{t.claim_rate}%</span></td>
-                        <td>{rv == null ? <span className="jo-dim">—</span> : <>
+                        <td>{rv == null || !(t.cust_rating_n > 0) ? <span className="jo-dim">— <span style={{ fontSize: 10 }}>ยังไม่มีรีวิว</span></span> : <>
                           <span className={"job-badge " + rag(rv, 4.5, 4)}>{rv} ★</span>
-                          {isCust && t.cust_rating_n > 0 && <span className="jo-dim" style={{ fontSize: 10.5, display: "block" }}>{t.cust_rating_n} รีวิว</span>}
+                          <span className="jo-dim" style={{ fontSize: 10.5, display: "block" }}>{t.cust_rating_n} รีวิว</span>
                         </>}</td>
                       </tr>
                     );
