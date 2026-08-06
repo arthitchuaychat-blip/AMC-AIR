@@ -94,13 +94,15 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
     } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setSending(null);
   }
-  // คัดลอกลิงก์ใบส่งมอบ (ไม่พึ่ง push) → วางในแชต LINE/ที่ไหนก็ได้เอง
-  async function copyLink(h) {
+  // คัดลอกลิงก์ (ไม่พึ่ง push) → วางในแชต LINE/ที่ไหนก็ได้เอง · kind: "doc" เอกสาร / "rate" ให้คะแนน
+  async function copyLink(h, kind) {
     setSending(h.id);
     try {
-      const url = await getHandoverLink(h.id);
-      try { await navigator.clipboard.writeText(url); flash("📋 คัดลอกลิงก์แล้ว — วางในแชต LINE ส่งลูกค้าได้เลย ✓"); }
-      catch { window.prompt("คัดลอกลิงก์นี้ (กดค้าง/Ctrl+C):", url); }
+      const { url, rateUrl } = await getHandoverLink(h.id);
+      const link = kind === "rate" ? rateUrl : url;
+      const msg = kind === "rate" ? "⭐ คัดลอกลิงก์ให้คะแนนแล้ว — วางในแชตส่งลูกค้าได้เลย ✓" : "📋 คัดลอกลิงก์เอกสารแล้ว ✓";
+      try { await navigator.clipboard.writeText(link); flash(msg); }
+      catch { window.prompt("คัดลอกลิงก์นี้ (กดค้าง/Ctrl+C):", link); }
     } catch (e) { flash("ขอลิงก์ไม่สำเร็จ: " + (e.message || e), true); }
     setSending(null);
   }
@@ -176,8 +178,9 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
               </div>
               <div className="ho-card-acts">
                 <button className="btn-ghost sm" onClick={() => print(h)}><UIcon name="catalog" size={14} /> พิมพ์/PDF</button>
-                {canSendLine && h.status === "submitted" && <button className="btn-ghost sm" disabled={sending === h.id} onClick={() => copyLink(h)} title="คัดลอกลิงก์ใบส่งมอบงาน → วางในแชต LINE ส่งลูกค้าเอง">📋 คัดลอกลิงก์</button>}
-                {canSendLine && h.status === "submitted" && <button className="btn-ghost sm" disabled={sending === h.id} onClick={() => sendLine(h)} title="ส่งลิงก์ใบส่งมอบงานให้ลูกค้าทาง LINE (ต้องเคยผูก LINE)">{sending === h.id ? "กำลังส่ง…" : "💬 ส่ง LINE"}</button>}
+                {canSendLine && h.status === "submitted" && <button className="btn-ghost sm" disabled={sending === h.id} onClick={() => copyLink(h, "doc")} title="คัดลอกลิงก์เอกสารส่งมอบงาน → วางในแชตส่งลูกค้า">📋 ลิงก์เอกสาร</button>}
+                {canSendLine && h.status === "submitted" && <button className="btn-ghost sm" disabled={sending === h.id} onClick={() => copyLink(h, "rate")} title="คัดลอกลิงก์ให้ลูกค้าให้คะแนนความพอใจ → วางในแชตส่งลูกค้า">⭐ ลิงก์ให้คะแนน</button>}
+                {canSendLine && h.status === "submitted" && <button className="btn-ghost sm" disabled={sending === h.id} onClick={() => sendLine(h)} title="ส่งลิงก์เอกสารให้ลูกค้าทาง LINE อัตโนมัติ (ต้องเคยผูก LINE)">{sending === h.id ? "กำลังส่ง…" : "💬 ส่ง LINE"}</button>}
                 {canEditRow(h) && <button className="btn-ghost sm" onClick={() => startEdit(h)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canDelete && <button className="btn-ghost sm danger" onClick={() => del(h)}><UIcon name="trash" size={14} /></button>}
               </div>

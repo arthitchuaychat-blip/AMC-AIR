@@ -20,7 +20,9 @@ export default async function handler(req, res) {
     const id = (req.query.id || "").toString();
     if (!id) return res.status(400).json({ error: "missing id" });
     const host = req.headers["x-forwarded-host"] || req.headers.host;
-    return res.status(200).json({ url: `https://${host}/?ho=${id}&t=${shareToken(id)}` });
+    const t = shareToken(id), base = `https://${host}/?`;
+    // 2 ลิงก์แยกกัน: เอกสารส่งมอบ (?ho=) และ ให้คะแนน (?rate=) — token เดียวกัน
+    return res.status(200).json({ url: `${base}ho=${id}&t=${t}`, rateUrl: `${base}rate=${id}&t=${t}` });
   } catch (e) {
     return res.status(500).json({ error: "error: " + (e.message || e) });
   }

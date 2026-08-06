@@ -9,6 +9,7 @@ import InstallBanner from "./components/InstallBanner";
 import { UIcon, Logo } from "./icons";
 import Login from "./components/Login";
 import PublicHandover from "./components/PublicHandover";
+import PublicRating from "./components/PublicRating";
 import { ConfirmHost, confirmDialog } from "./components/ConfirmDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
 // เปลือกแอปที่ติดตามทุกเมนู (โหลดทันที ไม่ต้องแยกก้อน)
@@ -126,7 +127,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-06·ปุ่มคัดลอกลิงก์ใบส่งมอบงาน (ส่งเองทุกช่องทาง ไม่พึ่ง push) v578";
+const BUILD = "2026-08-06·แยกลิงก์เอกสารส่งมอบ กับ ลิงก์ให้คะแนน (หน้าคะแนน ?rate= แยกต่างหาก) v579";
 
 function SetupNotice() {
   return (
@@ -147,6 +148,8 @@ export default function App() {
   const [ready, setReady] = React.useState(false);
   // ลิงก์ public ใบส่งมอบงานสำหรับลูกค้า (?ho=<id>&t=<token>) — เปิดดูได้โดยไม่ต้องล็อกอิน
   const publicHo = React.useMemo(() => { try { const p = new URLSearchParams(window.location.search); const id = p.get("ho"), t = p.get("t"); return id && t ? { id, t } : null; } catch { return null; } }, []);
+  // ลิงก์ให้คะแนนความพอใจ (แยกจากเอกสาร) — ?rate=<id>&t=<token>
+  const publicRate = React.useMemo(() => { try { const p = new URLSearchParams(window.location.search); const id = p.get("rate"), t = p.get("t"); return id && t ? { id, t } : null; } catch { return null; } }, []);
   const [session, setSession] = React.useState(null);
   const [profile, setProfile] = React.useState(null);
   const [teams, setTeams] = React.useState([]); // to tell if the logged-in user is on a subcontractor team
@@ -359,6 +362,7 @@ export default function App() {
   // so refreshing or "open link in new tab" lands on the same menu
   React.useEffect(() => { if (view) { try { window.history.replaceState(null, "", "#" + view); } catch (_) {} } }, [view]);
 
+  if (publicRate) return <PublicRating id={publicRate.id} token={publicRate.t} />;   // ลิงก์ให้คะแนน (แยก)
   if (publicHo) return <PublicHandover id={publicHo.id} token={publicHo.t} />;   // ลูกค้าเปิดจากลิงก์ LINE — ไม่ต้องล็อกอิน
   if (!hasConfig) return <SetupNotice />;
   if (!ready) return <div className="login-stage"><div className="page-sub">กำลังโหลด…</div></div>;

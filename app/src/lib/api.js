@@ -2810,13 +2810,14 @@ export async function sendHandoverLine(id) {
 }
 
 // ขอ "ลิงก์สาธารณะ" ของใบส่งมอบงาน (มี token) เพื่อคัดลอกไปส่งเอง — ไม่ push LINE
+// คืน { url: ลิงก์เอกสาร (?ho=), rateUrl: ลิงก์ให้คะแนน (?rate=) }
 export async function getHandoverLink(id) {
   const { data: { session } } = await supabase.auth.getSession();
   const r = await fetch(`/api/handover-link?id=${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${session?.access_token || ""}` } });
   const raw = await r.text().catch(() => "");
   let out = {}; try { out = raw ? JSON.parse(raw) : {}; } catch { /* not json */ }
   if (!r.ok) throw new Error(out.error || (raw ? raw.slice(0, 160) : "ขอลิงก์ไม่สำเร็จ (" + r.status + ")"));
-  return out.url;
+  return { url: out.url, rateUrl: out.rateUrl || (out.url || "").replace("?ho=", "?rate=") };
 }
 
 // ลบใบส่งมอบ: กติกาบ้าน — ต้องมีเหตุผล + ลง audit พร้อม snapshot (ใบที่ส่งแล้วมีลายเซ็นลูกค้า เป็นหลักฐานงาน)
