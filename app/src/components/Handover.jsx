@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listHandovers, deleteHandover, getCompanies, listServiceReminders, setReminderStatus, sendHandoverLine } from "../lib/api";
+import { listHandovers, deleteHandover, getCompanies, listServiceReminders, setReminderStatus, sendHandoverLine, getHandoverLink } from "../lib/api";
 import { blankHandover } from "../lib/handover";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtDocDate, matchText, matchPhone } from "../lib/format";
@@ -94,6 +94,16 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
     } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     setSending(null);
   }
+  // คัดลอกลิงก์ใบส่งมอบ (ไม่พึ่ง push) → วางในแชต LINE/ที่ไหนก็ได้เอง
+  async function copyLink(h) {
+    setSending(h.id);
+    try {
+      const url = await getHandoverLink(h.id);
+      try { await navigator.clipboard.writeText(url); flash("📋 คัดลอกลิงก์แล้ว — วางในแชต LINE ส่งลูกค้าได้เลย ✓"); }
+      catch { window.prompt("คัดลอกลิงก์นี้ (กดค้าง/Ctrl+C):", url); }
+    } catch (e) { flash("ขอลิงก์ไม่สำเร็จ: " + (e.message || e), true); }
+    setSending(null);
+  }
   // ส่ง LINE ได้เฉพาะฝ่ายออฟฟิศ (ตรงกับสิทธิ์ฝั่ง serverless) และเฉพาะใบที่ส่งแล้ว
   const canSendLine = ["admin", "sales", "exec", "finance", "hr"].includes(role);
 
@@ -166,7 +176,8 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
               </div>
               <div className="ho-card-acts">
                 <button className="btn-ghost sm" onClick={() => print(h)}><UIcon name="catalog" size={14} /> พิมพ์/PDF</button>
-                {canSendLine && h.status === "submitted" && <button className="btn-ghost sm" disabled={sending === h.id} onClick={() => sendLine(h)} title="ส่งลิงก์ใบส่งมอบงานให้ลูกค้าทาง LINE">{sending === h.id ? "กำลังส่ง…" : "💬 ส่ง LINE"}</button>}
+                {canSendLine && h.status === "submitted" && <button className="btn-ghost sm" disabled={sending === h.id} onClick={() => copyLink(h)} title="คัดลอกลิงก์ใบส่งมอบงาน → วางในแชต LINE ส่งลูกค้าเอง">📋 คัดลอกลิงก์</button>}
+                {canSendLine && h.status === "submitted" && <button className="btn-ghost sm" disabled={sending === h.id} onClick={() => sendLine(h)} title="ส่งลิงก์ใบส่งมอบงานให้ลูกค้าทาง LINE (ต้องเคยผูก LINE)">{sending === h.id ? "กำลังส่ง…" : "💬 ส่ง LINE"}</button>}
                 {canEditRow(h) && <button className="btn-ghost sm" onClick={() => startEdit(h)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canDelete && <button className="btn-ghost sm danger" onClick={() => del(h)}><UIcon name="trash" size={14} /></button>}
               </div>
