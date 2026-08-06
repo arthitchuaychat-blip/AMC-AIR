@@ -2674,9 +2674,9 @@ export async function unlockJob(job_no) {
 
 // ===================== ใบส่งมอบงาน · job handovers =====================
 const HANDOVER_COLS_BASE = "id,job_no,customer_id,customer_name,contact_name,contact_phone,address,doc_ref,doc_date,work_types,detail,fix_note,forms,tech_sign_url,tech_name,cust_sign_url,cust_name,status,created_by,created_at,updated_at";
-// เพิ่มคะแนนความพอใจลูกค้า (mig 200) — ถ้ายังไม่รัน migration select จะ error เรื่องคอลัมน์ → fallback เป็น BASE
-const HANDOVER_COLS = HANDOVER_COLS_BASE + ",cust_rating,cust_comment,cust_rated_at";
-const _preRate = (e) => /cust_rating|cust_comment|cust_rated_at|column|PGRST/i.test(e?.message || "");
+// เพิ่มคะแนนความพอใจลูกค้า (mig 200) + เลขที่เอกสาร ho_no (mig 202) — ถ้ายังไม่รัน migration select จะ error เรื่องคอลัมน์ → fallback เป็น BASE
+const HANDOVER_COLS = HANDOVER_COLS_BASE + ",cust_rating,cust_comment,cust_rated_at,ho_no";
+const _preRate = (e) => /cust_rating|cust_comment|cust_rated_at|ho_no|column|PGRST/i.test(e?.message || "");
 
 // list handovers (optionally for one job), newest first, with the creator's name attached
 export async function listHandovers(jobNo) {
@@ -2732,19 +2732,23 @@ export async function saveHandover(h) {
     tech_sign_url: h.tech_sign_url || null, tech_name: h.tech_name || null,
     cust_sign_url: h.cust_sign_url || null, cust_name: h.cust_name || null,
     status: h.status || "draft", updated_at: new Date().toISOString(),
+    ...(h.ho_no ? { ho_no: h.ho_no } : {}),   // เลขที่เอกสาร (mig 202)
   };
+  const stripHo = (f) => { const { ho_no, ...rest } = f; return rest; };   // ตัด ho_no ถ้ายังไม่รัน mig 202
   let saved, wasSubmitted = false;
   if (h.id) {
     const { data: prev } = await supabase.from("job_handovers").select("status").eq("id", h.id).maybeSingle();
     wasSubmitted = prev?.status === "submitted";
-    const { data, error } = await supabase.from("job_handovers").update(fields).eq("id", h.id).select(HANDOVER_COLS_BASE).single();
+    let { data, error } = await supabase.from("job_handovers").update(fields).eq("id", h.id).select(HANDOVER_COLS_BASE).single();
+    if (error && /ho_no|column|PGRST204/i.test(error.message || "")) ({ data, error } = await supabase.from("job_handovers").update(stripHo(fields)).eq("id", h.id).select(HANDOVER_COLS_BASE).single());
     if (error) throw /PGRST116|coerce/i.test(error.message || "") ? new Error("บันทึกไม่ได้ — ใบนี้ส่งแล้ว ช่างแก้ไขเองไม่ได้ (ต้องให้ออฟฟิศแก้)") : error;
-    saved = data;
+    saved = { ...data, ho_no: fields.ho_no || data?.ho_no || null };
   } else {
     fields.created_by = await _uid();
-    const { data, error } = await supabase.from("job_handovers").insert(fields).select(HANDOVER_COLS_BASE).single();
+    let { data, error } = await supabase.from("job_handovers").insert(fields).select(HANDOVER_COLS_BASE).single();
+    if (error && /ho_no|column|PGRST204/i.test(error.message || "")) ({ data, error } = await supabase.from("job_handovers").insert(stripHo(fields)).select(HANDOVER_COLS_BASE).single());
     if (error) throw error;
-    saved = data;
+    saved = { ...data, ho_no: fields.ho_no || null };
   }
   // ส่งใบส่งมอบ (ครั้งแรกเท่านั้น — บันทึกซ้ำใบที่ส่งแล้วไม่แจ้งซ้ำ) → ลงไทม์ไลน์ + แจ้งออฟฟิศ (best-effort)
   if (fields.status === "submitted" && !wasSubmitted && fields.job_no) {
@@ -2793,8 +2797,10 @@ export async function sendHandoverLine(id) {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
     body: JSON.stringify({ id }),
   });
-  const out = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(out.error || ("ส่งไม่สำเร็จ (" + r.status + ")"));
+  // อ่าน body แบบ text ก่อน แล้วค่อย parse — ถ้า server crash ระดับแพลตฟอร์ม (ไม่ใช่ JSON) จะได้เห็นข้อความจริง
+  const raw = await r.text().catch(() => "");
+  let out = {}; try { out = raw ? JSON.parse(raw) : {}; } catch { /* not json */ }
+  if (!r.ok) throw new Error(out.error || (raw ? raw.slice(0, 160) : "ส่งไม่สำเร็จ (" + r.status + ")"));
   return out;
 }
 

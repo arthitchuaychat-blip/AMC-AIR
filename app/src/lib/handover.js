@@ -289,10 +289,17 @@ export function blankForm(kind) {
 }
 
 // build a fresh handover, optionally pre-filled from a job order (jo may be null = standalone)
+// เลขที่เอกสารใบส่งมอบงาน — HO-YYMMDD-HHMMSS (รูปแบบเดียวกับ BOQ/QT/INV/REC) · mig 202
+export function genHandoverNo() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `HO-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
 export function blankHandover(jo) {
   const wt = jo && JOBTYPE_TO_WORK[jo.job_type] ? [JOBTYPE_TO_WORK[jo.job_type]] : [];
   const schedAt = jo && ((jo.visits && jo.visits.length && jo.visits[0].scheduled_at) || jo.scheduled_at);
   return {
+    ho_no: genHandoverNo(),
     job_no: jo?.job_no || null,
     customer_id: jo?.customer_id || null,
     customer_name: jo?.customerName || "",

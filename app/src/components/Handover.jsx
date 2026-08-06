@@ -9,10 +9,11 @@ import { UIcon } from "../icons";
 import HandoverEditor from "./HandoverEditor";
 import JobHandover from "./JobHandover";
 import DateRangeBar, { inDateRange } from "./DateRangeBar";
+import DocChips from "./DocChips";
 
 const STATUS = { draft: { th: "ฉบับร่าง", cls: "b-grey" }, submitted: { th: "ส่งแล้ว", cls: "b-green" } };
 
-export default function Handover({ role, me, startJob, onStartConsumed, focusJob, onFocusConsumed }) {
+export default function Handover({ role, me, startJob, onStartConsumed, focusJob, onFocusConsumed, onOpenDoc }) {
   const canEdit = can(role, "handover", "edit");
   const canDelete = role === "admin";
   const [list, setList] = React.useState([]);
@@ -99,7 +100,7 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
   const shown = list.filter((h) =>
     (statusF === "all" || h.status === statusF)
     && inDateRange(h.doc_date || h.created_at, dateR)
-    && (!search || matchText(search, h.job_no, h.customer_name, h.contact_name, h.doc_ref, h.creatorName) || matchPhone(search, h.contact_phone)));
+    && (!search || matchText(search, h.ho_no, h.job_no, h.customer_name, h.contact_name, h.doc_ref, h.creatorName) || matchPhone(search, h.contact_phone)));
 
   return (
     <div className="adm">
@@ -145,6 +146,7 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
             <div className="ho-card" key={h.id}>
               <div className="ho-card-main">
                 <div className="ho-card-top">
+                  {h.ho_no && <span className="ho-card-job" style={{ background: "#eef2ff", color: "#3730a3", borderColor: "#c7d2fe" }}>{h.ho_no}</span>}
                   <b>{h.customer_name || "— ไม่ระบุลูกค้า —"}</b>
                   <span className={"job-badge " + st.cls}>{st.th}</span>
                   {h.job_no && <span className="ho-card-job">{h.job_no}</span>}
@@ -156,6 +158,11 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
                   {h.creatorName ? ` · โดย ${h.creatorName}` : ""}
                   {h.cust_comment ? ` · 💬 “${h.cust_comment}”` : ""}
                 </div>
+                {onOpenDoc && (h.job_no || /^QT-/i.test(h.doc_ref || "")) && (
+                  <DocChips self={{ type: "handover", no: h.ho_no }}
+                    quoteNo={/^QT-/i.test(h.doc_ref || "") ? h.doc_ref : null}
+                    jobNos={h.job_no ? [h.job_no] : []} onOpen={onOpenDoc} />
+                )}
               </div>
               <div className="ho-card-acts">
                 <button className="btn-ghost sm" onClick={() => print(h)}><UIcon name="catalog" size={14} /> พิมพ์/PDF</button>

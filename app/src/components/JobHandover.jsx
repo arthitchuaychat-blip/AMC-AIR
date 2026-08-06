@@ -192,6 +192,7 @@ export default function JobHandover({ handover = {}, company = {} }) {
             </div>
           </div>
           <div className="ho-meta">
+            {h.ho_no && <div className="ho-f"><span className="ho-f-l">เลขที่เอกสาร · No.</span><span className="ho-f-v">{h.ho_no}</span></div>}
             <div className="ho-f"><span className="ho-f-l">เลขที่งาน JOB NO</span><span className="ho-f-v">{h.job_no || ""}</span></div>
             <div className="ho-f"><span className="ho-f-l">วันที่ · Date</span><span className="ho-f-v">{h.doc_date ? fmtDocDate(h.doc_date) : ""}</span></div>
             <div className="ho-f"><span className="ho-f-l">เอกสารอ้างอิง · Ref.</span><span className="ho-f-v">{h.doc_ref || ""}</span></div>
