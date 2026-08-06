@@ -1,16 +1,18 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listCustomers, saveCustomer, deleteCustomer, listCustomerDocs, findSimilarCustomers } from "../lib/api";
+import { listCustomers, saveCustomer, deleteCustomer, listCustomerDocs, findSimilarCustomers, listStaff } from "../lib/api";
 import { UIcon } from "../icons";
 import { custCode, fmtBaht, matchText, matchPhone } from "../lib/format";
 import { can } from "../lib/permissions";
+import { PIPE_STAGES, PIPE_SOURCES } from "../lib/pipeline";
 import { scheduleLabel } from "../lib/schedule";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import CustomerImportModal from "./CustomerImportModal";
 
 // ⚠️ ต้องมีครบทุกฟิลด์ที่ saveCustomer เขียนลง DB — ฟิลด์ที่ขาดจะถูกเขียนทับเป็นค่าว่าง/0
-const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", email: "", vat: true, credit_days: 0, address: "", note: "" });
+const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", email: "", vat: true, credit_days: 0, address: "", note: "",
+  source: "", stage: "new", owner_id: "", next_followup: "", est_value: "", lost_reason: "" });
 // สีไล่ต่อไซต์ เพื่อแยกกล่องไซต์ให้เห็นง่าย ไม่ตาลาย
 const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626"];
 
@@ -29,6 +31,8 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   const [importing, setImporting] = React.useState(false);
   const [viewMode, setViewMode] = React.useState("grid"); // grid | list
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
+  const [staff, setStaff] = React.useState([]);   // เซลส์ผู้ดูแล (dropdown ท่อขาย)
+  React.useEffect(() => { listStaff().then(setStaff).catch(() => {}); }, []);
 
   async function load() {
     setLoading(true);
@@ -65,7 +69,8 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   function startNew() { setEditing({ cust: blankCust(), contacts: [{ name: "", phone: "", role: "" }], sites: [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }] }); }
   function startEdit(c) {
     setEditing({
-      cust: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", email: c.email || "", vat: c.vat, credit_days: c.credit_days ?? 0, address: c.address || "", note: c.note || "" },
+      cust: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", email: c.email || "", vat: c.vat, credit_days: c.credit_days ?? 0, address: c.address || "", note: c.note || "",
+        source: c.source || "", stage: c.stage || "new", owner_id: c.owner_id || "", next_followup: c.next_followup || "", est_value: c.est_value ?? "", lost_reason: c.lost_reason || "" },
       contacts: c.contacts.length ? c.contacts.map((x) => ({ name: x.name || "", phone: x.phone || "", role: x.role || "" })) : [{ name: "", phone: "", role: "" }],
       // ⚠️ ต้องพก id ของไซต์เดิมไปด้วย — saveCustomer ใช้ id ตัดสินว่า "แก้แถวเดิม" ไม่ใช่ลบทิ้งสร้างใหม่
       // ถ้า id หาย เอกสารเก่าทุกใบจะหลุดจากไซต์ถาวร (FK เป็น on delete set null) แค่เพราะแก้เบอร์โทร
@@ -129,6 +134,39 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
               <input className="inp" type="number" min="0" step="1" value={e.cust.credit_days} onChange={(ev) => setCust("credit_days", ev.target.value)} placeholder="0 = ครบกำหนดวันออกบิล" /></label>
           </div>
           <label className="fld"><span>ที่อยู่หลัก</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={e.cust.address} onChange={(ev) => setCust("address", ev.target.value)} /></label>
+
+          {/* ── ท่อขาย + แหล่งที่มา (mig 199) ── */}
+          <div className="pipe-box">
+            <div className="pipe-box-tt">🎯 ท่อขาย & แหล่งที่มา <span className="jo-dim" style={{ fontWeight: 400 }}>(ไว้ติดตามการขาย + วัดช่องทางที่คุ้ม)</span></div>
+            <div className="fld-row">
+              <label className="fld"><span>ช่องทางที่มา</span>
+                <select className="inp" value={e.cust.source} onChange={(ev) => setCust("source", ev.target.value)}>
+                  <option value="">— ไม่ระบุ —</option>
+                  {PIPE_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select></label>
+              <label className="fld"><span>ขั้นท่อขาย</span>
+                <select className="inp" value={e.cust.stage} onChange={(ev) => setCust("stage", ev.target.value)}>
+                  {PIPE_STAGES.map((s) => <option key={s.v} value={s.v}>{s.emoji} {s.t}</option>)}
+                </select></label>
+            </div>
+            <div className="fld-row">
+              <label className="fld"><span>เซลส์ผู้ดูแล</span>
+                <select className="inp" value={e.cust.owner_id} onChange={(ev) => setCust("owner_id", ev.target.value)}>
+                  <option value="">— ยังไม่กำหนด —</option>
+                  {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select></label>
+              <label className="fld"><span>นัดติดตามครั้งถัดไป</span>
+                <input className="inp" type="date" value={e.cust.next_followup || ""} onChange={(ev) => setCust("next_followup", ev.target.value)} /></label>
+            </div>
+            <div className="fld-row">
+              <label className="fld"><span>มูลค่าคาดว่าจะปิด (บาท)</span>
+                <input className="inp" type="number" min="0" value={e.cust.est_value} onChange={(ev) => setCust("est_value", ev.target.value)} placeholder="ประมาณการ (ไม่บังคับ)" /></label>
+              {e.cust.stage === "lost" && (
+                <label className="fld"><span>เหตุผลที่ไม่ปิด</span>
+                  <input className="inp" value={e.cust.lost_reason} onChange={(ev) => setCust("lost_reason", ev.target.value)} placeholder="เช่น ราคาสูงไป · เลือกเจ้าอื่น" /></label>
+              )}
+            </div>
+          </div>
 
           <div className="fld"><span>ผู้ติดต่อ (เพิ่มได้หลายคน)</span>
             {e.contacts.map((c, i) => (

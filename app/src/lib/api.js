@@ -1329,18 +1329,43 @@ export async function findSimilarCustomers(cust) {
   return [...out.values()].slice(0, 8);
 }
 
+// อัปเดตท่อขายเร็ว ๆ จากบอร์ด (เปลี่ยนขั้น/นัดติดตาม/ผู้ดูแล) โดยไม่ต้องเปิดฟอร์มลูกค้าเต็ม · mig 199
+// patch = { stage?, next_followup?, owner_id?, est_value?, lost_reason?, source? }
+export async function setCustomerPipeline(id, patch) {
+  const row = {};
+  if (patch.stage !== undefined) row.stage = patch.stage || null;
+  if (patch.next_followup !== undefined) row.next_followup = patch.next_followup || null;
+  if (patch.owner_id !== undefined) row.owner_id = patch.owner_id || null;
+  if (patch.est_value !== undefined) row.est_value = patch.est_value === "" || patch.est_value == null ? null : Number(patch.est_value) || 0;
+  if (patch.lost_reason !== undefined) row.lost_reason = patch.lost_reason?.trim() || null;
+  if (patch.source !== undefined) row.source = patch.source?.trim() || null;
+  if (!Object.keys(row).length) return;
+  const { error } = await supabase.from("customers").update(row).eq("id", id);
+  if (error) throw error;
+  bustCache("listCustomers"); bustCache("listCustomersLite");   // ล้างแคชให้บอร์ด/ลิสต์เห็นค่าล่าสุด
+}
+
 export async function saveCustomer(cust, contacts, sites) {
   const { data: { user } } = await supabase.auth.getUser();
-  const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, email: cust.email?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null, credit_days: Math.max(0, Math.round(Number(cust.credit_days) || 0)) };
+  const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, email: cust.email?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null, credit_days: Math.max(0, Math.round(Number(cust.credit_days) || 0)),
+    // ท่อขาย/แหล่งที่มา (mig 199) — undefined = ไม่แตะ (ฟอร์มที่ไม่ได้ส่งค่ามาจะไม่ล้างของเดิม)
+    ...(cust.source !== undefined ? { source: cust.source?.trim() || null } : {}),
+    ...(cust.stage !== undefined ? { stage: cust.stage || null } : {}),
+    ...(cust.owner_id !== undefined ? { owner_id: cust.owner_id || null } : {}),
+    ...(cust.next_followup !== undefined ? { next_followup: cust.next_followup || null } : {}),
+    ...(cust.est_value !== undefined ? { est_value: cust.est_value === "" || cust.est_value == null ? null : Number(cust.est_value) || 0 } : {}),
+    ...(cust.lost_reason !== undefined ? { lost_reason: cust.lost_reason?.trim() || null } : {}) };
   let id = cust.id;
-  const preMig = (e) => /credit_days|PGRST204/i.test(e?.message || "");   // ยังไม่รัน mig 159 → บันทึกส่วนที่เหลือให้ผ่านไปก่อน
+  const preMig = (e) => /credit_days|source|stage|owner_id|next_followup|est_value|lost_reason|PGRST204/i.test(e?.message || "");   // ยังไม่รัน mig 159/199 → บันทึกส่วนที่เหลือให้ผ่านไปก่อน
+  // ตัดคอลัมน์ที่ต้องรัน migration ก่อน (159 credit_days / 199 ท่อขาย) ออก แล้วบันทึกส่วนที่เหลือให้ผ่าน
+  const stripMig = (f) => { const { credit_days, source, stage, owner_id, next_followup, est_value, lost_reason, ...rest } = f; return rest; };
   if (id) {
     let e = (await supabase.from("customers").update(fields).eq("id", id)).error;
-    if (e && preMig(e)) { const { credit_days, ...rest } = fields; e = (await supabase.from("customers").update(rest).eq("id", id)).error; }
+    if (e && preMig(e)) e = (await supabase.from("customers").update(stripMig(fields)).eq("id", id)).error;
     if (e) throw e;
   } else {
     let r = await supabase.from("customers").insert({ ...fields, created_by: user?.id || null }).select("id").single();
-    if (r.error && preMig(r.error)) { const { credit_days, ...rest } = fields; r = await supabase.from("customers").insert({ ...rest, created_by: user?.id || null }).select("id").single(); }
+    if (r.error && preMig(r.error)) r = await supabase.from("customers").insert({ ...stripMig(fields), created_by: user?.id || null }).select("id").single();
     if (r.error) throw r.error; id = r.data.id;
   }
   await supabase.from("customer_contacts").delete().eq("customer_id", id);

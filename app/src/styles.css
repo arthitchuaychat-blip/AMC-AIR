@@ -1065,6 +1065,23 @@ select.inp{cursor:pointer}
 .sub-pay-split{margin-top:8px}
 .sub-split-modes{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .sub-payout-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--surface-2);font-size:13px}
+/* ท่อขาย: กล่องในฟอร์มลูกค้า */
+.pipe-box{border:1px solid var(--line);border-radius:11px;padding:12px;margin:4px 0 2px;background:var(--surface-2)}
+.pipe-box-tt{font-size:13px;font-weight:700;margin-bottom:9px}
+/* ท่อขาย: บอร์ด */
+.pipe-src-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.pipe-src-tbl th{font-size:12px;color:var(--ink-3);font-weight:600;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.pipe-src-tbl th:first-child,.pipe-src-tbl td:first-child{text-align:left}
+.pipe-src-tbl td{text-align:right;padding:8px;border-bottom:1px solid var(--surface-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pipe-cols{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
+.pipe-col{flex:0 0 260px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:80px}
+.pipe-col-hd{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700;padding:2px 2px 6px;border-bottom:1px solid var(--line)}
+.pipe-col-hd .cnt{font-size:11px;color:var(--ink-3);font-weight:600}
+.pipe-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 10px;box-shadow:var(--shadow,0 1px 2px rgba(0,0,0,.05))}
+.pipe-card .nm{font-weight:600;font-size:13.5px;cursor:pointer}
+.pipe-card .mt{font-size:11.5px;color:var(--ink-2);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px}
+.pipe-card .due-late{color:var(--down,#dc2626);font-weight:600}
+.pipe-card select.mini{font-size:11px;padding:2px 4px;margin-top:6px;width:100%;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
 /* สกอร์การ์ดผลงาน (KPI) */
 .kpi-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
 .kpi-tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:3px}
