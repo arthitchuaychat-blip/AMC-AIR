@@ -358,10 +358,10 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
                       const dateTxt = e.type === "job" && e.scheduled_at ? scheduleLabel(e)
                         : (e.date ? new Date(e.date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) : "—");
                       return (
-                        <button className="cd-job" key={e.type + e.no} onClick={() => { const t = e.type, n = e.no; setViewing(null); onOpenDoc && onOpenDoc(t, n); }}>
+                        <button className="cd-job" key={e.type + e.no} onClick={() => { setViewing(null); onOpenDoc && onOpenDoc(e.type, e.type === "handover" ? (e.jobNo || e.no) : e.no); }}>
                           <span className={"cd-job-dot " + st[1]} />
                           <div className="cd-job-body">
-                            <div className="cd-job-top"><b><span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span>{e.title || ""}</b><span className={"job-badge " + st[1]}>{st[0]}</span></div>
+                            <div className="cd-job-top"><b><span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span>{e.title || ""}</b><span className={"job-badge " + st[1]}>{st[0]}</span>{e.rating > 0 ? <span className="job-badge b-amber">★ {e.rating}</span> : null}</div>
                             <div className="cd-job-meta">🗓 {dateTxt}{e.teamName ? ` · 👷 ${e.teamName}` : ""}{e.amount != null ? ` · ${fmtBaht(e.amount)}` : ""}</div>
                             <div className="cd-job-no">{e.no} · ดูรายละเอียด ›</div>
                           </div>

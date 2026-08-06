@@ -126,7 +126,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-06·ใบส่งมอบงานมีเลขที่เอกสาร (HO-) + ชิปเชื่อมโยงงาน/ใบเสนอ (mig 202) · ส่ง LINE โชว์ error จริง v576";
+const BUILD = "2026-08-06·ใบส่งมอบงานโผล่ในประวัติลูกค้า (เหมือนเอกสารอื่น) + แก้ ส่ง LINE crash (require ข้ามไฟล์) v577";
 
 function SetupNotice() {
   return (
@@ -353,6 +353,7 @@ export default function App() {
     else if (v === "receipt") setReceiptFocus(focus);
     else if (v === "chat") setChatFocus(focus);
     else if (v === "po") setPoFocus(focus);
+    else if (v === "handover") setHoFocusJob(focus);
   }, []);
   // keep the URL hash in sync with the current view (replaceState → doesn't disturb the Back scheme above),
   // so refreshing or "open link in new tab" lands on the same menu
@@ -417,7 +418,7 @@ export default function App() {
   // unified cross-document navigation (เชื่อมโยง chips + doc history in chat) → open in a NEW TAB
   // so you don't lose the page you're on; the new tab reads #view/no and focuses that record
   function openDoc(type, no) {
-    const v = { boq: "boq", quote: "quote", job: "joborders", invoice: "invoice", receipt: "receipt", po: "po" }[type];
+    const v = { boq: "boq", quote: "quote", job: "joborders", invoice: "invoice", receipt: "receipt", po: "po", handover: "handover" }[type];
     if (v) openInNewTab(v, no);
   }
 

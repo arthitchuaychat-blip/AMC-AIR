@@ -2481,12 +2481,16 @@ export async function listCustomerJobs(customerId) {
 
 // all documents + jobs for one customer (newest first) — for the customer detail history with type filter
 export async function listCustomerDocs(customerId) {
-  const [q, iv, rc, jo, tm] = await Promise.all([
+  const [q, iv, rc, jo, tm, ho] = await Promise.all([
     supabase.from("quotations").select("quote_no,title,status,issue_date,created_at,site_id").eq("customer_id", customerId),
     supabase.from("invoices").select("invoice_no,status,issue_date,total,installment,pct,created_at,site_id").eq("customer_id", customerId),
     supabase.from("receipts").select("receipt_no,status,issue_date,net,created_at,site_id").eq("customer_id", customerId),
     supabase.from("job_orders").select("job_no,title,scheduled_at,end_date,slot,status,assigned_team,created_at,site_id").eq("customer_id", customerId),
     supabase.from("teams").select("id,name"),
+    // ใบส่งมอบงาน (mig 202 ho_no) — โชว์ในประวัติลูกค้าเหมือนเอกสารอื่น · fallback ถ้ายังไม่รัน 202
+    supabase.from("job_handovers").select("id,ho_no,job_no,status,doc_date,created_at,cust_rating").eq("customer_id", customerId)
+      .then((r) => (r.error && /ho_no|cust_rating|column/i.test(r.error.message || "") ? supabase.from("job_handovers").select("id,job_no,status,doc_date,created_at").eq("customer_id", customerId) : r))
+      .catch(() => ({ data: [] })),
   ]);
   const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
   const entries = [
@@ -2494,6 +2498,7 @@ export async function listCustomerDocs(customerId) {
     ...(iv.data || []).map((x) => ({ type: "invoice", no: x.invoice_no, title: `งวด ${x.installment} (${Math.round(x.pct)}%)`, status: x.status, amount: x.total, date: x.issue_date || x.created_at, created: x.created_at, site_id: x.site_id })),
     ...(rc.data || []).map((x) => ({ type: "receipt", no: x.receipt_no, status: x.status, amount: x.net, date: x.issue_date || x.created_at, created: x.created_at, site_id: x.site_id })),
     ...(jo.data || []).map((x) => ({ type: "job", no: x.job_no, title: x.title, status: x.status, date: x.scheduled_at || x.created_at, created: x.created_at, teamName: x.assigned_team ? (tn[x.assigned_team] || x.assigned_team) : null, scheduled_at: x.scheduled_at, end_date: x.end_date, slot: x.slot, site_id: x.site_id })),
+    ...(ho.data || []).map((x) => ({ type: "handover", no: x.ho_no || ("HO#" + String(x.id).slice(0, 6)), hoId: x.id, jobNo: x.job_no, title: x.job_no ? `งาน ${x.job_no}` : "ใบส่งมอบงาน", status: x.status, rating: x.cust_rating || null, date: x.doc_date || x.created_at, created: x.created_at })),
   ];
   // newest-created first (true timeline order — independent of issue/appointment dates)
   return entries.sort((a, b) => new Date(b.created || b.date || 0) - new Date(a.created || a.date || 0));
