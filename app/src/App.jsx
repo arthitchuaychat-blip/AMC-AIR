@@ -54,10 +54,12 @@ const TaxReport = React.lazy(() => import("./components/TaxReport"));
 const CustomerFollowup = React.lazy(() => import("./components/CustomerFollowup"));
 const WebOrders = React.lazy(() => import("./components/WebOrders"));
 const Handbook = React.lazy(() => import("./components/Handbook"));
+const KpiScorecard = React.lazy(() => import("./components/KpiScorecard"));
 
 const NAV = {
   myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
+  kpi: { th: "สกอร์การ์ดผลงาน", en: "KPI Scorecard", icon: "trend" },
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
   followup: { th: "ติดตามลูกค้า", en: "Follow-up", icon: "user" },
   weborders: { th: "คำสั่งซื้อจากเว็บ", en: "Web Orders", icon: "purchase" },
@@ -97,7 +99,7 @@ const NAV = {
 // ⚠️ v546: ใช้เฉพาะ emoji รุ่นเก่า (Emoji 1.0 ปี 2015) ที่รองรับทุกเครื่อง/มือถือ —
 //    เลี่ยง Emoji 11+ (🧱🧰🧮🧾🧼) และแบบ ZWJ (🧑‍🔧🧑‍💼) ที่ font เก่าขึ้นเป็นกล่องว่าง
 const NAV_EMOJI = {
-  myjobs: "👷", dashboard: "📊", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
+  myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
   chat: "💚", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
   subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", billing: "📑",
   receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", expenses: "💳",
@@ -114,7 +116,7 @@ const NAV_GROUPS = [
   { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po", "tools"] },
-  { key: "overview", label: "ภาพรวม", ids: ["dashboard"] },
+  { key: "overview", label: "ภาพรวม", ids: ["dashboard", "kpi"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
 ];
 
@@ -122,7 +124,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-05·งานค้างจ่ายช่างซัพ: กดเลข JOB เปิดหน้าใบงานดูรายละเอียดได้ v572";
+const BUILD = "2026-08-06·สกอร์การ์ดผลงาน (KPI): วัดยอดขาย/คน + งาน/ทีม จริงต่อเดือน (mig 198) v573";
 
 function SetupNotice() {
   return (
@@ -531,6 +533,7 @@ export default function App() {
         <React.Suspense fallback={<div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)" }}>กำลังโหลด…</div>}>
         {view === "dashboard" && <Dashboard role={role} onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} onOpenDoc={openDoc} />}
+        {view === "kpi" && <KpiScorecard />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
         {view === "suppliers" && <Suppliers role={role} />}
         {view === "followup" && <CustomerFollowup role={role}

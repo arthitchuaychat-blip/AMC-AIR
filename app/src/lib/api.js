@@ -3197,6 +3197,15 @@ export async function listSubPayouts() {
   if (error) throw error; return data || [];
 }
 
+// สกอร์การ์ดผลงาน (mig 198) — วัด KPI จริงต่อคน/ต่อทีมในช่วงเวลา · office เท่านั้น
+// คืน { sales:[{user_id,name,role,quotes,won,close_rate,revenue}], teams:[{team_id,name,type,jobs_done,claims,claim_rate,rating_avg}] }
+export async function listKpiScorecard(from, to) {
+  const { data, error } = await supabase.rpc("kpi_scorecard", { p_from: from, p_to: to });
+  if (error) { if (/function|does not exist|schema cache|PGRST202/i.test(error.message || "")) return { sales: [], teams: [] }; throw error; }
+  const d = data || {};
+  return { sales: Array.isArray(d.sales) ? d.sales : [], teams: Array.isArray(d.teams) ? d.teams : [] };
+}
+
 // หัวหน้าทีมช่างซัพดู "งานค้างจ่าย" ของทีมตัวเอง (อ่านอย่างเดียว) — ผ่าน RPC security definer (mig 197)
 // คืน { jobs:[งานยืนยันค่าแรงแล้วยังจ่ายไม่ครบ], payouts:[ใบจ่ายที่ออกแล้วรอโอน] } เฉพาะทีมของผู้เรียก
 // ถ้ายังไม่รัน mig 197 → คืนโครงว่าง (หน้าจอไม่พัง)
