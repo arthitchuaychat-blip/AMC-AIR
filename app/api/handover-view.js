@@ -2,7 +2,7 @@
 // No login needed; access is gated by an HMAC token so only the shared link works.
 //   GET /api/handover-view?id=<id>&t=<token>  → { handover, company }
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (token secret = HANDOVER_SHARE_SECRET || service key)
-const crypto = require("crypto");
+import crypto from "crypto";
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}` });
@@ -13,7 +13,7 @@ function shareToken(id) {
   return crypto.createHmac("sha256", SECRET()).update("ho:" + String(id)).digest("hex").slice(0, 24);
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const id = (req.query.id || "").toString();
   const token = (req.query.t || "").toString();
   if (!id || !token) return res.status(400).json({ error: "missing id/token" });
@@ -38,5 +38,5 @@ module.exports = async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ error: "error: " + (e.message || e) });
   }
-};
-module.exports.shareToken = shareToken;
+}
+export { shareToken };

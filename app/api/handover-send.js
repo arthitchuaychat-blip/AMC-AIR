@@ -4,7 +4,7 @@
 // link so the office can copy/send it manually. Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, LINE_CHANNEL_ACCESS_TOKEN
 // ⚠️ ห้าม require ไฟล์ api ข้ามกัน (เช่น ./handover-view) — Vercel ไม่ bundle ไปด้วย → FUNCTION_INVOCATION_FAILED
 //    ต้อง inline shareToken เอง (ต้องได้ token เดียวกับ handover-view: HMAC "ho:<id>")
-const crypto = require("crypto");
+import crypto from "crypto";
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
@@ -21,7 +21,7 @@ async function readJson(req) {
   try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch { return {}; }
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "method" });
   let stage = "init";
   try {
@@ -78,4 +78,4 @@ module.exports = async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ error: `error@${stage}: ` + (e.message || e) });
   }
-};
+}

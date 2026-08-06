@@ -2,7 +2,7 @@
 //   POST /api/handover-rate  body: { id, t, rating(1-5), comment? }  → { ok: true }
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (+ HANDOVER_SHARE_SECRET ถ้าตั้งแยก)
 // ⚠️ ห้าม require ไฟล์ api ข้ามกัน — Vercel ไม่ bundle → FUNCTION_INVOCATION_FAILED · inline shareToken เอง
-const crypto = require("crypto");
+import crypto from "crypto";
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json", Prefer: "return=minimal" });
@@ -11,7 +11,7 @@ function shareToken(id) {
   return crypto.createHmac("sha256", SECRET()).update("ho:" + String(id)).digest("hex").slice(0, 24);
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "method not allowed" });
   if (!SB() || !KEY()) return res.status(503).json({ error: "server not configured" });
   let body = req.body;
