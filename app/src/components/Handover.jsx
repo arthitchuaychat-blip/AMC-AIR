@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listHandovers, deleteHandover, getCompanies, listServiceReminders, setReminderStatus, sendHandoverLine, getHandoverLink } from "../lib/api";
+import { listHandovers, deleteHandover, getCompanies, listServiceReminders, setReminderStatus, sendHandoverLine, getHandoverLink, getJobRateLink } from "../lib/api";
 import { blankHandover } from "../lib/handover";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { fmtDocDate, matchText, matchPhone } from "../lib/format";
@@ -98,9 +98,15 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
   async function copyLink(h, kind) {
     setSending(h.id);
     try {
-      const { url, rateUrl } = await getHandoverLink(h.id);
-      const link = kind === "rate" ? rateUrl : url;
-      const msg = kind === "rate" ? "⭐ คัดลอกลิงก์ให้คะแนนแล้ว — วางในแชตส่งลูกค้าได้เลย ✓" : "📋 คัดลอกลิงก์เอกสารแล้ว ✓";
+      let link, msg;
+      if (kind === "rate") {
+        if (!h.job_no) { flash("ใบนี้ไม่มีเลขใบงาน — ขอคะแนนจากแชตแทนได้", true); setSending(null); return; }
+        link = await getJobRateLink(h.job_no);   // คะแนนผูกกับใบงาน (mig 203)
+        msg = "⭐ คัดลอกลิงก์ให้คะแนนแล้ว — วางในแชตส่งลูกค้าได้เลย ✓";
+      } else {
+        const { url } = await getHandoverLink(h.id);
+        link = url; msg = "📋 คัดลอกลิงก์เอกสารแล้ว ✓";
+      }
       try { await navigator.clipboard.writeText(link); flash(msg); }
       catch { window.prompt("คัดลอกลิงก์นี้ (กดค้าง/Ctrl+C):", link); }
     } catch (e) { flash("ขอลิงก์ไม่สำเร็จ: " + (e.message || e), true); }

@@ -1,11 +1,11 @@
 import React from "react";
 
-// หน้าให้คะแนนความพอใจ (แยกจากเอกสารส่งมอบ) — ลูกค้าเปิดจากลิงก์ ?rate=<id>&t=<token>
-// ดึงข้อมูลย่อ (บริษัท/งาน/สถานะ) จาก /api/handover-view (token เดียวกัน) แล้วโชว์เฉพาะการ์ดให้ดาว
+// หน้าให้คะแนนความพอใจ (ผูกกับใบงาน) — ลูกค้าเปิดจากลิงก์ ?rate=<job_no>&t=<token>
+// ดึงข้อมูลย่อ (บริษัท/งาน) จาก /api/rate แล้วโชว์การ์ดให้ดาว · id = เลขใบงาน (job_no)
 export default function PublicRating({ id, token }) {
   const [state, setState] = React.useState({ loading: true });
   React.useEffect(() => {
-    fetch(`/api/handover-view?id=${encodeURIComponent(id)}&t=${encodeURIComponent(token)}`)
+    fetch(`/api/rate?job=${encodeURIComponent(id)}&t=${encodeURIComponent(token)}`)
       .then(async (r) => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status); return r.json(); })
       .then((d) => setState({ loading: false, data: d }))
       .catch((e) => setState({ loading: false, error: String(e.message || e) }));
@@ -19,10 +19,10 @@ export default function PublicRating({ id, token }) {
     </div>
   );
 
-  const { handover, company } = state.data;
+  const { job, company } = state.data;
   const co = company?.vat?.name ? company.vat : (company?.novat || company || {});
   const coName = co.name || "AMC AIR";
-  const custName = handover?.customer_name || "";
+  const custName = job?.customer_name || "";
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(160deg,#1e74e0 0%,#3b8ff0 34%,#eaf3fe 34%,#eaf3fe 100%)", display: "flex", flexDirection: "column", alignItems: "center", padding: "0 14px 48px", fontFamily: '"Segoe UI","Leelawadee UI","Noto Sans Thai",Tahoma,sans-serif' }}>
@@ -40,9 +40,9 @@ export default function PublicRating({ id, token }) {
           บริการของทีมช่างเราเป็นอย่างไรบ้างครับ?<br />รบกวนให้คะแนนความพอใจสักนิดนะครับ<br />
           <span style={{ color: "#64748b", fontSize: 13 }}>ความเห็นของคุณมีค่ากับเรามาก และช่วยให้เราพัฒนาบริการให้ดียิ่งขึ้น 💙</span>
         </div>
-        <RatingCard id={id} token={token} initial={handover?.cust_rating || 0} initialComment={handover?.cust_comment || ""} />
+        <RatingCard id={id} token={token} initial={job?.cust_rating || 0} initialComment={job?.cust_comment || ""} />
       </div>
-      <div style={{ color: "#64748b", fontSize: 12.5, marginTop: 20 }}>© {coName}{handover?.job_no ? ` · งาน ${handover.job_no}` : ""}</div>
+      <div style={{ color: "#64748b", fontSize: 12.5, marginTop: 20 }}>© {coName}{job?.job_no ? ` · งาน ${job.job_no}` : ""}</div>
     </div>
   );
 }
@@ -61,8 +61,8 @@ function RatingCard({ id, token, initial, initialComment }) {
     if (!(rating >= 1)) { setErr("กรุณาเลือกดาวก่อน"); return; }
     setBusy(true); setErr(null);
     try {
-      const r = await fetch("/api/handover-rate", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, t: token, rating, comment }) });
+      const r = await fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job: id, t: token, rating, comment }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
       setDone(true);
     } catch (e) { setErr("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง"); }

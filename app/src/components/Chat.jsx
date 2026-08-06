@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, searchFbMessages, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, searchFbMessages, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -135,6 +135,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [teams, setTeams] = React.useState([]);       // permanent teams for the queue panel
   const [showQueue, setShowQueue] = React.useState(false); // คิวช่าง section toggle in the info panel
   const [jobPicker, setJobPicker] = React.useState(null);
+  const [ratePicker, setRatePicker] = React.useState(null);   // ⭐ ขอคะแนน (เลือกใบงาน)
+  const [hoPicker, setHoPicker] = React.useState(null);       // 📄 ส่งใบส่งมอบ (เลือกใบ)
   const [sendMenuFor, setSendMenuFor] = React.useState(null); // doc entry whose "ส่งเป็น รูป/PDF" popup is open
   const [capJob, setCapJob] = React.useState(null); // { type, no, mode, to, label } → render off-screen + capture + send
   const startSend = (e, mode) => { setSendMenuFor(null); setCapJob({ type: e.type, no: e.no, mode, to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}` }); flash("กำลังเตรียมเอกสาร…"); };
@@ -522,6 +524,41 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   }
   function pickJob(jo) { setText(buildOrderConfirm(jo)); setJobPicker(null); flash("ใส่ข้อความคอนเฟิมแล้ว — ตรวจทานแล้วกดส่ง"); }
 
+  // ⭐ ขอคะแนน: เลือกใบงาน → ใส่ลิงก์ให้คะแนน (ผูก job_no) ในกล่องพิมพ์ ให้ตรวจก่อนส่ง
+  async function openRate() {
+    try {
+      let js = jobs; if (!js) { js = await listJobOrders(); setJobs(js); }
+      const mine = js.filter((j) => String(j.customer_id) === String(selContact.customer_id) && j.status !== "cancelled");
+      if (!mine.length) return flash("ลูกค้านี้ยังไม่มีใบงาน", true);
+      setRatePicker(mine);
+    } catch (e) { flash("โหลดใบงานไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function pickRate(jo) {
+    setRatePicker(null);
+    try {
+      const url = await getJobRateLink(jo.job_no);
+      setText(`ขอบคุณที่ใช้บริการ AMC AIR ครับ 🙏\nรบกวนให้คะแนนความพอใจงาน ${jo.job_no} สักนิดนะครับ กดที่ลิงก์นี้ได้เลย:\n${url}`);
+      flash("ใส่ลิงก์ขอคะแนนแล้ว — ตรวจทานแล้วกดส่ง");
+    } catch (e) { flash("ขอลิงก์ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // 📄 ส่งใบส่งมอบ (B): เลือกใบส่งมอบของลูกค้า → ใส่ลิงก์เอกสารในกล่องพิมพ์
+  async function openHo() {
+    try {
+      const all = await listHandovers();
+      const mine = (all || []).filter((h) => String(h.customer_id) === String(selContact.customer_id) && h.status === "submitted");
+      if (!mine.length) return flash("ลูกค้านี้ยังไม่มีใบส่งมอบงานที่ส่งแล้ว", true);
+      setHoPicker(mine);
+    } catch (e) { flash("โหลดใบส่งมอบไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function pickHo(h) {
+    setHoPicker(null);
+    try {
+      const { url } = await getHandoverLink(h.id);
+      setText(`📄 ใบส่งมอบงาน ${h.ho_no || h.job_no || ""}\nกดดูเอกสารส่งมอบงานได้ที่ลิงก์นี้ครับ:\n${url}`);
+      flash("ใส่ลิงก์ใบส่งมอบแล้ว — ตรวจทานแล้วกดส่ง");
+    } catch (e) { flash("ขอลิงก์ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+
   // กดปุ่มข้อความสำเร็จรูป: เติมข้อความลงช่องพิมพ์ + พักรูปแนบไว้ (ส่งพร้อมกันตอนกดส่ง)
   const insertQr = (qr) => {
     setText((cur) => cur ? cur + (cur.endsWith("\n") ? "" : "\n") + qr.text : qr.text);
@@ -758,6 +795,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   <div className="chat-tools">
                     {selContact.kind === "supplier" && <button className="chat-tool primary" disabled={sending} title="เลือกใบสั่งซื้อ ส่งเป็นรูป/PDF เข้าแชตซัพ" onClick={openPoPicker}>🛒 ส่ง PO</button>}
                     {selContact.customer_id && <button className="chat-tool primary" onClick={openConfirm} disabled={sending}>🧾 ส่งคอนเฟิม</button>}
+                    {selContact.customer_id && !isFb && <button className="chat-tool" onClick={openRate} disabled={sending} title="ส่งลิงก์ให้ลูกค้าให้คะแนนความพอใจ (อ้างเลขใบงาน)">⭐ ขอคะแนน</button>}
+                    {selContact.customer_id && !isFb && <button className="chat-tool" onClick={openHo} disabled={sending} title="ส่งลิงก์ใบส่งมอบงานให้ลูกค้า">📄 ส่งใบส่งมอบ</button>}
                     <label className={"chat-tool" + (sending || uploading ? " disabled" : "")}>📷 รูป
                       <input type="file" accept="image/*" multiple hidden disabled={sending || uploading} onChange={onImage} />
                     </label>
@@ -1060,6 +1099,40 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                 <button key={jo.job_no} className="confirm-job" onClick={() => pickJob(jo)}>
                   <div><b>{jo.job_no}</b> · {jo.title || "งานติดตั้ง/บริการ"}</div>
                   <small>🗓 {jo.scheduled_at ? scheduleLabel(jo) : "ยังไม่นัด"} · 💰 {fmtBaht(jo.quoteGrand || 0)}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {ratePicker && (
+        <div className="modal-overlay" onClick={() => setRatePicker(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
+            <div className="modal-head"><div className="modal-title">เลือกใบงานเพื่อขอคะแนน</div>
+              <button className="drawer-close" onClick={() => setRatePicker(null)}><UIcon name="x" size={20} /></button></div>
+            <div className="modal-body">
+              <p className="page-sub" style={{ marginBottom: 10 }}>เลือกใบงานที่จะขอให้ลูกค้าให้คะแนน — ระบบจะใส่ลิงก์ในกล่องพิมพ์ ให้ตรวจก่อนกดส่ง</p>
+              {ratePicker.map((jo) => (
+                <button key={jo.job_no} className="confirm-job" onClick={() => pickRate(jo)}>
+                  <div><b>{jo.job_no}</b> · {jo.title || "งานติดตั้ง/บริการ"}{jo.cust_rating ? ` · ★ ${jo.cust_rating}` : ""}</div>
+                  <small>🗓 {jo.scheduled_at ? scheduleLabel(jo) : "ยังไม่นัด"}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {hoPicker && (
+        <div className="modal-overlay" onClick={() => setHoPicker(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
+            <div className="modal-head"><div className="modal-title">เลือกใบส่งมอบงานเพื่อส่งให้ลูกค้า</div>
+              <button className="drawer-close" onClick={() => setHoPicker(null)}><UIcon name="x" size={20} /></button></div>
+            <div className="modal-body">
+              <p className="page-sub" style={{ marginBottom: 10 }}>เลือกใบส่งมอบ — ระบบจะใส่ลิงก์เอกสารในกล่องพิมพ์ ให้ตรวจก่อนกดส่ง</p>
+              {hoPicker.map((h) => (
+                <button key={h.id} className="confirm-job" onClick={() => pickHo(h)}>
+                  <div><b>{h.ho_no || "ใบส่งมอบ"}</b>{h.job_no ? ` · ${h.job_no}` : ""}</div>
+                  <small>🗓 {h.doc_date || (h.created_at || "").slice(0, 10)}{h.cust_rating ? ` · ★ ${h.cust_rating}` : ""}</small>
                 </button>
               ))}
             </div>

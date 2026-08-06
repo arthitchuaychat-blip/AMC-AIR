@@ -2820,6 +2820,16 @@ export async function getHandoverLink(id) {
   return { url: out.url, rateUrl: out.rateUrl || (out.url || "").replace("?ho=", "?rate=") };
 }
 
+// ขอลิงก์ "ให้คะแนน" ของใบงาน (ผูก job_no — ไม่ต้องมีใบส่งมอบ) เพื่อส่งในแชต/คัดลอก
+export async function getJobRateLink(jobNo) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const r = await fetch(`/api/rate-link?job=${encodeURIComponent(jobNo)}`, { headers: { Authorization: `Bearer ${session?.access_token || ""}` } });
+  const raw = await r.text().catch(() => "");
+  let out = {}; try { out = raw ? JSON.parse(raw) : {}; } catch { /* not json */ }
+  if (!r.ok) throw new Error(out.error || (raw ? raw.slice(0, 160) : "ขอลิงก์ไม่สำเร็จ (" + r.status + ")"));
+  return out.rateUrl;
+}
+
 // ลบใบส่งมอบ: กติกาบ้าน — ต้องมีเหตุผล + ลง audit พร้อม snapshot (ใบที่ส่งแล้วมีลายเซ็นลูกค้า เป็นหลักฐานงาน)
 export async function deleteHandover(id, reason) {
   const { data: snap } = await supabase.from("job_handovers").select("*").eq("id", id).maybeSingle();
