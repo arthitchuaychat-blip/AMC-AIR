@@ -24,7 +24,11 @@ export default function PublicHandover({ id, token }) {
   const co = company?.vat?.name ? company.vat : (company?.novat || company || {});
   return (
     <div style={{ background: "#f1f5f9", minHeight: "100vh", padding: "0 0 40px" }}>
-      <style>{`@media print { .pubho-bar, .pubho-rate { display:none !important; } .pubho-page { background:#fff !important; padding:0 !important; } }`}</style>
+      <style>{`
+        /* JobHandover ใช้ .print-area ที่ปกติซ่อนบนจอ (โชว์เฉพาะตอนพิมพ์) — หน้า public ต้องโชว์บนจอด้วย */
+        @media screen { .pubho-page .print-area { display:block !important; } }
+        @media print { .pubho-bar { display:none !important; } .pubho-page { background:#fff !important; padding:0 !important; } }
+      `}</style>
       <div className="pubho-bar" style={{ position: "sticky", top: 0, zIndex: 10, background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
         <b style={{ flex: 1, fontSize: 15 }}>🧾 ใบส่งมอบงาน · {co.name || "AMC AIR"}</b>
         <button onClick={() => window.print()} style={{ background: "#16a34a", color: "#fff", border: 0, borderRadius: 8, padding: "8px 16px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>🖨️ พิมพ์ / บันทึก PDF</button>
