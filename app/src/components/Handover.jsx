@@ -148,11 +148,13 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
                   <b>{h.customer_name || "— ไม่ระบุลูกค้า —"}</b>
                   <span className={"job-badge " + st.cls}>{st.th}</span>
                   {h.job_no && <span className="ho-card-job">{h.job_no}</span>}
+                  {h.cust_rating > 0 && <span className="job-badge b-amber" title={h.cust_comment || "ลูกค้าให้คะแนนแล้ว"}>★ {h.cust_rating}</span>}
                 </div>
                 <div className="ho-card-sub">
                   {fmtDocDate(h.doc_date || h.created_at)} · {machines} แบบฟอร์ม
                   {h.contact_phone ? ` · ${h.contact_phone}` : ""}
                   {h.creatorName ? ` · โดย ${h.creatorName}` : ""}
+                  {h.cust_comment ? ` · 💬 “${h.cust_comment}”` : ""}
                 </div>
               </div>
               <div className="ho-card-acts">

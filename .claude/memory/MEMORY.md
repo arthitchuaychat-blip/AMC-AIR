@@ -35,4 +35,5 @@
 - [Income/cost categories](income-cost-categories.md) — เสร็จครบ 3 เฟส v511: ประเภทงาน + รายได้แยกหมวด + P&L ต้นทุน/ค่าใช้จ่าย (แท็บ กำไร-ขาดทุน); ต้องรัน SQL 176+177; แหล่งข้อมูล+เกณฑ์+กับดักครบ
 - [KPI scorecard](kpi-scorecard.md) — สกอร์การ์ดผลงาน: วัด KPI จริงต่อคน(ยอดขาย)/ต่อทีม(งาน) จาก RPC kpi_scorecard (mig 198, module 'kpi'); ข้อ 1/3 แผนพัฒนา 6 ส.ค.
 - [Sales pipeline](sales-pipeline.md) — ท่อขาย + แหล่งที่มาลูกค้า: customers.stage/source/owner_id (mig 199), บอร์ด Pipeline.jsx (module 'pipeline'), วัด ROI ช่องทาง; ข้อ 2/3 แผนพัฒนา 6 ส.ค.
+- [Customer rating](customer-rating.md) — คะแนนความพอใจลูกค้าหลังจบงาน: ให้ดาวจากลิงก์ใบส่งมอบ (mig 200 + api handover-rate) → เข้าสกอร์การ์ดทีม (mig 201); ข้อ 3/3 แผนพัฒนา 6 ส.ค.
 - [App performance](app-performance.md) — เร่งแอป: code-split (บันเดิลแรก 2.3MB→0.65MB) + แคชลิสต์เอกสาร 45 วิ (ตัวดัก supabase.from/rpc ล้างแคชอัตโนมัติ = เซฟแล้วสด) ทำแล้ว v507; เหลือแค่ index ตอนตารางโต

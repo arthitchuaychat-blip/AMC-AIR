@@ -103,7 +103,7 @@ export default function KpiScorecard() {
         <div className="card">
           <div className="sec-head"><div>
             <div className="sec-title">ผลงานทีมช่าง (ต่อทีม)</div>
-            <div className="sec-sub">เป้า: งานเคลม ≤ 3% · คะแนนเฉลี่ย ≥ 4.5 ดาว · (คะแนนมาจากการรีวิวงานในเมนูช่างซัพ)</div>
+            <div className="sec-sub">เป้า: งานเคลม ≤ 3% · คะแนนลูกค้า ≥ 4.5 ดาว · (คะแนนลูกค้า = ลูกค้าให้ดาวจากลิงก์ใบส่งมอบงาน)</div>
           </div></div>
           {teams.length === 0 && <div className="empty sm">ยังไม่มีงานเสร็จของทีมในเดือนนี้</div>}
           {teams.length > 0 && (
@@ -111,21 +111,28 @@ export default function KpiScorecard() {
               <table className="kpi-table">
                 <thead><tr>
                   <th style={{ textAlign: "left" }}>ทีม</th>
-                  <th>งานเสร็จ</th><th>เคลม</th><th>อัตราเคลม</th><th>คะแนนเฉลี่ย</th>
+                  <th>งานเสร็จ</th><th>เคลม</th><th>อัตราเคลม</th><th>คะแนนลูกค้า</th>
                 </tr></thead>
                 <tbody>
-                  {teams.map((t) => (
-                    <tr key={t.team_id}>
-                      <td style={{ textAlign: "left" }}>
-                        <b>{t.name || t.team_id}</b>
-                        {t.type === "sub" && <span className="jo-dim" style={{ fontSize: 11 }}> · ช่างซัพ</span>}
-                      </td>
-                      <td>{fmtInt(t.jobs_done)}</td>
-                      <td>{fmtInt(t.claims)}</td>
-                      <td><span className={"job-badge " + rag(t.claim_rate, 3, 7, true)}>{t.claim_rate}%</span></td>
-                      <td>{t.rating_avg == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(t.rating_avg, 4.5, 4)}>{t.rating_avg} ★</span>}</td>
-                    </tr>
-                  ))}
+                  {teams.map((t) => {
+                    const rv = t.cust_rating_avg ?? t.rating_avg;   // คะแนนลูกค้าก่อน · ไม่มีก็ตกไปคะแนนรีวิวช่างซัพเดิม
+                    const isCust = t.cust_rating_avg != null;
+                    return (
+                      <tr key={t.team_id}>
+                        <td style={{ textAlign: "left" }}>
+                          <b>{t.name || t.team_id}</b>
+                          {t.type === "sub" && <span className="jo-dim" style={{ fontSize: 11 }}> · ช่างซัพ</span>}
+                        </td>
+                        <td>{fmtInt(t.jobs_done)}</td>
+                        <td>{fmtInt(t.claims)}</td>
+                        <td><span className={"job-badge " + rag(t.claim_rate, 3, 7, true)}>{t.claim_rate}%</span></td>
+                        <td>{rv == null ? <span className="jo-dim">—</span> : <>
+                          <span className={"job-badge " + rag(rv, 4.5, 4)}>{rv} ★</span>
+                          {isCust && t.cust_rating_n > 0 && <span className="jo-dim" style={{ fontSize: 10.5, display: "block" }}>{t.cust_rating_n} รีวิว</span>}
+                        </>}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

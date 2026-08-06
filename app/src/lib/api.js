@@ -2673,16 +2673,21 @@ export async function unlockJob(job_no) {
 }
 
 // ===================== ใบส่งมอบงาน · job handovers =====================
-const HANDOVER_COLS = "id,job_no,customer_id,customer_name,contact_name,contact_phone,address,doc_ref,doc_date,work_types,detail,fix_note,forms,tech_sign_url,tech_name,cust_sign_url,cust_name,status,created_by,created_at,updated_at";
+const HANDOVER_COLS_BASE = "id,job_no,customer_id,customer_name,contact_name,contact_phone,address,doc_ref,doc_date,work_types,detail,fix_note,forms,tech_sign_url,tech_name,cust_sign_url,cust_name,status,created_by,created_at,updated_at";
+// เพิ่มคะแนนความพอใจลูกค้า (mig 200) — ถ้ายังไม่รัน migration select จะ error เรื่องคอลัมน์ → fallback เป็น BASE
+const HANDOVER_COLS = HANDOVER_COLS_BASE + ",cust_rating,cust_comment,cust_rated_at";
+const _preRate = (e) => /cust_rating|cust_comment|cust_rated_at|column|PGRST/i.test(e?.message || "");
 
 // list handovers (optionally for one job), newest first, with the creator's name attached
 export async function listHandovers(jobNo) {
   // กันเพดาน 1000 แถว — ทะเบียนใบส่งมอบโตเรื่อย ๆ เกินพันใบ ใบเก่า (มีลายเซ็นลูกค้า) จะหายจากหน้าค้นหาเงียบ ๆ
-  const rows = await _fetchAll((f, t) => {
-    let q = supabase.from("job_handovers").select(HANDOVER_COLS, { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t);
+  const _rows = (cols) => _fetchAll((f, t) => {
+    let q = supabase.from("job_handovers").select(cols, { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t);
     if (jobNo) q = q.eq("job_no", jobNo);
     return q;
   });
+  let rows;
+  try { rows = await _rows(HANDOVER_COLS); } catch (e) { if (_preRate(e)) rows = await _rows(HANDOVER_COLS_BASE); else throw e; }
   const ids = [...new Set(rows.map((r) => r.created_by).filter(Boolean))];
   let names = {};
   if (ids.length) {
@@ -2711,7 +2716,8 @@ export async function listHandoverFlags() {
   return m;
 }
 export async function getHandover(id) {
-  const { data, error } = await supabase.from("job_handovers").select(HANDOVER_COLS).eq("id", id).single();
+  let { data, error } = await supabase.from("job_handovers").select(HANDOVER_COLS).eq("id", id).single();
+  if (error && _preRate(error)) ({ data, error } = await supabase.from("job_handovers").select(HANDOVER_COLS_BASE).eq("id", id).single());
   if (error) throw error;
   return data;
 }
@@ -2731,12 +2737,12 @@ export async function saveHandover(h) {
   if (h.id) {
     const { data: prev } = await supabase.from("job_handovers").select("status").eq("id", h.id).maybeSingle();
     wasSubmitted = prev?.status === "submitted";
-    const { data, error } = await supabase.from("job_handovers").update(fields).eq("id", h.id).select(HANDOVER_COLS).single();
+    const { data, error } = await supabase.from("job_handovers").update(fields).eq("id", h.id).select(HANDOVER_COLS_BASE).single();
     if (error) throw /PGRST116|coerce/i.test(error.message || "") ? new Error("บันทึกไม่ได้ — ใบนี้ส่งแล้ว ช่างแก้ไขเองไม่ได้ (ต้องให้ออฟฟิศแก้)") : error;
     saved = data;
   } else {
     fields.created_by = await _uid();
-    const { data, error } = await supabase.from("job_handovers").insert(fields).select(HANDOVER_COLS).single();
+    const { data, error } = await supabase.from("job_handovers").insert(fields).select(HANDOVER_COLS_BASE).single();
     if (error) throw error;
     saved = data;
   }
