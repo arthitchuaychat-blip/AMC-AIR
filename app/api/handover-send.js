@@ -17,19 +17,25 @@ async function readJson(req) {
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "method" });
-  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-  if (!token) return res.status(401).json({ error: "no auth" });
-  // identify caller + gate to office roles
-  const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${token}` } });
-  if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
-  const user = await ur.json();
-  const pr = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: sbH() });
-  const prof = (pr.ok ? await pr.json() : [])[0];
-  if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
-
-  const { id } = await readJson(req);
-  if (!id) return res.status(400).json({ error: "missing id" });
+  let stage = "init";
   try {
+    if (!SB() || !KEY()) return res.status(503).json({ error: "server not configured (SUPABASE_URL/SERVICE_ROLE_KEY)" });
+    const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+    if (!token) return res.status(401).json({ error: "no auth" });
+    // identify caller + gate to office roles
+    stage = "auth";
+    const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${token}` } });
+    if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
+    const user = await ur.json();
+    stage = "profile";
+    const pr = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: sbH() });
+    const prof = (pr.ok ? await pr.json() : [])[0];
+    if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
+
+    stage = "readbody";
+    const { id } = await readJson(req);
+    if (!id) return res.status(400).json({ error: "missing id" });
+    stage = "handover";
     const hr = await fetch(`${SB()}/rest/v1/job_handovers?id=eq.${encodeURIComponent(id)}&select=id,customer_id,customer_name,job_no,status&limit=1`, { headers: sbH() });
     const ho = (hr.ok ? await hr.json() : [])[0];
     if (!ho) return res.status(404).json({ error: "not found" });
@@ -47,7 +53,9 @@ module.exports = async function handler(req, res) {
       }
     }
     if (!lineUid) return res.status(200).json({ ok: true, sent: false, url, reason: "ลูกค้ายังไม่ได้ผูก LINE — คัดลอกลิงก์ส่งเอง" });
+    if (!process.env.LINE_CHANNEL_ACCESS_TOKEN) return res.status(200).json({ ok: true, sent: false, url, reason: "ยังไม่ได้ตั้งค่า LINE ฝั่งเซิร์ฟเวอร์ — คัดลอกลิงก์ส่งเอง" });
 
+    stage = "line-push";
     const text = `🧾 ใบส่งมอบงาน${ho.job_no ? ` (${ho.job_no})` : ""}\nกดดูเอกสารส่งมอบงาน:\n${url}`;
     const r = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
@@ -62,6 +70,6 @@ module.exports = async function handler(req, res) {
     await fetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(lineUid)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ last_message: "[ใบส่งมอบงาน]", last_message_at: new Date().toISOString() }) }).catch(() => {});
     return res.status(200).json({ ok: true, sent: true, url });
   } catch (e) {
-    return res.status(500).json({ error: "error: " + (e.message || e) });
+    return res.status(500).json({ error: `error@${stage}: ` + (e.message || e) });
   }
 };
