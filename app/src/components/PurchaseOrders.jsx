@@ -60,10 +60,11 @@ function PoDeliveryTag({ po }) {
   if (!po.delivery_method && !po.delivery_date) return null;
   const pickup = po.delivery_method === "pickup";
   const delivery = po.delivery_method === "delivery";
-  const col = pickup ? { bg: "#fff7ed", bd: "#fb923c", tx: "#c2410c" } : delivery ? { bg: "#eff6ff", bd: "#60a5fa", tx: "#1d4ed8" } : { bg: "#f3f4f6", bd: "#cbd5e1", tx: "#475569" };
+  const site = po.delivery_method === "site";
+  const col = pickup ? { bg: "#fff7ed", bd: "#fb923c", tx: "#c2410c" } : delivery ? { bg: "#eff6ff", bd: "#60a5fa", tx: "#1d4ed8" } : site ? { bg: "#f0fdf4", bd: "#4ade80", tx: "#15803d" } : { bg: "#f3f4f6", bd: "#cbd5e1", tx: "#475569" };
   return (
     <div style={{ display: "inline-flex", flexDirection: "column", gap: 3, alignItems: "flex-start", background: col.bg, border: `1.5px solid ${col.bd}`, color: col.tx, borderRadius: 11, padding: "7px 13px", lineHeight: 1.3 }}>
-      <span style={{ fontWeight: 800, fontSize: 14 }}>{pickup ? "🚗 ไปรับเอง" : delivery ? "🚚 ผู้ขายมาส่งที่ออฟฟิศ" : "📦 วิธีรับ: ยังไม่ระบุ"}</span>
+      <span style={{ fontWeight: 800, fontSize: 14 }}>{pickup ? "🚗 ไปรับเอง" : delivery ? "🚚 ผู้ขายมาส่งที่ออฟฟิศ" : site ? "🏗️ จัดส่งหน้างาน" : "📦 วิธีรับ: ยังไม่ระบุ"}</span>
       {po.delivery_date && <span style={{ fontWeight: 700, fontSize: 12.5 }}>📅 กำหนดรับ/ส่ง {new Date(po.delivery_date + "T00:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span>}
     </div>
   );
@@ -338,6 +339,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 <option value="">— ยังไม่ระบุ —</option>
                 <option value="pickup">🚗 ไปรับเอง (ที่ผู้ขาย)</option>
                 <option value="delivery">🚚 ผู้ขายมาส่งที่ออฟฟิศ</option>
+                <option value="site">🏗️ จัดส่งหน้างาน</option>
               </select></label>
           </div>
           <div className="fld-row">
@@ -511,7 +513,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
               <div className="job-lines">
                 {(expanded.has(po.po_no) ? po.items : po.items.slice(0, 3)).map((it) => { const m = matMap[it.material_code]; return (
                   <div className="po-view-row" key={it.material_code}>
-                    <span className="po-view-name">{m?.th || it.material_code}</span>
+                    <span className="po-view-name">{m?.th || it.material_code}{m?.th ? <small className="jo-dim" style={{ fontWeight: 400, display: "block", fontSize: 11 }}>รหัส {it.material_code}</small> : null}</span>
                     <span className="po-view-q">{fmtNum(it.qty)} {it.unit || m?.unit || ""} × {fmtBaht(it.price)}</span>
                     <span className="po-view-v">{fmtBaht(it.qty * it.price)}</span>
                   </div>
@@ -554,7 +556,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
         const c0 = sup?.contacts?.[0];
         return (
           <DocSlip company={co} titleTh="ใบสั่งซื้อ" titleEn="PURCHASE ORDER" docNo={printPo.po_no} partyLabel="ผู้ขาย"
-            metaRows={[{ label: "วันที่", value: fmtDocDate(printPo.issue_date || printPo.created_at) }, ...(printPo.quote_no ? [{ label: "อ้างอิงใบเสนอราคา", value: printPo.quote_no }] : []), ...(printPo.delivery_method ? [{ label: "วิธีรับสินค้า", value: printPo.delivery_method === "pickup" ? "ไปรับเอง (ที่ผู้ขาย)" : "ผู้ขายมาส่งที่ออฟฟิศ" }] : []), ...(printPo.delivery_date ? [{ label: "กำหนดรับ/ส่งสินค้า", value: fmtDocDate(printPo.delivery_date) }] : [])]}
+            metaRows={[{ label: "วันที่", value: fmtDocDate(printPo.issue_date || printPo.created_at) }, ...(printPo.quote_no ? [{ label: "อ้างอิงใบเสนอราคา", value: printPo.quote_no }] : []), ...(printPo.delivery_method ? [{ label: "วิธีรับสินค้า", value: printPo.delivery_method === "pickup" ? "ไปรับเอง (ที่ผู้ขาย)" : printPo.delivery_method === "site" ? "จัดส่งหน้างาน" : "ผู้ขายมาส่งที่ออฟฟิศ" }] : []), ...(printPo.delivery_date ? [{ label: "กำหนดรับ/ส่งสินค้า", value: fmtDocDate(printPo.delivery_date) }] : [])]}
             customer={{ name: printPo.supplier || "-", taxId: sup?.tax_id, address: sup?.address, contactName: c0?.name, contactPhone: c0?.phone }}
             terms={printPo.note} signLabels={["ผู้สั่งซื้อ", "ผู้อนุมัติ"]}
             totals={<div className="doc-totals">
