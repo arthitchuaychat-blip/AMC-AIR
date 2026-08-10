@@ -140,6 +140,7 @@ export default function WebOrders({ role, onCreateBoq, onOpenCustomer }) {
                   <span className="wo-badge" style={{ color: st[2], background: st[3] }}>{st[1]}</span>
                   <b className="wo-name">{o.name}</b>
                   <a className="wo-phone" href={`tel:${o.phone}`}>📞 {o.phone}</a>
+                  {o.line_id && <span className="wo-phone" style={{ color: "#06c755" }} title="LINE ID ที่ลูกค้ากรอก">💬 {o.line_id}</span>}
                   <span className="wo-time">{thDateTime(o.created_at)}</span>
                 </div>
                 {(o.address || o.note) && (

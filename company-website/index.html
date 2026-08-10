@@ -830,6 +830,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <input name="company" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
         <label>ชื่อ-สกุล *</label><input name="name" required placeholder="ชื่อของคุณ" />
         <label>เบอร์โทร *</label><input name="phone" required placeholder="0xx-xxx-xxxx" />
+        <label>LINE ID</label><input name="line_id" placeholder="ไอดีไลน์ (ถ้ามี — ทีมงานติดต่อกลับสะดวกขึ้น)" />
         <label>ที่อยู่ / พื้นที่หน้างาน</label><input name="address" placeholder="เขต/อำเภอ จังหวัด" />
         <label>รายละเอียดที่ต้องการ</label><textarea name="note" rows="3" placeholder="เช่น ติดตั้งแอร์ 2 เครื่อง / ล้างแอร์ 5 ตัว / แอร์ไม่เย็น"></textarea>
         <button class="btn btn-primary" type="submit">ส่งคำขอ</button>
@@ -899,6 +900,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <input name="company" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
       <label>ชื่อ-สกุล *</label><input name="name" required placeholder="ชื่อของคุณ" />
       <label>เบอร์โทร *</label><input name="phone" required placeholder="0xx-xxx-xxxx" />
+      <label>LINE ID</label><input name="line_id" placeholder="ไอดีไลน์ (ถ้ามี)" />
       <label>ที่อยู่จัดส่ง/ติดตั้ง</label><input name="address" placeholder="ที่อยู่" />
       <label>หมุดโลเคชั่น · Google Maps (ไม่บังคับ)</label>
       <div class="loc-row">
@@ -1258,6 +1260,7 @@ async function submitOrder(e) {
   // หมุดโลเคชั่น (ไม่บังคับ) — เก็บต่อท้ายหมายเหตุ ขึ้นต้น 📍 ให้หลังบ้านเห็น/ก๊อปลิงก์ได้เลย
   const mapUrl = (f.mapUrl.value || "").trim();
   const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(),
+    line_id: (f.line_id?.value || "").trim() || null,
     note: [f.note.value.trim(), mapUrl ? "📍 หมุด: " + mapUrl : ""].filter(Boolean).join("\n"),
     // แตกค่าติดตั้งที่ติ๊กไว้เป็นรายการของตัวเอง (จำนวนตามแอร์) — หลังบ้านเห็นเป็นบรรทัด "↳ ติดตั้ง…" ต่อท้ายแอร์ตัวนั้น
     items: cart.flatMap((x) => {
@@ -1268,7 +1271,9 @@ async function submitOrder(e) {
   if (!hasSb) { toast("เว็บยังไม่ได้เชื่อมระบบ — โทร " + (C.PHONE || "") + " ได้เลย", true); return false; }
   const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "กำลังส่ง…";
   try {
-    const { error } = await sb.from("web_orders").insert(payload);
+    let { error } = await sb.from("web_orders").insert(payload);
+    // เผื่อยังไม่รัน migration line_id → ตัดออกแล้วส่งใหม่ (กันฟอร์มพังทำลูกค้าหลุด)
+    if (error && /line_id|column|PGRST204/i.test(error.message || "")) { const { line_id, ...rest } = payload; ({ error } = await sb.from("web_orders").insert(rest)); }
     if (error) throw error;
     stampSend();   // สำเร็จแล้วค่อยจับเวลากันกดซ้ำ — ล้มเหลวจะได้กดใหม่ได้ทันที
     // ลิงก์เปิดแชท LINE OA พร้อมข้อความรายการ (ปุ่มให้ลูกค้ากดเอง — เปิดอัตโนมัติโดน popup blocker)
@@ -1296,11 +1301,13 @@ async function submitLead(e) {
   const f = e.target;
   if (isBot(f)) { toast("ส่งข้อมูลแล้ว ทีมงานจะติดต่อกลับ"); return false; }
   if (tooSoon()) { toast("เพิ่งส่งไปเมื่อสักครู่ ทีมงานได้รับแล้ว รอสักครู่นะครับ", true); return false; }
-  const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), note: f.note.value.trim(), items: [], total: 0 };
+  const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), line_id: (f.line_id?.value || "").trim() || null, note: f.note.value.trim(), items: [], total: 0 };
   if (!hasSb) { toast("เว็บยังไม่ได้เชื่อมระบบ — โทร " + (C.PHONE || "") + " ได้เลย", true); return false; }
   const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "กำลังส่ง…";
   try {
-    const { error } = await sb.from("web_orders").insert(payload);
+    let { error } = await sb.from("web_orders").insert(payload);
+    // เผื่อยังไม่รัน migration line_id → ตัดออกแล้วส่งใหม่ (กันฟอร์มพังทำลูกค้าหลุด)
+    if (error && /line_id|column|PGRST204/i.test(error.message || "")) { const { line_id, ...rest } = payload; ({ error } = await sb.from("web_orders").insert(rest)); }
     if (error) throw error;
     stampSend();   // สำเร็จแล้วค่อยจับเวลากันกดซ้ำ — ล้มเหลวจะได้กดใหม่ได้ทันที
     f.reset(); toast("ส่งคำขอแล้ว ✓ ทีมงานจะติดต่อกลับโดยเร็ว");
