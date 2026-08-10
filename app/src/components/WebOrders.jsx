@@ -8,6 +8,8 @@ import { confirmDialog } from "./ConfirmDialog";
 const STATUS = [
   ["new", "ใหม่", "#dc2626", "#fee2e2"],
   ["contacted", "ติดต่อแล้ว", "#d97706", "#fef3c7"],
+  ["unreachable", "ติดต่อไม่ได้", "#e11d48", "#ffe4e6"],
+  ["recontact", "รอติดต่อใหม่อีกครั้ง", "#0891b2", "#cffafe"],
   ["quoted", "เสนอราคาแล้ว", "#1d4ed8", "#dbeafe"],
   ["done", "ปิดการขาย", "#059669", "#dcf5e8"],
   ["cancelled", "ยกเลิก", "#64748b", "#f1f5f9"],
