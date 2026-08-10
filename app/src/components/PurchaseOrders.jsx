@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies, docNoTaken, markPoReceived, lastPurchaseOf, repriceReceivedPo } from "../lib/api";
+import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies, docNoTaken, markPoReceived, lastPurchaseOf, repriceReceivedPo, uploadExpenseFile } from "../lib/api";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -103,7 +103,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   // base หลังค้นหา+วันที่ — ใช้นับจำนวนบนชิปตัวกรอง
   // กรองด้วยวันที่เดียวกับที่การ์ดแสดง (issue_date) ไม่ใช่วันที่สร้างแถว — ใบลงวันที่ย้อนหลังเคยหลุดช่วงที่เลือก
   const fl0 = pos.filter((po) => inDateRange(po.issue_date || po.created_at, dateR)
-    && (matchText(q, po.po_no, po.supplier, po.note, po.internal_note, po.quote_no, po.customerName, po.jobNo, po.teamName) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
+    && (matchText(q, po.po_no, po.supplier, po.note, po.internal_note, po.quote_no, po.customerName, po.jobNo, po.teamName, po.dn_no, po.sup_inv_no) || (po.items || []).some((it) => matchText(q, it.material_code, matMap[it.material_code]?.th))));
   const [vatF, setVatF] = React.useState("all");   // งาน VAT / NOVAT (ตามธง vat ของใบ)
   const [byPerson, setByPerson] = React.useState("");   // ตัวกรอง "ผู้สร้างเอกสาร"
   const creatorOpts = React.useMemo(() => Array.from(new Set((pos || []).map((p) => p.createdByName).filter(Boolean))).sort(), [pos]);
@@ -147,7 +147,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     const src = Array.isArray(prefill) ? prefill : (prefill.items || []);
     const quoteNo = Array.isArray(prefill) ? "" : (prefill.quoteNo || "");
     if (!src.length && !quoteNo) { onPrefillConsumed && onPrefillConsumed(); return; }
-    setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: quoteNo, prep_no: (Array.isArray(prefill) ? "" : prefill.prepNo) || "", issue_date: todayStr(), delivery_date: "", delivery_method: "",
+    setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: quoteNo, prep_no: (Array.isArray(prefill) ? "" : prefill.prepNo) || "", issue_date: todayStr(), delivery_date: "", delivery_method: "", dn_no: "", sup_inv_no: "", attachments: [],
       // ประเภทสินค้า: มากับ prefill (สั่งซื้อแอร์ = "ac") หรือเดาจากรายการ (มีแอร์ → ac) — ผู้ใช้เปลี่ยนได้ก่อนบันทึก
       po_type: (!Array.isArray(prefill) && prefill.poType) || (src.some((p) => matMap[p.code]?.kind === "ac") ? "ac" : "material"),
       // จำนวนจากใบเสนอราคาเป็น "หน่วยหลัก" (เมตร/ชุด) → ตั้งหน่วยบรรทัดเป็นหน่วยหลัก + ราคา = ต้นทุน/หน่วยหลัก
@@ -157,14 +157,32 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, mats]);
 
-  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", po_type: "", issue_date: todayStr(), delivery_date: "", delivery_method: "", items: [] }); }
+  function startNew() { setEditing({ po_no: genPoNo(), supplier: "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", po_type: "", issue_date: todayStr(), delivery_date: "", delivery_method: "", dn_no: "", sup_inv_no: "", attachments: [], items: [] }); }
   function startEdit(po) {
     const incl = !!po.vat && !!po.price_incl;   // stored price is pre-VAT → show gross in the field when incl mode
     setEditing({ _edit: true, _paymentStatus: po.paymentStatus || "unpaid", po_no: po.po_no, status: po.status, supplier: po.supplier || "", note: po.note || "", internal_note: po.internal_note || "", vat: !!po.vat, priceIncl: !!po.price_incl, quote_no: po.quote_no || "", prep_no: po.prep_no || "", po_type: po.po_type || po.poType || "", issue_date: po.issue_date || (po.created_at || "").slice(0, 10), delivery_date: po.delivery_date || "", delivery_method: po.delivery_method || "",
+      dn_no: po.dn_no || "", sup_inv_no: po.sup_inv_no || "", attachments: Array.isArray(po.attachments) ? po.attachments : [],
       items: po.items.map((i) => ({ code: i.material_code, qty: i.qty, price: incl ? R2((Number(i.price) || 0) * 1.07) : (Number(i.price) || 0), unit: i.unit || null })) });
   }
 
   const setItem = (code, field, val) => setEditing((e) => ({ ...e, items: e.items.map((x) => x.code === code ? { ...x, [field]: val } : x) }));
+
+  // แนบไฟล์เอกสารผู้ขาย (ใบส่งของ/ใบแจ้งหนี้) — รองรับรูป + PDF
+  const [uploadingDoc, setUploadingDoc] = React.useState(false);
+  async function onAttachPo(e) {
+    const files = [...(e.target.files || [])]; if (!files.length) return;
+    setUploadingDoc(true);
+    try {
+      const added = [];
+      for (const f of files) { const url = await uploadExpenseFile(f); added.push({ name: f.name, url }); }
+      setEditing((s) => ({ ...s, attachments: [...(s.attachments || []), ...added] }));
+    } catch (ex) { flash("อัปโหลดไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUploadingDoc(false); e.target.value = "";
+  }
+  const removeAttach = (i) => setEditing((s) => ({ ...s, attachments: (s.attachments || []).filter((_, j) => j !== i) }));
+  // autocomplete: เลขเอกสารผู้ขายที่เคยกรอกไว้ (แนะนำ + กันซ้ำ + ค้นเร็ว)
+  const dnOpts = React.useMemo(() => [...new Set((pos || []).map((p) => p.dn_no).filter(Boolean))].slice(0, 200), [pos]);
+  const invOpts = React.useMemo(() => [...new Set((pos || []).map((p) => p.sup_inv_no).filter(Boolean))].slice(0, 200), [pos]);
   const removeItem = (code) => setEditing((e) => ({ ...e, items: e.items.filter((x) => x.code !== code) }));
   // หน่วยซื้อ: 1 purchaseUnit (ม้วน) = purchaseQty หน่วยหลัก (15 เมตร) — ใบสั่งซื้อกรอกเป็นหน่วยซื้อ
   const puFactor = (m) => (m?.purchaseUnit && Number(m.purchaseQty) > 1) ? Number(m.purchaseQty) : 1;
@@ -235,7 +253,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
     const incl = !!editing.vat && !!editing.priceIncl;
     const items = editing.items.map((it) => ({ ...it, price: incl ? (Number(it.price) || 0) / 1.07 : (Number(it.price) || 0) })); // store pre-VAT price
     try {
-      await savePurchaseOrder({ po_no: poNo, supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, delivery_date: editing.delivery_date || null, delivery_method: editing.delivery_method || null, status: editing.status || "open" }, items);
+      await savePurchaseOrder({ po_no: poNo, supplier: editing.supplier, note: editing.note, internal_note: editing.internal_note, vat: editing.vat, price_incl: !!editing.priceIncl, quote_no: editing.quote_no || null, prep_no: editing.prep_no || null, po_type: editing.po_type || null, issue_date: editing.issue_date || null, delivery_date: editing.delivery_date || null, delivery_method: editing.delivery_method || null, dn_no: editing.dn_no || null, sup_inv_no: editing.sup_inv_no || null, attachments: editing.attachments || [], status: editing.status || "open" }, items);
       // ใบที่รับของเข้าคลังไปแล้ว: แก้ราคาตามบิลซัพฯ ต้องไล่แก้ต้นทุนที่บันทึกไว้ในคลัง/ต้นทุนงานด้วย
       let repriced = 0, repriceErr = null;
       // ห้ามกลืน error เงียบ ๆ — ถ้าปรับต้นทุนไม่ผ่าน (สิทธิ์ไม่พอ) ต้องบอก ไม่งั้นใบโชว์ราคาใหม่
@@ -329,6 +347,36 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 {VAT_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select></label>
           </div>
+          {/* ── เอกสารจากผู้ขาย: เลขที่ใบส่งของ/ใบแจ้งหนี้ + แนบไฟล์ (ไว้จับคู่/ค้นหา) ── */}
+          <div className="pipe-box">
+            <div className="pipe-box-tt">📎 เอกสารจากผู้ขาย <span className="jo-dim" style={{ fontWeight: 400 }}>(ใบส่งของ/ใบแจ้งหนี้ — ไว้ค้นหา + จับคู่ตอนตั้งเบิก/จ่าย)</span></div>
+            <div className="fld-row">
+              <label className="fld"><span>เลขที่ใบส่งของ (Delivery Note)</span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input className="inp" list="po-dn-list" value={editing.dn_no || ""} onChange={(e) => setEditing({ ...editing, dn_no: e.target.value })} placeholder="เลขบนใบส่งของผู้ขาย" />
+                  <button type="button" className="btn-ghost sm" title="ใช้เลข PO เป็นเลขอ้างอิง" onClick={() => setEditing((s) => ({ ...s, dn_no: s.dn_no || s.po_no }))}>ใช้เลข PO</button>
+                </div>
+                <datalist id="po-dn-list">{dnOpts.map((v) => <option key={v} value={v} />)}</datalist></label>
+              <label className="fld"><span>เลขที่ใบแจ้งหนี้/ใบกำกับ (ผู้ขาย)</span>
+                <input className="inp" list="po-inv-list" value={editing.sup_inv_no || ""} onChange={(e) => setEditing({ ...editing, sup_inv_no: e.target.value })} placeholder="เลขบนใบแจ้งหนี้ผู้ขาย" />
+                <datalist id="po-inv-list">{invOpts.map((v) => <option key={v} value={v} />)}</datalist></label>
+            </div>
+            <div className="fld"><span>แนบไฟล์เอกสาร (รูป/PDF · เพิ่มได้หลายไฟล์)</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                {(editing.attachments || []).map((a, i) => (
+                  <span key={i} className="po-attach">
+                    <a href={a.url} target="_blank" rel="noreferrer" title={a.name}>📄 {a.name && a.name.length > 18 ? a.name.slice(0, 16) + "…" : (a.name || "ไฟล์")}</a>
+                    <button type="button" className="line-x" onClick={() => removeAttach(i)} title="ลบไฟล์"><UIcon name="x" size={12} /></button>
+                  </span>
+                ))}
+                <label className="btn-ghost sm" style={{ cursor: "pointer" }}>
+                  📎 {uploadingDoc ? "กำลังอัปโหลด…" : "แนบไฟล์"}
+                  <input type="file" accept="image/*,application/pdf" multiple onChange={onAttachPo} style={{ display: "none" }} disabled={uploadingDoc} />
+                </label>
+              </div>
+            </div>
+          </div>
+
           <InternalNoteField value={editing.internal_note} onChange={(v) => setEditing({ ...editing, internal_note: v })} />
 
           <div className="fld"><span>เพิ่มรายการ (ค้นหาสินค้า/วัสดุ)</span>
@@ -451,6 +499,15 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 customer={{ name: po.supplier || "ไม่ระบุร้าน" }} />
               <InternalNoteTag note={po.internal_note} role={role} />
               {po.createdByName && <div className="jo-dim" style={{ fontSize: 12.5, padding: "2px 2px 0" }}>✍️ ผู้สร้างใบ: {po.createdByName}</div>}
+              {(po.dn_no || po.sup_inv_no || (po.attachments || []).length > 0) && (
+                <div className="po-docrow">
+                  {po.dn_no && <span className="po-doctag">🚚 ใบส่งของ {po.dn_no}</span>}
+                  {po.sup_inv_no && <span className="po-doctag">🧾 ใบแจ้งหนี้ {po.sup_inv_no}</span>}
+                  {(po.attachments || []).map((a, i) => (
+                    <a key={i} className="po-attach" href={a.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={a.name}>📄 {a.name && a.name.length > 16 ? a.name.slice(0, 14) + "…" : (a.name || "ไฟล์")}</a>
+                  ))}
+                </div>
+              )}
               <div className="job-lines">
                 {(expanded.has(po.po_no) ? po.items : po.items.slice(0, 3)).map((it) => { const m = matMap[it.material_code]; return (
                   <div className="po-view-row" key={it.material_code}>

@@ -998,11 +998,14 @@ export async function deleteMaterialPrep(prep_no, cascade, reason) {
 
 export async function savePurchaseOrder(po, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, prep_no: po.prep_no || null, issue_date: po.issue_date || null, po_type: po.po_type || null, delivery_date: po.delivery_date || null, delivery_method: po.delivery_method || null, created_by: user?.id || null };
+  const head = { po_no: po.po_no, supplier: po.supplier || null, note: po.note || null, internal_note: po.internal_note?.trim() || null, status: po.status || "open", vat: !!po.vat, price_incl: !!po.price_incl, quote_no: po.quote_no || null, prep_no: po.prep_no || null, issue_date: po.issue_date || null, po_type: po.po_type || null, delivery_date: po.delivery_date || null, delivery_method: po.delivery_method || null,
+    // เอกสารผู้ขาย (mig 205)
+    dn_no: po.dn_no?.trim() || null, sup_inv_no: po.sup_inv_no?.trim() || null, attachments: Array.isArray(po.attachments) ? po.attachments : [],
+    created_by: user?.id || null };
   let e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
-  // pre-096/097/100/115/119/139/187 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
+  // pre-096/097/100/115/119/139/187/205 fallback — ตัดเฉพาะคอลัมน์ที่ schema ไม่รู้จักจริง ๆ (ชื่อคอลัมน์อยู่ใน error message ของ PostgREST)
   // ห้ามเหมารวม: เคยตัด vat ทิ้งไปด้วยตอน price_incl ยังไม่รัน migration → ใบสั่งซื้อโหมดรวม VAT ถูกเก็บเป็นไม่มี VAT
-  for (const c of ["price_incl", "vat", "quote_no", "prep_no", "issue_date", "po_type", "delivery_date", "delivery_method"]) {
+  for (const c of ["price_incl", "vat", "quote_no", "prep_no", "issue_date", "po_type", "delivery_date", "delivery_method", "dn_no", "sup_inv_no", "attachments"]) {
     if (e1 && c in head && (e1.message || "").includes(c)) {
       delete head[c];
       e1 = (await supabase.from("purchase_orders").upsert(head, { onConflict: "po_no" })).error;
