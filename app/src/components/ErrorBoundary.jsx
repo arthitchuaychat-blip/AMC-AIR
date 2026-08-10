@@ -11,11 +11,24 @@ export default class ErrorBoundary extends React.Component {
 
   static getDerivedStateFromError(err) { return { err }; }
 
+  // error จากการโหลดไฟล์ย่อย (lazy chunk) ที่หายหลัง deploy ใหม่ — ชื่อไฟล์ hash เปลี่ยน แท็บเก่าหาไม่เจอ
+  static isChunkError(err) {
+    const m = String(err?.message || err || "");
+    return /dynamically imported module|module script failed|error loading dynamically|Failed to fetch.*\.js|ChunkLoadError|Loading chunk/i.test(m);
+  }
+
   componentDidCatch(err, info) {
+    // stale chunk หลัง deploy → รีโหลดอัตโนมัติ 1 ครั้ง (แท็บเก่าจะได้บันเดิลใหม่ ผู้ใช้ไม่ต้องกดเอง)
+    //   กัน loop: ถ้าเพิ่งรีโหลดเพราะเหตุนี้ไปแล้วภายใน 15 วิ แล้วยังพัง → โชว์กล่อง error ตามปกติ
+    if (ErrorBoundary.isChunkError(err)) {
+      try {
+        const last = Number(sessionStorage.getItem("amc_chunk_reload") || 0);
+        if (Date.now() - last > 15000) { sessionStorage.setItem("amc_chunk_reload", String(Date.now())); window.location.reload(); return; }
+      } catch { /* sessionStorage ปิด → ตกไปโชว์กล่อง error */ }
+    }
     // เก็บไว้ให้เปิด console ดูได้ — ไม่ส่งออกที่ไหน (ข้อมูลลูกค้าอาจติดไปกับ stack)
     console.error("หน้าจอพัง:", err, info?.componentStack);
     // เก็บ componentStack ไว้โชว์ในกล่องด้วย — ลำพัง "reading 'color'" ไม่พอจะรู้ว่าพังที่ไหน
-    // (บันเดิล production ชื่อฟังก์ชันถูกย่อ แต่ชื่อ component ยังพอเดาได้ และบอกลำดับการซ้อนได้)
     this.setState({ stack: info?.componentStack || "" });
   }
 
