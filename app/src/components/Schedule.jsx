@@ -18,7 +18,7 @@ const weekStart = (d) => { const x = new Date(d); const dow = (x.getDay() + 6) %
 export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
   const canEdit = can(role, "schedule", "edit");
   const myTeamOnly = role === "tech" || role === "assistant"; // ช่าง/ผู้ช่วยช่างเห็นเฉพาะทีมตัวเอง · หัวหน้าช่าง/ออฟฟิศเห็นทุกทีม
-  const [view, setView] = React.useState("week");
+  const [view, setView] = React.useState("day");   // เปิดมาโฟกัส "วันนี้" เสมอ (เปลี่ยนเป็นสัปดาห์/เดือนได้)
   const [anchor, setAnchor] = React.useState(today0());
   const [teamF, setTeamF] = React.useState("all");
   const [statusF, setStatusF] = React.useState("all");
