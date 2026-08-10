@@ -38,10 +38,12 @@ async function blobifyUrl(url) {
 function ImgThumb({ url, onClick }) {
   const [src, setSrc] = React.useState(url);
   const [state, setState] = React.useState("idle");
+  const tried = React.useRef(false);   // กัน loop: ถ้าแปลง blob แล้วรูปยัง error อีก → เลิก (ไม่วนซ้ำ)
 
   async function handleError() {
-    if (state !== "idle") return;
-    setState("loading");
+    if (state === "loading") return;
+    if (tried.current) { setState("failed"); return; }
+    tried.current = true; setState("loading");
     try { setSrc(await blobifyUrl(url)); setState("idle"); }
     catch { setState("failed"); }
   }
@@ -110,7 +112,8 @@ export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, f
 
   const shared = !!linked && !!groupNo;
   async function load() { try { setLogs(shared ? await listJobLogsByGroup(groupNo) : await listJobLogs(jobNo)); } catch (e) { flash && flash("โหลดความเคลื่อนไหวไม่สำเร็จ: " + (e.message || e), true); setLogs([]); } }
-  React.useEffect(() => { load(); }, [jobNo, groupNo, linked]);
+  // ⚠️ dep เป็น `shared` (boolean) ไม่ใช่ `linked` (อาร์เรย์) — ไม่งั้น parent สร้าง linked ใหม่ทุกเรนเดอร์ → โหลดซ้ำไม่หยุด → หน้ากระพริบ
+  React.useEffect(() => { load(); }, [jobNo, groupNo, shared]);
   const openLb = (images, index) => setLightbox({ images, index });
 
   // split into top-level entries + replies grouped by parent

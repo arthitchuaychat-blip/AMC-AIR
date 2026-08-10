@@ -1,8 +1,11 @@
 import React from "react";
+import ReactDOM from "react-dom";
 import { UIcon } from "../icons";
 import { fileExt } from "../lib/format";
 
 // Fullscreen image viewer: swipe/arrow between images + download the whole album.
+// ⚠️ render ผ่าน portal ไป document.body — ถ้าเรนเดอร์เป็นลูกในไทม์ไลน์ (มี ancestor ที่มี transform/filter)
+//    position:fixed จะถูกจับอยู่ในกล่องนั้น → ภาพไม่เต็มจอ + เด้งไปมาตามการ scroll/reflow ของพื้นหลัง
 export default function Lightbox({ images, index = 0, onClose }) {
   const [i, setI] = React.useState(index);
   const [busy, setBusy] = React.useState(false);
@@ -11,7 +14,10 @@ export default function Lightbox({ images, index = 0, onClose }) {
   React.useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); else if (e.key === "ArrowRight") go(1); else if (e.key === "ArrowLeft") go(-1); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // ล็อกสกรอลล์พื้นหลังระหว่างเปิด — กันหน้าเลื่อน/เด้งใต้ตัวดูรูป
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prevOverflow; };
   }, [go, onClose]);
   // touch swipe
   const tx = React.useRef(null);
@@ -31,7 +37,7 @@ export default function Lightbox({ images, index = 0, onClose }) {
     setBusy(false);
   }
 
-  return (
+  return ReactDOM.createPortal(
     <div className="lb-overlay" onClick={onClose}>
       <div className="lb-bar" onClick={(e) => e.stopPropagation()}>
         <span className="lb-count">{i + 1} / {n}</span>
@@ -51,6 +57,7 @@ export default function Lightbox({ images, index = 0, onClose }) {
           {images.map((u, k) => <button key={k} className={"lb-thumb" + (k === i ? " on" : "")} onClick={() => setI(k)}><img src={u} alt="" /></button>)}
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

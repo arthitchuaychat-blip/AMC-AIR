@@ -127,7 +127,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-06·ปฏิทินงานเปิดมาโฟกัส 'วันนี้' (มุมมองวัน) เป็นค่าเริ่มต้น v585";
+const BUILD = "2026-08-06·แก้ตัวดูรูปใบงานกระพริบ/เด้ง (portal + ล็อกสกรอลล์ + กัน reload loop + กัน onError loop) v586";
 
 function SetupNotice() {
   return (
