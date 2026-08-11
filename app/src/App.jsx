@@ -57,6 +57,7 @@ const WebOrders = React.lazy(() => import("./components/WebOrders"));
 const Handbook = React.lazy(() => import("./components/Handbook"));
 const KpiScorecard = React.lazy(() => import("./components/KpiScorecard"));
 const Pipeline = React.lazy(() => import("./components/Pipeline"));
+const Reviews = React.lazy(() => import("./components/Reviews"));
 
 const NAV = {
   myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
@@ -65,6 +66,7 @@ const NAV = {
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
   pipeline: { th: "ท่อขาย", en: "Sales Pipeline", icon: "trend" },
   followup: { th: "ติดตามลูกค้า", en: "Follow-up", icon: "user" },
+  reviews: { th: "รีวิวลูกค้า", en: "Reviews", icon: "trend" },
   weborders: { th: "คำสั่งซื้อจากเว็บ", en: "Web Orders", icon: "purchase" },
   website: { th: "จัดการเว็บไซต์", en: "Website", icon: "catalog" },
   chat: { th: "แชตลูกค้า", en: "Customer Chat", icon: "chat" },
@@ -103,7 +105,7 @@ const NAV = {
 //    เลี่ยง Emoji 11+ (🧱🧰🧮🧾🧼) และแบบ ZWJ (🧑‍🔧🧑‍💼) ที่ font เก่าขึ้นเป็นกล่องว่าง
 const NAV_EMOJI = {
   myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
-  pipeline: "🎯", chat: "💚", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
+  pipeline: "🎯", reviews: "🌟", chat: "💚", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
   subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", billing: "📑",
   receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", expenses: "💳",
   joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
@@ -114,7 +116,7 @@ const NAV_EMOJI = {
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
 const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
-  { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "customers", "pipeline", "followup", "weborders", "website"] },
+  { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "customers", "pipeline", "followup", "reviews", "weborders", "website"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
@@ -127,7 +129,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-06·แถบแจ้ง 'มีอัปเดตใหม่ แตะโหลด' เมื่อมี deploy ใหม่ (กัน stale chunk เด้ง error) v590";
+const BUILD = "2026-08-06·หน้ารีวิวลูกค้า: รวมคะแนนจริง + ส่งขึ้นเว็บ/ลบจากเว็บได้ (mig 208) v591";
 
 function SetupNotice() {
   return (
@@ -572,6 +574,7 @@ export default function App() {
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} onOpenDoc={openDoc} />}
         {view === "kpi" && <KpiScorecard />}
         {view === "pipeline" && <Pipeline role={role} me={profile?.id} onOpenCustomer={(id) => { setCustFocus(String(id)); go("customers"); }} />}
+        {view === "reviews" && <Reviews role={role} />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
         {view === "suppliers" && <Suppliers role={role} />}
         {view === "followup" && <CustomerFollowup role={role}

@@ -3022,6 +3022,40 @@ export async function deleteWebItem(kind, id) {
   const t = WEB_KINDS[kind]; if (!t) throw new Error("unknown web kind");
   const { error } = await supabase.from(t).delete().eq("id", id); if (error) throw error;
 }
+
+// ---------- รีวิวลูกค้าจริง (จากคะแนนบนใบงาน mig 203) + ส่งขึ้นเว็บ ----------
+// หน้ารีวิวในแอป: รวมงานที่ลูกค้าให้คะแนน + ปุ่มส่งขึ้นเว็บ (insert web_reviews พร้อม source_job) / ลบจากเว็บ
+export async function listReviews() {
+  const rows = await _fetchAll((f, t) => supabase.from("job_orders")
+    .select("job_no,customer_id,assigned_team,cust_rating,cust_comment,cust_rated_at", { count: "exact" })
+    .not("cust_rating", "is", null).gt("cust_rating", 0)
+    .order("cust_rated_at", { ascending: false, nullsFirst: false }).order("job_no").range(f, t)).catch(() => []);
+  const custIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))];
+  const [cu, tm, wr] = await Promise.all([
+    custIds.length ? supabase.from("customers").select("id,name").in("id", custIds) : Promise.resolve({ data: [] }),
+    supabase.from("teams").select("id,name"),
+    supabase.from("web_reviews").select("id,source_job"),   // published set (source_job) — ถ้ายังไม่รัน 208 คอลัมน์หาย → treated as none
+  ]);
+  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
+  const pub = {}; if (!wr.error) (wr.data || []).forEach((w) => { if (w.source_job) pub[w.source_job] = w.id; });
+  return rows.map((j) => ({
+    job_no: j.job_no, customer_name: cn[j.customer_id] || "", team: tn[j.assigned_team] || "",
+    rating: j.cust_rating, comment: j.cust_comment, rated_at: j.cust_rated_at,
+    published: j.job_no in pub, web_review_id: pub[j.job_no] || null,
+  }));
+}
+// ส่งรีวิวจริงขึ้นเว็บ (insert web_reviews) — ใช้ชื่อจริงแบบสุภาพ + โยง source_job
+export async function publishReview({ job_no, name, role, text, stars }) {
+  const row = { name: (name || "ลูกค้า").trim(), role: (role || "ลูกค้า AMC AIR").trim(), text: (text || "").trim(), stars: Math.min(5, Math.max(1, Number(stars) || 5)), active: true, sort: 0, source_job: job_no };
+  let { error } = await supabase.from("web_reviews").insert(row);
+  if (error && /source_job|column|PGRST204/i.test(error.message || "")) { const { source_job, ...rest } = row; ({ error } = await supabase.from("web_reviews").insert(rest)); }
+  if (error) throw error;
+}
+// ลบรีวิวออกจากเว็บ (ลบแถว web_reviews)
+export async function unpublishReview(webReviewId) {
+  const { error } = await supabase.from("web_reviews").delete().eq("id", webReviewId); if (error) throw error;
+}
 // upload any website image as-is (keeps resolution/transparency) to the public photos bucket
 export async function uploadWebImage(file, folder) {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");

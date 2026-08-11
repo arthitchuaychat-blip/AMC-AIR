@@ -1065,6 +1065,14 @@ select.inp{cursor:pointer}
 .sub-pay-split{margin-top:8px}
 .sub-split-modes{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .sub-payout-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--surface-2);font-size:13px}
+/* รีวิวลูกค้า (หน้ารวม + ส่งขึ้นเว็บ) */
+.rev-list{display:grid;gap:12px}
+.rev-card{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:14px 16px}
+.rev-card-main{min-width:0;flex:1}
+.rev-stars{color:#f59e0b;font-size:17px;letter-spacing:1px}
+.rev-star-off{color:var(--surface-2)}
+.rev-text{margin:5px 0 4px;font-size:14.5px;color:var(--ink);line-height:1.5}
+.rev-card-act{flex:none;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 /* แถบแจ้งเวอร์ชันใหม่ (กัน stale chunk) */
 .ver-banner{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:2000;
   background:linear-gradient(135deg,#1f74e0,#155bb5);color:#fff;border:none;border-radius:999px;
