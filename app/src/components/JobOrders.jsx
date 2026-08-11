@@ -674,6 +674,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 <div className="job-card-id"><span className="job-no">{jo.job_no}</span>
                   {(() => { const td = jobTypeDef(jo.job_type); return <span className="job-type-chip" style={{ background: td[3] }}>{td[2]} {td[1]}</span>; })()}
                   <span className={"job-badge " + st.cls}>{st.th}</span>{jo.locked && <span className="job-badge" style={{ background: "#64748b", color: "#fff" }}>🔒 ล็อก</span>}{(() => { const f = hoFlags[jo.job_no]; if (!f?.any) return null; return f.signed ? <span className="job-badge b-green" title="มีใบส่งมอบงานที่ส่งแล้วและลูกค้าเซ็นรับ">📝 ใบส่งมอบ ✓</span> : <span className="job-badge b-amber" title={f.submitted ? "ส่งใบส่งมอบแล้วแต่ยังไม่มีลายเซ็นลูกค้า" : "ใบส่งมอบยังเป็นฉบับร่าง"}>📝 ยังไม่เซ็น</span>; })()}
+                  {jo.cust_rating > 0 && <span className="job-badge b-amber" title={jo.cust_comment ? `ลูกค้าให้ ${jo.cust_rating}★: “${jo.cust_comment}”` : `ลูกค้าให้ ${jo.cust_rating} ดาว`}>⭐ {jo.cust_rating}</span>}
+                  {jo.status === "done" && !(jo.cust_rating > 0) && !fieldOnly && <span className="job-badge b-grey" title="งานเสร็จแล้ว ยังไม่ได้ขอคะแนนลูกค้า — ส่งลิงก์ขอคะแนนจากแชตลูกค้า (ปุ่ม ⭐ ขอคะแนน) หรือใบส่งมอบงาน">⭐ ยังไม่ขอคะแนน</span>}
                   {/* สถานะการสั่งของสำหรับงานนี้ (ผ่านใบเสนอราคา ↔ ใบสั่งซื้อ) — ฝ่ายขาย/ทีมช่างเห็นทันทีว่าสั่งแอร์หรือยัง */}
                   {/* โหมดจอช่างไม่โหลด docLinks (setDocLinks byQuote:{}) → ป้ายนี้จะแดงตลอด ไม่มีความหมาย ต้องซ่อน */}
                   {!fieldOnly && jo.quote_no && (() => {
