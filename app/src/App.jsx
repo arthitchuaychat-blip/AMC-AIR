@@ -127,7 +127,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-06·ฟอร์มขอใบเสนอราคาบนเว็บเพิ่มช่อง LINE ID → โชว์ในคำสั่งซื้อจากเว็บ (mig 207) v589";
+const BUILD = "2026-08-06·แถบแจ้ง 'มีอัปเดตใหม่ แตะโหลด' เมื่อมี deploy ใหม่ (กัน stale chunk เด้ง error) v590";
 
 function SetupNotice() {
   return (
@@ -144,8 +144,33 @@ function SetupNotice() {
   );
 }
 
+// เช็กว่ามี deploy ใหม่หรือยัง — เทียบชื่อไฟล์บันเดิลหลักที่รันอยู่ กับที่ index.html ล่าสุดอ้างถึง
+// พอเจอเวอร์ชันใหม่ → คืน true (App เอาไปโชว์แถบ "โหลดใหม่") กันไปเจอหน้า error stale chunk ตั้งแต่ต้นทาง
+function useNewVersion() {
+  const [stale, setStale] = React.useState(false);
+  React.useEffect(() => {
+    const cur = String(window.__APP_ASSET__ || "").split("/").pop() || "";   // index-XXXX.js ที่รันอยู่
+    if (!cur || !/^index-.+\.js$/.test(cur)) return;   // dev/ไม่มี hash → ข้าม
+    let stop = false;
+    const check = async () => {
+      try {
+        const html = await fetch("/?_v=" + Date.now(), { cache: "no-store" }).then((r) => (r.ok ? r.text() : ""));
+        const m = html.match(/assets\/(index-[A-Za-z0-9_-]+\.js)/);
+        if (!stop && m && m[1] && m[1] !== cur) setStale(true);
+      } catch { /* ออฟไลน์/เน็ตสะดุด → ไม่เตือน */ }
+    };
+    const iv = setInterval(check, 3 * 60 * 1000);   // ทุก 3 นาที
+    const onFocus = () => check();
+    window.addEventListener("focus", onFocus);
+    check();
+    return () => { stop = true; clearInterval(iv); window.removeEventListener("focus", onFocus); };
+  }, []);
+  return stale;
+}
+
 export default function App() {
   const [ready, setReady] = React.useState(false);
+  const newVersion = useNewVersion();   // มี deploy ใหม่ → โชว์แถบให้กดโหลด
   // ลิงก์ public ใบส่งมอบงานสำหรับลูกค้า (?ho=<id>&t=<token>) — เปิดดูได้โดยไม่ต้องล็อกอิน
   const publicHo = React.useMemo(() => { try { const p = new URLSearchParams(window.location.search); const id = p.get("ho"), t = p.get("t"); return id && t ? { id, t } : null; } catch { return null; } }, []);
   // ลิงก์ให้คะแนนความพอใจ (แยกจากเอกสาร) — ?rate=<id>&t=<token>
@@ -439,6 +464,11 @@ export default function App() {
   return (
     <LangContext.Provider value={effLang}>
     <div className="app">
+      {newVersion && (
+        <button className="ver-banner" onClick={() => window.location.reload()} title="โหลดเวอร์ชันล่าสุด">
+          ✨ มีอัปเดตใหม่ — แตะเพื่อโหลดเวอร์ชันล่าสุด
+        </button>
+      )}
       {/* mobile top bar */}
       <div className="topbar">
         <button className="topbar-burger" onClick={() => setMenuOpen(true)} aria-label="เมนู"><UIcon name="menu" size={22} /></button>

@@ -1065,6 +1065,13 @@ select.inp{cursor:pointer}
 .sub-pay-split{margin-top:8px}
 .sub-split-modes{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .sub-payout-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--surface-2);font-size:13px}
+/* แถบแจ้งเวอร์ชันใหม่ (กัน stale chunk) */
+.ver-banner{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:2000;
+  background:linear-gradient(135deg,#1f74e0,#155bb5);color:#fff;border:none;border-radius:999px;
+  padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 6px 24px rgba(31,116,224,.45);
+  animation:ver-pop .25s ease}
+.ver-banner:hover{background:linear-gradient(135deg,#1a66c9,#124e9c)}
+@keyframes ver-pop{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 /* PO: เอกสารผู้ขาย (เลขที่ + ไฟล์แนบ) */
 .po-docrow{display:flex;flex-wrap:wrap;gap:6px;padding:6px 2px 0}
 .po-doctag{font-size:11.5px;font-weight:600;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:2px 8px;color:var(--ink-2);white-space:nowrap}

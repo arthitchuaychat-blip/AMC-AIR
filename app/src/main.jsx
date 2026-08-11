@@ -3,6 +3,9 @@ import ReactDOM from "react-dom/client";
 import "./styles.css";
 import App from "./App";
 
+// URL ของบันเดิลหลักที่กำลังรันอยู่ (…/assets/index-XXXX.js) — ใช้เทียบว่ามี deploy ใหม่หรือยัง
+try { window.__APP_ASSET__ = import.meta.url; } catch { /* ignore */ }
+
 // stale chunk หลัง deploy: Vite ยิง event นี้เมื่อโหลดไฟล์ย่อย (dynamic import) ที่หายไปไม่ได้
 // → รีโหลดอัตโนมัติ 1 ครั้ง (กัน loop ด้วย sessionStorage) ให้แท็บเก่าได้บันเดิลใหม่เอง
 window.addEventListener("vite:preloadError", () => {
