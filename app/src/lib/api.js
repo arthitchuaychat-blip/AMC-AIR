@@ -3934,7 +3934,7 @@ async function _enrichExpenseJobs(rows) {
     // ผลคือหน้าเบิกจ่ายดูปกติแต่ลิงก์ PO/ชื่อลูกค้าหายไปทั้งหน้า (พังเงียบ)
     const data = [];
     for (let i = 0; i < ids.length; i += 200) {
-      const { data: chunk, error } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id,vat").in("expense_id", ids.slice(i, i + 200));
+      const { data: chunk, error } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id,vat,delivery_date,delivery_method").in("expense_id", ids.slice(i, i + 200));
       if (error) throw error;
       data.push(...(chunk || []));
     }
@@ -3971,6 +3971,7 @@ async function _enrichExpenseJobs(rows) {
       po_no: p.po_no, quote_no: p.quote_no || null,
       total: Math.round((poTotals[p.po_no] || 0) * (p.vat ? 1.07 : 1) * 100) / 100,
       customerName: p.quote_no ? (custName[quoteInfo[p.quote_no]?.customer_id] ?? null) : null,
+      delivery_date: p.delivery_date || null, delivery_method: p.delivery_method || null,   // วันรับ/ส่งของ (เหมือนใน PO)
     }));
     return { ...x, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null,
       customerName: custId != null ? custName[custId] || null : null, poNo: po?.po_no || null, poNos: poList.map((p) => p.po_no), poDetails, quoteNo };

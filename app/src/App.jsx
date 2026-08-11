@@ -129,7 +129,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-06·วัดที่มา lead: เว็บเก็บ UTM → web_orders.source → โยนเข้าท่อขาย/รายงาน ROI (mig 209) v593";
+const BUILD = "2026-08-06·PO โชว์ชิปเลขใบเบิก (เชื่อมเมนูเบิกจ่าย) + ใบเบิกโชว์วันรับ/ส่งของจาก PO v594";
 
 function SetupNotice() {
   return (
@@ -637,6 +637,7 @@ export default function App() {
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           focus={poFocus} onFocusConsumed={() => setPoFocus(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }}
+          onGoExpenses={() => go("expenses")}
           onReceive={async (po) => {
             // ⚠️ ห้ามหักยอดที่รับแล้วตรงนี้ — it.qty เป็นหน่วยของบรรทัด (สินค้า 2 หน่วย = ม้วน)
             //    ส่วน got มาจาก transactions ซึ่งเป็นหน่วยหลักเสมอ (เมตร) ลบกันตรง ๆ = 3 − 100 → 0

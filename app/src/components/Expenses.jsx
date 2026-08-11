@@ -130,6 +130,16 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
         ) : null}
         amountLabel={L("ยอดเบิก", "တောင်းခံ ပမာဏ")} amount={x.amount}
         partyIcon="👤" customer={x.customerName ? { name: x.customerName } : null} />
+      {/* วันรับ/ส่งสินค้า (ดึงจาก PO ที่ผูก — เหมือนในเมนูใบสั่งซื้อ) */}
+      {pos.some((p) => p.delivery_date || p.delivery_method) && (
+        <div className="po-docrow" style={{ padding: "8px 2px 0" }}>
+          {pos.filter((p) => p.delivery_date || p.delivery_method).map((p) => {
+            const m = p.delivery_method === "pickup" ? "🚗 ไปรับเอง" : p.delivery_method === "delivery" ? "🚚 ผู้ขายมาส่ง" : p.delivery_method === "site" ? "🏗️ จัดส่งหน้างาน" : "📦 รับ/ส่ง";
+            const d = p.delivery_date ? new Date(p.delivery_date + "T00:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }) : "";
+            return <span key={p.po_no} className="po-doctag" style={{ background: "#fff7ed", borderColor: "#fdba74", color: "#c2410c" }}>{m}{d ? ` · กำหนด ${d}` : ""}{pos.length > 1 ? ` · ${p.po_no}` : ""}</span>;
+          })}
+        </div>
+      )}
       {(pos.length > 0 || x.jobNo || x.job_no || x.quoteNo) && (
         <div className="doc-links"><span className="doc-links-l">🔗 {L("เชื่อมโยง", "ချိတ်ဆက်")}</span>
           {pos.map((p) => <button key={p.po_no} type="button" className="doclink dl-po" title={L("ดูใบสั่งซื้อ (พรีวิวด้านขวา)", "ဝယ်ယူလွှာ ကြည့် (ညာဘက် အစမ်းကြည့်)")} onClick={() => onOpenDoc && onOpenDoc("po", p.po_no)}>{L("สั่งซื้อ", "ဝယ်ယူ")} {p.po_no}</button>)}
