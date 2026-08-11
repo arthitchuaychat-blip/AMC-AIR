@@ -74,7 +74,7 @@ function CategoryPicker({ value, onChange, flash }) {
   );
 }
 
-export default function Expenses({ role, me, onOpenDoc }) {
+export default function Expenses({ role, me, onOpenDoc, focus, onFocusConsumed }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const office = OFFICE.includes(role);
@@ -82,6 +82,9 @@ export default function Expenses({ role, me, onOpenDoc }) {
   const [tab, setTab] = React.useState("mine");
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
+  // มาจากชิป "เบิก #" ในใบ PO → เด้งไปแท็บที่เห็นใบเบิก + ใส่ค้นหาเลข PO ให้เลย (ไม่ค้างที่หน้ารวม)
+  const [pend, setPend] = React.useState(null);
+  React.useEffect(() => { if (focus) { setPend(focus); setTab(office ? "approve" : "mine"); onFocusConsumed && onFocusConsumed(); } }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเอกสาร (PO/งาน/QT) → พรีวิวแผงขวาก่อน · เปิดหน้าเต็มค่อยเด้งไปเมนู
   return (
     <div className="adm">
@@ -91,8 +94,8 @@ export default function Expenses({ role, me, onOpenDoc }) {
         {TABS.map(([v, l]) => <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
           style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
       </div>
-      {tab === "mine" && <MineTab role={role} flash={flash} onOpenDoc={openPeek} />}
-      {tab === "approve" && office && <ApproveTab flash={flash} onOpenDoc={openPeek} />}
+      {tab === "mine" && <MineTab role={role} flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} />}
+      {tab === "approve" && office && <ApproveTab flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} />}
       {tab === "accounts" && office && <AccountsTab flash={flash} />}
       {tab === "report" && office && <ReportTab flash={flash} />}
       {peekEl}
@@ -190,7 +193,7 @@ const expMatch = (x, q, dateR) =>
   matchText(q, x.title, x.poNo, ...(x.poNos || []), x.customerName, x.requesterName, x.jobNo || x.job_no, x.quoteNo, x.category, x.jobTitle, x.note)
   && inDateRange(x.created_at, dateR);
 
-function MineTab({ role, flash, onOpenDoc }) {
+function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const [list, setList] = React.useState(null);
@@ -201,6 +204,7 @@ function MineTab({ role, flash, onOpenDoc }) {
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   async function load() { try { setList(await listMyExpenses()); } catch (e) { flash(L("โหลดไม่สำเร็จ: ", "ဖွင့်မရ: ") + (e.message || e), true); setList([]); } }
   React.useEffect(() => { load(); listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: null } : {}).then((j) => setJobs(j.filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
+  React.useEffect(() => { if (initialSearch) { setQ(initialSearch); onConsumed && onConsumed(); } }, [initialSearch]); // eslint-disable-line react-hooks/exhaustive-deps · จากชิปในใบ PO → ใส่ค้นหาเลข PO
   const pendRcpt = (list || []).filter(needReceipt).length;
   const activeCount = (q ? 1 : 0) + (dateR.from || dateR.to ? 1 : 0);
   return (
@@ -298,7 +302,7 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
   );
 }
 
-function ApproveTab({ flash, onOpenDoc }) {
+function ApproveTab({ flash, onOpenDoc, initialSearch, onConsumed }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const [list, setList] = React.useState(null);
@@ -310,6 +314,8 @@ function ApproveTab({ flash, onOpenDoc }) {
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   async function load() { try { setList(await listExpenses()); } catch (e) { flash(L("โหลดไม่สำเร็จ: ", "ဖွင့်မရ: ") + (e.message || e), true); setList([]); } }
   React.useEffect(() => { load(); }, []);
+  // จากชิปในใบ PO → ใส่ค้นหาเลข PO + เปิดดูทุกสถานะ (ใบเบิกอาจจ่ายแล้ว จะได้ไม่หลุด)
+  React.useEffect(() => { if (initialSearch) { setQ(initialSearch); setStatusF("all"); onConsumed && onConsumed(); } }, [initialSearch]); // eslint-disable-line react-hooks/exhaustive-deps
   async function decide(x, status) {
     const lbl = { approved: L("อนุมัติ", "အတည်ပြု"), rejected: L("ไม่อนุมัติ", "ပယ်ချ"), pending: L("ยกเลิกอนุมัติ", "အတည်ပြုမှု ပယ်ဖျက်") }[status];
     if (!await confirmDialog(L(`${lbl}คำขอเบิก "${x.title}" (${fmtBaht(x.amount)}) ?${status === "pending" ? "\n(รายการจะกลับไปสถานะ “รออนุมัติ”)" : ""}`, `တောင်းခံစာ "${x.title}" (${fmtBaht(x.amount)}) ကို ${lbl} မလား?${status === "pending" ? "\n(စာရင်းသည် “အတည်ပြုရန် စောင့်” အခြေအနေသို့ ပြန်သွားမည်)" : ""}`))) return;
