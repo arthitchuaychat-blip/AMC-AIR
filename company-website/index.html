@@ -937,6 +937,31 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 const C = window.AMC_CONFIG || {};
 const hasSb = !!(C.SUPABASE_URL && C.SUPABASE_ANON && window.supabase);
 const sb = hasSb ? window.supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON) : null;
+
+// ── ที่มา lead (UTM/referrer) แบบ first-touch — เก็บใน localStorage ส่งไปกับ web_orders เพื่อวัด ROI โฆษณา ──
+const attribution = (() => {
+  try {
+    const key = "amc_attr";
+    let a = JSON.parse(localStorage.getItem(key) || "null");
+    if (!a) {
+      const p = new URLSearchParams(location.search);
+      a = { source: p.get("utm_source") || "", medium: p.get("utm_medium") || "", campaign: p.get("utm_campaign") || "",
+            content: p.get("utm_content") || "", gclid: p.get("gclid") || "", fbclid: p.get("fbclid") || "",
+            ref: document.referrer || "", at: new Date().toISOString() };
+      if (!a.source && a.ref) { const r = a.ref.toLowerCase();
+        a.source = r.includes("facebook") ? "facebook" : r.includes("google") ? "google" : r.includes("line") ? "line" : r.includes("instagram") ? "instagram" : r.includes("tiktok") ? "tiktok" : ""; }
+      localStorage.setItem(key, JSON.stringify(a));
+    }
+    return a;
+  } catch { return {}; }
+})();
+function friendlySource(a) {
+  const s = (a.source || "").toLowerCase();
+  const paid = !!(a.gclid || a.fbclid) || /cpc|paid|ads?|ppc/.test((a.medium || "").toLowerCase());
+  const map = { facebook: "Facebook", fb: "Facebook", meta: "Facebook", instagram: "Instagram", ig: "Instagram", google: "Google", tiktok: "TikTok", line: "LINE" };
+  const base = map[s] || (a.source || "เว็บไซต์ (เข้าตรง)");
+  return paid ? base + " (แอด)" : base;
+}
 const baht = (n) => "฿" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const $ = (s) => document.querySelector(s);
 
@@ -1261,6 +1286,7 @@ async function submitOrder(e) {
   const mapUrl = (f.mapUrl.value || "").trim();
   const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(),
     line_id: (f.line_id?.value || "").trim() || null,
+    source: friendlySource(attribution), utm: attribution,
     note: [f.note.value.trim(), mapUrl ? "📍 หมุด: " + mapUrl : ""].filter(Boolean).join("\n"),
     // แตกค่าติดตั้งที่ติ๊กไว้เป็นรายการของตัวเอง (จำนวนตามแอร์) — หลังบ้านเห็นเป็นบรรทัด "↳ ติดตั้ง…" ต่อท้ายแอร์ตัวนั้น
     items: cart.flatMap((x) => {
@@ -1273,7 +1299,7 @@ async function submitOrder(e) {
   try {
     let { error } = await sb.from("web_orders").insert(payload);
     // เผื่อยังไม่รัน migration line_id → ตัดออกแล้วส่งใหม่ (กันฟอร์มพังทำลูกค้าหลุด)
-    if (error && /line_id|column|PGRST204/i.test(error.message || "")) { const { line_id, ...rest } = payload; ({ error } = await sb.from("web_orders").insert(rest)); }
+    if (error && /line_id|source|utm|column|PGRST204/i.test(error.message || "")) { const { line_id, source, utm, ...rest } = payload; ({ error } = await sb.from("web_orders").insert(rest)); }
     if (error) throw error;
     stampSend();   // สำเร็จแล้วค่อยจับเวลากันกดซ้ำ — ล้มเหลวจะได้กดใหม่ได้ทันที
     // ลิงก์เปิดแชท LINE OA พร้อมข้อความรายการ (ปุ่มให้ลูกค้ากดเอง — เปิดอัตโนมัติโดน popup blocker)
@@ -1301,13 +1327,13 @@ async function submitLead(e) {
   const f = e.target;
   if (isBot(f)) { toast("ส่งข้อมูลแล้ว ทีมงานจะติดต่อกลับ"); return false; }
   if (tooSoon()) { toast("เพิ่งส่งไปเมื่อสักครู่ ทีมงานได้รับแล้ว รอสักครู่นะครับ", true); return false; }
-  const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), line_id: (f.line_id?.value || "").trim() || null, note: f.note.value.trim(), items: [], total: 0 };
+  const payload = { name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), line_id: (f.line_id?.value || "").trim() || null, source: friendlySource(attribution), utm: attribution, note: f.note.value.trim(), items: [], total: 0 };
   if (!hasSb) { toast("เว็บยังไม่ได้เชื่อมระบบ — โทร " + (C.PHONE || "") + " ได้เลย", true); return false; }
   const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "กำลังส่ง…";
   try {
     let { error } = await sb.from("web_orders").insert(payload);
     // เผื่อยังไม่รัน migration line_id → ตัดออกแล้วส่งใหม่ (กันฟอร์มพังทำลูกค้าหลุด)
-    if (error && /line_id|column|PGRST204/i.test(error.message || "")) { const { line_id, ...rest } = payload; ({ error } = await sb.from("web_orders").insert(rest)); }
+    if (error && /line_id|source|utm|column|PGRST204/i.test(error.message || "")) { const { line_id, source, utm, ...rest } = payload; ({ error } = await sb.from("web_orders").insert(rest)); }
     if (error) throw error;
     stampSend();   // สำเร็จแล้วค่อยจับเวลากันกดซ้ำ — ล้มเหลวจะได้กดใหม่ได้ทันที
     f.reset(); toast("ส่งคำขอแล้ว ✓ ทีมงานจะติดต่อกลับโดยเร็ว");

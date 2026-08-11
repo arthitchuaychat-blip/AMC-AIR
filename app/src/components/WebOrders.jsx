@@ -1,5 +1,14 @@
 import React from "react";
-import { listWebOrders, setWebOrderStatus, setWebOrderCustomer, setWebOrderBoq, listCustomersLite } from "../lib/api";
+import { listWebOrders, setWebOrderStatus, setWebOrderCustomer, setWebOrderBoq, listCustomersLite, setCustomerPipeline } from "../lib/api";
+
+// แปลง "ที่มา" ของคำสั่งซื้อเว็บ → ค่าช่องทางในท่อขาย (PIPE_SOURCES)
+const webPipeSource = (o) => {
+  const s = String(o?.source || "").toLowerCase();
+  if (s.includes("แอด") || (o?.utm && (o.utm.gclid || o.utm.fbclid || /cpc|paid|ads?/.test(String(o.utm.medium || "").toLowerCase())))) return "โฆษณา (ยิงแอด)";
+  if (s.includes("facebook")) return "Facebook";
+  if (s.includes("line")) return "LINE";
+  return "เว็บไซต์";
+};
 import { fmtBaht, custCode } from "../lib/format";
 import { can } from "../lib/permissions";
 import CustomerFormModal from "./CustomerFormModal";
@@ -71,6 +80,8 @@ export default function WebOrders({ role, onCreateBoq, onOpenCustomer }) {
     if (!cid) return flash("สร้างลูกค้าแล้ว แต่ไม่ได้รหัสลูกค้ากลับมา — กด “ผูกลูกค้าที่มีอยู่” เพื่อผูกเอง", true);
     try {
       await setWebOrderCustomer(o.id, cid);
+      // โยนที่มา (เว็บ/แอด) เข้าท่อขาย + ตั้งขั้น "กำลังติดต่อ" ให้ลูกค้าใหม่จากเว็บ (best-effort)
+      setCustomerPipeline(cid, { source: webPipeSource(o), stage: "contact" }).catch(() => {});
       await load();                                          // ดึงชื่อลูกค้าที่บันทึกจริงมาแสดง (ชื่อในฟอร์มแก้ได้)
       flash("ผูกลูกค้าเข้าคำสั่งซื้อแล้ว ✓");
       listCustomersLite().then(setCusts).catch(() => {});     // ลูกค้าใหม่เข้าลิสต์เตือนซ้ำด้วย
@@ -143,8 +154,9 @@ export default function WebOrders({ role, onCreateBoq, onOpenCustomer }) {
                   {o.line_id && <span className="wo-phone" style={{ color: "#06c755" }} title="LINE ID ที่ลูกค้ากรอก">💬 {o.line_id}</span>}
                   <span className="wo-time">{thDateTime(o.created_at)}</span>
                 </div>
-                {(o.address || o.note) && (
+                {(o.address || o.note || o.source) && (
                   <div className="wo-meta">
+                    {o.source && <div title={o.utm && o.utm.campaign ? "แคมเปญ: " + o.utm.campaign : "ช่องทางที่ลูกค้าเข้ามา"}>📣 ที่มา: <b>{o.source}</b>{o.utm && o.utm.campaign ? ` · ${o.utm.campaign}` : ""}</div>}
                     {o.address && <div>📍 {o.address}</div>}
                     {o.email && <div>✉️ {o.email}</div>}
                     {o.note && <div>📝 {o.note}</div>}
