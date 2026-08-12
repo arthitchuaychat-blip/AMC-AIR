@@ -129,7 +129,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-12·เปิดเมนูเลื่อนขึ้นบนสุดเสมอ + เปิดห้องแชตกระโดดข้อความล่าสุดทันที v601";
+const BUILD = "2026-08-12·แก้จอขาว (ย้าย scroll hook ขึ้นก่อน early return) + เปิดเมนูบนสุด/แชตล่าสุด v602";
 
 function SetupNotice() {
   return (
@@ -184,6 +184,10 @@ export default function App() {
   const [view, setView] = React.useState(() => { try { return (window.location.hash || "").replace(/^#/, "").split("/")[0] || null; } catch { return null; } });
   const [navHist, setNavHist] = React.useState([]); // stack of previous views → ปุ่มย้อนกลับ
   const [menuOpen, setMenuOpen] = React.useState(false);
+  // เปิด/สลับเมนู = เลื่อนเนื้อหากลับไปบนสุด (รายการเรียงใหม่สุดอยู่บน = เห็นรายการล่าสุดทันที) ไม่ค้างตำแหน่งเดิมของเมนูก่อนหน้า
+  // ⚠️ ต้องอยู่เหนือ early return ทุกจุด (login/loading) มิฉะนั้นผิด Rules of Hooks → จอขาว
+  const mainRef = React.useRef(null);
+  React.useEffect(() => { mainRef.current?.scrollTo({ top: 0 }); }, [view]);
   const [lang, setLang] = React.useState(() => { try { return localStorage.getItem("amc_lang") || "th"; } catch { return "th"; } });
   const [purchasePrefill, setPurchasePrefill] = React.useState(null);
   const [poPrefill, setPoPrefill] = React.useState(null);
@@ -424,10 +428,6 @@ export default function App() {
   // ทีมช่าง (ช่าง/ผู้ช่วยช่าง/หัวหน้าช่าง) + แม่บ้าน เลือกภาษาพม่าได้ (แรงงานพม่า) · ฝั่งหลังบ้าน/ออฟฟิศเป็นไทยเสมอ
   const canBurmese = role === "tech" || role === "assistant" || role === "lead_tech" || role === "maid";
   const effLang = canBurmese ? lang : "th";
-
-  // เปิด/สลับเมนู = เลื่อนเนื้อหากลับไปบนสุด (รายการเรียงใหม่สุดอยู่บน = เห็นรายการล่าสุดทันที) ไม่ค้างตำแหน่งเดิมของเมนูก่อนหน้า
-  const mainRef = React.useRef(null);
-  React.useEffect(() => { mainRef.current?.scrollTo({ top: 0 }); }, [view]);
   async function go(id) {
     // สลับเมนูขณะฟอร์มค้าง = ฟอร์มถูก unmount ทิ้งเหมือนกัน ต้องถามก่อน
     if (hasUnsaved() && !await confirmDialog({
