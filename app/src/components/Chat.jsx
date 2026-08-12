@@ -663,14 +663,14 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             <button className={"chat-ch" + (channel === "line" ? " on line" : "")} onClick={() => setChannel("line")}>
               LINE{tabUnread.line > 0 && <span className="chat-ch-cnt">{tabUnread.line > 99 ? "99+" : tabUnread.line}</span>}
             </button>
-            <button className={"chat-ch" + (isFb ? " on fb" : "")} onClick={() => setChannel("fb")}>
-              Facebook{tabUnread.fb > 0 && <span className="chat-ch-cnt">{tabUnread.fb > 99 ? "99+" : tabUnread.fb}</span>}
+            <button className={"chat-ch" + (isFb ? " on fb" : "")} title="Facebook" onClick={() => setChannel("fb")}>
+              FB{tabUnread.fb > 0 && <span className="chat-ch-cnt">{tabUnread.fb > 99 ? "99+" : tabUnread.fb}</span>}
             </button>
             <button className={"chat-ch" + (isCm ? " on fb" : "")} title="คอมเมนต์ใต้โพสต์ Facebook" onClick={() => setChannel("cm")}>
-              💬 คอมเมนต์
+              💬 คอม
             </button>
             <button className={"chat-ch" + (isSup ? " on sup" : "")} title="แชตซัพพลายเออร์ (LINE เดียวกัน แยกกระดาน)" onClick={() => setChannel("sup")}>
-              🏭 ซัพฯ{tabUnread.sup > 0 && <span className="chat-ch-cnt">{tabUnread.sup > 99 ? "99+" : tabUnread.sup}</span>}
+              🏭 ซัพ{tabUnread.sup > 0 && <span className="chat-ch-cnt">{tabUnread.sup > 99 ? "99+" : tabUnread.sup}</span>}
             </button>
           </div>
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
