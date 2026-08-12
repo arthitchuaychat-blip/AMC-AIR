@@ -687,7 +687,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <option value="all">👥 ทุกผู้รับผิดชอบ</option>
               <option value="me">👤 ของฉัน</option>
               <option value="none">— ยังไม่มอบหมาย —</option>
-              {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {ownerStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Combo>
           </div>
           <div className="chat-convos">
