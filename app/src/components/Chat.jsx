@@ -224,7 +224,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   React.useEffect(() => { selRef.current = sel; }, [sel]);
   // teams + jobs for the คิวช่าง panel (so we can answer queue questions instantly)
   React.useEffect(() => { listTeams().then(setTeams).catch(() => {}); listJobOrders().then(setJobs).catch(() => {}); }, []);
-  React.useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+  // เปิดห้องแชตใหม่ = กระโดดไปข้อความล่าสุด (ล่างสุด) ทันที · ข้อความใหม่ที่เข้ามาระหว่างเปิดอยู่ค่อยเลื่อนแบบนุ่ม
+  const jumpBottom = React.useRef(true);
+  React.useEffect(() => { jumpBottom.current = true; }, [sel]);
+  React.useEffect(() => { endRef.current?.scrollIntoView({ behavior: jumpBottom.current ? "auto" : "smooth", block: "end" }); jumpBottom.current = false; }, [msgs]);
 
   // reload + reset when switching channel (LINE ↔ FB) · แท็บคอมเมนต์ไม่ใช้ระบบ contact เดิม → ข้าม
   React.useEffect(() => { if (isCm) return; setSel(null); setMsgs([]); setShowThread(false); setQrPendImgs([]); loadContacts(); }, [channel]);

@@ -129,7 +129,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-12·แถบเมนูซ้ายแคบลง (266→222px) เพิ่มพื้นที่ทำงานส่วนกลาง v600";
+const BUILD = "2026-08-12·เปิดเมนูเลื่อนขึ้นบนสุดเสมอ + เปิดห้องแชตกระโดดข้อความล่าสุดทันที v601";
 
 function SetupNotice() {
   return (
@@ -425,6 +425,9 @@ export default function App() {
   const canBurmese = role === "tech" || role === "assistant" || role === "lead_tech" || role === "maid";
   const effLang = canBurmese ? lang : "th";
 
+  // เปิด/สลับเมนู = เลื่อนเนื้อหากลับไปบนสุด (รายการเรียงใหม่สุดอยู่บน = เห็นรายการล่าสุดทันที) ไม่ค้างตำแหน่งเดิมของเมนูก่อนหน้า
+  const mainRef = React.useRef(null);
+  React.useEffect(() => { mainRef.current?.scrollTo({ top: 0 }); }, [view]);
   async function go(id) {
     // สลับเมนูขณะฟอร์มค้าง = ฟอร์มถูก unmount ทิ้งเหมือนกัน ต้องถามก่อน
     if (hasUnsaved() && !await confirmDialog({
@@ -560,7 +563,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="main">
+      <main className="main" ref={mainRef}>
         {navHist.length > 0 && <button className="page-back" onClick={goBack}><UIcon name="chevR" size={15} style={{ transform: "rotate(180deg)" }} /> ย้อนกลับ</button>}
         {/* แถบเตือนงานค้างจากกระดานสั่งงาน — ตามไปทุกเมนู */}
         {profile?.id && <TaskReminder myId={profile.id} view={view} onOpen={(id) => { setTaskFocus(id); go("tasks"); }} onOpenBoard={() => go("tasks")} />}
