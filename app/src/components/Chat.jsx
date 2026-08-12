@@ -151,7 +151,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [staff, setStaff] = React.useState([]);
   const [myId, setMyId] = React.useState(null);
   const [stageF, setStageF] = React.useState("all");     // list filter by stage
-  const [mineOnly, setMineOnly] = React.useState(false); // list filter: assigned to me
+  const [ownerF, setOwnerF] = React.useState("all"); // list filter: ผู้รับผิดชอบ — "all" ทั้งหมด · "me" ของฉัน · "none" ยังไม่มอบหมาย · <staffId> คนที่เลือก
   const [replyTo, setReplyTo] = React.useState(null);    // message being replied-to (quote)
   const [sups, setSups] = React.useState([]);            // ทะเบียนผู้ขาย (โหลดเมื่อใช้แท็บซัพ/ผูกผู้ขาย)
   const [poPicker, setPoPicker] = React.useState(false); // โมดัลเลือก PO ส่งเข้าแชตซัพ
@@ -615,7 +615,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   }, [q, channel]);
   const shown = contacts.filter((c) =>
     (stageF === "all" || (c.stage || "new") === stageF)
-    && (!mineOnly || c.assigned_to === myId)
+    && (ownerF === "all" ? true : ownerF === "me" ? c.assigned_to === myId : ownerF === "none" ? !c.assigned_to : c.assigned_to === ownerF)
     // แท็บซัพ = เฉพาะผู้ติดต่อที่ติดป้ายซัพพลายเออร์ · แท็บ LINE ลูกค้า = ที่เหลือ (FB ไม่มีป้าย)
     && (isFb ? true : isSup ? c.kind === "supplier" : (c.kind || "customer") !== "supplier")
     // ชื่อ/ลูกค้าที่ผูก/ข้อความล่าสุด/เบอร์ — หรือเจอคำนี้ในประวัติแชตของห้องนั้น (ค้นจากเซิร์ฟเวอร์)
@@ -680,7 +680,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             <Combo className="inp" value={stageF} onChange={(e) => setStageF(e.target.value)}>
               <option value="all">ทุกสถานะ</option>{STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </Combo>
-            <button className={"chat-mine" + (mineOnly ? " on" : "")} onClick={() => setMineOnly((v) => !v)} title="เฉพาะที่ฉันรับผิดชอบ">👤 ของฉัน</button>
+            <Combo className="inp" value={ownerF} onChange={(e) => setOwnerF(e.target.value)} title="กรองตามผู้รับผิดชอบแชต">
+              <option value="all">👥 ทุกผู้รับผิดชอบ</option>
+              <option value="me">👤 ของฉัน</option>
+              <option value="none">— ยังไม่มอบหมาย —</option>
+              {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </Combo>
           </div>
           <div className="chat-convos">
             {searching && <div className="empty" style={{ fontSize: 13 }}>กำลังค้นข้อความในแชต…</div>}
