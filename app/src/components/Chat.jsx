@@ -128,6 +128,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [pending, setPending] = React.useState([]);        // รูป/ไฟล์ที่เลือกไว้ "พักก่อนส่ง" [{type:'image'|'file', url, name}] — กดตรวจแล้วค่อยส่ง
   const [uploading, setUploading] = React.useState(false); // กำลังอัปโหลดไฟล์เข้าที่พัก
   const [emojiOpen, setEmojiOpen] = React.useState(false);
+  const [toolsOpen, setToolsOpen] = React.useState(() => { try { return localStorage.getItem("amc_chat_tools") !== "0"; } catch { return true; } }); // พับ/กางแถบเครื่องมือ+คำตอบสำเร็จรูป (จำค่าไว้)
+  const toggleTools = () => setToolsOpen((o) => { const n = !o; try { localStorage.setItem("amc_chat_tools", n ? "1" : "0"); } catch {} if (!n) { setEmojiOpen(false); setStickerOpen(false); setQrbOpen(false); } return n; });
   const [qrButtons, setQrButtons] = React.useState([]);    // ปุ่มให้ลูกค้ากด (LINE quick-reply) [{label,text}] — แนบกับข้อความถัดไป
   const [qrbOpen, setQrbOpen] = React.useState(false);
   const [qrSearch, setQrSearch] = React.useState("");
@@ -792,7 +794,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
 
               {canSend ? (
                 <div className="chat-composer">
-                  <div className="chat-tools">
+                  <button type="button" className={"chat-tools-toggle" + (toolsOpen ? " open" : "")} onClick={toggleTools} title={toolsOpen ? "ซ่อนแถบเครื่องมือ เพิ่มพื้นที่แชต" : "แสดงเครื่องมือ & คำตอบสำเร็จรูป"}>
+                    <span>{toolsOpen ? "▾ ซ่อนเครื่องมือ" : "▸ เครื่องมือ & คำตอบสำเร็จรูป"}</span>
+                  </button>
+                  {toolsOpen && <div className="chat-tools">
                     {selContact.kind === "supplier" && <button className="chat-tool primary" disabled={sending} title="เลือกใบสั่งซื้อ ส่งเป็นรูป/PDF เข้าแชตซัพ" onClick={openPoPicker}>🛒 ส่ง PO</button>}
                     {selContact.customer_id && <button className="chat-tool primary" onClick={openConfirm} disabled={sending}>🧾 ส่งคอนเฟิม</button>}
                     {selContact.customer_id && !isFb && <button className="chat-tool" onClick={openRate} disabled={sending} title="ส่งลิงก์ให้ลูกค้าให้คะแนนความพอใจ (อ้างเลขใบงาน)">⭐ ขอคะแนน</button>}
@@ -817,7 +822,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       );
                     })}
                     <button className="chat-tool ghost" onClick={() => setQrManage(true)}>✏️ จัดการคำตอบ</button>
-                  </div>
+                  </div>}
                   {stickerOpen && (
                     <div className="chat-sticker-box">
                       <div className="chat-sticker-tabs">
