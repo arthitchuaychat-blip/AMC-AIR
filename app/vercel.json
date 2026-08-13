@@ -3,7 +3,8 @@
     "api/line-webhook.js": { "maxDuration": 60 }
   },
   "crons": [
-    { "path": "/api/hr-cron", "schedule": "15 2 * * *" }
+    { "path": "/api/hr-cron", "schedule": "15 2 * * *" },
+    { "path": "/api/daily-cron", "schedule": "0 1 * * *" }
   ],
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
   "headers": [

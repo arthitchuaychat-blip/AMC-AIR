@@ -37,4 +37,5 @@
 - [Sales pipeline](sales-pipeline.md) — ท่อขาย + แหล่งที่มาลูกค้า: customers.stage/source/owner_id (mig 199), บอร์ด Pipeline.jsx (module 'pipeline'), วัด ROI ช่องทาง; ข้อ 2/3 แผนพัฒนา 6 ส.ค.
 - [Customer rating](customer-rating.md) — คะแนนความพอใจลูกค้าหลังจบงาน: ให้ดาวจากลิงก์ใบส่งมอบ (mig 200 + api handover-rate) → เข้าสกอร์การ์ดทีม (mig 201); ข้อ 3/3 แผนพัฒนา 6 ส.ค.
 - [App performance](app-performance.md) — เร่งแอป: code-split (บันเดิลแรก 2.3MB→0.65MB) + แคชลิสต์เอกสาร 45 วิ (ตัวดัก supabase.from/rpc ล้างแคชอัตโนมัติ = เซฟแล้วสด) ทำแล้ว v507; เหลือแค่ index ตอนตารางโต
+- [Daily automation cron](daily-automation-cron.md) — /api/daily-cron (Vercel 08:00 ไทย): เตือนนัดลูกค้าล่วงหน้า 1 วัน (LINE) + สรุปเช้าทีมออฟฟิศ (นัด/แชตค้าง/สต๊อกต่ำ); ต้องตั้ง CRON_SECRET, ทดสอบ ?dry=1, Hobby จำกัด 2 cron ต้องรวมของใหม่เข้าไฟล์นี้
 - [App.jsx hooks trap](app-jsx-hooks-trap.md) — App.jsx มี early return หลายจุด (~393–411 login/loading) → เพิ่ม hook (useState/useRef/useEffect) ต้องอยู่ "เหนือ" มันเสมอ ไม่งั้นผิด Rules of Hooks จอขาว (build+undefined-vars จับไม่ได้); เจอจริง v601→hotfix v602
