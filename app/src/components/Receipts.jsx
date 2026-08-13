@@ -34,7 +34,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const canEdit = can(role, "receipt", "edit");
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   // ส่งใบกำกับภาษีเข้า FlowAccount — ต้องตรงกับ allowlist ฝั่งเซิร์ฟเวอร์ (api/flowaccount-doc.js)
-  const canSendFlow = ["admin", "exec", "finance", "sales", "hr"].includes(role);
+  const canSendFlow = ["admin", "exec", "finance", "sales", "field_sales", "hr"].includes(role);
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);

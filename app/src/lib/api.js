@@ -2774,7 +2774,7 @@ export async function saveHandover(h) {
         .map((f) => ({ due_date: f.next_date, kind: f.kind, customer_name: fields.customer_name, contact_phone: fields.contact_phone, job_no: fields.job_no, handover_id: saved?.id || null, note: f.kind === "wash" ? "นัดล้างรอบถัดไป" : "นัด PM รอบถัดไป", created_by: uid }));
       if (rems.length) {
         const { error } = await supabase.from("service_reminders").insert(rems);
-        if (!error) notify(await _usersByRole(["admin", "exec", "sales", "hr"]), { category: "job", title: `🔔 นัดบริการรอบถัดไป ${rems.length} รายการ · ${fields.customer_name || fields.job_no || "-"}`, body: rems.map((r) => `${r.note} ${r.due_date}`).join(" · "), url: "handover", ref_type: "handover" });
+        if (!error) notify(await _usersByRole(["admin", "exec", "sales", "field_sales", "hr"]), { category: "job", title: `🔔 นัดบริการรอบถัดไป ${rems.length} รายการ · ${fields.customer_name || fields.job_no || "-"}`, body: rems.map((r) => `${r.note} ${r.due_date}`).join(" · "), url: "handover", ref_type: "handover" });
       }
     } catch { /* ignore — best-effort */ }
   }
@@ -3542,7 +3542,7 @@ async function _usersByRole(roles) {
 async function _jobWatchers(job_no) {
   try {
     const { data: jo } = await supabase.from("job_orders").select("assigned_team").eq("job_no", job_no).maybeSingle();
-    const office = await _usersByRole(["admin", "exec", "sales", "lead_tech"]); // หัวหน้าช่างคุมทุกทีม — ต้องเห็นความเคลื่อนไหวงานด้วย
+    const office = await _usersByRole(["admin", "exec", "sales", "field_sales", "lead_tech"]); // หัวหน้าช่างคุมทุกทีม — ต้องเห็นความเคลื่อนไหวงานด้วย
     let team = [];
     if (jo?.assigned_team) { const { data } = await supabase.from("profiles").select("id").eq("team", jo.assigned_team); team = (data || []).map((p) => p.id); }
     return [...new Set([...office, ...team])];

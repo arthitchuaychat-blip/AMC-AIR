@@ -17,7 +17,7 @@ const ROOM_BG = {
 };
 const KIND_ICON  = { company: "🏢", dm: "👤", group: "👥", project: "🧰" };
 const KIND_LABEL = { company: "บริษัท", dm: "ส่วนตัว", group: "กลุ่ม", project: "งาน" };
-const OFFICE     = ["admin", "exec", "finance", "sales"];
+const OFFICE     = ["admin", "exec", "finance", "sales", "field_sales"];
 
 // deterministic avatar color per user-id
 const AV_COLORS = ["#0ea5e9","#10b981","#f59e0b","#8b5cf6","#ef4444","#ec4899","#14b8a6","#f97316"];
@@ -872,7 +872,7 @@ function MembersModal({ room, staff, onClose, onChanged, flash }) {
 function NotesModal({ room, me, staffById, flash, onClose, onPosted, onChanged }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
-  const OFFICE_ROLES = ["admin", "exec", "finance", "sales"];
+  const OFFICE_ROLES = ["admin", "exec", "finance", "sales", "field_sales"];
   const [notes, setNotes] = React.useState(null);
   const [ed, setEd] = React.useState(null);          // { id|null, text, images[] } — กำลังสร้าง/แก้
   const [nq, setNq] = React.useState("");            // ค้นหาโน้ตในห้องนี้

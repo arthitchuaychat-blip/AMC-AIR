@@ -20,7 +20,7 @@ export const DEPT_COLOR = {
   exec: "#334155", office: "#0d9488", sales: "#c2680a",
   stock: "#0e7fa0", field: "#2563eb", support: "#7c3aed",
 };
-export const GUIDE_ORDER = ["exec", "admin", "finance", "hr", "sales", "graphic", "stock", "lead_tech", "tech", "assistant", "maid"];
+export const GUIDE_ORDER = ["exec", "admin", "finance", "hr", "sales", "field_sales", "graphic", "stock", "lead_tech", "tech", "assistant", "maid"];
 
 export const COMPANY_TARGETS = [
   { m: "ยอดขายต่อเดือน", t: "≥ 4.0 ลบ.", note: "โต ~15% จากฐาน 3 ลบ." },
@@ -320,6 +320,8 @@ export const ROLE_GUIDE = {
     ],
   },
 };
+// ขายภาคสนาม = ใช้คู่มือเดียวกับ "ขาย" (สิทธิ์/หน้าที่เหมือนกัน)
+ROLE_GUIDE.field_sales = ROLE_GUIDE.sales;
 
 // คู่มือฉบับภาษาพม่า — เฉพาะตำแหน่งที่มีแรงงานพม่า (ตอนนี้: แม่บ้าน) · Handbook.jsx จะ merge ทับ ROLE_GUIDE เมื่อ lang="my"
 // (ช่องที่ไม่มีในนี้จะ fallback เป็นไทยอัตโนมัติ) — โครงสร้างต้องตรงกับ ROLE_GUIDE ทุก key

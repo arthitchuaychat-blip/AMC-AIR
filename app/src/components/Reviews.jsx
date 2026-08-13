@@ -14,7 +14,7 @@ export default function Reviews({ role }) {
   const [busy, setBusy] = React.useState(null);
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
-  const canPublish = ["admin", "exec", "sales", "graphic", "hr"].includes(role);
+  const canPublish = ["admin", "exec", "sales", "field_sales", "graphic", "hr"].includes(role);
 
   async function load() {
     try { setRows(await listReviews()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setRows([]); }

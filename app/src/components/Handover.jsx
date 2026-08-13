@@ -113,7 +113,7 @@ export default function Handover({ role, me, startJob, onStartConsumed, focusJob
     setSending(null);
   }
   // ส่ง LINE ได้เฉพาะฝ่ายออฟฟิศ (ตรงกับสิทธิ์ฝั่ง serverless) และเฉพาะใบที่ส่งแล้ว
-  const canSendLine = ["admin", "sales", "exec", "finance", "hr"].includes(role);
+  const canSendLine = ["admin", "sales", "field_sales", "exec", "finance", "hr"].includes(role);
 
   const shown = list.filter((h) =>
     (statusF === "all" || h.status === statusF)

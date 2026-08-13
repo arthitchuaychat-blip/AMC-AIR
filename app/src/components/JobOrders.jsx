@@ -29,7 +29,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const fieldOnly = role === "tech" || role === "assistant" || role === "lead_tech";
   const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
   // งานที่ถูกล็อก (อนุมัติ/ปิดงานแล้ว) แก้ไข/ปลดล็อกได้เฉพาะทีมออฟฟิศที่ดูแลใบงาน (ธุรการ/ผู้บริหาร/ฝ่ายขาย)
-  const canOverrideLock = role === "admin" || role === "exec" || role === "sales";
+  const canOverrideLock = role === "admin" || role === "exec" || role === "sales" || role === "field_sales";
   const canEditJob = (jo) => canEdit && (!jo.locked || canOverrideLock);
   const [openTl, setOpenTl] = React.useState(null);
   const [upBrief, setUpBrief] = React.useState(false);

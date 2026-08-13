@@ -12,7 +12,7 @@ export default function Pipeline({ role, me, onOpenCustomer }) {
   const [list, setList] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [ownerF, setOwnerF] = React.useState(role === "sales" ? "me" : "all"); // เซลส์เริ่มที่ "ของฉัน"
+  const [ownerF, setOwnerF] = React.useState((role === "sales" || role === "field_sales") ? "me" : "all"); // เซลส์เริ่มที่ "ของฉัน"
   const [srcF, setSrcF] = React.useState("all");
   const [q, setQ] = React.useState("");
   const [toast, setToast] = React.useState(null);

@@ -13,9 +13,10 @@
 // logic, not a togglable permission.
 
 // ลำดับนี้ = ลำดับที่โชว์ในดรอปดาวน์ตำแหน่ง + คอลัมน์ตารางสิทธิ์ (ตามที่เจ้าของกำหนด 2026-07-28)
-export const ROLES = ["exec", "admin", "finance", "hr", "sales", "graphic", "stock", "maid", "lead_tech", "tech", "assistant"];
+export const ROLES = ["exec", "admin", "finance", "hr", "sales", "field_sales", "graphic", "stock", "maid", "lead_tech", "tech", "assistant"];
 export const ROLE_LABEL = {
   exec: "ผู้บริหาร", admin: "ธุรการ", finance: "บัญชีการเงิน", hr: "บุคคล", sales: "ขาย",
+  field_sales: "ขายภาคสนาม",
   graphic: "การตลาดและกราฟิก", stock: "คลังสินค้าวัสดุ", maid: "แม่บ้าน",
   lead_tech: "หัวหน้าช่าง", tech: "ช่าง", assistant: "ผู้ช่วยช่าง",
 };
@@ -74,6 +75,8 @@ export const DEFAULT_PERMS = {
   // (ปุ่ม "รับสินค้าเข้าสต๊อก" บนใบสั่งซื้อพาไปหน้า movements — ปิดไว้ = กดแล้วไปต่อไม่ได้)
   // ⚠️ ต้องคู่กับ RLS mig 174 (transactions insert/select ต้องมี 'sales') ไม่งั้นปุ่มขึ้นแต่ของไม่เข้าสต๊อก
   sales:     { dashboard: V, customers: E, pipeline: E, reviews: E, followup: V, weborders: V, website: E, chat: E, teamchat: E, tasks: E, attendance: E, hr: N, boq: E, quote: E, invoice: E, receipt: E, billing: E, receivables: V, payables: N, tax: N, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, handover: E, schedule: E, catalog: E, movements: E, jobs: N, subcontract: E, suppliers: N, prep: E, po: E, tools: V, handbook: V, settings: N },
+  // ขายภาคสนาม = เหมือน "ขาย" ทุกอย่าง (สำเนาสิทธิ์ตรง ๆ) · RLS ครอบด้วย my_role()→'sales' ใน mig 210
+  field_sales: { dashboard: V, customers: E, pipeline: E, reviews: E, followup: V, weborders: V, website: E, chat: E, teamchat: E, tasks: E, attendance: E, hr: N, boq: E, quote: E, invoice: E, receipt: E, billing: E, receivables: V, payables: N, tax: N, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, handover: E, schedule: E, catalog: E, movements: E, jobs: N, subcontract: E, suppliers: N, prep: E, po: E, tools: V, handbook: V, settings: N },
   stock:     { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: N, joborders: E, handover: E, schedule: V, catalog: E, movements: E, stockcount: E, jobs: E, subcontract: N, suppliers: E, prep: E, po: E, tools: E, handbook: V, settings: N },
   lead_tech: { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: V, handover: E, schedule: V, catalog: V, movements: E, jobs: V, subcontract: N, suppliers: N, prep: N, po: N, tools: V, handbook: V, settings: N },
   tech:      { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, myjobs: E, joborders: V, handover: E, schedule: V, catalog: N, movements: E, jobs: N, subcontract: N, suppliers: N, prep: N, po: N, tools: V, handbook: V, settings: N },
