@@ -419,6 +419,8 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
   const byTeam = {}; payable.forEach((j) => { (byTeam[j.assigned_team] = byTeam[j.assigned_team] || []).push(j); });
   const teamName = (id) => teamById[id]?.name || id;
   const jobByNo = React.useMemo(() => Object.fromEntries(jobs.map((j) => [j.job_no, j])), [jobs]);
+  const [openIds, setOpenIds] = React.useState(() => new Set()); // ใบจ่ายที่กางดูรายการงาน
+  const togglePayout = (id) => setOpenIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   async function cancel(p) {
     // กติกาบ้าน: ยกเลิกต้องระบุเหตุผลเสมอ (ลง audit)
@@ -451,9 +453,13 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
         <div className="sec-head"><div><div className="sec-title">ใบจ่ายช่างซัพ</div></div></div>
         <div className="set-list">
           {payouts.length === 0 && <div className="empty sm">ยังไม่มีใบจ่าย</div>}
-          {payouts.map((p) => (
-            <div className="sub-payout-row" key={p.id}>
-              <div><b>ทีม {teamName(p.team)}</b> · {(p.lines || p.job_nos || []).length} งาน · {fmtDate(p.created_at)}
+          {payouts.map((p) => {
+            const plines = p.lines || (p.job_nos || []).map((n) => ({ job_no: n }));
+            const isOpen = openIds.has(p.id);
+            return (
+            <div key={p.id}>
+            <div className="sub-payout-row">
+              <div><b>ทีม {teamName(p.team)}</b> · <button type="button" className="sub-job-link" onClick={() => togglePayout(p.id)} title="ดู/ซ่อนรายการงานที่จ่ายในใบนี้">{plines.length} งาน {isOpen ? "▲" : "▼"}</button> · {fmtDate(p.created_at)}
                 <div className="jo-dim">รวม {fmtBaht(p.gross)} − หัก {fmtBaht(p.wht_amt)} = สุทธิ {fmtBaht(p.net)}{p.paid_at ? ` · จ่าย ${fmtDate(p.paid_at)}` : ""}</div></div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
                 {p.pay_slip_url && <img src={p.pay_slip_url} alt="สลิปโอนเงิน" title="สลิปโอนเงิน — กดดูเต็ม" style={{ width: 30, height: 30, objectFit: "cover", borderRadius: 7, border: "1px solid var(--line)", cursor: "zoom-in" }} onClick={() => window.open(p.pay_slip_url, "_blank")} />}
@@ -465,7 +471,23 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
                 {role === "admin" && <button className="btn-ghost sm danger" disabled={busy} title="ลบใบจ่ายถาวร (ธุรการเท่านั้น — กติกาบ้าน)" onClick={() => del(p)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div>
             </div>
-          ))}
+            {isOpen && (
+              <div style={{ margin: "2px 0 10px", padding: "6px 12px", background: "var(--surface-2)", borderRadius: 9, border: "1px solid var(--line-2)" }}>
+                {plines.map((l) => {
+                  const j = jobByNo[l.job_no] || {};
+                  const amt = Number(l.amount) != null ? Number(l.amount) : (Number(l.total) || 0);
+                  return (
+                    <div key={l.job_no} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "center", padding: "5px 0", borderBottom: "1px solid var(--line-2)", fontSize: 12.5 }}>
+                      <span>{j.scheduled_at ? <span className="jo-dim" style={{ marginRight: 6 }}>{fmtDate(j.scheduled_at)}</span> : ""}<b style={{ fontFamily: "var(--mono)" }}>{l.job_no}</b>{" "}{l.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}{" "}<span className="jo-dim">{l.customerName || j.customerName || "-"}</span></span>
+                      <b style={{ whiteSpace: "nowrap" }}>{fmtBaht(amt)}</b>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            </div>
+            );
+          })}
         </div>
       </div>
 
