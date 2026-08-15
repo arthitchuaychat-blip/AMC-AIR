@@ -1024,6 +1024,48 @@ export async function savePurchaseOrder(po, items) {
   syncInternalNote({ quoteNo: po.quote_no }, po.internal_note).catch(() => {});
 }
 
+// รายการที่ควรสั่งซื้อ (reorder) — วัสดุที่ tracked + ตั้งขั้นต่ำ แล้วคงเหลือ < ขั้นต่ำ
+// เดา "ผู้ขาย/ราคาล่าสุด" จากประวัติ po_items (ใบ PO ที่ไม่ยกเลิก) เพื่อจัดกลุ่มตามผู้ขาย
+export async function listReorderSuggestions() {
+  const { data: mats } = await supabase.from("materials")
+    .select("code,name_th,unit,min_stock,purchase_qty,purchase_unit,kind,tracked").eq("tracked", true).gt("min_stock", 0);
+  const codes = (mats || []).map((m) => m.code);
+  if (!codes.length) return [];
+  const stock = {};
+  for (let i = 0; i < codes.length; i += 300) {
+    const { data } = await supabase.from("material_stock").select("code,current_stock").in("code", codes.slice(i, i + 300));
+    (data || []).forEach((s) => { stock[s.code] = Number(s.current_stock) || 0; });
+  }
+  const low = (mats || []).filter((m) => (stock[m.code] ?? 0) < Number(m.min_stock));
+  if (!low.length) return [];
+  const lowCodes = low.map((m) => m.code);
+  // ประวัติราคา/ผู้ขาย: po_items ของโค้ดที่ต่ำ + หัว PO (join ใน JS ไม่พึ่ง FK embed)
+  const items = [];
+  for (let i = 0; i < lowCodes.length; i += 200) {
+    const { data } = await supabase.from("po_items").select("material_code,price,po_no").in("material_code", lowCodes.slice(i, i + 200));
+    if (data) items.push(...data);
+  }
+  const poNos = [...new Set(items.map((it) => it.po_no).filter(Boolean))];
+  const poInfo = {};
+  for (let i = 0; i < poNos.length; i += 300) {
+    const { data } = await supabase.from("purchase_orders").select("po_no,supplier,status,issue_date,created_at").in("po_no", poNos.slice(i, i + 300));
+    (data || []).forEach((p) => { poInfo[p.po_no] = p; });
+  }
+  const lastBuy = {};
+  items.forEach((it) => {
+    const po = poInfo[it.po_no]; if (!po || po.status === "cancelled") return;
+    const d = po.issue_date || (po.created_at || "").slice(0, 10) || "";
+    const cur = lastBuy[it.material_code];
+    if (!cur || d >= cur.date) lastBuy[it.material_code] = { supplier: po.supplier || "", price: Number(it.price) || 0, date: d, po_no: po.po_no };
+  });
+  return low.map((m) => {
+    const cur = stock[m.code] ?? 0;
+    const need = Math.max(1, Math.ceil(Number(m.min_stock) - cur));
+    const info = lastBuy[m.code] || {};
+    return { code: m.code, name: m.name_th || m.code, unit: m.unit || "", current: cur, min: Number(m.min_stock), need, suggestQty: need, lastSupplier: info.supplier || "", lastPrice: info.price || 0, lastPo: info.po_no || "", kind: m.kind };
+  }).sort((a, b) => (a.lastSupplier || "￿").localeCompare(b.lastSupplier || "￿") || (b.min - b.current) - (a.min - a.current));
+}
+
 export async function deletePurchaseOrder(po_no, reason) {
   // การ์ดฝั่ง server (UI ซ่อนปุ่มอยู่แล้ว แต่ API ต้องกันเอง): ใบที่รับของ/ตั้งเบิก/จ่ายแล้ว ห้ามลบ — ไล่ยกเลิกจากปลายทางก่อน
   const { data: cur, error: ce } = await supabase.from("purchase_orders").select("status,expense_id,paid_at").eq("po_no", po_no).maybeSingle();

@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies, docNoTaken, markPoReceived, lastPurchaseOf, repriceReceivedPo, uploadExpenseFile } from "../lib/api";
+import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies, docNoTaken, markPoReceived, lastPurchaseOf, repriceReceivedPo, uploadExpenseFile, listReorderSuggestions } from "../lib/api";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -98,6 +98,19 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   React.useEffect(() => { if (!printPo) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintPo(null); }, 120); return () => clearTimeout(t); }, [printPo]);
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
+  // 🔔 รายการที่ควรสั่งซื้อ (สต๊อกต่ำกว่าขั้นต่ำ) — จัดกลุ่มตามผู้ขายที่เคยซื้อล่าสุด
+  const [reorder, setReorder] = React.useState([]);
+  const [reorderOpen, setReorderOpen] = React.useState(false);
+  React.useEffect(() => { if (isAdmin) listReorderSuggestions().then(setReorder).catch(() => {}); }, [isAdmin]);
+  const reorderGroups = React.useMemo(() => {
+    const g = {};
+    reorder.forEach((r) => { const k = r.lastSupplier || ""; (g[k] = g[k] || []).push(r); });
+    return Object.entries(g).sort((a, b) => (a[0] || "￿").localeCompare(b[0] || "￿")); // ผู้ขายที่รู้ชื่อก่อน, "ไม่ทราบ" ท้ายสุด
+  }, [reorder]);
+  function createReorderPO(supplier, items) {
+    setEditing({ po_no: genPoNo(), supplier: supplier || "", note: "", internal_note: "", vat: true, priceIncl: false, quote_no: "", prep_no: "", issue_date: todayStr(), delivery_date: "", delivery_method: "", dn_no: "", sup_inv_no: "", attachments: [], po_type: "material",
+      items: items.map((x) => ({ code: x.code, qty: x.suggestQty, price: x.lastPrice || 0, unit: x.unit || null })) });
+  }
   // ประเภทสินค้าของใบ: คอลัมน์ po_type (mig 139) · ใบเก่าที่ยังไม่มี → เดาจากรายการ (มีแอร์ = ac)
   const poTypeOf = (po) => po.po_type || ((po.items || []).some((it) => matMap[it.material_code]?.kind === "ac") ? "ac" : "material");
   const [typeF, setTypeF] = React.useState("all");
@@ -436,6 +449,39 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           <p className="page-sub">{pos.length} ใบ · สร้าง → ส่งซัพพลายเออร์ → รับสินค้าเข้าสต๊อก</p></div>
         {isAdmin && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบสั่งซื้อ</button>}
       </div>
+
+      {/* 🔔 แจ้งเตือนรายการที่ควรสั่งซื้อ (สต๊อกต่ำกว่าขั้นต่ำ) — จัดกลุ่มตามผู้ขายเดิม + กดสร้าง PO ได้ทีเดียว */}
+      {isAdmin && reorder.length > 0 && (
+        <div style={{ border: "1px solid #fcd34d", background: "#fffbeb", borderRadius: 12, marginBottom: 14, overflow: "hidden" }}>
+          <button type="button" onClick={() => setReorderOpen((o) => !o)}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 800, color: "#b45309", fontSize: 14 }}>
+            <span>🔔 ควรสั่งซื้อ {reorder.length} รายการ · {reorderGroups.length} ผู้ขาย</span>
+            <span style={{ fontSize: 12 }}>{reorderOpen ? "▲ ซ่อน" : "▼ ดูรายการ"}</span>
+          </button>
+          {reorderOpen && (
+            <div style={{ padding: "0 14px 12px" }}>
+              {reorderGroups.map(([sup, items]) => (
+                <div key={sup || "_none"} style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 10, background: "#fff" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 11px", borderBottom: "1px solid var(--line-2)" }}>
+                    <b style={{ fontSize: 13 }}>{sup ? `🏭 ${sup}` : "❓ ไม่ทราบผู้ขาย (ยังไม่เคยซื้อ)"} · {items.length} รายการ</b>
+                    <button className="btn-ghost sm" onClick={() => createReorderPO(sup, items)} title="ร่างใบสั่งซื้อจากรายการกลุ่มนี้ (แก้ไขก่อนบันทึกได้)">🛒 สร้างใบสั่งซื้อ</button>
+                  </div>
+                  <div style={{ padding: "4px 11px 8px" }}>
+                    {items.map((r) => (
+                      <div key={r.code} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 10, alignItems: "center", padding: "5px 0", borderBottom: "1px solid var(--line-2)", fontSize: 12.5 }}>
+                        <span>{r.name} <span style={{ color: "var(--ink-3)" }}>({r.code})</span></span>
+                        <span style={{ color: "#dc2626", whiteSpace: "nowrap" }}>เหลือ {r.current}/{r.min} {r.unit}</span>
+                        <span style={{ whiteSpace: "nowrap", fontWeight: 700 }}>ควรสั่ง {r.suggestQty} {r.unit}{r.lastPrice ? ` · ~${r.lastPrice.toLocaleString("en-US")}฿` : ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <p style={{ fontSize: 11.5, color: "var(--ink-3)", margin: "9px 2px 0" }}>ℹ️ จำนวน/ราคาเป็นค่าแนะนำ (จำนวน = เติมให้ถึงขั้นต่ำ · ราคา = ครั้งล่าสุดที่ซื้อ) — ตรวจแก้ก่อนบันทึกได้เสมอ</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ช่องค้นหาอยู่นอกแถบตัวกรอง (เห็นตลอด) · ชิปตัวกรองยุบเก็บใน FilterBar เพื่อประหยัดพื้นที่ */}
       <div className="cat-filter" style={{ justifyContent: "flex-end" }}>
