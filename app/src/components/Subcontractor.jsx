@@ -186,7 +186,7 @@ function OfficeSubcontractor({ role, onOpenDoc }) {
         </div>
 
         {tab === "labor" && <LaborTab jobs={subJobs} quoteBy={quoteBy} teamById={teamById} subTeams={subTeams} canLabor={canLabor} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
-        {tab === "pay" && canPay && <PayTab role={role} jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} teamById={teamById} payouts={payouts} onReload={load} flash={flash} />}
+        {tab === "pay" && canPay && <PayTab role={role} jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} teamById={teamById} payouts={payouts} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
         {tab === "score" && <ScoreTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} matCost={matCost} payouts={payouts} />}
       </>}
 
@@ -408,7 +408,7 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
 }
 
 // ---------- ค่าแรงรอจ่าย (split payments) ----------
-function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, flash }) {
+function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, flash, onOpenDoc }) {
   const [slip, setSlip] = React.useState(null); // payout to show as a slip
   const [editPo, setEditPo] = React.useState(null); // payout being edited
   const [payFor, setPayFor] = React.useState(null); // payout being paid (pick account)
@@ -478,7 +478,7 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
                   const amt = Number(l.amount) != null ? Number(l.amount) : (Number(l.total) || 0);
                   return (
                     <div key={l.job_no} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "center", padding: "5px 0", borderBottom: "1px solid var(--line-2)", fontSize: 12.5 }}>
-                      <span>{j.scheduled_at ? <span className="jo-dim" style={{ marginRight: 6 }}>{fmtDate(j.scheduled_at)}</span> : ""}<b style={{ fontFamily: "var(--mono)" }}>{l.job_no}</b>{" "}{l.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}{" "}<span className="jo-dim">{l.customerName || j.customerName || "-"}</span></span>
+                      <span>{j.scheduled_at ? <span className="jo-dim" style={{ marginRight: 6 }}>{fmtDate(j.scheduled_at)}</span> : ""}{onOpenDoc ? <button type="button" className="sub-job-link" style={{ fontFamily: "var(--mono)", fontWeight: 700 }} title="เปิดหน้าใบงาน" onClick={() => onOpenDoc("job", l.job_no)}>{l.job_no}</button> : <b style={{ fontFamily: "var(--mono)" }}>{l.job_no}</b>}{" "}{l.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}{" "}<span className="jo-dim">{l.customerName || j.customerName || "-"}</span></span>
                       <b style={{ whiteSpace: "nowrap" }}>{fmtBaht(amt)}</b>
                     </div>
                   );
