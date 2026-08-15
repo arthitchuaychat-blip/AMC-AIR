@@ -134,13 +134,15 @@ export default async function handler(req, res) {
     // ═══════════ (3) สรุปเช้าให้ทีมออฟฟิศ ═══════════
     try {
       const rangeToday = `scheduled_at=gte.${enc(today.startISO)}&scheduled_at=lt.${enc(today.endISO)}`;
-      const [jobsToday, visitsToday, unread, materials, stockRows, staff] = await Promise.all([
+      const [jobsToday, visitsToday, unread, materials, stockRows, staff, overdue] = await Promise.all([
         q(`job_orders?select=job_no,customer_id,status&${rangeToday}&status=not.in.(cancelled,done)`).catch(() => []),
         q(`job_visits?select=job_no,status&${rangeToday}&status=not.in.(cancelled,done)`).catch(() => []),
         q(`line_contacts?select=line_user_id&unread=gt.0`).catch(() => []),
         q(`materials?select=code,name_th,min_stock,tracked&tracked=eq.true&min_stock=gt.0`).catch(() => []),
         q(`material_stock?select=code,current_stock`).catch(() => []),
         q(`profiles?select=id,role`).catch(() => []),
+        // หนี้ค้างเกินกำหนด = ใบแจ้งหนี้ยังไม่จ่าย + เลยวันครบกำหนดแล้ว
+        q(`invoices?select=invoice_no,total,wht_amt,due_date,customer_id&status=eq.unpaid&due_date=lt.${today.ymd}&order=due_date.asc`).catch(() => []),
       ]);
       const jobNos = new Set([...jobsToday.map((j) => j.job_no), ...visitsToday.map((v) => v.job_no)]);
       const nAppt = jobNos.size;
@@ -148,16 +150,27 @@ export default async function handler(req, res) {
       const stockMap = Object.fromEntries(stockRows.map((s) => [s.code, Number(s.current_stock) || 0]));
       const low = materials.filter((m) => stockMap[m.code] != null && stockMap[m.code] < Number(m.min_stock));
       const nLow = low.length;
+      // ชื่อลูกค้าของใบที่ค้าง (ดึงเฉพาะ id ที่เกี่ยว)
+      const nOd = overdue.length;
+      const odAmt = overdue.reduce((a, x) => a + Math.max(0, (Number(x.total) || 0) - (Number(x.wht_amt) || 0)), 0);
+      let odNames = [];
+      if (nOd) {
+        const ids = [...new Set(overdue.map((x) => x.customer_id).filter(Boolean))];
+        const custs = ids.length ? await q(`customers?select=id,name&id=in.(${ids.map((i) => `"${i}"`).join(",")})`).catch(() => []) : [];
+        const cn = Object.fromEntries(custs.map((c) => [c.id, c.name]));
+        odNames = [...new Set(overdue.map((x) => cn[x.customer_id]).filter(Boolean))];
+      }
 
       const lines = [
         `📅 นัดวันนี้: ${nAppt} งาน`,
         `💬 แชตลูกค้าค้างตอบ: ${nUnread} ห้อง`,
+        `💰 หนี้ค้างเกินกำหนด: ${nOd} ใบ ${Math.round(odAmt).toLocaleString("en-US")} บาท${nOd ? " — " + odNames.slice(0, 5).join(", ") + (odNames.length > 5 ? " …" : "") : ""}`,
         `📦 สต๊อกต่ำกว่าขั้นต่ำ: ${nLow} รายการ${nLow ? " — " + low.slice(0, 5).map((m) => m.name_th || m.code).join(", ") + (nLow > 5 ? " …" : "") : ""}`,
       ];
-      result.digest = { appointments: nAppt, unreadChats: nUnread, lowStock: nLow };
+      result.digest = { appointments: nAppt, unreadChats: nUnread, overdueInvoices: nOd, overdueAmount: Math.round(odAmt), lowStock: nLow };
 
       const office = staff.filter((p) => ["admin", "exec", "hr"].includes(p.role)).map((p) => p.id);
-      const title = `🌅 สรุปเช้า ${today.thai} — นัด ${nAppt} · แชตค้าง ${nUnread} · สต๊อกต่ำ ${nLow}`;
+      const title = `🌅 สรุปเช้า ${today.thai} — นัด ${nAppt} · แชตค้าง ${nUnread} · หนี้ค้าง ${nOd} · สต๊อกต่ำ ${nLow}`;
       const body = lines.join("\n");
       if (!dry && office.length) {
         const rows = office.map((id) => ({ user_id: id, category: "job", title, body, url: "dashboard", ref_type: "digest" }));
