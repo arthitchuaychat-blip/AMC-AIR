@@ -4327,6 +4327,51 @@ export async function fbCommentAction(action, comment_id, text) {
   if (!r.ok || j.ok === false) throw new Error(j.error || j.msg || "ไม่สำเร็จ");
   return j;
 }
+
+// ─────────── อีเมล (กล่อง info@amcair.net ผ่าน Gmail API) ───────────
+export async function listEmailThreads() {
+  const { data, error } = await supabase.from("email_threads")
+    .select("thread_id,subject,from_email,from_name,snippet,last_message_at,unread,assigned_to,customer_id")
+    .order("last_message_at", { ascending: false, nullsFirst: false }).limit(500);
+  if (error) throw error;
+  return data || [];
+}
+export async function listEmailMessages(threadId) {
+  const { data, error } = await supabase.from("email_messages")
+    .select("id,direction,from_email,from_name,to_email,subject,body_text,created_at,sent_by")
+    .eq("thread_id", threadId).order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+export async function syncEmails() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("ยังไม่ได้เข้าสู่ระบบ");
+  const r = await fetch("/api/email-sync", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "ดึงอีเมลไม่สำเร็จ");
+  return j;
+}
+export async function sendEmail({ threadId, to, subject, text }) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("ยังไม่ได้เข้าสู่ระบบ");
+  const r = await fetch("/api/email-send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ threadId, to, subject, text }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.ok === false) throw new Error(j.error || "ส่งอีเมลไม่สำเร็จ");
+  return j;
+}
+export async function markEmailRead(threadId) {
+  const { error } = await supabase.from("email_threads").update({ unread: false, last_read_at: new Date().toISOString() }).eq("thread_id", threadId);
+  if (error) throw error;
+}
+export async function setEmailOwner(threadId, uid) {
+  const { error } = await supabase.from("email_threads").update({ assigned_to: uid || null }).eq("thread_id", threadId);
+  if (error) throw error;
+}
+export async function linkEmailCustomer(threadId, customerId) {
+  const { error } = await supabase.from("email_threads").update({ customer_id: customerId || null }).eq("thread_id", threadId);
+  if (error) throw error;
+}
+
 // CRM: set a contact's stage / responsible staff
 export async function setLineStage(uid, stage) {
   const { error } = await supabase.from("line_contacts").update({ stage }).eq("line_user_id", uid);
