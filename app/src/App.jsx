@@ -42,6 +42,7 @@ const Handover = React.lazy(() => import("./components/Handover"));
 const WebManage = React.lazy(() => import("./components/WebManage"));
 const Schedule = React.lazy(() => import("./components/Schedule"));
 const Chat = React.lazy(() => import("./components/Chat"));
+const Email = React.lazy(() => import("./components/Email"));
 const TeamChat = React.lazy(() => import("./components/TeamChat"));
 const TaskBoard = React.lazy(() => import("./components/TaskBoard"));
 const MyJobs = React.lazy(() => import("./components/MyJobs"));
@@ -70,6 +71,7 @@ const NAV = {
   weborders: { th: "คำสั่งซื้อจากเว็บ", en: "Web Orders", icon: "purchase" },
   website: { th: "จัดการเว็บไซต์", en: "Website", icon: "catalog" },
   chat: { th: "แชตลูกค้า", en: "Customer Chat", icon: "chat" },
+  email: { th: "อีเมล", en: "Email", icon: "chat" },
   teamchat: { th: "แชตทีม", en: "Team Chat", icon: "chat" },
   tasks: { th: "กระดานสั่งงาน", en: "Task Board", icon: "clipboard" },
   attendance: { th: "เข้างาน/ลา", en: "Attendance", icon: "calendar" },
@@ -105,7 +107,7 @@ const NAV = {
 //    เลี่ยง Emoji 11+ (🧱🧰🧮🧾🧼) และแบบ ZWJ (🧑‍🔧🧑‍💼) ที่ font เก่าขึ้นเป็นกล่องว่าง
 const NAV_EMOJI = {
   myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
-  pipeline: "🎯", reviews: "🌟", chat: "💚", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
+  pipeline: "🎯", reviews: "🌟", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
   subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", billing: "📑",
   receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", expenses: "💳",
   joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
@@ -116,7 +118,7 @@ const NAV_EMOJI = {
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
 const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
-  { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "customers", "pipeline", "followup", "reviews", "weborders", "website"] },
+  { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "customers", "pipeline", "followup", "reviews", "weborders", "website"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
@@ -127,9 +129,9 @@ const NAV_GROUPS = [
 
 const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่ายธุรการ", finance: "บัญชี/การเงิน", sales: "ฝ่ายขาย", stock: "ธุรการวัสดุ", lead_tech: "หัวหน้าช่าง", tech: "ช่าง" };
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
-const NAV_BADGE_SKIP = { chat: 1, teamchat: 1 };
+const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-12·อีเมลเฟส 2b: หลังบ้านดึง/ส่งเมล Gmail + ตารางกล่องเมล (รอ UI) v608";
+const BUILD = "2026-08-12·อีเมลเฟส 2c: หน้ากล่องอีเมลในแอป (อ่าน/ตอบ/มอบหมาย) info@amcair.net v609";
 
 function SetupNotice() {
   return (
@@ -591,6 +593,7 @@ export default function App() {
           onCreateBoq={(cid) => { setBoqNewCust(String(cid)); go("boq"); }}
           onCreateSurvey={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }}
           onCreateTask={(cid, name) => { setTaskPrefill({ customerId: cid ? String(cid) : null, name: name || null }); go("tasks"); }} />}
+        {view === "email" && <Email role={role} me={profile} />}
         {view === "teamchat" && <TeamChat focus={teamFocus} onFocusConsumed={() => setTeamFocus(null)} onJobClick={(jn) => openInNewTab("joborders", jn)} />}
         {view === "tasks" && <TaskBoard role={role} me={profile} prefill={taskPrefill} onPrefillConsumed={() => setTaskPrefill(null)} focus={taskFocus} onFocusConsumed={() => setTaskFocus(null)} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
