@@ -33,6 +33,58 @@ function HtmlMail({ html }) {
   return <iframe ref={ref} title="email" srcDoc={doc} sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" onLoad={resize} style={{ width: "100%", border: "none", minHeight: 90, background: "#fff", display: "block" }} />;
 }
 
+// เขียนอีเมลใหม่ (ถึงผู้รับที่ยังไม่เคยมีเธรด)
+function ComposeModal({ onClose, onSent, flash }) {
+  const [to, setTo] = React.useState("");
+  const [subject, setSubject] = React.useState("");
+  const [text, setText] = React.useState("");
+  const [atts, setAtts] = React.useState([]);
+  const [uploading, setUploading] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  async function pick(e) {
+    const files = [...(e.target.files || [])]; e.target.value = "";
+    if (!files.length) return;
+    setUploading(true);
+    for (const f of files) { try { const url = await uploadExpenseFile(f); setAtts((p) => [...p, { name: f.name, url, mimeType: f.type || "application/octet-stream" }]); } catch (ex) { flash("อัปโหลดไม่สำเร็จ: " + (ex.message || ex), true); } }
+    setUploading(false);
+  }
+  async function send() {
+    const toClean = to.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toClean)) return flash("กรอกอีเมลผู้รับให้ถูกต้อง", true);
+    if (!subject.trim() && !text.trim() && !atts.length) return flash("ใส่หัวข้อหรือข้อความก่อน", true);
+    setSending(true);
+    try { await sendEmail({ to: toClean, subject: subject.trim() || "(ไม่มีหัวข้อ)", text, attachments: atts }); flash("ส่งอีเมลแล้ว ✓"); onSent && onSent(); onClose(); }
+    catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    setSending(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 560, maxWidth: "94vw" }}>
+        <div className="modal-head"><div className="modal-title">✏️ เขียนอีเมลใหม่</div><button className="modal-x" onClick={onClose}>✕</button></div>
+        <div className="modal-body">
+          <label className="fld"><span>ถึง (อีเมลผู้รับ)</span><input className="inp" type="email" placeholder="name@example.com" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          <label className="fld"><span>หัวข้อ</span><input className="inp" value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
+          <label className="fld"><span>ข้อความ</span><textarea className="inp" rows={7} value={text} onChange={(e) => setText(e.target.value)} placeholder="ส่งในนาม AMC AIR <info@amcair.net>" /></label>
+          {atts.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {atts.map((a, i) => (
+                <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 8px", border: "1px solid var(--line)", borderRadius: 8, background: "var(--surface-2)" }}>
+                  {isImg(a.mimeType) ? <img src={a.url} alt="" style={{ width: 22, height: 22, objectFit: "cover", borderRadius: 4 }} /> : "📎"} {a.name.length > 24 ? a.name.slice(0, 24) + "…" : a.name}
+                  <button type="button" onClick={() => setAtts((p) => p.filter((_, j) => j !== i))} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-3)" }}>✕</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="modal-foot">
+          <label className={"btn-ghost" + (uploading ? " disabled" : "")} style={{ cursor: "pointer" }}>{uploading ? "⏳ อัปโหลด…" : "📎 แนบไฟล์"}<input type="file" multiple hidden disabled={uploading} onChange={pick} /></label>
+          <button className="btn-primary" disabled={sending || uploading} onClick={send}>{sending ? "กำลังส่ง…" : "ส่งอีเมล"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Email({ role, me }) {
   const [threads, setThreads] = React.useState(null);
   const [staff, setStaff] = React.useState([]);
@@ -52,6 +104,7 @@ export default function Email({ role, me }) {
   const [docPick, setDocPick] = React.useState(false);   // เปิดตัวเลือกเอกสารลูกค้า
   const [docs, setDocs] = React.useState(null);
   const [capJob, setCapJob] = React.useState(null);      // { type, no, label } → render เอกสาร → แปลง PDF → แนบ
+  const [composeOpen, setComposeOpen] = React.useState(false);
   const [toast, setToast] = React.useState(null);
   const endRef = React.useRef(null);
   const myId = me?.id;
@@ -144,7 +197,10 @@ export default function Email({ role, me }) {
       <div className="adm-head">
         <div><h1 className="page-title">อีเมล <span className="page-title-en">Email</span></h1>
           <p className="page-sub">{(threads || []).length} บทสนทนา · info@amcair.net</p></div>
-        <button className="btn-ghost" onClick={refresh} disabled={syncing}>{syncing ? "⏳ กำลังดึง…" : "🔄 รีเฟรช"}</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn-primary" onClick={() => setComposeOpen(true)}>✏️ เขียนอีเมลใหม่</button>
+          <button className="btn-ghost" onClick={refresh} disabled={syncing}>{syncing ? "⏳ กำลังดึง…" : "🔄 รีเฟรช"}</button>
+        </div>
       </div>
 
       <div className={"chat-wrap" + (sel ? " show-thread" : "")} style={{ position: "relative" }}>
@@ -295,6 +351,7 @@ export default function Email({ role, me }) {
           catch (e) { flash("เตรียมเอกสารไม่สำเร็จ: " + (e.message || e), true); }
           setCapJob(null);
         }} />}
+      {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} onSent={() => setTimeout(refresh, 1500)} flash={flash} />}
       {toast && <div className={"toast" + (toast.err ? " err" : "")} style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 50 }}>{toast.m}</div>}
     </div>
   );
