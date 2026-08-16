@@ -299,7 +299,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   // ---------- LIST ----------
   const invVat = (x) => !!quoteByNo[x.quote_no]?.vat;
   // งานที่วางบิลยังไม่ครบเต็มสัญญา (ยอดวางบิลรวม < ยอดทั้งใบเสนอราคา)
-  const notFullyBilled = (x) => { const q = quoteByNo[x.quote_no]; const grand = q?.grand || 0; return grand > 0 && round2((billed[x.quote_no] || 0)) < round2(grand) - 0.01; };
+  const notFullyBilled = (x) => { if (x.status === "cancelled") return false; const q = quoteByNo[x.quote_no]; const grand = q?.grand || 0; return grand > 0 && round2((billed[x.quote_no] || 0)) < round2(grand) - 0.01; };
   // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรอง
   const fl0 = list.filter((x) => inDateRange(x.issue_date, dateR)
     && (matchText(search, x.invoice_no, x.customerName, x.quote_no, x.createdByName, x.note, x.internal_note) || matchPhone(search, x.contactPhone)));
