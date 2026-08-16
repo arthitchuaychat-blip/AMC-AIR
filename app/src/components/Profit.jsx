@@ -12,6 +12,7 @@ const ST = { pending: "รอเริ่ม", in_progress: "กำลังท�
 export default function Profit({ onOpenJob }) {
   const [rows, setRows] = React.useState([]);
   const [orphans, setOrphans] = React.useState([]);
+  const [surveyCost, setSurveyCost] = React.useState({ count: 0, total: 0 }); // ค่าสำรวจหน้างาน (ค่าใช้จ่ายการขาย)
   const [open, setOpen] = React.useState({});       // quote_no → expanded breakdown
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState(null);
@@ -101,7 +102,11 @@ export default function Profit({ onOpenJob }) {
         })
         .filter((o) => o.net > 0.01 && (!o.job || !o.job.quote_no))
         .sort((a, b) => b.net - a.net);
-      setOrphans(orph);
+      // งานสำรวจหน้างาน = ต้นทุนหาลูกค้า (lead) ไม่ควรมีใบเสนอ → แยกเป็น "ค่าใช้จ่ายการขาย" ไม่ปนกล่องเตือน
+      const isSurvey = (o) => o.job?.job_type === "survey";
+      setOrphans(orph.filter((o) => !isSurvey(o)));
+      const svy = orph.filter(isSurvey);
+      setSurveyCost({ count: svy.length, total: svy.reduce((a, o) => a + o.net, 0) });
     } catch (e) { setErr(e.message || String(e)); }
     setLoading(false);
   }
@@ -159,6 +164,15 @@ export default function Profit({ onOpenJob }) {
             <div className="stat-card"><div className="stat-val" style={{ color: sumNet >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(sumNet)}</div><div className="stat-label">กำไรสุทธิรวม (ต้นทุนจริง)</div><div className="stat-sub">{withNet.length} งานที่มีต้นทุนจริง</div></div>
             <div className="stat-card"><div className="stat-val" style={{ color: "var(--up)" }}>{margin.toFixed(1)}%</div><div className="stat-label">มาร์จินสุทธิเฉลี่ย (จริง)</div></div>
           </div>
+
+          {surveyCost.count > 0 && (
+            <div className="card" style={{ padding: "11px 16px", marginBottom: 14, borderLeft: "3px solid #2563eb", background: "#eff6ff" }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#1d4ed8" }}>
+                🔍 ค่าสำรวจหน้างาน (ค่าใช้จ่ายการขาย): {surveyCost.count} งาน · {fmtBaht(surveyCost.total)}
+              </div>
+              <div className="page-sub" style={{ marginTop: 4, marginBottom: 0 }}>งานสำรวจยังไม่มีใบเสนอราคาเป็นเรื่องปกติ (เป็นต้นทุนหาลูกค้า) — ระบบ<b>ไม่นับเข้ากำไรรายใบ</b> แต่ถือเป็น<b>ค่าใช้จ่ายการขาย</b>ของบริษัท ไม่ต้องไปทำใบเสนอย้อนหลัง</div>
+            </div>
+          )}
 
           {orphans.length > 0 && (
             <div className="card" style={{ padding: "12px 16px", marginBottom: 14, borderLeft: "3px solid var(--down)" }}>
