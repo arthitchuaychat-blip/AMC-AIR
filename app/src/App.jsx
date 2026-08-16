@@ -1,6 +1,6 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
-import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams, unreadByModule, markModuleRead, poReceivedQty, getQuoteItems } from "./lib/api";
+import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams, unreadByModule, markModuleRead, poReceivedQty, getQuoteItems, countEmailUnread, syncEmails } from "./lib/api";
 import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
 import { NAV_MY, LangContext } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
@@ -131,7 +131,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-16·อีเมล: เขียนอีเมลใหม่ถึงผู้รับใหม่ได้ (To/หัวข้อ/ข้อความ/แนบไฟล์) v614";
+const BUILD = "2026-08-16·อีเมล: badge เลขค้างอ่านที่เมนู + กรองกล่องเข้า/ส่งออก + ดึงเมลอัตโนมัติ v615";
 
 function SetupNotice() {
   return (
@@ -218,6 +218,7 @@ export default function App() {
   const [teamFocus, setTeamFocus] = React.useState(null); // open this team-chat room (from a notification)
   const [taskPrefill, setTaskPrefill] = React.useState(null); // {customerId,name} → open Task Board create-form (จากแชต)
   const [chatUnread, setChatUnread] = React.useState(0); // LINE chats waiting to be answered → sidebar badge
+  const [emailUnread, setEmailUnread] = React.useState(0); // อีเมลค้างอ่าน → badge เมนูอีเมล
   const [teamUnread, setTeamUnread] = React.useState(0); // unread team-chat messages → sidebar badge
   const [notifCounts, setNotifCounts] = React.useState({}); // unread notifications per category → per-menu badges
   const [navCollapsed, setNavCollapsed] = React.useState(() => { // collapsed sidebar groups (remembered)
@@ -314,6 +315,20 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "line_contacts" }, soon)
       .subscribe();
     return () => { alive = false; clearInterval(iv); if (t) clearTimeout(t); supabase.removeChannel(ch); };
+  }, [profile, permsV]);
+
+  // sidebar badge: อีเมลค้างอ่าน — ดึงเมลใหม่ทุก 3 นาที (dedup เร็ว) + นับค้างอ่าน + realtime
+  React.useEffect(() => {
+    if (!profile || !can(profile.role, "email", "view")) { setEmailUnread(0); return; }
+    let alive = true;
+    const count = () => countEmailUnread().then((n) => { if (alive) setEmailUnread(n); }).catch(() => {});
+    const syncCount = () => syncEmails().catch(() => {}).then(count);
+    syncCount();
+    const iv = setInterval(syncCount, 180000);
+    const ch = supabase.channel("nav-email-unread")
+      .on("postgres_changes", { event: "*", schema: "public", table: "email_threads" }, count)
+      .subscribe();
+    return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
   }, [profile, permsV]);
 
   // sidebar badge: unread team-chat messages — live via realtime, polling fallback
@@ -505,7 +520,7 @@ export default function App() {
             )}
           </div>
           {(() => {
-            const badgeFor = (id) => id === "chat" ? chatUnread : id === "teamchat" ? teamUnread : (NAV_BADGE_SKIP[id] ? 0 : (notifCounts[id] || 0));
+            const badgeFor = (id) => id === "chat" ? chatUnread : id === "email" ? emailUnread : id === "teamchat" ? teamUnread : (NAV_BADGE_SKIP[id] ? 0 : (notifCounts[id] || 0));
             const renderItem = (id) => {
               const n = NAV[id];
               const primary = effLang === "my" ? (NAV_MY[id] || n.th) : n.th;
@@ -518,6 +533,7 @@ export default function App() {
                   <span className="nav-th">{primary}</span>
                   <span className="nav-en">{secondary}</span>
                   {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
+                  {id === "email" && emailUnread > 0 && <span className="nav-badge" title={`${emailUnread} อีเมลค้างอ่าน`}>{emailUnread > 99 ? "99+" : emailUnread}</span>}
                   {id === "teamchat" && teamUnread > 0 && <span className="nav-badge" title={`${teamUnread} ข้อความใหม่`}>{teamUnread > 99 ? "99+" : teamUnread}</span>}
                   {!NAV_BADGE_SKIP[id] && (notifCounts[id] || 0) > 0 && <span className="nav-badge" title="กิจกรรมใหม่ที่ยังไม่ได้อ่าน">{notifCounts[id] > 99 ? "99+" : notifCounts[id]}</span>}
                 </a>

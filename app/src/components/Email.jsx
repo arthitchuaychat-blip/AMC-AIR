@@ -92,6 +92,7 @@ export default function Email({ role, me }) {
   const [msgs, setMsgs] = React.useState(null);
   const [q, setQ] = React.useState("");
   const [ownerF, setOwnerF] = React.useState("all");
+  const [boxF, setBoxF] = React.useState("all"); // all | inbox (มีเมลลูกค้า) | sent (เราส่งออก)
   const [unreadOnly, setUnreadOnly] = React.useState(false);
   const [syncing, setSyncing] = React.useState(false);
   const [text, setText] = React.useState("");
@@ -189,6 +190,7 @@ export default function Email({ role, me }) {
 
   const shown = (threads || []).filter((t) =>
     (ownerF === "all" ? true : ownerF === "me" ? t.assigned_to === myId : ownerF === "none" ? !t.assigned_to : t.assigned_to === ownerF)
+    && (boxF === "all" ? true : boxF === "inbox" ? !!t.last_inbound_at : !t.last_inbound_at)
     && (!unreadOnly || t.unread)
     && (!q.trim() || [t.subject, t.from_name, t.from_email, t.snippet].some((v) => String(v || "").toLowerCase().includes(q.toLowerCase()))));
 
@@ -207,7 +209,7 @@ export default function Email({ role, me }) {
         {/* รายการอีเมล */}
         <div className="chat-list">
           <div className="chat-search"><input placeholder="ค้นหา หัวข้อ / ผู้ส่ง / ข้อความ" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <div className="chat-listfilter">
+          <div className="chat-listfilter" style={{ flexWrap: "wrap" }}>
             <select className="inp" value={ownerF} onChange={(e) => setOwnerF(e.target.value)} title="กรองผู้รับผิดชอบ">
               <option value="all">👥 ทุกผู้รับผิดชอบ</option>
               <option value="me">👤 ของฉัน</option>
@@ -215,6 +217,11 @@ export default function Email({ role, me }) {
               {ownerStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <button className={"chat-mine" + (unreadOnly ? " on" : "")} onClick={() => setUnreadOnly((v) => !v)} title="เฉพาะที่ยังไม่อ่าน">● ยังไม่อ่าน</button>
+          </div>
+          <div className="chat-listfilter" style={{ gap: 6 }}>
+            {[["all", "ทั้งหมด"], ["inbox", "📥 กล่องเข้า"], ["sent", "📤 ส่งออก"]].map(([v, l]) => (
+              <button key={v} className={"chat-mine" + (boxF === v ? " on" : "")} onClick={() => setBoxF(v)}>{l}</button>
+            ))}
           </div>
           <div className="chat-convos">
             {threads === null && <div className="empty" style={{ fontSize: 13 }}>กำลังโหลด…</div>}
