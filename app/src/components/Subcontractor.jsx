@@ -202,6 +202,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
   const [teamF, setTeamF] = React.useState("all");
   const [statusF, setStatusF] = React.useState("all");
   const [laborF, setLaborF] = React.useState("all");   // กรองตามสถานะการกรอกค่าแรง
+  const [q, setQ] = React.useState("");                // ค้นหา เลขใบงาน/ชื่อลูกค้า/ชื่องาน
   const [jobPreview, setJobPreview] = React.useState(null);
   const STATUS = JOB_ST;
   // ชิปเชื่อมโยงใบเสนอราคา/ใบงาน → พรีวิวแผงขวาก่อน · "เปิดหน้าเต็ม" เด้งไปเมนูจริงผ่าน onOpenDoc
@@ -211,7 +212,9 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
   const statusOpts = [["all", "ทุกสถานะ"], ...Object.entries(STATUS).filter(([k]) => jobs.some((j) => j.status === k)).map(([k, v]) => [k, v.t])];
   const LABOR_F = [["all", "ค่าแรง: ทั้งหมด"], ["none", "ยังไม่กรอกค่าแรง"], ["entered", "กรอกแล้ว · รอยืนยัน"], ["confirmed", "ยืนยันแล้ว · รอจ่าย"], ["partial", "จ่ายบางส่วน"], ["paid", "จ่ายครบแล้ว"]];
   const laborOpts = LABOR_F.filter(([v]) => v === "all" || jobs.some((j) => state(j).k === v));
-  const shown = jobs.filter((j) => (teamF === "all" || j.assigned_team === teamF) && (statusF === "all" || j.status === statusF) && (laborF === "all" || state(j).k === laborF));
+  const qc = q.trim().toLowerCase();
+  const shown = jobs.filter((j) => (teamF === "all" || j.assigned_team === teamF) && (statusF === "all" || j.status === statusF) && (laborF === "all" || state(j).k === laborF)
+    && (!qc || [j.job_no, j.customerName, j.title, j.quote_no].some((v) => String(v || "").toLowerCase().includes(qc))));
 
   async function confirm(j, val) {
     setBusy(j.job_no);
@@ -233,6 +236,11 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">ค่าแรงเหมาต่องาน</div><div className="sec-sub">กรอกค่าแรงรายบรรทัด (ดีฟอลต์ = % ของราคาขาย) → เมื่องาน “เสร็จ” กด “ยืนยันค่าแรง” เพื่อส่งไปหน้ารอจ่าย</div></div></div>
       <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
+        <div className="cat-search" style={{ flex: "1 1 220px", minWidth: 180 }}>
+          <UIcon name="search" size={16} color="var(--ink-3)" />
+          <input placeholder="ค้นหา เลขใบงาน / ชื่อลูกค้า / ชื่องาน" value={q} onChange={(e) => setQ(e.target.value)} />
+          {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
+        </div>
         <select className="inp" style={{ width: "auto", flex: "none" }} value={teamF} onChange={(e) => setTeamF(e.target.value)}>
           <option value="all">ทุกทีมช่างซัพ</option>
           {teamOpts.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
