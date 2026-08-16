@@ -60,6 +60,27 @@ const parseAddr = (raw) => {
   return { name: "", email: s.trim().toLowerCase() };
 };
 
+// อัปโหลดไฟล์เข้า Supabase Storage (bucket photos, public) → คืน public URL
+export async function uploadToStorage(path, buffer, mime) {
+  const r = await fetch(`${SB()}/storage/v1/object/photos/${path}`, {
+    method: "POST", headers: { apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": mime || "application/octet-stream", "x-upsert": "true" }, body: buffer,
+  });
+  if (!r.ok) throw new Error(`storage ${r.status} ${await r.text()}`);
+  return `${SB()}/storage/v1/object/public/photos/${path}`;
+}
+
+// เก็บ metadata ไฟล์แนบจาก payload (ยังไม่โหลดตัวไฟล์)
+export function collectAttachments(payload) {
+  const out = [];
+  const walk = (p) => {
+    if (!p) return;
+    if (p.filename && p.body?.attachmentId) out.push({ filename: p.filename, mimeType: p.mimeType || "application/octet-stream", size: p.body.size || 0, attachmentId: p.body.attachmentId });
+    (p.parts || []).forEach(walk);
+  };
+  walk(payload);
+  return out;
+}
+
 export function parseMessage(msg, selfEmail) {
   const headers = {};
   (msg.payload?.headers || []).forEach((h) => { headers[h.name.toLowerCase()] = h.value; });
@@ -78,6 +99,7 @@ export function parseMessage(msg, selfEmail) {
     subject: headers["subject"] || "(ไม่มีหัวข้อ)",
     snippet: msg.snippet || "",
     body_text: extractBody(msg.payload),
+    attachments: collectAttachments(msg.payload),
     message_id_header: headers["message-id"] || null,
     created_at: dateMs ? new Date(dateMs).toISOString() : null,
     // คู่สนทนาภายนอก (ลูกค้า) = ฝั่งที่ไม่ใช่ตัวเรา

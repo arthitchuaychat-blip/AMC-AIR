@@ -1,6 +1,6 @@
 // ดึงอีเมลล่าสุดของ info@amcair.net เข้ามา mirror ใน Supabase (เรียกตอนเปิดหน้าอีเมล/กดรีเฟรช)
 // สิทธิ์: เฉพาะทีมหลังบ้าน (ตรวจ JWT) · โหมดตรวจ: GET ?debug=<CRON_SECRET> คืน JSON ละเอียด
-import { SB, KEY, sbH, sbGet, gmailAccessToken, gmail, parseMessage } from "./_gmail.js";
+import { SB, KEY, sbH, sbGet, gmailAccessToken, gmail, parseMessage, uploadToStorage } from "./_gmail.js";
 
 const OFFICE = ["admin", "exec", "finance", "hr", "sales", "field_sales", "graphic"];
 
@@ -45,11 +45,27 @@ export default async function handler(req, res) {
       await fetch(`${SB()}/rest/v1/email_threads`, { method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(stubs) });
     }
 
+    // 1.5) โหลดไฟล์แนบของเมลเข้า → เก็บลง storage (photos/email/<msgId>/<file>)
+    let attErr = null;
+    for (const m of parsed) {
+      m.stored = [];
+      for (const a of (m.attachments || [])) {
+        try {
+          if ((a.size || 0) > 12 * 1024 * 1024) continue; // ข้ามไฟล์ใหญ่เกิน 12MB
+          const att = await gmail(`messages/${m.id}/attachments/${a.attachmentId}`, token);
+          const buf = Buffer.from(String(att.data || "").replace(/-/g, "+").replace(/_/g, "/"), "base64");
+          const safe = (a.filename || "file").replace(/[^\w.\-]+/g, "_").slice(0, 80);
+          const url = await uploadToStorage(`email/${encodeURIComponent(m.id)}/${encodeURIComponent(safe)}`, buf, a.mimeType);
+          m.stored.push({ name: a.filename || safe, url, mimeType: a.mimeType, size: a.size });
+        } catch (e) { if (!attErr) attErr = String(e.message || e); }
+      }
+    }
+
     // 2) ใส่ข้อความ (ลูก)
     if (parsed.length) {
       const rows = parsed.map((m) => ({
         id: m.id, thread_id: m.thread_id, direction: m.direction, from_email: m.from_email, from_name: m.from_name,
-        to_email: m.to_email, subject: m.subject, snippet: m.snippet, body_text: m.body_text, message_id_header: m.message_id_header, created_at: m.created_at,
+        to_email: m.to_email, subject: m.subject, snippet: m.snippet, body_text: m.body_text, message_id_header: m.message_id_header, created_at: m.created_at, attachments: m.stored || [],
       }));
       const ins = await fetch(`${SB()}/rest/v1/email_messages`, { method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" }, body: JSON.stringify(rows) });
       if (!ins.ok) storeErr = `messages ${ins.status}: ${(await ins.text()).slice(0, 300)}`;
@@ -86,7 +102,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true, listCount: ids.length, existingCount: existing.size, new: parsed.length, threads: affected.length,
-      parseErr, storeErr, self,
+      parseErr, storeErr, attErr, self,
       sample: debug ? parsed.slice(0, 3).map((p) => ({ subject: p.subject, from: p.from_email, dir: p.direction, hasBody: !!p.body_text })) : undefined,
     });
   } catch (e) {

@@ -4338,7 +4338,7 @@ export async function listEmailThreads() {
 }
 export async function listEmailMessages(threadId) {
   const { data, error } = await supabase.from("email_messages")
-    .select("id,direction,from_email,from_name,to_email,subject,body_text,created_at,sent_by")
+    .select("id,direction,from_email,from_name,to_email,subject,body_text,attachments,created_at,sent_by")
     .eq("thread_id", threadId).order("created_at", { ascending: true });
   if (error) throw error;
   return data || [];
@@ -4351,10 +4351,10 @@ export async function syncEmails() {
   if (!r.ok) throw new Error(j.error || "ดึงอีเมลไม่สำเร็จ");
   return j;
 }
-export async function sendEmail({ threadId, to, subject, text }) {
+export async function sendEmail({ threadId, to, subject, text, attachments }) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("ยังไม่ได้เข้าสู่ระบบ");
-  const r = await fetch("/api/email-send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ threadId, to, subject, text }) });
+  const r = await fetch("/api/email-send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ threadId, to, subject, text, attachments }) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw new Error(j.error || "ส่งอีเมลไม่สำเร็จ");
   return j;
