@@ -1,6 +1,11 @@
 import React from "react";
-import { listEmailThreads, listEmailMessages, syncEmails, sendEmail, markEmailRead, setEmailOwner, listStaff, uploadExpenseFile } from "../lib/api";
+import { listEmailThreads, listEmailMessages, syncEmails, sendEmail, markEmailRead, setEmailOwner, linkEmailCustomer, listStaff, uploadExpenseFile, listCustomers, listCustomerDocs } from "../lib/api";
 import { can } from "../lib/permissions";
+import DocCapture from "./DocCapture";
+import { captureDocForEmail } from "../lib/sendDoc";
+
+const DOC_LABEL = { quote: "ใบเสนอราคา", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", handover: "ใบส่งมอบงาน" };
+const DOC_SENDABLE = ["quote", "invoice", "receipt", "handover"];
 
 const fmtWhen = (iso) => {
   if (!iso) return "";
@@ -41,6 +46,12 @@ export default function Email({ role, me }) {
   const [sending, setSending] = React.useState(false);
   const [pend, setPend] = React.useState([]);        // ไฟล์แนบที่เตรียมส่ง [{name,url,mimeType}]
   const [uploading, setUploading] = React.useState(false);
+  const [customers, setCustomers] = React.useState([]);
+  const [custPick, setCustPick] = React.useState(false); // เปิดกล่องค้นหาลูกค้าเพื่อผูก
+  const [custQ, setCustQ] = React.useState("");
+  const [docPick, setDocPick] = React.useState(false);   // เปิดตัวเลือกเอกสารลูกค้า
+  const [docs, setDocs] = React.useState(null);
+  const [capJob, setCapJob] = React.useState(null);      // { type, no, label } → render เอกสาร → แปลง PDF → แนบ
   const [toast, setToast] = React.useState(null);
   const endRef = React.useRef(null);
   const myId = me?.id;
@@ -48,6 +59,11 @@ export default function Email({ role, me }) {
 
   const staffMap = React.useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
   const ownerStaff = React.useMemo(() => staff.filter((s) => can(s.role, "email", "view")), [staff]);
+  const custMap = React.useMemo(() => Object.fromEntries(customers.map((c) => [c.id, c.name])), [customers]);
+  const custMatches = React.useMemo(() => {
+    const q2 = custQ.trim().toLowerCase();
+    return (q2 ? customers.filter((c) => [c.name, c.phone].some((v) => String(v || "").toLowerCase().includes(q2))) : customers).slice(0, 40);
+  }, [customers, custQ]);
 
   async function load() { try { setThreads(await listEmailThreads()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setThreads([]); } }
   async function refresh() {
@@ -56,7 +72,27 @@ export default function Email({ role, me }) {
     catch (e) { flash("ดึงอีเมลไม่สำเร็จ: " + (e.message || e), true); }
     setSyncing(false);
   }
-  React.useEffect(() => { listStaff().then(setStaff).catch(() => {}); load(); refresh(); /* eslint-disable-next-line */ }, []);
+  React.useEffect(() => { listStaff().then(setStaff).catch(() => {}); listCustomers().then(setCustomers).catch(() => {}); load(); refresh(); /* eslint-disable-next-line */ }, []);
+
+  async function linkCust(cid) {
+    if (!sel) return;
+    try {
+      await linkEmailCustomer(sel.thread_id, cid || null);
+      setThreads((ts) => (ts || []).map((x) => x.thread_id === sel.thread_id ? { ...x, customer_id: cid || null } : x));
+      setSel((s) => ({ ...s, customer_id: cid || null }));
+      setCustPick(false); setCustQ("");
+    } catch { flash("ผูกลูกค้าไม่สำเร็จ", true); }
+  }
+  async function openDocs() {
+    if (!sel?.customer_id) return;
+    setDocPick(true); setDocs(null);
+    try { setDocs((await listCustomerDocs(sel.customer_id)).filter((d) => DOC_SENDABLE.includes(d.type))); }
+    catch { setDocs([]); flash("โหลดเอกสารไม่สำเร็จ", true); }
+  }
+  function attachDoc(d) {
+    setDocPick(false);
+    setCapJob({ type: d.type, no: d.no, label: `${DOC_LABEL[d.type] || "เอกสาร"} ${d.no}` });
+  }
 
   async function onPick(e) {
     const files = [...(e.target.files || [])]; e.target.value = "";
@@ -70,7 +106,7 @@ export default function Email({ role, me }) {
   }
 
   async function open(t) {
-    setSel(t); setMsgs(null); setText(""); setPend([]);
+    setSel(t); setMsgs(null); setText(""); setPend([]); setDocPick(false); setCustPick(false); setCustQ("");
     try { setMsgs(await listEmailMessages(t.thread_id)); } catch { setMsgs([]); }
     if (t.unread) { markEmailRead(t.thread_id).catch(() => {}); setThreads((ts) => (ts || []).map((x) => x.thread_id === t.thread_id ? { ...x, unread: false } : x)); }
   }
@@ -160,6 +196,26 @@ export default function Email({ role, me }) {
                 </select>
               </div>
 
+              {/* ผูกลูกค้า (เหมือนแชต LINE) */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderBottom: "1px solid var(--line-2)", position: "relative", flexWrap: "wrap" }}>
+                {sel.customer_id ? (
+                  <span className="chat-link-chip" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>🔗 {custMap[sel.customer_id] || "ลูกค้า"}
+                    <button type="button" onClick={() => linkCust(null)} title="ยกเลิกผูก" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-3)" }}>✕</button>
+                  </span>
+                ) : (
+                  <button className="btn-ghost sm" onClick={() => setCustPick((v) => !v)}>🔗 ผูกลูกค้า</button>
+                )}
+                {custPick && !sel.customer_id && (
+                  <div style={{ position: "absolute", top: "100%", left: 12, zIndex: 20, width: 300, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "var(--shadow-lg)", padding: 8 }}>
+                    <input className="inp" autoFocus placeholder="ค้นหาลูกค้า (ชื่อ/เบอร์)" value={custQ} onChange={(e) => setCustQ(e.target.value)} style={{ width: "100%", marginBottom: 6 }} />
+                    <div style={{ maxHeight: 240, overflowY: "auto" }}>
+                      {custMatches.map((c) => <button key={c.id} className="btn-ghost sm" style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 2 }} onClick={() => linkCust(c.id)}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</button>)}
+                      {!custMatches.length && <div className="jo-dim" style={{ fontSize: 12, padding: 6 }}>ไม่พบลูกค้า</div>}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="chat-msgs">
                 {msgs === null && <div className="empty" style={{ fontSize: 13 }}>กำลังโหลด…</div>}
                 {(msgs || []).map((m) => {
@@ -203,10 +259,25 @@ export default function Email({ role, me }) {
                   ))}
                 </div>
               )}
-              <div className="chat-compose">
+              <div className="chat-compose" style={{ position: "relative" }}>
                 <label className={"btn-ghost" + (uploading ? " disabled" : "")} style={{ display: "inline-flex", alignItems: "center", cursor: "pointer", padding: "0 12px", alignSelf: "stretch" }} title="แนบไฟล์/รูป">
                   {uploading ? "⏳" : "📎"}<input type="file" multiple hidden disabled={uploading} onChange={onPick} />
                 </label>
+                <button type="button" className="btn-ghost" disabled={!sel.customer_id || !!capJob} style={{ padding: "0 12px", alignSelf: "stretch" }} title={sel.customer_id ? "แนบเอกสารของลูกค้า (PDF)" : "ต้องผูกลูกค้าก่อน"} onClick={openDocs}>{capJob ? "⏳" : "📄"}</button>
+                {docPick && (
+                  <div style={{ position: "absolute", bottom: "100%", left: 8, marginBottom: 6, zIndex: 20, width: 340, maxWidth: "90%", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "var(--shadow-lg)", padding: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><b style={{ fontSize: 13 }}>📄 แนบเอกสารลูกค้า</b><button className="btn-ghost sm" onClick={() => setDocPick(false)}>✕</button></div>
+                    <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                      {docs === null && <div className="jo-dim" style={{ fontSize: 12, padding: 6 }}>กำลังโหลด…</div>}
+                      {docs && !docs.length && <div className="jo-dim" style={{ fontSize: 12, padding: 6 }}>ลูกค้านี้ยังไม่มีเอกสาร</div>}
+                      {(docs || []).map((d) => (
+                        <button key={d.type + d.no} className="btn-ghost sm" style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 2 }} onClick={() => attachDoc(d)}>
+                          {DOC_LABEL[d.type] || d.type} <b style={{ fontFamily: "var(--mono)" }}>{d.no}</b>{d.title ? ` · ${d.title}` : ""}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <textarea className="inp chat-input" rows={4} value={text} placeholder={sending ? "กำลังส่ง…" : `ตอบกลับ ${sel.from_email}… (ส่งในนาม AMC AIR <info@amcair.net>)`}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } }} />
@@ -216,6 +287,14 @@ export default function Email({ role, me }) {
           )}
         </div>
       </div>
+      {/* แปลงเอกสาร → PDF แล้วแนบ (render นอกจอ) */}
+      {capJob && <DocCapture type={capJob.type} no={capJob.no}
+        onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
+        onReady={async (node) => {
+          try { const atts = await captureDocForEmail(node, "pdf", capJob.label); setPend((p) => [...p, ...atts]); flash("แนบเอกสารแล้ว — ตรวจแล้วกดส่ง ✓"); }
+          catch (e) { flash("เตรียมเอกสารไม่สำเร็จ: " + (e.message || e), true); }
+          setCapJob(null);
+        }} />}
       {toast && <div className={"toast" + (toast.err ? " err" : "")} style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 50 }}>{toast.m}</div>}
     </div>
   );

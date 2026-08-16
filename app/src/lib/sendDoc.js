@@ -74,6 +74,23 @@ export async function captureDocToStage(node, mode, label) {
   return { attachments: [], text: `📄 ${label}\n${url}` };
 }
 
+// capture `node` → คืน "ไฟล์แนบจริง" สำหรับอีเมล (PDF หรือ PNG) — [{name, url, mimeType}]
+export async function captureDocForEmail(node, mode, label) {
+  const printArea = node.querySelector(".print-area") || node;
+  const pages = await renderPages(printArea.outerHTML);
+  if (!pages.length) throw new Error("สร้างเอกสารไม่สำเร็จ");
+  if (mode === "image") {
+    const out = [];
+    for (let i = 0; i < pages.length; i++) {
+      const url = await uploadDocFile(dataUrlToBlob(pages[i].dataUrl), "png", "image/png");
+      out.push({ name: `${label}${pages.length > 1 ? ` (${i + 1})` : ""}.png`, url, mimeType: "image/png" });
+    }
+    return out;
+  }
+  const url = await uploadDocFile(pagesToPdfBlob(pages), "pdf", "application/pdf");
+  return [{ name: `${label}.pdf`, url, mimeType: "application/pdf" }];
+}
+
 // capture `node` (.print-area or its wrapper), then send to the customer on LINE — mode: "image" | "pdf"
 export async function sendDocFromNode(node, lineUserId, mode, label) {
   const printArea = node.querySelector(".print-area") || node;
