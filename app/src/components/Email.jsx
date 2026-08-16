@@ -12,6 +12,12 @@ const fmtWhen = (iso) => {
 const fmtFull = (iso) => (iso ? new Date(iso).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
 const initials = (s) => (String(s || "?").trim()[0] || "?").toUpperCase();
 const isImg = (mt) => String(mt || "").startsWith("image/");
+// ทำ URL ในข้อความให้คลิกได้ (เหมือนหน้าแชตลูกค้า) — http(s) และ www.
+const linkify = (text) => String(text || "").split(/(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+)/gi).map((p, i) => {
+  if (/^https?:\/\//i.test(p)) return <a key={i} href={p} target="_blank" rel="noreferrer" className="chat-link">{p}</a>;
+  if (/^www\./i.test(p)) return <a key={i} href={"https://" + p} target="_blank" rel="noreferrer" className="chat-link">{p}</a>;
+  return p;
+});
 
 export default function Email({ role, me }) {
   const [threads, setThreads] = React.useState(null);
@@ -152,7 +158,7 @@ export default function Email({ role, me }) {
                   return (
                     <div key={m.id} className={"chat-bubble " + (out ? "out" : "in")} style={{ maxWidth: "82%" }}>
                       <span className="chat-sender">{out ? (m.sent_by && staffMap[m.sent_by] ? staffMap[m.sent_by] : "AMC AIR") : (m.from_name || m.from_email)}</span>
-                      {(m.body_text || !(m.attachments || []).length) && <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13.5, lineHeight: 1.6 }}>{m.body_text || "(ไม่มีเนื้อหา)"}</div>}
+                      {(m.body_text || !(m.attachments || []).length) && <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13.5, lineHeight: 1.6 }}>{m.body_text ? linkify(m.body_text) : "(ไม่มีเนื้อหา)"}</div>}
                       {(m.attachments || []).length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                           {m.attachments.map((a, i) => isImg(a.mimeType)
