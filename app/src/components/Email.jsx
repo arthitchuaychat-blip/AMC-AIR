@@ -218,8 +218,8 @@ export default function Email({ role, me }) {
             </select>
             <button className={"chat-mine" + (unreadOnly ? " on" : "")} onClick={() => setUnreadOnly((v) => !v)} title="เฉพาะที่ยังไม่อ่าน">● ยังไม่อ่าน</button>
           </div>
-          <div className="chat-listfilter" style={{ gap: 6 }}>
-            {[["all", "ทั้งหมด"], ["inbox", "📥 กล่องเข้า"], ["sent", "📤 ส่งออก"], ["spam", "⚠️ สแปม"]].map(([v, l]) => (
+          <div className="chat-listfilter" style={{ gap: 6, flexWrap: "wrap", justifyContent: "flex-start" }}>
+            {[["all", "ทั้งหมด"], ["inbox", "📥 เข้า"], ["sent", "📤 ออก"], ["spam", "⚠️ สแปม"]].map(([v, l]) => (
               <button key={v} className={"chat-mine" + (boxF === v ? " on" : "")} onClick={() => setBoxF(v)}>{l}</button>
             ))}
           </div>
