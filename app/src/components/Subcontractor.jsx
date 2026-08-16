@@ -296,7 +296,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
         const jst = st2[jp.status] || { t: jp.status, c: "b-grey" }; const team = teamById[jp.assigned_team];
         return (
           <div className="confirm-overlay" onMouseDown={() => setJobPreview(null)}>
-            <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 480, textAlign: "left", padding: "20px 22px", gap: 0 }}>
+            <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 680, width: "94vw", textAlign: "left", padding: "20px 24px", gap: 0, maxHeight: "88vh", overflowY: "auto" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontWeight: 700, fontSize: 15 }}>{jp.job_no}</span>
@@ -689,7 +689,7 @@ function PayTeam({ team, list, allJobs = [], quoteBy, flash, onCreated }) {
         const jst = ST[jp.status] || { t: jp.status, c: "b-grey" };
         return (
           <div className="confirm-overlay" onMouseDown={() => setJobPreview(null)}>
-            <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 480, textAlign: "left", padding: "20px 22px", gap: 0 }}>
+            <div className="confirm-box" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 680, width: "94vw", textAlign: "left", padding: "20px 24px", gap: 0, maxHeight: "88vh", overflowY: "auto" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontWeight: 700, fontSize: 15 }}>{jp.job_no}</span>
