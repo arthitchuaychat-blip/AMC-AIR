@@ -228,7 +228,9 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
     if (!(j.labor_total > 0)) return { k: "none", t: "ยังไม่กรอกค่าแรง", c: "b-grey" };
     if (j.labor_paid) return { k: "paid", t: "จ่ายครบแล้ว", c: "b-green" };
     if ((Number(j.labor_paid_amt) || 0) > 0) return { k: "partial", t: "จ่ายบางส่วน", c: "b-amber" };
-    if (j.labor_confirmed) return { k: "confirmed", t: "ยืนยันแล้ว · รอจ่าย", c: "b-blue" };
+    if (j.labor_confirmed) return j.status === "done"
+      ? { k: "confirmed", t: "ยืนยันแล้ว · รอจ่าย", c: "b-blue" }
+      : { k: "confirmed", t: "ยืนยันแล้ว · รอปิดงานครบทุกรอบ", c: "b-amber" };
     return { k: "entered", t: "กรอกแล้ว · รอยืนยัน", c: "b-orange" };
   }
 
@@ -423,7 +425,8 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
   const [busy, setBusy] = React.useState(false);
   const canEditPayout = EDIT_PAYOUT_ROLES.includes(role);
   // confirmed + still owing
-  const payable = jobs.filter((j) => j.labor_confirmed && remaining(j) > 0.01);
+  // จ่ายช่างได้เฉพาะงานที่ "เสร็จปิดงาน" ครบทุกรอบแล้ว — งานที่ยังมีรอบค้าง (รอนัดหมายเพิ่ม ฯลฯ) ยังไม่โผล่
+  const payable = jobs.filter((j) => j.labor_confirmed && j.status === "done" && remaining(j) > 0.01);
   const byTeam = {}; payable.forEach((j) => { (byTeam[j.assigned_team] = byTeam[j.assigned_team] || []).push(j); });
   const teamName = (id) => teamById[id]?.name || id;
   const jobByNo = React.useMemo(() => Object.fromEntries(jobs.map((j) => [j.job_no, j])), [jobs]);
