@@ -37,6 +37,15 @@ export default async function handler(req, res) {
     }
 
     let storeErr = null;
+    const affected = [...new Set(parsed.map((m) => m.thread_id))];
+
+    // 1) สร้าง "เธรดแม่" ก่อน (แค่ thread_id) — กัน FK ล้ม (email_messages อ้าง email_threads)
+    if (affected.length) {
+      const stubs = affected.map((tid) => ({ thread_id: tid }));
+      await fetch(`${SB()}/rest/v1/email_threads`, { method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(stubs) });
+    }
+
+    // 2) ใส่ข้อความ (ลูก)
     if (parsed.length) {
       const rows = parsed.map((m) => ({
         id: m.id, thread_id: m.thread_id, direction: m.direction, from_email: m.from_email, from_name: m.from_name,
@@ -46,8 +55,7 @@ export default async function handler(req, res) {
       if (!ins.ok) storeErr = `messages ${ins.status}: ${(await ins.text()).slice(0, 300)}`;
     }
 
-    // ── อัปเดตเธรดที่ได้รับผลกระทบ (คงค่า assigned_to/customer_id/last_read_at เดิม) ──
-    const affected = [...new Set(parsed.map((m) => m.thread_id))];
+    // 3) อัปเดตสรุปเธรด (คงค่า assigned_to/customer_id/last_read_at เดิม)
     for (const tid of affected) {
       const msgs = await sbGet(`email_messages?thread_id=eq.${encodeURIComponent(tid)}&select=direction,from_email,from_name,to_email,subject,snippet,created_at&order=created_at.asc`);
       if (!msgs.length) continue;
