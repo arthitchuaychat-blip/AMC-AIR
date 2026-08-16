@@ -1,5 +1,5 @@
 import React from "react";
-import { listJobOrders, listTeams } from "../lib/api";
+import { listJobOrders, listTeams, listCalendarEvents, saveCalendarEvent, deleteCalendarEvent } from "../lib/api";
 import { UIcon } from "../icons";
 import { BUCKETS, slotDef, slotBucket, jobDays, ymd, parseYmd, thDayMon, thDow, thMonthYear, scheduleLabel, jobTypeDef, JOB_STATUSES, jobStatusDef } from "../lib/schedule";
 import JobTimeline, { Linkify } from "./JobTimeline";
@@ -27,13 +27,20 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
   const [loading, setLoading] = React.useState(true);
   const [detail, setDetail] = React.useState(null); // job/visit entry shown in the popup
   const [gcal, setGcal] = React.useState(false); // Google Calendar subscribe panel
+  const [events, setEvents] = React.useState([]);   // นัดหมายอิสระ (calendar_events)
+  const [evtEdit, setEvtEdit] = React.useState(null); // { ...event } หรือ {} (สร้างใหม่) → เปิด modal
 
   React.useEffect(() => { (async () => {
     setLoading(true);
-    try { const [j, t] = await Promise.all([listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: role === "lead_tech" ? null : team } : {}), listTeams()]); setJobs(j); setTeams(t); }
+    try {
+      const [j, t, ev] = await Promise.all([listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: role === "lead_tech" ? null : team } : {}), listTeams(), listCalendarEvents().catch(() => [])]);
+      setJobs(j); setTeams(t); setEvents(ev);
+    }
     catch (e) { console.error(e); }
     setLoading(false);
   })(); }, []);
+  async function reloadEvents() { try { setEvents(await listCalendarEvents()); } catch { /* noop */ } }
+  const openEntry = (j) => { if (j._event) setEvtEdit(j._event); else setDetail(j); };
 
   const teamColor = (id) => teams.find((t) => t.id === id)?.color || "#94a3b8";
   const teamName = (id) => teams.find((t) => t.id === id)?.name?.replace("Team ", "") || "—";
@@ -53,13 +60,24 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
         out.push({ ...j, _key: j.job_no + "#" + (v.id ?? "x"), assigned_team: v.assigned_team, scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot, status: v.status });
       });
     });
+    // นัดหมายอิสระ (ไม่ผูกใบงาน) — เข้า flow เดียวกัน
+    events.forEach((ev) => {
+      if (!ev.start_at) return;
+      const sd = ymd(new Date(ev.start_at));
+      const ed = ev.end_at ? ymd(new Date(ev.end_at)) : null;
+      out.push({
+        _key: "evt#" + ev.id, _event: ev, job_no: null, job_type: "other", status: "scheduled",
+        assigned_team: ev.team || null, scheduled_at: ev.start_at, end_date: (ed && ed > sd) ? ed : null,
+        slot: ev.slot || "custom", customerName: "📌 " + (ev.title || "นัดหมาย"), title: null,
+      });
+    });
     return out;
-  }, [jobs]);
+  }, [jobs, events]);
 
   // index visit-entries by day (yyyy-mm-dd), respecting the team filter
   const byDay = React.useMemo(() => {
     const m = {};
-    entries.filter((e) => (myTeamOnly ? e.assigned_team === team : (teamF === "all" || e.assigned_team === teamF)) && matchStatus(e.status, statusF))
+    entries.filter((e) => e._event || ((myTeamOnly ? e.assigned_team === team : (teamF === "all" || e.assigned_team === teamF)) && matchStatus(e.status, statusF)))
       .forEach((e) => { jobDays(e).forEach((d) => { (m[d] = m[d] || []).push(e); }); });
     return m;
   }, [entries, teamF, statusF, myTeamOnly, team]);
@@ -100,6 +118,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
           <div className="seg">{VIEWS.map(([v, l]) => (
             <button key={v} className={"seg-btn" + (view === v ? " on" : "")} onClick={() => setView(v)}>{l}</button>
           ))}</div>
+          {canEdit && <button className="btn-primary sm" onClick={() => setEvtEdit({ _new: true, start_ymd: ymd(anchor) })} title="สร้างนัดหมายอิสระ (ไม่ต้องผูกใบงาน)">📌 นัดหมาย</button>}
           {canEdit && <button className="btn-ghost sm" onClick={() => setGcal(true)} title="ซิงค์ตารางงานเข้า Google Calendar"><UIcon name="calendar" size={15} /> Google ปฏิทิน</button>}
         </div>
       </div>
@@ -137,6 +156,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
       )}
 
       {detail && <JobDetailModal job={detail} onClose={() => setDetail(null)} />}
+      {evtEdit && <EventModal ev={evtEdit} teams={teams} canEdit={canEdit} onClose={() => setEvtEdit(null)} onSaved={() => { setEvtEdit(null); reloadEvents(); }} />}
       {gcal && <GoogleCalModal teams={teams} currentTeam={teamF !== "all" ? teams.find((t) => t.id === teamF) : null} onClose={() => setGcal(false)} />}
     </div>
   );
@@ -215,7 +235,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
                     ? new Date(j.scheduled_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น."
                     : (sd ? (sd.time || sd.th) : "");
                   return (
-                    <button className={"agenda-row" + (j.status === "done" ? " sc-done" : "")} key={j._key} onClick={() => setDetail(j)} style={{ borderLeftColor: c }}>
+                    <button className={"agenda-row" + (j.status === "done" ? " sc-done" : "")} key={j._key} onClick={() => openEntry(j)} style={{ borderLeftColor: c }}>
                       <span className="agenda-slot">{slotTxt}</span>
                       <span className="agenda-meta"><span style={{ width: 8, height: 8, borderRadius: 9, background: c, display: "inline-block", marginRight: 5 }} />{teamName(j.assigned_team)} · <b style={{ color: c }}>{STATUS[j.status] || ""}</b></span>
                       <span className="agenda-main">{jobTypeDef(j.job_type)[2]} {[j.customerName, j.title].filter(Boolean).join(" · ") || "งาน"}</span>
@@ -236,7 +256,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
     const full = slotBucket(j) === "full";
     const multi = jobDays(j).length > 1;
     return (
-      <button className={"sched-chip" + (big ? " big" : "") + (full ? " full" : "") + (j.status === "done" ? " sc-done" : "")} onClick={() => setDetail(j)}
+      <button className={"sched-chip" + (big ? " big" : "") + (full ? " full" : "") + (j.status === "done" ? " sc-done" : "")} onClick={() => openEntry(j)}
         style={{ background: c, borderColor: c }} title={`${j.job_no} · ${scheduleLabel(j)} · ${STATUS[j.status] || ""}`}>
         <span className="sc-team">{jobTypeDef(j.job_type)[2]} {teamName(j.assigned_team)}{j.status === "in_progress" ? " ●" : j.status === "done" ? " ✓" : j.status === "awaiting_approval" ? " ⏳" : j.status === "reschedule" ? " ↻" : ""}</span>
         <span className="sc-title">{[j.customerName, j.title].filter(Boolean).join(" · ") || "งาน"}</span>
@@ -337,7 +357,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
                   {list.slice(0, 3).map((j) => (
                     <span key={j._key} className="sm-job" style={{ background: teamColor(j.assigned_team) }}
                       title={`${teamName(j.assigned_team)} · ${j.title || j.customerName || "งาน"}`}
-                      onClick={(e) => { e.stopPropagation(); setDetail(j); }}>
+                      onClick={(e) => { e.stopPropagation(); openEntry(j); }}>
                       {jobTypeDef(j.job_type)[2]} {[j.customerName, j.title].filter(Boolean).join(" · ") || teamName(j.assigned_team)}
                     </span>
                   ))}
@@ -403,6 +423,65 @@ function GoogleCalModal({ teams, currentTeam, onClose }) {
           <p className="page-sub" style={{ marginTop: 12 }}>* เป็นการ “ติดตาม” แบบอ่านอย่างเดียว — แก้ใน Google จะไม่ย้อนกลับมาที่ระบบ · Google รีเฟรชฟีดเองทุก ~ไม่กี่ชั่วโมง</p>
         </div>
         <div className="modal-foot"><button className="btn-primary" onClick={onClose}>เสร็จ</button></div>
+      </div>
+    </div>
+  );
+}
+
+// ── นัดหมายอิสระ (ไม่ผูกใบงาน) — สร้าง/แก้ไข/ลบ ──
+function EventModal({ ev, teams, canEdit, onClose, onSaved }) {
+  const isNew = !ev.id;
+  const pad = (n) => String(n).padStart(2, "0");
+  const startD = ev.start_at ? new Date(ev.start_at) : null;
+  const endD = ev.end_at ? new Date(ev.end_at) : null;
+  const toDate = (d) => d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : (ev.start_ymd || "");
+  const toTime = (d) => d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : "09:00";
+  const [title, setTitle] = React.useState(ev.title || "");
+  const [date, setDate] = React.useState(toDate(startD));
+  const [start, setStart] = React.useState(toTime(startD));
+  const [end, setEnd] = React.useState(endD ? toTime(endD) : "");
+  const [team, setTeam] = React.useState(ev.team || "");
+  const [note, setNote] = React.useState(ev.note || "");
+  const [busy, setBusy] = React.useState(false);
+  async function save() {
+    if (!title.trim() || !date) return;
+    setBusy(true);
+    try {
+      const start_at = new Date(`${date}T${start || "09:00"}`).toISOString();
+      const end_at = end ? new Date(`${date}T${end}`).toISOString() : null;
+      await saveCalendarEvent({ id: ev.id, title, start_at, end_at, slot: "custom", team: team || null, note });
+      onSaved();
+    } catch (e) { alert("บันทึกไม่สำเร็จ: " + (e.message || e)); setBusy(false); }
+  }
+  async function del() {
+    if (!ev.id || !window.confirm("ลบนัดหมายนี้?")) return;
+    setBusy(true);
+    try { await deleteCalendarEvent(ev.id); onSaved(); } catch (e) { alert("ลบไม่สำเร็จ: " + (e.message || e)); setBusy(false); }
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: "94vw" }}>
+        <div className="modal-head"><div className="modal-title">📌 {isNew ? "นัดหมายใหม่" : "แก้ไขนัดหมาย"}</div><button className="modal-x" onClick={onClose}>✕</button></div>
+        <div className="modal-body">
+          <label className="fld"><span>หัวข้อนัดหมาย</span><input className="inp" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น ประชุมทีม · นัดดูหน้างาน" disabled={!canEdit} /></label>
+          <div className="fld-row3">
+            <label className="fld"><span>วันที่</span><input className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={!canEdit} /></label>
+            <label className="fld"><span>เวลาเริ่ม</span><input className="inp" type="time" value={start} onChange={(e) => setStart(e.target.value)} disabled={!canEdit} /></label>
+            <label className="fld"><span>ถึง (ไม่บังคับ)</span><input className="inp" type="time" value={end} onChange={(e) => setEnd(e.target.value)} disabled={!canEdit} /></label>
+          </div>
+          <label className="fld"><span>ทีม (ไม่บังคับ)</span>
+            <select className="inp" value={team} onChange={(e) => setTeam(e.target.value)} disabled={!canEdit}>
+              <option value="">— ไม่ระบุทีม —</option>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+          <label className="fld"><span>โน้ต</span><textarea className="inp" rows={3} value={note} onChange={(e) => setNote(e.target.value)} disabled={!canEdit} /></label>
+        </div>
+        <div className="modal-foot">
+          {!isNew && canEdit && <button className="btn-ghost danger" disabled={busy} onClick={del}>🗑 ลบ</button>}
+          <button className="btn-ghost" onClick={onClose}>ปิด</button>
+          {canEdit && <button className="btn-primary" disabled={busy || !title.trim() || !date} onClick={save}>{busy ? "…" : "บันทึก"}</button>}
+        </div>
       </div>
     </div>
   );

@@ -4376,6 +4376,26 @@ export async function linkEmailCustomer(threadId, customerId) {
   if (error) throw error;
 }
 
+// ─────────── นัดหมายอิสระในปฏิทิน (ไม่ผูกใบงาน) — calendar_events (mig 216) ───────────
+export async function listCalendarEvents() {
+  const { data, error } = await supabase.from("calendar_events").select("*").order("start_at", { ascending: true });
+  if (error) { if (/calendar_events|relation|does not exist/i.test(error.message || "")) return []; throw error; }
+  return data || [];
+}
+export async function saveCalendarEvent(ev) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const row = { title: (ev.title || "นัดหมาย").trim(), start_at: ev.start_at, end_at: ev.end_at || null, slot: ev.slot || null, team: ev.team || null, note: ev.note?.trim() || null, customer_id: ev.customer_id || null };
+  if (ev.id) { const { error } = await supabase.from("calendar_events").update(row).eq("id", ev.id); if (error) throw error; return ev.id; }
+  row.created_by = user?.id || null;
+  const { data, error } = await supabase.from("calendar_events").insert(row).select("id").single();
+  if (error) throw error;
+  return data.id;
+}
+export async function deleteCalendarEvent(id) {
+  const { error } = await supabase.from("calendar_events").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // CRM: set a contact's stage / responsible staff
 export async function setLineStage(uid, stage) {
   const { error } = await supabase.from("line_contacts").update({ stage }).eq("line_user_id", uid);
