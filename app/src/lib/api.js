@@ -4331,13 +4331,13 @@ export async function fbCommentAction(action, comment_id, text) {
 // ─────────── อีเมล (กล่อง info@amcair.net ผ่าน Gmail API) ───────────
 export async function listEmailThreads() {
   const { data, error } = await supabase.from("email_threads")
-    .select("thread_id,subject,from_email,from_name,snippet,last_message_at,last_inbound_at,unread,assigned_to,customer_id")
+    .select("thread_id,subject,from_email,from_name,snippet,last_message_at,last_inbound_at,unread,spam,assigned_to,customer_id")
     .order("last_message_at", { ascending: false, nullsFirst: false }).limit(500);
   if (error) throw error;
   return data || [];
 }
 export async function countEmailUnread() {
-  const { count } = await supabase.from("email_threads").select("thread_id", { count: "exact", head: true }).eq("unread", true);
+  const { count } = await supabase.from("email_threads").select("thread_id", { count: "exact", head: true }).eq("unread", true).neq("spam", true);
   return count || 0;
 }
 export async function listEmailMessages(threadId) {

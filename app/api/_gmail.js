@@ -108,6 +108,7 @@ export function parseMessage(msg, selfEmail) {
     snippet: msg.snippet || "",
     body_text: extractBody(msg.payload),
     body_html: extractHtml(msg.payload) || null,
+    spam: (msg.labelIds || []).includes("SPAM"),
     attachments: collectAttachments(msg.payload),
     message_id_header: headers["message-id"] || null,
     created_at: dateMs ? new Date(dateMs).toISOString() : null,

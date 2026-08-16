@@ -190,7 +190,7 @@ export default function Email({ role, me }) {
 
   const shown = (threads || []).filter((t) =>
     (ownerF === "all" ? true : ownerF === "me" ? t.assigned_to === myId : ownerF === "none" ? !t.assigned_to : t.assigned_to === ownerF)
-    && (boxF === "all" ? true : boxF === "inbox" ? !!t.last_inbound_at : !t.last_inbound_at)
+    && (boxF === "spam" ? t.spam : (!t.spam && (boxF === "all" ? true : boxF === "inbox" ? !!t.last_inbound_at : !t.last_inbound_at)))
     && (!unreadOnly || t.unread)
     && (!q.trim() || [t.subject, t.from_name, t.from_email, t.snippet].some((v) => String(v || "").toLowerCase().includes(q.toLowerCase()))));
 
@@ -219,7 +219,7 @@ export default function Email({ role, me }) {
             <button className={"chat-mine" + (unreadOnly ? " on" : "")} onClick={() => setUnreadOnly((v) => !v)} title="เฉพาะที่ยังไม่อ่าน">● ยังไม่อ่าน</button>
           </div>
           <div className="chat-listfilter" style={{ gap: 6 }}>
-            {[["all", "ทั้งหมด"], ["inbox", "📥 กล่องเข้า"], ["sent", "📤 ส่งออก"]].map(([v, l]) => (
+            {[["all", "ทั้งหมด"], ["inbox", "📥 กล่องเข้า"], ["sent", "📤 ส่งออก"], ["spam", "⚠️ สแปม"]].map(([v, l]) => (
               <button key={v} className={"chat-mine" + (boxF === v ? " on" : "")} onClick={() => setBoxF(v)}>{l}</button>
             ))}
           </div>
@@ -233,6 +233,7 @@ export default function Email({ role, me }) {
                   <div className="chat-convo-top"><b>{t.from_name || t.from_email || "—"}</b><span>{fmtWhen(t.last_message_at)}</span></div>
                   <div className="chat-convo-last"><b style={{ color: "var(--ink)" }}>{t.subject || "(ไม่มีหัวข้อ)"}</b>{t.snippet ? " — " + t.snippet : ""}</div>
                   <div className="chat-convo-tags">
+                    {t.spam && <span style={{ background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca", borderRadius: 6, fontSize: 11, padding: "1px 6px", fontWeight: 700 }}>⚠️ สงสัยสแปม</span>}
                     {t.assigned_to && staffMap[t.assigned_to] && <span className="conv-owner">👤 {staffMap[t.assigned_to]}</span>}
                   </div>
                 </div>
@@ -251,7 +252,7 @@ export default function Email({ role, me }) {
                 <div className="chat-av sm">{initials(sel.from_name || sel.from_email)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="chat-thread-name" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sel.subject || "(ไม่มีหัวข้อ)"}</div>
-                  <div className="chat-thread-sub">✉️ {sel.from_name ? `${sel.from_name} · ` : ""}{sel.from_email}</div>
+                  <div className="chat-thread-sub">✉️ {sel.from_name ? `${sel.from_name} · ` : ""}{sel.from_email}{sel.spam ? <span style={{ color: "#b91c1c", marginLeft: 6, fontWeight: 700 }}>· ⚠️ Gmail คัดว่าเป็นสแปม</span> : ""}</div>
                 </div>
                 <select className="inp" style={{ maxWidth: 170 }} value={sel.assigned_to || ""} onChange={(e) => changeOwner(e.target.value || null)} title="ผู้รับผิดชอบ">
                   <option value="">— มอบหมาย —</option>

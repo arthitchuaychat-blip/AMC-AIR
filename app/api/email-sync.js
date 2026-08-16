@@ -20,8 +20,8 @@ export default async function handler(req, res) {
     const self = (process.env.GMAIL_ADDRESS || "").toLowerCase();
     const token = await gmailAccessToken();
 
-    // ── รายชื่อเมล 30 วันล่าสุด (ทั้งเข้า+ออก, ไม่เอา spam/trash) ──
-    const list = await gmail(`messages?q=${encodeURIComponent("newer_than:30d -in:spam -in:trash")}&maxResults=60`, token);
+    // ── รายชื่อเมล 30 วันล่าสุด (ทั้งเข้า+ออก+สแปม, ไม่เอา trash) — สแปมติดป้ายไว้แยก ──
+    const list = await gmail(`messages?q=${encodeURIComponent("newer_than:30d -in:trash")}&maxResults=80`, token);
     const ids = (list.messages || []).map((m) => m.id);
     if (!ids.length) return res.status(200).json({ ok: true, listCount: 0, new: 0, threads: 0 });
 
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
     if (parsed.length) {
       const rows = parsed.map((m) => ({
         id: m.id, thread_id: m.thread_id, direction: m.direction, from_email: m.from_email, from_name: m.from_name,
-        to_email: m.to_email, subject: m.subject, snippet: m.snippet, body_text: m.body_text, body_html: m.body_html || null, message_id_header: m.message_id_header, created_at: m.created_at, attachments: m.stored || [],
+        to_email: m.to_email, subject: m.subject, snippet: m.snippet, body_text: m.body_text, body_html: m.body_html || null, spam: !!m.spam, message_id_header: m.message_id_header, created_at: m.created_at, attachments: m.stored || [],
       }));
       const ins = await fetch(`${SB()}/rest/v1/email_messages`, { method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" }, body: JSON.stringify(rows) });
       if (!ins.ok) storeErr = `messages ${ins.status}: ${(await ins.text()).slice(0, 300)}`;
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
 
     // 3) อัปเดตสรุปเธรด (คงค่า assigned_to/customer_id/last_read_at เดิม)
     for (const tid of affected) {
-      const msgs = await sbGet(`email_messages?thread_id=eq.${encodeURIComponent(tid)}&select=direction,from_email,from_name,to_email,subject,snippet,created_at&order=created_at.asc`);
+      const msgs = await sbGet(`email_messages?thread_id=eq.${encodeURIComponent(tid)}&select=direction,from_email,from_name,to_email,subject,snippet,spam,created_at&order=created_at.asc`);
       if (!msgs.length) continue;
       const latest = msgs[msgs.length - 1];
       const inbound = msgs.filter((m) => m.direction === "in");
@@ -91,6 +91,7 @@ export default async function handler(req, res) {
         last_message_at: latest.created_at,
         last_inbound_at: lastInboundAt,
         unread,
+        spam: lastInbound ? !!lastInbound.spam : false,
         assigned_to: prev.assigned_to ?? null,
         customer_id: prev.customer_id ?? null,
         last_read_at: prev.last_read_at ?? null,
