@@ -38,6 +38,14 @@ const b64urlDecode = (s) => {
 };
 const stripHtml = (h) => String(h || "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+\n/g, "\n").replace(/[ \t]{2,}/g, " ").trim();
 
+// เก็บ HTML ดิบ (ไว้แสดงสวยเหมือน Gmail)
+function extractHtml(payload) {
+  let html = "";
+  const walk = (p) => { if (!p) return; if ((p.mimeType || "") === "text/html" && p.body?.data) html += b64urlDecode(p.body.data); (p.parts || []).forEach(walk); };
+  walk(payload);
+  return html.slice(0, 400000);
+}
+
 // เดินหา part text/plain (ถ้าไม่มีใช้ text/html แล้วถอด tag)
 function extractBody(payload) {
   let text = "", html = "";
@@ -99,6 +107,7 @@ export function parseMessage(msg, selfEmail) {
     subject: headers["subject"] || "(ไม่มีหัวข้อ)",
     snippet: msg.snippet || "",
     body_text: extractBody(msg.payload),
+    body_html: extractHtml(msg.payload) || null,
     attachments: collectAttachments(msg.payload),
     message_id_header: headers["message-id"] || null,
     created_at: dateMs ? new Date(dateMs).toISOString() : null,

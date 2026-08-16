@@ -19,6 +19,15 @@ const linkify = (text) => String(text || "").split(/(https?:\/\/[^\s<>()]+|www\.
   return p;
 });
 
+// แสดง HTML ของอีเมลแบบสวย (เหมือน Gmail) ใน iframe แซนด์บ็อกซ์ — ไม่รันสคริปต์แฝง = ปลอดภัย
+function HtmlMail({ html }) {
+  const ref = React.useRef(null);
+  const doc = `<!doctype html><html><head><base target="_blank"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+    + `<style>html,body{margin:0;padding:8px}body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;word-break:break-word}img{max-width:100%;height:auto}a{color:#2563eb}table{max-width:100%!important}</style></head><body>${html}</body></html>`;
+  const resize = () => { try { const b = ref.current.contentWindow.document.body; ref.current.style.height = Math.min((b.scrollHeight || 200) + 22, 4000) + "px"; } catch { /* noop */ } };
+  return <iframe ref={ref} title="email" srcDoc={doc} sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" onLoad={resize} style={{ width: "100%", border: "none", minHeight: 90, background: "#fff", display: "block" }} />;
+}
+
 export default function Email({ role, me }) {
   const [threads, setThreads] = React.useState(null);
   const [staff, setStaff] = React.useState([]);
@@ -155,17 +164,28 @@ export default function Email({ role, me }) {
                 {msgs === null && <div className="empty" style={{ fontSize: 13 }}>กำลังโหลด…</div>}
                 {(msgs || []).map((m) => {
                   const out = m.direction === "out";
+                  const atts = (m.attachments || []).length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                      {m.attachments.map((a, i) => isImg(a.mimeType)
+                        ? <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.name}><img src={a.url} alt={a.name} style={{ maxWidth: 160, maxHeight: 160, borderRadius: 8, border: "1px solid var(--line)", display: "block" }} /></a>
+                        : <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, padding: "5px 10px", border: "1px solid var(--line)", borderRadius: 8, background: "var(--surface-2)", textDecoration: "none", color: "var(--ink)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {a.name}</a>)}
+                    </div>
+                  ) : null;
+                  // อีเมล HTML → แสดงสวยเต็มความกว้าง (เหมือน Gmail)
+                  if (m.body_html) {
+                    return (
+                      <div key={m.id} style={{ margin: "8px 0", width: "100%" }}>
+                        <div className="chat-sender" style={{ marginBottom: 4 }}>{out ? "AMC AIR" : (m.from_name || m.from_email)} · {fmtFull(m.created_at)}</div>
+                        <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", background: "#fff" }}><HtmlMail html={m.body_html} /></div>
+                        {atts}
+                      </div>
+                    );
+                  }
                   return (
                     <div key={m.id} className={"chat-bubble " + (out ? "out" : "in")} style={{ maxWidth: "82%" }}>
                       <span className="chat-sender">{out ? (m.sent_by && staffMap[m.sent_by] ? staffMap[m.sent_by] : "AMC AIR") : (m.from_name || m.from_email)}</span>
                       {(m.body_text || !(m.attachments || []).length) && <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13.5, lineHeight: 1.6 }}>{m.body_text ? linkify(m.body_text) : "(ไม่มีเนื้อหา)"}</div>}
-                      {(m.attachments || []).length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                          {m.attachments.map((a, i) => isImg(a.mimeType)
-                            ? <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.name}><img src={a.url} alt={a.name} style={{ maxWidth: 160, maxHeight: 160, borderRadius: 8, border: "1px solid var(--line)", display: "block" }} /></a>
-                            : <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, padding: "5px 10px", border: "1px solid var(--line)", borderRadius: 8, background: "var(--surface-2)", textDecoration: "none", color: "var(--ink)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {a.name}</a>)}
-                        </div>
-                      )}
+                      {atts}
                       <time style={{ fontSize: 10.5, opacity: 0.7, display: "block", marginTop: 4 }}>{fmtFull(m.created_at)}</time>
                     </div>
                   );

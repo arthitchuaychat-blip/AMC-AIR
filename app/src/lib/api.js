@@ -4338,7 +4338,7 @@ export async function listEmailThreads() {
 }
 export async function listEmailMessages(threadId) {
   const { data, error } = await supabase.from("email_messages")
-    .select("id,direction,from_email,from_name,to_email,subject,body_text,attachments,created_at,sent_by")
+    .select("id,direction,from_email,from_name,to_email,subject,body_text,body_html,attachments,created_at,sent_by")
     .eq("thread_id", threadId).order("created_at", { ascending: true });
   if (error) throw error;
   return data || [];

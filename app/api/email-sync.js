@@ -65,7 +65,7 @@ export default async function handler(req, res) {
     if (parsed.length) {
       const rows = parsed.map((m) => ({
         id: m.id, thread_id: m.thread_id, direction: m.direction, from_email: m.from_email, from_name: m.from_name,
-        to_email: m.to_email, subject: m.subject, snippet: m.snippet, body_text: m.body_text, message_id_header: m.message_id_header, created_at: m.created_at, attachments: m.stored || [],
+        to_email: m.to_email, subject: m.subject, snippet: m.snippet, body_text: m.body_text, body_html: m.body_html || null, message_id_header: m.message_id_header, created_at: m.created_at, attachments: m.stored || [],
       }));
       const ins = await fetch(`${SB()}/rest/v1/email_messages`, { method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" }, body: JSON.stringify(rows) });
       if (!ins.ok) storeErr = `messages ${ins.status}: ${(await ins.text()).slice(0, 300)}`;
