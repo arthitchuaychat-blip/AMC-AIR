@@ -424,22 +424,25 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             const its = q?.items || []; const hasD = its.some((x) => Number(x.discount) > 0);
             const snap = printI.items || []; const rate = Number(printI.wht_rate) || 3;
             // หัก ณ ที่จ่ายต่อบรรทัด (เฉพาะรายการค่าบริการที่ติ๊ก) — รวมทุกบรรทัด = ยอดหักรวมพอดี (บรรทัดสุดท้ายรับเศษ)
-            const perLine = {};
+            const perLineBase = {}, perLineWht = {};
             if (printI.wht_amt > 0 && allAmtP > 0) {
               const flagged = snap.map((s, i) => ({ s, i })).filter((o) => o.s.wht);
-              let acc = 0;
+              const whtBaseTot = round2((printI.base || 0) * flagged.reduce((a, o) => a + (Number(o.s.amount) || 0), 0) / allAmtP);
+              let accB = 0, accW = 0;
               flagged.forEach((o, k) => {
-                const w = (k === flagged.length - 1) ? round2(printI.wht_amt - acc) : round2((printI.base || 0) * (Number(o.s.amount) || 0) / allAmtP * rate / 100);
-                if (k < flagged.length - 1) acc = round2(acc + w);
-                perLine[o.i] = w;
+                const last = k === flagged.length - 1;
+                const b = last ? round2(whtBaseTot - accB) : round2((printI.base || 0) * (Number(o.s.amount) || 0) / allAmtP);
+                const w = last ? round2(printI.wht_amt - accW) : round2(b * rate / 100);
+                if (!last) { accB = round2(accB + b); accW = round2(accW + w); }
+                perLineBase[o.i] = b; perLineWht[o.i] = w;
               });
             }
             return its.map((it, i) => {
-              const s = snap[i]; const w = (s && s.name === it.name && perLine[i] > 0) ? perLine[i] : 0; // ผูกตามลำดับ + ยืนยันชื่อตรง กันแนบผิดบรรทัด
+              const s = snap[i]; const ok = s && s.name === it.name && perLineWht[i] > 0; // ผูกตามลำดับ + ยืนยันชื่อตรง กันแนบผิดบรรทัด
               return (
                 <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td>
                   <td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}
-                    {w > 0 && <div className="doc-item-desc" style={{ color: "#b91c1c" }}>↳ หัก ณ ที่จ่าย {rate}% = − {fmtBaht(w)}</div>}
+                    {ok && <div className="doc-item-desc" style={{ color: "#b91c1c" }}>↳ หัก ณ ที่จ่าย {rate}% จากยอด {fmtBaht(perLineBase[i])} = − {fmtBaht(perLineWht[i])}</div>}
                   </td>
                   <td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
               );
