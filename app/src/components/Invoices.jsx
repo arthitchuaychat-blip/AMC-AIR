@@ -420,9 +420,31 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtBaht(printI.total - printI.wht_amt)}</b></div>}
           </div>}>
           {/* ราคาบรรทัดพิมพ์ = price_show (รวมค่าบัตรแล้ว) ให้บวกลงตัวกับยอดรวมที่คิดจาก price_show — เหมือนใบเสนอราคา */}
-          {(() => { const its = q?.items || []; const hasD = its.some((x) => Number(x.discount) > 0); return its.map((it, i) => (
-            <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td><td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}</td><td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
-          )); })()}
+          {(() => {
+            const its = q?.items || []; const hasD = its.some((x) => Number(x.discount) > 0);
+            const snap = printI.items || []; const rate = Number(printI.wht_rate) || 3;
+            // หัก ณ ที่จ่ายต่อบรรทัด (เฉพาะรายการค่าบริการที่ติ๊ก) — รวมทุกบรรทัด = ยอดหักรวมพอดี (บรรทัดสุดท้ายรับเศษ)
+            const perLine = {};
+            if (printI.wht_amt > 0 && allAmtP > 0) {
+              const flagged = snap.map((s, i) => ({ s, i })).filter((o) => o.s.wht);
+              let acc = 0;
+              flagged.forEach((o, k) => {
+                const w = (k === flagged.length - 1) ? round2(printI.wht_amt - acc) : round2((printI.base || 0) * (Number(o.s.amount) || 0) / allAmtP * rate / 100);
+                if (k < flagged.length - 1) acc = round2(acc + w);
+                perLine[o.i] = w;
+              });
+            }
+            return its.map((it, i) => {
+              const s = snap[i]; const w = (s && s.name === it.name && perLine[i] > 0) ? perLine[i] : 0; // ผูกตามลำดับ + ยืนยันชื่อตรง กันแนบผิดบรรทัด
+              return (
+                <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td>
+                  <td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}
+                    {w > 0 && <div className="doc-item-desc" style={{ color: "#b91c1c" }}>↳ หัก ณ ที่จ่าย {rate}% = − {fmtBaht(w)}</div>}
+                  </td>
+                  <td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
+              );
+            });
+          })()}
         </DocSlip>
       ); })()}
 
