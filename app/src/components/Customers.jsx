@@ -11,7 +11,7 @@ import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import CustomerImportModal from "./CustomerImportModal";
 
 // ⚠️ ต้องมีครบทุกฟิลด์ที่ saveCustomer เขียนลง DB — ฟิลด์ที่ขาดจะถูกเขียนทับเป็นค่าว่าง/0
-const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", email: "", vat: true, credit_days: 0, address: "", note: "",
+const blankCust = () => ({ id: null, type: "company", name: "", tax_id: "", branch: "", email: "", vat: true, credit_days: 0, address: "", note: "",
   source: "", stage: "new", owner_id: "", next_followup: "", est_value: "", lost_reason: "" });
 // สีไล่ต่อไซต์ เพื่อแยกกล่องไซต์ให้เห็นง่าย ไม่ตาลาย
 const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626"];
@@ -69,7 +69,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   function startNew() { setEditing({ cust: blankCust(), contacts: [{ name: "", phone: "", role: "" }], sites: [{ site_name: "", contact_name: "", phone: "", address: "", map_url: "" }] }); }
   function startEdit(c) {
     setEditing({
-      cust: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", email: c.email || "", vat: c.vat, credit_days: c.credit_days ?? 0, address: c.address || "", note: c.note || "",
+      cust: { id: c.id, type: c.type, name: c.name, tax_id: c.tax_id || "", branch: c.branch || "", email: c.email || "", vat: c.vat, credit_days: c.credit_days ?? 0, address: c.address || "", note: c.note || "",
         source: c.source || "", stage: c.stage || "new", owner_id: c.owner_id || "", next_followup: c.next_followup || "", est_value: c.est_value ?? "", lost_reason: c.lost_reason || "" },
       contacts: c.contacts.length ? c.contacts.map((x) => ({ name: x.name || "", phone: x.phone || "", role: x.role || "" })) : [{ name: "", phone: "", role: "" }],
       // ⚠️ ต้องพก id ของไซต์เดิมไปด้วย — saveCustomer ใช้ id ตัดสินว่า "แก้แถวเดิม" ไม่ใช่ลบทิ้งสร้างใหม่
@@ -127,6 +127,21 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
               </button>
             </label>
           </div>
+          {/* สาขา (นิติบุคคลเท่านั้น · mig 217) — โชว์ในเอกสารภาษี · ว่าง = สำนักงานใหญ่ */}
+          {e.cust.type === "company" && (
+            <div className="fld-row">
+              <label className="fld"><span>สาขา <span className="jo-dim" style={{ fontWeight: 400 }}>(แสดงในเอกสารภาษี)</span></span>
+                <select className="inp" value={(!e.cust.branch || e.cust.branch === "สำนักงานใหญ่") ? "head" : "branch"}
+                  onChange={(ev) => setCust("branch", ev.target.value === "head" ? "สำนักงานใหญ่" : (e.cust.branch && e.cust.branch !== "สำนักงานใหญ่" ? e.cust.branch : "สาขาที่ 00001"))}>
+                  <option value="head">สำนักงานใหญ่</option>
+                  <option value="branch">สาขา (ระบุเลขที่)</option>
+                </select>
+              </label>
+              {e.cust.branch && e.cust.branch !== "สำนักงานใหญ่"
+                ? <label className="fld"><span>เลขที่/ชื่อสาขา</span><input className="inp" value={e.cust.branch.replace(/^สาขาที่\s*/, "")} onChange={(ev) => setCust("branch", "สาขาที่ " + ev.target.value)} placeholder="เช่น 00001" /></label>
+                : <div className="fld" />}
+            </div>
+          )}
           <div className="fld-row">
             <label className="fld"><span>อีเมล</span><input className="inp" type="email" value={e.cust.email} onChange={(ev) => setCust("email", ev.target.value)} placeholder="เช่น contact@company.com (ไม่บังคับ)" /></label>
             {/* เครดิตเทอม (mig 159) — ใบแจ้งหนี้ใช้ตั้งวันครบกำหนดชำระให้เอง */}
@@ -296,7 +311,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
               <div className="cd-grid">
                 <div className="cd-k">รหัสลูกค้า</div><div className="cd-v">{custCode(viewing.id)}</div>
                 <div className="cd-k">ประเภท</div><div className="cd-v">{viewing.type === "company" ? "นิติบุคคล" : "บุคคลธรรมดา"}</div>
-                <div className="cd-k">เลขผู้เสียภาษี</div><div className="cd-v">{viewing.tax_id || "—"}</div>
+                <div className="cd-k">เลขผู้เสียภาษี</div><div className="cd-v">{viewing.tax_id ? `${viewing.tax_id} (${viewing.branch || "สำนักงานใหญ่"})` : "—"}</div>
                 <div className="cd-k">อีเมล</div><div className="cd-v">{viewing.email ? <a href={`mailto:${viewing.email}`}>{viewing.email}</a> : "—"}</div>
                 <div className="cd-k">ภาษี</div><div className="cd-v">{viewing.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</div>
                 <div className="cd-k">ที่อยู่หลัก</div><div className="cd-v">{viewing.address || "—"}</div>
