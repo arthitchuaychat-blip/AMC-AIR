@@ -509,7 +509,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           metaRows={[{ label: "วันที่", value: printQ.issue_date }, { label: "ยืนราคาถึง", value: printQ.valid_until }, { label: "อ้างอิง BOQ", value: printQ.boq_no },
             ...(printQ.payMethod === "card_full" ? [{ label: "การชำระเงิน", value: "บัตรเครดิต (รูดเต็ม)" }] : printQ.payMethod === "card_inst10" ? [{ label: "การชำระเงิน", value: "ผ่อนบัตรเครดิต 10 เดือน" }] : [])]}
           projectTitle={printQ.title}
-          customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, address: printQ.customerAddr, contactName: printQ.mainContactName, contactPhone: printQ.mainContactPhone, siteName: printQ.siteName, siteAddress: printQ.siteAddress, siteContactName: printQ.siteContactName, siteContactPhone: printQ.siteContactPhone, mapUrl: printQ.map_url }}
+          customer={{ name: printQ.customerName, code: custCode(printQ.customerCode), taxId: printQ.customerTaxId, branch: printQ.customerBranch, address: printQ.customerAddr, contactName: printQ.mainContactName, contactPhone: printQ.mainContactPhone, siteName: printQ.siteName, siteAddress: printQ.siteAddress, siteContactName: printQ.siteContactName, siteContactPhone: printQ.siteContactPhone, mapUrl: printQ.map_url }}
           terms={printQ.note || co.default_terms} termsPayment={printQ.terms_payment} termsFreebies={printQ.terms_freebies} termsWarranty={printQ.terms_warranty} bank={co.bank_info}
           signLabels={["ผู้เสนอราคา", "ผู้อนุมัติ / ลูกค้า"]} signUrl={printQ.sign_url} signName={printQ.sign_name}
           discountCol={printQ.items.some((it) => Number(it.discount) > 0)}

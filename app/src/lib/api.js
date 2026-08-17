@@ -1392,7 +1392,7 @@ export async function setCustomerPipeline(id, patch) {
 
 export async function saveCustomer(cust, contacts, sites) {
   const { data: { user } } = await supabase.auth.getUser();
-  const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, email: cust.email?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null, credit_days: Math.max(0, Math.round(Number(cust.credit_days) || 0)),
+  const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, branch: cust.type === "company" ? (cust.branch?.trim() || "สำนักงานใหญ่") : null, email: cust.email?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null, credit_days: Math.max(0, Math.round(Number(cust.credit_days) || 0)),
     // ท่อขาย/แหล่งที่มา (mig 199) — undefined = ไม่แตะ (ฟอร์มที่ไม่ได้ส่งค่ามาจะไม่ล้างของเดิม)
     ...(cust.source !== undefined ? { source: cust.source?.trim() || null } : {}),
     ...(cust.stage !== undefined ? { stage: cust.stage || null } : {}),
@@ -1401,9 +1401,9 @@ export async function saveCustomer(cust, contacts, sites) {
     ...(cust.est_value !== undefined ? { est_value: cust.est_value === "" || cust.est_value == null ? null : Number(cust.est_value) || 0 } : {}),
     ...(cust.lost_reason !== undefined ? { lost_reason: cust.lost_reason?.trim() || null } : {}) };
   let id = cust.id;
-  const preMig = (e) => /credit_days|source|stage|owner_id|next_followup|est_value|lost_reason|PGRST204/i.test(e?.message || "");   // ยังไม่รัน mig 159/199 → บันทึกส่วนที่เหลือให้ผ่านไปก่อน
-  // ตัดคอลัมน์ที่ต้องรัน migration ก่อน (159 credit_days / 199 ท่อขาย) ออก แล้วบันทึกส่วนที่เหลือให้ผ่าน
-  const stripMig = (f) => { const { credit_days, source, stage, owner_id, next_followup, est_value, lost_reason, ...rest } = f; return rest; };
+  const preMig = (e) => /credit_days|source|stage|owner_id|next_followup|est_value|lost_reason|branch|PGRST204/i.test(e?.message || "");   // ยังไม่รัน mig 159/199/217 → บันทึกส่วนที่เหลือให้ผ่านไปก่อน
+  // ตัดคอลัมน์ที่ต้องรัน migration ก่อน (159 credit_days / 199 ท่อขาย / 217 branch) ออก แล้วบันทึกส่วนที่เหลือให้ผ่าน
+  const stripMig = (f) => { const { credit_days, source, stage, owner_id, next_followup, est_value, lost_reason, branch, ...rest } = f; return rest; };
   if (id) {
     let e = (await supabase.from("customers").update(fields).eq("id", id)).error;
     if (e && preMig(e)) e = (await supabase.from("customers").update(stripMig(fields)).eq("id", id)).error;
@@ -1591,7 +1591,7 @@ async function _loadBoqs(opts = {}) {
   const [it, cu, si, ct, qt] = await Promise.all([
     // ห้ามอ่านทั้งตารางตรง ๆ — Supabase ตัดที่ 1000 แถว รายการใบใหม่ (id ท้ายตาราง) จะหายทั้งที่บันทึกสำเร็จ
     _allRows((f, t) => _onlyNos(supabase.from("boq_items").select("*", { count: "exact" }), "boq_no", nos).order("id").range(f, t)),
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,status", { count: "exact" }), "boq_no", nos).order("quote_no").range(f, t)),
@@ -1603,6 +1603,7 @@ async function _loadBoqs(opts = {}) {
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const custBranch = Object.fromEntries((cu.data || []).map((c) => [c.id, c.branch]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   // linked (non-cancelled) quote per BOQ + whether any of them is approved (drives the edit lock)
@@ -1892,7 +1893,7 @@ async function _loadQuotations(opts = {}) {
   const cScope = scoped ? _capNos(cids) : null, sScope = scoped ? _capNos(sids) : null;
   const [it, cu, si, ct, jo, inv] = await Promise.all([
     _allRows((f, t) => _onlyNos(supabase.from("quotation_items").select("*", { count: "exact" }), "quote_no", scope).order("id").range(f, t)), // กันเพดาน 1000 แถว
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,type", { count: "exact" }), "id", cScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", sScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status,assigned_team", { count: "exact" }), "quote_no", scope).order("job_no").range(f, t)),
@@ -1905,6 +1906,7 @@ async function _loadQuotations(opts = {}) {
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const custBranch = Object.fromEntries((cu.data || []).map((c) => [c.id, c.branch]));
   const custType = Object.fromEntries((cu.data || []).map((c) => [c.id, c.type]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
@@ -1939,7 +1941,7 @@ async function _loadQuotations(opts = {}) {
     const map_url = (s && s.map_url) || _gmap(address);
     const ct0 = firstContact[qo.customer_id];
     return { ...qo, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
-      customerTaxId: custTax[qo.customer_id] || null, customerType: custType[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
+      customerTaxId: custTax[qo.customer_id] || null, customerBranch: custBranch[qo.customer_id] || null, customerType: custType[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
       siteAddress, address, map_url, createdByName: cb[qo.created_by] || null,
       mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
@@ -2064,7 +2066,7 @@ async function _loadInvoices(opts = {}) {
   if (iv.error) throw iv.error;
   const cids = _idsOf(iv.data, "customer_id"), sids = _idsOf(iv.data, "site_id"), qnos = _idsOf(iv.data, "quote_no");
   const [cu, si, ct, qt, rc, bn] = await Promise.all([
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,title", { count: "exact" }), "quote_no", nos && (qnos.length ? qnos : ["__none__"])).order("quote_no").range(f, t)),
@@ -2078,6 +2080,7 @@ async function _loadInvoices(opts = {}) {
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const cxb = Object.fromEntries((cu.data || []).map((c) => [c.id, c.branch]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
@@ -2091,7 +2094,7 @@ async function _loadInvoices(opts = {}) {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
       title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
-      customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
+      customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null, customerBranch: cxb[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteName: s?.site_name || null, siteAddress: s?.address || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
       createdByName: cb[x.created_by] || null,
@@ -2238,7 +2241,7 @@ async function _loadReceipts(opts = {}) {
   const sScope = scoped ? _capNos(_idsOf(rc.data, "site_id")) : null;
   const qScope = scoped ? _capNos(_idsOf(rc.data, "quote_no")) : null;
   const [cu, si, ct, jo, qt] = await Promise.all([
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id", { count: "exact" }), "id", cScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", sScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("job_no,quote_no", { count: "exact" }), "quote_no", qScope).order("job_no").range(f, t)),
@@ -2251,6 +2254,7 @@ async function _loadReceipts(opts = {}) {
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const cxb = Object.fromEntries((cu.data || []).map((c) => [c.id, c.branch]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j.job_no; });
@@ -2259,7 +2263,7 @@ async function _loadReceipts(opts = {}) {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,
       title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
-      customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null,
+      customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null, customerBranch: cxb[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteName: s?.site_name || null, siteAddress: s?.address || null, createdByName: cb[x.created_by] || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
       mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
@@ -2312,7 +2316,7 @@ async function _loadBillingNotes() {
   const [bn, iv, cu, si, ct, rc, qt] = await Promise.all([
     _allRows((f, t) => supabase.from("billing_notes").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("billing_no").range(f, t)),
     _allRows((f, t) => supabase.from("invoices").select("invoice_no,total,wht_amt,installment,pct,status,issue_date,quote_no", { count: "exact" }).order("invoice_no").range(f, t)),
-    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id,type", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("*", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("receipts").select("invoice_no,status", { count: "exact" }).order("receipt_no").range(f, t)),
@@ -2325,6 +2329,7 @@ async function _loadBillingNotes() {
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const cxb = Object.fromEntries((cu.data || []).map((c) => [c.id, c.branch]));
   const ctype = Object.fromEntries((cu.data || []).map((c) => [c.id, c.type]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
@@ -2336,7 +2341,7 @@ async function _loadBillingNotes() {
     const wht = live.reduce((a, x) => a + (Number(x.wht_amt) || 0), 0);   // หัก ณ ที่จ่าย รวม (นิติบุคคล)
     const vat = live.some((x) => x.vat);   // ใบวางบิลถือเป็น VAT ถ้ามีใบแจ้งหนี้ VAT อยู่ → เลือกหัวกระดาษ/บัญชีให้ถูก
     const s = b.site_id ? sm[b.site_id] : null; const ct0 = cc[b.customer_id];
-    return { ...b, customerName: cn[b.customer_id] || null, customerCode: b.customer_id || null, customerTaxId: cx[b.customer_id] || null,
+    return { ...b, customerName: cn[b.customer_id] || null, customerCode: b.customer_id || null, customerTaxId: cx[b.customer_id] || null, customerBranch: cxb[b.customer_id] || null,
       customerType: ctype[b.customer_id] || null, vat,
       customerAddr: ca[b.customer_id] || null, siteName: s?.site_name || null, siteAddress: s?.address || null, mapUrl: (s && s.map_url) || _gmap(s?.address || ca[b.customer_id]),
       mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,

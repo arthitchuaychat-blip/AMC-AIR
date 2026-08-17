@@ -5,7 +5,7 @@ import { custCode } from "../lib/format";
 
 // Full add/edit customer form in a popup. initial = customer obj (with contacts[]/sites[]) for edit, or a seed for new.
 // onSaved(id) fires after a successful save.
-const seedCust = (i) => ({ id: i?.id || null, type: i?.type || "person", name: i?.name || "", tax_id: i?.tax_id || "", email: i?.email || "", vat: !!i?.vat, credit_days: i?.credit_days ?? 0, address: i?.address || "", note: i?.note || "" });
+const seedCust = (i) => ({ id: i?.id || null, type: i?.type || "person", name: i?.name || "", tax_id: i?.tax_id || "", branch: i?.branch || "", email: i?.email || "", vat: !!i?.vat, credit_days: i?.credit_days ?? 0, address: i?.address || "", note: i?.note || "" });
 // สีไล่ต่อไซต์ เพื่อแยกกล่องไซต์ให้เห็นง่าย ไม่ตาลาย
 const SITE_COLORS = ["#2563eb", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626"];
 
@@ -56,6 +56,20 @@ export default function CustomerFormModal({ initial, onClose, onSaved }) {
             <label className="fld"><span>ชื่อลูกค้า *</span><input className="inp" value={cust.name} onChange={(e) => setC("name", e.target.value)} placeholder={cust.type === "company" ? "เช่น บริษัท ... จำกัด" : "ชื่อ-นามสกุล"} /></label>
             <label className="fld"><span>เลขผู้เสียภาษี</span><input className="inp" value={cust.tax_id} onChange={(e) => setC("tax_id", e.target.value)} placeholder="13 หลัก" /></label>
           </div>
+          {cust.type === "company" && (
+            <div className="fld-row">
+              <label className="fld"><span>สาขา <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(แสดงในเอกสารภาษี)</span></span>
+                <select className="inp" value={(!cust.branch || cust.branch === "สำนักงานใหญ่") ? "head" : "branch"}
+                  onChange={(e) => setC("branch", e.target.value === "head" ? "สำนักงานใหญ่" : (cust.branch && cust.branch !== "สำนักงานใหญ่" ? cust.branch : "สาขาที่ 00001"))}>
+                  <option value="head">สำนักงานใหญ่</option>
+                  <option value="branch">สาขา (ระบุเลขที่)</option>
+                </select>
+              </label>
+              {cust.branch && cust.branch !== "สำนักงานใหญ่"
+                ? <label className="fld"><span>เลขที่/ชื่อสาขา</span><input className="inp" value={cust.branch.replace(/^สาขาที่\s*/, "")} onChange={(e) => setC("branch", "สาขาที่ " + e.target.value)} placeholder="เช่น 00001" /></label>
+                : <div className="fld" />}
+            </div>
+          )}
           <div className="fld-row">
             <label className="fld"><span>ภาษีมูลค่าเพิ่ม</span>
               <button type="button" className={"vat-toggle" + (cust.vat ? " on" : "")} onClick={() => setC("vat", !cust.vat)}>{cust.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</button>

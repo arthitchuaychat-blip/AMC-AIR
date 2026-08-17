@@ -71,7 +71,7 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
                 <div className="doc-cust-name">{customer.name || "-"}{customer.code ? `  (รหัส ${customer.code})` : ""}</div>
                 {customer.address && <div className="doc-cust-line">{customer.address}</div>}
                 <div className="doc-cust-line">
-                  {customer.taxId ? <>เลขประจำตัวผู้เสียภาษี {customer.taxId}</> : null}
+                  {customer.taxId ? <>เลขประจำตัวผู้เสียภาษี {customer.taxId} ({customer.branch || "สำนักงานใหญ่"})</> : null}
                   {customer.contactName || customer.contactPhone ? <>{customer.taxId ? " · " : ""}ผู้ติดต่อ {customer.contactName || ""}{customer.contactPhone ? ` ${customer.contactPhone}` : ""}</> : null}
                 </div>
                 {(customer.siteName || customer.siteAddress || customer.siteContactName || customer.siteContactPhone) && (
