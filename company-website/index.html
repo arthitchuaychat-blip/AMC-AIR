@@ -429,7 +429,9 @@ footer .copy{border-top:1px solid #1e293b;padding-top:20px;font-size:12.5px;colo
 .pp-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
 .pp-filters select{appearance:none;-webkit-appearance:none;background:#fff;border:1.5px solid var(--line);color:var(--ink);font-family:inherit;font-size:14px;font-weight:600;padding:11px 32px 11px 14px;border-radius:11px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;min-width:160px}
 .pp-filters select:hover{border-color:var(--primary)}
-@media(max-width:560px){.pp-filters select{flex:1;min-width:calc(50% - 5px)}}
+.pp-search{flex:1;min-width:220px}
+.pp-search input::placeholder{color:var(--ink-3)}
+@media(max-width:560px){.pp-filters select{flex:1;min-width:calc(50% - 5px)}.pp-search{flex:1 0 100%;min-width:100%}}
 @media(max-width:860px){
   .page{display:flex;flex-direction:column;padding-top:78px;gap:16px}
   .side{display:contents}
@@ -857,6 +859,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <option value="ซ่อม">ซ่อม/แก้ไข</option><option value="ย้าย">ย้ายแอร์</option>
       <option value="รื้อถอน">รื้อถอนแอร์</option><option value="อื่นๆ">บริการอื่น ๆ</option>
     </select>
+    <div class="prod-search pp-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+      <input id="prodSearch" placeholder="ค้นหาสินค้า… (ชื่อรุ่น / รหัส / ยี่ห้อ)" />
+    </div>
   </div>
   <div class="prod-tools">
     <div class="prod-tabs" id="prodTabs">
@@ -864,10 +870,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <button class="prod-tab" data-k="ac">❄️ แอร์</button>
       <button class="prod-tab" data-k="material">🔩 อะไหล่/วัสดุ</button>
       <button class="prod-tab" data-k="service">🛠️ บริการ</button>
-    </div>
-    <div class="prod-search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-      <input id="prodSearch" placeholder="ค้นหาสินค้า…" />
     </div>
   </div>
   <div class="prod-grid" id="prodGrid"><div class="prod-empty">กำลังโหลดสินค้า…</div></div>
@@ -1199,6 +1201,17 @@ function prodCard(p) {
     </div>
   </div>`;
 }
+// รวมข้อความที่ค้นได้ต่อสินค้า: ชื่อรุ่น + รหัส + ยี่ห้อ + ซีรีส์ + ประเภท + ขนาด BTU + น้ำยา/ไฟ
+function prodHaystack(p) {
+  return [p.name, p.code, p.brand, p.series, typeLabel(p.ac_type), (p.btu ? p.btu + " btu" : ""), p.refrigerant, p.voltage]
+    .filter(Boolean).join(" ").toLowerCase();
+}
+// ค้นแบบทุกคำต้องเจอ (เช่น "carrier 18000" = ยี่ห้อ carrier + ขนาด 18000)
+function prodMatch(p, q) {
+  if (!q) return true;
+  const h = prodHaystack(p);
+  return q.split(/\s+/).filter(Boolean).every((t) => h.includes(t));
+}
 function renderProducts() {
   const grid = $("#prodGrid");
   const q = prodQuery.trim().toLowerCase();
@@ -1208,7 +1221,7 @@ function renderProducts() {
     && (!prodType || typeLabel(p.ac_type) === prodType)
     && (!prodBtu || btuHit(p, prodBtu))
     && (!prodSvc || p.kind !== "service" || svcMatch(p, prodSvc))
-    && (!q || (p.name || "").toLowerCase().includes(q)));
+    && prodMatch(p, q));
   if (!list.length) { SG = []; grid.innerHTML = `<div class="prod-empty">${allProducts.length ? "ไม่พบสินค้าที่ค้นหา" : (prodNote || "ยังไม่มีสินค้า")}</div>`; return; }
   // แอร์ที่มี "รุ่น" → การ์ดละรุ่น (เลือกขนาดในการ์ด) · ที่เหลือ (วัสดุ/บริการ/แอร์ไม่มีรุ่น) → การ์ดเดี่ยวตามเดิม
   const gm = {}; const singles = [];
