@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listAdjustmentNotes, saveAdjustmentNote, setAdjustmentNoteStatus, deleteAdjustmentNote, listReceipts, getCompanies, docNoTaken } from "../lib/api";
+import { listAdjustmentNotes, saveAdjustmentNote, setAdjustmentNoteStatus, deleteAdjustmentNote, listReceipts, listQuotations, getCompanies, docNoTaken } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -29,6 +29,7 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
   const canDelete = role === "admin";
   const [list, setList] = React.useState([]);
   const [receipts, setReceipts] = React.useState([]);
+  const [quotes, setQuotes] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
@@ -40,7 +41,7 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
 
   async function load() {
     setLoading(true);
-    try { const [an, rc, co] = await Promise.all([listAdjustmentNotes(), listReceipts(), getCompanies()]); setList(an); setReceipts(rc); setCompanies(co || { vat: {}, novat: {} }); }
+    try { const [an, rc, q, co] = await Promise.all([listAdjustmentNotes(), listReceipts(), listQuotations(), getCompanies()]); setList(an); setReceipts(rc); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -51,6 +52,7 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
 
   const openReceipts = receipts.filter((r) => r.status !== "cancelled");
   const rcByNo = React.useMemo(() => Object.fromEntries(receipts.map((r) => [r.receipt_no, r])), [receipts]);
+  const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
   function startNew(kind) {
     setEd({ note_no: genNo(kind), kind, receipt_no: "", issue_date: today(), reason: "", wht_rate: 3,
@@ -74,6 +76,16 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
     setEd((e) => ({ ...e, receipt_no, _src: r || null,
       // ตั้งค่าเริ่มต้นธงหัก ณ ที่จ่าย: นิติบุคคล + ค่าบริการ
       items: e.items.map((it) => ({ ...it, wht: (r?.customerType === "company") && it.kind === "service" })) }));
+  }
+  // ดึงรายการจากใบเดิม (ใบเสนอราคาที่ผูกกับใบเสร็จ) มาเป็นบรรทัดที่จะลด/เพิ่ม — แก้จำนวน/ราคาต่อได้
+  function addFromSource(it) {
+    const price = Number(it.price_show ?? it.unit_price) || 0;
+    const kind = it.kind === "service" ? "service" : "material";
+    setEd((e) => {
+      const row = { name: it.name, desc: it.description || "", unit: it.unit || "", qty: Number(it.qty) || 1, price, kind, wht: (e._src?.customerType === "company") && kind === "service" };
+      const blankOnly = e.items.length === 1 && !e.items[0].name.trim() && !Number(e.items[0].price);
+      return { ...e, items: blankOnly ? [row] : [...e.items, row] };
+    });
   }
 
   // ---- ยอดคำนวณ ----
@@ -154,12 +166,35 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
           <label className="fld"><span>เหตุผลการ{K.verb} * <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(แสดงในเอกสาร ให้ลูกค้าทราบ)</span></span>
             <input className="inp" value={ed.reason} onChange={(e) => setF("reason", e.target.value)} placeholder={ed.kind === "credit" ? "เช่น ยกเลิกงานติดตั้งชั้น 2 ตามที่ตกลง" : "เช่น เพิ่มงานเดินท่อน้ำทิ้งเพิ่มเติม"} /></label>
 
-          <div className="fld"><span>รายการที่{K.verb} (ใส่เอง)</span>
+          {src && (() => {
+            const q = quoteByNo[src.quote_no];
+            const srcItems = (q?.items || []).filter((it) => it.name);
+            if (!srcItems.length) return null;
+            return (
+              <div className="fld"><span>รายการในใบเดิม <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(กด ＋ เพื่อดึงมา{K.verb} แล้วแก้จำนวน/ราคาได้)</span></span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8, padding: 6 }}>
+                  {srcItems.map((it, i) => {
+                    const price = Number(it.price_show ?? it.unit_price) || 0;
+                    return (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", background: "var(--surface-2)", borderRadius: 6 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</div>
+                          <div className="page-sub" style={{ margin: 0 }}>{Number(it.qty)} {it.unit || ""} × {fmtBaht(price)}{it.kind === "service" ? " · ค่าบริการ" : ""}</div>
+                        </div>
+                        <button className="btn-ghost sm" onClick={() => addFromSource(it)}><UIcon name="plus" size={13} /> {K.verb}</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+          <div className="fld"><span>รายการที่{K.verb} <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(ดึงจากใบเดิมด้านบน หรือใส่เอง)</span></span>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {ed.items.map((it, i) => {
                 const amt = round2((Number(it.qty) || 0) * (Number(it.price) || 0));
                 return (
-                  <div key={i} className="card" style={{ padding: 8, background: "var(--bg-1)" }}>
+                  <div key={i} className="card" style={{ padding: 8, background: "var(--surface-2)" }}>
                     <div className="crm-row">
                       <input className="inp" style={{ flex: 2 }} value={it.name} onChange={(e) => setItem(i, "name", e.target.value)} placeholder="ชื่อรายการ" />
                       <Combo className="inp" style={{ width: 110, flex: "none" }} value={it.kind} onChange={(e) => setItem(i, "kind", e.target.value)}>
