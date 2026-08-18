@@ -5863,13 +5863,16 @@ export async function vatSummary(ym) {
   const last = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
   const from = `${ym}-01`, to = `${ym}-${String(last).padStart(2, "0")}`;
   // PO กรองช่วงเดือนฝั่ง server (เดิมดึงทุกปีมากรองฝั่ง client — โดนเพดาน 1000 แถวก่อนกรอง ภาษีซื้อขาด)
-  const [rc, po] = await Promise.all([
+  const [rc, po, an] = await Promise.all([
     _fetchAll((f, t) => supabase.from("receipts").select("vat_amt,status,issue_date,receipt_no", { count: "exact" }).neq("status", "cancelled").gte("issue_date", from).lte("issue_date", to).order("receipt_no").range(f, t)).then((rows) => ({ data: rows })),
     _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,vat,status,issue_date,created_at", { count: "exact" }).neq("status", "cancelled").eq("vat", true)
       .or(`and(issue_date.gte.${from},issue_date.lte.${to}),and(issue_date.is.null,created_at.gte.${from},created_at.lte.${to}T23:59:59)`)
       .order("po_no").range(f, t)).then((rows) => ({ data: rows })),
+    // ใบลด/เพิ่มหนี้ (mig 218) มี VAT → ปรับภาษีขายเดือนนั้น (credit ลบ · debit บวก) · fallback ถ้ายังไม่รัน
+    supabase.from("adjustment_notes").select("kind,vat_amt,is_vat,status,issue_date").eq("status", "issued").eq("is_vat", true).gte("issue_date", from).lte("issue_date", to).then((r) => r).catch(() => ({ data: [] })),
   ]);
-  const saleVat = (rc.data || []).reduce((a, r) => a + (Number(r.vat_amt) || 0), 0);
+  const noteVat = (an.data || []).reduce((a, x) => a + (x.kind === "debit" ? 1 : -1) * (Number(x.vat_amt) || 0), 0);
+  const saleVat = (rc.data || []).reduce((a, r) => a + (Number(r.vat_amt) || 0), 0) + noteVat;
   const pos = (po.data || []).filter((x) => { const d = x.issue_date || (x.created_at || "").slice(0, 10); return d >= from && d <= to; });
   let buyVat = 0;
   const nos = pos.map((x) => x.po_no);

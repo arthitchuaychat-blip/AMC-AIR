@@ -1,5 +1,6 @@
 import React from "react";
-import { listMaterials, listCategories, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, dashboardActionLite, vatSummary, listAccounts, listProfiles, quoteAttribution } from "../lib/api";
+import { listMaterials, listCategories, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, listAdjustmentNotes, dashboardActionLite, vatSummary, listAccounts, listProfiles, quoteAttribution } from "../lib/api";
+import { sumAdj } from "../lib/adjustments";
 import { downloadCsv } from "../lib/format";
 import { can } from "../lib/permissions";
 import { fmtBaht, fmtNum, fmtCompact, inRange } from "../lib/format";
@@ -111,7 +112,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     const opt = from ? { since: from } : {};
     (async () => {
       try {
-        const [qs, rcs, cats] = await Promise.all([listQuotations(opt), listReceipts(opt).catch(() => []), listCategories().catch(() => [])]);
+        const [qs, rcs, cats, ans] = await Promise.all([listQuotations(opt), listReceipts(opt).catch(() => []), listCategories().catch(() => []), listAdjustmentNotes().catch(() => [])]);
         const boqNos = [...new Set(qs.map((q) => q.boq_no).filter(Boolean))];
         const bs = await listBoqs(from && boqNos.length ? { nos: boqNos } : {});
         // ใบเสร็จที่ผูกใบเสนอนอกช่วง → ขอแค่ "ใครขาย/ทีมไหน" ของใบเสนอพวกนั้นมาเพิ่ม (ตารางบาง 2 คอลัมน์)
@@ -119,7 +120,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
         const inWin = new Set(qs.map((q) => q.quote_no));
         const missing = [...new Set(rcs.map((r) => r.quote_no).filter((n) => n && !inWin.has(n)))];
         const extra = missing.length ? await quoteAttribution(missing).catch(() => ({})) : {};
-        if (alive) setOv({ qs, bs, rcs, attrExtra: extra, cats });
+        if (alive) setOv({ qs, bs, rcs, ans, attrExtra: extra, cats });
       } catch (e) { if (alive) setOvErr(e.message || String(e)); }
     })();
     return () => { alive = false; };
@@ -209,8 +210,20 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     return Object.fromEntries(Object.entries(out).map(([k, bag]) => [k, Object.values(bag).sort((a, b) => b.amount - a.amount)]));
   }, [ov, fq, from, to, mats]);
   // ยอดขายที่ออกใบเสร็จ + รับเงินแล้ว (ใบเสร็จสถานะ "ชำระเงินแล้ว" ตามวันที่รับเงิน) — ยอดก่อน VAT ให้เทียบกับการ์ดยอดขายอนุมัติได้ตรง ๆ
+  // ใบลด/เพิ่มหนี้ กรองตามคน/ทีม เหมือนใบเสร็จ (ผูกผ่านใบเสนอ) — ปรับยอดรายได้ที่รับจริงให้ถูกต้อง
+  const fAns = React.useMemo(() => {
+    if (!ov?.ans) return [];
+    if (!byPerson && !byTeam) return ov.ans;
+    return ov.ans.filter((a) => {
+      const at = a.quote_no ? attr[a.quote_no] : null;
+      if (!at) return false;
+      if (byPerson && (at.createdByName || "") !== byPerson) return false;
+      if (byTeam && at.jobTeam !== byTeam) return false;
+      return true;
+    });
+  }, [ov, attr, byPerson, byTeam]);
   const rcStat = React.useMemo(() => {
-    const z = { sale: 0, count: 0, net: 0, wht: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
+    const z = { sale: 0, count: 0, net: 0, wht: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0, adjNet: 0 };
     if (!ov?.rcs) return z;
     const quoteVat = Object.fromEntries((ov.qs || []).map((q) => [q.quote_no, !!q.vat]));
     const s = { ...z };
@@ -224,8 +237,16 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       s.wht += Number(r.wht_amt) || 0;   // ถูกหัก ณ ที่จ่ายสะสม (ขอคืน/เครดิตภาษีได้)
       if (isVat) { s.vatSale += base; s.vatCount += 1; } else { s.novatSale += base; s.novatCount += 1; }
     });
+    // ปรับด้วยใบลด/เพิ่มหนี้ (issued) ตามวันที่ออก — credit ลบ · debit บวก
+    fAns.forEach((a) => {
+      if (a.status !== "issued" || !inRange(a.issue_date || a.created_at, from, to)) return;
+      const sign = a.kind === "debit" ? 1 : -1;
+      const b = sign * (Number(a.base) || 0);
+      s.sale += b; s.net += sign * (Number(a.net) || 0); s.wht += sign * (Number(a.wht_amt) || 0); s.adjNet += sign * (Number(a.net) || 0);
+      if (a.is_vat) s.vatSale += b; else s.novatSale += b;
+    });
     return s;
-  }, [ov, fRcs, from, to]);
+  }, [ov, fRcs, fAns, from, to]);
 
   // การ์ดที่คำนวณจากเอกสารในช่วง: ระหว่างโหลดต้องขึ้น "…" ไม่ใช่ตัวเลขของช่วงก่อนหน้าใต้ป้ายช่วงใหม่
   const dv = (v) => (ov ? fmtBaht(v) : "…");

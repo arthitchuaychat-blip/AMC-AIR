@@ -1,5 +1,5 @@
 import React from "react";
-import { listReceipts, listPurchaseOrders, listSubPayouts, listTeams } from "../lib/api";
+import { listReceipts, listPurchaseOrders, listSubPayouts, listTeams, listAdjustmentNotes } from "../lib/api";
 import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
 
@@ -9,6 +9,7 @@ const netOf = (r) => Number(r.net) || ((Number(r.total) || 0) - (Number(r.wht_am
 
 export default function TaxReport({ role }) {
   const [receipts, setReceipts] = React.useState(null);
+  const [notes, setNotes] = React.useState([]);   // ใบลด/เพิ่มหนี้ → ปรับภาษีขาย/ยอดขาย
   const [pos, setPos] = React.useState([]);   // ใบสั่งซื้อที่ติ๊ก VAT → ภาษีซื้อ
   const [payouts, setPayouts] = React.useState([]);   // ใบจ่ายช่างซัพที่จ่ายแล้ว → ภาษีที่เราหักไว้ ต้องนำส่ง (ภ.ง.ด.53)
   const [teamName, setTeamName] = React.useState({});
@@ -20,8 +21,9 @@ export default function TaxReport({ role }) {
 
   async function load() {
     try {
-      const [r, p, sp] = await Promise.all([listReceipts(), listPurchaseOrders().catch(() => []), listSubPayouts().catch(() => [])]);
+      const [r, p, sp, an] = await Promise.all([listReceipts(), listPurchaseOrders().catch(() => []), listSubPayouts().catch(() => []), listAdjustmentNotes().catch(() => [])]);
       setReceipts(r.filter((x) => x.status !== "cancelled" && x.issue_date));
+      setNotes((an || []).filter((x) => x.status === "issued" && x.issue_date));
       // ภาษีซื้อรับรู้เมื่อ "รับของ/จ่ายเงิน" แล้วเท่านั้น — ใบที่ยังไม่รับของยังไม่มีใบกำกับภาษีซื้อในมือ
       // เดิมนับทุกใบที่ติ๊ก VAT ตั้งแต่วันสั่ง → ใบที่สั่งค้างไว้ไม่รับของเลยก็ยังนับเป็นภาษีซื้อตลอดไป
       setPos(p.filter((x) => x.status !== "cancelled" && x.vat && (x.status === "received" || x.paid_at)));
@@ -44,6 +46,12 @@ export default function TaxReport({ role }) {
   }, [receipts]);
 
   const ofYear = React.useMemo(() => (receipts || []).filter((r) => (r.issue_date || "").slice(0, 4) === String(year)), [receipts, year]);
+  // ใบลด/เพิ่มหนี้ปีนี้ → แปลงเป็น "แถวแบบใบเสร็จ" ที่มียอดติดเครื่องหมาย (credit ลบ · debit บวก) เพื่อรวมเข้ารายงานภาษีขาย
+  const ofYearNotes = React.useMemo(() => (notes || []).filter((a) => (a.issue_date || "").slice(0, 4) === String(year)).map((a) => {
+    const sign = a.kind === "debit" ? 1 : -1;
+    return { receipt_no: a.note_no, issue_date: a.issue_date, customerName: a.customerName, customerTaxId: a.customerTaxId,
+      base: sign * (Number(a.base) || 0), vat_amt: sign * (Number(a.vat_amt) || 0), wht_amt: sign * (Number(a.wht_amt) || 0), net: sign * (Number(a.net) || 0), _adj: a.kind };
+  }), [notes, year]);
 
   // aggregate per month (index 0–11): tax is recognised on the receipt (ใบกำกับภาษี) date
   // ภาษีซื้อ: จากใบสั่งซื้อที่ติ๊ก VAT และรับของ/จ่ายแล้ว ลงเดือนตามวันรับของ (ประมาณการ — ตอนยื่นจริงใช้ใบกำกับภาษีซื้อจากผู้ขาย)
@@ -56,6 +64,13 @@ export default function TaxReport({ role }) {
       const b = m[mi];
       b.count++; b.base += Number(r.base) || 0; b.vat += Number(r.vat_amt) || 0; b.wht += Number(r.wht_amt) || 0; b.net += netOf(r); b.rows.push(r);
     });
+    // ใบลด/เพิ่มหนี้ (ยอดติดเครื่องหมายแล้ว) — ปรับภาษีขาย/ยอดขายเดือนที่ออกเอกสาร
+    ofYearNotes.forEach((r) => {
+      const mi = Number((r.issue_date || "").slice(5, 7)) - 1;
+      if (mi < 0 || mi > 11) return;
+      const b = m[mi];
+      b.base += r.base; b.vat += r.vat_amt; b.wht += r.wht_amt; b.net += r.net; b.rows.push(r);
+    });
     pos.forEach((x) => {
       const d = poDate(x);
       if ((d || "").slice(0, 4) !== String(year)) return;
@@ -65,7 +80,7 @@ export default function TaxReport({ role }) {
     });
     m.forEach((b) => { b.base = round2(b.base); b.vat = round2(b.vat); b.buyVat = round2(b.buyVat); b.wht = round2(b.wht); b.net = round2(b.net); b.vatDue = round2(b.vat - b.buyVat); b.rows.sort((a, c) => (a.issue_date < c.issue_date ? -1 : 1)); });
     return m;
-  }, [ofYear, pos, year]);
+  }, [ofYear, ofYearNotes, pos, year]);
 
   const tot = months.reduce((a, b) => ({ count: a.count + b.count, base: round2(a.base + b.base), vat: round2(a.vat + b.vat), buyVat: round2(a.buyVat + b.buyVat), buyCount: a.buyCount + b.buyCount, wht: round2(a.wht + b.wht), net: round2(a.net + b.net) }), { count: 0, base: 0, vat: 0, buyVat: 0, buyCount: 0, wht: 0, net: 0 });
   tot.vatDue = round2(tot.vat - tot.buyVat);

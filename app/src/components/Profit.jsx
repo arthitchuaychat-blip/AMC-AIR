@@ -1,5 +1,5 @@
 import React from "react";
-import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost, listPurchaseOrders } from "../lib/api";
+import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost, listPurchaseOrders, listAdjustmentNotes } from "../lib/api";
 import { fmtBaht, matchText, inRange } from "../lib/format";
 import { UIcon } from "../icons";
 
@@ -24,8 +24,11 @@ export default function Profit({ onOpenJob }) {
   async function load() {
     setLoading(true); setErr(null);
     try {
-      const [qs, bs, jos, mat, exp, pos] = await Promise.all([listQuotations(), listBoqs(), listJobOrders(), jobMaterialCost(), jobExpenseCost(), listPurchaseOrders().catch(() => [])]);
+      const [qs, bs, jos, mat, exp, pos, ans] = await Promise.all([listQuotations(), listBoqs(), listJobOrders(), jobMaterialCost(), jobExpenseCost(), listPurchaseOrders().catch(() => []), listAdjustmentNotes().catch(() => [])]);
       const boqCost = Object.fromEntries(bs.map((b) => [b.boq_no, b.total]));
+      // ใบลด/เพิ่มหนี้ (issued) ปรับรายได้งานตามใบเสนอที่ผูก (ก่อน VAT · credit ลบ · debit บวก)
+      const noteAdjByQuote = {};
+      (ans || []).forEach((a) => { if (a.status === "issued" && a.quote_no) noteAdjByQuote[a.quote_no] = (noteAdjByQuote[a.quote_no] || 0) + (a.kind === "debit" ? 1 : -1) * (Number(a.base) || 0); });
       // PO ผูกงานที่ยังรอรับของ = ต้นทุนที่สั่งแล้วของงาน (ก่อน VAT) · พอรับของจะย้ายไปอยู่ใน "เบิกจริง" แทน (นับเฉพาะ open → ไม่ซ้ำ)
       const poPendByQuote = {};
       (pos || []).forEach((p) => { if (p.quote_no && p.status === "open") poPendByQuote[p.quote_no] = (poPendByQuote[p.quote_no] || 0) + (Number(p.subtotal) || 0); });
@@ -46,7 +49,7 @@ export default function Profit({ onOpenJob }) {
           const discCash = q.discount_type === "percent" ? subCash * Number(q.discount_value || 0) / 100 : Number(q.discount_value || 0);
           cardFee = Math.max(0, Math.round((q.afterDisc - (subCash - discCash)) * 100) / 100);
         }
-        return { jobs, detail, sale: q.afterDisc, cardFee, poPend: poPendByQuote[q.quote_no] || 0, boq_no: q.boq_no };
+        return { jobs, detail, sale: (q.afterDisc || 0) + (noteAdjByQuote[q.quote_no] || 0), cardFee, poPend: poPendByQuote[q.quote_no] || 0, boq_no: q.boq_no };
       };
 
       const out = [];

@@ -15,6 +15,14 @@ metadata:
 
 **⚠️ ไม่แตะกระแสเงินสดอัตโนมัติ (เจ้าของเคาะ)** — เงินจริงเข้า/ออกผ่านใบเสร็จงวดถัดไป (เพิ่มหนี้) หรือการคืนเงิน (ลดหนี้) กันนับซ้ำ. `saveAdjustmentNote` จึงไม่เรียก `syncCashEntriesFromDocs`. ถ้าต้องคืนเงินจริง finance เพิ่มรายการเงินสดแมนนวลเอง. [[cash-flow]]
 
+**เชื่อมเข้ารายงาน (v632) — credit ลบ · debit บวก · เฉพาะ issued · ผูกวันที่ออกเอกสาร:** helper `lib/adjustments.js sumAdj()`.
+- Dashboard "รับเงินแล้ว/รายได้ที่รับ" (`rcStat`) + WHT + VAT split — net note base/net/wht (กรองคน/ทีมผ่าน quote attribution เหมือนใบเสร็จ)
+- `vatSummary` (api.js) ภาษีขายเดือนนี้ — net note vat_amt (is_vat)
+- TaxReport (ภ.พ.30) — net base/vat/wht/net รายเดือน (push note เป็นแถวยอดติดเครื่องหมาย)
+- Profit — รายได้งาน (`sale = afterDisc + noteAdjByQuote[quote]` ก่อน VAT)
+- KPI scorecard — mig **219** เพิ่ม CTE `adj` net(net) ต่อ created_by
+- **ไม่แตะ:** AR/เงินค้างรับ (โน้ตอ้างใบเสร็จ = ใบที่จ่ายแล้ว ไม่อยู่ใน AR → กันนับซ้ำ) · "ยอดขายอนุมัติ"/PnL/SalesReport/Trend/Exec (quotation-based = มูลค่าดีลตอนปิด ไม่ retro-adjust) — ถ้าเจ้าของอยากให้ปรับด้วยค่อยทำเพิ่ม.
+
 **สิทธิ์:** module `adjnote` = สำเนาสิทธิ์ `receipt` ทุก role (admin/exec/finance/sales/field_sales/hr = edit). ลบถาวร = admin เท่านั้น (ยกเลิกได้ทุกคนที่ edit).
 
 **api.js:** `listAdjustmentNotes`, `saveAdjustmentNote`, `setAdjustmentNoteStatus` (cancel), `setAdjustmentNoteWht`, `deleteAdjustmentNote`. `_DOC_NO_COL.adjustment_notes="note_no"`. เลข `CN-`/`DN-YYMMDD-HHMMSS`.
