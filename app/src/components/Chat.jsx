@@ -7,7 +7,8 @@ import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
 import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
-import { scheduleLabel } from "../lib/schedule";
+import { scheduleLabel, JOB_STATUSES } from "../lib/schedule";
+const JOB_ST_LABEL = Object.fromEntries((JOB_STATUSES || []).map(([v, l]) => [v, l]));
 import { fmtBaht, fmtNum, custCode, matchText, matchPhone, eqi, ATTACH_ACCEPT } from "../lib/format";
 import { can } from "../lib/permissions";
 import { QR_MY } from "../lib/i18n";
@@ -524,10 +525,20 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       if (!js) { js = await listJobOrders(); setJobs(js); }
       const mine = js.filter((j) => String(j.customer_id) === String(selContact.customer_id));
       if (!mine.length) return flash("ลูกค้านี้ยังไม่มีใบงาน", true);
-      setJobPicker(mine);
+      // แตกใบงานเป็น "รอบเข้างาน" — 1 แถวต่อ 1 รอบ (job_visits) เพื่อให้เลือกคอนเฟิมรอบที่เพิ่มเข้ามาได้
+      // ใบเก่าที่ยังไม่มีรอบ (visits ว่าง) → 1 แถวใช้ตารางนัดหลักบนใบงาน
+      const entries = [];
+      mine.forEach((jo) => {
+        const vs = (jo.visits || []).filter((v) => (v.scheduled_at || v.visit_date) && v.status !== "cancelled");
+        if (vs.length) vs.forEach((v, i) => entries.push({ jo, visit: v, round: i + 1, rounds: vs.length }));
+        else entries.push({ jo, visit: null, round: 0, rounds: 0 });
+      });
+      // เรียงตามวันนัดของรอบ (รอบใกล้ที่สุดอยู่บน)
+      entries.sort((a, b) => (String((a.visit?.scheduled_at) || a.jo.scheduled_at || "")).localeCompare(String((b.visit?.scheduled_at) || b.jo.scheduled_at || "")));
+      setJobPicker(entries);
     } catch (e) { flash("โหลดใบงานไม่สำเร็จ: " + (e.message || e), true); }
   }
-  function pickJob(jo) { setText(buildOrderConfirm(jo)); setJobPicker(null); flash("ใส่ข้อความคอนเฟิมแล้ว — ตรวจทานแล้วกดส่ง"); }
+  function pickJob(entry) { const e = entry.jo ? entry : { jo: entry, visit: null }; setText(buildOrderConfirm(e.jo, e.visit)); setJobPicker(null); flash("ใส่ข้อความคอนเฟิมแล้ว — ตรวจทานแล้วกดส่ง"); }
 
   // ⭐ ขอคะแนน: เลือกใบงาน → ใส่ลิงก์ให้คะแนน (ผูก job_no) ในกล่องพิมพ์ ให้ตรวจก่อนส่ง
   async function openRate() {
@@ -1108,12 +1119,17 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <button className="drawer-close" onClick={() => setJobPicker(null)}><UIcon name="x" size={20} /></button></div>
             <div className="modal-body">
               <p className="page-sub" style={{ marginBottom: 10 }}>เลือกใบงานของลูกค้ารายนี้ — ระบบจะใส่ข้อความคอนเฟิมในกล่องพิมพ์ ให้ตรวจทานก่อนกดส่ง</p>
-              {jobPicker.map((jo) => (
-                <button key={jo.job_no} className="confirm-job" onClick={() => pickJob(jo)}>
-                  <div><b>{jo.job_no}</b> · {jo.title || "งานติดตั้ง/บริการ"}</div>
-                  <small>🗓 {jo.scheduled_at ? scheduleLabel(jo) : "ยังไม่นัด"} · 💰 {fmtBaht(jo.quoteGrand || 0)}</small>
-                </button>
-              ))}
+              {jobPicker.map((en, i) => {
+                const jo = en.jo; const v = en.visit;
+                const sched = v && v.scheduled_at ? scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot }) : (jo.scheduled_at ? scheduleLabel(jo) : "ยังไม่นัด");
+                const vst = v && (JOB_ST_LABEL[v.status] || null);
+                return (
+                  <button key={jo.job_no + "#" + i} className="confirm-job" onClick={() => pickJob(en)}>
+                    <div><b>{jo.job_no}</b>{en.rounds > 1 ? <span style={{ color: "#7c3aed", fontWeight: 700 }}> · รอบ {en.round}/{en.rounds}</span> : ""} · {jo.title || "งานติดตั้ง/บริการ"}</div>
+                    <small>🗓 {sched}{vst ? ` · ${vst}` : ""} · 💰 {fmtBaht(jo.quoteGrand || 0)}</small>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

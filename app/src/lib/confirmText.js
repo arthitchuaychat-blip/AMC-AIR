@@ -5,7 +5,10 @@ import { scheduleLabel } from "./schedule";
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" }) : "-";
 
 // jo = job order object จาก listJobOrders() (มี confirmItems, quoteGrand, scheduled_at, slot, customerName ฯลฯ)
-export function buildOrderConfirm(jo) {
+// visit (ไม่บังคับ) = รอบเข้างานที่ต้องการคอนเฟิม (job_visits) → ใช้วันเวลาของรอบนั้นแทนรอบแรก
+export function buildOrderConfirm(jo, visit) {
+  // เลือกวันเวลานัดจากรอบที่ระบุ (ถ้ามี) มิฉะนั้นใช้รอบหลัก (scheduled_at บนใบงาน)
+  const sched = visit && visit.scheduled_at ? { scheduled_at: visit.scheduled_at, end_date: visit.end_date, slot: visit.slot } : (jo.scheduled_at ? jo : null);
   // หน้างาน = ข้อมูลไซต์เท่าที่มี (ไซต์ที่ผูกไว้ หรือที่กรอกในใบงานเอง) — แต่ไม่ดึงที่อยู่หลักมาแทน
   const svcAddr = jo.siteAddress || (jo.address && jo.address !== jo.customerAddr ? jo.address : "");
   const svcCName = jo.siteContactName || (jo.contact_name && jo.contact_name !== jo.mainContactName ? jo.contact_name : "");
@@ -18,7 +21,7 @@ export function buildOrderConfirm(jo) {
 
   const lines = [
     `วันที่สั่งซื้อ : ${fmtDate(jo.created_at)}`,
-    `วันเวลานัดหมายบริการ : ${jo.scheduled_at ? scheduleLabel(jo) : "-"}`,
+    `วันเวลานัดหมายบริการ : ${sched ? scheduleLabel(sched) : "-"}`,
     `เลขที่ใบเสนอราคา : ${jo.quote_no || "-"}`,
     "--",
     `ชื่อลูกค้า : ${jo.customerName || "-"}`,
