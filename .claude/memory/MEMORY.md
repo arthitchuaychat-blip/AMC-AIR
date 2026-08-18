@@ -16,6 +16,7 @@
 - [Team chat push](team-chat-push.md) — team-chat unread badges + Web Push/PWA (sw.js, push-send.js, migration 040); needs VAPID env on Vercel + Add-to-Home-Screen.
 - [HR system](hr-system.md) — attendance (selfie+GPS check-in/out), leave, holidays, monthly stats; lib/hr.js schedules, migration 041; set staff work_pattern in HR settings.
 - [Subcontractor system](subcontractor-system.md) — sub teams: per-job labor (80% default), payouts with WHT-on-VAT, team scorecard; migration 042; feeds Profit.
+- [ใบลด/เพิ่มหนี้](adjustment-notes.md) — Credit/Debit Note (mig 218, v628): ปรับยอดหลังออกใบเสร็จ; ตารางเดียว kind; มีรายการของตัวเอง; VAT/WHT สืบจากใบต้นทาง; ไม่แตะกระแสเงินสดอัตโนมัติ.
 - [Google Calendar feed](gcal-feed.md) — job schedule → Google Calendar via token-gated ICS feed (api/calendar.js); needs CALENDAR_FEED_TOKEN env; subscribe UI in Schedule.
 - [Cash flow](cash-flow.md) — money in/out by day, projected vs actual; cash_entries ledger seeded from docs + manual lines; migration 046; CashFlow.jsx.
 - [Doc lifecycle](doc-lifecycle.md) — OWNER RULES v390: ยกเลิก/ลบไล่จากใบล่าสุด+เหตุผลบังคับ (confirmDialog prompt.required), ใบยกเลิกล็อกปุ่มสร้างต่อ (BOQ แก้แล้ว revive), ใบเสนอใหม่ต้องอ้าง BOQ; + billing notes (mig 050), date filters.

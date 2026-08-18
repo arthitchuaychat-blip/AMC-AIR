@@ -2,9 +2,9 @@ import React from "react";
 
 // "เชื่อมโยง" row: clickable chips for every related document in the chain (both directions).
 // Pass the doc numbers you want to show; `self` ({type,no}) is excluded. onOpen(type, no) handles navigation.
-const LABEL = { boq: (n) => "BOQ " + n, quote: (n) => n, job: (n) => "งาน " + n, invoice: (n) => "บิล " + n, receipt: (n) => "ใบเสร็จ " + n, po: (n) => "สั่งซื้อ " + n };
+const LABEL = { boq: (n) => "BOQ " + n, quote: (n) => n, job: (n) => "งาน " + n, invoice: (n) => "บิล " + n, receipt: (n) => "ใบเสร็จ " + n, po: (n) => "สั่งซื้อ " + n, creditnote: (n) => "ใบลดหนี้ " + n, debitnote: (n) => "ใบเพิ่มหนี้ " + n };
 
-export default function DocChips({ boqNo, quoteNo, jobNos = [], invoiceNos = [], receiptNos = [], poNos = [], self, onOpen, jobStatusBy = {} }) {
+export default function DocChips({ boqNo, quoteNo, jobNos = [], invoiceNos = [], receiptNos = [], poNos = [], creditNos = [], debitNos = [], self, onOpen, jobStatusBy = {} }) {
   const items = [];
   if (boqNo) items.push(["boq", boqNo]);
   if (quoteNo) items.push(["quote", quoteNo]);
@@ -12,6 +12,8 @@ export default function DocChips({ boqNo, quoteNo, jobNos = [], invoiceNos = [],
   invoiceNos.forEach((n) => items.push(["invoice", n]));
   receiptNos.forEach((n) => items.push(["receipt", n]));
   poNos.forEach((n) => items.push(["po", n]));
+  creditNos.forEach((n) => items.push(["creditnote", n]));
+  debitNos.forEach((n) => items.push(["debitnote", n]));
   const shown = items.filter(([t, n]) => n && !(self && self.type === t && self.no === n));
   if (!shown.length) return null;
   return (

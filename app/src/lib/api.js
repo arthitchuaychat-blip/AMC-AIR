@@ -1542,7 +1542,7 @@ const _onlyIds = (q, col, ids) => (ids == null ? q : q.in(col, ids.length ? ids 
 
 // เลขเอกสารซ้ำไหม — ต้องเช็คก่อนบันทึกใบใหม่ทุกครั้ง เพราะ save เป็น upsert ที่ "ทับใบเดิมเงียบ ๆ" ถ้าเลขชนกัน
 // (เลขจาก genNo ละเอียดระดับวินาที แต่ 2 เครื่องกดพร้อมกัน หรือพิมพ์เลขมือซ้ำ ก็ยังชนได้)
-const _DOC_NO_COL = { boqs: "boq_no", quotations: "quote_no", invoices: "invoice_no", receipts: "receipt_no", billing_notes: "billing_no", purchase_orders: "po_no", material_preps: "prep_no" };
+const _DOC_NO_COL = { boqs: "boq_no", quotations: "quote_no", invoices: "invoice_no", receipts: "receipt_no", billing_notes: "billing_no", purchase_orders: "po_no", material_preps: "prep_no", adjustment_notes: "note_no" };
 export async function docNoTaken(table, no) {
   const col = _DOC_NO_COL[table];
   if (!col || !no) return false;
@@ -2255,6 +2255,7 @@ async function _loadReceipts(opts = {}) {
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
   const cxb = Object.fromEntries((cu.data || []).map((c) => [c.id, c.branch]));
+  const ctype = Object.fromEntries((cu.data || []).map((c) => [c.id, c.type]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j.job_no; });
@@ -2263,7 +2264,7 @@ async function _loadReceipts(opts = {}) {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, job_no: x.job_no || (x.quote_no ? jobByQuote[x.quote_no] : null) || null,
       title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
-      customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null, customerBranch: cxb[x.customer_id] || null,
+      customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null, customerBranch: cxb[x.customer_id] || null, customerType: ctype[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteName: s?.site_name || null, siteAddress: s?.address || null, createdByName: cb[x.created_by] || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
       mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
@@ -2309,6 +2310,79 @@ export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, n
   syncCashEntriesFromDocs().catch(() => {});
   syncBankReceipts().catch(() => {});
 }
+
+// ---------- ใบลดหนี้ / ใบเพิ่มหนี้ (Credit / Debit Note) — mig 218 ----------
+// ปรับยอดหลังออกใบเสร็จ/ใบแจ้งหนี้แล้ว · มีรายการของตัวเอง (ของที่ลด/เพิ่ม ไม่ได้ดึงจากใบเสนอ)
+// ไม่แตะกระแสเงินสดอัตโนมัติ (v1) — เงินจริงเข้า/ออกผ่านใบเสร็จงวดถัดไป/การคืนเงิน (กันนับซ้ำ)
+export function listAdjustmentNotes(opts = {}) { return _cached("listAdjustmentNotes:" + JSON.stringify(opts || {}), () => _loadAdjustmentNotes(opts), _SHORT_TTL); }
+async function _loadAdjustmentNotes() {
+  const [an, cu, si, ct] = await Promise.all([
+    _allRows((f, t) => supabase.from("adjustment_notes").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("note_no").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("*", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
+  ]);
+  if (an.error) throw an.error;
+  const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
+  const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const cxb = Object.fromEntries((cu.data || []).map((c) => [c.id, c.branch]));
+  const ctype = Object.fromEntries((cu.data || []).map((c) => [c.id, c.type]));
+  const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
+  const cc = _firstContacts(ct.data);
+  return (an.data || []).map((x) => {
+    const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
+    return { ...x, customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null, customerBranch: cxb[x.customer_id] || null,
+      customerType: ctype[x.customer_id] || null, customerAddr: ca[x.customer_id] || null,
+      siteName: s?.site_name || null, siteAddress: s?.address || null, mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
+      mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,
+      contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null };
+  });
+}
+export async function saveAdjustmentNote(a) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const kind = a.kind === "debit" ? "debit" : "credit";
+  // อ้างเอกสารต้นทางอย่างน้อยหนึ่งใบ + ห้ามอ้างใบที่ยกเลิกแล้ว
+  if (a.receipt_no) {
+    const { data: rcRow, error: re } = await supabase.from("receipts").select("status").eq("receipt_no", a.receipt_no).maybeSingle();
+    if (re) throw re;
+    if (rcRow && rcRow.status === "cancelled") throw new Error("ใบเสร็จต้นทางถูกยกเลิกแล้ว — ออกใบลด/เพิ่มหนี้ไม่ได้");
+  }
+  const { error } = await supabase.from("adjustment_notes").upsert({
+    note_no: a.note_no, kind, receipt_no: a.receipt_no || null, invoice_no: a.invoice_no || null, quote_no: a.quote_no || null,
+    boq_no: a.boq_no || null, job_no: a.job_no || null, customer_id: a.customer_id || null, site_id: a.site_id || null,
+    issue_date: a.issue_date || null, reason: a.reason?.trim() || null, is_vat: !!a.is_vat, items: a.items || [],
+    base: Number(a.base) || 0, vat_amt: Number(a.vat_amt) || 0, total: Number(a.total) || 0,
+    wht_rate: Number(a.wht_rate) || 3, wht_amt: Number(a.wht_amt) || 0, net: Number(a.net) || 0,
+    note: a.note?.trim() || null, internal_note: a.internal_note?.trim() || null, ..._termCols(a), ..._signCols(a),
+    status: a.status === "cancelled" ? "cancelled" : "issued", created_by: user?.id || null,
+  }, { onConflict: "note_no" });
+  if (error) throw error;
+  bustCache("listAdjustmentNotes"); bustCache("listDocLinks");
+  syncInternalNote({ invoiceNo: a.invoice_no }, a.internal_note).catch(() => {});
+}
+export async function setAdjustmentNoteWht(note_no, items, wht_rate, wht_amt, net) {
+  const { error } = await supabase.from("adjustment_notes").update({ items: items || [], wht_rate: Number(wht_rate) || 3, wht_amt: Number(wht_amt) || 0, net: Number(net) || 0 }).eq("note_no", note_no);
+  if (error) throw error;
+  bustCache("listAdjustmentNotes");
+  await logAudit({ action: "edit", target_type: "adjustment_note", target_no: note_no, reason: `แก้หัก ณ ที่จ่าย → ${Number(wht_amt) || 0} บาท` });
+}
+export async function setAdjustmentNoteStatus(note_no, status, reason) {
+  const patch = { status };
+  if (status === "cancelled") { patch.cancel_reason = reason || null; patch.cancelled_at = new Date().toISOString(); }
+  const { error } = await supabase.from("adjustment_notes").update(patch).eq("note_no", note_no);
+  if (error) throw error;
+  bustCache("listAdjustmentNotes"); bustCache("listDocLinks");
+  if (status === "cancelled") await logAudit({ action: "cancel", target_type: "adjustment_note", target_no: note_no, reason: reason || null });
+}
+export async function deleteAdjustmentNote(note_no, reason) {
+  const { data: snap } = await supabase.from("adjustment_notes").select("*").eq("note_no", note_no).maybeSingle();
+  await logAudit({ action: "delete", target_type: "adjustment_note", target_no: note_no, reason: reason || null, snapshot: snap || null });
+  const { error } = await supabase.from("adjustment_notes").delete().eq("note_no", note_no);
+  if (error) throw error;
+  bustCache("listAdjustmentNotes"); bustCache("listDocLinks");
+}
+
 // toggle a receipt's paid status (and sync the linked invoice)
 // ---------- BILLING NOTES (ใบวางบิล) ----------
 export function listBillingNotes() { return _cached("listBillingNotes", _loadBillingNotes, _SHORT_TTL); }
@@ -5621,30 +5695,39 @@ export async function markChatRead(roomId) {
 // chain is keyed by quote_no: BOQ → quote → invoices/job-orders → receipts
 export function listDocLinks() { return _cached("listDocLinks", _loadDocLinks, _SHORT_TTL); }
 async function _loadDocLinks() {
-  const [q, inv, rc, jo, po] = await Promise.all([
+  const [q, inv, rc, jo, po, an] = await Promise.all([
     _allRows((f, t) => supabase.from("quotations").select("quote_no,boq_no", { count: "exact" }).order("quote_no").range(f, t)),
     _allRows((f, t) => supabase.from("invoices").select("invoice_no,quote_no", { count: "exact" }).neq("status", "cancelled").order("invoice_no").range(f, t)),
     _allRows((f, t) => supabase.from("receipts").select("receipt_no,invoice_no,quote_no,job_no,boq_no", { count: "exact" }).neq("status", "cancelled").order("receipt_no").range(f, t)), // ใบเสร็จยกเลิกไม่ขึ้นชิป (กติกา: ใบยกเลิก = จบสาย)
     _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no,status", { count: "exact" }).order("job_no").range(f, t)),
     _allRows((f, t) => supabase.from("purchase_orders").select("po_no,quote_no,status", { count: "exact" }).order("po_no").range(f, t)).catch(() => ({ data: [] })), // pre-100 → ยังไม่มี quote_no
+    _allRows((f, t) => supabase.from("adjustment_notes").select("note_no,kind,quote_no,invoice_no,receipt_no", { count: "exact" }).neq("status", "cancelled").order("note_no").range(f, t)).catch(() => ({ data: [] })), // mig 218 ยังไม่รัน → ข้าม
   ]);
   const byQuote = {};
   // สถานะใบงานรายใบ — เอกสารทุกใบในสายใช้ติดป้าย "✓ เสร็จปิดงาน" บนชิปงาน
   const jobStatusBy = Object.fromEntries((jo.data || []).map((x) => [x.job_no, x.status]));
-  const ensure = (qn) => (byQuote[qn] = byQuote[qn] || { boqNo: null, jobNos: [], invoiceNos: [], receiptNos: [], poNos: [], poOpen: 0 });
+  const ensure = (qn) => (byQuote[qn] = byQuote[qn] || { boqNo: null, jobNos: [], invoiceNos: [], receiptNos: [], poNos: [], poOpen: 0, creditNos: [], debitNos: [] });
   (q.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).boqNo = x.boq_no || null; });
   (jo.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).jobNos.push(x.job_no); });
   (inv.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).invoiceNos.push(x.invoice_no); });
   (rc.data || []).forEach((x) => { if (x.quote_no) ensure(x.quote_no).receiptNos.push(x.receipt_no); });
   (po.data || []).forEach((x) => { if (x.quote_no && x.status !== "cancelled") { const e = ensure(x.quote_no); e.poNos.push(x.po_no); if (x.status === "open") e.poOpen += 1; } });
+  // ใบลด/เพิ่มหนี้ (mig 218) — อ้าง quote_no ตรง ๆ หรือสืบจากใบเสร็จ/ใบแจ้งหนี้ต้นทาง
+  const invToQuoteEarly = {}; (inv.data || []).forEach((x) => { if (x.quote_no) invToQuoteEarly[x.invoice_no] = x.quote_no; });
+  const rcToQuoteEarly = {}; (rc.data || []).forEach((x) => { if (x.quote_no) rcToQuoteEarly[x.receipt_no] = x.quote_no; });
+  (an.data || []).forEach((x) => {
+    const qn = x.quote_no || (x.invoice_no && invToQuoteEarly[x.invoice_no]) || (x.receipt_no && rcToQuoteEarly[x.receipt_no]);
+    if (!qn) return; const e = ensure(qn); (x.kind === "debit" ? e.debitNos : e.creditNos).push(x.note_no);
+  });
   // reverse lookups → quote_no (so any doc can find its chain)
-  const boqToQuote = {}, jobToQuote = {}, invToQuote = {}, rcToQuote = {}, poToQuote = {};
+  const boqToQuote = {}, jobToQuote = {}, invToQuote = {}, rcToQuote = {}, poToQuote = {}, cnToQuote = {}, dnToQuote = {};
   (q.data || []).forEach((x) => { if (x.boq_no) boqToQuote[x.boq_no] = x.quote_no; });
   (jo.data || []).forEach((x) => { if (x.quote_no) jobToQuote[x.job_no] = x.quote_no; });
   (inv.data || []).forEach((x) => { if (x.quote_no) invToQuote[x.invoice_no] = x.quote_no; });
   (rc.data || []).forEach((x) => { if (x.quote_no) rcToQuote[x.receipt_no] = x.quote_no; });
   (po.data || []).forEach((x) => { if (x.quote_no) poToQuote[x.po_no] = x.quote_no; });
-  return { byQuote, boqToQuote, jobToQuote, invToQuote, rcToQuote, poToQuote, jobStatusBy };
+  (an.data || []).forEach((x) => { const qn = x.quote_no || (x.invoice_no && invToQuoteEarly[x.invoice_no]) || (x.receipt_no && rcToQuoteEarly[x.receipt_no]); if (qn) (x.kind === "debit" ? dnToQuote : cnToQuote)[x.note_no] = qn; });
+  return { byQuote, boqToQuote, jobToQuote, invToQuote, rcToQuote, poToQuote, cnToQuote, dnToQuote, jobStatusBy };
 }
 
 // ---------- เครื่องมือช่าง (mig 122): ทะเบียน + เบิก/คืน/แจ้งชำรุด ----------

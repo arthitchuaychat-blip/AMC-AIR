@@ -48,6 +48,7 @@ const TaskBoard = React.lazy(() => import("./components/TaskBoard"));
 const MyJobs = React.lazy(() => import("./components/MyJobs"));
 const Invoices = React.lazy(() => import("./components/Invoices"));
 const Receipts = React.lazy(() => import("./components/Receipts"));
+const AdjustmentNotes = React.lazy(() => import("./components/AdjustmentNotes"));
 const Receivables = React.lazy(() => import("./components/Receivables"));
 const Payables = React.lazy(() => import("./components/Payables"));
 const MaterialPrep = React.lazy(() => import("./components/MaterialPrep"));
@@ -83,6 +84,7 @@ const NAV = {
   quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
   invoice: { th: "ใบส่งของ/ใบแจ้งหนี้", en: "Delivery / Invoice", icon: "clipboard" },
   receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
+  adjnote: { th: "ใบเพิ่ม/ลดหนี้", en: "Credit / Debit Note", icon: "clipboard" },
   billing: { th: "ใบวางบิล", en: "Billing Notes", icon: "clipboard" },
   receivables: { th: "เงินค้างรับ", en: "Receivables", icon: "trend" },
   payables: { th: "ค้างจ่าย", en: "Payables", icon: "trend" },
@@ -108,7 +110,7 @@ const NAV = {
 const NAV_EMOJI = {
   myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
   pipeline: "🎯", reviews: "🌟", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
-  subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", billing: "📑",
+  subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", adjnote: "📃", billing: "📑",
   receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", expenses: "💳",
   joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
   suppliers: "🏭", prep: "📥", po: "🛍️", tools: "🔨", settings: "⚙️",
@@ -119,7 +121,7 @@ const NAV_EMOJI = {
 const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "customers", "pipeline", "followup", "reviews", "weborders", "website"] },
-  { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt"] },
+  { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt", "adjnote"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po", "tools"] },
@@ -131,7 +133,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-17·สาขาลูกค้านิติบุคคล: เพิ่มช่องในการ์ดลูกค้า (หน้าเพิ่ม/แก้ไข) + โชว์ในเอกสาร v627";
+const BUILD = "2026-08-17·ใบเพิ่ม/ลดหนี้ (Credit/Debit Note): เอกสารใหม่ ปรับยอดหลังออกใบเสร็จ + พิมพ์ A4 v628";
 
 function SetupNotice() {
   return (
@@ -627,6 +629,7 @@ export default function App() {
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "receipt" && <Receipts role={role} focus={receiptFocus} onFocusConsumed={() => setReceiptFocus(null)} fromInvoice={receiptFromInvoice} onFromInvoiceConsumed={() => setReceiptFromInvoice(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
+        {view === "adjnote" && <AdjustmentNotes role={role} onOpenDoc={openDoc} />}
         {view === "billing" && <BillingNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
         {view === "receivables" && <Receivables role={role} onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
