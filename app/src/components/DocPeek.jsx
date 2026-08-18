@@ -1,5 +1,5 @@
 import React from "react";
-import { listBoqs, listQuotations, listInvoices, listReceipts, listPurchaseOrders, listMaterialsLite, listJobOrders, listBillingNotes } from "../lib/api";
+import { listBoqs, listQuotations, listInvoices, listReceipts, listPurchaseOrders, listMaterialsLite, listJobOrders, listBillingNotes, listAdjustmentNotes } from "../lib/api";
 import { fmtBaht, fmtNum, fmtDocDate } from "../lib/format";
 import { JOB_STATUSES, jobTypeDef } from "../lib/schedule";
 import { UIcon } from "../icons";
@@ -14,11 +14,13 @@ const META = {
   billing: { th: "ใบวางบิล", color: "#b45309" },
   po: { th: "ใบสั่งซื้อ", color: "#7c3aed" },
   job: { th: "ใบงาน", color: "#ea8a04" },
+  creditnote: { th: "ใบลดหนี้", color: "#dc2626" },
+  debitnote: { th: "ใบเพิ่มหนี้", color: "#2563eb" },
 };
 const JOB_ST = Object.fromEntries(JOB_STATUSES.map(([v, l]) => [v, l]));
 const ST_TH = {
   draft: "ร่าง", sent: "ส่งแล้ว", approved: "อนุมัติ", rejected: "ปฏิเสธ", expired: "หมดอายุ", cancelled: "ยกเลิก",
-  unpaid: "ค้างชำระ", paid: "ชำระแล้ว", pending: "รอชำระ", open: "รอรับของ", received: "รับของแล้ว",
+  unpaid: "ค้างชำระ", paid: "ชำระแล้ว", pending: "รอชำระ", open: "รอรับของ", received: "รับของแล้ว", issued: "ออกแล้ว",
 };
 
 export default function DocPeek({ type, no, onClose, onOpenFull }) {
@@ -44,6 +46,7 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
           if (d) { const mm = Object.fromEntries(mats.map((m) => [m.code, m])); d = { ...d, _poLines: d.items.map((it) => ({ name: mm[it.material_code]?.th || it.material_code, qty: it.qty, unit: it.unit || mm[it.material_code]?.unit || "", price: it.price })) }; }
         }
         else if (type === "billing") d = (await listBillingNotes()).find((x) => x.billing_no === no);
+        else if (type === "creditnote" || type === "debitnote") d = (await listAdjustmentNotes()).find((x) => x.note_no === no);
         else if (type === "job") d = (await listJobOrders()).find((x) => x.job_no === no);
         if (alive) { setDoc(d || null); setLoading(false); }
       } catch (e) { if (alive) { setErr(e.message || String(e)); setLoading(false); } }
@@ -95,6 +98,8 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
                 <div className="cd-k">วันที่</div><div className="cd-v">{fmtDocDate(doc.issue_date || doc.created_at) || "-"}</div>
                 {stKey && <><div className="cd-k">สถานะ</div><div className="cd-v">{(type === "job" ? JOB_ST[stKey] : type === "billing" ? ({ open: "วางบิล", cancelled: "ยกเลิก" }[stKey]) : ST_TH[stKey]) || stKey}{payTh ? <span className="jo-dim"> · 💳 {payTh}</span> : ""}</div></>}
                 {doc.title && <><div className="cd-k">ชื่องาน</div><div className="cd-v">{doc.title}</div></>}
+                {(type === "creditnote" || type === "debitnote") && doc.reason && <><div className="cd-k">เหตุผล</div><div className="cd-v">{doc.reason}</div></>}
+                {(type === "creditnote" || type === "debitnote") && doc.receipt_no && <><div className="cd-k">อ้างอิงใบเสร็จ</div><div className="cd-v">{doc.receipt_no}</div></>}
                 {(type === "po" || type === "job") && doc.quote_no && <><div className="cd-k">อ้างอิง</div><div className="cd-v">{doc.quote_no}</div></>}
                 {type === "invoice" && doc.due_date && <><div className="cd-k">ครบกำหนด</div><div className="cd-v">{fmtDocDate(doc.due_date)}</div></>}
                 {type === "job" && doc.teamName && <><div className="cd-k">ทีมช่าง</div><div className="cd-v">🔧 {doc.teamName}</div></>}
@@ -151,6 +156,12 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
                   <PeekRow l="ยอดวางบิลรวม" v={fmtBaht(doc.total)} />
                   {Number(doc.wht) > 0 && <PeekRow l="หัก ณ ที่จ่าย" v={"− " + fmtBaht(doc.wht)} />}
                   <PeekRow big l="ยอดสุทธิที่ต้องชำระ" v={fmtBaht(doc.net || doc.total)} />
+                </>}
+                {(type === "creditnote" || type === "debitnote") && <>
+                  <PeekRow l="รวมก่อนภาษี" v={fmtBaht(doc.base)} />
+                  {doc.is_vat ? <PeekRow l="VAT 7%" v={fmtBaht(doc.vat_amt)} /> : null}
+                  {Number(doc.wht_amt) > 0 && <PeekRow l="หัก ณ ที่จ่าย" v={"− " + fmtBaht(doc.wht_amt)} />}
+                  <PeekRow big l={type === "creditnote" ? "ยอดลดสุทธิ" : "ยอดเพิ่มสุทธิ"} v={fmtBaht(doc.net || doc.total)} />
                 </>}
                 {type === "po" && <>
                   <PeekRow l="ยอดก่อน VAT" v={fmtBaht(doc.subtotal)} />

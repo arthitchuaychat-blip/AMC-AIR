@@ -1,6 +1,6 @@
 import React from "react";
 import DocSlip from "./DocSlip";
-import { listQuotations, listInvoices, listReceipts, listPurchaseOrders, listSuppliers, listMaterialsLite, getCompanies } from "../lib/api";
+import { listQuotations, listInvoices, listReceipts, listPurchaseOrders, listSuppliers, listMaterialsLite, listAdjustmentNotes, getCompanies } from "../lib/api";
 import { fmtBaht, fmtBaht2, fmtNum, custCode, fmtDocDate } from "../lib/format";
 
 // Renders a single document (quotation/invoice/receipt) off-screen at A4 size so it can be captured
@@ -42,6 +42,10 @@ export default function DocCapture({ type, no, onReady, onError }) {
           const [pos, sups, mats] = await Promise.all([listPurchaseOrders(), listSuppliers().catch(() => []), listMaterialsLite()]);
           const x = pos.find((r) => r.po_no === no); if (!x) throw new Error("ไม่พบใบสั่งซื้อ " + no);
           alive && setData({ companies, x, sup: sups.find((s) => (s.name || "").trim() === (x.supplier || "").trim()) || null, matMap: Object.fromEntries(mats.map((m) => [m.code, m])) });
+        } else if (type === "creditnote" || type === "debitnote") {
+          const x = (await listAdjustmentNotes()).find((r) => r.note_no === no);
+          if (!x) throw new Error("ไม่พบเอกสาร " + no);
+          alive && setData({ companies, x });
         } else throw new Error("ชนิดเอกสารไม่รองรับ");
       } catch (e) { onError && onError(e.message || String(e)); }
     })();
@@ -69,7 +73,38 @@ function slip(type, d) {
   if (type === "quote") return quoteSlip(d.q, d.companies);
   if (type === "invoice") return invoiceSlip(d.x, d.q, d.companies);
   if (type === "po") return poSlip(d.x, d.sup, d.matMap, d.companies);
+  if (type === "creditnote" || type === "debitnote") return noteSlip(d.x, d.companies);
   return receiptSlip(d.x, d.q, d.inv, d.companies);
+}
+
+// ใบลดหนี้ / ใบเพิ่มหนี้ — รายการเป็นของตัวเอง (ที่ลด/เพิ่ม) · ต้องเหมือนหน้าพิมพ์ใน AdjustmentNotes
+function noteSlip(x, companies) {
+  const isCredit = x.kind !== "debit";
+  const verb = isCredit ? "ลด" : "เพิ่ม";
+  const co = x.is_vat ? companies.vat : companies.novat;
+  const its = x.items || [];
+  return (
+    <DocSlip company={co} titleTh={isCredit ? "ใบลดหนี้" : "ใบเพิ่มหนี้"} titleEn={isCredit ? "CREDIT NOTE" : "DEBIT NOTE"} docNo={x.note_no}
+      metaRows={[{ label: "วันที่", value: fmtDocDate(x.issue_date || x.created_at) }, { label: "อ้างอิงใบเสร็จ", value: x.receipt_no }, { label: "อ้างอิงใบแจ้งหนี้", value: x.invoice_no }, { label: "อ้างอิงใบเสนอ", value: x.quote_no }]}
+      projectTitle={`เหตุผลการ${verb}: ${x.reason || "-"}`}
+      customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, branch: x.customerBranch, address: x.customerAddr, contactName: x.mainContactName, contactPhone: x.mainContactPhone, siteName: x.siteName, siteAddress: x.siteAddress, siteContactName: x.siteContactName, siteContactPhone: x.siteContactPhone, mapUrl: x.mapUrl }}
+      terms={x.note} termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info}
+      signLabels={["ผู้ออกเอกสาร", "ผู้รับเอกสาร / ลูกค้า"]} signUrl={x.sign_url} signName={x.sign_name}
+      unitHead="หน่วยละ" amountHead={`ยอด${verb}`}
+      totals={<div className="doc-totals">
+        <div><span>รวมยอด{verb}ก่อนภาษี</span><b>{fmtBaht2(x.base)}</b></div>
+        {x.is_vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht2(x.vat_amt)}</b></div> : null}
+        <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht2(x.total)}</b></div>
+        {x.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(x.wht_rate) || 3}%</span><b>− {fmtBaht2(x.wht_amt)}</b></div>}
+        <div className="doc-grand"><span>ยอดสุทธิ ({verb})</span><b>{fmtBaht2(x.net)}</b></div>
+      </div>}>
+      {its.map((it, i) => (
+        <tr key={i}><td>{i + 1}</td><td>{it.code || "-"}</td>
+          <td>{it.name}{it.desc ? <div className="doc-item-desc">{it.desc}</div> : null}</td>
+          <td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht2(it.price)}</td><td className="r">{fmtBaht2(Number(it.amount) || (Number(it.qty) * Number(it.price)))}</td></tr>
+      ))}
+    </DocSlip>
+  );
 }
 
 function poSlip(po, sup, matMap, companies) {

@@ -133,7 +133,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-18·ใบเพิ่ม/ลดหนี้: รายการในใบเดิมโชว์ชื่อเต็ม+รหัส+คำอธิบาย · แก้คำอธิบายบรรทัดได้ v630";
+const BUILD = "2026-08-18·ใบเพิ่ม/ลดหนี้: เชื่อมโยงเอกสาร (ชิป+พรีวิว) + แชตลูกค้า + ส่งให้ลูกค้าทางแชตได้ v631";
 
 function SetupNotice() {
   return (
@@ -472,7 +472,7 @@ export default function App() {
   // unified cross-document navigation (เชื่อมโยง chips + doc history in chat) → open in a NEW TAB
   // so you don't lose the page you're on; the new tab reads #view/no and focuses that record
   function openDoc(type, no) {
-    const v = { boq: "boq", quote: "quote", job: "joborders", invoice: "invoice", receipt: "receipt", po: "po", handover: "handover" }[type];
+    const v = { boq: "boq", quote: "quote", job: "joborders", invoice: "invoice", receipt: "receipt", po: "po", handover: "handover", creditnote: "adjnote", debitnote: "adjnote" }[type];
     if (v) openInNewTab(v, no);
   }
 
@@ -629,7 +629,7 @@ export default function App() {
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "receipt" && <Receipts role={role} focus={receiptFocus} onFocusConsumed={() => setReceiptFocus(null)} fromInvoice={receiptFromInvoice} onFromInvoiceConsumed={() => setReceiptFromInvoice(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
-        {view === "adjnote" && <AdjustmentNotes role={role} onOpenDoc={openDoc} />}
+        {view === "adjnote" && <AdjustmentNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "billing" && <BillingNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
         {view === "receivables" && <Receivables role={role} onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}

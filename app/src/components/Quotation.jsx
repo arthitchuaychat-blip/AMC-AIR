@@ -471,7 +471,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 title={q.title} sub={`${q.items.length} รายการ`} by={q.createdByName}
                 date={q.issue_date || q.created_at} amountLabel="ยอดสุทธิ" amount={q.grand}
                 customer={{ name: q.customerName, contactName: q.contactName, phone: q.contactPhone, addr: q.customerAddr, siteAddress: q.siteAddress, mapUrl: q.map_url }} />
-              {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "quote", no: q.quote_no }} onOpen={openPeek} />; })()}
+              {(() => { const ch = docLinks.byQuote[q.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={q.boq_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} creditNos={ch.creditNos} debitNos={ch.debitNos} self={{ type: "quote", no: q.quote_no }} onOpen={openPeek} />; })()}
               <InternalNoteTag note={q.internal_note} role={role} />
               <div className="job-lines"><div className="job-actions">
                 <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />

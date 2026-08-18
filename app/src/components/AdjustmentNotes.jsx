@@ -1,12 +1,15 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listAdjustmentNotes, saveAdjustmentNote, setAdjustmentNoteStatus, deleteAdjustmentNote, listReceipts, listQuotations, getCompanies, docNoTaken } from "../lib/api";
+import { listAdjustmentNotes, saveAdjustmentNote, setAdjustmentNoteStatus, deleteAdjustmentNote, listReceipts, listQuotations, listDocLinks, getCompanies, docNoTaken } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
 import DocTerms from "./DocTerms";
+import DocChips from "./DocChips";
+import ChatCustomerLink from "./ChatCustomerLink";
+import { useDocPeek } from "./DocPeek";
 import { DocNoteField, InternalNoteField, SignToggle } from "./InternalNote";
 import { mySignature, defaultSignOn } from "../lib/sign";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
@@ -24,12 +27,14 @@ const blankItem = () => ({ name: "", desc: "", unit: "", qty: 1, price: 0, kind:
 const today = () => new Date().toISOString().slice(0, 10);
 function genNo(kind) { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${KINDS[kind].prefix}-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 
-export default function AdjustmentNotes({ role, onOpenDoc }) {
+export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
+  const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวา
   const canEdit = can(role, "adjnote", "edit");
   const canDelete = role === "admin";
   const [list, setList] = React.useState([]);
   const [receipts, setReceipts] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
+  const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
@@ -41,7 +46,7 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
 
   async function load() {
     setLoading(true);
-    try { const [an, rc, q, co] = await Promise.all([listAdjustmentNotes(), listReceipts(), listQuotations(), getCompanies()]); setList(an); setReceipts(rc); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); }
+    try { const [an, rc, q, dl, co] = await Promise.all([listAdjustmentNotes(), listReceipts(), listQuotations(), listDocLinks(), getCompanies()]); setList(an); setReceipts(rc); setQuotes(q); setDocLinks(dl || { byQuote: {} }); setCompanies(co || { vat: {}, novat: {} }); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -299,7 +304,9 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
                   {x.wht_amt > 0 && <div className="page-sub" style={{ margin: 0 }}>หัก ณ ที่จ่าย {fmtBaht(x.wht_amt)}</div>}
                 </div>
               </div>
+              {(() => { const ch = docLinks.byQuote[x.quote_no] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} boqNo={x.boq_no} quoteNo={x.quote_no} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} creditNos={ch.creditNos} debitNos={ch.debitNos} self={{ type: x.kind === "debit" ? "debitnote" : "creditnote", no: x.note_no }} onOpen={openPeek} />; })()}
               <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => doPrint(x)}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && !cancelled && <button className="btn-ghost sm" onClick={() => startEdit(x)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && !cancelled && <button className="btn-ghost sm" style={{ color: "#b45309" }} onClick={() => cancel(x)}>ยกเลิก</button>}
@@ -356,6 +363,7 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
           </DocSlip>
         );
       })()}
+      {peekEl}
       {toast && <Toast t={toast} />}
     </div>
   );

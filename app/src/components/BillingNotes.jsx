@@ -161,7 +161,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
               });
               return [...ch.quotes].map((qn, i) => {
                 const g = docLinks.byQuote[qn] || {};
-                return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} key={qn + i} boqNo={g.boqNo} quoteNo={qn} jobNos={g.jobNos} invoiceNos={g.invoiceNos} receiptNos={g.receiptNos} poNos={g.poNos} onOpen={openPeek} />;
+                return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} key={qn + i} boqNo={g.boqNo} quoteNo={qn} jobNos={g.jobNos} invoiceNos={g.invoiceNos} receiptNos={g.receiptNos} poNos={g.poNos} creditNos={g.creditNos} debitNos={g.debitNos} onOpen={openPeek} />;
               });
             })()}
             <InternalNoteTag note={b.internal_note} role={role} />

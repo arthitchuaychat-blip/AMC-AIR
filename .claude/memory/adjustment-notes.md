@@ -19,4 +19,6 @@ metadata:
 
 **api.js:** `listAdjustmentNotes`, `saveAdjustmentNote`, `setAdjustmentNoteStatus` (cancel), `setAdjustmentNoteWht`, `deleteAdjustmentNote`. `_DOC_NO_COL.adjustment_notes="note_no"`. เลข `CN-`/`DN-YYMMDD-HHMMSS`.
 
-**เชื่อมโยง:** `_loadDocLinks` เก็บ `creditNos`/`debitNos` ต่อ quote + `DocChips` มี label `creditnote`/`debitnote` แล้ว — แต่ **ยังไม่ wire เข้า DocChips ในหน้าใบเสร็จ/ใบแจ้งหนี้** (งาน follow-up ถ้าอยากเห็นชิปใบลด/เพิ่มหนี้จากใบเสร็จ ต้องส่ง prop creditNos/debitNos + ให้ openDoc/DocPeek รองรับ type ใหม่). [[sales-doc-flow]]
+**เชื่อมโยง (wired ครบแล้ว v631):** `_loadDocLinks` เก็บ `creditNos`/`debitNos` ต่อ quote · DocChips ส่ง prop ครบทั้ง Receipts/Invoices/Quotation/BillingNotes + หน้าใบลด/เพิ่มหนี้เอง · `DocPeek` META + loader (type `creditnote`/`debitnote`) พรีวิวแผงขวา · `openDoc` map → view `adjnote`.
+
+**ส่งให้ลูกค้าทางแชต (v631):** `listCustomerDocs` เพิ่ม entry note (type creditnote/debitnote) · `docmeta.js` TYPE_LABEL/DOC_STATUS/DOC_FILTERS · Chat.jsx `sendable` รวม 2 type · `DocCapture.noteSlip` เรนเดอร์ A4 เพื่อแคปส่ง · หน้าใบลด/เพิ่มหนี้มีปุ่ม ChatCustomerLink (role sales/admin/exec) + onGoChat. [[sales-doc-flow]] [[email-inbox]]

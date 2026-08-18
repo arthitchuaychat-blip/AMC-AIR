@@ -1064,7 +1064,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       const st = stOf(e);
                       const dateTxt = e.type === "job" && e.scheduled_at ? scheduleLabel(e)
                         : (e.date ? new Date(e.date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) : "—");
-                      const sendable = ["quote", "invoice", "receipt"].includes(e.type);
+                      const sendable = ["quote", "invoice", "receipt", "creditnote", "debitnote"].includes(e.type);
                       return (
                         <div className="cd-job" key={e.type + e.no}>
                           <span className={"cd-job-dot " + st[1]} />
