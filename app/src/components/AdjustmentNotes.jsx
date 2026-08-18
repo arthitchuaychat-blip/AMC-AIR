@@ -176,12 +176,13 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
                   {srcItems.map((it, i) => {
                     const price = Number(it.price_show ?? it.unit_price) || 0;
                     return (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", background: "var(--surface-2)", borderRadius: 6 }}>
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 8px", background: "var(--surface-2)", borderRadius: 6 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</div>
-                          <div className="page-sub" style={{ margin: 0 }}>{Number(it.qty)} {it.unit || ""} × {fmtBaht(price)}{it.kind === "service" ? " · ค่าบริการ" : ""}</div>
+                          <div style={{ fontWeight: 600 }}>{it.item_code ? <span style={{ color: "var(--ink-3)", fontWeight: 500 }}>{it.item_code} · </span> : null}{it.name}</div>
+                          {it.description ? <div className="page-sub" style={{ margin: "2px 0 0", whiteSpace: "pre-wrap" }}>{it.description}</div> : null}
+                          <div className="page-sub" style={{ margin: "2px 0 0", fontWeight: 600 }}>{Number(it.qty)} {it.unit || ""} × {fmtBaht(price)} = {fmtBaht(Number(it.qty) * price)}{it.kind === "service" ? " · ค่าบริการ" : ""}</div>
                         </div>
-                        <button className="btn-ghost sm" onClick={() => addFromSource(it)}><UIcon name="plus" size={13} /> {K.verb}</button>
+                        <button className="btn-ghost sm" style={{ flex: "none", marginTop: 2 }} onClick={() => addFromSource(it)}><UIcon name="plus" size={13} /> {K.verb}</button>
                       </div>
                     );
                   })}
@@ -202,6 +203,7 @@ export default function AdjustmentNotes({ role, onOpenDoc }) {
                       </Combo>
                       <button className="line-x" onClick={() => delItem(i)}><UIcon name="x" size={14} /></button>
                     </div>
+                    <input className="inp" style={{ marginTop: 6 }} value={it.desc || ""} onChange={(e) => setItem(i, "desc", e.target.value)} placeholder="รายละเอียด/คำอธิบาย (ไม่บังคับ)" />
                     <div className="crm-row" style={{ marginTop: 6 }}>
                       <input className="inp" style={{ width: 70, flex: "none" }} type="number" min="0" step="1" value={it.qty} onChange={(e) => setItem(i, "qty", e.target.value)} placeholder="จำนวน" />
                       <input className="inp" style={{ width: 90, flex: "none" }} value={it.unit} onChange={(e) => setItem(i, "unit", e.target.value)} placeholder="หน่วย" />
