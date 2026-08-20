@@ -210,10 +210,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       const r = await fetch("/api/fb-backfill", { headers: { Authorization: `Bearer ${session?.access_token || ""}` } });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
-      flash(`รีเฟรชโปรไฟล์ FB แล้ว ✓ อัปเดต ${j.updated || 0}/${j.scanned || 0}${j.failed ? ` · พลาด ${j.failed}` : ""}`);
       await loadContacts();
+      if ((j.updated || 0) > 0) flash(`รีเฟรชโปรไฟล์ FB แล้ว ✓ อัปเดต ${j.updated}/${j.scanned || 0}`);
+      else if (!j.scanned) flash("โปรไฟล์ครบแล้ว — ไม่มีรายการต้องอัปเดต");
+      else { const d = (j.details || [])[0] || {}; flash(`ดึงโปรไฟล์ไม่ได้ (${j.scanned} ราย): ${d.graphError || d.result || "ไม่ทราบสาเหตุ"}${d.gotPic === false ? " · FB ไม่คืนรูป" : ""}`, true); }
     } catch (e) { flash("รีเฟรชไม่สำเร็จ: " + (e.message || e), true); }
-    setFbRefreshing(false);
+    finally { setFbRefreshing(false); }
   }
   React.useEffect(() => {
     loadContacts(); loadQr();
@@ -702,7 +704,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             </button>
           </div>
           {isFb && (
-            <button className="btn-ghost sm" style={{ display: "inline-flex", alignSelf: "flex-start", width: "fit-content", fontSize: 12, padding: "3px 9px", margin: "0 0 8px", lineHeight: 1.5 }} disabled={fbRefreshing} onClick={refreshFbProfiles}
+            <button className="btn-ghost sm" style={{ flex: "none", display: "inline-flex", alignSelf: "flex-start", width: "fit-content", fontSize: 12, padding: "4px 10px", margin: "0 0 8px" }} disabled={fbRefreshing} onClick={refreshFbProfiles}
               title="ดึงชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook เก่าที่ยังไม่ขึ้น">🔄 {fbRefreshing ? "กำลังรีเฟรช…" : "รีเฟรชโปรไฟล์"}</button>
           )}
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
