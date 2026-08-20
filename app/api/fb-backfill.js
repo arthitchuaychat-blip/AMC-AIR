@@ -24,18 +24,28 @@ export default async function handler(req, res) {
   let updated = 0, failed = 0;
   const details = [];
   for (const c of rows) {
+    const d = { psid: c.psid };
     try {
       const p = await fetch(`${GRAPH}/${c.psid}?fields=first_name,last_name,profile_pic&access_token=${token}`).then((r) => r.json());
+      if (p.error) { d.graphError = p.error.message || p.error.type || JSON.stringify(p.error); }
       const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || null;
-      const pic = p.profile_pic ? (await cacheImage(`fb/${c.psid}.jpg`, p.profile_pic)) || p.profile_pic : null;
-      if (!name && !pic) { failed++; details.push({ psid: c.psid, err: p.error?.message || "ไม่พบโปรไฟล์" }); continue; }
+      d.gotName = !!name; d.gotPic = !!p.profile_pic;
+      let pic = null;
+      if (p.profile_pic) {
+        const cached = await cacheImage(`fb/${c.psid}.jpg`, p.profile_pic);
+        d.cached = cached ? "ok" : "cache-failed";
+        pic = cached || p.profile_pic;
+      }
+      if (!name && !pic) { failed++; d.result = "no-profile"; details.push(d); continue; }
       const patch = {};
       if (name && !c.display_name) patch.display_name = name;
-      if (pic) patch.picture_url = pic;   // รูปหมดอายุได้ → รีเฟรชทับทุกครั้ง
-      if (!Object.keys(patch).length) continue;
-      const up = await fetch(`${SB()}/rest/v1/fb_contacts?psid=eq.${encodeURIComponent(c.psid)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify(patch) });
-      if (up.ok) updated++; else { failed++; details.push({ psid: c.psid, err: "patch " + up.status }); }
-    } catch (e) { failed++; details.push({ psid: c.psid, err: String(e) }); }
+      if (pic) patch.picture_url = pic;   // ทับรูปเดิม (FB CDN หมดอายุ) ด้วย URL storage เรา
+      if (!Object.keys(patch).length) { d.result = "nothing-to-update"; details.push(d); continue; }
+      const up = await fetch(`${SB()}/rest/v1/fb_contacts?psid=eq.${encodeURIComponent(c.psid)}`, { method: "PATCH", headers: { ...sbH(), Prefer: "return=minimal" }, body: JSON.stringify(patch) });
+      if (up.ok) { updated++; d.result = "updated"; d.newPic = patch.picture_url ? patch.picture_url.slice(0, 60) + "…" : null; }
+      else { failed++; d.result = "patch-" + up.status; d.patchBody = (await up.text().catch(() => "")).slice(0, 120); }
+      details.push(d);
+    } catch (e) { failed++; d.result = "exception"; d.err = String(e); details.push(d); }
   }
-  return res.status(200).json({ scanned: rows.length, updated, failed, details: details.slice(0, 20) });
+  return res.status(200).json({ scanned: rows.length, updated, failed, tokenSet: !!token, details: details.slice(0, 15) });
 }
