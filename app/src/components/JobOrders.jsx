@@ -21,7 +21,7 @@ function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); 
 const mapLink = (addr) => (addr && addr.trim()) ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr.trim()) : "";
 
 const blankVisit = () => ({ date: "", end_date: "", slot: "morning", time: "", status: "scheduled" });
-const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", issue_date: new Date().toISOString().slice(0, 10), contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", internal_note: "", sales_photos: [], assigned_team: "", visits: [blankVisit()], status: "pending" });
+const blankEd = () => ({ job_no: genNo(), quote_no: "", customer_id: "", site_id: "", title: "", job_type: "install", issue_date: new Date().toISOString().slice(0, 10), contact_name: "", contact_phone: "", address: "", map_url: "", details: "", sales_note: "", internal_note: "", sales_photos: [], survey_job_no: "", assigned_team: "", visits: [blankVisit()], status: "pending" });
 
 export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, prefill, onPrefillConsumed, schedule, onScheduleConsumed, surveyFor, onSurveyConsumed, onHandover, onCreatePrep, onMovement, onOpenQuote, onOpenBoq, onOpenDoc, onGoChat }) {
   const canEdit = can(role, "joborders", "edit");
@@ -143,6 +143,18 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     const contact = cust?.contacts?.[0];
     const details = (q.items || []).map((it, i) => `${i + 1}. ${it.name || it.item_code} × ${it.qty} ${it.unit || ""}`).join("\n");
     const address = q.siteAddress || site?.address || q.customerAddr || cust?.address || "";
+    // หาใบงานสำรวจของลูกค้า+ไซต์เดียวกันที่ยังไม่ผูกใบเสนอราคา → ผูกให้อัตโนมัติ (แก้/ยกเลิกได้ในฟอร์ม)
+    const surveyCand = (list || []).filter((j) => j.job_type === "survey" && !j.quote_no && j.status !== "cancelled"
+      && String(j.customer_id) === String(q.customer_id)
+      && (!q.site_id || !j.site_id || String(j.site_id) === String(q.site_id)))
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
+    // ก็อปบรีฟ + รูปจากใบสำรวจมาเป็นจุดตั้งต้น → ช่างหน้างานเห็นในจอช่าง (MyJobs) ครบ · ออฟฟิศแก้ต่อได้
+    const svBrief = surveyCand ? [
+      surveyCand.sales_note && ("📋 โน้ตสำรวจ: " + surveyCand.sales_note),
+      surveyCand.details && ("ผลสำรวจ: " + surveyCand.details),
+      surveyCand.completion_note && ("สรุปหลังสำรวจ: " + surveyCand.completion_note),
+    ].filter(Boolean).join("\n") : "";
+    const svPhotos = surveyCand ? [...(surveyCand.sales_photos || []), ...(surveyCand.photos || [])] : [];
     setEd({
       ...blankEd(), quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "",
       job_type: q.job_type || "install",   // ประเภทงานติดมาจาก BOQ → ใบเสนอราคา → ใบงาน (CRM)
@@ -150,6 +162,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       contact_name: q.contactName || contact?.name || "",
       contact_phone: q.contactPhone || contact?.phone || "",
       address, map_url: q.map_url || site?.map_url || mapLink(address), details,
+      survey_job_no: surveyCand?.job_no || "", sales_note: svBrief, sales_photos: svPhotos,
     });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill, custs]);
@@ -457,6 +470,35 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
               </label>
             </div>
           </div>
+
+          {/* 🔍 ข้อมูลจากการสำรวจหน้างาน — ผูกใบงานสำรวจต้นทาง (mig 220) ให้ช่างเห็นข้อมูลสำรวจต่อเนื่อง */}
+          {ed.job_type !== "survey" && (() => {
+            const surveyJobs = (list || []).filter((j) => j.job_type === "survey" && String(j.customer_id) === String(ed.customer_id) && j.job_no !== ed.job_no);
+            const sv = ed.survey_job_no ? (list || []).find((j) => j.job_no === ed.survey_job_no) : null;
+            if (!surveyJobs.length && !sv) return null;
+            const svPhotos = sv ? [...(sv.sales_photos || []), ...(sv.photos || [])] : [];
+            return (
+              <div className="fld" style={{ border: "1.5px solid #bfdbfe", background: "#eff6ff", borderRadius: 12, padding: "10px 12px" }}>
+                <span style={{ fontWeight: 800, color: "#1d4ed8" }}>🔍 ข้อมูลจากการสำรวจหน้างาน</span>
+                <Combo className="inp" style={{ marginTop: 6 }} value={ed.survey_job_no || ""} onChange={(e) => setF("survey_job_no", e.target.value)}>
+                  <option value="">— ไม่ผูกงานสำรวจ —</option>
+                  {surveyJobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.title || "สำรวจงาน"}</option>)}
+                </Combo>
+                {sv && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6, fontSize: 13.5, color: "var(--ink-2)" }}>
+                    {sv.sales_note && <div><b>โน้ตฝ่ายขาย:</b> {sv.sales_note}</div>}
+                    {sv.details && <div style={{ whiteSpace: "pre-wrap" }}><b>รายละเอียด/ผลสำรวจ:</b> {sv.details}</div>}
+                    {sv.completion_note && <div style={{ whiteSpace: "pre-wrap" }}><b>สรุปหลังสำรวจ:</b> {sv.completion_note}</div>}
+                    {svPhotos.length > 0 && (
+                      <div className="myjob-photos">{svPhotos.map((u, i) => <div className="myjob-photo" key={i}><AttachThumb url={u} /></div>)}</div>
+                    )}
+                    {!sv.sales_note && !sv.details && !sv.completion_note && !svPhotos.length && <div className="jo-dim">— ใบสำรวจนี้ยังไม่มีข้อมูล/รูป —</div>}
+                    <button type="button" className="btn-ghost sm" style={{ alignSelf: "flex-start" }} onClick={() => { setEd(null); setQ(sv.job_no); setOpenTl(sv.job_no); }}>เปิดใบงานสำรวจ ↗</button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="fld-row">
             <label className="fld"><span>ทีมช่าง <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(1 ใบงาน = 1 ทีม · ทีมอื่นใช้ "ใบงานเชื่อม")</small></span>

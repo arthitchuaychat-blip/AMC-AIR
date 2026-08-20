@@ -2735,6 +2735,7 @@ export async function saveJobOrder(jo, author) {
     title: jo.title?.trim() || null, job_type: jo.job_type || "install", contact_name: jo.contact_name?.trim() || null, contact_phone: jo.contact_phone?.trim() || null,
     address: jo.address?.trim() || null, map_url: jo.map_url?.trim() || null, details: jo.details?.trim() || null,
     sales_note: jo.sales_note?.trim() || null, sales_photos: jo.sales_photos || [], internal_note: jo.internal_note?.trim() || null,
+    survey_job_no: jo.survey_job_no || null,   // mig 220 — ผูกใบสำรวจต้นทาง
     assigned_team: jo.assigned_team || null, scheduled_at: jo.scheduled_at || null,
     end_date: jo.end_date || null, slot: jo.slot || null, issue_date: jo.issue_date || null,
     status: headStatus, created_by: user?.id || null,
@@ -2749,6 +2750,7 @@ export async function saveJobOrder(jo, author) {
   if (curHead) delete jHead.created_by;
   let { error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" });
   if (error && /issue_date/i.test(error.message || "")) { delete jHead.issue_date; ({ error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" })); } // pre-119 fallback
+  if (error && /survey_job_no/i.test(error.message || "")) { delete jHead.survey_job_no; ({ error } = await supabase.from("job_orders").upsert(jHead, { onConflict: "job_no" })); } // pre-220 fallback
   if (error) throw error;
   // บันทึกรอบเข้างาน — แก้ของเดิมคง id ไว้ ห้ามลบทิ้งแล้วสร้างใหม่
   // id ของรอบคือสิ่งที่มือถือช่างถืออยู่ ถ้าเปลี่ยนทุกครั้งที่ออฟฟิศกดบันทึก ช่างที่เปิดหน้าค้างจะกดอัปเดตไม่ได้
