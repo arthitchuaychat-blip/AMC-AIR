@@ -702,8 +702,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             </button>
           </div>
           {isFb && (
-            <button className="btn-ghost sm" style={{ margin: "0 0 6px", alignSelf: "flex-start" }} disabled={fbRefreshing} onClick={refreshFbProfiles}
-              title="ดึงชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook เก่าที่ยังไม่ขึ้น">🔄 {fbRefreshing ? "กำลังรีเฟรช…" : "รีเฟรชโปรไฟล์ FB"}</button>
+            <button className="btn-ghost sm" style={{ display: "inline-flex", alignSelf: "flex-start", width: "fit-content", fontSize: 12, padding: "3px 9px", margin: "0 0 8px", lineHeight: 1.5 }} disabled={fbRefreshing} onClick={refreshFbProfiles}
+              title="ดึงชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook เก่าที่ยังไม่ขึ้น">🔄 {fbRefreshing ? "กำลังรีเฟรช…" : "รีเฟรชโปรไฟล์"}</button>
           )}
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า / ข้อความในแชต" value={q} onChange={(e) => setQ(e.target.value)} />
