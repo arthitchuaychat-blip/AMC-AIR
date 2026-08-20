@@ -201,6 +201,20 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   };
 
   async function loadQr() { try { setQuickReplies(await listQuickReplies()); } catch { /* ignore */ } }
+  const [fbRefreshing, setFbRefreshing] = React.useState(false);
+  // เติมชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook ย้อนหลัง (เรียก /api/fb-backfill ด้วย JWT ทีมออฟฟิศ)
+  async function refreshFbProfiles() {
+    setFbRefreshing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch("/api/fb-backfill", { headers: { Authorization: `Bearer ${session?.access_token || ""}` } });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+      flash(`รีเฟรชโปรไฟล์ FB แล้ว ✓ อัปเดต ${j.updated || 0}/${j.scanned || 0}${j.failed ? ` · พลาด ${j.failed}` : ""}`);
+      await loadContacts();
+    } catch (e) { flash("รีเฟรชไม่สำเร็จ: " + (e.message || e), true); }
+    setFbRefreshing(false);
+  }
   React.useEffect(() => {
     loadContacts(); loadQr();
     listCustomers().then(setCusts).catch(() => {});
@@ -687,6 +701,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               🏭 ซัพ{tabUnread.sup > 0 && <span className="chat-ch-cnt">{tabUnread.sup > 99 ? "99+" : tabUnread.sup}</span>}
             </button>
           </div>
+          {isFb && (
+            <button className="btn-ghost sm" style={{ margin: "0 0 6px", alignSelf: "flex-start" }} disabled={fbRefreshing} onClick={refreshFbProfiles}
+              title="ดึงชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook เก่าที่ยังไม่ขึ้น">🔄 {fbRefreshing ? "กำลังรีเฟรช…" : "รีเฟรชโปรไฟล์ FB"}</button>
+          )}
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า / ข้อความในแชต" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>

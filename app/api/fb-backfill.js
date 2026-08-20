@@ -7,12 +7,26 @@ const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
 
+const OFFICE = ["admin", "exec", "sales", "field_sales", "finance", "hr"];
+
 export default async function handler(req, res) {
-  // กันยิงมั่ว: ต้องแนบ ?key=<CRON_SECRET> ให้ตรง
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return res.status(503).json({ error: "ตั้ง CRON_SECRET ใน Vercel ก่อน" });
-  if ((req.query?.key || "") !== secret) return res.status(403).json({ error: "forbidden — แนบ ?key=<CRON_SECRET> ให้ถูก" });
   if (!SB() || !KEY()) return res.status(503).json({ error: "ขาด SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY" });
+  // อนุญาต 2 ทาง: (1) ?key=<CRON_SECRET> · (2) ล็อกอินทีมออฟฟิศ (JWT) → กดจากในแอปได้เลย
+  let ok = false;
+  const secret = process.env.CRON_SECRET;
+  if (secret && (req.query?.key || "") === secret) ok = true;
+  if (!ok) {
+    const jwt = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+    if (jwt) {
+      const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${jwt}` } });
+      if (ur.ok) {
+        const user = await ur.json();
+        const prof = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+        if (OFFICE.includes(prof[0]?.role)) ok = true;
+      }
+    }
+  }
+  if (!ok) return res.status(403).json({ error: "forbidden — ล็อกอินทีมออฟฟิศ หรือแนบ ?key=<CRON_SECRET>" });
 
   const token = await pageToken();
   if (!token) return res.status(503).json({ error: "ขาด FB_PAGE_ACCESS_TOKEN" });
