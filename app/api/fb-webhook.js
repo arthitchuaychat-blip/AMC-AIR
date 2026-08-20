@@ -3,6 +3,7 @@
 import crypto from "crypto";
 import webpush from "web-push";
 import { GRAPH, pageToken, pageId, cacheImage } from "./_fb.js";
+import { getAutoReplyCfg, isOpenNow, generateReply } from "./_ai.js";
 
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -39,6 +40,53 @@ async function rawBody(req) {
   return Buffer.concat(chunks);
 }
 
+// ส่งข้อความจากเพจไปหาลูกค้า (บอท) + บันทึกลง fb_messages/fb_contacts
+async function sendFbText(psid, text, token) {
+  try {
+    const r = await fetch(`${GRAPH}/${pageId() || "me"}/messages?access_token=${token}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient: { id: psid }, messaging_type: "RESPONSE", message: { text } }),
+    });
+    if (!r.ok) return false;
+    const out = await r.json().catch(() => ({}));
+    await fetch(`${SB()}/rest/v1/fb_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ psid, direction: "out", type: "text", text, fb_message_id: out.message_id || null, sent_by: null }) });
+    await fetch(`${SB()}/rest/v1/fb_contacts?psid=eq.${encodeURIComponent(psid)}`, { method: "PATCH", headers: sbH(), body: JSON.stringify({ last_message: text, last_message_at: new Date().toISOString() }) });
+    return true;
+  } catch { return false; }
+}
+// กล่องดำบอท (เหมือน ai_bot_last ของ LINE) — ไล่สาเหตุตอนบอทเงียบ
+async function aiBlackboxFb(psid, q, extra) {
+  try {
+    await fetch(`${SB()}/rest/v1/app_config?on_conflict=key`, {
+      method: "POST", headers: { ...sbH(), Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ key: "ai_bot_last_fb", value: { at: new Date().toISOString(), conv: String(psid).slice(-8), q: String(q || "").slice(0, 80), ...extra } }),
+    });
+  } catch { /* ห้ามพังงานหลัก */ }
+}
+// บอท AI ตอบเฟซ — ใช้ตั้งค่าชุดเดียวกับ LINE (app_config autoreply)
+async function fbAutoReply({ psid, text, token }) {
+  try {
+    if (!token) return;
+    const cfg = await getAutoReplyCfg();
+    if (!cfg || !cfg.enabled) { await aiBlackboxFb(psid, text, { skip: "autoreply-master-disabled" }); return; }
+    const afterHours = !isOpenNow(cfg);
+    if (!(cfg.ai_enabled && (afterHours || cfg.ai_always))) { await aiBlackboxFb(psid, text, { skip: !cfg.ai_enabled ? "ai-disabled" : "in-business-hours(ai_always off)" }); return; }
+    // อย่าแทรกถ้าพนักงานเพิ่งตอบเอง (staff-took-over) — มีข้อความ out ที่คนพิมพ์ (sent_by ไม่ว่าง) ใน 30 นาที
+    const recent = await fetch(`${SB()}/rest/v1/fb_messages?psid=eq.${encodeURIComponent(psid)}&direction=eq.out&sent_by=not.is.null&select=created_at&order=created_at.desc&limit=1`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    if (recent[0]?.created_at && (Date.now() - new Date(recent[0].created_at).getTime()) < 30 * 60000) { await aiBlackboxFb(psid, text, { skip: "staff-took-over" }); return; }
+    // ประวัติแชตล่าสุด → ตอบต่อเนื่อง (ข้อความปัจจุบันถูกบันทึกไปแล้ว)
+    const hr = await fetch(`${SB()}/rest/v1/fb_messages?psid=eq.${encodeURIComponent(psid)}&type=eq.text&select=direction,text&order=created_at.desc&limit=10`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    let hist = hr.reverse().filter((m) => (m.text || "").trim()).map((m) => ({ role: m.direction === "in" ? "user" : "assistant", content: m.text }));
+    while (hist.length && hist[0].role !== "user") hist.shift();
+    if (!hist.length || hist[hist.length - 1].role !== "user") hist.push({ role: "user", content: text });
+    const t0 = Date.now();
+    const out = await generateReply({ history: hist, cfg, afterHours });
+    let sent = false;
+    if (out.text) sent = await sendFbText(psid, "🤖 " + out.text, token);
+    await aiBlackboxFb(psid, text, { ok: !!out.text && sent, ms: Date.now() - t0, err: out.err || (out.text && !sent ? "fb-send-failed" : null) });
+  } catch (e) { await aiBlackboxFb(psid, text, { err: "exception:" + String(e?.message || e) }); }
+}
+
 export default async function handler(req, res) {
   // 1) webhook verification handshake
   if (req.method === "GET") {
@@ -65,6 +113,11 @@ export default async function handler(req, res) {
     for (const ev of entry.messaging || []) {
       const psid = ev.sender && ev.sender.id;
       if (!psid || !ev.message || ev.message.is_echo) continue;
+      // กันตอบซ้ำเมื่อ Meta ยิง event เดิมซ้ำ (retry) — mid เดิมเคยเก็บแล้ว = ข้าม
+      if (ev.message.mid) {
+        const dup = await fetch(`${SB()}/rest/v1/fb_messages?fb_message_id=eq.${encodeURIComponent(ev.message.mid)}&select=id&limit=1`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+        if (dup.length) continue;
+      }
       const text = ev.message.text || null;
       const att = (ev.message.attachments || [])[0];
       const imageUrl = att && att.type === "image" ? att.payload?.url : null;
@@ -93,6 +146,8 @@ export default async function handler(req, res) {
       }
       await fetch(`${SB()}/rest/v1/fb_messages`, { method: "POST", headers: sbH(), body: JSON.stringify({ psid, direction: "in", type: imageUrl ? "image" : "text", text, image_url: imageUrl, fb_message_id: ev.message.mid || null }) });
       await notifyFbChat(psid, exist[0]?.display_name || null, preview);   // แจ้งเตือนออฟฟิศ + ผู้รับผิดชอบ
+      // บอท AI ตอบอัตโนมัติ (ใช้ตั้งค่าชุดเดียวกับ LINE OA) — เฉพาะข้อความ text
+      if (text && text.trim()) await fbAutoReply({ psid, text: text.trim(), token });
     }
 
     // ── คอมเมนต์ใต้โพสต์ (field 'feed' · mig 193) — ต้องมีสิทธิ์ pages_read_engagement ──
