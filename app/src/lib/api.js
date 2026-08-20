@@ -1203,6 +1203,8 @@ export async function listPayables() {
       ].filter(Boolean).join(" · ") : null,
       amount: owed,
       date: (x.created_at || "").slice(0, 10),
+      received: !!x.received_at || x.status === "received",   // รับสินค้าแล้วหรือยัง (ตัวกรอง)
+      expenseId: x.expense_id || null,                        // ใบจ่าย/ใบเบิกที่ผูก (ลิงก์)
       status: paid > 0 ? `จ่ายแล้ว ${money(paid)} · ค้างจริง ${money(owed)}`
         : x.expense_id ? "ส่งเบิกแล้ว · รอจ่าย" : "รับของแล้ว · ยังไม่ตั้งเบิกจ่าย",
     });

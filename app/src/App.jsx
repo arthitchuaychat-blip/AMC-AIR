@@ -133,7 +133,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-18·แชต FB: ปุ่มรีเฟรชโปรไฟล์ (เติมชื่อ+รูปย้อนหลัง) + cache รูปเข้า storage v635";
+const BUILD = "2026-08-18·ค้างจ่าย: ลิงก์ PO → ใบจ่าย/ใบเบิก + ตัวกรองรับสินค้า (รับแล้ว/ยังไม่รับ) v636";
 
 function SetupNotice() {
   return (
@@ -633,7 +633,7 @@ export default function App() {
         {view === "billing" && <BillingNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
         {view === "receivables" && <Receivables role={role} onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
-        {view === "payables" && <Payables role={role} onOpenPo={(no) => { setPoFocus(no); go("po"); }} onGoExpenses={() => go("expenses")} onGoSub={() => go("subcontract")} />}
+        {view === "payables" && <Payables role={role} onOpenPo={(no) => { setPoFocus(no); go("po"); }} onGoExpenses={(ref) => { setExpenseFocus(ref || null); go("expenses"); }} onGoSub={() => go("subcontract")} />}
         {view === "tax" && <TaxReport role={role} />}
         {view === "weborders" && <WebOrders role={role}
           onOpenCustomer={(cid) => { setCustFocus(String(cid)); go("customers"); }}

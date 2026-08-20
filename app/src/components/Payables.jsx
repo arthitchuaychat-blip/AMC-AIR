@@ -23,6 +23,7 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
   const [rows, setRows] = React.useState(null);
   const [view, setView] = React.useState("type"); // "type" | "creditor"
   const [q, setQ] = React.useState("");
+  const [recvF, setRecvF] = React.useState("all"); // all | received | pending — กรองสถานะรับสินค้า (เฉพาะ PO)
   const [openCred, setOpenCred] = React.useState(null);
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
@@ -38,7 +39,10 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
   React.useEffect(() => { load(); }, []);
 
   const matches = (r) => { const n = q.trim().toLowerCase(); if (!n) return true; return [r.name, r.refNo, r.title, r.status].some((f) => String(f || "").toLowerCase().includes(n)); };
-  const shown = React.useMemo(() => (rows || []).filter(matches), [rows, q]);
+  // ตัวกรองรับสินค้า = เฉพาะ PO (รายการอื่นไม่ใช่ของ) → เปิดตัวกรองแล้วโชว์เฉพาะ PO ที่ตรงสถานะ
+  const recvOk = (r) => recvF === "all" || (r.type === "po" && (recvF === "received" ? r.received : !r.received));
+  const shown = React.useMemo(() => (rows || []).filter((r) => matches(r) && recvOk(r)), [rows, q, recvF]);
+  const poRecvCount = (v) => (rows || []).filter((r) => r.type === "po" && matches(r) && (v === "received" ? r.received : !r.received)).length;
 
   // KPIs
   const total = shown.reduce((a, r) => a + r.amount, 0);
@@ -93,6 +97,9 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
             <span style={{ marginLeft: 8, fontSize: 11.5, fontWeight: 700, color: t.color, background: t.bg, borderRadius: 8, padding: "2px 8px" }}>{r.status}</span>
           </span>
           <span className="ar-acts">
+            {r.type === "po" && r.expenseId && onGoExpenses && (
+              <button className="btn-ghost sm" title="เปิดใบเบิกจ่าย/ใบจ่ายที่ผูกกับ PO นี้" onClick={() => onGoExpenses(r.refNo)}>🧾 ดูใบจ่าย</button>
+            )}
             <button className="btn-ghost sm" onClick={() => openRow(r)}><UIcon name="clipboard" size={13} /> ไปจัดการ</button>
           </span>
         </div>
@@ -123,10 +130,17 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
         <div className="stat-card"><div className="stat-val">{credCount}</div><div className="stat-label">เจ้าหนี้/ทีมที่ค้าง</div></div>
       </div>
 
-      <FilterBar id="payables" count={q ? 1 : 0}>
-        <div className="cat-search" style={{ maxWidth: 380, marginBottom: 14 }}>
+      <FilterBar id="payables" count={(q ? 1 : 0) + (recvF !== "all" ? 1 : 0)}>
+        <div className="cat-search" style={{ maxWidth: 380, marginBottom: 12 }}>
           <UIcon name="search" size={16} color="var(--ink-3)" />
           <input placeholder="ค้นหา ผู้ขาย / เลขเอกสาร / ทีม" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <div className="cat-filter">
+          <span style={{ fontSize: 12.5, color: "var(--ink-3)", alignSelf: "center", marginRight: 4 }}>รับสินค้า:</span>
+          {[["all", "ทั้งหมด"], ["received", "รับของแล้ว"], ["pending", "ยังไม่รับของ"]].map(([v, l]) => (
+            <button key={v} className={"cat-chip" + (recvF === v ? " on" : "")} onClick={() => setRecvF(v)}
+              style={recvF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}{v !== "all" ? ` (${poRecvCount(v)})` : ""}</button>
+          ))}
         </div>
       </FilterBar>
 
