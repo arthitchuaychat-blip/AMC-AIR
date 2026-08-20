@@ -21,6 +21,27 @@ export async function pageToken() {
 
 export const pageId = () => process.env.FB_PAGE_ID || null;
 
+// รูปโปรไฟล์ FB (platform-lookaside.fbsbx.com) เป็น URL เซ็นชื่อ "หมดอายุ" + เบราว์เซอร์บล็อก (CORP) →
+// โหลดมาเก็บใน Supabase Storage (bucket photos) ของเราเอง แล้วคืน public URL ของเราแทน (ไม่หมดอายุ ไม่โดนบล็อก)
+export async function cacheImage(path, url) {
+  const SB = process.env.SUPABASE_URL, KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SB || !KEY || !url) return null;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const ct = r.headers.get("content-type") || "image/jpeg";
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length) return null;
+    const up = await fetch(`${SB}/storage/v1/object/photos/${path}`, {
+      method: "POST",
+      headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": ct, "x-upsert": "true" },
+      body: buf,
+    });
+    if (!up.ok) return null;
+    return `${SB}/storage/v1/object/public/photos/${path}`;
+  } catch { return null; }
+}
+
 // รายชื่อเพจที่โทเค็น (system user) เข้าถึงได้ — ใช้ช่วยหา FB_PAGE_ID ที่จะไปตั้งใน Vercel
 export async function listPages() {
   const env = process.env.FB_PAGE_ACCESS_TOKEN;

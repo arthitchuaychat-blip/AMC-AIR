@@ -2,7 +2,7 @@
 // Env: FB_VERIFY_TOKEN, FB_PAGE_ACCESS_TOKEN, FB_APP_SECRET (optional, for signature check), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 import crypto from "crypto";
 import webpush from "web-push";
-import { GRAPH, pageToken, pageId } from "./_fb.js";
+import { GRAPH, pageToken, pageId, cacheImage } from "./_fb.js";
 
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -75,7 +75,9 @@ export default async function handler(req, res) {
         if (!token) return { name: null, pic: null };
         try {
           const p = await fetch(`${GRAPH}/${psid}?fields=first_name,last_name,profile_pic&access_token=${token}`).then((r) => r.json());
-          return { name: [p.first_name, p.last_name].filter(Boolean).join(" ") || null, pic: p.profile_pic || null };
+          // เก็บรูปเข้า storage เราเอง (URL FB หมดอายุ + โดนบล็อก) · เก็บไม่ได้ค่อย fallback URL ดิบ
+          const pic = p.profile_pic ? (await cacheImage(`fb/${psid}.jpg`, p.profile_pic)) || p.profile_pic : null;
+          return { name: [p.first_name, p.last_name].filter(Boolean).join(" ") || null, pic };
         } catch { return { name: null, pic: null }; }
       };
       // upsert contact (ดึงชื่อตอนติดต่อครั้งแรก · ถ้าติดต่อเก่ายังไม่มีชื่อ ให้เติมย้อนหลัง)

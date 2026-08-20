@@ -1,7 +1,7 @@
 // เติมชื่อ + รูปโปรไฟล์ย้อนหลังให้ผู้ติดต่อ Facebook เก่า (ที่ทักเข้ามาก่อนตั้ง Page Token)
 // เรียกครั้งเดียว: GET https://app.amcair.net/api/fb-backfill?key=<CRON_SECRET>
 // ใช้ Messenger User Profile API (first_name+last_name+profile_pic) ด้วย Page Access Token
-import { GRAPH, pageToken } from "./_fb.js";
+import { GRAPH, pageToken, cacheImage } from "./_fb.js";
 
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -17,8 +17,8 @@ export default async function handler(req, res) {
   const token = await pageToken();
   if (!token) return res.status(503).json({ error: "ขาด FB_PAGE_ACCESS_TOKEN" });
 
-  // ผู้ติดต่อที่ยังไม่มีชื่อ หรือยังไม่มีรูป
-  const rows = await fetch(`${SB()}/rest/v1/fb_contacts?or=(display_name.is.null,picture_url.is.null)&select=psid,display_name,picture_url&limit=200`, { headers: sbH() })
+  // ผู้ติดต่อที่ยังไม่มีชื่อ/รูป หรือรูปยังชี้ไป CDN ของ FB (fbsbx/lookaside — หมดอายุ) → ดึงใหม่+เก็บเข้า storage เรา
+  const rows = await fetch(`${SB()}/rest/v1/fb_contacts?or=(display_name.is.null,picture_url.is.null,picture_url.like.*fbsbx*,picture_url.like.*lookaside*)&select=psid,display_name,picture_url&limit=200`, { headers: sbH() })
     .then((r) => (r.ok ? r.json() : [])).catch(() => []);
 
   let updated = 0, failed = 0;
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     try {
       const p = await fetch(`${GRAPH}/${c.psid}?fields=first_name,last_name,profile_pic&access_token=${token}`).then((r) => r.json());
       const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || null;
-      const pic = p.profile_pic || null;
+      const pic = p.profile_pic ? (await cacheImage(`fb/${c.psid}.jpg`, p.profile_pic)) || p.profile_pic : null;
       if (!name && !pic) { failed++; details.push({ psid: c.psid, err: p.error?.message || "ไม่พบโปรไฟล์" }); continue; }
       const patch = {};
       if (name && !c.display_name) patch.display_name = name;
