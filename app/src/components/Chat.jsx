@@ -202,19 +202,20 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
 
   async function loadQr() { try { setQuickReplies(await listQuickReplies()); } catch { /* ignore */ } }
   const [fbRefreshing, setFbRefreshing] = React.useState(false);
+  const [fbMsg, setFbMsg] = React.useState(null);   // ผลรีเฟรชโปรไฟล์ (ค้างไว้ข้างปุ่มให้อ่านง่าย)
   // เติมชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook ย้อนหลัง (เรียก /api/fb-backfill ด้วย JWT ทีมออฟฟิศ)
   async function refreshFbProfiles() {
-    setFbRefreshing(true);
+    setFbRefreshing(true); setFbMsg(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const r = await fetch("/api/fb-backfill", { headers: { Authorization: `Bearer ${session?.access_token || ""}` } });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
       await loadContacts();
-      if ((j.updated || 0) > 0) flash(`รีเฟรชโปรไฟล์ FB แล้ว ✓ อัปเดต ${j.updated}/${j.scanned || 0}`);
-      else if (!j.scanned) flash("โปรไฟล์ครบแล้ว — ไม่มีรายการต้องอัปเดต");
-      else { const d = (j.details || [])[0] || {}; flash(`ดึงโปรไฟล์ไม่ได้ (${j.scanned} ราย): ${d.graphError || d.result || "ไม่ทราบสาเหตุ"}${d.gotPic === false ? " · FB ไม่คืนรูป" : ""}`, true); }
-    } catch (e) { flash("รีเฟรชไม่สำเร็จ: " + (e.message || e), true); }
+      if ((j.updated || 0) > 0) setFbMsg({ ok: true, t: `อัปเดต ${j.updated}/${j.scanned || 0} ราย ✓` });
+      else if (!j.scanned) setFbMsg({ ok: true, t: "โปรไฟล์ครบแล้ว — ไม่มีที่ต้องอัปเดต" });
+      else { const d = (j.details || [])[0] || {}; setFbMsg({ ok: false, t: `FB ไม่คืนข้อมูล (${j.scanned} ราย) · ${d.graphError || d.result || "?"}${d.gotName === false ? " · ไม่มีชื่อ" : ""}${d.gotPic === false ? " · ไม่มีรูป" : ""}` }); }
+    } catch (e) { setFbMsg({ ok: false, t: "ผิดพลาด: " + (e.message || e) }); }
     finally { setFbRefreshing(false); }
   }
   React.useEffect(() => {
@@ -704,8 +705,11 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             </button>
           </div>
           {isFb && (
-            <button className="btn-ghost sm" style={{ flex: "none", display: "inline-flex", alignSelf: "flex-start", width: "fit-content", fontSize: 12, padding: "4px 10px", margin: "0 0 8px" }} disabled={fbRefreshing} onClick={refreshFbProfiles}
-              title="ดึงชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook เก่าที่ยังไม่ขึ้น">🔄 {fbRefreshing ? "กำลังรีเฟรช…" : "รีเฟรชโปรไฟล์"}</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "0 0 8px" }}>
+              <button className="btn-ghost sm" style={{ flex: "none", display: "inline-flex", width: "fit-content", fontSize: 12, padding: "4px 10px" }} disabled={fbRefreshing} onClick={refreshFbProfiles}
+                title="ดึงชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook เก่าที่ยังไม่ขึ้น">🔄 {fbRefreshing ? "กำลังรีเฟรช…" : "รีเฟรชโปรไฟล์"}</button>
+              {fbMsg && <span style={{ fontSize: 11.5, color: fbMsg.ok ? "#16a34a" : "#dc2626", flex: "1 1 100%" }}>{fbMsg.t}</span>}
+            </div>
           )}
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า / ข้อความในแชต" value={q} onChange={(e) => setQ(e.target.value)} />
