@@ -3537,20 +3537,22 @@ export async function createSubPayout({ team, lines, whtRate, note }) {
 // ledger (kind='payout') for bank reconciliation. Cash flow is handled separately by the sync.
 // Back-compat: paySubPayout(id, "โอนเงิน") still works (no account).
 export async function paySubPayout(id, opts) {
-  const { accountId, method, payDate, slipUrl } = typeof opts === "string" ? { method: opts } : (opts || {});
+  const { accountId, method, payDate, slipUrl, note } = typeof opts === "string" ? { method: opts } : (opts || {});
   const uid = await _uid();
   const { data: p, error: e0 } = await supabase.from("sub_payouts").select("net,team,status").eq("id", id).single();
   if (e0) throw e0;
   if (p.status === "paid") throw new Error("ใบนี้บันทึกจ่ายแล้ว");
   const day = payDate || new Date().toISOString().slice(0, 10);
+  const noteTxt = (note || "").trim();
   // paid_at ใช้วันที่จ่ายที่ผู้ใช้เลือก (เที่ยง UTC = ตกวันเดียวกันตามเวลาไทยแน่นอน) — กระแสเงินสดลงวันเดียวกับเดินบัญชี ไม่ใช่วันกดปุ่ม
-  const patch = { status: "paid", paid_at: payDate ? `${payDate}T12:00:00.000Z` : new Date().toISOString(), method: method || null, paid_from: accountId || null, pay_slip_url: slipUrl || null };
+  const patch = { status: "paid", paid_at: payDate ? `${payDate}T12:00:00.000Z` : new Date().toISOString(), method: method || null, paid_from: accountId || null, pay_slip_url: slipUrl || null, pay_note: noteTxt || null };
   let upd = await supabase.from("sub_payouts").update(patch).eq("id", id);
+  if (upd.error && /pay_note/i.test(upd.error.message || "")) { delete patch.pay_note; upd = await supabase.from("sub_payouts").update(patch).eq("id", id); } // pre-221 fallback
   if (upd.error && /pay_slip_url/i.test(upd.error.message || "")) { delete patch.pay_slip_url; upd = await supabase.from("sub_payouts").update(patch).eq("id", id); } // pre-128 fallback
   if (upd.error && /paid_from|column|PGRST204/i.test(upd.error.message || "")) { delete patch.paid_from; upd = await supabase.from("sub_payouts").update(patch).eq("id", id); }
   if (upd.error) throw upd.error;
   if (accountId) {
-    const { error: eAcc } = await supabase.from("account_entries").insert({ account_id: accountId, direction: "out", amount: Number(p.net) || 0, kind: "payout", ref_type: "payout", ref_id: id, note: `จ่ายค่าแรงช่างซัพ · ทีม ${p.team}`, entry_date: day, created_by: uid });
+    const { error: eAcc } = await supabase.from("account_entries").insert({ account_id: accountId, direction: "out", amount: Number(p.net) || 0, kind: "payout", ref_type: "payout", ref_id: id, note: `จ่ายค่าแรงช่างซัพ · ทีม ${p.team}${noteTxt ? " · " + noteTxt : ""}`, entry_date: day, created_by: uid });
     if (eAcc) throw eAcc;
   }
   syncCashEntriesFromDocs().catch(() => {}); // paid → move to "จ่ายจริง" in cash flow

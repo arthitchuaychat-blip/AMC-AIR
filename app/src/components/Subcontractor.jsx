@@ -471,7 +471,8 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
             <div key={p.id}>
             <div className="sub-payout-row">
               <div><b>ทีม {teamName(p.team)}</b> · <button type="button" className="sub-job-link" onClick={() => togglePayout(p.id)} title="ดู/ซ่อนรายการงานที่จ่ายในใบนี้">{plines.length} งาน {isOpen ? "▲" : "▼"}</button> · {fmtDate(p.created_at)}
-                <div className="jo-dim">รวม {fmtBaht(p.gross)} − หัก {fmtBaht(p.wht_amt)} = สุทธิ {fmtBaht(p.net)}{p.paid_at ? ` · จ่าย ${fmtDate(p.paid_at)}` : ""}</div></div>
+                <div className="jo-dim">รวม {fmtBaht(p.gross)} − หัก {fmtBaht(p.wht_amt)} = สุทธิ {fmtBaht(p.net)}{p.paid_at ? ` · จ่าย ${fmtDate(p.paid_at)}` : ""}</div>
+                {p.pay_note && <div className="jo-dim" style={{ marginTop: 2 }}>📝 {p.pay_note}</div>}</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
                 {p.pay_slip_url && <img src={p.pay_slip_url} alt="สลิปโอนเงิน" title="สลิปโอนเงิน — กดดูเต็ม" style={{ width: 30, height: 30, objectFit: "cover", borderRadius: 7, border: "1px solid var(--line)", cursor: "zoom-in" }} onClick={() => window.open(p.pay_slip_url, "_blank")} />}
                 {p.status === "paid" ? <span className="job-badge b-green">จ่ายแล้ว</span> : <span className="job-badge b-orange">รอจ่าย</span>}
@@ -515,6 +516,7 @@ function PaySubModal({ payout, teamName, onClose, onPaid, flash }) {
   const [accountId, setAccountId] = React.useState("");
   const [payDate, setPayDate] = React.useState(new Date().toISOString().slice(0, 10));
   const [slipUrl, setSlipUrl] = React.useState("");
+  const [note, setNote] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => { listAccounts().then((a) => { setAccounts(a); setAccountId((a.find((x) => x.kind === "bank") || a[0])?.id || ""); }).catch(() => setAccounts([])); }, []);
@@ -528,7 +530,7 @@ function PaySubModal({ payout, teamName, onClose, onPaid, flash }) {
     if (!accountId) return flash("เลือกบัญชีที่จ่าย", true);
     if (!slipUrl) return flash("แนบสลิปโอนเงินก่อนบันทึกจ่าย", true);
     setBusy(true);
-    try { await paySubPayout(payout.id, { accountId, method: "โอนเงิน", payDate, slipUrl }); flash("บันทึกจ่ายแล้ว ✓ (ลงบัญชีเดินบัญชี + กระแสเงินสด)"); onPaid(); }
+    try { await paySubPayout(payout.id, { accountId, method: "โอนเงิน", payDate, slipUrl, note }); flash("บันทึกจ่ายแล้ว ✓ (ลงบัญชีเดินบัญชี + กระแสเงินสด)"); onPaid(); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -555,6 +557,8 @@ function PaySubModal({ payout, teamName, onClose, onPaid, flash }) {
               {slipUrl && <button type="button" className="btn-ghost sm danger" onClick={() => setSlipUrl("")}>ลบ</button>}
             </div>
           </label>
+          <label className="fld"><span>หมายเหตุ <span className="jo-dim" style={{ fontWeight: 400 }}>(ไม่บังคับ)</span></span>
+            <textarea className="inp" rows={2} style={{ resize: "vertical" }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น จ่ายผ่าน PromptPay · หักค่าปรับงานล่าช้า · จ่ายแทนงวดที่แล้ว" /></label>
           <div className="jo-dim">รายการนี้จะถูกบันทึกเป็น <b>เงินออก</b> ในบัญชีที่เลือก (เมนูเบิกจ่าย → เดินบัญชี &amp; กระทบแบงค์) และแสดงใน <b>กระแสเงินสด</b> อัตโนมัติ</div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
