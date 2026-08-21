@@ -940,6 +940,7 @@ function PayoutSlip({ payout, team, jobByNo = {}, onClose, flash }) {
             <div className="ps-tot ps-net"><span>ยอดที่ต้องจ่ายงวดนี้ (สุทธิ)</span><b>{fmtBaht(payout.net)}</b></div>
             {anyPartial && totalRemaining > 0.01 && <div className="ps-tot ps-remain"><span>คงเหลือค้างจ่าย (ยกไปงวดหน้า)</span><b>{fmtBaht(totalRemaining)}</b></div>}
             <div className="ps-status">สถานะ: {payout.status === "paid" ? `จ่ายแล้ว ${fmtDate(payout.paid_at)}` : "รอจ่าย"}</div>
+            {payout.pay_note && <div className="ps-status" style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>📝 หมายเหตุ: {payout.pay_note}</div>}
           </div>
           {/* ส่งตรงให้หัวหน้าช่างซัพคนนี้ */}
           <div className="ps-lead">
