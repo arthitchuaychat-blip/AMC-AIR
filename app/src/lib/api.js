@@ -4207,6 +4207,25 @@ export async function payExpense(id, { accountId, proof, payDate, amount, expect
   syncCashEntriesFromDocs().catch(() => {});
   notify([ex.requester], { category: "hr", title: `💸 ${fully ? "จ่ายเงินเบิกครบแล้ว" : "จ่ายเงินเบิกบางส่วน"} "${ex.title}" ${payAmt.toLocaleString()} บาท`, body: fully ? "แนบหลักฐานการจ่ายเรียบร้อย" : `คงเหลืออีก ${(remaining - payAmt).toLocaleString()} บาท`, url: "expenses", ref_type: "expense" });
 }
+// ยกเลิกการจ่ายเงินเบิก (ผู้บริหารเท่านั้น — gate ที่ UI) — คืนสถานะ "อนุมัติ · รอจ่าย" + ถอนรายการเงินออก
+export async function unpayExpense(id, reason) {
+  const { data: ex, error: e0 } = await supabase.from("expense_requests").select("*").eq("id", id).single();
+  if (e0) throw e0;
+  if (ex.status !== "paid" && !(Number(ex.paid_amount) > 0)) throw new Error("ใบนี้ยังไม่ได้จ่ายเงิน");
+  // คืนใบกลับเป็น "อนุมัติ · รอจ่าย" + ล้างยอด/หลักฐานการจ่าย
+  const upd = { status: "approved", paid_at: null, paid_from: null, paid_amount: 0, last_paid_at: null, payment_proof: [], expected_pay_date: null };
+  let uErr = (await supabase.from("expense_requests").update(upd).eq("id", id)).error;
+  if (uErr && /paid_amount|last_paid_at|expected_pay_date|payment_proof/i.test(uErr.message || "")) {
+    uErr = (await supabase.from("expense_requests").update({ status: "approved", paid_at: null, paid_from: null }).eq("id", id)).error;   // pre-mig fallback
+  }
+  if (uErr) throw uErr;
+  // ถอนรายการเดินบัญชี (เงินออก) ของการจ่ายใบนี้ · คืน PO ที่ผูกให้กลับเป็นยังไม่จ่าย
+  try { await supabase.from("account_entries").delete().eq("ref_type", "expense").eq("ref_id", id); } catch (_) { /* ignore */ }
+  try { await supabase.from("purchase_orders").update({ paid_at: null }).eq("expense_id", id); } catch (_) { /* ignore */ }
+  await logAudit({ action: "cancel", target_type: "expense", target_no: "เบิก #" + id, reason: reason || null, snapshot: { paid_amount: ex.paid_amount, paid_at: ex.paid_at, paid_from: ex.paid_from } });
+  syncCashEntriesFromDocs().catch(() => {});
+  try { await notify([ex.requester], { category: "hr", title: `↩️ ยกเลิกการจ่ายเงินเบิก "${ex.title}"`, body: reason || "", url: "expenses", ref_type: "expense" }); } catch (_) { /* ignore */ }
+}
 // แก้ "วันคาดว่าจะจ่ายยอดค้าง" ของใบเบิก (ประมาณการในกระแสเงินสด) — แก้ได้ตลอด
 export async function setExpenseExpectedDate(id, date) {
   const { error } = await supabase.from("expense_requests").update({ expected_pay_date: date || null }).eq("id", id);

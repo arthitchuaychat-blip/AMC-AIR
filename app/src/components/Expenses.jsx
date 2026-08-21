@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders, listPurchaseOrders, requestPoPaymentBatch } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders, listPurchaseOrders, requestPoPaymentBatch } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
@@ -95,7 +95,7 @@ export default function Expenses({ role, me, onOpenDoc, focus, onFocusConsumed }
           style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
       </div>
       {tab === "mine" && <MineTab role={role} flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} />}
-      {tab === "approve" && office && <ApproveTab flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} />}
+      {tab === "approve" && office && <ApproveTab role={role} flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} />}
       {tab === "accounts" && office && <AccountsTab flash={flash} />}
       {tab === "report" && office && <ReportTab flash={flash} />}
       {peekEl}
@@ -302,7 +302,7 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
   );
 }
 
-function ApproveTab({ flash, onOpenDoc, initialSearch, onConsumed }) {
+function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const [list, setList] = React.useState(null);
@@ -320,6 +320,12 @@ function ApproveTab({ flash, onOpenDoc, initialSearch, onConsumed }) {
     const lbl = { approved: L("อนุมัติ", "အတည်ပြု"), rejected: L("ไม่อนุมัติ", "ပယ်ချ"), pending: L("ยกเลิกอนุมัติ", "အတည်ပြုမှု ပယ်ဖျက်") }[status];
     if (!await confirmDialog(L(`${lbl}คำขอเบิก "${x.title}" (${fmtBaht(x.amount)}) ?${status === "pending" ? "\n(รายการจะกลับไปสถานะ “รออนุมัติ”)" : ""}`, `တောင်းခံစာ "${x.title}" (${fmtBaht(x.amount)}) ကို ${lbl} မလား?${status === "pending" ? "\n(စာရင်းသည် “အတည်ပြုရန် စောင့်” အခြေအနေသို့ ပြန်သွားမည်)" : ""}`))) return;
     try { await decideExpense(x.id, status); flash(L(lbl + "แล้ว", lbl + "ပြီး")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); }
+  }
+  // ยกเลิกการจ่ายเงิน (ผู้บริหารเท่านั้น) — คืนใบกลับเป็น "อนุมัติ · รอจ่าย" + ถอนเงินออก/คืน PO/กระแสเงินสด
+  async function unpay(x) {
+    const reason = await confirmDialog({ title: `ยกเลิกการจ่ายเงินเบิก "${x.title}" (${fmtBaht(x.paid_amount || x.amount)}) ?`, message: "ใบจะกลับเป็น “อนุมัติ · รอจ่าย” · รายการเงินออกในบัญชี/กระแสเงินสดจะถูกถอนออก · PO ที่ผูกกลับเป็นยังไม่จ่าย", confirmText: "ยกเลิกการจ่าย", prompt: { label: "เหตุผลที่ยกเลิกการจ่าย", placeholder: "เช่น โอนผิดบัญชี · จ่ายผิดยอด · ยกเลิกงาน", required: true } });
+    if (reason === false) return;
+    try { await unpayExpense(x.id, reason); flash("ยกเลิกการจ่ายแล้ว — กลับเป็นรอจ่าย ✓"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   const nRcpt = (list || []).filter(needReceipt).length;
   const shown = (list || []).filter((x) => (statusF === "needReceipt" ? needReceipt(x) : (statusF === "all" || x.status === statusF)) && expMatch(x, q, dateR));
@@ -351,6 +357,8 @@ function ApproveTab({ flash, onOpenDoc, initialSearch, onConsumed }) {
             {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> {Number(x.paid_amount) > 0 ? L("จ่ายงวดต่อไป", "နောက်အရစ် ပေးချေ") : L("จ่ายเงิน + แนบสลิปโอน", "ငွေပေး + လွှဲဆလစ် တွဲ")}</button>
               {!(Number(x.paid_amount) > 0) && <button className="btn-ghost sm danger" onClick={() => decide(x, "pending")}>{L("ยกเลิกอนุมัติ", "အတည်ပြုမှု ပယ်ဖျက်")}</button>}</>}
             {needReceipt(x) && <button className="btn-ghost sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จแทนพนักงาน", "ဝန်ထမ်းကိုယ်စား ဘောက်ချာ တွဲ")}</button>}
+            {/* ยกเลิกการจ่าย — ผู้บริหารเท่านั้น (เจ้าของเคาะ) */}
+            {(x.status === "paid" || Number(x.paid_amount) > 0) && role === "exec" && <button className="btn-ghost sm danger" onClick={() => unpay(x)}>↩️ {L("ยกเลิกการจ่าย", "ငွေပေးမှု ပယ်ဖျက်")}</button>}
           </ExpenseCard>
         ))}
       </div>
