@@ -4434,6 +4434,7 @@ async function _fbSend(to, payload) {
 }
 export const sendFbMessage = (psid, text, opts) => _fbSend(psid, { text, ...(opts || {}) });
 export const sendFbImage = (psid, imageUrl) => _fbSend(psid, { imageUrl });
+export const sendFbFile = (psid, fileUrl, fileName) => _fbSend(psid, { fileUrl, fileName });   // PDF/ไฟล์ → Messenger type:"file"
 
 // ── คอมเมนต์ Facebook (mig 193) — รับผ่าน webhook · ตอบ/ซ่อน/ปิด ผ่าน /api/fb-comment ──
 export async function listFbComments(status = "open") {

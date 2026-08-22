@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, searchFbMessages, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, searchFbMessages, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -365,8 +365,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       }
       for (const u of imgs) await chSendImage(sel, u);   // รูปแนบจากข้อความสำเร็จรูป — ตามหลังข้อความ
       for (const a of pend) {                            // ของที่ "พักไว้" ตรวจแล้ว → ส่งตามลำดับ
-        if (a.type === "file" && !isFb) await sendLineFile(sel, a.url, a.name);
-        else await chSendImage(sel, a.url);              // รูป (ทั้ง LINE/FB) · ไฟล์บน FB ส่งเป็นรูปลิงก์ไม่ได้ → ส่งเป็นรูป
+        if (a.type === "file") await (isFb ? sendFbFile(sel, a.url, a.name) : sendLineFile(sel, a.url, a.name));   // PDF/ไฟล์ → FB ต้องส่งเป็น type:file (ส่งเป็นรูปจะ upload ไม่สำเร็จ)
+        else await chSendImage(sel, a.url);              // รูป (ทั้ง LINE/FB)
       }
       if (isFb) setMsgs(await chListMessages(sel));      // FB: เผื่อ realtime ไม่ทัน → รีเฟรช
       // คนตอบคนแรก = ผู้รับผิดชอบลูกค้าโดยอัตโนมัติ (แชตลูกค้าที่ยังไม่มีผู้รับผิดชอบ · LINE + FB)
