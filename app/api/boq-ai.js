@@ -7,6 +7,35 @@ const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-T
 const OFFICE = ["admin", "exec", "sales", "field_sales", "finance", "hr"];
 const IMG_TYPES = { "image/jpeg": 1, "image/png": 1, "image/gif": 1, "image/webp": 1 };
 
+// แยก JSON จากคำตอบ AI แบบทน: ตัด fence, หา { ... } ตัวนอกสุด, ถ้ายาวเกินถูกตัดกลาง (unterminated) ลองปิดวงเล็บ/ตัด lines ท้าย
+function parseLooseJson(text) {
+  if (!text) return null;
+  let t = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+  const s = t.indexOf("{");
+  if (s < 0) return null;
+  t = t.slice(s);
+  try { return JSON.parse(t); } catch {}
+  // หาวงเล็บปิดที่สมดุลจากท้าย
+  let depth = 0, end = -1, inStr = false, esc = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (esc) { esc = false; continue; }
+    if (c === "\\") { esc = true; continue; }
+    if (c === '"') inStr = !inStr;
+    else if (!inStr) { if (c === "{") depth++; else if (c === "}") { depth--; if (depth === 0) end = i; } }
+  }
+  if (end > 0) { try { return JSON.parse(t.slice(0, end + 1)); } catch {} }
+  // JSON ถูกตัดกลาง (truncate) — ตัดกลับไปที่ } ปิด object รายการล่าสุด แล้วปิด array + object เอง
+  const lastObj = t.lastIndexOf("}");
+  if (lastObj > 0) {
+    let head = t.slice(0, lastObj + 1);
+    // ถ้ามี "lines":[ ให้ปิด array + object
+    if (/"lines"\s*:\s*\[/.test(head)) { try { return JSON.parse(head + "]}"); } catch {} }
+    try { return JSON.parse(head + "}"); } catch {}
+  }
+  return null;
+}
+
 async function readJson(req) {
   if (req.body && typeof req.body === "object") return req.body;
   const chunks = []; for await (const c of req) chunks.push(typeof c === "string" ? Buffer.from(c) : c);
@@ -131,7 +160,7 @@ export default async function handler(req, res) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: "claude-sonnet-5", max_tokens: 6000, output_config: { effort: "medium" },
+        model: "claude-sonnet-5", max_tokens: 8000, output_config: { effort: "medium" },
         system: [
           { type: "text", text: rules },
           { type: "text", text: "แคตตาล็อกวัสดุ/แอร์/บริการ (ต้นทุนจริง — ใช้รหัสจากนี้เท่านั้น):\n" + catalog, cache_control: { type: "ephemeral" } },
@@ -144,9 +173,13 @@ export default async function handler(req, res) {
   const data = await r.json();
   if (data.stop_reason === "refusal") return res.status(200).json({ lines: [], summary: "AI ปฏิเสธการตอบ", diag });
   const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
-  let parsed;
-  try { parsed = JSON.parse(text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim()); }
-  catch { return res.status(200).json({ lines: [], summary: "AI ตอบไม่เป็น JSON — ลองใหม่/เพิ่มรายละเอียด", raw: text.slice(0, 500), diag }); }
+  const truncated = data.stop_reason === "max_tokens";
+  let parsed = parseLooseJson(text);
+  if (!parsed) return res.status(200).json({
+    lines: [], questions: [],
+    summary: truncated ? "AI ตอบยาวเกินโควตา (JSON ถูกตัดกลางคัน) — ลองแยกส่งทีละชั้น/ระบุจุดที่ต้องการ" : "AI ตอบไม่เป็น JSON — กด 'ร่างใหม่' อีกครั้ง",
+    raw: text.slice(0, 1200), diag,
+  });
 
   // ตรวจ + จับคู่แคตตาล็อกจริง (override ชื่อ/หน่วย/ต้นทุน ตามรหัส) — กัน AI มั่วราคา
   const cat = await loadCatalog();

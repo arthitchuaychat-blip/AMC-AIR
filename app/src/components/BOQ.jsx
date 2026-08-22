@@ -496,6 +496,12 @@ function BoqAiModal({ onClose, onApply, flash }) {
                 <ul style={{ margin: "2px 0 0", paddingLeft: 18 }}>{result.diag.map((d, i) => <li key={i} style={{ color: d.includes("✓") ? "var(--ink-2)" : "#dc2626" }}>{d}</li>)}</ul>
               </div>
             )}
+            {result.raw && (
+              <details style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "6px 12px", marginBottom: 10, fontSize: 12 }}>
+                <summary style={{ cursor: "pointer", fontWeight: 600 }}>🔎 ข้อความดิบจาก AI (เผื่อส่งให้ทีมช่วยดู)</summary>
+                <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", margin: "6px 0 0", maxHeight: "30vh", overflowY: "auto" }}>{result.raw}</pre>
+              </details>
+            )}
             {result.questions?.length > 0 && (
               <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 13 }}>
                 <b>❓ AI อยากขอข้อมูลเพิ่ม (เพื่อร่างให้แม่นขึ้น):</b>
