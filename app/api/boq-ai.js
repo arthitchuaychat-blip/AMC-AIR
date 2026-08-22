@@ -145,7 +145,8 @@ export default async function handler(req, res) {
   if (imageUrls.length && !media.length && !spec.trim())
     return res.status(200).json({ lines: [], summary: "❌ ไฟล์แบบเข้าไม่ถึง AI — ดูสาเหตุด้านล่าง", questions: [], diag });
 
-  const catalog = catalogText(await loadCatalog());
+  const catData = await loadCatalog();
+  const catalog = catalogText(catData);
   const rules = `คุณคือวิศวกรประเมินราคางานติดตั้งแอร์ของ AMC AIR ช่วยร่าง BOQ (ปริมาณวัสดุ) จากแบบ/แปลน + รายการสเปค + บรีฟที่ให้มา
 
 ## วิธีอ่านแบบแอร์ (สำคัญมาก)
@@ -186,7 +187,7 @@ export default async function handler(req, res) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: "claude-sonnet-5", max_tokens: 16000, output_config: { effort: "medium" },
+        model: "claude-sonnet-5", max_tokens: 12000, output_config: { effort: "low" },
         system: [
           { type: "text", text: rules },
           { type: "text", text: "แคตตาล็อกวัสดุ/แอร์/บริการ (ต้นทุนจริง — ใช้รหัสจากนี้เท่านั้น):\n" + catalog, cache_control: { type: "ephemeral" } },
@@ -208,7 +209,7 @@ export default async function handler(req, res) {
   });
 
   // ตรวจ + จับคู่แคตตาล็อกจริง (override ชื่อ/หน่วย/ต้นทุน ตามรหัส) — กัน AI มั่วราคา
-  const cat = await loadCatalog();
+  const cat = catData;
   const byCode = {}; [...cat.ac, ...cat.svc, ...cat.mat].forEach((m) => { byCode[String(m.code)] = m; });
   const okSec = { ac: 1, charged: 1, free: 1, service: 1 };
   const lines = (parsed.lines || []).map((x) => {
