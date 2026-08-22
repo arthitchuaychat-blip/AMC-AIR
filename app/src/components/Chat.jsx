@@ -626,7 +626,15 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
 
   const selContact = contacts.find((c) => c.line_user_id === sel);
   // resolve a quoted message by its LINE id (to render the referenced message inside a reply)
-  const byLineId = React.useMemo(() => { const m = {}; msgs.forEach((x) => { if (x.line_message_id) m[x.line_message_id] = x; }); return m; }, [msgs]);
+  // map ข้อความตาม id ของแพลตฟอร์ม (LINE line_message_id / FB fb_message_id) → ใช้ resolve + เด้งไปข้อความที่ถูกอ้างถึง
+  const byLineId = React.useMemo(() => { const m = {}; msgs.forEach((x) => { if (x.line_message_id) m[x.line_message_id] = x; if (x.fb_message_id) m[x.fb_message_id] = x; }); return m; }, [msgs]);
+  // กดที่กล่องอ้างอิง → เลื่อนไปข้อความต้นทาง + ไฮไลต์ · ถ้ายังไม่โหลด (เก่ากว่าที่เปิดอยู่) → โหลดเพิ่ม
+  function jumpToMsg(orig) {
+    if (!orig) { if (moreOld) loadOlder(); return; }
+    const el = document.getElementById("cmsg-" + orig.id);
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("chat-hl"); setTimeout(() => el.classList.remove("chat-hl"), 1700); }
+    else if (moreOld) loadOlder();
+  }
 
   // ค้นข้อความในประวัติแชต — จอโหลดมาแค่ข้อความท้าย ๆ ของห้องที่เปิดอยู่ จึงต้องถามเซิร์ฟเวอร์
   // หน่วง 300ms กันยิง query ทุกตัวอักษร · ทิ้งผลที่กลับมาช้ากว่าคำค้นล่าสุด (กันผลเก่าทับผลใหม่)
@@ -794,16 +802,17 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   return (
                     <React.Fragment key={m.id}>
                       {daySep && <div className="chat-daysep">{fmtDay(m.created_at)}</div>}
-                      <div className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "") + (m.type === "sticker" && m.image_url ? " sticker" : "")}
+                      <div id={"cmsg-" + m.id} className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "") + (m.type === "sticker" && m.image_url ? " sticker" : "")}
                         style={coworker ? { background: cwColor, borderColor: cwColor } : undefined}>
                         {out && m.sent_by && <span className="chat-sender">↳ {senderName}</span>}
                         {!out && m.sender_name && <span className="chat-sender" style={{ color: "#0891b2" }}>{m.sender_name}</span>}
                         {m.quoted_message_id && (() => {
                           const orig = byLineId[m.quoted_message_id];
                           return (
-                            <div className="chat-quote">
-                              <span className="chat-quote-who">{orig ? (orig.direction === "out" ? (orig.sent_by && staffMap[orig.sent_by]) || "ทีมงาน" : (selContact?.display_name || "ลูกค้า")) : "ข้อความที่อ้างอิง"}</span>
-                              <span className="chat-quote-text">{orig ? msgSnippet(orig) : "(ข้อความเก่า)"}</span>
+                            <div className="chat-quote" role="button" tabIndex={0} title="กดเพื่อไปที่ข้อความที่ตอบกลับ" style={{ cursor: "pointer" }}
+                              onClick={() => jumpToMsg(orig)} onKeyDown={(e) => { if (e.key === "Enter") jumpToMsg(orig); }}>
+                              <span className="chat-quote-who">↩ {orig ? (orig.direction === "out" ? (orig.sent_by && staffMap[orig.sent_by]) || "ทีมงาน" : (selContact?.display_name || "ลูกค้า")) : "ข้อความที่อ้างอิง"}</span>
+                              <span className="chat-quote-text">{orig ? msgSnippet(orig) : "(กดเพื่อโหลดข้อความเก่า)"}</span>
                             </div>
                           );
                         })()}
