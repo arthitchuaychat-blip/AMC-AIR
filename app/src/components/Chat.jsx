@@ -203,21 +203,22 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function loadQr() { try { setQuickReplies(await listQuickReplies()); } catch { /* ignore */ } }
   const [fbRefreshing, setFbRefreshing] = React.useState(false);
   const [fbMsg, setFbMsg] = React.useState(null);   // ผลรีเฟรชโปรไฟล์ (ค้างไว้ข้างปุ่มให้อ่านง่าย)
+  const [fbRaw, setFbRaw] = React.useState(null);   // ผลดิบ (JSON) ค้างบนจอ ไว้วินิจฉัย
   // เติมชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook ย้อนหลัง (เรียก /api/fb-backfill ด้วย JWT ทีมออฟฟิศ)
   async function refreshFbProfiles() {
-    setFbRefreshing(true); setFbMsg(null);
+    setFbRefreshing(true); setFbMsg(null); setFbRaw("กำลังเรียก /api/fb-backfill …");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const r = await fetch("/api/fb-backfill", { headers: { Authorization: `Bearer ${session?.access_token || ""}` } });
-      const j = await r.json().catch(() => ({}));
+      const text = await r.text();
+      let j = {}; try { j = JSON.parse(text); } catch { /* keep text */ }
+      setFbRaw(`HTTP ${r.status}\n` + (text || "").slice(0, 2000));   // ผลดิบค้างบนจอ
       if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
       await loadContacts();
       if ((j.updated || 0) > 0) setFbMsg({ ok: true, t: `อัปเดต ${j.updated}/${j.scanned || 0} ราย ✓ — กดซ้ำได้ถ้ายังเหลือ` });
       else if (!j.scanned) setFbMsg({ ok: true, t: "ไม่มีรายการต้องอัปเดต (โปรไฟล์ครบ)" });
       else { const d = (j.details || [])[0] || {}; setFbMsg({ ok: false, t: `FB ไม่คืนข้อมูล · ${d.graphError || d.result || "?"}` }); }
-      // เด้งผลดิบเต็ม ๆ ทุกครั้ง (ไว้วินิจฉัย) — ก็อป/ถ่ายรูปส่งให้ผู้ดูแลระบบ
-      window.alert("ผลรีเฟรชโปรไฟล์ FB:\n\n" + JSON.stringify(j, null, 2).slice(0, 1800));
-    } catch (e) { setFbMsg({ ok: false, t: "ผิดพลาด: " + (e.message || e) }); window.alert("รีเฟรชผิดพลาด: " + (e.message || e)); }
+    } catch (e) { setFbMsg({ ok: false, t: "ผิดพลาด: " + (e.message || e) }); }
     finally { setFbRefreshing(false); }
   }
   React.useEffect(() => {
@@ -720,6 +721,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <button className="btn-ghost sm" style={{ flex: "none", display: "inline-flex", width: "fit-content", fontSize: 12, padding: "4px 10px" }} disabled={fbRefreshing} onClick={refreshFbProfiles}
                 title="ดึงชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook เก่าที่ยังไม่ขึ้น">🔄 {fbRefreshing ? "กำลังรีเฟรช…" : "รีเฟรชโปรไฟล์"}</button>
               {fbMsg && <span style={{ fontSize: 11.5, color: fbMsg.ok ? "#16a34a" : "#dc2626", flex: "1 1 100%" }}>{fbMsg.t}</span>}
+              {fbRaw && <pre style={{ flex: "1 1 100%", margin: "4px 0 0", padding: "6px 8px", fontSize: 10.5, lineHeight: 1.35, background: "#0f172a", color: "#e2e8f0", borderRadius: 6, maxHeight: 160, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", userSelect: "text" }} onClick={() => { try { navigator.clipboard.writeText(fbRaw); flash("ก็อปผลแล้ว — วางส่งให้ผู้ดูแลได้"); } catch { /* ignore */ } }} title="กดเพื่อคัดลอก">{fbRaw}</pre>}
             </div>
           )}
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
