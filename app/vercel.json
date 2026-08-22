@@ -2,6 +2,7 @@
   "functions": {
     "api/line-webhook.js": { "maxDuration": 60 },
     "api/fb-webhook.js": { "maxDuration": 60 },
+    "api/fb-send.js": { "maxDuration": 30 },
     "api/fb-backfill.js": { "maxDuration": 60 },
     "api/boq-ai.js": { "maxDuration": 300 },
     "api/po-check.js": { "maxDuration": 120 }

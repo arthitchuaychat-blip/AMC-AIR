@@ -29,22 +29,36 @@ export default async function handler(req, res) {
   const { to, text, imageUrl, fileUrl, fileName, replyToMid } = await readJson(req);
   if (!to || (!text?.trim() && !imageUrl && !fileUrl)) return res.status(400).json({ error: "missing to/text" });
 
-  const message = imageUrl
-    ? { attachment: { type: "image", payload: { url: imageUrl, is_reusable: true } } }
-    : fileUrl
-      ? { attachment: { type: "file", payload: { url: fileUrl, is_reusable: true } } }   // PDF/เอกสาร → Messenger รับเป็น file (type:image จะ reject)
-      : { text };
-  // ตอบกลับอ้างข้อความ (FB reply) — ได้ผลเฉพาะในกรอบ 24 ชม. · นอกกรอบ API จะปฏิเสธ reply แต่ข้อความปกติยังส่งได้
-  const replyField = replyToMid ? { reply_to: { mid: String(replyToMid) } } : {};
-  let r = await fetch(`${GRAPH}/${pageId() || "me"}/messages?access_token=${page}`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message, ...replyField }),
-  });
-  if (!r.ok && replyToMid) {   // reply ถูกปฏิเสธ (นอกกรอบ 24 ชม.) → ส่งแบบไม่อ้างอิงแทน ไม่ให้ล้ม
-    r = await fetch(`${GRAPH}/${pageId() || "me"}/messages?access_token=${page}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message }),
-    });
+  const endpoint = `${GRAPH}/${pageId() || "me"}/messages?access_token=${page}`;
+  const attUrl = imageUrl || fileUrl || null;
+  let r;
+  if (attUrl) {
+    // ส่งไฟล์แนบแบบ "อัปโหลดตรง" (multipart) — เซิร์ฟเวอร์ดึงไฟล์เองแล้วส่ง bytes เข้า FB
+    // เดิมส่ง payload.url ให้ FB ไปดึงเอง → FB โหลด URL เราไม่ได้บ่อย ๆ = #100 "อัพโหลดไม่สำเร็จ" (subcode 2018007)
+    let buf, ct;
+    try {
+      const f = await fetch(attUrl);
+      if (!f.ok) return res.status(502).json({ error: `โหลดไฟล์แนบไม่ได้ (HTTP ${f.status})` });
+      ct = (f.headers.get("content-type") || "").split(";")[0].trim();
+      buf = Buffer.from(await f.arrayBuffer());
+      if (!buf.length) return res.status(502).json({ error: "ไฟล์แนบว่างเปล่า" });
+    } catch (e) { return res.status(502).json({ error: "ดึงไฟล์แนบไม่สำเร็จ: " + (e.message || e) }); }
+    const isImage = imageUrl ? (!ct || /^image\//.test(ct)) : /^image\//.test(ct || "");
+    if (!ct) ct = isImage ? "image/jpeg" : "application/octet-stream";
+    const fname = fileName || decodeURIComponent(String(attUrl).split("/").pop().split("?")[0] || "") || (isImage ? "image.jpg" : "file.bin");
+    const fd = new FormData();
+    fd.append("recipient", JSON.stringify({ id: to }));
+    fd.append("messaging_type", "RESPONSE");
+    fd.append("message", JSON.stringify({ attachment: { type: isImage ? "image" : "file", payload: { is_reusable: true } } }));
+    fd.append("filedata", new Blob([buf], { type: ct }), fname);
+    r = await fetch(endpoint, { method: "POST", body: fd });   // อย่าตั้ง Content-Type เอง — ให้ multipart boundary อัตโนมัติ
+  } else {
+    // ตอบกลับอ้างข้อความ (FB reply) — ได้ผลเฉพาะในกรอบ 24 ชม. · นอกกรอบ API จะปฏิเสธ reply แต่ข้อความปกติยังส่งได้
+    const replyField = replyToMid ? { reply_to: { mid: String(replyToMid) } } : {};
+    r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message: { text }, ...replyField }) });
+    if (!r.ok && replyToMid) {   // reply ถูกปฏิเสธ (นอกกรอบ 24 ชม.) → ส่งแบบไม่อ้างอิงแทน
+      r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message: { text } }) });
+    }
   }
   if (!r.ok) return res.status(502).json({ error: "fb: " + (await r.text().catch(() => r.status)) });
   const out = await r.json().catch(() => ({}));
