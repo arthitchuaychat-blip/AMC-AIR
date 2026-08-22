@@ -214,8 +214,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       await loadContacts();
       if ((j.updated || 0) > 0) setFbMsg({ ok: true, t: `อัปเดต ${j.updated}/${j.scanned || 0} ราย ✓` });
       else if (!j.scanned) setFbMsg({ ok: true, t: "โปรไฟล์ครบแล้ว — ไม่มีที่ต้องอัปเดต" });
-      else { const d = (j.details || [])[0] || {}; setFbMsg({ ok: false, t: `FB ไม่คืนข้อมูล (${j.scanned} ราย) · ${d.graphError || d.result || "?"}${d.gotName === false ? " · ไม่มีชื่อ" : ""}${d.gotPic === false ? " · ไม่มีรูป" : ""}` }); }
-    } catch (e) { setFbMsg({ ok: false, t: "ผิดพลาด: " + (e.message || e) }); }
+      else {
+        const d = (j.details || [])[0] || {};
+        setFbMsg({ ok: false, t: `FB ไม่คืนข้อมูล (${j.scanned} ราย) · ${d.graphError || d.result || "?"}${d.gotName === false ? " · ไม่มีชื่อ" : ""}${d.gotPic === false ? " · ไม่มีรูป" : ""}` });
+        // เด้งผลดิบเต็ม ๆ ให้อ่าน/ถ่ายรูปได้ (ไว้วินิจฉัยว่า Facebook ปฏิเสธเพราะอะไร)
+        window.alert("ผลรีเฟรชโปรไฟล์ FB (ส่งให้ผู้ดูแลระบบ):\n\n" + JSON.stringify(j, null, 2).slice(0, 1800));
+      }
+    } catch (e) { setFbMsg({ ok: false, t: "ผิดพลาด: " + (e.message || e) }); window.alert("รีเฟรชผิดพลาด: " + (e.message || e)); }
     finally { setFbRefreshing(false); }
   }
   React.useEffect(() => {
