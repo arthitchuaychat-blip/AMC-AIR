@@ -721,7 +721,6 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <button className="btn-ghost sm" style={{ flex: "none", display: "inline-flex", width: "fit-content", fontSize: 12, padding: "4px 10px" }} disabled={fbRefreshing} onClick={refreshFbProfiles}
                 title="ดึงชื่อ+รูปโปรไฟล์ผู้ติดต่อ Facebook เก่าที่ยังไม่ขึ้น">🔄 {fbRefreshing ? "กำลังรีเฟรช…" : "รีเฟรชโปรไฟล์"}</button>
               {fbMsg && <span style={{ fontSize: 11.5, color: fbMsg.ok ? "#16a34a" : "#dc2626", flex: "1 1 100%" }}>{fbMsg.t}</span>}
-              {fbRaw && <pre style={{ flex: "1 1 100%", margin: "4px 0 0", padding: "6px 8px", fontSize: 10.5, lineHeight: 1.35, background: "#0f172a", color: "#e2e8f0", borderRadius: 6, maxHeight: 160, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", userSelect: "text" }} onClick={() => { try { navigator.clipboard.writeText(fbRaw); flash("ก็อปผลแล้ว — วางส่งให้ผู้ดูแลได้"); } catch { /* ignore */ } }} title="กดเพื่อคัดลอก">{fbRaw}</pre>}
             </div>
           )}
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
@@ -1150,6 +1149,21 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
           );
         })()}
       </div>
+      {fbRaw && (
+        <div className="modal-overlay" onClick={() => setFbRaw(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 560, maxWidth: "92vw" }}>
+            <div className="modal-head"><div className="modal-title">ผลรีเฟรชโปรไฟล์ FB (ส่งให้ผู้ดูแลระบบ)</div>
+              <button className="modal-x" onClick={() => setFbRaw(null)}><UIcon name="x" size={18} /></button></div>
+            <div className="modal-body">
+              <pre style={{ margin: 0, padding: "10px 12px", fontSize: 12, lineHeight: 1.4, background: "#0f172a", color: "#e2e8f0", borderRadius: 8, maxHeight: "56vh", overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", userSelect: "text" }}>{fbRaw}</pre>
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => { try { navigator.clipboard.writeText(fbRaw); flash("คัดลอกแล้ว — วางส่งให้ผู้ดูแลได้"); } catch { /* ignore */ } }}>📋 คัดลอก</button>
+              <button className="btn-primary" onClick={() => setFbRaw(null)}>ปิด</button>
+            </div>
+          </div>
+        </div>
+      )}
       {jobPicker && (
         <div className="modal-overlay" onClick={() => setJobPicker(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
