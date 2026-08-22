@@ -31,11 +31,10 @@ export default async function handler(req, res) {
 
   const endpoint = `${GRAPH}/${pageId() || "me"}/messages?access_token=${page}`;
   const attUrl = imageUrl || fileUrl || null;
-  let r;
+
+  // ดึง bytes ไฟล์แนบล่วงหน้า (อัปโหลดตรงเข้า FB — เสถียรกว่าให้ FB ไปดึง URL เอง)
+  let buf = null, ct = null, isImage = false, fname = "";
   if (attUrl) {
-    // ส่งไฟล์แนบแบบ "อัปโหลดตรง" (multipart) — เซิร์ฟเวอร์ดึงไฟล์เองแล้วส่ง bytes เข้า FB
-    // เดิมส่ง payload.url ให้ FB ไปดึงเอง → FB โหลด URL เราไม่ได้บ่อย ๆ = #100 "อัพโหลดไม่สำเร็จ" (subcode 2018007)
-    let buf, ct;
     try {
       const f = await fetch(attUrl);
       if (!f.ok) return res.status(502).json({ error: `โหลดไฟล์แนบไม่ได้ (HTTP ${f.status})` });
@@ -43,24 +42,41 @@ export default async function handler(req, res) {
       buf = Buffer.from(await f.arrayBuffer());
       if (!buf.length) return res.status(502).json({ error: "ไฟล์แนบว่างเปล่า" });
     } catch (e) { return res.status(502).json({ error: "ดึงไฟล์แนบไม่สำเร็จ: " + (e.message || e) }); }
-    const isImage = imageUrl ? (!ct || /^image\//.test(ct)) : /^image\//.test(ct || "");
+    isImage = imageUrl ? (!ct || /^image\//.test(ct)) : /^image\//.test(ct || "");
     if (!ct) ct = isImage ? "image/jpeg" : "application/octet-stream";
-    const fname = fileName || decodeURIComponent(String(attUrl).split("/").pop().split("?")[0] || "") || (isImage ? "image.jpg" : "file.bin");
-    const fd = new FormData();
-    fd.append("recipient", JSON.stringify({ id: to }));
-    fd.append("messaging_type", "RESPONSE");
-    fd.append("message", JSON.stringify({ attachment: { type: isImage ? "image" : "file", payload: { is_reusable: true } } }));
-    fd.append("filedata", new Blob([buf], { type: ct }), fname);
-    r = await fetch(endpoint, { method: "POST", body: fd });   // อย่าตั้ง Content-Type เอง — ให้ multipart boundary อัตโนมัติ
-  } else {
-    // ตอบกลับอ้างข้อความ (FB reply) — ได้ผลเฉพาะในกรอบ 24 ชม. · นอกกรอบ API จะปฏิเสธ reply แต่ข้อความปกติยังส่งได้
-    const replyField = replyToMid ? { reply_to: { mid: String(replyToMid) } } : {};
-    r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message: { text }, ...replyField }) });
-    if (!r.ok && replyToMid) {   // reply ถูกปฏิเสธ (นอกกรอบ 24 ชม.) → ส่งแบบไม่อ้างอิงแทน
-      r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message: { text } }) });
-    }
+    fname = fileName || decodeURIComponent(String(attUrl).split("/").pop().split("?")[0] || "") || (isImage ? "image.jpg" : "file.bin");
   }
-  if (!r.ok) return res.status(502).json({ error: "fb: " + (await r.text().catch(() => r.status)) });
+
+  // ส่ง 1 ครั้ง — tag=null คือปกติ (กรอบ 24 ชม.) · tag="HUMAN_AGENT" ขยายเป็น 7 วัน (เจ้าหน้าที่ตอบลูกค้า)
+  const post = (tag) => {
+    const mt = tag ? "MESSAGE_TAG" : "RESPONSE";
+    if (attUrl) {
+      const fd = new FormData();
+      fd.append("recipient", JSON.stringify({ id: to }));
+      fd.append("messaging_type", mt);
+      if (tag) fd.append("tag", tag);
+      fd.append("message", JSON.stringify({ attachment: { type: isImage ? "image" : "file", payload: { is_reusable: true } } }));
+      fd.append("filedata", new Blob([buf], { type: ct }), fname);
+      return fetch(endpoint, { method: "POST", body: fd });   // อย่าตั้ง Content-Type เอง — multipart boundary อัตโนมัติ
+    }
+    const body = { recipient: { id: to }, messaging_type: mt, message: { text }, ...(tag ? { tag } : {}), ...((!tag && replyToMid) ? { reply_to: { mid: String(replyToMid) } } : {}) };
+    return fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  };
+
+  let r = await post(null);
+  let errTxt = r.ok ? "" : await r.text().catch(() => String(r.status));
+  // นอกกรอบ 24 ชม. (#10 / subcode 2018278) → ลอง HUMAN_AGENT (ตอบลูกค้าได้ถึง 7 วัน) · reply ก็ลองแบบไม่อ้างอิง
+  const outOfWindow = !r.ok && /2018278|"code"\s*:\s*10|allowed window|outside/i.test(errTxt);
+  if (outOfWindow) {
+    const r2 = await post("HUMAN_AGENT");
+    if (r2.ok) { r = r2; errTxt = ""; }
+    else { errTxt = await r2.text().catch(() => String(r2.status)); }
+  }
+  if (!r.ok) {
+    const stillWindow = /2018278|"code"\s*:\s*10|allowed window|outside/i.test(errTxt);
+    if (stillWindow) return res.status(502).json({ error: "ส่งไม่ได้ — เกิน 24 ชม. หลังลูกค้าทักล่าสุด (กฎ Facebook Messenger) ต้องให้ลูกค้าทักเข้ามาก่อนถึงจะตอบ/ส่งไฟล์ได้ · ถ้าเกิน 7 วันต้องรอลูกค้าทักใหม่เท่านั้น", code: "window" });
+    return res.status(502).json({ error: "fb: " + errTxt });
+  }
   const out = await r.json().catch(() => ({}));
 
   const kind = imageUrl ? "image" : fileUrl ? "file" : "text";
