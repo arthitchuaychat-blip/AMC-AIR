@@ -35,6 +35,19 @@ export default async function handler(req, res) {
   try { whoami = await fetch(`${GRAPH}/me?fields=id,name&access_token=${token}`).then((r) => r.json()); } catch (e) { whoami = { error: String(e) }; }
   const pageIdEnv = process.env.FB_PAGE_ID || null;
   const tokenIsPage = !!(whoami && whoami.id && pageIdEnv && String(whoami.id) === String(pageIdEnv));
+  // โหมดตรวจ ?probe=1 — ทดสอบวิธีดึงชื่อแบบต่าง ๆ กับผู้ติดต่อ 1 ราย แล้วคืนผลดิบ (ไม่แก้ข้อมูล)
+  if (req.query?.probe) {
+    const one = await fetch(`${SB()}/rest/v1/fb_contacts?display_name=is.null&select=psid&limit=1`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const psid = one[0]?.psid;
+    const out = { whoami, pageIdEnv, tokenIsPage, psid };
+    if (psid) {
+      out.direct = await fetch(`${GRAPH}/${psid}?fields=first_name,last_name,profile_pic&access_token=${token}`).then((r) => r.json()).catch((e) => ({ error: String(e) }));
+      out.conv = await fetch(`${GRAPH}/${pageIdEnv}/conversations?user_id=${psid}&fields=participants,senders&access_token=${token}`).then((r) => r.json()).catch((e) => ({ error: String(e) }));
+    }
+    let td = null; try { td = await fetch(`${GRAPH}/debug_token?input_token=${token}&access_token=${token}`).then((r) => r.json()); } catch (e) { td = { error: String(e) }; }
+    out.scopes = td?.data?.scopes || td;
+    return res.status(200).json(out);
+  }
 
   // ผู้ติดต่อที่ยังไม่มีชื่อ/รูป → ดึงโปรไฟล์ + เก็บรูปเข้า storage เรา · ทีละ 30 คน/รอบ (กัน timeout)
   const rows = await fetch(`${SB()}/rest/v1/fb_contacts?or=(display_name.is.null,picture_url.is.null)&select=psid,display_name,picture_url&order=last_message_at.desc.nullslast&limit=30`, { headers: sbH() })
