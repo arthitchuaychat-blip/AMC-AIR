@@ -551,7 +551,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         else entries.push({ jo, visit: null, round: 0, rounds: 0 });
       });
       // เรียงตามวันนัดของรอบ (รอบใกล้ที่สุดอยู่บน)
-      entries.sort((a, b) => (String((a.visit?.scheduled_at) || a.jo.scheduled_at || "")).localeCompare(String((b.visit?.scheduled_at) || b.jo.scheduled_at || "")));
+      // นัดหมายล่าสุด (วันที่ใหม่สุด) อยู่บนสุดเสมอ — เรียงจากมาก→น้อย
+      entries.sort((a, b) => (String((b.visit?.scheduled_at) || b.jo.scheduled_at || "")).localeCompare(String((a.visit?.scheduled_at) || a.jo.scheduled_at || "")));
       setJobPicker(entries);
     } catch (e) { flash("โหลดใบงานไม่สำเร็จ: " + (e.message || e), true); }
   }
