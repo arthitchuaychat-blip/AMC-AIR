@@ -427,6 +427,19 @@ export async function aiDraftBoq({ imageUrls = [], spec = "", brief = "" }) {
   return j;
 }
 
+// AI ตรวจใบส่งของ/บิลผู้ขาย เทียบกับ PO (โหลด PO ฝั่งเซิร์ฟเวอร์)
+export async function aiCheckPo(poNo) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const r = await fetch("/api/po-check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+    body: JSON.stringify({ poNo }),
+  });
+  let j = null; try { j = await r.json(); } catch { /* non-JSON */ }
+  if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+  return j;
+}
+
 // update a material's (weighted-average) unit cost — used by purchase moving average
 export async function updateMaterialCost(code, cost) {
   const { error } = await supabase.from("materials").update({ cost }).eq("code", code);

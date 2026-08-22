@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies, docNoTaken, markPoReceived, lastPurchaseOf, repriceReceivedPo, uploadExpenseFile, listReorderSuggestions } from "../lib/api";
+import { listPurchaseOrders, savePurchaseOrder, deletePurchaseOrder, cancelPurchaseOrder, listMaterialsLite, listSuppliers, listApprovedQuotesLite, requestPoPayment, getCompanies, docNoTaken, markPoReceived, lastPurchaseOf, repriceReceivedPo, uploadExpenseFile, listReorderSuggestions, aiCheckPo } from "../lib/api";
 import { InternalNoteField, InternalNoteTag } from "./InternalNote";
 import { fmtBaht, fmtNum, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
@@ -94,6 +94,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const [sups, setSups] = React.useState([]);            // ทะเบียนผู้ขายฉบับเต็ม (ที่อยู่/เลขภาษี สำหรับใบพิมพ์)
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [printPo, setPrintPo] = React.useState(null);
+  const [checkPo, setCheckPo] = React.useState(null);   // PO ที่กำลังให้ AI ตรวจใบส่งของ
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printPo) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintPo(null); }, 120); return () => clearTimeout(t); }, [printPo]);
 
@@ -573,6 +574,8 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
                 <div className="job-actions">
                   <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintPo(po); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                   <button className="btn-ghost sm" onClick={() => copyPo(po)}><UIcon name="clipboard" size={14} /> คัดลอกส่งซัพพลายเออร์</button>
+                  {(po.attachments || []).length > 0 &&
+                    <button className="btn-ghost sm" style={{ color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} title="ให้ AI อ่านใบส่งของที่แนบ แล้วเทียบราคา/จำนวนกับ PO" onClick={() => setCheckPo(po)}>🤖 AI ตรวจใบส่งของ</button>}
                   {isAdmin && po.status !== "cancelled" && po.paymentStatus === "unpaid" && po.total > 0 &&
                     <button className="btn-ghost sm" style={{ color: "#1d4ed8", borderColor: "#c7dbff", background: "#eff5ff" }} onClick={() => requestPay(po)}>💳 ส่งขออนุมัติจ่าย</button>}
                   {po.paymentStatus === "pending" && <span className="job-closed-note">รออนุมัติจ่ายในเมนูเบิกจ่าย</span>}
@@ -617,8 +620,97 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           </DocSlip>
         );
       })()}
+      {checkPo && <PoCheckModal po={checkPo} onClose={() => setCheckPo(null)} onEdit={(po) => { setCheckPo(null); startEdit(po); }} />}
       {peekEl}
       {toast && <Toast toast={toast} />}
+    </div>
+  );
+}
+
+// ── AI ตรวจใบส่งของ เทียบกับ PO ─────────────────────────────────────
+const ST_META = {
+  ok: { label: "ตรง", color: "#16a34a", bg: "#f0fdf4", icon: "✓" },
+  price_diff: { label: "ราคาต่าง", color: "#d97706", bg: "#fffbeb", icon: "💰" },
+  qty_diff: { label: "จำนวนต่าง", color: "#d97706", bg: "#fffbeb", icon: "🔢" },
+  missing_in_doc: { label: "ไม่พบในใบส่งของ", color: "#dc2626", bg: "#fef2f2", icon: "⚠️" },
+};
+function PoCheckModal({ po, onClose, onEdit }) {
+  const [busy, setBusy] = React.useState(false);
+  const [res, setRes] = React.useState(null);
+  const [err, setErr] = React.useState("");
+  const run = async () => {
+    setBusy(true); setErr(""); setRes(null);
+    try { setRes(await aiCheckPo(po.po_no)); }
+    catch (e) { setErr(e.message || String(e)); }
+    finally { setBusy(false); }
+  };
+  React.useEffect(() => { run(); /* auto-run on open */ }, []);
+  const money = (v) => (v == null ? "—" : fmtBaht(v));
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 620, width: "94%" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">🤖 AI ตรวจใบส่งของ · {po.po_no}</div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button>
+        </div>
+        <div className="modal-body" style={{ maxHeight: "72vh", overflowY: "auto" }}>
+          <div className="jo-dim" style={{ marginBottom: 8 }}>ผู้ขาย {po.supplier || "-"} · เทียบราคา/จำนวนที่คีย์ใน PO กับใบส่งของที่แนบ</div>
+          {busy && <div style={{ padding: "24px 0", textAlign: "center" }}>🤖 AI กำลังอ่านใบส่งของ…</div>}
+          {err && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", borderRadius: 10, padding: "10px 12px", fontSize: 13 }}>❌ {err}</div>}
+          {res && (<>
+            {res.error
+              ? <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 12px", fontSize: 13 }}>{res.error}</div>
+              : (<>
+                <div style={{ background: res.diffCount ? "#fffbeb" : "#f0fdf4", border: `1px solid ${res.diffCount ? "#fde68a" : "#bbf7d0"}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10, fontSize: 13.5 }}>
+                  {res.diffCount ? <b>⚠️ พบ {res.diffCount} จุดที่ควรตรวจ</b> : <b>✅ ตรงกันทั้งหมด</b>}
+                  {res.summary ? <div style={{ marginTop: 4, fontWeight: 400 }}>{res.summary}</div> : null}
+                </div>
+                {res.diag?.length > 0 && (
+                  <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginBottom: 8 }}>
+                    {res.diag.map((d, i) => <div key={i} style={{ color: d.includes("✓") ? "var(--ink-3)" : "#dc2626" }}>{d}</div>)}
+                  </div>
+                )}
+                <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+                  {(res.rows || []).map((r, i) => { const s = ST_META[r.status] || ST_META.ok; return (
+                    <div key={i} style={{ padding: "8px 12px", borderBottom: "1px solid var(--line-2)", fontSize: 13, background: s.bg }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <span style={{ fontWeight: 600 }}>{s.icon} {r.name}</span>
+                        <span style={{ color: s.color, fontWeight: 600, flex: "none" }}>{s.label}</span>
+                      </div>
+                      <div className="jo-dim" style={{ marginTop: 2, fontSize: 12 }}>
+                        PO: {fmtNum(r.poQty)} × {money(r.poPrice)}
+                        {r.status !== "ok" && <> · ใบส่งของ: {r.docQty == null ? "—" : fmtNum(r.docQty)} × {money(r.docPrice)}</>}
+                      </div>
+                      {r.note ? <div style={{ marginTop: 2, fontSize: 12, color: s.color }}>{r.note}</div> : null}
+                    </div>
+                  ); })}
+                </div>
+                {res.extraInDoc?.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "#dc2626", marginBottom: 4 }}>➕ มีในใบส่งของ แต่ไม่มีใน PO</div>
+                    <div style={{ border: "1px solid #fecaca", borderRadius: 10, overflow: "hidden" }}>
+                      {res.extraInDoc.map((x, i) => (
+                        <div key={i} style={{ padding: "6px 12px", borderBottom: "1px solid var(--line-2)", fontSize: 13, background: "#fef2f2" }}>
+                          {x.name} <span className="jo-dim">— {x.qty == null ? "?" : fmtNum(x.qty)} × {money(x.price)}{x.note ? " · " + x.note : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontSize: 13.5, padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+                  <span>ยอดก่อน VAT — PO: <b>{fmtBaht(res.poTotal)}</b> · ใบส่งของ: <b>{res.docTotal == null ? "อ่านไม่เจอ" : fmtBaht(res.docTotal)}</b></span>
+                  {res.totalDiff != null && Math.abs(res.totalDiff) >= 0.5 && <b style={{ color: "#d97706" }}>ต่าง {fmtBaht(res.totalDiff)}</b>}
+                </div>
+                <div className="jo-dim" style={{ fontSize: 11.5, marginTop: 8 }}>* AI ช่วยอ่านเบื้องต้น — ตรวจกับใบจริงอีกครั้งก่อนอนุมัติจ่าย</div>
+              </>)}
+          </>)}
+        </div>
+        <div className="modal-foot" style={{ gap: 8 }}>
+          <button className="btn-ghost" onClick={onClose}>ปิด</button>
+          <button className="btn-ghost" disabled={busy} onClick={run}>↻ ตรวจใหม่</button>
+          {res && !res.error && res.diffCount > 0 && <button className="btn-primary" style={{ flex: 1 }} onClick={() => onEdit(po)}><UIcon name="edit" size={14} color="#fff" /> แก้ราคา/จำนวนใน PO</button>}
+        </div>
+      </div>
     </div>
   );
 }
