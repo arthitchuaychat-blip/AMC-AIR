@@ -25,15 +25,38 @@ function parseLooseJson(text) {
     else if (!inStr) { if (c === "{") depth++; else if (c === "}") { depth--; if (depth === 0) end = i; } }
   }
   if (end > 0) { try { return JSON.parse(t.slice(0, end + 1)); } catch {} }
-  // JSON ถูกตัดกลาง (truncate) — ตัดกลับไปที่ } ปิด object รายการล่าสุด แล้วปิด array + object เอง
-  const lastObj = t.lastIndexOf("}");
-  if (lastObj > 0) {
-    let head = t.slice(0, lastObj + 1);
-    // ถ้ามี "lines":[ ให้ปิด array + object
-    if (/"lines"\s*:\s*\[/.test(head)) { try { return JSON.parse(head + "]}"); } catch {} }
-    try { return JSON.parse(head + "}"); } catch {}
+  // JSON ถูกตัดกลาง (truncate) — กู้เท่าที่สมบูรณ์: ดึง summary/questions + เก็บ object ใน lines[] ที่สมดุลทีละตัว
+  return salvageJson(t);
+}
+
+// กู้ JSON ที่ถูกตัดกลางคัน: เก็บ summary, questions (ถ้าครบ), และ line objects ที่สมบูรณ์ใน lines[]
+function salvageJson(t) {
+  const out = { summary: "", questions: [], lines: [] };
+  const sm = t.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (sm) { try { out.summary = JSON.parse('"' + sm[1] + '"'); } catch { out.summary = sm[1]; } }
+  const qm = t.match(/"questions"\s*:\s*(\[[\s\S]*?\])/);
+  if (qm) { try { out.questions = JSON.parse(qm[1]); } catch {} }
+  const li = t.search(/"lines"\s*:\s*\[/);
+  if (li >= 0) {
+    let i = t.indexOf("[", li) + 1;
+    while (i < t.length) {
+      while (i < t.length && t[i] !== "{") { if (t[i] === "]") { i = t.length; break; } i++; }
+      if (i >= t.length) break;
+      // สแกน object ตัวถัดไปแบบสมดุล
+      let depth = 0, inStr = false, esc = false, start = i, done = -1;
+      for (let j = i; j < t.length; j++) {
+        const c = t[j];
+        if (esc) { esc = false; continue; }
+        if (c === "\\") { esc = true; continue; }
+        if (c === '"') inStr = !inStr;
+        else if (!inStr) { if (c === "{") depth++; else if (c === "}") { depth--; if (depth === 0) { done = j; break; } } }
+      }
+      if (done < 0) break;   // object สุดท้ายถูกตัด — หยุด
+      try { out.lines.push(JSON.parse(t.slice(start, done + 1))); } catch {}
+      i = done + 1;
+    }
   }
-  return null;
+  return (out.lines.length || out.questions.length || out.summary) ? out : null;
 }
 
 async function readJson(req) {
@@ -163,7 +186,7 @@ export default async function handler(req, res) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: "claude-sonnet-5", max_tokens: 8000, output_config: { effort: "medium" },
+        model: "claude-sonnet-5", max_tokens: 16000, output_config: { effort: "medium" },
         system: [
           { type: "text", text: rules },
           { type: "text", text: "แคตตาล็อกวัสดุ/แอร์/บริการ (ต้นทุนจริง — ใช้รหัสจากนี้เท่านั้น):\n" + catalog, cache_control: { type: "ephemeral" } },
@@ -212,5 +235,6 @@ export default async function handler(req, res) {
       "ต้องการยี่ห้อ/รุ่นใด และให้รวมงานเดินท่อ/เดินไฟ/รื้อของเก่าด้วยไหม?",
     ];
   }
-  return res.status(200).json({ summary: parsed.summary || "", questions, lines, count: lines.length, diag, raw: (!lines.length ? text.slice(0, 1200) : undefined) });
+  const summary = (truncated ? "⚠️ รายการอาจไม่ครบ (AI ตอบยาวจนถูกตัด — ได้เท่าที่สมบูรณ์) · " : "") + (parsed.summary || "");
+  return res.status(200).json({ summary, questions, lines, count: lines.length, diag, raw: (!lines.length ? text.slice(0, 1200) : undefined) });
 }
