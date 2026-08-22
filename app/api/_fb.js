@@ -21,6 +21,24 @@ export async function pageToken() {
 
 export const pageId = () => process.env.FB_PAGE_ID || null;
 
+// ดึงชื่อ+รูปโปรไฟล์ลูกค้า Messenger
+// ⚠️ User Profile API ดึงตรง (GET /{psid}?fields=first_name...) โดน Facebook บล็อก (error 100/33)
+//    → ใช้ Conversations API ดึง "ชื่อ" แทน (ได้ผลจริง) · รูปลองผ่าน /{psid}/picture (อาจไม่ได้ถ้าถูกจำกัด)
+export async function fetchFbProfile(psid, token, pid = process.env.FB_PAGE_ID) {
+  let name = null, picUrl = null;
+  try {
+    const c = await fetch(`${GRAPH}/${pid}/conversations?user_id=${psid}&fields=participants&access_token=${token}`).then((r) => r.json());
+    const parts = c?.data?.[0]?.participants?.data || [];
+    const p = parts.find((x) => String(x.id) === String(psid) && String(x.id) !== String(pid));
+    if (p?.name) name = p.name;
+  } catch { /* ignore */ }
+  try {
+    const pic = await fetch(`${GRAPH}/${psid}/picture?redirect=false&type=large&access_token=${token}`).then((r) => r.json());
+    if (pic?.data?.url && !pic.data.is_silhouette) picUrl = pic.data.url;
+  } catch { /* ignore */ }
+  return { name, picUrl };
+}
+
 // รูปโปรไฟล์ FB (platform-lookaside.fbsbx.com) เป็น URL เซ็นชื่อ "หมดอายุ" + เบราว์เซอร์บล็อก (CORP) →
 // โหลดมาเก็บใน Supabase Storage (bucket photos) ของเราเอง แล้วคืน public URL ของเราแทน (ไม่หมดอายุ ไม่โดนบล็อก)
 export async function cacheImage(path, url) {

@@ -1,7 +1,7 @@
 // เติมชื่อ + รูปโปรไฟล์ย้อนหลังให้ผู้ติดต่อ Facebook เก่า (ที่ทักเข้ามาก่อนตั้ง Page Token)
 // เรียกครั้งเดียว: GET https://app.amcair.net/api/fb-backfill?key=<CRON_SECRET>
 // ใช้ Messenger User Profile API (first_name+last_name+profile_pic) ด้วย Page Access Token
-import { GRAPH, pageToken, cacheImage } from "./_fb.js";
+import { GRAPH, pageToken, cacheImage, fetchFbProfile } from "./_fb.js";
 
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -58,15 +58,13 @@ export default async function handler(req, res) {
   for (const c of rows) {
     const d = { psid: c.psid };
     try {
-      const p = await fetch(`${GRAPH}/${c.psid}?fields=first_name,last_name,profile_pic&access_token=${token}`).then((r) => r.json());
-      if (p.error) { d.graphError = p.error.message || p.error.type || JSON.stringify(p.error); }
-      const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || null;
-      d.gotName = !!name; d.gotPic = !!p.profile_pic;
+      const { name, picUrl } = await fetchFbProfile(c.psid, token, pageIdEnv);   // ชื่อผ่าน Conversations API
+      d.gotName = !!name; d.gotPic = !!picUrl;
       let pic = null;
-      if (p.profile_pic) {
-        const cached = await cacheImage(`fb/${c.psid}.jpg`, p.profile_pic);
+      if (picUrl) {
+        const cached = await cacheImage(`fb/${c.psid}.jpg`, picUrl);
         d.cached = cached ? "ok" : "cache-failed";
-        pic = cached || p.profile_pic;
+        pic = cached || picUrl;
       }
       if (!name && !pic) { failed++; d.result = "no-profile"; details.push(d); continue; }
       const patch = {};

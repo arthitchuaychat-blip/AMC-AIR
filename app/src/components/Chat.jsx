@@ -209,7 +209,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     setFbRefreshing(true); setFbMsg(null); setFbRaw("กำลังเรียก /api/fb-backfill …");
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const r = await fetch("/api/fb-backfill?probe=1", { headers: { Authorization: `Bearer ${session?.access_token || ""}` } });
+      const r = await fetch("/api/fb-backfill", { headers: { Authorization: `Bearer ${session?.access_token || ""}` } });
       const text = await r.text();
       let j = {}; try { j = JSON.parse(text); } catch { /* keep text */ }
       setFbRaw(`HTTP ${r.status}\n` + (text || "").slice(0, 2000));   // ผลดิบค้างบนจอ

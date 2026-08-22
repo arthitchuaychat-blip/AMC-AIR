@@ -2,7 +2,7 @@
 // Env: FB_VERIFY_TOKEN, FB_PAGE_ACCESS_TOKEN, FB_APP_SECRET (optional, for signature check), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 import crypto from "crypto";
 import webpush from "web-push";
-import { GRAPH, pageToken, pageId, cacheImage } from "./_fb.js";
+import { GRAPH, pageToken, pageId, cacheImage, fetchFbProfile } from "./_fb.js";
 import { getAutoReplyCfg, isOpenNow, generateReply } from "./_ai.js";
 
 const SB = () => process.env.SUPABASE_URL;
@@ -126,12 +126,9 @@ export default async function handler(req, res) {
       // ดึงชื่อ+รูปโปรไฟล์จาก Messenger User Profile API (ใช้ first_name+last_name — ฟิลด์ name ไม่คืนค่าสำหรับผู้ใช้ทั่วไป)
       const fetchProfile = async () => {
         if (!token) return { name: null, pic: null };
-        try {
-          const p = await fetch(`${GRAPH}/${psid}?fields=first_name,last_name,profile_pic&access_token=${token}`).then((r) => r.json());
-          // เก็บรูปเข้า storage เราเอง (URL FB หมดอายุ + โดนบล็อก) · เก็บไม่ได้ค่อย fallback URL ดิบ
-          const pic = p.profile_pic ? (await cacheImage(`fb/${psid}.jpg`, p.profile_pic)) || p.profile_pic : null;
-          return { name: [p.first_name, p.last_name].filter(Boolean).join(" ") || null, pic };
-        } catch { return { name: null, pic: null }; }
+        const { name, picUrl } = await fetchFbProfile(psid, token, pageId());
+        const pic = picUrl ? (await cacheImage(`fb/${psid}.jpg`, picUrl)) || picUrl : null;   // เก็บรูปเข้า storage เรา (URL FB หมดอายุ)
+        return { name, pic };
       };
       // upsert contact (ดึงชื่อตอนติดต่อครั้งแรก · ถ้าติดต่อเก่ายังไม่มีชื่อ ให้เติมย้อนหลัง)
       const exist = await fetch(`${SB()}/rest/v1/fb_contacts?psid=eq.${encodeURIComponent(psid)}&select=psid,unread,display_name`, { headers: sbH() }).then((r) => r.ok ? r.json() : []).catch(() => []);
