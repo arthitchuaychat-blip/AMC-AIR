@@ -31,8 +31,8 @@ export default async function handler(req, res) {
   const token = await pageToken();
   if (!token) return res.status(503).json({ error: "ขาด FB_PAGE_ACCESS_TOKEN" });
 
-  // ผู้ติดต่อที่ยังไม่มีชื่อ/รูป หรือรูปยังชี้ไป CDN ของ FB (fbsbx/lookaside — หมดอายุ) → ดึงใหม่+เก็บเข้า storage เรา
-  const rows = await fetch(`${SB()}/rest/v1/fb_contacts?or=(display_name.is.null,picture_url.is.null,picture_url.like.*fbsbx*,picture_url.like.*lookaside*)&select=psid,display_name,picture_url&limit=200`, { headers: sbH() })
+  // ผู้ติดต่อที่ยังไม่มีชื่อ/รูป → ดึงโปรไฟล์ + เก็บรูปเข้า storage เรา · ทีละ 30 คน/รอบ (กัน timeout)
+  const rows = await fetch(`${SB()}/rest/v1/fb_contacts?or=(display_name.is.null,picture_url.is.null)&select=psid,display_name,picture_url&order=last_message_at.desc.nullslast&limit=30`, { headers: sbH() })
     .then((r) => (r.ok ? r.json() : [])).catch(() => []);
 
   let updated = 0, failed = 0;
