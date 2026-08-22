@@ -30,6 +30,11 @@ export default async function handler(req, res) {
 
   const token = await pageToken();
   if (!token) return res.status(503).json({ error: "ขาด FB_PAGE_ACCESS_TOKEN" });
+  // ตรวจว่า token ที่ resolve ได้เป็นของ "เพจ" จริงไหม (ถ้าเป็น system user = แลก page token ไม่สำเร็จ = ดึงโปรไฟล์ไม่ได้)
+  let whoami = null;
+  try { whoami = await fetch(`${GRAPH}/me?fields=id,name&access_token=${token}`).then((r) => r.json()); } catch (e) { whoami = { error: String(e) }; }
+  const pageIdEnv = process.env.FB_PAGE_ID || null;
+  const tokenIsPage = !!(whoami && whoami.id && pageIdEnv && String(whoami.id) === String(pageIdEnv));
 
   // ผู้ติดต่อที่ยังไม่มีชื่อ/รูป → ดึงโปรไฟล์ + เก็บรูปเข้า storage เรา · ทีละ 30 คน/รอบ (กัน timeout)
   const rows = await fetch(`${SB()}/rest/v1/fb_contacts?or=(display_name.is.null,picture_url.is.null)&select=psid,display_name,picture_url&order=last_message_at.desc.nullslast&limit=30`, { headers: sbH() })
@@ -61,5 +66,5 @@ export default async function handler(req, res) {
       details.push(d);
     } catch (e) { failed++; d.result = "exception"; d.err = String(e); details.push(d); }
   }
-  return res.status(200).json({ scanned: rows.length, updated, failed, tokenSet: !!token, details: details.slice(0, 15) });
+  return res.status(200).json({ scanned: rows.length, updated, failed, tokenSet: !!token, whoami, pageIdEnv, tokenIsPage, details: details.slice(0, 5) });
 }
