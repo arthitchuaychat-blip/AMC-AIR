@@ -455,8 +455,8 @@ function BoqAiModal({ onClose, onApply, flash }) {
     setBusy(true); setResult(null);
     try {
       const j = await aiDraftBoq({ imageUrls: files.map((f) => f.url), spec, brief });
-      if (!j.lines || !j.lines.length) { flash(j.summary || "AI ร่างไม่ได้ — ลองเพิ่มรายละเอียด/แบบให้ชัดขึ้น", true); setBusy(false); return; }
-      setResult(j);
+      if (!(j.lines || []).length && !(j.questions || []).length) { flash(j.summary || "AI ร่างไม่ได้ — ลองเพิ่มรายละเอียด/แบบให้ชัดขึ้น", true); setBusy(false); return; }
+      setResult({ ...j, lines: j.lines || [], questions: j.questions || [] });
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -490,6 +490,13 @@ function BoqAiModal({ onClose, onApply, flash }) {
             </div>
           </>) : (<>
             <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 13 }}>📋 <b>AI สรุป:</b> {result.summary || "-"}</div>
+            {result.questions?.length > 0 && (
+              <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 13 }}>
+                <b>❓ AI อยากขอข้อมูลเพิ่ม (เพื่อร่างให้แม่นขึ้น):</b>
+                <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{result.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
+                <div className="jo-dim" style={{ marginTop: 4 }}>ตอบในช่องบรีฟ แล้วกด "↩ แก้ข้อมูล/ร่างใหม่" เพื่อให้ AI ร่างใหม่ให้แม่นขึ้น</div>
+              </div>
+            )}
             <div className="jo-dim" style={{ marginBottom: 6 }}>ร่าง {result.lines.length} รายการ (⚠️ = ต้องตรวจ) — กด "เติมเข้าใบ" แล้วแก้จำนวน/ราคาต่อได้</div>
             <div style={{ border: "1px solid var(--line)", borderRadius: 8, maxHeight: "48vh", overflowY: "auto" }}>
               {result.lines.map((l, i) => (

@@ -102,9 +102,10 @@ export default async function handler(req, res) {
 - qty ตัวเลขจริง · unit_cost ตามต้นทุนแคตตาล็อก (ระบบ override อีกชั้น) · note=ตำแหน่ง/ที่มาสั้น ๆ (เช่น "FCU-104 ชั้น1")
 - เคารพบรีฟ: ยี่ห้อ, ความหนาฉนวน, รวม/ไม่รวมอุปกรณ์ซัพพอร์ต, เดินท่อในฝ้า/ลอย ฯลฯ
 - แบบหลายชั้น/หลายรูป: อ่านทุกรูป รวมทุกชั้น · ในสรุปให้แจกแจงต่อชั้น (ชั้น 1 กี่ตัวใหม่/เดิม ฯลฯ)
+- **ถ้าคุณสงสัย/อ่านแบบไม่ชัด/ต้องการข้อมูลเพิ่มเพื่อให้ร่างแม่นขึ้น → ใส่คำถามใน "questions" เสมอ อย่าเดามั่วแล้วเงียบ** (เช่น BTU ที่หายไป, สเกล/ความยาวท่อจริง, ยี่ห้อรุ่นที่ต้องการ, รวมแอร์เดิมไหม, มีงานไฟ/รื้อของเก่าไหม, ชนิดเครื่องตัวไหนไม่ชัด)
 
 ตอบเป็น JSON เท่านั้น (ห้ามมีข้อความอื่นนอก JSON):
-{"summary":"สรุป: อ่านแบบได้กี่ชั้น กี่ FCU (ใหม่/ย้าย/เดิม) ต่อชั้น + ข้อควรระวัง/สิ่งที่ต้องขอเพิ่ม (เช่น BTU)","lines":[{"section":"ac|charged|free|service","code":"รหัสจากแคตตาล็อก หรือ ''","name":"ชื่อ","unit":"หน่วย","qty":ตัวเลข,"unit_cost":ตัวเลข,"note":"ตำแหน่ง/หมายเหตุ","needsCheck":true|false}]}`;
+{"summary":"สรุป: อ่านแบบได้กี่ชั้น กี่ FCU (ใหม่/ย้าย/เดิม) ต่อชั้น","questions":["คำถาม/ข้อมูลที่อยากขอเพิ่ม (ว่างได้ถ้าไม่มี)"],"lines":[{"section":"ac|charged|free|service","code":"รหัสจากแคตตาล็อก หรือ ''","name":"ชื่อ","unit":"หน่วย","qty":ตัวเลข,"unit_cost":ตัวเลข,"note":"ตำแหน่ง/หมายเหตุ","needsCheck":true|false}]}`;
 
   const userContent = [
     ...media,
@@ -153,5 +154,6 @@ export default async function handler(req, res) {
     };
   }).filter((x) => x.name && x.qty > 0);
 
-  return res.status(200).json({ summary: parsed.summary || "", lines, count: lines.length });
+  const questions = Array.isArray(parsed.questions) ? parsed.questions.filter((q) => q && String(q).trim()) : [];
+  return res.status(200).json({ summary: parsed.summary || "", questions, lines, count: lines.length });
 }
