@@ -455,8 +455,8 @@ function BoqAiModal({ onClose, onApply, flash }) {
     setBusy(true); setResult(null);
     try {
       const j = await aiDraftBoq({ imageUrls: files.map((f) => f.url), spec, brief });
-      if (!(j.lines || []).length && !(j.questions || []).length) { flash(j.summary || "AI ร่างไม่ได้ — ลองเพิ่มรายละเอียด/แบบให้ชัดขึ้น", true); setBusy(false); return; }
-      setResult({ ...j, lines: j.lines || [], questions: j.questions || [] });
+      if (!(j.lines || []).length && !(j.questions || []).length && !(j.diag || []).length) { flash(j.summary || "AI ร่างไม่ได้ — ลองเพิ่มรายละเอียด/แบบให้ชัดขึ้น", true); setBusy(false); return; }
+      setResult({ ...j, lines: j.lines || [], questions: j.questions || [], diag: j.diag || [] });
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -490,6 +490,12 @@ function BoqAiModal({ onClose, onApply, flash }) {
             </div>
           </>) : (<>
             <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 13 }}>📋 <b>AI สรุป:</b> {result.summary || "-"}</div>
+            {result.diag?.length > 0 && (
+              <div style={{ background: "#f8fafc", border: "1px solid var(--line)", borderRadius: 10, padding: "6px 12px", marginBottom: 10, fontSize: 12 }}>
+                <b>📎 ไฟล์ที่ส่งเข้า AI:</b>
+                <ul style={{ margin: "2px 0 0", paddingLeft: 18 }}>{result.diag.map((d, i) => <li key={i} style={{ color: d.includes("✓") ? "var(--ink-2)" : "#dc2626" }}>{d}</li>)}</ul>
+              </div>
+            )}
             {result.questions?.length > 0 && (
               <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 13 }}>
                 <b>❓ AI อยากขอข้อมูลเพิ่ม (เพื่อร่างให้แม่นขึ้น):</b>
@@ -514,8 +520,8 @@ function BoqAiModal({ onClose, onApply, flash }) {
           <button className="btn-ghost" onClick={onClose}>ปิด</button>
           {!result
             ? <button className="btn-primary" style={{ flex: 1, background: "#7c3aed", borderColor: "#7c3aed" }} disabled={busy || uploading} onClick={run}>{busy ? "🤖 AI กำลังอ่านแบบ…" : "🤖 ร่าง BOQ"}</button>
-            : <><button className="btn-ghost" onClick={() => setResult(null)}>↩ แก้ข้อมูล/ร่างใหม่</button>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={() => onApply(result.lines)}><UIcon name="check" size={15} color="#fff" /> เติมเข้าใบ ({result.lines.length})</button></>}
+            : <><button className="btn-ghost" style={{ flex: result.lines.length ? "none" : 1 }} onClick={() => setResult(null)}>↩ แก้ข้อมูล/ร่างใหม่</button>
+              {result.lines.length > 0 && <button className="btn-primary" style={{ flex: 1 }} onClick={() => onApply(result.lines)}><UIcon name="check" size={15} color="#fff" /> เติมเข้าใบ ({result.lines.length})</button>}</>}
         </div>
       </div>
     </div>

@@ -67,18 +67,31 @@ export default async function handler(req, res) {
   if (!imageUrls.length && !spec.trim()) return res.status(400).json({ error: "ต้องมีรูปแบบ หรือ รายการสเปคอย่างน้อยอย่างใดอย่างหนึ่ง" });
 
   // ดึงรูป/PDF มาแปลง base64 เป็น content block (vision) — สูงสุด 6 ไฟล์
+  // PDF ใหญ่ได้ถึง ~24MB (แบบสถาปัตย์มักใหญ่) · รูป ≤ 5MB · รวม base64 ทุกไฟล์ ≤ ~28MB (ลิมิต Anthropic 32MB/คำขอ)
   const media = [];
+  const diag = [];
+  let totalB64 = 0;
+  const MAX_TOTAL = 28 * 1024 * 1024;
   for (const u of imageUrls.slice(0, 6)) {
+    const nm = decodeURIComponent(String(u).split("/").pop().split("?")[0] || "file");
     try {
-      const r = await fetch(u); if (!r.ok) continue;
+      const r = await fetch(u);
+      if (!r.ok) { diag.push(`${nm}: โหลดไม่ได้ (HTTP ${r.status})`); continue; }
       const ct = (r.headers.get("content-type") || "").split(";")[0].trim();
       const buf = Buffer.from(await r.arrayBuffer());
-      if (buf.length > 5 * 1024 * 1024) continue;   // เกิน 5MB ข้าม
+      const isPdf = ct === "application/pdf" || nm.toLowerCase().endsWith(".pdf");
+      const cap = isPdf ? 24 * 1024 * 1024 : 5 * 1024 * 1024;
+      if (buf.length > cap) { diag.push(`${nm}: ไฟล์ใหญ่เกิน (${(buf.length / 1048576).toFixed(1)}MB > ${cap / 1048576}MB) — ลดขนาด/บีบ PDF ก่อน`); continue; }
       const b64 = buf.toString("base64");
-      if (ct === "application/pdf") media.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } });
+      if (totalB64 + b64.length > MAX_TOTAL) { diag.push(`${nm}: รวมไฟล์เกินลิมิตคำขอ AI — ส่งทีละ 1-2 ไฟล์`); continue; }
+      totalB64 += b64.length;
+      if (isPdf) media.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } });
       else media.push({ type: "image", source: { type: "base64", media_type: IMG_TYPES[ct] ? ct : "image/jpeg", data: b64 } });
-    } catch { /* ข้ามไฟล์ที่โหลดไม่ได้ */ }
+      diag.push(`${nm}: ✓ ส่งเข้า AI (${(buf.length / 1048576).toFixed(1)}MB${isPdf ? " · PDF" : ""})`);
+    } catch (e) { diag.push(`${nm}: error ${e.message || e}`); }
   }
+  if (imageUrls.length && !media.length && !spec.trim())
+    return res.status(200).json({ lines: [], summary: "❌ ไฟล์แบบเข้าไม่ถึง AI — ดูสาเหตุด้านล่าง", questions: [], diag });
 
   const catalog = catalogText(await loadCatalog());
   const rules = `คุณคือวิศวกรประเมินราคางานติดตั้งแอร์ของ AMC AIR ช่วยร่าง BOQ (ปริมาณวัสดุ) จากแบบ/แปลน + รายการสเปค + บรีฟที่ให้มา
@@ -129,11 +142,11 @@ export default async function handler(req, res) {
   } catch (e) { return res.status(502).json({ error: "เรียก AI ไม่สำเร็จ: " + (e.message || e) }); }
   if (!r.ok) { const b = (await r.text()).slice(0, 300); return res.status(502).json({ error: `AI ${r.status}: ${b}` }); }
   const data = await r.json();
-  if (data.stop_reason === "refusal") return res.status(200).json({ lines: [], summary: "AI ปฏิเสธการตอบ" });
+  if (data.stop_reason === "refusal") return res.status(200).json({ lines: [], summary: "AI ปฏิเสธการตอบ", diag });
   const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
   let parsed;
   try { parsed = JSON.parse(text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim()); }
-  catch { return res.status(200).json({ lines: [], summary: "AI ตอบไม่เป็น JSON — ลองใหม่/เพิ่มรายละเอียด", raw: text.slice(0, 500) }); }
+  catch { return res.status(200).json({ lines: [], summary: "AI ตอบไม่เป็น JSON — ลองใหม่/เพิ่มรายละเอียด", raw: text.slice(0, 500), diag }); }
 
   // ตรวจ + จับคู่แคตตาล็อกจริง (override ชื่อ/หน่วย/ต้นทุน ตามรหัส) — กัน AI มั่วราคา
   const cat = await loadCatalog();
@@ -155,5 +168,5 @@ export default async function handler(req, res) {
   }).filter((x) => x.name && x.qty > 0);
 
   const questions = Array.isArray(parsed.questions) ? parsed.questions.filter((q) => q && String(q).trim()) : [];
-  return res.status(200).json({ summary: parsed.summary || "", questions, lines, count: lines.length });
+  return res.status(200).json({ summary: parsed.summary || "", questions, lines, count: lines.length, diag });
 }
