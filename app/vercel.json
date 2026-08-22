@@ -2,7 +2,8 @@
   "functions": {
     "api/line-webhook.js": { "maxDuration": 60 },
     "api/fb-webhook.js": { "maxDuration": 60 },
-    "api/fb-backfill.js": { "maxDuration": 60 }
+    "api/fb-backfill.js": { "maxDuration": 60 },
+    "api/boq-ai.js": { "maxDuration": 90 }
   },
   "crons": [
     { "path": "/api/hr-cron", "schedule": "15 2 * * *" },

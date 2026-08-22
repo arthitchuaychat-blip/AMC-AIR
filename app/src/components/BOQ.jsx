@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, listDocLinks, docNoTaken, setWebOrderBoq } from "../lib/api";
+import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, listDocLinks, docNoTaken, setWebOrderBoq, aiDraftBoq, uploadExpenseFile, uploadDocFile } from "../lib/api";
 import { fmtBaht, fmtNum, custCode, matchText, matchPhone, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -77,6 +77,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null); // {boq_no, customer_id, site_id, title, note, items{}}
+  const [aiOpen, setAiOpen] = React.useState(false);   // โมดัลช่วยร่าง BOQ จากแบบ
   const [search, setSearch] = React.useState("");
   const [typeF, setTypeF] = React.useState("all"); // กรองตามประเภทงาน (CRM)
   const [byPerson, setByPerson] = React.useState(""); // กรองตามผู้สร้างเอกสาร
@@ -167,6 +168,15 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   };
   const setItem = (sec, i, k, v) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: e.items[sec].map((x, j) => j === i ? { ...x, [k]: v } : x) } }));
   const delItem = (sec, i) => setEd((e) => ({ ...e, items: { ...e.items, [sec]: e.items[sec].filter((_, j) => j !== i) } }));
+  // ต่อรายการที่ AI ร่างมา (จากแบบ) เข้าใบปัจจุบัน — แยกเข้า section ตามที่ AI จัดให้
+  const applyAiLines = (lines) => setEd((e) => {
+    const items = { ...e.items };
+    (lines || []).forEach((l) => {
+      const sec = items[l.section] ? l.section : "charged";
+      items[sec] = [...items[sec], { code: l.code || "", name: l.name, unit: l.unit || "", qty: Number(l.qty) || 1, unit_cost: Number(l.unit_cost) || 0, description: l.description || "" }];
+    });
+    return { ...e, items };
+  });
 
   async function save() {
     const dk = draftKey;   // เก็บไว้ก่อน — setEd(null) ตอนท้ายทำให้ draftKey กลายเป็น null
@@ -263,6 +273,12 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
             );
           })()}
 
+          <div style={{ margin: "4px 0 10px", padding: "10px 12px", border: "1.5px dashed #c4b5fd", background: "#f5f3ff", borderRadius: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 700, color: "#6d28d9" }}>🤖 ให้ AI ช่วยร่างจากแบบ</span>
+            <span className="jo-dim" style={{ flex: "1 1 220px", fontSize: 12.5 }}>อัปโหลดแปลน/รูป + วางสเปค + ใส่บรีฟ → AI ร่างรายการวัสดุจากคลังจริงมาให้ตรวจ/แก้</span>
+            <button type="button" className="btn-primary sm" style={{ background: "#7c3aed", borderColor: "#7c3aed" }} onClick={() => setAiOpen(true)}>เปิดตัวช่วยร่าง BOQ</button>
+          </div>
+
           {SECTIONS.map((sec) => (
             <SectionBlock key={sec.id} sec={sec} items={ed.items[sec.id]} pool={poolFor(sec)}
               onAdd={(it) => addItem(sec.id, it)} onSet={(i, k, v) => setItem(sec.id, i, k, v)} onDel={(i) => delItem(sec.id, i)} onMove={(i, dir) => moveItem(sec.id, i, dir)} />
@@ -283,6 +299,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
         </div>
         <ItemBrowser mats={mats} onAdd={browserAdd} matTargets={[{ id: "charged", label: "คิดเงิน" }, { id: "free", label: "แถม" }]} />
         </div>
+        {aiOpen && <BoqAiModal onClose={() => setAiOpen(false)} onApply={(lines) => { applyAiLines(lines); flash(`AI ร่างเข้าใบแล้ว ${lines.length} รายการ — ตรวจ/แก้ได้เลย`); setAiOpen(false); }} flash={flash} />}
         {toast && <Toast t={toast} />}
       </div>
     );
@@ -400,4 +417,100 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
 
 function Toast({ t }) {
   return <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", background: t.bad ? "#dc2626" : "#16a34a", color: "#fff", fontSize: 13.5, fontWeight: 600, padding: "12px 22px", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 200, maxWidth: "90%", textAlign: "center" }}>{t.m}</div>;
+}
+
+// บรีฟสำเร็จรูป — กดใส่เร็ว ๆ
+const BRIEF_CHIPS = [
+  "ยี่ห้อ Daikin เท่านั้น", "ยี่ห้อ Carrier เท่านั้น", "ยี่ห้อ Mitsubishi เท่านั้น",
+  "เลือกรุ่น Inverter เบอร์ 5 เน้นประหยัดไฟ", "ฉนวนหนา 3/4 นิ้ว", "ฉนวนหนา 1/2 นิ้ว",
+  "รวมขายึด/แท่นวางคอยล์ร้อน", "ไม่รวมอุปกรณ์ซัพพอร์ต (ลูกค้ามีเอง)",
+  "เดินท่อในฝ้า", "ท่อยาวพิเศษ ~15 เมตร/จุด", "รวมงานรื้อเครื่องเก่า", "รวมงานเดินสายไฟ",
+];
+
+// โมดัลช่วยร่าง BOQ จากแบบ (Claude vision)
+function BoqAiModal({ onClose, onApply, flash }) {
+  const [files, setFiles] = React.useState([]);   // [{url, name, isPdf}]
+  const [uploading, setUploading] = React.useState(false);
+  const [spec, setSpec] = React.useState("");
+  const [brief, setBrief] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [result, setResult] = React.useState(null);   // { summary, lines }
+
+  async function onFiles(e) {
+    const list = [...(e.target.files || [])]; if (!list.length) return;
+    setUploading(true);
+    try {
+      for (const f of list) {
+        const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+        const url = isPdf ? await uploadDocFile(f, "pdf", "application/pdf") : await uploadExpenseFile(f);
+        setFiles((s) => [...s, { url, name: f.name, isPdf }]);
+      }
+    } catch (ex) { flash("อัปโหลดไม่สำเร็จ: " + (ex.message || ex), true); }
+    setUploading(false); e.target.value = "";
+  }
+  const addChip = (t) => setBrief((b) => (b.trim() ? b.trim() + " · " + t : t));
+
+  async function run() {
+    if (!files.length && !spec.trim()) return flash("ใส่รูปแบบ หรือ วางรายการสเปคก่อน", true);
+    setBusy(true); setResult(null);
+    try {
+      const j = await aiDraftBoq({ imageUrls: files.map((f) => f.url), spec, brief });
+      if (!j.lines || !j.lines.length) { flash(j.summary || "AI ร่างไม่ได้ — ลองเพิ่มรายละเอียด/แบบให้ชัดขึ้น", true); setBusy(false); return; }
+      setResult(j);
+    } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+
+  const SEC_TH = { ac: "เครื่องแอร์", charged: "วัสดุคิดเงิน", free: "วัสดุแถม", service: "ค่าบริการ" };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 720, maxWidth: "94vw", maxHeight: "92vh", display: "flex", flexDirection: "column" }}>
+        <div className="modal-head"><div className="modal-title">🤖 ช่วยร่าง BOQ จากแบบ</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body" style={{ overflowY: "auto" }}>
+          {!result ? (<>
+            <label className="fld"><span>1) แบบ/แปลน/รูปหน้างาน <span className="jo-dim" style={{ fontWeight: 400 }}>(รูป หรือ PDF · ใส่ได้หลายไฟล์)</span></span>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {files.map((f, i) => (
+                  <div key={i} style={{ position: "relative", border: "1px solid var(--line)", borderRadius: 8, padding: f.isPdf ? "8px 10px" : 0, overflow: "hidden" }}>
+                    {f.isPdf ? <span style={{ fontSize: 12 }}>📄 {f.name.slice(0, 18)}</span> : <img src={f.url} alt="" style={{ width: 60, height: 60, objectFit: "cover", display: "block" }} />}
+                    <button type="button" onClick={() => setFiles((s) => s.filter((_, j) => j !== i))} style={{ position: "absolute", top: 0, right: 0, background: "#dc2626", color: "#fff", border: "none", borderRadius: "0 0 0 6px", cursor: "pointer", fontSize: 12, lineHeight: 1, padding: "2px 5px" }}>×</button>
+                  </div>
+                ))}
+                <label className="btn-ghost sm" style={{ cursor: "pointer" }}>📎 {uploading ? "กำลังอัปโหลด…" : "แนบแบบ/รูป"}
+                  <input type="file" accept="image/*,application/pdf" multiple onChange={onFiles} style={{ display: "none" }} disabled={uploading} />
+                </label>
+              </div>
+            </label>
+            <label className="fld"><span>2) รายการ/สเปค <span className="jo-dim" style={{ fontWeight: 400 }}>(วางจาก Excel/ข้อความได้ เช่น ห้อง+จำนวน+BTU)</span></span>
+              <textarea className="inp" rows={4} style={{ resize: "vertical" }} value={spec} onChange={(e) => setSpec(e.target.value)} placeholder={"เช่น\nห้องนอน1  12000 BTU  1 เครื่อง\nห้องนั่งเล่น  24000 BTU  1 เครื่อง\nสำนักงานชั้น2  18000 BTU  3 เครื่อง"} /></label>
+            <label className="fld"><span>3) บรีฟถึง AI <span className="jo-dim" style={{ fontWeight: 400 }}>(ความต้องการลูกค้า/เงื่อนไขงาน)</span></span>
+              <textarea className="inp" rows={2} style={{ resize: "vertical" }} value={brief} onChange={(e) => setBrief(e.target.value)} placeholder="เช่น ลูกค้าอยากได้ Daikin Inverter · ฉนวน 3/4 นิ้ว · รวมขายึด · เดินท่อในฝ้า" /></label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: -4 }}>
+              {BRIEF_CHIPS.map((c) => <button key={c} type="button" className="cat-chip" style={{ fontSize: 11.5 }} onClick={() => addChip(c)}>+ {c}</button>)}
+            </div>
+          </>) : (<>
+            <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 13 }}>📋 <b>AI สรุป:</b> {result.summary || "-"}</div>
+            <div className="jo-dim" style={{ marginBottom: 6 }}>ร่าง {result.lines.length} รายการ (⚠️ = ต้องตรวจ) — กด "เติมเข้าใบ" แล้วแก้จำนวน/ราคาต่อได้</div>
+            <div style={{ border: "1px solid var(--line)", borderRadius: 8, maxHeight: "48vh", overflowY: "auto" }}>
+              {result.lines.map((l, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, padding: "6px 10px", borderBottom: "1px solid var(--line-2)", fontSize: 13 }}>
+                  <span style={{ flex: "0 0 78px", color: "#7c3aed", fontWeight: 600 }}>{SEC_TH[l.section] || l.section}</span>
+                  <span style={{ flex: 1 }}>{l.code ? <b style={{ color: "var(--ink-3)", fontWeight: 500 }}>{l.code} · </b> : null}{l.name}{l.description ? <div className="jo-dim">{l.description}</div> : null}</span>
+                  <span style={{ flex: "0 0 90px", textAlign: "right" }}>{fmtNum(l.qty)} {l.unit}</span>
+                  <span style={{ flex: "0 0 90px", textAlign: "right", fontWeight: 600 }}>{fmtBaht(l.unit_cost)}</span>
+                </div>
+              ))}
+            </div>
+          </>)}
+        </div>
+        <div className="modal-foot" style={{ flexWrap: "wrap", gap: 8 }}>
+          <button className="btn-ghost" onClick={onClose}>ปิด</button>
+          {!result
+            ? <button className="btn-primary" style={{ flex: 1, background: "#7c3aed", borderColor: "#7c3aed" }} disabled={busy || uploading} onClick={run}>{busy ? "🤖 AI กำลังอ่านแบบ…" : "🤖 ร่าง BOQ"}</button>
+            : <><button className="btn-ghost" onClick={() => setResult(null)}>↩ แก้ข้อมูล/ร่างใหม่</button>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={() => onApply(result.lines)}><UIcon name="check" size={15} color="#fff" /> เติมเข้าใบ ({result.lines.length})</button></>}
+        </div>
+      </div>
+    </div>
+  );
 }

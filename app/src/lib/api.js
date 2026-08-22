@@ -414,6 +414,19 @@ export async function aiDraftSeriesFeatures(brand, series, items) {
   return j.text;
 }
 
+// ช่วยร่าง BOQ จากแบบ/รูป (Claude vision) → คืน { summary, lines:[{section,code,name,unit,qty,unit_cost,description}] }
+export async function aiDraftBoq({ imageUrls = [], spec = "", brief = "" }) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const r = await fetch("/api/boq-ai", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+    body: JSON.stringify({ imageUrls, spec, brief }),
+  });
+  let j = null; try { j = await r.json(); } catch { /* non-JSON */ }
+  if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+  return j;
+}
+
 // update a material's (weighted-average) unit cost — used by purchase moving average
 export async function updateMaterialCost(code, cost) {
   const { error } = await supabase.from("materials").update({ cost }).eq("code", code);
