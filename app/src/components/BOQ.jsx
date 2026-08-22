@@ -481,7 +481,7 @@ function BoqAiModal({ onClose, onApply, flash }) {
                 </label>
               </div>
             </label>
-            <label className="fld"><span>2) รายการ/สเปค <span className="jo-dim" style={{ fontWeight: 400 }}>(วางจาก Excel/ข้อความได้ เช่น ห้อง+จำนวน+BTU)</span></span>
+            <label className="fld"><span>2) รายการ/สเปค <span className="jo-dim" style={{ fontWeight: 400 }}>(ไม่บังคับ — ถ้าแบบมีจำนวน+ขนาด BTU ครบแล้ว เว้นว่างได้ · AI จะอ่านจากแบบเอง)</span></span>
               <textarea className="inp" rows={4} style={{ resize: "vertical" }} value={spec} onChange={(e) => setSpec(e.target.value)} placeholder={"เช่น\nห้องนอน1  12000 BTU  1 เครื่อง\nห้องนั่งเล่น  24000 BTU  1 เครื่อง\nสำนักงานชั้น2  18000 BTU  3 เครื่อง"} /></label>
             <label className="fld"><span>3) บรีฟถึง AI <span className="jo-dim" style={{ fontWeight: 400 }}>(ความต้องการลูกค้า/เงื่อนไขงาน)</span></span>
               <textarea className="inp" rows={2} style={{ resize: "vertical" }} value={brief} onChange={(e) => setBrief(e.target.value)} placeholder="เช่น ลูกค้าอยากได้ Daikin Inverter · ฉนวน 3/4 นิ้ว · รวมขายึด · เดินท่อในฝ้า" /></label>
