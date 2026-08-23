@@ -698,8 +698,8 @@ function PoCheckModal({ po, onClose, onEdit }) {
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontSize: 13.5, padding: "8px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
-                  <span>ยอดก่อน VAT — PO: <b>{fmtBaht(res.poTotal)}</b> · ใบส่งของ: <b>{res.docTotal == null ? "อ่านไม่เจอ" : fmtBaht(res.docTotal)}</b></span>
-                  {res.totalDiff != null && Math.abs(res.totalDiff) >= 0.5 && <b style={{ color: "#d97706" }}>ต่าง {fmtBaht(res.totalDiff)}</b>}
+                  <span>ยอดรวม{res.totalBasis ? ` (${res.totalBasis})` : ""} — PO: <b>{fmtBaht(res.poCompare != null ? res.poCompare : res.poTotal)}</b> · ใบส่งของ: <b>{res.docTotal == null ? "อ่านไม่เจอ" : fmtBaht(res.docTotal)}</b></span>
+                  {res.totalDiff != null && Math.abs(res.totalDiff) > 1 && <b style={{ color: "#d97706" }}>ต่าง {fmtBaht(res.totalDiff)}</b>}
                 </div>
                 <div className="jo-dim" style={{ fontSize: 11.5, marginTop: 8 }}>* AI ช่วยอ่านเบื้องต้น — ตรวจกับใบจริงอีกครั้งก่อนอนุมัติจ่าย</div>
               </>)}

@@ -67,13 +67,17 @@ export default async function handler(req, res) {
   }
 
   // ข้อความรายการ PO ให้ AI เทียบ
-  let poTotal = 0;
+  const poVat = !!po.vat;
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  let poTotal = 0;   // ยอดก่อน VAT (ราคาที่คีย์ใน po_items เป็นราคาต่อหน่วยก่อน VAT)
   const poLines = items.map((it, i) => {
     const m = nameByCode[String(it.material_code)] || {};
     const qty = Number(it.qty) || 0, price = Number(it.price) || 0, line = qty * price;
     poTotal += line;
-    return `${i + 1}. ${m.name_th || it.material_code} (รหัส ${it.material_code}) — สั่ง ${qty} ${it.unit || m.unit || ""} × ${money(price)} บาท = ${money(line)} บาท`;
+    const inc = poVat ? ` (รวม VAT = ${money(r2(price * 1.07))})` : "";
+    return `${i + 1}. ${m.name_th || it.material_code} (รหัส ${it.material_code}) — สั่ง ${qty} ${it.unit || m.unit || ""} × ราคาก่อน VAT ${money(price)} บาท${inc} = ${money(line)} บาท (ก่อน VAT)`;
   }).join("\n");
+  const poTotalIncl = poVat ? r2(poTotal * 1.07) : r2(poTotal);   // ยอดรวม VAT ของ PO
 
   // แนบรูป/PDF ใบส่งของ → base64
   const media = [];
@@ -116,15 +120,26 @@ export default async function handler(req, res) {
 4. รายการที่มีในใบส่งของ "แต่ไม่มีใน PO" → ใส่ใน extraInDoc
 5. อ่านยอดรวมทั้งใบ (docTotal) ถ้าเห็น · ระบุเลขที่ใบส่งของ (docNo) ถ้าเห็น
 
-## ข้อควรระวัง
-- ราคาใน PO เป็น "ราคาต่อหน่วยที่คีย์" (ปกติราคาก่อน VAT) · ถ้าบิลแสดงรวม VAT แล้ว ให้ทักใน note/summary ว่าเทียบกันคนละฐาน อย่าตัดสินว่าผิดทันที
-- ตัวเลขจำนวน/ราคาต้องอ่านให้แม่น · ถ้าอ่านเลขไม่ชัดให้บอกใน note ว่า "อ่านไม่ชัด"
-- ถ้าในรูปไม่ใช่ใบส่งของ/บิล (เช่นเป็นรูปสินค้า/แชต) ให้ตั้ง summary บอกว่าไม่พบเอกสารบิลในรูป และ rows เท่าที่ทำได้
+## ⚠️ เรื่อง VAT (สำคัญที่สุด — กันตีธงผิด)
+- **ราคาต่อหน่วยใน PO ที่ให้เป็น "ราคาก่อน VAT"** ${poVat ? "· PO นี้มี VAT 7% (บวก VAT ตอนคิดยอดรวม)" : "· PO นี้ไม่มี VAT"}
+- **บิลผู้ขายมักแสดงราคาต่อหน่วย "รวม VAT แล้ว"** → ก่อนเทียบ **ต้องปรับฐาน VAT ให้ตรงกันเสมอ**: ราคาบิล(รวม VAT) = ราคา PO(ก่อน VAT) × 1.07
+- **ถ้าราคาต่างกัน "เพราะ VAT ล้วน ๆ" (บิลรวม VAT = PO ก่อน VAT × 1.07 พอดี) = ราคาตรงกัน → status ต้องเป็น "ok"** ห้ามตั้ง price_diff เด็ดขาด · ให้ note ว่า "ราคาตรง (บิลรวม VAT แล้ว)"
+- price_diff ใช้เฉพาะเมื่อราคาต่างกัน**จริง**หลังปรับ VAT แล้ว (ไม่ใช่แค่ต่างเพราะฐาน VAT)
+- ระบุ **docTotalIncludesVat** = true ถ้ายอดรวมบนบิลเป็นราคารวม VAT แล้ว, false ถ้าเป็นก่อน VAT, null ถ้าไม่แน่ใจ
+
+## ข้อควรระวังอื่น
+- ตัวเลขจำนวน/ราคาต้องอ่านให้แม่น · อ่านเลขไม่ชัดให้บอกใน note ว่า "อ่านไม่ชัด"
+- ถ้าในรูปไม่ใช่ใบส่งของ/บิล ให้ตั้ง summary บอกว่าไม่พบเอกสารบิล และ rows เท่าที่ทำได้
 
 ตอบเป็น JSON เท่านั้น (ห้ามมีข้อความอื่นนอก JSON):
-{"summary":"สรุปสั้น ๆ ว่าตรง/ไม่ตรงกี่จุด อะไรบ้าง","docNo":"เลขใบส่งของถ้าเห็น หรือ ''","docTotal":ตัวเลขยอดรวมบนใบ หรือ null,"rows":[{"name":"ชื่อสินค้า","status":"ok|price_diff|qty_diff|missing_in_doc","docQty":ตัวเลข|null,"docPrice":ตัวเลข|null,"note":"รายละเอียดสั้น ๆ"}],"extraInDoc":[{"name":"","qty":ตัวเลข,"price":ตัวเลข,"note":""}]}`;
+{"summary":"สรุปสั้น ๆ ว่าตรง/ไม่ตรงกี่จุด อะไรบ้าง (ปรับฐาน VAT แล้ว)","docNo":"เลขใบส่งของถ้าเห็น หรือ ''","docTotal":ตัวเลขยอดรวมบนใบ หรือ null,"docTotalIncludesVat":true|false|null,"rows":[{"name":"ชื่อสินค้า","status":"ok|price_diff|qty_diff|missing_in_doc","docQty":ตัวเลข|null,"docPrice":ตัวเลข|null,"note":"รายละเอียดสั้น ๆ"}],"extraInDoc":[{"name":"","qty":ตัวเลข,"price":ตัวเลข,"note":""}]}`;
 
-  const userText = `ใบสั่งซื้อ (PO) เลขที่ ${po.po_no} · ผู้ขาย ${po.supplier || "-"} · ${po.vat ? "PO นี้มี VAT 7%" : "PO นี้ไม่มี VAT"}\nรายการที่สั่ง (${items.length} รายการ) ยอดก่อน VAT รวม ${money(poTotal)} บาท:\n${poLines}\n\nโปรดอ่านใบส่งของ/บิลในรูป แล้วเทียบกับรายการข้างบน ตอบเป็น JSON เท่านั้น`;
+  const userText = `ใบสั่งซื้อ (PO) เลขที่ ${po.po_no} · ผู้ขาย ${po.supplier || "-"} · ${poVat ? "มี VAT 7%" : "ไม่มี VAT"}
+รายการที่สั่ง (${items.length} รายการ):
+${poLines}
+
+ยอดรวม PO: ก่อน VAT ${money(poTotal)} บาท${poVat ? ` · รวม VAT 7% = ${money(poTotalIncl)} บาท` : ""}
+โปรดอ่านใบส่งของ/บิลในรูป แล้วเทียบกับ PO ข้างบน (ปรับฐาน VAT ให้ตรงกันก่อนเทียบ) ตอบเป็น JSON เท่านั้น`;
 
   let r;
   try {
@@ -154,24 +169,42 @@ export default async function handler(req, res) {
     // จับคู่แถวจาก AI: ตามลำดับก่อน ถ้าชื่อใกล้กัน
     const ai = aiRows[i] && normName(aiRows[i].name) && looseMatch(aiRows[i].name, nm) ? aiRows[i]
       : aiRows.find((x) => looseMatch(x.name, nm)) || aiRows[i] || {};
-    const st = okStatus[ai.status] ? ai.status : "ok";
+    let st = okStatus[ai.status] ? ai.status : "ok";
+    let note = ai.note || "";
+    const poPrice = Number(it.price) || 0;
+    const dP = ai.docPrice == null ? null : Number(ai.docPrice);
+    // กันตีธงผิดเพราะ VAT: ราคา "price_diff" ที่อธิบายได้ด้วย VAT ล้วน ๆ (บิลรวม VAT = PO ก่อน VAT ×1.07) = ราคาตรงจริง
+    if (st === "price_diff" && dP != null && poPrice > 0) {
+      const tol = Math.max(1, poPrice * 0.01);
+      if (Math.abs(dP - poPrice) <= tol) { st = "ok"; }                                   // ตรงเป๊ะ
+      else if (poVat && Math.abs(dP - r2(poPrice * 1.07)) <= tol) { st = "ok"; note = "ราคาตรง (บิลรวม VAT แล้ว)"; }   // บิลรวม VAT
+      else if (Math.abs(r2(dP / 1.07) - poPrice) <= tol) { st = "ok"; note = "ราคาตรง (บิลแสดงรวม VAT · PO ก่อน VAT)"; }
+    }
     return {
       name: nm, code: it.material_code,
-      poQty: Number(it.qty) || 0, poPrice: Number(it.price) || 0,
+      poQty: Number(it.qty) || 0, poPrice,
       docQty: ai.docQty == null ? null : Number(ai.docQty),
-      docPrice: ai.docPrice == null ? null : Number(ai.docPrice),
-      status: st, note: ai.note || "",
+      docPrice: dP, status: st, note,
     };
   });
   const extraInDoc = (Array.isArray(parsed.extraInDoc) ? parsed.extraInDoc : []).map((x) => ({
     name: x.name || "(ไม่ระบุ)", qty: x.qty == null ? null : Number(x.qty), price: x.price == null ? null : Number(x.price), note: x.note || "",
   }));
   const docTotal = parsed.docTotal == null ? null : Number(parsed.docTotal);
-  const diffCount = rows.filter((x) => x.status !== "ok").length + extraInDoc.length;
+  // เลือกฐานเทียบยอดรวมให้ตรงกับบิล (บิลรวม VAT → เทียบยอดรวม VAT ของ PO · ไม่แน่ใจ → เลือกฐานที่ใกล้บิลสุด กัน VAT-only diff)
+  const dInc = parsed.docTotalIncludesVat;
+  let poCompare = poTotal, basis = "ก่อน VAT";
+  if (docTotal != null) {
+    if (dInc === true) { poCompare = poTotalIncl; basis = "รวม VAT"; }
+    else if (dInc === false) { poCompare = poTotal; basis = "ก่อน VAT"; }
+    else if (poVat) { const useIncl = Math.abs(docTotal - poTotalIncl) <= Math.abs(docTotal - poTotal); poCompare = useIncl ? poTotalIncl : poTotal; basis = useIncl ? "รวม VAT" : "ก่อน VAT"; }
+  }
+  const totalDiff = docTotal == null ? null : r2(docTotal - poCompare);
+  const diffCount = rows.filter((x) => x.status !== "ok").length + extraInDoc.length + (totalDiff != null && Math.abs(totalDiff) > 1 ? 1 : 0);
   return res.status(200).json({
-    po_no: po.po_no, supplier: po.supplier || "", vat: !!po.vat, dnNo: po.dn_no || parsed.docNo || "",
+    po_no: po.po_no, supplier: po.supplier || "", vat: poVat, dnNo: po.dn_no || parsed.docNo || "",
     summary: parsed.summary || "", rows, extraInDoc,
-    poTotal, docTotal, totalDiff: docTotal == null ? null : docTotal - poTotal,
+    poTotal, poTotalIncl, poCompare, totalBasis: basis, docTotal, totalDiff,
     diffCount, diag,
   });
 }
