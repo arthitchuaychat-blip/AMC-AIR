@@ -1762,6 +1762,16 @@ function _expAccountOf(text, hasJob) {
   return hasJob ? "5020" : "7090";   // ผูกงาน = ต้นทุนวัสดุ · ไม่ผูก = เบ็ดเตล็ด (บริหาร)
 }
 
+// จับชนิดต้นทุนสินค้าจาก material → รหัสบัญชี COGS แยกชนิด (แอร์/วัสดุ/อุปกรณ์เสริม/อะไหล่)
+function _matCogsAccount(mat, catName) {
+  if (!mat) return "5011";
+  if (mat.kind === "ac") return "5010";
+  const s = ((catName || "") + " " + (mat.name_th || "")).toLowerCase();
+  if (/อะไหล่|อะหลั่ย|spare|\bpart/.test(s)) return "5013";
+  if (/อุปกรณ์เสริม|เสริม|accessor|อุปกรณ์/.test(s)) return "5012";
+  return "5011";
+}
+
 // ── ลงบัญชีอัตโนมัติฝั่งจ่าย: PO(จ่ายตรง) + เบิกจ่าย + ช่างซัพ (เกณฑ์เงินสด: เฉพาะที่จ่ายแล้ว) ──
 // entity: ผูก quote/งาน → ตาม VAT ของใบเสนอ · ไม่ผูก → บริษัท · ภาษีซื้อ(1300) เฉพาะบริษัท
 export async function autoPostExpenses({ from, to } = {}) {
@@ -1780,6 +1790,16 @@ export async function autoPostExpenses({ from, to } = {}) {
   const jobQuote = {}; jobs.forEach((j) => { if (j.quote_no) jobQuote[j.job_no] = j.quote_no; });
   const quoteVat = {}; quotes.forEach((q) => { quoteVat[q.quote_no] = q.vat; });
   const poTotal = {}; poItems.forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + Number(it.qty) * Number(it.price); });
+  const poItemsByPo = {}; poItems.forEach((it) => { (poItemsByPo[it.po_no] ||= []).push(it); });
+  // แยกชนิดต้นทุนสินค้า: โหลด materials + หมวด สำหรับ material_code ที่มีใน PO
+  const codes = [...new Set(poItems.map((x) => x.material_code).filter(Boolean))];
+  const [cats, mats] = await Promise.all([
+    listCategories().catch(() => []),
+    codes.length ? _fetchAll((f, t) => supabase.from("materials").select("code,kind,category,name_th", { count: "exact" }).in("code", codes).order("code").range(f, t)) : Promise.resolve([]),
+  ]);
+  const catName = {}; (cats || []).forEach((c) => { catName[c.id] = c.name; });
+  const matByCode = {}; (mats || []).forEach((m) => { matByCode[m.code] = m; });
+  const matAcct = (code) => { const m = matByCode[code]; return _matCogsAccount(m, m ? catName[m.category] : ""); };
   const expById = {}; exp.forEach((x) => { expById[x.id] = x; });
   const poLinkedExp = new Set(po.map((p) => p.expense_id).filter(Boolean));   // ใบเบิกที่เป็นการจ่าย PO → PO คุมแทน
   const done = new Set(posted.map((x) => x.ref_type + ":" + x.ref_no));
@@ -1799,7 +1819,14 @@ export async function autoPostExpenses({ from, to } = {}) {
     if (arrived && !done.has("po:" + p.po_no)) {
       const jdate = _d(p.received_at || p.created_at);
       if (inR(jdate)) {
-        const lines = [{ account_code: "5020", debit: base, credit: 0 }];
+        // แยกต้นทุนตามชนิดสินค้าในใบ (แอร์5010/วัสดุ5011/อุปกรณ์เสริม5012/อะไหล่5013)
+        const perAcct = {};
+        (poItemsByPo[p.po_no] || []).forEach((it) => { const g = (Number(it.qty) || 0) * (Number(it.price) || 0); if (g > 0) { const a = matAcct(it.material_code); perAcct[a] = (perAcct[a] || 0) + g; } });
+        let cogs = Object.entries(perAcct).map(([a, g]) => ({ a, amt: r2(g) }));
+        if (!cogs.length) cogs = [{ a: "5020", amt: base }];
+        const drift = r2(base - cogs.reduce((s, x) => s + x.amt, 0));
+        if (Math.abs(drift) >= 0.01) { cogs.sort((x, y) => y.amt - x.amt); cogs[0].amt = r2(cogs[0].amt + drift); }
+        const lines = cogs.map((x) => ({ account_code: x.a, debit: x.amt, credit: 0 }));
         if (vat > 0.005) lines.push({ account_code: "1300", debit: vat, credit: 0, memo: "ภาษีซื้อ" });
         lines.push({ account_code: "2010", debit: 0, credit: total });
         tasks.push({ entity, jdate, ref_type: "po", ref_no: p.po_no, memo: `รับของ PO ${p.po_no}${p.supplier ? " · " + p.supplier : ""}`, lines });
