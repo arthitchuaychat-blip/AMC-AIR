@@ -1679,6 +1679,64 @@ export async function saveCompany(c, kind) {
   bustCache("companies");
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ระบบบัญชีคู่ (Double-entry) — อ่านผังบัญชี/กิจการ · ลงสมุดรายวัน · งบทดลอง
+// ตาราง acc_* (migration 225) · entity = 'company' (บริษัท VAT) | 'personal' (บุคคล)
+// ═══════════════════════════════════════════════════════════════════════════
+export function listAccEntities() {
+  return _cached("accEntities", async () => {
+    const { data, error } = await supabase.from("acc_entities").select("*").order("sort");
+    if (error) throw error;
+    return data || [];
+  });
+}
+export function listAccChart() {
+  return _cached("accChart", async () => {
+    const { data, error } = await supabase.from("acc_accounts").select("*").order("sort");
+    if (error) throw error;
+    return data || [];
+  });
+}
+// สมุดรายวัน + บรรทัด ในช่วงวันที่ (กรองกิจการได้: 'all'|'company'|'personal')
+export async function listJournal({ entity = "all", from, to } = {}) {
+  let q = supabase.from("acc_journal")
+    .select("*, lines:acc_journal_lines(*)")
+    .neq("status", "void")
+    .order("jdate", { ascending: false }).order("id", { ascending: false });
+  if (entity && entity !== "all") q = q.eq("entity", entity);
+  if (from) q = q.gte("jdate", from);
+  if (to)   q = q.lte("jdate", to);
+  const { data, error } = await q.range(0, 999);
+  if (error) throw error;
+  return data || [];
+}
+// ลงรายการสมุดรายวัน (บันทึกหัว + บรรทัด) — ต้องเดบิต=เครดิต และมีอย่างน้อย 2 บรรทัด
+export async function postJournal({ entity, jdate, ref_type = "manual", ref_no = null, memo = null, source = "manual", lines = [] }) {
+  const cleaned = (lines || [])
+    .map((l) => ({ account_code: String(l.account_code || "").trim(), debit: Math.round((Number(l.debit) || 0) * 100) / 100, credit: Math.round((Number(l.credit) || 0) * 100) / 100, memo: l.memo?.trim() || null }))
+    .filter((l) => l.account_code && (l.debit > 0 || l.credit > 0));
+  if (!entity || !["company", "personal"].includes(entity)) throw new Error("เลือกกิจการ (บริษัท/บุคคล)");
+  if (!jdate) throw new Error("ระบุวันที่");
+  if (cleaned.length < 2) throw new Error("ต้องมีอย่างน้อย 2 บรรทัด");
+  const sumD = cleaned.reduce((s, l) => s + l.debit, 0);
+  const sumC = cleaned.reduce((s, l) => s + l.credit, 0);
+  if (Math.abs(sumD - sumC) > 0.009) throw new Error(`เดบิต (${sumD.toLocaleString()}) ≠ เครดิต (${sumC.toLocaleString()}) — ต้องเท่ากัน`);
+  const period = String(jdate).slice(0, 7);
+  const { data: head, error: e1 } = await supabase.from("acc_journal")
+    .insert({ entity, jdate, period, ref_type, ref_no, memo: memo?.trim() || null, source, status: "posted" })
+    .select("id").single();
+  if (e1) throw e1;
+  const rows = cleaned.map((l, i) => ({ journal_id: head.id, account_code: l.account_code, entity, debit: l.debit, credit: l.credit, memo: l.memo, line_no: i + 1 }));
+  const { error: e2 } = await supabase.from("acc_journal_lines").insert(rows);
+  if (e2) { await supabase.from("acc_journal").delete().eq("id", head.id); throw e2; } // rollback หัวถ้าบรรทัดพัง
+  return head.id;
+}
+// ยกเลิกรายการ (คงไว้เพื่อ audit — เปลี่ยนสถานะเป็น void ไม่ลบจริง)
+export async function voidJournal(id) {
+  const { error } = await supabase.from("acc_journal").update({ status: "void" }).eq("id", id);
+  if (error) throw error;
+}
+
 // test the FlowAccount OpenAPI connection (sandbox) via our serverless function
 export async function flowaccountTest() {
   const { data: { session } } = await supabase.auth.getSession();

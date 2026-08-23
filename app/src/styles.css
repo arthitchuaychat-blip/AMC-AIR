@@ -2621,3 +2621,56 @@ button.card.set-fold-head.open{border-color:var(--primary);box-shadow:0 2px 10px
 .nav-item:active{transform:translateY(0);box-shadow:none}
 /* ไอคอนเมนูแบบ emoji (สีสดในตัว) — วางในคอลัมน์ไอคอน 18px, span 2 แถวเหมือน svg เดิม */
 .nav-emoji{grid-row:span 2;font-size:17.5px;line-height:1;width:18px;text-align:center;justify-self:center;align-self:center;filter:saturate(1.08)}
+
+/* ═══ ระบบบัญชี (Accounting) ═══ */
+.acc-entbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.acc-ent{font-size:13px;font-weight:700;padding:7px 15px;border-radius:20px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer;font-family:inherit}
+.acc-ent.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.acc-note{font-size:11.5px;color:var(--ink-3);margin-left:auto}
+.acc-tabs{margin-bottom:12px}
+.acc-daterow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.acc-daterow label{font-size:12.5px;color:var(--ink-3);display:inline-flex;align-items:center;gap:6px}
+.acc-daterow .inp{width:auto;padding:6px 9px;font-size:13px}
+.acc-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.05);overflow-x:auto}
+.acc-table{width:100%;border-collapse:collapse;font-size:13.5px}
+.acc-table th{text-align:left;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px;padding:6px 10px;border-bottom:1px solid var(--line)}
+.acc-table td{padding:6px 10px;border-bottom:1px solid var(--surface-2)}
+.acc-table .r,.acc-jelines .r,.acc-entry-lines .r{text-align:right}
+.acc-table .mono,.mono{font-variant-numeric:tabular-nums;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.acc-table tfoot td{font-weight:800;padding-top:9px;border-top:2px solid var(--ink-2);border-bottom:none}
+.acc-table tfoot tr.ok td{color:#0a6b3d}
+.acc-table tfoot tr.bad td{color:#b91c1c}
+.acc-coa-group{margin-bottom:16px}
+.acc-coa-cat{font-size:13px;font-weight:800;color:var(--primary);margin:4px 0 4px;padding-bottom:3px;border-bottom:2px solid var(--surface-2)}
+.acc-coa-scope{font-size:11px;color:var(--ink-3);text-align:right;white-space:nowrap}
+.acc-jl-code{color:var(--ink-3);width:52px}
+/* สมุดรายวัน — การ์ดต่อรายการ */
+.acc-je{border:1px solid var(--line);border-radius:11px;margin-bottom:10px;overflow:hidden}
+.acc-je-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;background:var(--surface-2);font-size:12.5px}
+.acc-je-date{font-weight:800}
+.acc-je-ent{font-weight:700;color:var(--ink-2)}
+.acc-je-ref{color:var(--ink-3)}
+.acc-je-tag{font-size:10.5px;font-weight:800;background:#e0edff;color:#1e40af;border-radius:7px;padding:1px 7px}
+.acc-je-memo{color:var(--ink-3);flex:1;min-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-je-void{margin-left:auto;border:none;background:none;color:var(--ink-3);font-size:14px;cursor:pointer;padding:2px 6px;border-radius:6px}
+.acc-je-void:hover{background:#fee2e2;color:#b91c1c}
+.acc-jelines{width:100%;border-collapse:collapse;font-size:13px}
+.acc-jelines td{padding:5px 12px;border-top:1px solid var(--surface-2)}
+.acc-jl-memo{color:var(--ink-3);font-size:12px}
+/* modal ลงรายการ */
+.acc-modal{max-width:640px;width:96vw}
+.acc-modal-top{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.acc-modal-top label,.acc-modal-memo{font-size:12px;color:var(--ink-3);display:flex;flex-direction:column;gap:4px}
+.acc-modal-top .inp{min-width:150px}
+.acc-modal-memo{margin-bottom:10px}
+.acc-entry-lines{width:100%;border-collapse:collapse;font-size:13px}
+.acc-entry-lines th{font-size:11px;color:var(--ink-3);font-weight:700;text-align:left;padding:4px 6px}
+.acc-entry-lines td{padding:3px 6px}
+.acc-entry-lines .inp{width:100%;padding:6px 8px;font-size:13px}
+.acc-entry-lines tfoot td{font-weight:800;padding-top:8px;border-top:1px solid var(--line)}
+.acc-entry-lines tfoot tr.ok td{color:#0a6b3d}
+.acc-entry-lines tfoot tr.bad td{color:#9a3412}
+.acc-rm{border:none;background:none;color:var(--ink-3);cursor:pointer;font-size:13px;padding:2px 6px}
+.acc-rm:hover{color:#b91c1c}
+.acc-modal-foot{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:14px}
+.acc-bal-hint{font-size:12px;color:var(--ink-3);margin-right:auto}

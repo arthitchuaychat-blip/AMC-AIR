@@ -35,6 +35,7 @@ const BOQ = React.lazy(() => import("./components/BOQ"));
 const Quotation = React.lazy(() => import("./components/Quotation"));
 const Profit = React.lazy(() => import("./components/Profit"));
 const CashFlow = React.lazy(() => import("./components/CashFlow"));
+const Accounting = React.lazy(() => import("./components/Accounting"));
 const Expenses = React.lazy(() => import("./components/Expenses"));
 const BillingNotes = React.lazy(() => import("./components/BillingNotes"));
 const JobOrders = React.lazy(() => import("./components/JobOrders"));
@@ -91,6 +92,7 @@ const NAV = {
   tax: { th: "รายงานภาษี", en: "Tax Report", icon: "clipboard" },
   profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
   cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "trend" },
+  accounting: { th: "บัญชี", en: "Accounting", icon: "clipboard" },
   expenses: { th: "เบิกจ่าย", en: "Expenses", icon: "withdraw" },
   joborders: { th: "ใบงาน", en: "Job Orders", icon: "clipboard" },
   handover: { th: "ใบส่งมอบงาน", en: "Handover", icon: "catalog" },
@@ -111,7 +113,7 @@ const NAV_EMOJI = {
   myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
   pipeline: "🎯", reviews: "🌟", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
   subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", adjnote: "📃", billing: "📑",
-  receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", expenses: "💳",
+  receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", expenses: "💳", accounting: "📚",
   joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
   suppliers: "🏭", prep: "📥", po: "🛍️", tools: "🔨", settings: "⚙️",
 };
@@ -122,7 +124,7 @@ const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "customers", "pipeline", "followup", "reviews", "weborders", "website"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt", "adjnote"] },
-  { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses"] },
+  { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "expenses", "accounting"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po", "tools"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard", "kpi"] },
@@ -133,7 +135,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-23·แชตทีม: ปรับความสูงกระดานให้พอดีจอ (ช่องพิมพ์ไม่หลุดขอบล่าง) v680";
+const BUILD = "2026-08-23·บัญชี: หน้าจอบัญชีคู่ (ผังบัญชี/สมุดรายวัน/งบทดลอง) ซ่อนให้แอดมิน v681";
 
 function SetupNotice() {
   return (
@@ -641,6 +643,7 @@ export default function App() {
         {view === "website" && <WebManage role={role} />}
         {view === "profit" && <Profit onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
         {view === "cashflow" && <CashFlow />}
+        {view === "accounting" && <Accounting />}
         {view === "expenses" && <Expenses role={role} me={profile} onOpenDoc={(t, no) => {
           if (t === "po") { setPoFocus(no); go("po"); }
           else if (t === "job") { setJobFocus(no); go("joborders"); }
