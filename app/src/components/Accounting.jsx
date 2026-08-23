@@ -110,7 +110,7 @@ export default function Accounting() {
   const entName = (code) => entities.find((e) => e.code === code)?.name || (code === "company" ? "บริษัท" : "บุคคล");
 
   async function runAutoPost() {
-    const ok = await confirmDialog({ title: "ดึงเอกสารเข้าบัญชี?", message: `อ่านเอกสารที่ “รับ/จ่ายเงินแล้ว” ในช่วง ${thDate(from)} – ${thDate(to)} มาลงสมุดรายวันอัตโนมัติ\n\n• รายรับ: ใบเสร็จ (แยกประเภทรายได้ + VAT)\n• รายจ่าย: ใบสั่งซื้อ · เบิกจ่าย · ค่าแรงช่างซัพ\n\nปลอดภัย: ทำซ้ำได้ไม่เบิ้ล · ยกเลิกรายการได้ · ไม่แตะเอกสารขาย`, confirmText: "ดึงเข้าบัญชี", danger: false });
+    const ok = await confirmDialog({ title: "ดึงเอกสารเข้าบัญชี?", message: `อ่านเอกสารในช่วง ${thDate(from)} – ${thDate(to)} มาลงสมุดรายวันอัตโนมัติ (เกณฑ์คงค้าง)\n\n• ขาย: ใบแจ้งหนี้ → รายได้ + ลูกหนี้ · ใบเสร็จ → เก็บลูกหนี้\n• ซื้อ: รับของ PO → ต้นทุน + เจ้าหนี้ · จ่าย → ตัดเจ้าหนี้\n• เบิกจ่าย · ค่าแรงช่างซัพ · เงินเดือน\n\nแนะนำให้ตั้งช่วงตั้งแต่ต้นปี · ปลอดภัย: ทำซ้ำไม่เบิ้ล · ยกเลิกได้ · ไม่แตะเอกสารขาย`, confirmText: "ดึงเข้าบัญชี", danger: false });
     if (!ok) return;
     setSyncing(true);
     try {

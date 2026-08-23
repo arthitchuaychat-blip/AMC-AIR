@@ -1769,54 +1769,59 @@ export async function autoPostExpenses({ from, to } = {}) {
   const inR = (d) => d && (!from || d >= from) && (!to || d <= to);
   const [exp, po, poItems, payouts, jobs, quotes, posted] = await Promise.all([
     _fetchAll((f, t) => supabase.from("expense_requests").select("id,title,category,job_no,amount,paid_amount,status,last_paid_at,paid_at,created_at", { count: "exact" }).in("status", ["approved", "paid"]).order("id").range(f, t)),
-    _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,quote_no,status,vat,paid_at,expense_id,created_at", { count: "exact" }).order("po_no").range(f, t)),
+    _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,quote_no,status,vat,received_at,paid_at,expense_id,created_at", { count: "exact" }).order("po_no").range(f, t)),
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at", { count: "exact" }).eq("status", "paid").order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("job_orders").select("job_no,quote_no", { count: "exact" }).order("job_no").range(f, t)),
     _fetchAll((f, t) => supabase.from("quotations").select("quote_no,vat", { count: "exact" }).order("quote_no").range(f, t)),
-    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_type,ref_no", { count: "exact" }).in("ref_type", ["po", "expense", "payout"]).neq("status", "void").range(f, t)),
+    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_type,ref_no", { count: "exact" }).in("ref_type", ["po", "po_pay", "expense", "payout"]).neq("status", "void").range(f, t)),
   ]);
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
   const jobQuote = {}; jobs.forEach((j) => { if (j.quote_no) jobQuote[j.job_no] = j.quote_no; });
   const quoteVat = {}; quotes.forEach((q) => { quoteVat[q.quote_no] = q.vat; });
   const poTotal = {}; poItems.forEach((it) => { poTotal[it.po_no] = (poTotal[it.po_no] || 0) + Number(it.qty) * Number(it.price); });
-  const poByExpense = {}; po.forEach((p) => { if (p.expense_id) (poByExpense[p.expense_id] ||= []).push(p); });
+  const expById = {}; exp.forEach((x) => { expById[x.id] = x; });
+  const poLinkedExp = new Set(po.map((p) => p.expense_id).filter(Boolean));   // ใบเบิกที่เป็นการจ่าย PO → PO คุมแทน
   const done = new Set(posted.map((x) => x.ref_type + ":" + x.ref_no));
   const entOf = (quote_no, job_no) => { const qn = quote_no || (job_no && jobQuote[job_no]); const v = qn != null ? quoteVat[qn] : undefined; return v === false ? "personal" : "company"; };
   const bank = (ent) => (ent === "company" ? "1020" : "1021");
 
-  const tasks = [];   // {entity, jdate, ref_type, ref_no, memo, lines}
-  // 1) เบิกจ่าย (จ่ายแล้วบางส่วน/ทั้งหมด) — ใช้ยอดที่จ่ายจริง
-  exp.forEach((x) => {
-    const paid = r2(x.paid_amount); if (paid <= 0.005) return;
-    const jdate = _d(x.last_paid_at || x.paid_at || x.created_at); if (!inR(jdate)) return;
-    if (done.has("expense:" + x.id)) return;
-    const linkedPO = poByExpense[x.id] || [];
-    const entity = entOf(linkedPO[0]?.quote_no, x.job_no);
-    const lines = [];
-    if (linkedPO.length && linkedPO.some((p) => p.vat) && entity === "company") {
-      const base = r2(paid / 1.07), vat = r2(paid - base);   // ถอด VAT ออกจากยอดจ่าย
-      lines.push({ account_code: "5020", debit: base, credit: 0 }, { account_code: "1300", debit: vat, credit: 0, memo: "ภาษีซื้อ" });
-    } else {
-      lines.push({ account_code: linkedPO.length ? "5020" : _expAccountOf((x.category || "") + " " + (x.title || ""), !!x.job_no), debit: paid, credit: 0 });
-    }
-    lines.push({ account_code: bank(entity), debit: 0, credit: paid });
-    tasks.push({ entity, jdate, ref_type: "expense", ref_no: String(x.id), memo: `เบิกจ่าย: ${x.title || ""}${x.job_no ? " · งาน " + x.job_no : ""}`, lines });
-  });
-  // 2) PO จ่ายตรง (มี paid_at · ไม่ผูกใบเบิก · ไม่ยกเลิก) — ใบเบิกที่ผูก PO คุมด้านบนแล้ว
+  const tasks = [];
+  // 1) PO — เกณฑ์คงค้าง: รับของ → ตั้งเจ้าหนี้ (Dr ต้นทุน+ภาษีซื้อ · Cr เจ้าหนี้การค้า 2010)
   po.forEach((p) => {
-    if (p.status === "cancelled" || p.expense_id || !p.paid_at) return;
-    const jdate = _d(p.paid_at); if (!inR(jdate)) return;
-    if (done.has("po:" + p.po_no)) return;
+    if (p.status === "cancelled") return;
     const base = r2(poTotal[p.po_no] || 0); if (base <= 0.005) return;
     const entity = entOf(p.quote_no, null);
     const vat = p.vat && entity === "company" ? r2(base * 0.07) : 0;
-    const lines = [{ account_code: "5020", debit: base, credit: 0 }];
-    if (vat > 0.005) lines.push({ account_code: "1300", debit: vat, credit: 0, memo: "ภาษีซื้อ" });
-    lines.push({ account_code: bank(entity), debit: 0, credit: r2(base + vat) });
-    tasks.push({ entity, jdate, ref_type: "po", ref_no: p.po_no, memo: `ใบสั่งซื้อ ${p.po_no}${p.supplier ? " · " + p.supplier : ""}`, lines });
+    const total = r2(base + vat);
+    const arrived = p.received_at || p.paid_at || p.status === "received" || p.expense_id;
+    // ตั้งเจ้าหนี้ตอนรับของ
+    if (arrived && !done.has("po:" + p.po_no)) {
+      const jdate = _d(p.received_at || p.created_at);
+      if (inR(jdate)) {
+        const lines = [{ account_code: "5020", debit: base, credit: 0 }];
+        if (vat > 0.005) lines.push({ account_code: "1300", debit: vat, credit: 0, memo: "ภาษีซื้อ" });
+        lines.push({ account_code: "2010", debit: 0, credit: total });
+        tasks.push({ entity, jdate, ref_type: "po", ref_no: p.po_no, memo: `รับของ PO ${p.po_no}${p.supplier ? " · " + p.supplier : ""}`, lines });
+      }
+    }
+    // จ่ายเจ้าหนี้ (จ่ายตรง paid_at · หรือจ่ายผ่านใบเบิกที่ปิดแล้ว)
+    let payDate = p.paid_at ? _d(p.paid_at) : null;
+    if (!payDate && p.expense_id && expById[p.expense_id]?.status === "paid") { const e = expById[p.expense_id]; payDate = _d(e.last_paid_at || e.paid_at || e.created_at); }
+    if (payDate && inR(payDate) && !done.has("po_pay:" + p.po_no)) {
+      tasks.push({ entity, jdate: payDate, ref_type: "po_pay", ref_no: p.po_no, memo: `จ่ายเจ้าหนี้ PO ${p.po_no}${p.supplier ? " · " + p.supplier : ""}`, lines: [{ account_code: "2010", debit: total, credit: 0 }, { account_code: bank(entity), debit: 0, credit: total }] });
+    }
   });
-  // 3) ช่างซัพ (จ่ายแล้ว) → ค่าแรงช่างซัพ = ต้นทุนบริการ (5040) · กิจการ = บริษัท (ไม่มีลิงก์งานชัด)
+  // 2) เบิกจ่ายทั่วไป (ไม่ผูก PO) — เกณฑ์เงินสด: จ่ายแล้ว → ค่าใช้จ่ายตามหมวด
+  exp.forEach((x) => {
+    if (poLinkedExp.has(x.id)) return;   // ใบเบิกที่จ่าย PO → PO คุมแล้ว
+    const paid = r2(x.paid_amount); if (paid <= 0.005) return;
+    const jdate = _d(x.last_paid_at || x.paid_at || x.created_at); if (!inR(jdate)) return;
+    if (done.has("expense:" + x.id)) return;
+    const entity = entOf(null, x.job_no);
+    tasks.push({ entity, jdate, ref_type: "expense", ref_no: String(x.id), memo: `เบิกจ่าย: ${x.title || ""}${x.job_no ? " · งาน " + x.job_no : ""}`, lines: [{ account_code: _expAccountOf((x.category || "") + " " + (x.title || ""), !!x.job_no), debit: paid, credit: 0 }, { account_code: bank(entity), debit: 0, credit: paid }] });
+  });
+  // 3) ช่างซัพ (จ่ายแล้ว) → ค่าแรงช่างซัพ = ต้นทุนบริการ (5040) · กิจการ = บริษัท
   payouts.forEach((x) => {
     const amt = r2(x.net); if (amt <= 0.005) return;
     const jdate = _d(x.paid_at || x.created_at); if (!inR(jdate)) return;
@@ -1871,57 +1876,67 @@ export async function autoPostPayroll({ from, to } = {}) {
 // ── ลงบัญชีอัตโนมัติจากใบเสร็จ (เกณฑ์เงินสด: เฉพาะใบเสร็จ status='paid') ──
 // entity: VAT>0 = บริษัท · ไม่มี VAT = บุคคล · แยกประเภทรายได้ตามรายการในใบเสนอ
 // idempotent: ข้ามใบที่ลงบัญชีแล้ว (ref_type='receipt' + ref_no) · reversible: void ได้
+// แยกรายได้ base ตามรายการใบเสนอ → [{acct, amt}] รวมเท่ากับ base เป๊ะ
+function _revSplit(base, its, r2) {
+  const byAcct = {}; let gross = 0;
+  (its || []).forEach((it) => { const g = Math.max(0, (Number(it.qty) || 0) * (Number(it.unit_price) || 0) - (Number(it.discount) || 0)); if (g > 0) { const a = _revAccountOf(it); byAcct[a] = (byAcct[a] || 0) + g; gross += g; } });
+  if (gross <= 0) return [{ acct: "4060", amt: base }];
+  const rev = Object.entries(byAcct).map(([acct, g]) => ({ acct, amt: r2(base * g / gross) }));
+  const drift = r2(base - rev.reduce((s, x) => s + x.amt, 0));
+  if (Math.abs(drift) >= 0.01) { rev.sort((a, b) => b.amt - a.amt); rev[0].amt = r2(rev[0].amt + drift); }
+  return rev;
+}
+
+// ── ลงบัญชีอัตโนมัติฝั่งขาย (เกณฑ์คงค้าง) ──
+// ใบแจ้งหนี้ → รับรู้รายได้ + ลูกหนี้การค้า(1100) · ใบเสร็จ → ถ้ามีใบแจ้งหนี้=เก็บลูกหนี้ / ไม่มี=ขายสด
 export async function autoPostReceipts({ from, to } = {}) {
-  // 1) ใบเสร็จรับเงินแล้วทั้งหมด (กันเพดาน 1000)
-  const rc = await _fetchAll((f, t) => supabase.from("receipts")
-    .select("receipt_no,quote_no,issue_date,created_at,payment_method,base,vat_amt,total,wht_amt,net,status,customer_id", { count: "exact" })
-    .eq("status", "paid").order("receipt_no").range(f, t));
-  const inRange = (r) => { const d = (r.issue_date || (r.created_at || "").slice(0, 10)); return (!from || d >= from) && (!to || d <= to); };
-  const cand = rc.filter((r) => inRange(r) && (Number(r.base) || 0) + (Number(r.vat_amt) || 0) > 0.005);
-  // 2) ใบที่ลงบัญชีแล้ว → ข้าม
-  const posted = await _fetchAll((f, t) => supabase.from("acc_journal")
-    .select("ref_no", { count: "exact" }).eq("ref_type", "receipt").neq("status", "void").range(f, t));
-  const done = new Set(posted.map((x) => x.ref_no));
-  const todo = cand.filter((r) => !done.has(r.receipt_no));
-  if (!todo.length) return { posted: 0, skipped: cand.length, total: cand.length };
-  // 3) รายการในใบเสนอ (แยกประเภทรายได้)
-  const qnos = [...new Set(todo.map((r) => r.quote_no).filter(Boolean))];
-  const items = qnos.length ? await _fetchAll((f, t) => supabase.from("quotation_items")
-    .select("quote_no,name,description,kind,qty,unit_price,discount", { count: "exact" }).in("quote_no", qnos).order("id").range(f, t)) : [];
-  const itemsByQ = {}; items.forEach((x) => { (itemsByQ[x.quote_no] ||= []).push(x); });
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const _d = (r) => r.issue_date || (r.created_at || "").slice(0, 10);
+  const inR = (d) => d && (!from || d >= from) && (!to || d <= to);
+  const [inv, rc, posted] = await Promise.all([
+    _fetchAll((f, t) => supabase.from("invoices").select("invoice_no,quote_no,issue_date,created_at,base,vat_amt,total,status", { count: "exact" }).neq("status", "cancelled").order("invoice_no").range(f, t)),
+    _fetchAll((f, t) => supabase.from("receipts").select("receipt_no,invoice_no,quote_no,issue_date,created_at,payment_method,base,vat_amt,total,wht_amt,net,status", { count: "exact" }).eq("status", "paid").order("receipt_no").range(f, t)),
+    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_type,ref_no", { count: "exact" }).in("ref_type", ["invoice", "receipt"]).neq("status", "void").range(f, t)),
+  ]);
+  const done = new Set(posted.map((x) => x.ref_type + ":" + x.ref_no));
+  const qnos = [...new Set([...inv.map((x) => x.quote_no), ...rc.filter((x) => !x.invoice_no).map((x) => x.quote_no)].filter(Boolean))];
+  const items = qnos.length ? await _fetchAll((f, t) => supabase.from("quotation_items").select("quote_no,name,description,kind,qty,unit_price,discount", { count: "exact" }).in("quote_no", qnos).order("id").range(f, t)) : [];
+  const itemsByQ = {}; items.forEach((x) => { (itemsByQ[x.quote_no] ||= []).push(x); });
+
+  const tasks = [];
+  // 1) ใบแจ้งหนี้ (คงค้าง) → Dr ลูกหนี้ · Cr รายได้ + ภาษีขาย
+  inv.forEach((x) => {
+    const jdate = _d(x); if (!inR(jdate) || done.has("invoice:" + x.invoice_no)) return;
+    const base = r2(x.base), vat = r2(x.vat_amt), total = r2(x.total != null ? x.total : base + vat);
+    if (total <= 0.005) return;
+    const entity = vat > 0.005 ? "company" : "personal";
+    const lines = [{ account_code: "1100", debit: total, credit: 0 }];
+    _revSplit(base, itemsByQ[x.quote_no], r2).forEach((rv) => lines.push({ account_code: rv.acct, debit: 0, credit: rv.amt }));
+    if (vat > 0.005) lines.push({ account_code: "2100", debit: 0, credit: vat, memo: "ภาษีขาย" });
+    tasks.push({ entity, jdate, ref_type: "invoice", ref_no: x.invoice_no, memo: `ใบแจ้งหนี้ ${x.invoice_no}`, lines });
+  });
+  // 2) ใบเสร็จ (จ่ายแล้ว) → เก็บลูกหนี้ หรือขายสด
+  rc.forEach((r) => {
+    const jdate = _d(r); if (!inR(jdate) || done.has("receipt:" + r.receipt_no)) return;
+    const base = r2(r.base), vat = r2(r.vat_amt), wht = r2(r.wht_amt);
+    const total = r2(r.total != null ? r.total : base + vat), cash = r2(r.net != null ? r.net : total - wht);
+    if (total <= 0.005) return;
+    const entity = vat > 0.005 ? "company" : "personal";
+    const cashAcct = /สด|cash/i.test(r.payment_method || "") ? "1010" : (entity === "company" ? "1020" : "1021");
+    const lines = [{ account_code: cashAcct, debit: cash, credit: 0 }];
+    if (wht > 0.005) lines.push({ account_code: "1310", debit: wht, credit: 0, memo: "ภาษีถูกหัก ณ ที่จ่าย" });
+    if (r.invoice_no) {
+      lines.push({ account_code: "1100", debit: 0, credit: total });   // เก็บลูกหนี้ (รายได้รับรู้ที่ใบแจ้งหนี้แล้ว)
+    } else {
+      _revSplit(base, itemsByQ[r.quote_no], r2).forEach((rv) => lines.push({ account_code: rv.acct, debit: 0, credit: rv.amt }));
+      if (vat > 0.005) lines.push({ account_code: "2100", debit: 0, credit: vat, memo: "ภาษีขาย" });
+    }
+    tasks.push({ entity, jdate, ref_type: "receipt", ref_no: r.receipt_no, memo: `ใบเสร็จ ${r.receipt_no}`, lines });
+  });
 
   let ok = 0; const errs = [];
-  for (const r of todo) {
-    const entity = (Number(r.vat_amt) || 0) > 0.005 ? "company" : "personal";
-    const base = r2(r.base), vat = r2(r.vat_amt), wht = r2(r.wht_amt);
-    const cash = r2(r.net != null ? r.net : r2(r.total) - wht);   // เงินรับจริง (หลังหัก ณ ที่จ่าย)
-    const jdate = r.issue_date || (r.created_at || "").slice(0, 10);
-    // แยกรายได้ตามรายการ → prorate ให้รวมเท่ากับ base เป๊ะ
-    const its = itemsByQ[r.quote_no] || [];
-    const byAcct = {};
-    let gross = 0;
-    its.forEach((it) => { const g = Math.max(0, (Number(it.qty) || 0) * (Number(it.unit_price) || 0) - (Number(it.discount) || 0)); if (g > 0) { byAcct[_revAccountOf(it)] = (byAcct[_revAccountOf(it)] || 0) + g; gross += g; } });
-    let rev = [];
-    if (gross > 0) {
-      rev = Object.entries(byAcct).map(([acct, g]) => ({ acct, amt: r2(base * g / gross) }));
-      const drift = r2(base - rev.reduce((s, x) => s + x.amt, 0));
-      if (Math.abs(drift) >= 0.01 && rev.length) rev.sort((a, b) => b.amt - a.amt), rev[0].amt = r2(rev[0].amt + drift);
-    } else {
-      rev = [{ acct: "4060", amt: base }];   // ไม่มีรายการ → รายได้บริการอื่นๆ
-    }
-    // ผูกบัญชีเงิน: เงินสด → 1010 · อื่นๆ (โอน) → ธนาคารตามกิจการ
-    const cashAcct = /สด|cash/i.test(r.payment_method || "") ? "1010" : (entity === "company" ? "1020" : "1021");
-    const lines = [{ account_code: cashAcct, debit: cash, credit: 0, memo: null }];
-    if (wht > 0.005) lines.push({ account_code: "1310", debit: wht, credit: 0, memo: "ภาษีถูกหัก ณ ที่จ่าย" });
-    rev.forEach((x) => lines.push({ account_code: x.acct, debit: 0, credit: x.amt, memo: null }));
-    if (vat > 0.005) lines.push({ account_code: "2100", debit: 0, credit: vat, memo: "ภาษีขาย" });
-    try {
-      await postJournal({ entity, jdate, ref_type: "receipt", ref_no: r.receipt_no, memo: `ใบเสร็จ ${r.receipt_no}`, source: "auto", lines });
-      ok++;
-    } catch (e) { errs.push(`${r.receipt_no}: ${e.message || e}`); }
-  }
-  return { posted: ok, skipped: done.size ? cand.length - todo.length : 0, total: cand.length, errors: errs };
+  for (const t of tasks) { try { await postJournal({ ...t, source: "auto" }); ok++; } catch (e) { errs.push(`${t.ref_type} ${t.ref_no}: ${e.message || e}`); } }
+  return { posted: ok, total: tasks.length, errors: errs };
 }
 
 // test the FlowAccount OpenAPI connection (sandbox) via our serverless function
