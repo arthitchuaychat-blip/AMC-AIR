@@ -482,7 +482,11 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
                 <span style={{ fontWeight: 800, color: "#1d4ed8" }}>🔍 ข้อมูลจากการสำรวจหน้างาน</span>
                 <Combo className="inp" style={{ marginTop: 6 }} value={ed.survey_job_no || ""} onChange={(e) => setF("survey_job_no", e.target.value)}>
                   <option value="">— ไม่ผูกงานสำรวจ —</option>
-                  {surveyJobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.title || "สำรวจงาน"}</option>)}
+                  {surveyJobs.map((j) => {
+                    const s = j.scheduled_at || j.issue_date;
+                    const dt = s ? (() => { try { return new Date(s).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }); } catch { return ""; } })() : "";
+                    return <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.title || "สำรวจงาน"}{dt ? ` · ${dt}` : ""}{cust?.name ? ` · ${cust.name}` : ""}</option>;
+                  })}
                 </Combo>
                 {sv && (
                   <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6, fontSize: 13.5, color: "var(--ink-2)" }}>
