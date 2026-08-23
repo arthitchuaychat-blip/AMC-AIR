@@ -1778,8 +1778,8 @@ export async function autoPostExpenses({ from, to } = {}) {
   const _d = (ts) => (ts ? String(ts).slice(0, 10) : null);
   const inR = (d) => d && (!from || d >= from) && (!to || d <= to);
   const [exp, po, poItems, payouts, jobs, quotes, posted] = await Promise.all([
-    _fetchAll((f, t) => supabase.from("expense_requests").select("id,title,category,job_no,amount,paid_amount,status,last_paid_at,paid_at,created_at", { count: "exact" }).in("status", ["approved", "paid"]).order("id").range(f, t)),
-    _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,quote_no,status,vat,received_at,paid_at,expense_id,created_at", { count: "exact" }).order("po_no").range(f, t)),
+    _fetchAll((f, t) => supabase.from("expense_requests").select("id,title,category,job_no,amount,paid_amount,status,decided_at,last_paid_at,paid_at,created_at", { count: "exact" }).in("status", ["approved", "paid"]).order("id").range(f, t)),
+    _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,quote_no,status,vat,paid_at,expense_id,created_at", { count: "exact" }).order("po_no").range(f, t)),
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at", { count: "exact" }).eq("status", "paid").order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("job_orders").select("job_no,quote_no", { count: "exact" }).order("job_no").range(f, t)),
@@ -1807,36 +1807,37 @@ export async function autoPostExpenses({ from, to } = {}) {
   const bank = (ent) => (ent === "company" ? "1020" : "1021");
 
   const tasks = [];
-  // 1) PO — เกณฑ์คงค้าง: รับของ → ตั้งเจ้าหนี้ (Dr ต้นทุน+ภาษีซื้อ · Cr เจ้าหนี้การค้า 2010)
+  // 1) PO — ตั้งเจ้าหนี้เมื่อ "อนุมัติจ่ายแล้ว" (จ่ายตรง หรือใบเบิกที่ผูก approved/paid) · จ่ายแล้ว → ตัดเจ้าหนี้
   po.forEach((p) => {
     if (p.status === "cancelled") return;
     const base = r2(poTotal[p.po_no] || 0); if (base <= 0.005) return;
     const entity = entOf(p.quote_no, null);
     const vat = p.vat && entity === "company" ? r2(base * 0.07) : 0;
     const total = r2(base + vat);
-    const arrived = p.received_at || p.paid_at || p.status === "received" || p.expense_id;
-    // ตั้งเจ้าหนี้ตอนรับของ
-    if (arrived && !done.has("po:" + p.po_no)) {
-      const jdate = _d(p.received_at || p.created_at);
-      if (inR(jdate)) {
-        // แยกต้นทุนตามชนิดสินค้าในใบ (แอร์5010/วัสดุ5011/อุปกรณ์เสริม5012/อะไหล่5013)
-        const perAcct = {};
-        (poItemsByPo[p.po_no] || []).forEach((it) => { const g = (Number(it.qty) || 0) * (Number(it.price) || 0); if (g > 0) { const a = matAcct(it.material_code); perAcct[a] = (perAcct[a] || 0) + g; } });
-        let cogs = Object.entries(perAcct).map(([a, g]) => ({ a, amt: r2(g) }));
-        if (!cogs.length) cogs = [{ a: "5020", amt: base }];
-        const drift = r2(base - cogs.reduce((s, x) => s + x.amt, 0));
-        if (Math.abs(drift) >= 0.01) { cogs.sort((x, y) => y.amt - x.amt); cogs[0].amt = r2(cogs[0].amt + drift); }
-        const lines = cogs.map((x) => ({ account_code: x.a, debit: x.amt, credit: 0 }));
-        if (vat > 0.005) lines.push({ account_code: "1300", debit: vat, credit: 0, memo: "ภาษีซื้อ" });
-        lines.push({ account_code: "2010", debit: 0, credit: total });
-        tasks.push({ entity, jdate, ref_type: "po", ref_no: p.po_no, memo: `รับของ PO ${p.po_no}${p.supplier ? " · " + p.supplier : ""}`, lines });
-      }
+    const e = p.expense_id ? expById[p.expense_id] : null;
+    const approved = !!p.paid_at || (e && (e.status === "approved" || e.status === "paid"));
+    if (!approved) return;   // PO ที่ยังไม่อนุมัติจ่าย → ยังไม่ตั้งเจ้าหนี้
+    // ตั้งเจ้าหนี้ ณ วันอนุมัติจ่าย (Dr ต้นทุนแยกชนิด + ภาษีซื้อ · Cr เจ้าหนี้การค้า 2010)
+    const apDate = p.paid_at ? _d(p.paid_at) : _d(e?.decided_at || e?.created_at || p.created_at);
+    if (inR(apDate) && !done.has("po:" + p.po_no)) {
+      const perAcct = {};
+      (poItemsByPo[p.po_no] || []).forEach((it) => { const g = (Number(it.qty) || 0) * (Number(it.price) || 0); if (g > 0) { const a = matAcct(it.material_code); perAcct[a] = (perAcct[a] || 0) + g; } });
+      let cogs = Object.entries(perAcct).map(([a, g]) => ({ a, amt: r2(g) }));
+      if (!cogs.length) cogs = [{ a: "5020", amt: base }];
+      const drift = r2(base - cogs.reduce((s, x) => s + x.amt, 0));
+      if (Math.abs(drift) >= 0.01) { cogs.sort((x, y) => y.amt - x.amt); cogs[0].amt = r2(cogs[0].amt + drift); }
+      const lines = cogs.map((x) => ({ account_code: x.a, debit: x.amt, credit: 0 }));
+      if (vat > 0.005) lines.push({ account_code: "1300", debit: vat, credit: 0, memo: "ภาษีซื้อ" });
+      lines.push({ account_code: "2010", debit: 0, credit: total });
+      tasks.push({ entity, jdate: apDate, ref_type: "po", ref_no: p.po_no, memo: `เจ้าหนี้ PO ${p.po_no}${p.supplier ? " · " + p.supplier : ""}`, lines });
     }
-    // จ่ายเจ้าหนี้ (จ่ายตรง paid_at · หรือจ่ายผ่านใบเบิกที่ปิดแล้ว)
-    let payDate = p.paid_at ? _d(p.paid_at) : null;
-    if (!payDate && p.expense_id && expById[p.expense_id]?.status === "paid") { const e = expById[p.expense_id]; payDate = _d(e.last_paid_at || e.paid_at || e.created_at); }
-    if (payDate && inR(payDate) && !done.has("po_pay:" + p.po_no)) {
-      tasks.push({ entity, jdate: payDate, ref_type: "po_pay", ref_no: p.po_no, memo: `จ่ายเจ้าหนี้ PO ${p.po_no}${p.supplier ? " · " + p.supplier : ""}`, lines: [{ account_code: "2010", debit: total, credit: 0 }, { account_code: bank(entity), debit: 0, credit: total }] });
+    // จ่ายเจ้าหนี้ (จ่ายจริงแล้ว) → Dr เจ้าหนี้ · Cr ธนาคาร
+    const paid = !!p.paid_at || (e && e.status === "paid");
+    if (paid) {
+      const payDate = p.paid_at ? _d(p.paid_at) : _d(e.last_paid_at || e.paid_at || e.created_at);
+      if (inR(payDate) && !done.has("po_pay:" + p.po_no)) {
+        tasks.push({ entity, jdate: payDate, ref_type: "po_pay", ref_no: p.po_no, memo: `จ่ายเจ้าหนี้ PO ${p.po_no}${p.supplier ? " · " + p.supplier : ""}`, lines: [{ account_code: "2010", debit: total, credit: 0 }, { account_code: bank(entity), debit: 0, credit: total }] });
+      }
     }
   });
   // 2) เบิกจ่ายทั่วไป (ไม่ผูก PO) — เกณฑ์เงินสด: จ่ายแล้ว → ค่าใช้จ่ายตามหมวด
