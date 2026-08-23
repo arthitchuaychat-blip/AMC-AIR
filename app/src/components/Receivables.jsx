@@ -1,5 +1,5 @@
 import React from "react";
-import { listInvoices, setInvoiceBadDebt } from "../lib/api";
+import { listInvoices, listReceipts, setInvoiceBadDebt } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
@@ -45,19 +45,24 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
 
   async function load() {
     try {
-      const inv = await listInvoices();
+      const [inv, rec] = await Promise.all([listInvoices(), listReceipts()]);
       // หนี้ที่ตัดสูญแล้ว: ไม่ตามต่อ แต่ต้องโชว์ยอดสะสมไว้ให้เห็นว่าปีนี้เก็บไม่ได้ไปเท่าไหร่
       setBadDebt((inv || []).filter((x) => x.status === "bad_debt"));
+      // ใบเสร็จที่ "ออกแล้วแต่ยังไม่ได้รับเงิน" (สถานะรอชำระเงิน · มักออกไว้ตอนวางบิล) → เงินยังไม่เข้า = ต้องถือเป็นค้างรับ
+      const pendingRecByInv = {};
+      (rec || []).forEach((r) => { if (r.invoice_no && r.status !== "paid" && r.status !== "cancelled") pendingRecByInv[r.invoice_no] = r; });
       const ar = inv
-        .filter((x) => x.status === "unpaid")
+        // ค้างรับ = ใบแจ้งหนี้ที่ยังไม่ชำระ · หรือ มีใบเสร็จที่ออกแล้วแต่ยังรอชำระ (แม้ใบแจ้งหนี้จะถูกมาร์คไปแล้ว) — กันเงินหลุดจากค้างรับ
+        .filter((x) => x.status !== "cancelled" && x.status !== "bad_debt" && (x.status === "unpaid" || pendingRecByInv[x.invoice_no]))
         .map((x) => {
+          const pr = pendingRecByInv[x.invoice_no];
           const owed = round2((Number(x.total) || 0) - (Number(x.wht_amt) || 0));
           const ag = agingOf(x.due_date, today);
           return {
             invoice_no: x.invoice_no, customer_id: x.customer_id, customerName: x.customerName || "(ไม่ระบุลูกค้า)",
             phone: x.contactPhone || x.mainContactPhone || null, title: x.title || null,
             issue_date: x.issue_date, due_date: x.due_date, installment: x.installment,
-            owed, bucket: ag.key, days: ag.days,
+            owed, bucket: ag.key, days: ag.days, pendingReceiptNo: pr ? pr.receipt_no : null,
           };
         })
         .filter((x) => x.owed > 0)
@@ -123,6 +128,7 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
           {showBucket && <span className="ar-dot" style={{ background: b.color }} />}
           <b className="ar-inv">{r.invoice_no}</b>
           {r.installment > 1 && <span className="ar-inst">งวด {r.installment}</span>}
+          {r.pendingReceiptNo && <span className="ar-inst" style={{ background: "#fef3c7", color: "#b45309", borderColor: "#fde68a" }} title={`ออกใบเสร็จ ${r.pendingReceiptNo} แล้ว (มักตอนวางบิล) แต่ยังไม่ได้รับเงิน`}>🧾 ออกใบเสร็จแล้ว · รอชำระ</span>}
           <span className="ar-cust">{r.customerName}</span>
           <span className="ar-owed">{fmtBaht(r.owed)}</span>
         </div>
@@ -146,7 +152,7 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
     <div className="adm">
       <div className="adm-head">
         <div><h1 className="page-title">เงินค้างรับ <span className="page-title-en">Receivables</span></h1>
-          <p className="page-sub">ใบแจ้งหนี้ที่ยังไม่ได้รับเงิน · จัดกลุ่มตามอายุหนี้ (เกินกำหนดกี่วัน) · ตามเก็บเงินได้เร็วขึ้น</p></div>
+          <p className="page-sub">ใบแจ้งหนี้ที่ยังไม่ได้รับเงิน + ใบเสร็จที่ออกแล้วแต่ยังรอชำระ (🧾) · จัดกลุ่มตามอายุหนี้ · ตามเก็บเงินได้เร็วขึ้น</p></div>
         <div className="cat-head-actions" style={{ gap: 8 }}>
           <div className="seg">
             <button className={"seg-btn" + (view === "aging" ? " on" : "")} onClick={() => setView("aging")}>ตามอายุหนี้</button>
