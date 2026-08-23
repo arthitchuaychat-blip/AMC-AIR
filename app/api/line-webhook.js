@@ -365,11 +365,12 @@ async function notifyCustomerChat(title, body, convId) {
     const profs = pr.ok ? await pr.json() : [];
     const roleIds = profs.filter((p) => { const s = cfg[p.role]; return !s || s.customer_chat !== false; }).map((p) => p.id);
     // + ผู้รับผิดชอบแชตนี้ (assigned_to) — คนดูแลลูกค้ารายนี้ต้องได้เตือนเสมอ แม้ role จะปิดแจ้งเตือนไว้
-    let assignedTo = null;
-    try { const cr = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId || "")}&select=assigned_to`, { headers: sbH() }); if (cr.ok) assignedTo = (await cr.json())[0]?.assigned_to || null; } catch (_) { /* ignore */ }
+    let assignedTo = null, contactName = null;
+    try { const cr = await tfetch(`${SB()}/rest/v1/line_contacts?line_user_id=eq.${encodeURIComponent(convId || "")}&select=assigned_to,display_name,custom_name`, { headers: sbH() }); if (cr.ok) { const c = (await cr.json())[0] || {}; assignedTo = c.assigned_to || null; contactName = c.custom_name || c.display_name || null; } } catch (_) { /* ignore */ }
+    const ftitle = contactName ? `💬 ${contactName}` : title;   // มีชื่อลูกค้า → ใช้ชื่อ (เหมือน LINE)
     const ids = [...new Set([...roleIds, ...(assignedTo ? [assignedTo] : [])])];
     if (!ids.length) return;
-    await tfetch(`${SB()}/rest/v1/notifications`, { method: "POST", headers: sbH(), body: JSON.stringify(ids.map((id) => ({ user_id: id, category: "customer_chat", title, body: (body || "").slice(0, 180), url: "chat", ref_type: "line", ref_no: convId || null }))) });
+    await tfetch(`${SB()}/rest/v1/notifications`, { method: "POST", headers: sbH(), body: JSON.stringify(ids.map((id) => ({ user_id: id, category: "customer_chat", title: ftitle, body: (body || "").slice(0, 180), url: "chat", ref_type: "line", ref_no: convId || null }))) });
     const pub = process.env.VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
     if (!pub || !priv) return;
     const inList = ids.map((id) => `"${id}"`).join(",");
@@ -378,7 +379,7 @@ async function notifyCustomerChat(title, body, convId) {
     if (!subs.length) return;
     webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:admin@amcair.net", pub, priv);
     // กดแจ้งเตือนแล้วเปิดกระดานแชตโฟกัสลูกค้าคนนั้นเลย (hash deep-link: /#chat/<convId>) — เหมือน LINE กดแล้วเข้าห้อง
-    const payload = JSON.stringify({ title, body: (body || "").slice(0, 180), url: convId ? "/#chat/" + encodeURIComponent(convId) : "/#chat", tag: "notif" });
+    const payload = JSON.stringify({ title: ftitle, body: (body || "").slice(0, 180), url: convId ? "/#chat/" + encodeURIComponent(convId) : "/#chat", tag: "notif" });
     await Promise.all(subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 1800 }).catch(() => {})));
   } catch (_) { /* ignore */ }
 }

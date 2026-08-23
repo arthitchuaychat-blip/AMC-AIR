@@ -2725,8 +2725,8 @@ export async function addJobLog(job_no, { note, photos, author, parent_id }) {
     parent_id: parent_id || null, author: author || null, created_by: user?.id || null,
   });
   if (error) throw error;
-  const watchers = await _jobWatchers(job_no);
-  notify(watchers, { category: "job", title: `💬 ความเคลื่อนไหวงาน ${job_no}`, body: (note || "[ไฟล์แนบ]").slice(0, 120), url: "joborders", ref_type: "job", ref_no: job_no });
+  const [watchers, cn] = await Promise.all([_jobWatchers(job_no), _jobCust(job_no)]);
+  notify(watchers, { category: "job", title: `🔧 ${cn || "งาน"} · ${job_no}`, body: `${(note || "").trim() || "📷 เพิ่มรูป/ไฟล์งาน"}`.slice(0, 140), url: "joborders", ref_type: "job", ref_no: job_no });
 }
 
 const _JOB_ST_TH = { pending: "รอเริ่มงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", awaiting_approval: "รออนุมัติ", reschedule: "นัดหมายเพิ่ม", quote_pending: "รอทำใบเสนอราคา", done: "เสร็จแล้ว", cancelled: "ยกเลิก" };
@@ -2820,7 +2820,8 @@ export async function saveJobOrder(jo, author) {
   // handoff: notify the assigned team's members
   if (jo.assigned_team) {
     const { data: tm } = await supabase.from("profiles").select("id").eq("team", jo.assigned_team);
-    notify((tm || []).map((p) => p.id), { category: "job", title: `🔧 มอบหมายงาน ${jo.job_no}`, body: jo.title || "", url: "joborders", ref_type: "job", ref_no: jo.job_no });
+    const cnA = await _custName(jo.customer_id);
+    notify((tm || []).map((p) => p.id), { category: "job", title: `🔧 มอบหมายงานใหม่: ${cnA || jo.job_no}`, body: `${jo.title || "งานติดตั้ง/บริการ"} · ${jo.job_no}`, url: "joborders", ref_type: "job", ref_no: jo.job_no });
   }
   syncInternalNote({ quoteNo: jo.quote_no }, jo.internal_note).catch(() => {});
 }
@@ -2838,7 +2839,7 @@ export async function updateJobStatus(job_no, status, author) {
   // record the status change on the timeline (best-effort — don't fail the status update if logging fails)
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("job_logs").insert({ job_no, type: "status", status, author: author || null, created_by: user?.id || null });
-  notify(await _jobWatchers(job_no), { category: "job", title: `📋 งาน ${job_no} → ${_JOB_ST_TH[status] || status}`, url: "joborders", ref_type: "job", ref_no: job_no });
+  { const [w, cn] = await Promise.all([_jobWatchers(job_no), _jobCust(job_no)]); notify(w, { category: "job", title: `📋 ${cn || "งาน"} · ${job_no}`, body: `สถานะ → ${_JOB_ST_TH[status] || status}`, url: "joborders", ref_type: "job", ref_no: job_no }); }
 }
 
 export async function lockJob(job_no) {
@@ -3041,7 +3042,7 @@ export async function updateVisitStatus(visitId, jobNo, status, author, opts = {
   } else if (error) throw error;
   await supabase.from("job_logs").insert({ job_no: jobNo, type: "status", status, author: author || null, created_by: user?.id || null });
   if (opts.jobOverride) await supabase.from("job_logs").insert({ job_no: jobNo, type: "status", status: opts.jobOverride, author: author || null, created_by: user?.id || null });
-  notify(await _jobWatchers(jobNo), { category: "job", title: `📋 งาน ${jobNo} (รอบ) → ${_JOB_ST_TH[status] || status}`, url: "joborders", ref_type: "job", ref_no: jobNo });
+  { const [w, cn] = await Promise.all([_jobWatchers(jobNo), _jobCust(jobNo)]); notify(w, { category: "job", title: `📋 ${cn || "งาน"} · ${jobNo}`, body: `รอบงาน → ${_JOB_ST_TH[status] || status}`, url: "joborders", ref_type: "job", ref_no: jobNo }); }
   return data;
 }
 
@@ -3721,6 +3722,9 @@ async function _usersByRole(roles) {
   return (data || []).map((p) => p.id);
 }
 // who watches a job: office (admin/exec/sales) + the assigned team's members
+// ชื่อลูกค้าจาก id · และชื่อลูกค้าจากเลขงาน — ใช้ทำหัวข้อแจ้งเตือนงานให้เห็นว่าเป็นลูกค้าใคร
+async function _custName(id) { if (!id) return ""; try { const { data } = await supabase.from("customers").select("name").eq("id", id).maybeSingle(); return data?.name || ""; } catch { return ""; } }
+async function _jobCust(job_no) { try { const { data: jo } = await supabase.from("job_orders").select("customer_id").eq("job_no", job_no).maybeSingle(); return jo ? await _custName(jo.customer_id) : ""; } catch { return ""; } }
 async function _jobWatchers(job_no) {
   try {
     const { data: jo } = await supabase.from("job_orders").select("assigned_team").eq("job_no", job_no).maybeSingle();
@@ -3837,6 +3841,7 @@ export async function listTasks() {
 }
 export async function saveTask(t) {
   const uid = await _uid();
+  const me = await _meSafe();   // ชื่อคนสั่ง → ใส่ในแจ้งเตือน (ผู้รับจะรู้ว่าใครสั่ง)
   const row = {
     title: t.title?.trim(), detail: t.detail?.trim() || null,
     assignee: t.assignee || null, priority: t.priority || "normal",
@@ -3844,12 +3849,12 @@ export async function saveTask(t) {
     attachments: t.attachments || [], updated_at: new Date().toISOString(),
   };
   if (t.id) { const { error } = await supabase.from("tasks").update(row).eq("id", t.id); if (error) throw error;
-    if (row.assignee) notify([row.assignee], { category: "task", title: `📌 อัปเดตงาน: ${row.title}`, url: "tasks", ref_type: "task", ref_no: t.id });
+    if (row.assignee) notify([row.assignee], { category: "task", title: `📌 ${me?.name || "หัวหน้า"} อัปเดตงาน: ${row.title}`, body: row.detail || "", url: "tasks", ref_type: "task", ref_no: t.id });
     return t.id; }
   row.assigner = uid;
   const { data, error } = await supabase.from("tasks").insert(row).select("id").single();
   if (error) throw error;
-  if (row.assignee) notify([row.assignee], { category: "task", title: `📌 ได้รับมอบหมายงานใหม่: ${row.title}`, body: row.detail || "", url: "tasks", ref_type: "task", ref_no: data.id });
+  if (row.assignee) notify([row.assignee], { category: "task", title: `📌 ${me?.name || "หัวหน้า"} มอบงานให้คุณ: ${row.title}`, body: `${row.detail ? row.detail + " · " : ""}${row.due_date ? "กำหนด " + row.due_date : ""}`.trim().replace(/ · $/, "") || "", url: "tasks", ref_type: "task", ref_no: data.id });
   return data.id;
 }
 export async function setTaskStatus(id, status) {
@@ -4734,7 +4739,8 @@ export async function checkIn({ lat, lng, photo }) {
     : await supabase.from("hr_attendance").insert({ user_id: uid, work_date: day, ...row });
   if (error) throw error;
   const me = await _meSafe();
-  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `🕒 ${me?.name || "พนักงาน"} เช็คอินเข้างาน`, url: "hr", ref_type: "attendance" });
+  const now = new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `🕒 ${me?.name || "พนักงาน"} เข้างาน ${now} น.`, url: "hr", ref_type: "attendance" });
 }
 export async function checkOut({ lat, lng, photo }) {
   const uid = await _uid(), day = await _hrToday();   // วันที่จากเซิร์ฟเวอร์ ให้ตรงกับที่ RLS ตรึงไว้
@@ -4744,6 +4750,9 @@ export async function checkOut({ lat, lng, photo }) {
     check_out_at: new Date().toISOString(), check_out_lat: lat ?? null, check_out_lng: lng ?? null, check_out_photo: photo || null,
   }).eq("id", ex.data.id);
   if (error) throw error;
+  const me = await _meSafe();
+  const now = new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `🕔 ${me?.name || "พนักงาน"} ออกงาน ${now} น.`, url: "hr", ref_type: "attendance" });
 }
 export async function listMyAttendance(fromDay) {
   const uid = await _uid();
@@ -4795,7 +4804,8 @@ export async function submitLeave({ type, start_date, end_date, days, reason, ho
   if (error) throw error;
   const me = await _meSafe();
   const amount = Number(hours) > 0 ? `${Number(hours)} ชม.` : `${days} วัน`;
-  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `📝 ${me?.name || "พนักงาน"} ขอลา (${amount})`, body: reason || "", url: "hr", ref_type: "leave" });
+  const when = `${start_date}${end_date && end_date !== start_date ? " – " + end_date : ""}${Number(hours) > 0 && time_from ? ` ${time_from}–${time_to}` : ""}`;
+  notify(await _usersByRole(["admin", "exec", "hr"]), { category: "hr", title: `📝 ${me?.name || "พนักงาน"} ขอลา (${amount})`, body: `${when}${reason ? " · " + reason : ""}`, url: "hr", ref_type: "leave" });
 }
 export async function listMyLeaves() {
   const uid = await _uid();
