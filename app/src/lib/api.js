@@ -1737,6 +1737,73 @@ export async function voidJournal(id) {
   if (error) throw error;
 }
 
+// จับประเภทรายได้จากชื่อ/รายละเอียดรายการ → รหัสบัญชีรายได้ 4010–4060
+function _revAccountOf(it) {
+  if ((it.kind || "") === "ac") return "4010";
+  const s = ((it.name || "") + " " + (it.description || "")).toLowerCase();
+  if (/ล้าง|ทำความสะอาด|clean/.test(s)) return "4030";
+  if (/ย้าย|ถอดย้าย|move|relocat/.test(s)) return "4050";
+  if (/ซ่อม|เซอร์วิส|service|repair|เช็ค|ตรวจเช็ค|เติมน้ำยา|อะไหล่/.test(s)) return "4040";
+  if (/ติดตั้ง|เดินท่อ|เดินสาย|install|set\b/.test(s)) return "4020";
+  return "4060";
+}
+
+// ── ลงบัญชีอัตโนมัติจากใบเสร็จ (เกณฑ์เงินสด: เฉพาะใบเสร็จ status='paid') ──
+// entity: VAT>0 = บริษัท · ไม่มี VAT = บุคคล · แยกประเภทรายได้ตามรายการในใบเสนอ
+// idempotent: ข้ามใบที่ลงบัญชีแล้ว (ref_type='receipt' + ref_no) · reversible: void ได้
+export async function autoPostReceipts({ from, to } = {}) {
+  // 1) ใบเสร็จรับเงินแล้วทั้งหมด (กันเพดาน 1000)
+  const rc = await _fetchAll((f, t) => supabase.from("receipts")
+    .select("receipt_no,quote_no,issue_date,created_at,payment_method,base,vat_amt,total,wht_amt,net,status,customer_id", { count: "exact" })
+    .eq("status", "paid").order("receipt_no").range(f, t));
+  const inRange = (r) => { const d = (r.issue_date || (r.created_at || "").slice(0, 10)); return (!from || d >= from) && (!to || d <= to); };
+  const cand = rc.filter((r) => inRange(r) && (Number(r.base) || 0) + (Number(r.vat_amt) || 0) > 0.005);
+  // 2) ใบที่ลงบัญชีแล้ว → ข้าม
+  const posted = await _fetchAll((f, t) => supabase.from("acc_journal")
+    .select("ref_no", { count: "exact" }).eq("ref_type", "receipt").neq("status", "void").range(f, t));
+  const done = new Set(posted.map((x) => x.ref_no));
+  const todo = cand.filter((r) => !done.has(r.receipt_no));
+  if (!todo.length) return { posted: 0, skipped: cand.length, total: cand.length };
+  // 3) รายการในใบเสนอ (แยกประเภทรายได้)
+  const qnos = [...new Set(todo.map((r) => r.quote_no).filter(Boolean))];
+  const items = qnos.length ? await _fetchAll((f, t) => supabase.from("quotation_items")
+    .select("quote_no,name,description,kind,qty,unit_price,discount", { count: "exact" }).in("quote_no", qnos).order("id").range(f, t)) : [];
+  const itemsByQ = {}; items.forEach((x) => { (itemsByQ[x.quote_no] ||= []).push(x); });
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+  let ok = 0; const errs = [];
+  for (const r of todo) {
+    const entity = (Number(r.vat_amt) || 0) > 0.005 ? "company" : "personal";
+    const base = r2(r.base), vat = r2(r.vat_amt), wht = r2(r.wht_amt);
+    const cash = r2(r.net != null ? r.net : r2(r.total) - wht);   // เงินรับจริง (หลังหัก ณ ที่จ่าย)
+    const jdate = r.issue_date || (r.created_at || "").slice(0, 10);
+    // แยกรายได้ตามรายการ → prorate ให้รวมเท่ากับ base เป๊ะ
+    const its = itemsByQ[r.quote_no] || [];
+    const byAcct = {};
+    let gross = 0;
+    its.forEach((it) => { const g = Math.max(0, (Number(it.qty) || 0) * (Number(it.unit_price) || 0) - (Number(it.discount) || 0)); if (g > 0) { byAcct[_revAccountOf(it)] = (byAcct[_revAccountOf(it)] || 0) + g; gross += g; } });
+    let rev = [];
+    if (gross > 0) {
+      rev = Object.entries(byAcct).map(([acct, g]) => ({ acct, amt: r2(base * g / gross) }));
+      const drift = r2(base - rev.reduce((s, x) => s + x.amt, 0));
+      if (Math.abs(drift) >= 0.01 && rev.length) rev.sort((a, b) => b.amt - a.amt), rev[0].amt = r2(rev[0].amt + drift);
+    } else {
+      rev = [{ acct: "4060", amt: base }];   // ไม่มีรายการ → รายได้บริการอื่นๆ
+    }
+    // ผูกบัญชีเงิน: เงินสด → 1010 · อื่นๆ (โอน) → ธนาคารตามกิจการ
+    const cashAcct = /สด|cash/i.test(r.payment_method || "") ? "1010" : (entity === "company" ? "1020" : "1021");
+    const lines = [{ account_code: cashAcct, debit: cash, credit: 0, memo: null }];
+    if (wht > 0.005) lines.push({ account_code: "1310", debit: wht, credit: 0, memo: "ภาษีถูกหัก ณ ที่จ่าย" });
+    rev.forEach((x) => lines.push({ account_code: x.acct, debit: 0, credit: x.amt, memo: null }));
+    if (vat > 0.005) lines.push({ account_code: "2100", debit: 0, credit: vat, memo: "ภาษีขาย" });
+    try {
+      await postJournal({ entity, jdate, ref_type: "receipt", ref_no: r.receipt_no, memo: `ใบเสร็จ ${r.receipt_no}`, source: "auto", lines });
+      ok++;
+    } catch (e) { errs.push(`${r.receipt_no}: ${e.message || e}`); }
+  }
+  return { posted: ok, skipped: done.size ? cand.length - todo.length : 0, total: cand.length, errors: errs };
+}
+
 // test the FlowAccount OpenAPI connection (sandbox) via our serverless function
 export async function flowaccountTest() {
   const { data: { session } } = await supabase.auth.getSession();

@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccEntities, listAccChart, listJournal, postJournal, voidJournal } from "../lib/api";
+import { listAccEntities, listAccChart, listJournal, postJournal, voidJournal, autoPostReceipts } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 
@@ -21,6 +21,7 @@ export default function Accounting() {
   const [to, setTo] = React.useState(ymd(new Date()));
   const [loading, setLoading] = React.useState(true);
   const [entry, setEntry] = React.useState(null);        // manual-entry modal state | null
+  const [syncing, setSyncing] = React.useState(false);
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
 
@@ -63,6 +64,17 @@ export default function Accounting() {
 
   const entName = (code) => entities.find((e) => e.code === code)?.name || (code === "company" ? "บริษัท" : "บุคคล");
 
+  async function runAutoPost() {
+    const ok = await confirmDialog({ title: "ดึงใบเสร็จเข้าบัญชี?", message: `อ่านใบเสร็จที่ “รับเงินแล้ว” ในช่วง ${thDate(from)} – ${thDate(to)} มาลงสมุดรายวันอัตโนมัติ (แยกกิจการตาม VAT · แยกประเภทรายได้)\n\nปลอดภัย: ทำซ้ำได้ไม่เบิ้ล (ข้ามใบที่ลงแล้ว) · ยกเลิกรายการได้ภายหลัง · ไม่แตะเอกสารขาย`, confirmText: "ดึงเข้าบัญชี", danger: false });
+    if (!ok) return;
+    setSyncing(true);
+    try {
+      const r = await autoPostReceipts({ from, to });
+      flash(r.posted ? `ลงบัญชี ${r.posted} ใบ${r.skipped ? ` · ข้าม ${r.skipped} ใบ (ลงแล้ว)` : ""}${r.errors?.length ? ` · พลาด ${r.errors.length}` : ""}` : `ไม่มีใบใหม่ (ลงครบแล้ว ${r.total} ใบ)`, !!r.errors?.length);
+      loadJournal();
+    } catch (e) { flash(e.message || "ไม่สำเร็จ", true); } finally { setSyncing(false); }
+  }
+
   return (
     <div className="adm">
       <div className="adm-head">
@@ -92,6 +104,7 @@ export default function Accounting() {
         <div className="acc-daterow">
           <label>ตั้งแต่ <input type="date" className="inp" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
           <label>ถึง <input type="date" className="inp" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          {tab === "journal" && <button className="btn-ghost" disabled={syncing} onClick={runAutoPost}>{syncing ? "กำลังดึง…" : "⟳ ดึงใบเสร็จเข้าบัญชี"}</button>}
           {tab === "journal" && <button className="btn" onClick={() => setEntry(newEntry(entity))}>＋ ลงรายการเอง</button>}
         </div>
       )}
