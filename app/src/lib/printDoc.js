@@ -26,12 +26,13 @@ export function buildDocHtml(printAreaHTML) {
 <title>เอกสาร AMC AIR</title>
 ${styles}
 <style>
-  @page{ size:A4; margin:${TOP_MM}mm ${SIDE_MM}mm ${BOTTOM_MM}mm }
+  /* margin:0 = ไม่ให้เบราว์เซอร์ใส่หัว/ท้ายกระดาษของมันเอง (วันเวลา · URL · ชื่อเรื่อง · เลขหน้า) — เราทำขอบ+เลขหน้าเอง */
+  @page{ size:A4; margin:0 }
   html,body{ margin:0;padding:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact }
   @media screen { .print-area{ display:block !important } }
   @media print { body *{ visibility:visible !important } }
   .print-area{ position:static !important; width:auto !important; padding:0 }
-  /* .doc fixed to the print content width so on-screen measurement matches print wrapping exactly */
+  /* ก่อนแบ่งหน้า: .doc กว้างเท่าเนื้อหาจริง (เพื่อวัดความสูงแถวให้ตรงตอนพิมพ์) · หลังแบ่งหน้า JS ขยายเป็น 210mm */
   .doc{ display:block !important; position:static !important; min-height:0 !important; max-width:none !important;
         width:${CONTENT_W_MM}mm; margin:0 auto !important; padding:0 !important }
   .doc::before{ display:none }
@@ -40,9 +41,13 @@ ${styles}
   .doc-colstrip{ margin-top:4px }
   /* long product codes wrap inside their column instead of spilling into the รายการ column */
   .doc-sheet>tbody>tr>td:nth-child(2){ overflow-wrap:anywhere; word-break:break-word }
-  .pg{ width:100% }
-  .pg-break{ page-break-after:always; break-after:page }
-  .doc-signs{ margin-top:24px }
+  /* แต่ละหน้า = เต็ม A4 · ขอบกระดาษทำด้วย padding เอง · flex เพื่อดันเลขหน้า (และลายเซ็น) ไปล่างสุด */
+  .pg{ width:210mm; min-height:296mm; box-sizing:border-box; margin:0 auto; background:#fff;
+       padding:${TOP_MM}mm ${SIDE_MM}mm ${BOTTOM_MM}mm; display:flex; flex-direction:column;
+       break-inside:avoid; page-break-inside:avoid }
+  .pg-body{ flex:1 1 auto; display:flex; flex-direction:column; min-height:0 }
+  .doc-signs{ margin-top:auto !important }         /* ลายเซ็น = ดันไปท้ายหน้าสุดท้าย (เหนือเลขหน้า) */
+  .pg-foot{ flex:none; text-align:center; font-size:10.5px; color:#9aa3b2; padding-top:8px }
   .doc-sheet>tbody>tr,.doc-totals,.doc-terms-box,.doc-cust{ break-inside:avoid; page-break-inside:avoid }
 </style></head><body>${printAreaHTML}</body></html>`;
 }
@@ -89,7 +94,8 @@ export function paginate(d) {
   const pageH = 297 * MM;
   const usable = pageH - (TOP_MM + BOTTOM_MM) * MM;     // printable height per page
   const headerH = headerEl.offsetHeight;
-  const budget = Math.max(120, usable - headerH - 6);   // px available for rows on each page
+  const footerH = 26;                                    // เผื่อที่ให้เลขหน้า
+  const budget = Math.max(120, usable - headerH - footerH - 6);   // px available for rows on each page
   const heights = rows.map((r) => r.offsetHeight);
 
   // greedy pack — a row that alone exceeds the budget still gets its own page
@@ -101,18 +107,36 @@ export function paginate(d) {
   }
   if (cur.length) pages.push(cur);
 
+  // กันที่ให้ช่องลายเซ็นบนหน้าสุดท้าย — ถ้าเนื้อที่ไม่พอ ย้ายแถวท้ายไปหน้าใหม่ (ไม่ให้ลายเซ็นหลุดไปโดดหน้าเดียว)
+  if (signsEl && pages.length) {
+    const signH = signsEl.offsetHeight + 24;
+    let last = pages[pages.length - 1];
+    let lastH = last.reduce((a, i) => a + heights[i], 0);
+    if (lastH + signH > budget && last.length) {
+      const fresh = [];
+      while (last.length && lastH + signH > budget) { const mv = last.pop(); lastH -= heights[mv]; fresh.unshift(mv); }
+      if (!last.length) pages.pop();
+      pages.push(fresh);
+    }
+  }
+
   const headerHTML = headerEl.outerHTML;
   const signsHTML = signsEl ? signsEl.outerHTML : "";
   const lastIdx = pages.length - 1;
+  const total = pages.length;
   const html = pages.map((idxs, p) => {
     const body = idxs.map((i) => rows[i].outerHTML).join("");
-    return `<div class="pg${p < lastIdx ? " pg-break" : ""}">`
+    return `<div class="pg">`
+      + `<div class="pg-body">`
       + headerHTML
       + `<table class="doc-sheet">${colgroupHTML}<tbody>${body}</tbody></table>`
       + (p === lastIdx ? signsHTML : "")
+      + `</div>`
+      + `<div class="pg-foot">หน้า ${p + 1} / ${total}</div>`
       + `</div>`;
   }).join("");
 
   docEl.innerHTML = html;
+  docEl.style.width = "210mm"; docEl.style.margin = "0 auto";   // ขยายเต็มหน้าให้ .pg (210mm) พอดี
   return Array.from(docEl.querySelectorAll(".pg"));
 }

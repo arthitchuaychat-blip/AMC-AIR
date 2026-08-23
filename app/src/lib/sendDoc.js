@@ -8,8 +8,8 @@ import { buildDocHtml, paginate, MM, SIDE_MM, TOP_MM, BOTTOM_MM, CONTENT_W_MM } 
 async function renderPages(printAreaHTML) {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  // give the iframe the A4 content width (px) so wrapping/heights match print exactly
-  const wPx = Math.round(CONTENT_W_MM * MM);
+  // ต้องกว้างพอสำหรับหน้าเต็ม A4 (210mm) — printDoc ขยาย .pg เป็น 210mm ตอนแบ่งหน้า (มีขอบกระดาษในตัว)
+  const wPx = Math.round(210 * MM);
   iframe.style.cssText = `position:fixed;left:-10000px;top:0;width:${wPx + 40}px;height:1600px;border:0;background:#fff;`;
   document.body.appendChild(iframe);
   try {
@@ -43,15 +43,11 @@ function dataUrlToBlob(dataUrl) {
 // one captured A4 page per PDF page, fit within the page margins, aspect preserved
 function pagesToPdfBlob(pages) {
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
-  const PT = 72 / 25.4; // pt per mm
   const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
-  const side = SIDE_MM * PT, top = TOP_MM * PT;
-  const maxW = pageW - side * 2, maxH = pageH - top - BOTTOM_MM * PT;
+  // แต่ละหน้าที่จับภาพมาเป็น "หน้าเต็ม A4 พร้อมขอบกระดาษในตัวแล้ว" (printDoc .pg) → วางเต็มหน้า
   pages.forEach((p, i) => {
     if (i) pdf.addPage();
-    let w = maxW, h = (p.height / p.width) * maxW;
-    if (h > maxH) { h = maxH; w = (p.width / p.height) * maxH; }
-    pdf.addImage(p.dataUrl, "PNG", (pageW - w) / 2, top, w, h);
+    pdf.addImage(p.dataUrl, "PNG", 0, 0, pageW, pageH);
   });
   return pdf.output("blob");
 }
