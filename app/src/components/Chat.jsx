@@ -142,13 +142,15 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [hoPicker, setHoPicker] = React.useState(null);       // 📄 ส่งใบส่งมอบ (เลือกใบ)
   const [sendMenuFor, setSendMenuFor] = React.useState(null); // doc entry whose "ส่งเป็น รูป/PDF" popup is open
   const [emailDoc, setEmailDoc] = React.useState(null);       // { to, subject, body, attachments, label } — คอมโพสอีเมลส่งเอกสาร
+  const [copyMode, setCopyMode] = React.useState("none");     // ประทับต้นฉบับ/สำเนา: none | orig | copy | both
+  const COPY_LABELS = { none: [""], orig: ["ต้นฉบับ"], copy: ["สำเนา"], both: ["ต้นฉบับ", "สำเนา"] };
   const [multiSel, setMultiSel] = React.useState(false);      // โหมดเลือกเอกสารหลายใบ
   const [selDocs, setSelDocs] = React.useState(() => new Set()); // คีย์ "type|no" ที่เลือกไว้
   const [batch, setBatch] = React.useState(null);             // { entries, mode, i, imgs, atts, texts } — คิวเตรียมเอกสารหลายใบ
   const [company, setCompany] = React.useState(null);         // หัวจดหมายบริษัท (โลโก้/ที่อยู่/ช่องทางติดต่อ) สำหรับอีเมล
   React.useEffect(() => { getCompanies().then((c) => setCompany((c.vat && Object.keys(c.vat).length) ? c.vat : c.novat)).catch(() => {}); }, []);
   const [capJob, setCapJob] = React.useState(null); // { type, no, mode, to, label } → render off-screen + capture + send
-  const startSend = (e, mode) => { setSendMenuFor(null); setCapJob({ type: e.type, no: e.no, mode, to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}`, email: selCust?.email || "", custName: selCust?.name || "" }); flash(mode === "email" ? "กำลังเตรียมเอกสารสำหรับอีเมล…" : "กำลังเตรียมเอกสาร…"); };
+  const startSend = (e, mode) => { setSendMenuFor(null); setCapJob({ type: e.type, no: e.no, mode, to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}`, email: selCust?.email || "", custName: selCust?.name || "", copies: COPY_LABELS[copyMode] || [""] }); flash(mode === "email" ? "กำลังเตรียมเอกสารสำหรับอีเมล…" : "กำลังเตรียมเอกสาร…"); };
   // ── ส่งหลายเอกสารพร้อมกัน ──
   const docKey = (e) => e.type + "|" + e.no;
   const toggleSelDoc = (e) => setSelDocs((s) => { const n = new Set(s); const k = docKey(e); n.has(k) ? n.delete(k) : n.add(k); return n; });
@@ -1409,7 +1411,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
             <div className="modal-head"><div className="modal-title">ส่งเอกสารให้ลูกค้า</div>
               <button className="drawer-close" onClick={() => setSendMenuFor(null)}><UIcon name="x" size={20} /></button></div>
             <div className="modal-body">
-              <p className="page-sub" style={{ marginBottom: 14 }}><span className={"doc-tag dl-" + sendMenuFor.type}>{TYPE_LABEL[sendMenuFor.type]}</span><b>{sendMenuFor.no}</b>{sendMenuFor.title ? ` · ${sendMenuFor.title}` : ""} — ส่งเป็น?</p>
+              <p className="page-sub" style={{ marginBottom: 12 }}><span className={"doc-tag dl-" + sendMenuFor.type}>{TYPE_LABEL[sendMenuFor.type]}</span><b>{sendMenuFor.no}</b>{sendMenuFor.title ? ` · ${sendMenuFor.title}` : ""} — ส่งเป็น?</p>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", marginBottom: 6 }}>ประทับเอกสาร</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+                {[["none", "ไม่ประทับ"], ["orig", "ต้นฉบับ"], ["copy", "สำเนา"], ["both", "ทั้งคู่"]].map(([v, l]) => (
+                  <button key={v} className={"cat-chip" + (copyMode === v ? " on" : "")} style={copyMode === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}} onClick={() => setCopyMode(v)}>{l}</button>
+                ))}
+              </div>
               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", marginBottom: 6 }}>💬 ส่งเข้าแชต ({isFb ? "Facebook" : "LINE"})</div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => startSend(sendMenuFor, "image")}><UIcon name="camera" size={15} color="#fff" /> รูปภาพ</button>
@@ -1549,9 +1557,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
         onReady={async (node) => {
           try {
+            const copies = capJob.copies && capJob.copies.length ? capJob.copies : [""];   // ["" ] | ["ต้นฉบับ"] | ["ต้นฉบับ","สำเนา"]
+            const suffix = (cl) => (cl ? ` (${cl})` : "");
             if (capJob.mode === "email") {
-              // ส่งเอกสารทางอีเมล → แนบไฟล์ PDF จริง แล้วเปิดหน้าคอมโพส
-              const atts = await captureDocForEmail(node, "pdf", capJob.label);
+              // ส่งเอกสารทางอีเมล → แนบไฟล์ PDF จริง (ต้นฉบับ/สำเนา ตามที่เลือก) แล้วเปิดหน้าคอมโพส
+              const atts = [];
+              for (const cl of copies) atts.push(...(await captureDocForEmail(node, "pdf", capJob.label + suffix(cl), cl)));
               setEmailDoc({
                 to: capJob.email || "", label: capJob.label, attachments: atts,
                 subject: `${capJob.label} — AMC AIR`,
@@ -1559,9 +1570,14 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               });
               flash("เตรียมเอกสารเสร็จ — ตรวจอีเมลแล้วกดส่ง ✓");
             } else {
-              const { attachments, text: txt } = await captureDocToStage(node, capJob.mode, capJob.label);
-              if (attachments.length) setPending((s) => [...s, ...attachments]);
-              if (txt) setText((cur) => (cur ? cur + "\n" : "") + txt);
+              const imgs = [], texts = [];
+              for (const cl of copies) {
+                const { attachments, text: txt } = await captureDocToStage(node, capJob.mode, capJob.label + suffix(cl), cl);
+                if (attachments.length) imgs.push(...attachments);
+                if (txt) texts.push(txt);
+              }
+              if (imgs.length) setPending((s) => [...s, ...imgs]);
+              if (texts.length) setText((cur) => (cur ? cur + "\n" : "") + texts.join("\n"));
               flash("แนบเอกสารไว้ในช่องแชตแล้ว — ตรวจแล้วกด “ส่ง” ✓");
             }
           }

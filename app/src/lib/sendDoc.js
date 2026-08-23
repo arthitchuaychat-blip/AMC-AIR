@@ -54,8 +54,9 @@ function pagesToPdfBlob(pages) {
 
 // capture `node` → คืนไฟล์แนบไว้ "พักก่อนส่ง" (ไม่ส่งทันที) ให้ตรวจแล้วค่อยกดส่ง
 // image → คืน attachments (รูปทุกหน้า) · pdf → คืนลิงก์ PDF เป็นข้อความ (LINE ส่งไฟล์เนทีฟไม่ได้)
-export async function captureDocToStage(node, mode, label) {
+export async function captureDocToStage(node, mode, label, copyLabel) {
   const printArea = node.querySelector(".print-area") || node;
+  if (printArea.querySelector(".doc")) printArea.querySelector(".doc").setAttribute("data-copy", copyLabel || "");
   const pages = await renderPages(printArea.outerHTML);
   if (!pages.length) throw new Error("สร้างเอกสารไม่สำเร็จ");
   if (mode === "image") {
@@ -71,8 +72,9 @@ export async function captureDocToStage(node, mode, label) {
 }
 
 // capture `node` → คืน "ไฟล์แนบจริง" สำหรับอีเมล (PDF หรือ PNG) — [{name, url, mimeType}]
-export async function captureDocForEmail(node, mode, label) {
+export async function captureDocForEmail(node, mode, label, copyLabel) {
   const printArea = node.querySelector(".print-area") || node;
+  if (printArea.querySelector(".doc")) printArea.querySelector(".doc").setAttribute("data-copy", copyLabel || "");
   const pages = await renderPages(printArea.outerHTML);
   if (!pages.length) throw new Error("สร้างเอกสารไม่สำเร็จ");
   if (mode === "image") {

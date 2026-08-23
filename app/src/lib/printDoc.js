@@ -48,17 +48,56 @@ ${styles}
   .pg-body{ flex:1 1 auto; display:flex; flex-direction:column; min-height:0 }
   .doc-signs{ margin-top:auto !important }         /* ลายเซ็น = ดันไปท้ายหน้าสุดท้าย (เหนือเลขหน้า) */
   .pg-foot{ flex:none; text-align:center; font-size:10.5px; color:#9aa3b2; padding-top:8px }
+  .pg-copymark{ align-self:flex-end; flex:none; border:1.3px solid #1f74e0; color:#1f74e0; font-weight:800;
+                font-size:11px; padding:2px 12px; border-radius:6px; margin:0 0 6px; letter-spacing:.6px }
+  .pg-copymark.is-copy{ border-color:#94a3b8; color:#64748b }
   .doc-sheet>tbody>tr,.doc-totals,.doc-terms-box,.doc-cust{ break-inside:avoid; page-break-inside:avoid }
 </style></head><body>${printAreaHTML}</body></html>`;
 }
 
-export function writeAndPrint(win, selector = ".print-area") {
+// ถามผู้ใช้ว่าจะพิมพ์ ต้นฉบับ / สำเนา / ทั้งคู่ (โมดัลเล็ก ๆ กลางจอ) — คืน array ป้ายชุด หรือ null ถ้ายกเลิก
+export function askCopies() {
+  return new Promise((resolve) => {
+    const ov = document.createElement("div");
+    ov.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;font-family:'Sarabun','Noto Sans Thai',sans-serif;padding:16px";
+    const btn = "display:block;width:100%;text-align:center;padding:12px;border-radius:11px;border:1px solid #dbe2ec;background:#fff;font:inherit;font-size:14.5px;font-weight:700;color:#18212e;cursor:pointer;margin-top:8px";
+    ov.innerHTML = `<div style="background:#fff;border-radius:16px;padding:20px;max-width:330px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.35)">
+      <div style="font-weight:800;font-size:16px">พิมพ์เอกสาร</div>
+      <div style="font-size:13px;color:#64748b;margin:2px 0 14px">เลือกชนิดที่จะพิมพ์</div>
+      <button data-v="orig" style="${btn};margin-top:0;background:#1f74e0;color:#fff;border-color:#1f74e0">📄 ต้นฉบับ (Original)</button>
+      <button data-v="copy" style="${btn}">📑 สำเนา (Copy)</button>
+      <button data-v="both" style="${btn}">📄📑 ทั้งต้นฉบับ + สำเนา</button>
+      <button data-v="none" style="${btn}">พิมพ์เฉย ๆ (ไม่ประทับ)</button>
+      <button data-v="cancel" style="${btn};border:none;color:#94a3b8;font-weight:600;font-size:13px;margin-top:6px">ยกเลิก</button>
+    </div>`;
+    ov.addEventListener("click", (e) => {
+      const v = e.target && e.target.getAttribute && e.target.getAttribute("data-v");
+      if (!v) return;
+      try { document.body.removeChild(ov); } catch (_) {}
+      resolve(v === "cancel" ? null : v === "orig" ? ["ต้นฉบับ"] : v === "copy" ? ["สำเนา"] : v === "both" ? ["ต้นฉบับ", "สำเนา"] : [""]);
+    });
+    document.body.appendChild(ov);
+  });
+}
+// clone the print-area and stamp its .doc with a copy label (ต้นฉบับ/สำเนา) — used to render one or two sets
+function stampClone(src, label) {
+  const clone = src.cloneNode(true);
+  const doc = clone.querySelector(".doc");
+  if (doc && label) doc.setAttribute("data-copy", label);
+  return clone.outerHTML;
+}
+
+export async function writeAndPrint(win, selector = ".print-area") {
   const src = document.querySelector(selector);
   if (!src) { if (win) win.close(); return; }
-  if (!win) { window.print(); return; } // popup blocked → fall back to in-page print (desktop)
 
+  const labels = await askCopies();
+  if (labels === null) { if (win) win.close(); return; }   // ยกเลิก
+  if (!win) { window.print(); return; } // popup blocked → fall back to in-page print (desktop · ไม่ประทับ)
+
+  const body = labels.map((lab) => stampClone(src, lab)).join("");
   win.document.open();
-  win.document.write(buildDocHtml(src.outerHTML));
+  win.document.write(buildDocHtml(body));
   win.document.close();
 
   let done = false;
@@ -78,24 +117,34 @@ export function writeAndPrint(win, selector = ".print-area") {
 
 // Split the one long body table into per-page .pg blocks, each led by a copy of the running header.
 // Returns the array of .pg elements (used by the PDF capture). Operates on the given document.
+// รองรับหลายชุดในหน้าเดียว (ต้นฉบับ/สำเนา) — ป้ายชุดอ่านจาก data-copy บน .doc แต่ละใบ
 export function paginate(d) {
-  const docEl = d.querySelector(".doc");
-  const headerEl = d.querySelector(".doc-running");
-  const bodyTable = d.querySelector(".doc-sheet");
+  const docs = Array.from(d.querySelectorAll(".doc"));
+  if (!docs.length) return;
+  const out = [];
+  docs.forEach((docEl) => { const pgs = paginateOne(docEl); if (pgs) out.push(...pgs); });
+  return out;
+}
+function paginateOne(docEl) {
+  const headerEl = docEl.querySelector(".doc-running");
+  const bodyTable = docEl.querySelector(".doc-sheet");
   if (!docEl || !headerEl || !bodyTable) return;
+  const copyLabel = docEl.getAttribute("data-copy") || "";
+  const copyClass = copyLabel.includes("สำเนา") ? " is-copy" : "";
 
   const colgroup = bodyTable.querySelector("colgroup");
   const colgroupHTML = colgroup ? colgroup.outerHTML : "";
   const tbody = bodyTable.querySelector("tbody");
   const rows = Array.from(tbody ? tbody.children : []);
-  const signsEl = d.querySelector(".doc-signs");
+  const signsEl = docEl.querySelector(".doc-signs");
   if (!rows.length) return;
 
   const pageH = 297 * MM;
   const usable = pageH - (TOP_MM + BOTTOM_MM) * MM;     // printable height per page
   const headerH = headerEl.offsetHeight;
   const footerH = 26;                                    // เผื่อที่ให้เลขหน้า
-  const budget = Math.max(120, usable - headerH - footerH - 6);   // px available for rows on each page
+  const markH = copyLabel ? 26 : 0;                      // เผื่อที่ให้ป้าย ต้นฉบับ/สำเนา
+  const budget = Math.max(120, usable - headerH - footerH - markH - 6);   // px available for rows on each page
   const heights = rows.map((r) => r.offsetHeight);
 
   // greedy pack — a row that alone exceeds the budget still gets its own page
@@ -127,12 +176,13 @@ export function paginate(d) {
   const html = pages.map((idxs, p) => {
     const body = idxs.map((i) => rows[i].outerHTML).join("");
     return `<div class="pg">`
+      + (copyLabel ? `<div class="pg-copymark${copyClass}">${copyLabel}</div>` : "")
       + `<div class="pg-body">`
       + headerHTML
       + `<table class="doc-sheet">${colgroupHTML}<tbody>${body}</tbody></table>`
       + (p === lastIdx ? signsHTML : "")
       + `</div>`
-      + `<div class="pg-foot">หน้า ${p + 1} / ${total}</div>`
+      + `<div class="pg-foot">หน้า ${p + 1} / ${total}${copyLabel ? " · " + copyLabel : ""}</div>`
       + `</div>`;
   }).join("");
 
