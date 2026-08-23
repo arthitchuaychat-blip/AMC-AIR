@@ -1,6 +1,6 @@
 import React from "react";
 import DocSlip from "./DocSlip";
-import { listQuotations, listInvoices, listReceipts, listPurchaseOrders, listSuppliers, listMaterialsLite, listAdjustmentNotes, getCompanies } from "../lib/api";
+import { listQuotations, listInvoices, listReceipts, listPurchaseOrders, listSuppliers, listMaterialsLite, listAdjustmentNotes, listBillingNotes, getCompanies } from "../lib/api";
 import { fmtBaht, fmtBaht2, fmtNum, custCode, fmtDocDate } from "../lib/format";
 
 // Renders a single document (quotation/invoice/receipt) off-screen at A4 size so it can be captured
@@ -46,6 +46,10 @@ export default function DocCapture({ type, no, onReady, onError }) {
           const x = (await listAdjustmentNotes()).find((r) => r.note_no === no);
           if (!x) throw new Error("ไม่พบเอกสาร " + no);
           alive && setData({ companies, x });
+        } else if (type === "billing") {
+          const x = (await listBillingNotes()).find((r) => r.billing_no === no);
+          if (!x) throw new Error("ไม่พบใบวางบิล " + no);
+          alive && setData({ companies, x });
         } else throw new Error("ชนิดเอกสารไม่รองรับ");
       } catch (e) { onError && onError(e.message || String(e)); }
     })();
@@ -74,7 +78,32 @@ function slip(type, d) {
   if (type === "invoice") return invoiceSlip(d.x, d.q, d.companies);
   if (type === "po") return poSlip(d.x, d.sup, d.matMap, d.companies);
   if (type === "creditnote" || type === "debitnote") return noteSlip(d.x, d.companies);
+  if (type === "billing") return billingSlip(d.x, d.companies);
   return receiptSlip(d.x, d.q, d.inv, d.companies);
+}
+
+// ใบวางบิล / ใบแจ้งหนี้รวม — mirror หน้าพิมพ์ใน BillingNotes.jsx
+function billingSlip(x, companies) {
+  const has = (c) => c && Object.keys(c).length;
+  const co = x.vat ? (has(companies.vat) ? companies.vat : companies.novat || {}) : (has(companies.novat) ? companies.novat : companies.vat || {});
+  const live = x.liveInvoices || (x.invoices || []).filter((iv) => iv.status !== "cancelled");
+  return (
+    <DocSlip company={co} titleTh="ใบวางบิล / ใบแจ้งหนี้รวม" titleEn="BILLING NOTE" docNo={x.billing_no}
+      metaRows={[{ label: "วันที่", value: fmtDocDate(x.issue_date || x.created_at) }, { label: "จำนวนใบแจ้งหนี้", value: String(live.length) }]}
+      customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, branch: x.customerBranch, address: x.customerAddr, contactName: x.mainContactName, contactPhone: x.mainContactPhone, siteName: x.siteName, siteAddress: x.siteAddress, siteContactName: x.siteContactName, siteContactPhone: x.siteContactPhone, mapUrl: x.mapUrl }}
+      terms={x.note} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]} signUrl={x.sign_url} signName={x.sign_name}
+      totals={<div className="doc-totals">
+        {x.wht > 0 ? <>
+          <div><span>ยอดวางบิลรวม</span><b>{fmtBaht(x.total)}</b></div>
+          <div><span>หัก ณ ที่จ่าย</span><b>− {fmtBaht(x.wht)}</b></div>
+          <div className="doc-grand"><span>ยอดสุทธิที่ต้องชำระ</span><b>{fmtBaht(x.net)}</b></div>
+        </> : <div className="doc-grand"><span>ยอดวางบิลรวมทั้งสิ้น</span><b>{fmtBaht(x.total)}</b></div>}
+      </div>}>
+      {live.map((iv, i) => (
+        <tr key={iv.invoice_no}><td>{i + 1}</td><td>{iv.invoice_no}</td><td>ใบแจ้งหนี้ · งวดที่ {iv.installment} ({Math.round(iv.pct)}%){iv.issue_date ? ` · ${iv.issue_date}` : ""}</td><td className="r" /><td className="r" /><td className="r">{fmtBaht(iv.total)}</td></tr>
+      ))}
+    </DocSlip>
+  );
 }
 
 // ใบลดหนี้ / ใบเพิ่มหนี้ — รายการเป็นของตัวเอง (ที่ลด/เพิ่ม) · ต้องเหมือนหน้าพิมพ์ใน AdjustmentNotes

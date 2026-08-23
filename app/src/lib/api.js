@@ -2633,7 +2633,7 @@ export async function listCustomerJobs(customerId) {
 
 // all documents + jobs for one customer (newest first) — for the customer detail history with type filter
 export async function listCustomerDocs(customerId) {
-  const [q, iv, rc, jo, tm, ho, an] = await Promise.all([
+  const [q, iv, rc, jo, tm, ho, an, bn] = await Promise.all([
     supabase.from("quotations").select("quote_no,title,status,issue_date,created_at,site_id").eq("customer_id", customerId),
     supabase.from("invoices").select("invoice_no,status,issue_date,total,installment,pct,created_at,site_id").eq("customer_id", customerId),
     supabase.from("receipts").select("receipt_no,status,issue_date,net,created_at,site_id").eq("customer_id", customerId),
@@ -2645,6 +2645,8 @@ export async function listCustomerDocs(customerId) {
       .catch(() => ({ data: [] })),
     // ใบลด/เพิ่มหนี้ (mig 218) — fallback ถ้ายังไม่รัน
     supabase.from("adjustment_notes").select("note_no,kind,status,issue_date,net,reason,created_at,site_id").eq("customer_id", customerId).then((r) => r).catch(() => ({ data: [] })),
+    // ใบวางบิล — โชว์ในประวัติลูกค้า (ส่งเข้าแชต/อีเมลได้)
+    supabase.from("billing_notes").select("billing_no,status,issue_date,created_at,site_id").eq("customer_id", customerId).then((r) => r).catch(() => ({ data: [] })),
   ]);
   const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
   const entries = [
@@ -2654,6 +2656,7 @@ export async function listCustomerDocs(customerId) {
     ...(jo.data || []).map((x) => ({ type: "job", no: x.job_no, title: x.title, status: x.status, date: x.scheduled_at || x.created_at, created: x.created_at, teamName: x.assigned_team ? (tn[x.assigned_team] || x.assigned_team) : null, scheduled_at: x.scheduled_at, end_date: x.end_date, slot: x.slot, site_id: x.site_id })),
     ...(ho.data || []).map((x) => ({ type: "handover", no: x.ho_no || ("HO#" + String(x.id).slice(0, 6)), hoId: x.id, jobNo: x.job_no, title: x.job_no ? `งาน ${x.job_no}` : "ใบส่งมอบงาน", status: x.status, rating: x.cust_rating || null, date: x.doc_date || x.created_at, created: x.created_at })),
     ...(an.data || []).map((x) => ({ type: x.kind === "debit" ? "debitnote" : "creditnote", no: x.note_no, title: x.reason || (x.kind === "debit" ? "เพิ่มหนี้" : "ลดหนี้"), status: x.status, amount: x.net, date: x.issue_date || x.created_at, created: x.created_at, site_id: x.site_id })),
+    ...(bn.data || []).map((x) => ({ type: "billing", no: x.billing_no, title: "ใบวางบิล / ใบแจ้งหนี้รวม", status: x.status, date: x.issue_date || x.created_at, created: x.created_at, site_id: x.site_id })),
   ];
   // newest-created first (true timeline order — independent of issue/appointment dates)
   return entries.sort((a, b) => new Date(b.created || b.date || 0) - new Date(a.created || a.date || 0));

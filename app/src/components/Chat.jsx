@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -16,7 +16,7 @@ import { UIcon, MaterialThumb } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
 import DocCapture from "./DocCapture";
 import { useDocPeek } from "./DocPeek";
-import { captureDocToStage } from "../lib/sendDoc";
+import { captureDocToStage, captureDocForEmail } from "../lib/sendDoc";
 import html2canvas from "html2canvas";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
@@ -141,8 +141,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [ratePicker, setRatePicker] = React.useState(null);   // ⭐ ขอคะแนน (เลือกใบงาน)
   const [hoPicker, setHoPicker] = React.useState(null);       // 📄 ส่งใบส่งมอบ (เลือกใบ)
   const [sendMenuFor, setSendMenuFor] = React.useState(null); // doc entry whose "ส่งเป็น รูป/PDF" popup is open
+  const [emailDoc, setEmailDoc] = React.useState(null);       // { to, subject, body, attachments, label } — คอมโพสอีเมลส่งเอกสาร
   const [capJob, setCapJob] = React.useState(null); // { type, no, mode, to, label } → render off-screen + capture + send
-  const startSend = (e, mode) => { setSendMenuFor(null); setCapJob({ type: e.type, no: e.no, mode, to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}` }); flash("กำลังเตรียมเอกสาร…"); };
+  const startSend = (e, mode) => { setSendMenuFor(null); setCapJob({ type: e.type, no: e.no, mode, to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}`, email: selCust?.email || "", custName: selCust?.name || "" }); flash(mode === "email" ? "กำลังเตรียมเอกสารสำหรับอีเมล…" : "กำลังเตรียมเอกสาร…"); };
   const [infoDocs, setInfoDocs] = React.useState([]);
   const [loadingInfoDocs, setLoadingInfoDocs] = React.useState(false);
   const [infoDocF, setInfoDocF] = React.useState("all");
@@ -559,6 +560,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     } catch (e) { flash("โหลดใบงานไม่สำเร็จ: " + (e.message || e), true); }
   }
   function pickJob(entry) { const e = entry.jo ? entry : { jo: entry, visit: null }; setText(buildOrderConfirm(e.jo, e.visit)); setJobPicker(null); flash("ใส่ข้อความคอนเฟิมแล้ว — ตรวจทานแล้วกดส่ง"); }
+  function emailConfirm(entry) {
+    const e = entry.jo ? entry : { jo: entry, visit: null };
+    setJobPicker(null);
+    setEmailDoc({ to: selCust?.email || "", label: `ยืนยันนัดหมายงาน ${e.jo.job_no}`, attachments: [],
+      subject: `ยืนยันนัดหมายงาน ${e.jo.job_no} — AMC AIR`, body: buildOrderConfirm(e.jo, e.visit) });
+  }
 
   // ⭐ ขอคะแนน: เลือกใบงาน → ใส่ลิงก์ให้คะแนน (ผูก job_no) ในกล่องพิมพ์ ให้ตรวจก่อนส่ง
   async function openRate() {
@@ -627,6 +634,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function delQr(id) { if (!await confirmDialog("ลบข้อความนี้?")) return; try { await deleteQuickReply(id); await loadQr(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
 
   const selContact = contacts.find((c) => c.line_user_id === sel);
+  const selCust = custs.find((c) => String(c.id) === String(selContact?.customer_id)) || null;   // ลูกค้าที่ผูกกับแชตนี้ (ใช้อีเมล/ที่อยู่)
   // resolve a quoted message by its LINE id (to render the referenced message inside a reply)
   // map ข้อความตาม id ของแพลตฟอร์ม (LINE line_message_id / FB fb_message_id) → ใช้ resolve + เด้งไปข้อความที่ถูกอ้างถึง
   const byLineId = React.useMemo(() => { const m = {}; msgs.forEach((x) => { if (x.line_message_id) m[x.line_message_id] = x; if (x.fb_message_id) m[x.fb_message_id] = x; }); return m; }, [msgs]);
@@ -1111,7 +1119,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       const st = stOf(e);
                       const dateTxt = e.type === "job" && e.scheduled_at ? scheduleLabel(e)
                         : (e.date ? new Date(e.date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) : "—");
-                      const sendable = ["quote", "invoice", "receipt", "creditnote", "debitnote"].includes(e.type);
+                      const sendable = ["quote", "invoice", "receipt", "creditnote", "debitnote", "billing"].includes(e.type);
                       return (
                         <div className="cd-job" key={e.type + e.no}>
                           <span className={"cd-job-dot " + st[1]} />
@@ -1175,10 +1183,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                 const sched = v && v.scheduled_at ? scheduleLabel({ scheduled_at: v.scheduled_at, end_date: v.end_date, slot: v.slot }) : (jo.scheduled_at ? scheduleLabel(jo) : "ยังไม่นัด");
                 const vst = v && (JOB_ST_LABEL[v.status] || null);
                 return (
-                  <button key={jo.job_no + "#" + i} className="confirm-job" onClick={() => pickJob(en)}>
-                    <div><b>{jo.job_no}</b>{en.rounds > 1 ? <span style={{ color: "#7c3aed", fontWeight: 700 }}> · รอบ {en.round}/{en.rounds}</span> : ""} · {jo.title || "งานติดตั้ง/บริการ"}</div>
-                    <small>🗓 {sched}{vst ? ` · ${vst}` : ""} · 💰 {fmtBaht(jo.quoteGrand || 0)}</small>
-                  </button>
+                  <div key={jo.job_no + "#" + i} style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+                    <button className="confirm-job" style={{ flex: 1 }} onClick={() => pickJob(en)}>
+                      <div><b>{jo.job_no}</b>{en.rounds > 1 ? <span style={{ color: "#7c3aed", fontWeight: 700 }}> · รอบ {en.round}/{en.rounds}</span> : ""} · {jo.title || "งานติดตั้ง/บริการ"}</div>
+                      <small>🗓 {sched}{vst ? ` · ${vst}` : ""} · 💰 {fmtBaht(jo.quoteGrand || 0)} · แตะเพื่อใส่ในแชต</small>
+                    </button>
+                    {selCust?.email && <button className="btn-ghost sm" style={{ flex: "none", color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} title={`ส่งคอนเฟิมทางอีเมลถึง ${selCust.email}`} onClick={() => emailConfirm(en)}>📧</button>}
+                  </div>
                 );
               })}
             </div>
@@ -1317,10 +1328,16 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <button className="drawer-close" onClick={() => setSendMenuFor(null)}><UIcon name="x" size={20} /></button></div>
             <div className="modal-body">
               <p className="page-sub" style={{ marginBottom: 14 }}><span className={"doc-tag dl-" + sendMenuFor.type}>{TYPE_LABEL[sendMenuFor.type]}</span><b>{sendMenuFor.no}</b>{sendMenuFor.title ? ` · ${sendMenuFor.title}` : ""} — ส่งเป็น?</p>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", marginBottom: 6 }}>💬 ส่งเข้าแชต ({isFb ? "Facebook" : "LINE"})</div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => startSend(sendMenuFor, "image")}><UIcon name="camera" size={15} color="#fff" /> รูปภาพ</button>
                 <button className="btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={() => startSend(sendMenuFor, "pdf")}><UIcon name="clipboard" size={15} /> ไฟล์ PDF</button>
               </div>
+              <div style={{ borderTop: "1px solid var(--line)", margin: "14px 0 10px" }} />
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", marginBottom: 6 }}>📧 ส่งทางอีเมล (แนบ PDF)</div>
+              {selCust?.email
+                ? <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", color: "#7c3aed", borderColor: "#ddd6fe", background: "#f5f3ff" }} onClick={() => startSend(sendMenuFor, "email")}>📧 ส่งอีเมลถึง {selCust.email}</button>
+                : <div className="jo-dim" style={{ fontSize: 12.5 }}>ลูกค้ารายนี้ยังไม่มีอีเมลในระบบ — เพิ่มอีเมลในข้อมูลลูกค้าก่อน</div>}
             </div>
           </div>
         </div>
@@ -1450,16 +1467,77 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
         onReady={async (node) => {
           try {
-            const { attachments, text: txt } = await captureDocToStage(node, capJob.mode, capJob.label);
-            if (attachments.length) setPending((s) => [...s, ...attachments]);
-            if (txt) setText((cur) => (cur ? cur + "\n" : "") + txt);
-            flash("แนบเอกสารไว้ในช่องแชตแล้ว — ตรวจแล้วกด “ส่ง” ✓");
+            if (capJob.mode === "email") {
+              // ส่งเอกสารทางอีเมล → แนบไฟล์ PDF จริง แล้วเปิดหน้าคอมโพส
+              const atts = await captureDocForEmail(node, "pdf", capJob.label);
+              setEmailDoc({
+                to: capJob.email || "", label: capJob.label, attachments: atts,
+                subject: `${capJob.label} — AMC AIR`,
+                body: `เรียน ${capJob.custName || "ลูกค้า"}\n\nบริษัท AMC AIR ขอนำส่ง${capJob.label} ตามไฟล์แนบครับ หากมีข้อสงสัยหรือต้องการข้อมูลเพิ่มเติม ติดต่อกลับได้เลยครับ\n\nขอบคุณที่ใช้บริการครับ\nAMC AIR`,
+              });
+              flash("เตรียมเอกสารเสร็จ — ตรวจอีเมลแล้วกดส่ง ✓");
+            } else {
+              const { attachments, text: txt } = await captureDocToStage(node, capJob.mode, capJob.label);
+              if (attachments.length) setPending((s) => [...s, ...attachments]);
+              if (txt) setText((cur) => (cur ? cur + "\n" : "") + txt);
+              flash("แนบเอกสารไว้ในช่องแชตแล้ว — ตรวจแล้วกด “ส่ง” ✓");
+            }
           }
           catch (e) { flash("เตรียมเอกสารไม่สำเร็จ: " + (e.message || e), true); }
           setCapJob(null);
         }} />}
+      {emailDoc && <EmailDocModal draft={emailDoc} onClose={() => setEmailDoc(null)} flash={flash} />}
       {peekEl}
       {toast && <div className={"chat-toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
+    </div>
+  );
+}
+
+/* ─── คอมโพสอีเมลส่งเอกสารขายให้ลูกค้า (แนบ PDF) ─── */
+function EmailDocModal({ draft, onClose, flash }) {
+  const [to, setTo] = React.useState(draft.to || "");
+  const [subject, setSubject] = React.useState(draft.subject || "");
+  const [body, setBody] = React.useState(draft.body || "");
+  const [sending, setSending] = React.useState(false);
+  const atts = draft.attachments || [];
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim());
+  async function send() {
+    if (!validEmail) return flash("อีเมลผู้รับไม่ถูกต้อง", true);
+    if (!atts.length && !body.trim()) return flash("ต้องมีข้อความหรือไฟล์แนบอย่างน้อยอย่างหนึ่ง", true);
+    setSending(true);
+    try {
+      await sendEmail({ to: to.trim(), subject: subject.trim() || draft.label, text: body, attachments: atts });
+      flash(`ส่งอีเมล ${draft.label} ให้ลูกค้าแล้ว ✓`);
+      onClose();
+    } catch (e) { flash("ส่งอีเมลไม่สำเร็จ: " + (e.message || e), true); setSending(false); }
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 560, width: "94%" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><div className="modal-title">📧 ส่งอีเมล · {draft.label}</div>
+          <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: "72vh", overflowY: "auto" }}>
+          <label className="fld"><span>ถึง (อีเมลลูกค้า)</span>
+            <input className="inp" type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@email.com" />
+          </label>
+          <label className="fld"><span>หัวข้อ</span>
+            <input className="inp" value={subject} onChange={(e) => setSubject(e.target.value)} />
+          </label>
+          <label className="fld"><span>ข้อความ</span>
+            <textarea className="inp" rows={7} style={{ resize: "vertical" }} value={body} onChange={(e) => setBody(e.target.value)} />
+          </label>
+          {atts.length > 0 && <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "8px 12px", fontSize: 13 }}>
+            📎 ไฟล์แนบ: {atts.map((a) => a.name).join(", ")}
+          </div>}
+          <div className="jo-dim" style={{ fontSize: 11.5 }}>* ส่งจากอีเมลบริษัท (info@amcair.net) · ลูกค้าจะเห็นอีเมลนี้จริง</div>
+        </div>
+        <div className="modal-foot" style={{ gap: 8 }}>
+          <button className="btn-ghost" onClick={onClose} disabled={sending}>ยกเลิก</button>
+          <button className="btn-primary" style={{ flex: 1 }} disabled={sending || !validEmail || (!atts.length && !body.trim())} onClick={send}>
+            {sending ? "กำลังส่ง…" : "📧 ส่งอีเมล"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

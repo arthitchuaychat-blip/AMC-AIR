@@ -1,12 +1,13 @@
 // shared labels/status for the unified document+job history (customer detail & chat panel)
-export const TYPE_LABEL = { quote: "ใบเสนอ", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", job: "ใบงาน", po: "ใบสั่งซื้อ", handover: "ส่งมอบ", creditnote: "ใบลดหนี้", debitnote: "ใบเพิ่มหนี้" };
-export const DOC_FILTERS = [["all", "ทั้งหมด"], ["quote", "ใบเสนอราคา"], ["invoice", "ใบแจ้งหนี้"], ["receipt", "ใบเสร็จ"], ["creditnote", "ใบลดหนี้"], ["debitnote", "ใบเพิ่มหนี้"], ["job", "ใบงาน"], ["handover", "ใบส่งมอบ"]];
+export const TYPE_LABEL = { quote: "ใบเสนอ", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", job: "ใบงาน", po: "ใบสั่งซื้อ", handover: "ส่งมอบ", creditnote: "ใบลดหนี้", debitnote: "ใบเพิ่มหนี้", billing: "ใบวางบิล" };
+export const DOC_FILTERS = [["all", "ทั้งหมด"], ["quote", "ใบเสนอราคา"], ["invoice", "ใบแจ้งหนี้"], ["billing", "ใบวางบิล"], ["receipt", "ใบเสร็จ"], ["creditnote", "ใบลดหนี้"], ["debitnote", "ใบเพิ่มหนี้"], ["job", "ใบงาน"], ["handover", "ใบส่งมอบ"]];
 const DOC_STATUS = {
   quote: { draft: ["ร่าง", "b-grey"], sent: ["ส่งแล้ว", "b-blue"], approved: ["อนุมัติ", "b-green"], rejected: ["ปฏิเสธ", "b-red"], expired: ["หมดอายุ", "b-grey"] },
   invoice: { unpaid: ["ค้างชำระ", "b-amber"], paid: ["ชำระแล้ว", "b-green"], cancelled: ["ยกเลิก", "b-red"] },
   receipt: { pending: ["รอชำระ", "b-amber"], paid: ["ชำระแล้ว", "b-green"] },
   creditnote: { issued: ["ออกแล้ว", "b-green"], cancelled: ["ยกเลิก", "b-red"] },
   debitnote: { issued: ["ออกแล้ว", "b-green"], cancelled: ["ยกเลิก", "b-red"] },
+  billing: { open: ["วางบิลแล้ว", "b-blue"], paid: ["ชำระแล้ว", "b-green"], cancelled: ["ยกเลิก", "b-red"] },
   job: { pending: ["รอจ่ายงาน", "b-grey"], scheduled: ["นัดแล้ว", "b-blue"], in_progress: ["กำลังทำ", "b-amber"], done: ["เสร็จ", "b-green"], cancelled: ["ยกเลิก", "b-red"] },
   handover: { draft: ["ร่าง", "b-grey"], submitted: ["ส่งแล้ว", "b-green"] },
 };
