@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, getCompanies, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -145,6 +145,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [multiSel, setMultiSel] = React.useState(false);      // โหมดเลือกเอกสารหลายใบ
   const [selDocs, setSelDocs] = React.useState(() => new Set()); // คีย์ "type|no" ที่เลือกไว้
   const [batch, setBatch] = React.useState(null);             // { entries, mode, i, imgs, atts, texts } — คิวเตรียมเอกสารหลายใบ
+  const [company, setCompany] = React.useState(null);         // หัวจดหมายบริษัท (โลโก้/ที่อยู่/ช่องทางติดต่อ) สำหรับอีเมล
+  React.useEffect(() => { getCompanies().then((c) => setCompany((c.vat && Object.keys(c.vat).length) ? c.vat : c.novat)).catch(() => {}); }, []);
   const [capJob, setCapJob] = React.useState(null); // { type, no, mode, to, label } → render off-screen + capture + send
   const startSend = (e, mode) => { setSendMenuFor(null); setCapJob({ type: e.type, no: e.no, mode, to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}`, email: selCust?.email || "", custName: selCust?.name || "" }); flash(mode === "email" ? "กำลังเตรียมเอกสารสำหรับอีเมล…" : "กำลังเตรียมเอกสาร…"); };
   // ── ส่งหลายเอกสารพร้อมกัน ──
@@ -1571,15 +1573,40 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
           onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setBatch(null); }}
           onReady={batchOnReady} />
       )}
-      {emailDoc && <EmailDocModal draft={emailDoc} onClose={() => setEmailDoc(null)} flash={flash} />}
+      {emailDoc && <EmailDocModal draft={emailDoc} company={company} onClose={() => setEmailDoc(null)} flash={flash} />}
       {peekEl}
       {toast && <div className={"chat-toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );
 }
 
+/* ─── หัวจดหมายอีเมล (โลโก้ + ข้อมูลบริษัท + ช่องทางติดต่อ) ─── */
+function buildEmailHtml(co, bodyText) {
+  const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const bodyHtml = esc(bodyText).replace(/\n/g, "<br>");
+  const contacts = [];
+  if (co?.phone) contacts.push(`📞 โทร. ${esc(co.phone)}`);
+  if (co?.line_id) contacts.push(`💬 LINE: ${esc(co.line_id)}`);
+  if (co?.website) contacts.push(`🌐 ${esc(co.website)}`);
+  if (co?.email) contacts.push(`✉️ ${esc(co.email)}`);
+  const logo = co?.logo_url ? `<img src="${esc(co.logo_url)}" alt="" style="height:56px;max-width:200px;object-fit:contain" />` : "";
+  return `<div style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#1f2937;max-width:600px;margin:0 auto;padding:4px">
+    <div style="border-bottom:3px solid #1d4ed8;padding-bottom:14px;margin-bottom:18px">
+      ${logo ? `<div style="margin-bottom:8px">${logo}</div>` : ""}
+      <div style="font-size:19px;font-weight:700;color:#1d4ed8">${esc(co?.name || "AMC AIR")}</div>
+      ${co?.address ? `<div style="font-size:12.5px;color:#6b7280;margin-top:4px;line-height:1.5">${esc(co.address)}</div>` : ""}
+      ${co?.tax_id ? `<div style="font-size:12.5px;color:#6b7280">เลขประจำตัวผู้เสียภาษี ${esc(co.tax_id)}</div>` : ""}
+    </div>
+    <div style="font-size:14px;line-height:1.75">${bodyHtml}</div>
+    <div style="border-top:1px solid #e5e7eb;margin-top:24px;padding-top:14px;font-size:12.5px;color:#4b5563">
+      <div style="font-weight:700;color:#111827;margin-bottom:6px">ช่องทางติดต่อ</div>
+      ${contacts.map((c) => `<div style="margin:2px 0">${c}</div>`).join("")}
+    </div>
+  </div>`;
+}
+
 /* ─── คอมโพสอีเมลส่งเอกสารขายให้ลูกค้า (แนบ PDF) ─── */
-function EmailDocModal({ draft, onClose, flash }) {
+function EmailDocModal({ draft, company, onClose, flash }) {
   const [to, setTo] = React.useState(draft.to || "");
   const [subject, setSubject] = React.useState(draft.subject || "");
   const [body, setBody] = React.useState(draft.body || "");
@@ -1591,7 +1618,7 @@ function EmailDocModal({ draft, onClose, flash }) {
     if (!atts.length && !body.trim()) return flash("ต้องมีข้อความหรือไฟล์แนบอย่างน้อยอย่างหนึ่ง", true);
     setSending(true);
     try {
-      await sendEmail({ to: to.trim(), subject: subject.trim() || draft.label, text: body, attachments: atts });
+      await sendEmail({ to: to.trim(), subject: subject.trim() || draft.label, text: body, html: buildEmailHtml(company, body), attachments: atts });
       flash(`ส่งอีเมล ${draft.label} ให้ลูกค้าแล้ว ✓`);
       onClose();
     } catch (e) { flash("ส่งอีเมลไม่สำเร็จ: " + (e.message || e), true); setSending(false); }
@@ -1614,7 +1641,7 @@ function EmailDocModal({ draft, onClose, flash }) {
           {atts.length > 0 && <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "8px 12px", fontSize: 13 }}>
             📎 ไฟล์แนบ: {atts.map((a) => a.name).join(", ")}
           </div>}
-          <div className="jo-dim" style={{ fontSize: 11.5 }}>* ส่งจากอีเมลบริษัท (info@amcair.net) · ลูกค้าจะเห็นอีเมลนี้จริง</div>
+          <div className="jo-dim" style={{ fontSize: 11.5 }}>* ส่งจากอีเมลบริษัท (info@amcair.net) · ระบบจะใส่ <b>หัวจดหมาย (โลโก้ + ข้อมูลบริษัท + ช่องทางติดต่อ)</b> ให้อัตโนมัติ · ลูกค้าเห็นอีเมลนี้จริง</div>
         </div>
         <div className="modal-foot" style={{ gap: 8 }}>
           <button className="btn-ghost" onClick={onClose} disabled={sending}>ยกเลิก</button>

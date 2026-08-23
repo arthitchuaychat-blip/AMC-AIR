@@ -1668,11 +1668,13 @@ export function getCompanies() {
 // kind: "vat" (id=1) | "novat" (id=2)
 export async function saveCompany(c, kind) {
   const id = kind === "novat" ? 2 : 1;
-  const { error } = await supabase.from("company_profile").upsert({
+  const row = {
     id, name: c.name?.trim() || null, branch: c.branch?.trim() || null, address: c.address?.trim() || null,
     tax_id: c.tax_id?.trim() || null, phone: c.phone?.trim() || null, email: c.email?.trim() || null,
-    website: c.website?.trim() || null, bank_info: c.bank_info?.trim() || null, default_terms: c.default_terms?.trim() || null,
-  }, { onConflict: "id" });
+    website: c.website?.trim() || null, line_id: c.line_id?.trim() || null, bank_info: c.bank_info?.trim() || null, default_terms: c.default_terms?.trim() || null,
+  };
+  let { error } = await supabase.from("company_profile").upsert(row, { onConflict: "id" });
+  if (error && /line_id|PGRST204/i.test(error.message || "")) { delete row.line_id; ({ error } = await supabase.from("company_profile").upsert(row, { onConflict: "id" })); } // pre-224 fallback
   if (error) throw error;
   bustCache("companies");
 }
@@ -4492,10 +4494,10 @@ export async function syncEmails() {
   if (!r.ok) throw new Error(j.error || "ดึงอีเมลไม่สำเร็จ");
   return j;
 }
-export async function sendEmail({ threadId, to, subject, text, attachments }) {
+export async function sendEmail({ threadId, to, subject, text, html, attachments }) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("ยังไม่ได้เข้าสู่ระบบ");
-  const r = await fetch("/api/email-send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ threadId, to, subject, text, attachments }) });
+  const r = await fetch("/api/email-send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ threadId, to, subject, text, html, attachments }) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw new Error(j.error || "ส่งอีเมลไม่สำเร็จ");
   return j;

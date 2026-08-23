@@ -23,9 +23,9 @@ export default async function handler(req, res) {
     const prof = (await sbGet(`profiles?id=eq.${user.id}&select=role`))[0];
     if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
 
-    const { threadId, to, subject, text, attachments } = await readJson(req);
+    const { threadId, to, subject, text, html, attachments } = await readJson(req);
     const atts = Array.isArray(attachments) ? attachments : [];
-    if (!to || (!text?.trim() && !atts.length)) return res.status(400).json({ error: "missing to/text" });
+    if (!to || (!text?.trim() && !html && !atts.length)) return res.status(400).json({ error: "missing to/text" });
     const self = process.env.GMAIL_ADDRESS;
 
     // หา Message-ID ของเมลเข้าล่าสุดในเธรด → ตอบให้ต่อเธรดถูกต้อง
@@ -45,12 +45,26 @@ export default async function handler(req, res) {
       "MIME-Version: 1.0",
     ].filter((x) => x !== null);
 
+    // บล็อกเนื้อความ: ถ้ามี html ส่งเป็น multipart/alternative (text + html) · ไม่งั้น text/plain ล้วน
+    const rnd = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const textPart = `Content-Type: text/plain; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(bodyText, "utf8").toString("base64")}`;
+    let bodyHeaders, bodyContent;
+    if (html) {
+      const altB = "amcalt_" + rnd();
+      const htmlPart = `Content-Type: text/html; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(html, "utf8").toString("base64")}`;
+      bodyHeaders = `Content-Type: multipart/alternative; boundary="${altB}"`;
+      bodyContent = [`--${altB}`, textPart, `--${altB}`, htmlPart, `--${altB}--`].join("\r\n");
+    } else {
+      bodyHeaders = 'Content-Type: text/plain; charset="UTF-8"\r\nContent-Transfer-Encoding: base64';
+      bodyContent = Buffer.from(bodyText, "utf8").toString("base64");
+    }
+
     let mime;
     if (!atts.length) {
-      mime = [...head, 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", Buffer.from(bodyText, "utf8").toString("base64")].join("\r\n");
+      mime = [...head, bodyHeaders, "", bodyContent].join("\r\n");
     } else {
-      const boundary = "amcmix_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-      const parts = [`--${boundary}`, 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", Buffer.from(bodyText, "utf8").toString("base64")];
+      const boundary = "amcmix_" + rnd();
+      const parts = [`--${boundary}`, bodyHeaders, "", bodyContent];
       for (const a of atts) {
         try {
           const fr = await fetch(a.url);
