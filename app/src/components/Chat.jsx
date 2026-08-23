@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -241,6 +241,17 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function toggleAiOff(off) {
     try { await (isFb ? setFbAiOff(sel, off) : setLineAiOff(sel, off)); await loadContacts(); flash(off ? "ปิดบอท AI ห้องนี้แล้ว — มีแต่คนตอบ" : "เปิดบอท AI ห้องนี้แล้ว"); }
     catch (e) { flash("เปลี่ยนไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // ปักหมุดแชต (ดันขึ้นบนสุด) + เปลี่ยนชื่อลูกค้าในแชต — ทุกแพลตฟอร์ม (mig 223)
+  async function togglePin(c) {
+    try { await (isFb ? setFbPinned(c.line_user_id, !c.pinned) : setLinePinned(c.line_user_id, !c.pinned)); await loadContacts(); flash(!c.pinned ? "ปักหมุดแชตไว้ด้านบนแล้ว 📌" : "ยกเลิกปักหมุดแล้ว"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  async function renameContact(c) {
+    const name = window.prompt("ตั้งชื่อลูกค้าในแชต (เว้นว่าง = ใช้ชื่อโปรไฟล์เดิม):", c.custom_name || c.display_name || "");
+    if (name === null) return;
+    try { await (isFb ? setFbName(c.line_user_id, name) : setLineName(c.line_user_id, name)); await loadContacts(); flash("เปลี่ยนชื่อแล้ว ✓"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   React.useEffect(() => { selRef.current = sel; }, [sel]);
   // teams + jobs for the คิวช่าง panel (so we can answer queue questions instantly)
@@ -670,8 +681,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     && (isFb ? true : isSup ? c.kind === "supplier" : (c.kind || "customer") !== "supplier")
     // ชื่อ/ลูกค้าที่ผูก/ข้อความล่าสุด/เบอร์ — หรือเจอคำนี้ในประวัติแชตของห้องนั้น (ค้นจากเซิร์ฟเวอร์)
     && (matchText(q, c.display_name, c.customerName, c.last_message) || matchPhone(q, c.phone) || !!msgHits[c.line_user_id]))
-    // ห้องที่ยังไม่อ่านลอยขึ้นบนสุดเสมอ · ที่เหลือเรียงตามข้อความล่าสุด
+    // ปักหมุดขึ้นบนสุดก่อน · แล้วห้องที่ยังไม่อ่าน · ที่เหลือเรียงตามข้อความล่าสุด
     .sort((a, b) => {
+      const ap = a.pinned ? 1 : 0, bp = b.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
       const au = (a.unread || 0) > 0 ? 1 : 0, bu = (b.unread || 0) > 0 ? 1 : 0;
       if (au !== bu) return bu - au;
       return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
@@ -753,7 +766,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <button key={c.line_user_id} className={"chat-convo" + (sel === c.line_user_id ? " on" : "")} onClick={() => openContact(c)}>
                 <div className="chat-av">{c.picture_url ? <img src={c.picture_url} alt="" /> : initial(c.display_name)}</div>
                 <div className="chat-convo-body">
-                  <div className="chat-convo-top"><b>{c.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</b><span title={c.last_message_at ? new Date(c.last_message_at).toLocaleString("th-TH") : ""}>{fmtWhen(c.last_message_at)}</span></div>
+                  <div className="chat-convo-top"><b>{c.pinned ? "📌 " : ""}{c.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</b><span title={c.last_message_at ? new Date(c.last_message_at).toLocaleString("th-TH") : ""}>{fmtWhen(c.last_message_at)}</span></div>
                   {/* เจอคำค้นในประวัติแชต → โชว์ข้อความที่ตรงแทนข้อความล่าสุด จะได้รู้ว่าเจอเพราะอะไร */}
                   {msgHits[c.line_user_id]
                     ? <div className="chat-convo-last chat-convo-hit" title={msgHits[c.line_user_id].text || ""}>
@@ -782,12 +795,15 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                 <button className="chat-back" onClick={() => setShowThread(false)}><UIcon name="chevR" size={18} style={{ transform: "rotate(180deg)" }} /></button>
                 <div className="chat-av sm">{selContact.picture_url ? <img src={selContact.picture_url} alt="" /> : initial(selContact.display_name)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="chat-thread-name">{selContact.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</div>
+                  <div className="chat-thread-name">{selContact.pinned ? "📌 " : ""}{selContact.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}
+                    {canSend && <button className="chat-name-edit" title="เปลี่ยนชื่อลูกค้าในแชต" onClick={() => renameContact(selContact)}>✏️</button>}
+                  </div>
                   <div className="chat-thread-sub" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 8px" }}>
                     <span>{selContact.customerName ? `🔗 ${selContact.customerName}` : "ยังไม่เชื่อมลูกค้า"}</span>
                     {!isSup && <span className="conv-owner">👤 {(selContact.assigned_to && staffMap[selContact.assigned_to]) || "ยังไม่มีผู้รับผิดชอบ"}</span>}
                   </div>
                 </div>
+                {canSend && <button className={"chat-hd-btn" + (selContact.pinned ? " on" : "")} onClick={() => togglePin(selContact)} title={selContact.pinned ? "ยกเลิกปักหมุด" : "ปักหมุดแชตนี้ไว้ด้านบน"}>📌</button>}
                 {canSend && onCreateTask && <button className="chat-info-toggle" onClick={() => onCreateTask(selContact.customer_id || null, selContact.customerName || selContact.display_name)} title="สร้างงานในกระดานสั่งงาน">✅</button>}
                 <button className="chat-info-toggle" onClick={() => setShowInfo((s) => !s)} title="ข้อมูลลูกค้า"><UIcon name="building" size={18} /></button>
               </div>

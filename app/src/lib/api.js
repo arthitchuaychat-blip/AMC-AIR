@@ -4330,7 +4330,7 @@ export async function listLineContacts() {
   return (c.data || []).map((r) => {
     let ids = byUid[r.line_user_id] || [];
     if (r.customer_id && !ids.some((x) => String(x) === String(r.customer_id))) ids = [r.customer_id, ...ids]; // active not yet in join (legacy)
-    return { ...r, customerName: r.customer_id ? cn[r.customer_id] : null, custIds: ids };
+    return { ...r, display_name: r.custom_name || r.display_name, customerName: r.customer_id ? cn[r.customer_id] : null, custIds: ids };
   });
 }
 // link an ADDITIONAL customer to a LINE chat + make it the active one (drives the info panel)
@@ -4405,7 +4405,7 @@ export async function listFbContacts() {
   if (c.error) throw c.error;
   const cn = Object.fromEntries((cu.data || []).map((x) => [x.id, x.name]));
   // line_user_id alias so the existing inbox UI can render FB contacts unchanged
-  return (c.data || []).map((r) => ({ ...r, line_user_id: r.psid, channel: "fb", customerName: r.customer_id ? cn[r.customer_id] : null }));
+  return (c.data || []).map((r) => ({ ...r, line_user_id: r.psid, channel: "fb", display_name: r.custom_name || r.display_name, customerName: r.customer_id ? cn[r.customer_id] : null }));
 }
 // ใหม่→เก่า + limit แล้วกลับลำดับ ด้วยเหตุผลเดียวกับ listLineMessages (ไม่งั้นข้อความใหม่หายทั้งห้อง)
 export async function listFbMessages(psid, { limit = CHAT_TAIL, before } = {}) {
@@ -4557,6 +4557,12 @@ export async function setFbOwner(psid, userId) { const { error } = await supabas
 export async function setFbNote(psid, note) { const { error } = await supabase.from("fb_contacts").update({ note: note || null }).eq("psid", psid); if (error) throw _noteErr(error); }
 export async function setFbTags(psid, tags) { const { error } = await supabase.from("fb_contacts").update({ tags: (tags && tags.length) ? tags : null }).eq("psid", psid); if (error) throw _noteErr(error); }
 export async function setFbAiOff(psid, off) { const { error } = await supabase.from("fb_contacts").update({ ai_off: !!off }).eq("psid", psid); if (error) throw new Error(/ai_off|PGRST204/i.test(error.message || "") ? "ต้องรัน migration 222 ใน Supabase ก่อน" : error.message); }
+// ปักหมุดแชต + เปลี่ยนชื่อลูกค้าในแชต (mig 223) — custom_name ว่าง = คืนชื่อโปรไฟล์เดิม
+const _pinErr = (e) => new Error(/pinned|custom_name|PGRST204/i.test(e.message || "") ? "ต้องรัน migration 223 ใน Supabase ก่อน" : e.message);
+export async function setLinePinned(uid, pinned) { const { error } = await supabase.from("line_contacts").update({ pinned: !!pinned }).eq("line_user_id", uid); if (error) throw _pinErr(error); }
+export async function setFbPinned(psid, pinned) { const { error } = await supabase.from("fb_contacts").update({ pinned: !!pinned }).eq("psid", psid); if (error) throw _pinErr(error); }
+export async function setLineName(uid, name) { const { error } = await supabase.from("line_contacts").update({ custom_name: (name || "").trim() || null }).eq("line_user_id", uid); if (error) throw _pinErr(error); }
+export async function setFbName(psid, name) { const { error } = await supabase.from("fb_contacts").update({ custom_name: (name || "").trim() || null }).eq("psid", psid); if (error) throw _pinErr(error); }
 // ค้นหาข้อความ FB (mirror searchLineMessages) — คืน map keyed by psid (= line_user_id ที่ alias ไว้)
 export async function searchFbMessages(term, { limit = 300 } = {}) {
   const t = String(term || "").trim(); if (t.length < 2) return {};
