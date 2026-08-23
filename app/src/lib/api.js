@@ -3368,6 +3368,15 @@ export async function searchTransactions(q, codes = [], limit = 400) {
   return [...(full.data || []), ...(data || []).filter((r) => !r.ref_no)];
 }
 
+// ธุรกรรมตามช่วงวันที่ (YYYY-MM-DD) — ใหม่→เก่า · ผ่าน _fetchAll (ไม่ติดเพดาน 1000 แถว) สำหรับหน้าเคลื่อนไหวสินค้า
+export async function listTransactionsRange(from, to) {
+  return _fetchAll((f, t) => {
+    let q = supabase.from("transactions").select("*", { count: "exact" }).order("id", { ascending: false });
+    if (from) q = q.gte("txn_date", from);
+    if (to) q = q.lte("txn_date", to);
+    return q.range(f, t);
+  });
+}
 // transactions since a date (YYYY-MM-DD); null = all-time. For dashboards.
 export async function listTransactionsSince(startDate) {
   // limit(10000) ใช้ไม่ได้จริง — Supabase ตัดที่ 1000 แถวเสมอ ต้องดึงเป็นช่วง ๆ

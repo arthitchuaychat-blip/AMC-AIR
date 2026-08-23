@@ -1,7 +1,8 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, searchTransactions, deleteTransaction, cancelTransactionGroup, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived, unmarkPoReceived, getStockByCodes } from "../lib/api";
+import { listMaterials, listMaterialsLite, listTeams, recordTransactions, listRecentTransactions, searchTransactions, listTransactionsRange, deleteTransaction, cancelTransactionGroup, updateTransaction, listOpenJobs, listJobOrders, updateMaterialCost, markPoReceived, unmarkPoReceived, getStockByCodes } from "../lib/api";
+import DateRangeBar from "./DateRangeBar";
 import { fmtBaht, fmtNum, matchText } from "../lib/format";
 import { can } from "../lib/permissions";
 import { scheduleLabel } from "../lib/schedule";
@@ -411,6 +412,20 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   // พิมพ์ค้นแล้วยิงถามฐานข้อมูลทั้งประวัติ (debounce) — ไม่จำกัดแค่ 60 รายการล่าสุดที่โหลดมา
   const [refQ, setRefQ] = React.useState("");
   const [searchRows, setSearchRows] = React.useState(null);   // null = ไม่ได้ค้น → ใช้รายการล่าสุดตามปกติ
+  // ช่วงวันที่ (ว่าง = แสดง 60 รายการล่าสุดเหมือนเดิม) — เลือกช่วงแล้วดึงทั้งช่วง (ไม่ติดเพดาน)
+  const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const dateActive = !!(dateR.from || dateR.to);
+  const [rangeRows, setRangeRows] = React.useState(null);
+  const [rangeLoading, setRangeLoading] = React.useState(false);
+  React.useEffect(() => {
+    if (!dateActive) { setRangeRows(null); return; }
+    let dead = false; setRangeLoading(true);
+    listTransactionsRange(dateR.from || null, dateR.to || null)
+      .then((rows) => { if (!dead) setRangeRows(rows || []); })
+      .catch(() => { if (!dead) setRangeRows([]); })
+      .finally(() => { if (!dead) setRangeLoading(false); });
+    return () => { dead = true; };
+  }, [dateR.from, dateR.to]);
   React.useEffect(() => {
     const t = refQ.trim();
     if (t.length < 2) { setSearchRows(null); return; }
@@ -425,7 +440,9 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     return () => { dead = true; clearTimeout(h); };
   }, [refQ, mats]);
   const searchGroups = React.useMemo(() => (searchRows == null ? null : buildGroups(searchRows)), [searchRows]);
-  const baseGroups = searchGroups ?? groups;
+  const rangeGroups = React.useMemo(() => (rangeRows == null ? null : buildGroups(rangeRows)), [rangeRows]);
+  // เลือกช่วงวันที่ → ใช้ข้อมูลทั้งช่วง (ค้นข้อความกรองในช่วงต่อ) · ไม่เลือกช่วง → ค้นทั้งประวัติ/รายการล่าสุด
+  const baseGroups = dateActive ? (rangeGroups ?? []) : (searchGroups ?? groups);
   const shownGroups = refQ.trim()
     ? baseGroups.filter((g) => matchText(refQ, g.ref_no, g.job_no, g.team)
         || g.rows.some((r) => matchText(refQ, r.material_code, matMap[r.material_code]?.th)))
@@ -687,17 +704,21 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           )}
         </div>
 
-        {/* RECENT */}
+        {/* RECENT / ประวัติตามช่วงวันที่ */}
         <div className="card">
-          <div className="sec-head"><div className="sec-title">รายการล่าสุด <span className="sec-sub">{refQ.trim() ? `พบ ${shownGroups.length} ชุด (ค้นทั้งประวัติ)` : `${recent.length} รายการ`} · กดพิมพ์/ยกเลิกได้</span></div></div>
+          <div className="sec-head"><div className="sec-title">{dateActive ? "ประวัติเคลื่อนไหว" : "รายการล่าสุด"} <span className="sec-sub">{dateActive ? `${shownGroups.length} ชุด ในช่วงที่เลือก` : refQ.trim() ? `พบ ${shownGroups.length} ชุด (ค้นทั้งประวัติ)` : `${recent.length} รายการล่าสุด`} · กดพิมพ์/ยกเลิกได้</span></div></div>
           <div className="cat-search" style={{ marginBottom: 8 }}>
             <UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาเลข PO / ใบงาน / เลขเอกสาร / วัสดุ" value={refQ} onChange={(e) => setRefQ(e.target.value)} />
             {refQ && <button className="cat-search-x" onClick={() => setRefQ("")}><UIcon name="x" size={14} /></button>}
           </div>
-          {loading && <div className="empty sm">กำลังโหลด…</div>}
-          {!loading && recent.length === 0 && <div className="empty sm">ยังไม่มีธุรกรรม</div>}
-          {!loading && recent.length > 0 && shownGroups.length === 0 && <div className="empty sm">ไม่พบรายการที่ตรงกับ "{refQ}"</div>}
+          <div style={{ marginBottom: 10 }}>
+            <DateRangeBar value={dateR} onChange={setDateR} />
+            {!dateActive && <div className="jo-dim" style={{ fontSize: 11.5, marginTop: 4 }}>เลือกช่วงวันที่เพื่อดูย้อนหลังเกิน 60 รายการ (ไม่เลือก = 60 รายการล่าสุด)</div>}
+          </div>
+          {(loading || rangeLoading) && <div className="empty sm">กำลังโหลด…</div>}
+          {!loading && !dateActive && recent.length === 0 && <div className="empty sm">ยังไม่มีธุรกรรม</div>}
+          {!rangeLoading && !loading && shownGroups.length === 0 && (dateActive || recent.length > 0) && <div className="empty sm">{dateActive ? "ไม่พบธุรกรรมในช่วงวันที่ที่เลือก" : `ไม่พบรายการที่ตรงกับ "${refQ}"`}</div>}
           <div className="ledger">
             {shownGroups.map((g) => {
               const mv = typeOf(g.type);
