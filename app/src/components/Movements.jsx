@@ -98,8 +98,9 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
   // job orders assigned to the picked team (active) — for the เบิก job picker, nearest date first
+  // เบิกให้ได้เฉพาะงานที่ยังไม่ "เสร็จปิดงาน" (done) และยังไม่ยกเลิก — งานปิดแล้วไม่ควรมีการเบิกเพิ่ม
   const teamJobs = React.useMemo(() => jobOrders
-    .filter((j) => j.assigned_team === team && j.status !== "cancelled")
+    .filter((j) => j.assigned_team === team && j.status !== "cancelled" && j.status !== "done")
     .sort((a, b) => (a.scheduled_at || "").localeCompare(b.scheduled_at || "")), [jobOrders, team]);
   // only stock-tracked items can move; then narrow by the picker filters
   const matCats = React.useMemo(() => {
