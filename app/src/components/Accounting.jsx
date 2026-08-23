@@ -9,7 +9,10 @@ const thDate = (s) => new Date(s + "T00:00:00").toLocaleDateString("th-TH", { da
 const CAT_LABEL = { asset: "สินทรัพย์", liability: "หนี้สิน", equity: "ส่วนของเจ้าของ", revenue: "รายได้", expense: "ต้นทุน/ค่าใช้จ่าย" };
 const CAT_ORDER = ["asset", "liability", "equity", "revenue", "expense"];
 const SCOPE_TAG = { company: "🏢 บริษัท", personal: "👤 บุคคล" };
-const REFT = { manual: "ลงเอง", opening: "ยอดยกมา", quotation: "ใบเสนอราคา", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", po: "ใบสั่งซื้อ", expense: "เบิกจ่าย", payroll: "เงินเดือน" };
+const REFT = { manual: "ลงเอง", opening: "ยอดยกมา", quotation: "ใบเสนอราคา", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", po: "รับของ PO", po_pay: "จ่ายเจ้าหนี้", expense: "เบิกจ่าย", payout: "ค่าแรงช่างซัพ", payroll: "เงินเดือน" };
+// สมุดรายวันเฉพาะ (แยกตาม ref_type) — ขาย/ซื้อ/รับ/จ่าย/ทั่วไป
+const BOOK_OF = { invoice: "sales", receipt: "receipt", po: "purchase", po_pay: "payment", expense: "payment", payout: "payment", payroll: "general", manual: "general", opening: "general" };
+const BOOKS = [["all", "ทั้งหมด"], ["sales", "ขาย"], ["purchase", "ซื้อ"], ["receipt", "รับเงิน"], ["payment", "จ่ายเงิน"], ["general", "ทั่วไป"]];
 
 export default function Accounting() {
   const [tab, setTab] = React.useState("pl");            // pl | bs | tb | journal | coa
@@ -21,6 +24,7 @@ export default function Accounting() {
   const [to, setTo] = React.useState(ymd(new Date()));
   const [loading, setLoading] = React.useState(true);
   const [entry, setEntry] = React.useState(null);        // manual-entry modal state | null
+  const [book, setBook] = React.useState("all");         // ตัวกรองสมุดรายวันเฉพาะ
   const [syncing, setSyncing] = React.useState(false);
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
@@ -225,11 +229,19 @@ export default function Accounting() {
       )}
 
       {/* ═══ สมุดรายวัน ═══ */}
-      {tab === "journal" && (
+      {tab === "journal" && (() => {
+        const shown = journal.filter((j) => book === "all" || (BOOK_OF[j.ref_type] || "general") === book);
+        return (
         <div className="acc-card">
-          {loading ? <div className="empty">กำลังโหลด…</div> : journal.length === 0 ? (
-            <div className="empty">ยังไม่มีรายการ — กด “＋ ลงรายการเอง” เพื่อเริ่ม</div>
-          ) : journal.map((j) => (
+          <div className="acc-books">
+            {BOOKS.map(([k, lb]) => {
+              const c = k === "all" ? journal.length : journal.filter((j) => (BOOK_OF[j.ref_type] || "general") === k).length;
+              return <button key={k} className={"acc-book" + (book === k ? " on" : "")} onClick={() => setBook(k)}>{lb}{c ? <span className="acc-book-c">{c}</span> : null}</button>;
+            })}
+          </div>
+          {loading ? <div className="empty">กำลังโหลด…</div> : shown.length === 0 ? (
+            <div className="empty">{book === "all" ? "ยังไม่มีรายการ — กด “＋ ลงรายการเอง” เพื่อเริ่ม" : "ไม่มีรายการในสมุดเล่มนี้"}</div>
+          ) : shown.map((j) => (
             <div key={j.id} className="acc-je">
               <div className="acc-je-head">
                 <span className="acc-je-date">{thDate(j.jdate)}</span>
@@ -254,7 +266,8 @@ export default function Accounting() {
             </div>
           ))}
         </div>
-      )}
+        );
+      })()}
 
       {/* ═══ ผังบัญชี ═══ */}
       {tab === "coa" && (
