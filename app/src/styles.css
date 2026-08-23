@@ -2693,3 +2693,13 @@ button.card.set-fold-head.open{border-color:var(--primary);box-shadow:0 2px 10px
 .acc-book.on{background:var(--primary);color:#fff;border-color:var(--primary)}
 .acc-book-c{font-size:10.5px;font-weight:800;background:var(--surface-2);color:var(--ink-2);border-radius:8px;padding:0 5px}
 .acc-book.on .acc-book-c{background:rgba(255,255,255,.28);color:#fff}
+
+/* ปุ่มลิงก์ไปเอกสาร + บัญชีแยกประเภท */
+.acc-je-link{border:1px solid var(--line);background:var(--surface);color:var(--primary);font-size:11px;font-weight:700;border-radius:8px;padding:3px 9px;cursor:pointer;font-family:inherit}
+.acc-je-link:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+.acc-ledger-pick{margin-bottom:12px}
+.acc-ledger-pick label{font-size:12px;color:var(--ink-3);display:flex;flex-direction:column;gap:4px;max-width:420px}
+.acc-led-open td,.acc-ledger tfoot td{font-weight:800;background:var(--surface-2)}
+.acc-ledger tfoot td{border-top:2px solid var(--ink-2)}
+.acc-led-link{border:none;background:none;color:var(--primary);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:6px}
+.acc-led-link:hover{background:var(--surface-2)}

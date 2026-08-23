@@ -135,7 +135,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-23·บัญชี: แยกสมุดรายวันเฉพาะ (ขาย/ซื้อ/รับ/จ่าย/ทั่วไป) v686";
+const BUILD = "2026-08-23·บัญชี: แยกประเภท (Ledger) + ปุ่มลิงก์จากสมุดรายวันไปเอกสาร v687";
 
 function SetupNotice() {
   return (
@@ -643,7 +643,14 @@ export default function App() {
         {view === "website" && <WebManage role={role} />}
         {view === "profit" && <Profit onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
         {view === "cashflow" && <CashFlow />}
-        {view === "accounting" && <Accounting />}
+        {view === "accounting" && <Accounting onOpenRef={(t, no) => {
+          if (!no) return;
+          if (t === "invoice" || t === "receipt") openDoc(t, no);
+          else if (t === "po" || t === "po_pay") openDoc("po", no);
+          else if (t === "expense") { setExpenseFocus(no); go("expenses"); }
+          else if (t === "payout") go("subcontract");
+          else if (t === "payroll") go("hr");
+        }} />}
         {view === "expenses" && <Expenses role={role} me={profile} onOpenDoc={(t, no) => {
           if (t === "po") { setPoFocus(no); go("po"); }
           else if (t === "job") { setJobFocus(no); go("joborders"); }

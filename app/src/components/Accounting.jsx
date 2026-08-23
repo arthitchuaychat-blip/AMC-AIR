@@ -13,9 +13,11 @@ const REFT = { manual: "ลงเอง", opening: "ยอดยกมา", quot
 // สมุดรายวันเฉพาะ (แยกตาม ref_type) — ขาย/ซื้อ/รับ/จ่าย/ทั่วไป
 const BOOK_OF = { invoice: "sales", receipt: "receipt", po: "purchase", po_pay: "payment", expense: "payment", payout: "payment", payroll: "general", manual: "general", opening: "general" };
 const BOOKS = [["all", "ทั้งหมด"], ["sales", "ขาย"], ["purchase", "ซื้อ"], ["receipt", "รับเงิน"], ["payment", "จ่ายเงิน"], ["general", "ทั่วไป"]];
+const LINKABLE = new Set(["invoice", "receipt", "po", "po_pay", "expense", "payout", "payroll"]);
 
-export default function Accounting() {
-  const [tab, setTab] = React.useState("pl");            // pl | bs | tb | journal | coa
+export default function Accounting({ onOpenRef }) {
+  const [tab, setTab] = React.useState("pl");            // pl | bs | ledger | tb | journal | coa
+  const [ledgerAcct, setLedgerAcct] = React.useState("");
   const [entity, setEntity] = React.useState("all");     // all | company | personal
   const [entities, setEntities] = React.useState([]);
   const [chart, setChart] = React.useState([]);
@@ -64,10 +66,25 @@ export default function Accounting() {
   const [stmtRows, setStmtRows] = React.useState([]);
   const [stmtLoading, setStmtLoading] = React.useState(false);
   React.useEffect(() => {
-    if (tab !== "pl" && tab !== "bs") return;
+    if (tab !== "pl" && tab !== "bs" && tab !== "ledger") return;
     setStmtLoading(true);
     listJournal({ entity, to }).then(setStmtRows).catch((e) => flash(e.message || "โหลดไม่สำเร็จ", true)).finally(() => setStmtLoading(false));
   }, [tab, entity, to]);
+
+  // ── บัญชีแยกประเภท (Ledger) — รายการของบัญชีที่เลือก + ยอดยกมา + คงเหลือวิ่ง ──
+  const ledger = React.useMemo(() => {
+    if (!ledgerAcct) return null;
+    const meta = chartMap[ledgerAcct] || {};
+    const sideDebit = meta.normal_side !== "credit";
+    const rows = [];
+    stmtRows.forEach((j) => (j.lines || []).forEach((l) => { if (l.account_code === ledgerAcct) rows.push({ jdate: j.jdate, id: j.id, ref_type: j.ref_type, ref_no: j.ref_no, memo: j.memo, debit: Number(l.debit) || 0, credit: Number(l.credit) || 0 }); }));
+    rows.sort((a, b) => a.jdate < b.jdate ? -1 : a.jdate > b.jdate ? 1 : (a.id - b.id));
+    const opening = rows.filter((r) => r.jdate < from).reduce((s, r) => s + r.debit - r.credit, 0);
+    let bal = opening; const out = [];
+    rows.filter((r) => r.jdate >= from && r.jdate <= to).forEach((r) => { bal += r.debit - r.credit; out.push({ ...r, bal }); });
+    const disp = (v) => sideDebit ? v : -v;
+    return { meta, opening: disp(opening), rows: out.map((r) => ({ ...r, balDisp: disp(r.bal) })), closing: disp(bal) };
+  }, [ledgerAcct, stmtRows, from, to, chartMap]);
 
   const stmt = React.useMemo(() => {
     const yearStart = `${(to || ymd(new Date())).slice(0, 4)}-01-01`;
@@ -144,7 +161,7 @@ export default function Accounting() {
 
       {/* ── แท็บ ── */}
       <div className="view-seg acc-tabs">
-        {[["pl", "งบกำไรขาดทุน"], ["bs", "งบแสดงฐานะ"], ["tb", "งบทดลอง"], ["journal", "สมุดรายวัน"], ["coa", "ผังบัญชี"]].map(([k, lb]) => (
+        {[["pl", "งบกำไรขาดทุน"], ["bs", "งบแสดงฐานะ"], ["ledger", "แยกประเภท"], ["tb", "งบทดลอง"], ["journal", "สมุดรายวัน"], ["coa", "ผังบัญชี"]].map(([k, lb]) => (
           <button key={k} className={"seg-btn" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{lb}</button>
         ))}
       </div>
@@ -152,7 +169,7 @@ export default function Accounting() {
       {/* ── ช่วงวันที่ ── */}
       {tab !== "coa" && (
         <div className="acc-daterow">
-          {(tab === "tb" || tab === "journal") && <label>ตั้งแต่ <input type="date" className="inp" value={from} onChange={(e) => setFrom(e.target.value)} /></label>}
+          {(tab === "tb" || tab === "journal" || tab === "ledger") && <label>ตั้งแต่ <input type="date" className="inp" value={from} onChange={(e) => setFrom(e.target.value)} /></label>}
           <label>{tab === "pl" ? "งวดถึง" : tab === "bs" ? "ณ วันที่" : "ถึง"} <input type="date" className="inp" value={to} onChange={(e) => setTo(e.target.value)} /></label>
           {tab === "pl" && <span className="acc-hint">งวดปี {to.slice(0, 4)} (ม.ค. – {thDate(to)})</span>}
           {tab === "journal" && <button className="btn-ghost" disabled={syncing} onClick={runAutoPost}>{syncing ? "กำลังดึง…" : "⟳ ดึงเอกสารเข้าบัญชี"}</button>}
@@ -194,6 +211,39 @@ export default function Accounting() {
                 <StmtSection title="ส่วนของเจ้าของ" rows={[...stmt.bs.equityRows, { code: "—", name: "กำไร(ขาดทุน)สะสม + งวดนี้", amt: stmt.bs.netIncomeAll }]} total={stmt.bs.equity} />
                 <StmtTotal label={"รวมหนี้สินและส่วนของเจ้าของ" + (stmt.bs.balanced ? " ✓" : " ⚠ ไม่สมดุล")} amt={stmt.bs.liab + stmt.bs.equity} grand ok={stmt.bs.balanced} />
               </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* ═══ บัญชีแยกประเภท (Ledger) ═══ */}
+      {tab === "ledger" && (
+        <div className="acc-card">
+          <div className="acc-ledger-pick">
+            <label>เลือกบัญชี
+              <select className="inp" value={ledgerAcct} onChange={(e) => setLedgerAcct(e.target.value)}>
+                <option value="">— เลือกบัญชี —</option>
+                {CAT_ORDER.map((cat) => { const rs = chart.filter((a) => a.category === cat); return rs.length ? <optgroup key={cat} label={CAT_LABEL[cat]}>{rs.map((a) => <option key={a.code} value={a.code}>{a.code} · {a.name}</option>)}</optgroup> : null; })}
+              </select>
+            </label>
+          </div>
+          {!ledgerAcct ? <div className="empty">เลือกบัญชีเพื่อดูรายการเดินบัญชี</div> : stmtLoading ? <div className="empty">กำลังโหลด…</div> : (
+            <table className="acc-table acc-ledger">
+              <thead><tr><th>วันที่</th><th>รายการ</th><th className="r">เดบิต</th><th className="r">เครดิต</th><th className="r">คงเหลือ</th><th></th></tr></thead>
+              <tbody>
+                <tr className="acc-led-open"><td colSpan={4}>ยอดยกมา (ก่อน {thDate(from)})</td><td className="r mono">{fmtBaht(ledger.opening)}</td><td></td></tr>
+                {ledger.rows.map((r, i) => (
+                  <tr key={r.id + "-" + i}>
+                    <td className="mono">{thDate(r.jdate)}</td>
+                    <td>{REFT[r.ref_type] || r.ref_type}{r.ref_no ? ` ${r.ref_no}` : ""}{r.memo ? <span className="acc-jl-memo"> · {r.memo}</span> : null}</td>
+                    <td className="r mono">{r.debit ? fmtBaht(r.debit) : ""}</td>
+                    <td className="r mono">{r.credit ? fmtBaht(r.credit) : ""}</td>
+                    <td className="r mono">{fmtBaht(r.balDisp)}</td>
+                    <td>{onOpenRef && LINKABLE.has(r.ref_type) && r.ref_no && <button className="acc-led-link" title="เปิดเอกสาร" onClick={() => onOpenRef(r.ref_type, r.ref_no)}>↗</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr><td colSpan={4}>ยอดคงเหลือ ณ {thDate(to)}</td><td className="r mono">{fmtBaht(ledger.closing)}</td><td></td></tr></tfoot>
             </table>
           )}
         </div>
@@ -249,6 +299,7 @@ export default function Accounting() {
                 <span className="acc-je-ref">{REFT[j.ref_type] || j.ref_type}{j.ref_no ? ` · ${j.ref_no}` : ""}</span>
                 {j.source === "manual" && <span className="acc-je-tag">ลงเอง</span>}
                 <span className="acc-je-memo">{j.memo || ""}</span>
+                {onOpenRef && LINKABLE.has(j.ref_type) && j.ref_no && <button className="acc-je-link" title="เปิดเอกสารต้นทาง" onClick={() => onOpenRef(j.ref_type, j.ref_no)}>↗ เอกสาร</button>}
                 <button className="acc-je-void" title="ยกเลิกรายการ" onClick={() => doVoid(j)}>✕</button>
               </div>
               <table className="acc-jelines">
