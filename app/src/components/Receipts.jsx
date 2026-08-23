@@ -296,7 +296,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           return (
           <div className={"card job-card doc2" + (x.status !== "pending" ? " closed" : "")} key={x.receipt_no}>
             <DocCardHead no={x.receipt_no} onClick={() => openPeek("receipt", x.receipt_no)}
-              badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span>{x.flowaccount_no && <span className="fa-no-badge" title="เลขที่เอกสารใน FlowAccount"><b>FlowAccount</b> {x.flowaccount_no}</span>}</>}
+              badges={<><span className={"job-badge " + st.cls}>{st.th}</span>{round2(x.net || 0) < 0.01 && round2(x.total || 0) < 0.01 && <span className="job-badge b-grey">🎁 ไม่เก็บเงิน</span>}<span className={"vat-badge " + (quoteByNo[x.quote_no]?.vat ? "vat-on" : "vat-off")}>{quoteByNo[x.quote_no]?.vat ? "VAT" : "NO VAT"}</span>{x.flowaccount_no && <span className="fa-no-badge" title="เลขที่เอกสารใน FlowAccount"><b>FlowAccount</b> {x.flowaccount_no}</span>}</>}
               title={x.title} sub={<span className="dch-more">ดูตัวอย่าง ›</span>} by={x.createdByName}
               date={x.issue_date || x.created_at}
               amountNode={x.wht_amt > 0 ? (

@@ -97,10 +97,16 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     const q = quoteByNo[qno];
     setEd((e) => ({ ...e, quote_no: qno, due_date: e.due_date || dueFromTerms(e.issue_date, q?.customer_id), wht_rate: Number(q?.wht_rate) || 3, note: e.note || q?.note || "", internal_note: e.internal_note || q?.internal_note || "", terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
   }
-  // approved quotes that still have a balance to bill (shown in the picker)
-  const billableQuotes = approvedQuotes.filter((q) => round2((q.grand || 0) - (billed[q.quote_no] || 0)) > 0.01);
+  // งานฟรี/ไม่เก็บเงิน = ใบเสนอราคายอดรวม 0 (เช่น งานรับประกัน/อภินันทนาการ) → ออกใบแจ้งหนี้ ฿0 ได้ 1 ใบเพื่อปิดงาน
+  const isFreeQuote = (q) => round2(q?.grand || 0) < 0.01;
+  const invoicedQuotes = React.useMemo(() => new Set((list || []).filter((x) => x.status !== "cancelled").map((x) => x.quote_no)), [list]);
+  // approved quotes that still have a balance to bill · งานฟรีที่ยังไม่เคยออกใบแจ้งหนี้ก็ขึ้นให้เลือก (ออกได้ 1 ใบ)
+  const billableQuotes = approvedQuotes.filter((q) => isFreeQuote(q)
+    ? !invoicedQuotes.has(q.quote_no)
+    : round2((q.grand || 0) - (billed[q.quote_no] || 0)) > 0.01);
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   const selQ = ed?.quote_no ? quoteByNo[ed.quote_no] : null;
+  const freeJob = selQ && isFreeQuote(selQ);
   const remaining = selQ ? Math.max(0, round2((selQ.grand || 0) - (billed[selQ.quote_no] || 0))) : 0;
   const newTotal = (() => {
     if (!selQ) return 0;
@@ -141,8 +147,12 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       message: "ใบนี้จะไม่ถูกนับว่า “เกินกำหนด” ในรายงานลูกหนี้ และกระแสเงินสดจะถือว่าเงินเข้าวันที่ออกบิล\n\nตั้งเครดิตเทอมของลูกค้าไว้ที่หน้าลูกค้า แล้วระบบจะเติมวันครบกำหนดให้เองทุกใบ",
       confirmText: "บันทึกโดยไม่ระบุ", cancelText: "กลับไปใส่วันที่",
     })) return;
-    if (newTotal <= 0) return flash("ยอดงวดต้องมากกว่า 0 (อาจวางบิลครบ 100% แล้ว)", true);
-    if (newTotal > remaining + 0.01) return flash("ยอดงวดเกินยอดคงเหลือ", true);
+    if (freeJob) {
+      if (invoicedQuotes.has(selQ.quote_no)) return flash("งานฟรีนี้ออกใบแจ้งหนี้ไปแล้ว (ออกได้ใบเดียว)", true);
+    } else {
+      if (newTotal <= 0) return flash("ยอดงวดต้องมากกว่า 0 (อาจวางบิลครบ 100% แล้ว)", true);
+      if (newTotal > remaining + 0.01) return flash("ยอดงวดเกินยอดคงเหลือ", true);
+    }
     const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;
     const installment = list.filter((x) => x.quote_no === selQ.quote_no && x.status !== "cancelled").length + 1;
     const base = round2((selQ.afterDisc || 0) * f);
@@ -199,6 +209,11 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
               <div><span>ยอดรวมทั้งสิ้น</span><b>{fmtBaht(selQ.grand)}</b></div>
               <div><span>วางบิลแล้ว</span><b>{fmtBaht(billed[selQ.quote_no] || 0)}</b></div>
               <div className="inv-remain"><span>คงเหลือวางบิลได้</span><b>{fmtBaht(remaining)}</b></div>
+            </div>
+          )}
+          {freeJob && (
+            <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 12px", fontSize: 13, lineHeight: 1.6 }}>
+              🎁 <b>งานนี้ยอดรวม ฿0 (งานฟรี / ไม่เก็บเงิน)</b> — เช่น งานรับประกัน/อภินันทนาการ · กด "สร้างใบแจ้งหนี้ ฿0" เพื่อออกเอกสารปิดงาน แล้วไปออก <b>ใบเสร็จ ฿0</b> ต่อได้ (ลูกค้าได้ใบเสร็จไว้เป็นหลักฐาน · รายงานรายได้ = 0) · ออกได้ 1 ใบต่องาน
             </div>
           )}
 
@@ -288,7 +303,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
-            <button className="btn-primary" style={{ flex: 1 }} disabled={!selQ || newTotal <= 0} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบส่งของ/ใบแจ้งหนี้</button>
+            <button className="btn-primary" style={{ flex: 1 }} disabled={!selQ || (!freeJob && newTotal <= 0)} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {freeJob ? "สร้างใบแจ้งหนี้ ฿0 (งานฟรี)" : "สร้างใบส่งของ/ใบแจ้งหนี้"}</button>
           </div>
         </div>
         {toast && <Toast t={toast} />}
@@ -368,7 +383,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           return (
             <div className={"card job-card doc2" + (x.status !== "unpaid" ? " closed" : "")} key={x.invoice_no}>
               <DocCardHead no={x.invoice_no} onClick={() => openPeek("invoice", x.invoice_no)}
-                badges={<><span className={"job-badge " + st.cls}>{st.th}</span><span className={"vat-badge " + (q?.vat ? "vat-on" : "vat-off")}>{q?.vat ? "VAT" : "NO VAT"}</span></>}
+                badges={<><span className={"job-badge " + st.cls}>{st.th}</span>{round2(x.total || 0) < 0.01 && <span className="job-badge b-grey">🎁 ไม่เก็บเงิน</span>}<span className={"vat-badge " + (q?.vat ? "vat-on" : "vat-off")}>{q?.vat ? "VAT" : "NO VAT"}</span></>}
                 title={x.title} sub={<>งวดที่ {x.installment} · {Math.round(x.pct)}% <span className="dch-more">ดูตัวอย่าง ›</span></>} by={x.createdByName}
                 date={x.issue_date || x.created_at} amountLabel="ยอดงวดนี้" amount={x.total}
                 customer={{ name: x.customerName, contactName: x.mainContactName, phone: x.contactPhone || x.mainContactPhone, addr: x.customerAddr, siteAddress: x.siteAddress, mapUrl: x.mapUrl }} />
