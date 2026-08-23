@@ -157,6 +157,23 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   const taRef   = React.useRef(null);
   const msgsRef = React.useRef(null);          // กล่องข้อความ (ไว้คุมตำแหน่ง scroll)
   const keepScrollRef = React.useRef(null);    // จำ scroll ก่อนเติมข้อความเก่าด้านบน
+  const boardRef = React.useRef(null);         // กระดานแชต — วัดความสูงให้พอดีจอ (ช่องพิมพ์ไม่หลุดขอบล่าง)
+
+  // ── ยืดกระดานให้เต็มพื้นที่ที่เหลือพอดี (แถบงานค้าง/ปุ่มย้อนกลับมี-ไม่มีสลับกัน ค่าคงที่จึงเดาไม่แม่น) ──
+  React.useLayoutEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const fit = () => {
+      if (window.innerWidth <= 760) { el.style.height = ""; return; } // จอเล็ก = ต่อกันแนวตั้ง (ปล่อยตาม CSS)
+      const top = el.getBoundingClientRect().top;
+      el.style.height = Math.max(360, window.innerHeight - top - 16) + "px"; // เว้นขอบล่าง 16px
+    };
+    fit();
+    // แถบงานค้าง/ฟอนต์โหลดทีหลัง ทำให้ตำแหน่งขยับ → วัดซ้ำอีกสองสามจังหวะ
+    const timers = [80, 300, 700].map((ms) => setTimeout(fit, ms));
+    window.addEventListener("resize", fit);
+    return () => { window.removeEventListener("resize", fit); timers.forEach(clearTimeout); };
+  }, [me]);
   const roomsTimer = React.useRef(null);       // debounce โหลดรายชื่อห้องตอนข้อความ realtime รัว ๆ
   selRef.current = sel;
 
@@ -415,7 +432,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
         </div>
       </div>
 
-      <div className="tc-board">
+      <div className="tc-board" ref={boardRef}>
         {/* ── sidebar ── */}
         <div className="tc-rooms">
           <div className="tc-rooms-top">
