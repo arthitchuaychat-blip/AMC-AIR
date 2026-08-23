@@ -4553,6 +4553,7 @@ export async function setFbStage(psid, stage) { const { error } = await supabase
 export async function setFbOwner(psid, userId) { const { error } = await supabase.from("fb_contacts").update({ assigned_to: userId || null }).eq("psid", psid); if (error) throw error; }
 export async function setFbNote(psid, note) { const { error } = await supabase.from("fb_contacts").update({ note: note || null }).eq("psid", psid); if (error) throw _noteErr(error); }
 export async function setFbTags(psid, tags) { const { error } = await supabase.from("fb_contacts").update({ tags: (tags && tags.length) ? tags : null }).eq("psid", psid); if (error) throw _noteErr(error); }
+export async function setFbAiOff(psid, off) { const { error } = await supabase.from("fb_contacts").update({ ai_off: !!off }).eq("psid", psid); if (error) throw new Error(/ai_off|PGRST204/i.test(error.message || "") ? "ต้องรัน migration 222 ใน Supabase ก่อน" : error.message); }
 // ค้นหาข้อความ FB (mirror searchLineMessages) — คืน map keyed by psid (= line_user_id ที่ alias ไว้)
 export async function searchFbMessages(term, { limit = 300 } = {}) {
   const t = String(term || "").trim(); if (t.length < 2) return {};

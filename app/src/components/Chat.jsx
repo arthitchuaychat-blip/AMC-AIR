@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, searchFbMessages, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -238,8 +238,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   async function changeTags(tags) { try { if (isFb) await setFbTags(sel, tags); else await setLineTags(sel, tags); await loadContacts(); } catch (e) { flash("บันทึกแท็กไม่สำเร็จ: " + (e.message || e), true); } }
   // ปิดบอทเฉพาะห้องนี้ — ใช้ตอนกำลังคุยปิดการขายเอง ไม่อยากให้บอทแทรก (mig 164)
   async function toggleAiOff(off) {
-    if (isFb) return;
-    try { await setLineAiOff(sel, off); await loadContacts(); flash(off ? "ปิดบอท AI ห้องนี้แล้ว — มีแต่คนตอบ" : "เปิดบอท AI ห้องนี้แล้ว"); }
+    try { await (isFb ? setFbAiOff(sel, off) : setLineAiOff(sel, off)); await loadContacts(); flash(off ? "ปิดบอท AI ห้องนี้แล้ว — มีแต่คนตอบ" : "เปิดบอท AI ห้องนี้แล้ว"); }
     catch (e) { flash("เปลี่ยนไม่สำเร็จ: " + (e.message || e), true); }
   }
   React.useEffect(() => { selRef.current = sel; }, [sel]);
@@ -856,14 +855,14 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                   {toolsOpen && <div className="chat-tools">
                     {selContact.kind === "supplier" && <button className="chat-tool primary" disabled={sending} title="เลือกใบสั่งซื้อ ส่งเป็นรูป/PDF เข้าแชตซัพ" onClick={openPoPicker}>🛒 ส่ง PO</button>}
                     {selContact.customer_id && <button className="chat-tool primary" onClick={openConfirm} disabled={sending}>🧾 ส่งคอนเฟิม</button>}
-                    {selContact.customer_id && !isFb && <button className="chat-tool" onClick={openRate} disabled={sending} title="ส่งลิงก์ให้ลูกค้าให้คะแนนความพอใจ (อ้างเลขใบงาน)">⭐ ขอคะแนน</button>}
-                    {selContact.customer_id && !isFb && <button className="chat-tool" onClick={openHo} disabled={sending} title="ส่งลิงก์ใบส่งมอบงานให้ลูกค้า">📄 ส่งใบส่งมอบ</button>}
+                    {selContact.customer_id && <button className="chat-tool" onClick={openRate} disabled={sending} title="ส่งลิงก์ให้ลูกค้าให้คะแนนความพอใจ (อ้างเลขใบงาน)">⭐ ขอคะแนน</button>}
+                    {selContact.customer_id && <button className="chat-tool" onClick={openHo} disabled={sending} title="ส่งลิงก์ใบส่งมอบงานให้ลูกค้า">📄 ส่งใบส่งมอบ</button>}
                     <label className={"chat-tool" + (sending || uploading ? " disabled" : "")}>📷 รูป
                       <input type="file" accept="image/*" multiple hidden disabled={sending || uploading} onChange={onImage} />
                     </label>
-                    {!isFb && <label className={"chat-tool" + (sending || uploading ? " disabled" : "")}>📎 ไฟล์
+                    <label className={"chat-tool" + (sending || uploading ? " disabled" : "")}>📎 ไฟล์
                       <input type="file" accept={ATTACH_ACCEPT} multiple hidden disabled={sending || uploading} onChange={onFile} />
-                    </label>}
+                    </label>
                     <button className={"chat-tool" + (emojiOpen ? " primary" : "")} disabled={sending} onClick={() => { setEmojiOpen((o) => !o); setStickerOpen(false); }}>😀 อีโมจิ</button>
                     {!isFb && <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => { setStickerOpen((o) => !o); setEmojiOpen(false); }}>😊 สติกเกอร์</button>}
                     {!isFb && <button className={"chat-tool" + (qrbOpen || qrButtons.length ? " primary" : "")} disabled={sending} title="เพิ่มปุ่มให้ลูกค้ากดตอบ (LINE) — แนบกับข้อความถัดไป" onClick={() => setQrbOpen((o) => !o)}>🔘 ปุ่มลูกค้า{qrButtons.length ? ` (${qrButtons.length})` : ""}</button>}
@@ -1039,7 +1038,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     </div>
                   </div>
                   {/* บอทมีเบรกอยู่แล้ว (เงียบอัตโนมัติหลังพนักงานตอบ) แต่บางห้องอยากปิดถาวรระหว่างปิดการขาย */}
-                  {!isFb && canSend && (
+                  {canSend && (
                     <label className="ci-field" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
                       title="ปิดบอท AI เฉพาะห้องนี้ — ใช้ตอนกำลังคุยปิดการขายเอง ไม่อยากให้บอทแทรก">
                       <input type="checkbox" checked={!!selContact.ai_off} onChange={(e) => toggleAiOff(e.target.checked)} />
@@ -1121,7 +1120,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                             <div className="cd-job-meta">🗓 {dateTxt}{e.teamName ? ` · 👷 ${e.teamName}` : ""}{e.amount != null ? ` · ${fmtBaht(e.amount)}` : ""}</div>
                             <div className="cd-job-no-row">
                               <span className="cd-job-no">{e.no} · ดูรายละเอียด ›</span>
-                              {sendable && canSend && !isFb && <button className="cd-send" disabled={!!capJob} onClick={(ev) => { ev.stopPropagation(); setSendMenuFor(e); }}>📤 ส่ง</button>}
+                              {sendable && canSend && <button className="cd-send" disabled={!!capJob} onClick={(ev) => { ev.stopPropagation(); setSendMenuFor(e); }}>📤 ส่ง</button>}
                             </div>
                           </div>
                         </div>

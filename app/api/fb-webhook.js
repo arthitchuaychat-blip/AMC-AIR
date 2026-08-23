@@ -71,6 +71,9 @@ async function fbAutoReply({ psid, text, token }) {
     if (!cfg || !cfg.enabled) { await aiBlackboxFb(psid, text, { skip: "autoreply-master-disabled" }); return; }
     const afterHours = !isOpenNow(cfg);
     if (!(cfg.ai_enabled && (afterHours || cfg.ai_always))) { await aiBlackboxFb(psid, text, { skip: !cfg.ai_enabled ? "ai-disabled" : "in-business-hours(ai_always off)" }); return; }
+    // ปิดบอทเฉพาะห้องนี้ (ai_off) — พนักงานกำลังคุยปิดการขายเอง · ถ้ายังไม่รัน migration คอลัมน์ ai_off ยังไม่มี → select error → ผ่าน (บอทยังตอบ)
+    const ct = await fetch(`${SB()}/rest/v1/fb_contacts?psid=eq.${encodeURIComponent(psid)}&select=ai_off`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    if (ct[0]?.ai_off) { await aiBlackboxFb(psid, text, { skip: "room-ai-off" }); return; }
     // อย่าแทรกถ้าพนักงานเพิ่งตอบเอง (staff-took-over) — มีข้อความ out ที่คนพิมพ์ (sent_by ไม่ว่าง) ใน 30 นาที
     const recent = await fetch(`${SB()}/rest/v1/fb_messages?psid=eq.${encodeURIComponent(psid)}&direction=eq.out&sent_by=not.is.null&select=created_at&order=created_at.desc&limit=1`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
     if (recent[0]?.created_at && (Date.now() - new Date(recent[0].created_at).getTime()) < 30 * 60000) { await aiBlackboxFb(psid, text, { skip: "staff-took-over" }); return; }
