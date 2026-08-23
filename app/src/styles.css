@@ -1639,10 +1639,13 @@ select.inp{cursor:pointer}
 .doc-totals .doc-grand{font-weight:800;font-size:14px;background:#f7f8fb}
 .doc-totals .doc-grand:last-child{background:linear-gradient(135deg,#1f74e0,#2c63de);color:#fff;font-size:16px;padding-top:9px;padding-bottom:9px}
 .doc-foot{margin-top:18px}
-.doc-terms{display:flex;gap:12px;margin-bottom:18px}
-.doc-terms-box{flex:1;background:#f7f8fb;border:1px solid #eef0f5;border-radius:10px;padding:10px 13px}
-.doc-terms-title{font-weight:800;font-size:11px;margin-bottom:4px;color:#1f74e0;text-transform:uppercase;letter-spacing:.4px}
-.doc-terms-body{font-size:11.5px;white-space:pre-line;line-height:1.55;color:#334155}
+/* เงื่อนไขท้ายเอกสาร: แถวแนวนอนเต็มความกว้าง (หัวข้อซ้าย · เนื้อหาขวา) รวมเป็นการ์ดเดียว อ่านง่ายเป็นระเบียบ */
+.doc-terms{display:flex;flex-direction:column;margin-bottom:16px;border:1px solid #e6e9f1;border-radius:10px;overflow:hidden;background:#f7f8fb}
+.doc-terms-box{display:flex;gap:14px;align-items:baseline;padding:8px 14px;border-bottom:1px solid #e9ecf3}
+.doc-terms-box:last-child{border-bottom:none}
+.doc-terms-title{flex:0 0 128px;font-weight:800;font-size:10.5px;margin:0;color:#1f74e0;text-transform:uppercase;letter-spacing:.4px;line-height:1.6}
+.doc-terms-body{flex:1;min-width:0;font-size:11.5px;white-space:pre-line;line-height:1.55;color:#334155;margin:0}
+@media(max-width:560px){ .doc-terms-box{flex-direction:column;gap:2px} .doc-terms-title{flex:none} }
 .doc-signs{display:flex;justify-content:space-around;gap:18px;margin-top:auto;padding-top:30px}
 /* signature pad (Attendance → my signature) */
 .sigpad{display:flex;flex-direction:column;gap:10px}
