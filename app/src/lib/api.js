@@ -1671,10 +1671,10 @@ export async function saveCompany(c, kind) {
   const row = {
     id, name: c.name?.trim() || null, branch: c.branch?.trim() || null, address: c.address?.trim() || null,
     tax_id: c.tax_id?.trim() || null, phone: c.phone?.trim() || null, email: c.email?.trim() || null,
-    website: c.website?.trim() || null, line_id: c.line_id?.trim() || null, bank_info: c.bank_info?.trim() || null, default_terms: c.default_terms?.trim() || null,
+    website: c.website?.trim() || null, line_id: c.line_id?.trim() || null, logo_url: c.logo_url?.trim() || null, bank_info: c.bank_info?.trim() || null, default_terms: c.default_terms?.trim() || null,
   };
   let { error } = await supabase.from("company_profile").upsert(row, { onConflict: "id" });
-  if (error && /line_id|PGRST204/i.test(error.message || "")) { delete row.line_id; ({ error } = await supabase.from("company_profile").upsert(row, { onConflict: "id" })); } // pre-224 fallback
+  if (error && /line_id|logo_url|PGRST204/i.test(error.message || "")) { delete row.line_id; if (/logo_url/i.test(error.message || "")) delete row.logo_url; ({ error } = await supabase.from("company_profile").upsert(row, { onConflict: "id" })); } // pre-224 fallback
   if (error) throw error;
   bustCache("companies");
 }

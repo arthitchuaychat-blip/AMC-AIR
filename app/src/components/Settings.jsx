@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, setProfileActive, listCategories, saveCategory, deleteCategory, updateCategory, setCategoryMatGroup, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
+import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, setProfileActive, listCategories, saveCategory, deleteCategory, updateCategory, setCategoryMatGroup, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, uploadWebLogo, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -141,6 +141,14 @@ function CompanyCard({ kind, title, sub, flash }) {
   const [c, setC] = React.useState({});
   const [busy, setBusy] = React.useState(false);
   const [warn, setWarn] = React.useState(null);
+  const [logoUp, setLogoUp] = React.useState(false);
+  async function onLogo(e) {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
+    setLogoUp(true);
+    try { const url = await uploadWebLogo(f); setC((s) => ({ ...s, logo_url: url })); flash("อัปโหลดโลโก้แล้ว — กด 'บันทึกข้อมูลบริษัท' เพื่อยืนยัน"); }
+    catch (ex) { flash("อัปโหลดโลโก้ไม่สำเร็จ: " + (ex.message || ex), true); }
+    setLogoUp(false);
+  }
   React.useEffect(() => {
     getCompanies().then((d) => setC((kind === "novat" ? d.novat : d.vat) || {}))
       .catch((e) => setWarn("ยังโหลดข้อมูลบริษัทไม่ได้ — อาจยังไม่ได้รัน migration 015 (" + (e.message || e) + ")"));
@@ -170,6 +178,17 @@ function CompanyCard({ kind, title, sub, flash }) {
         <label className="fld"><span>เว็บไซต์</span><input className="inp" value={c.website || ""} onChange={(e) => set("website", e.target.value)} placeholder="www.amc-air.com" /></label>
       </div>
       <label className="fld"><span>LINE (ID หรือลิงก์ทางการ)</span><input className="inp" value={c.line_id || ""} onChange={(e) => set("line_id", e.target.value)} placeholder="@amcair หรือ https://lin.ee/xxxx" /></label>
+      <div className="fld"><span>โลโก้บริษัท <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(แสดงบนหัวเอกสาร + หัวจดหมายอีเมล · แนะนำ PNG พื้นโปร่ง)</span></span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          {c.logo_url
+            ? <img src={c.logo_url} alt="โลโก้" style={{ height: 52, maxWidth: 180, objectFit: "contain", border: "1px solid var(--line)", borderRadius: 8, padding: 4, background: "#fff" }} />
+            : <span className="jo-dim" style={{ fontSize: 12.5 }}>ยังไม่ได้ตั้งโลโก้</span>}
+          <label className="btn-ghost sm" style={{ cursor: logoUp ? "default" : "pointer" }}>{logoUp ? "กำลังอัปโหลด…" : "📤 อัปโหลดโลโก้"}
+            <input type="file" accept="image/*" hidden disabled={logoUp} onChange={onLogo} />
+          </label>
+          {c.logo_url && <button type="button" className="btn-ghost sm" onClick={() => set("logo_url", "")}>เอาออก</button>}
+        </div>
+      </div>
       <label className="fld"><span>บัญชีธนาคาร (สำหรับชำระเงิน)</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={c.bank_info || ""} onChange={(e) => set("bank_info", e.target.value)} placeholder={"ธ.กสิกรไทย 130-3-86355-5\nธ.ไทยพาณิชย์ 046-0-70228-9"} /></label>
       <div style={{ marginTop: 6 }}>
         <button className="btn-primary" disabled={busy} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {busy ? "กำลังบันทึก…" : "บันทึกข้อมูลบริษัท"}</button>
