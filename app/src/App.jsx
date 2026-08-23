@@ -133,7 +133,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-08-23·AI ตรวจใบส่งของ: ปรับฐาน VAT ให้ตรงกันก่อนเทียบ (เลิกตีธงผิดเพราะ VAT) v667";
+const BUILD = "2026-08-23·ฟอนต์: เปลี่ยนทั้งแอป+เอกสารเป็น Sarabun (ทางการ · มาตรฐานไทย) v668";
 
 function SetupNotice() {
   return (

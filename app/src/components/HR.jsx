@@ -1245,7 +1245,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     setDmBusy(r.p.id);
     const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
     const line = (l, v, neg) => (v ? `<tr><td style="padding:5px 10px">${l}</td><td style="padding:5px 12px;text-align:right;font-weight:700;color:${neg ? "#b91c1c" : "#0f1729"}">${neg ? "−" : ""}${fmtBaht(v)}</td></tr>` : "");
-    const html = `<div style="width:460px;background:#fff;font-family:'IBM Plex Sans Thai','Noto Sans Thai',sans-serif;color:#0f1729;padding:20px">
+    const html = `<div style="width:460px;background:#fff;font-family:'Sarabun','IBM Plex Sans Thai',sans-serif;color:#0f1729;padding:20px">
       <div style="font-size:17px;font-weight:800;border-bottom:2px solid #0ea5e9;padding-bottom:8px">${esc(company.name || "AMC AIR")} · สลิปเงินเดือน</div>
       <div style="font-size:12.5px;color:#475569;margin:6px 0">${esc(r.p.name || r.p.email)}${r.p.department ? " · " + esc(r.p.department) : ""} · รอบ ${ym} (${from} ถึง ${to})</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px">

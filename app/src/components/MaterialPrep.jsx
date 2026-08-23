@@ -198,7 +198,7 @@ export default function MaterialPrep({ role, prefill, onPrefillConsumed, onCreat
         </table>
       </div>` : "";
     const bItems = buyItems(p), wItems = wdItems(p);
-    return `<div style="width:720px;background:#fff;font-family:'IBM Plex Sans Thai','Noto Sans Thai',sans-serif;color:#0f1729;padding:22px">
+    return `<div style="width:720px;background:#fff;font-family:'Sarabun','IBM Plex Sans Thai',sans-serif;color:#0f1729;padding:22px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0ea5e9;padding-bottom:10px">
         <div><div style="font-size:20px;font-weight:800">AMC AIR · ใบเตรียมวัสดุ</div>
           <div style="font-size:13px;color:#475569;margin-top:2px">${esc(p.prep_no)}${p.jobNo ? " · งาน " + esc(p.jobNo) : ""}${p.quote_no ? " · อ้างอิง " + esc(p.quote_no) : ""}</div>

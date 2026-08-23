@@ -529,7 +529,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         <td style="padding:11px 6px;line-height:1.45">${esc(x.name)}${x.qty > 1 ? `<div style="font-size:13px;color:#64748b;margin-top:2px">× ${x.qty} @ ${fmtBaht(adj)}</div>` : ""}${x.kind === "ac" && x.powerCost ? `<div style="font-size:13px;color:#0a6b3d;margin-top:2px">⚡ ค่าไฟประมาณ ${fmtNum(x.powerCost)} บาท/ปี (8 ชม./วัน)</div>` : ""}</td>
         <td style="padding:11px 14px;text-align:right;font-weight:800;white-space:nowrap;vertical-align:top">${fmtBaht(adj * x.qty)}</td></tr>`;
     }).join("");
-    const cardHtml = `<div style="width:640px;background:#fff;font-family:'IBM Plex Sans Thai','Noto Sans Thai',sans-serif;color:#0f1729;border:1px solid #dbe4ee;border-radius:14px;overflow:hidden">
+    const cardHtml = `<div style="width:640px;background:#fff;font-family:'Sarabun','IBM Plex Sans Thai',sans-serif;color:#0f1729;border:1px solid #dbe4ee;border-radius:14px;overflow:hidden">
       <div style="background:linear-gradient(90deg,#0ea5e9,#0369a1);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
         <div style="font-size:18px;font-weight:800">AMC AIR · สรุปราคา</div>
         <div style="font-size:14px;font-weight:700;background:rgba(255,255,255,.18);padding:4px 12px;border-radius:99px">${pm.l}</div>
