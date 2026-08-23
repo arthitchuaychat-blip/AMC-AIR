@@ -346,7 +346,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบส่งของ/ใบแจ้งหนี้</button>}
         </div>
       </div>
-      <FilterBar id="invoices" count={activeCount}>
+      <FilterBar id="invoices" count={activeCount} resultCount={shown.length} resultLabel="ใบ">
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["unpaid", "ค้างชำระ"], ["paid", "ชำระแล้ว"], ["bad_debt", "ตัดหนี้สูญ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}

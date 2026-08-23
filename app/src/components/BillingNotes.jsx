@@ -98,7 +98,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
         // จำนวนตัวกรองที่ใช้อยู่ (ไม่ใช่ค่าเริ่มต้น) → โชว์บนแถบตัวกรองยุบได้
         const activeCount = (statusF !== "all" ? 1 : 0) + (byPerson ? 1 : 0);   // ไม่นับช่วงวันที่ (มี default 6 เดือนอยู่แล้ว)
         return (<>
-      <FilterBar id="billing" count={activeCount}>
+      <FilterBar id="billing" count={activeCount} resultCount={shown.length} resultLabel="ใบ">
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["open", "วางบิล"], ["unpaid", "ค้างชำระ"], ["done", "ออกใบเสร็จครบ"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}

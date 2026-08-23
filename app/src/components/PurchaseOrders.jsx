@@ -492,7 +492,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
           {q && <button className="cat-search-x" onClick={() => setQ("")}><UIcon name="x" size={15} /></button>}
         </div>
       </div>
-      <FilterBar id="po" count={activeCount}>
+      <FilterBar id="po" count={activeCount} resultCount={shown.length} resultLabel="ใบ">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {PO_FILTERS.map((f) => (
             <button key={f.id} className={"cat-chip" + (statusF === f.id ? " on" : "")} onClick={() => setStatusF(f.id)}

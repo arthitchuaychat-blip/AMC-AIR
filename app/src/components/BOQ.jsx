@@ -331,7 +331,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
         const dateActive = (dateR.from || dateR.to) && !(dateR.from === _dfltR.from && dateR.to === _dfltR.to);
         const activeCount = (typeF !== "all" ? 1 : 0) + (byPerson ? 1 : 0) + (dateActive ? 1 : 0);
         return (<>
-      <FilterBar id="boq" count={activeCount}>
+      <FilterBar id="boq" count={activeCount} resultCount={fl.length} resultLabel="ใบ">
       <div className="cat-filter">
         {[["all", "ทุกประเภทงาน"], ...JOB_TYPES.map(([v, l, ic]) => [v, `${ic} ${l}`])].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (typeF === v ? " on" : "")} onClick={() => setTypeF(v)}

@@ -130,7 +130,7 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
         <div className="stat-card"><div className="stat-val">{credCount}</div><div className="stat-label">เจ้าหนี้/ทีมที่ค้าง</div></div>
       </div>
 
-      <FilterBar id="payables" count={(q ? 1 : 0) + (recvF !== "all" ? 1 : 0)}>
+      <FilterBar id="payables" count={(q ? 1 : 0) + (recvF !== "all" ? 1 : 0)} resultCount={shown.length} resultLabel="รายการ">
         <div className="cat-search" style={{ maxWidth: 380, marginBottom: 12 }}>
           <UIcon name="search" size={16} color="var(--ink-3)" />
           <input placeholder="ค้นหา ผู้ขาย / เลขเอกสาร / ทีม" value={q} onChange={(e) => setQ(e.target.value)} />

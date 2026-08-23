@@ -412,6 +412,10 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const _dfltR = defaultDocRange();
   const dateActive = (dateR.from || dateR.to) && !(dateR.from === _dfltR.from && dateR.to === _dfltR.to);
   const activeCount = (statusF !== "all" ? 1 : 0) + (vatF !== "all" ? 1 : 0) + (docF !== "all" ? 1 : 0) + (byPerson ? 1 : 0) + (dateActive ? 1 : 0);
+  const fl = fl0.filter((q) => (statusF === "all" || q.status === statusF)
+    && (vatF === "all" || (vatF === "vat" ? !!q.vat : !q.vat))
+    && (!byPerson || (q.createdByName || "") === byPerson)
+    && docPred(q, docF));
   return (
     <div className="adm">
       <div className="adm-head">
@@ -425,7 +429,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         </div>
       </div>
 
-      <FilterBar id="quote" count={activeCount}>
+      <FilterBar id="quote" count={activeCount} resultCount={fl.length} resultLabel="ใบ">
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ...STATUS_OPTS, ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
@@ -455,10 +459,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
-        const fl = fl0.filter((q) => (statusF === "all" || q.status === statusF)
-          && (vatF === "all" || (vatF === "vat" ? !!q.vat : !q.vat))
-          && (!byPerson || (q.createdByName || "") === byPerson)
-          && docPred(q, docF));
         return (<>
       {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสนอราคา" : "ไม่พบใบเสนอราคาที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">

@@ -267,7 +267,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> ออกใบเสร็จ</button>}
         </div>
       </div>
-      <FilterBar id="receipts" count={activeCount}>
+      <FilterBar id="receipts" count={activeCount} resultCount={shown.length} resultLabel="ใบ">
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ["pending", "รอชำระเงิน"], ["paid", "ชำระเงินแล้ว"], ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}

@@ -601,6 +601,19 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     : list;
   // จำนวนตัวกรองที่ใช้อยู่ (ต่างจากค่าเริ่มต้น) — โชว์บนแถบตัวกรองยุบได้ · ช่วงวันที่ที่นี่ค่าเริ่มต้นว่าง นับตรง ๆ ได้
   const activeCount = (statusF !== "all" ? 1 : 0) + (typeF !== "all" ? 1 : 0) + (teamF !== "all" ? 1 : 0) + (byPerson ? 1 : 0) + ((dateFrom || dateTo) ? 1 : 0);
+  // รายการหลังกรองทุกตัว (ยกออกมาเพื่อโชว์จำนวนบนแถบตัวกรอง + ใช้ render)
+  const jobDates = (jo) => { const ds = (jo.visits || []).map((v) => v.scheduled_at).filter(Boolean).map((s) => ymd(new Date(s))); if (!ds.length && jo.scheduled_at) ds.push(ymd(new Date(jo.scheduled_at))); return ds; };
+  const inJobDateRange = (jo) => { if (!dateFrom && !dateTo) return true; const ds = jobDates(jo); if (!ds.length) return false; return ds.some((d) => (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)); };
+  const jobAt = (jo) => { const t = jo.scheduled_at ? new Date(jo.scheduled_at).getTime() : NaN; return Number.isNaN(t) ? Infinity : t; };
+  const fl = baseList.filter((jo) => (statusF === "all" || jo.status === statusF)
+    && (typeF === "all" || (jo.job_type || "install") === typeF)
+    && (teamF === "all" || jo.assigned_team === teamF)
+    && (!byPerson || (jo.createdByName || "") === byPerson)
+    && inJobDateRange(jo)
+    && (matchText(q, jo.job_no, jo.customerName, jo.teamName, jo.title, jo.quote_no, jo.address) || matchPhone(q, jo.contact_phone)))
+    .sort(sortMode === "queue"
+      ? (a, b) => jobAt(a) - jobAt(b) || (a.job_no || "").localeCompare(b.job_no || "")
+      : (a, b) => (b.created_at || "").localeCompare(a.created_at || "") || (b.job_no || "").localeCompare(a.job_no || ""));
   return (
     <div className="adm">
       <div className="adm-head">
@@ -623,7 +636,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
         </div>
       </div>
 
-      <FilterBar id="joborders" count={activeCount}>
+      <FilterBar id="joborders" count={activeCount} resultCount={fl.length} resultLabel="ใบ">
       <div className="cat-filter">
         <button className={"cat-chip" + (statusF === "all" ? " on" : "")} onClick={() => setStatusF("all")}
           style={statusF === "all" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>ทั้งหมด ({baseList.length})</button>
@@ -681,30 +694,6 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
 
       {loading && <div className="empty">กำลังโหลด…</div>}
       {(() => {
-        // all visit dates of a job (YYYY-MM-DD) — falls back to the legacy single scheduled_at
-        const jobDates = (jo) => {
-          // ⚠️ ใช้ ymd (วันที่ท้องถิ่น) ไม่ใช่ toISOString (UTC) — input วันที่/ปุ่มวันนี้เป็นวันท้องถิ่น
-          //    งานเริ่มก่อน 07:00 ไทย toISOString จะร่นไปวันก่อนหน้า แล้วหายจากตัวกรอง
-          const ds = (jo.visits || []).map((v) => v.scheduled_at).filter(Boolean).map((s) => ymd(new Date(s)));
-          if (!ds.length && jo.scheduled_at) ds.push(ymd(new Date(jo.scheduled_at)));
-          return ds;
-        };
-        const inDateRange = (jo) => {
-          if (!dateFrom && !dateTo) return true;
-          const ds = jobDates(jo);
-          if (!ds.length) return false; // no date → excluded when filtering by date
-          return ds.some((d) => (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo));
-        };
-        const jobAt = (jo) => { const t = jo.scheduled_at ? new Date(jo.scheduled_at).getTime() : NaN; return Number.isNaN(t) ? Infinity : t; };
-        const fl = baseList.filter((jo) => (statusF === "all" || jo.status === statusF)
-          && (typeF === "all" || (jo.job_type || "install") === typeF)
-          && (teamF === "all" || jo.assigned_team === teamF)
-          && (!byPerson || (jo.createdByName || "") === byPerson)
-          && inDateRange(jo)
-          && (matchText(q, jo.job_no, jo.customerName, jo.teamName, jo.title, jo.quote_no, jo.address) || matchPhone(q, jo.contact_phone)))
-          .sort(sortMode === "queue"
-            ? (a, b) => jobAt(a) - jobAt(b) || (a.job_no || "").localeCompare(b.job_no || "")                                  // ตามคิวนัด (ใกล้→ไกล · ไม่มีวันอยู่ท้าย)
-            : (a, b) => (b.created_at || "").localeCompare(a.created_at || "") || (b.job_no || "").localeCompare(a.job_no || "")); // ล่าสุดบนสุด (ตามวันที่สร้างใบ)
         return (<>
           {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบงาน" : "ไม่พบใบงานที่ตรงเงื่อนไข"}</div>}
           <div className="job-cards">
