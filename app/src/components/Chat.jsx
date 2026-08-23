@@ -142,8 +142,48 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [hoPicker, setHoPicker] = React.useState(null);       // 📄 ส่งใบส่งมอบ (เลือกใบ)
   const [sendMenuFor, setSendMenuFor] = React.useState(null); // doc entry whose "ส่งเป็น รูป/PDF" popup is open
   const [emailDoc, setEmailDoc] = React.useState(null);       // { to, subject, body, attachments, label } — คอมโพสอีเมลส่งเอกสาร
+  const [multiSel, setMultiSel] = React.useState(false);      // โหมดเลือกเอกสารหลายใบ
+  const [selDocs, setSelDocs] = React.useState(() => new Set()); // คีย์ "type|no" ที่เลือกไว้
+  const [batch, setBatch] = React.useState(null);             // { entries, mode, i, imgs, atts, texts } — คิวเตรียมเอกสารหลายใบ
   const [capJob, setCapJob] = React.useState(null); // { type, no, mode, to, label } → render off-screen + capture + send
   const startSend = (e, mode) => { setSendMenuFor(null); setCapJob({ type: e.type, no: e.no, mode, to: sel, label: `${TYPE_LABEL[e.type]} ${e.no}`, email: selCust?.email || "", custName: selCust?.name || "" }); flash(mode === "email" ? "กำลังเตรียมเอกสารสำหรับอีเมล…" : "กำลังเตรียมเอกสาร…"); };
+  // ── ส่งหลายเอกสารพร้อมกัน ──
+  const docKey = (e) => e.type + "|" + e.no;
+  const toggleSelDoc = (e) => setSelDocs((s) => { const n = new Set(s); const k = docKey(e); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  const exitMulti = () => { setMultiSel(false); setSelDocs(new Set()); };
+  function batchSend(entries, mode) {
+    if (!entries.length) return flash("ยังไม่ได้เลือกเอกสาร", true);
+    setBatch({ entries, mode, i: 0, imgs: [], atts: [], texts: [] });
+    flash(`กำลังเตรียม ${entries.length} เอกสาร…`);
+  }
+  async function batchOnReady(node) {
+    const b = batch; if (!b) return;
+    const en = b.entries[b.i];
+    const label = `${TYPE_LABEL[en.type]} ${en.no}`;
+    let imgs = b.imgs, atts = b.atts, texts = b.texts;
+    try {
+      if (b.mode === "email") { atts = [...atts, ...(await captureDocForEmail(node, "pdf", label))]; }
+      else if (b.mode === "pdf") { const { text } = await captureDocToStage(node, "pdf", label); if (text) texts = [...texts, text]; }
+      else { const { attachments } = await captureDocToStage(node, "image", label); imgs = [...imgs, ...attachments]; }
+    } catch (e) { flash(`เตรียม ${label} ไม่สำเร็จ: ${e.message || e}`, true); }
+    const next = b.i + 1;
+    if (next < b.entries.length) { setBatch({ ...b, i: next, imgs, atts, texts }); return; }
+    // เตรียมครบทุกใบแล้ว → รวมส่ง
+    setBatch(null); exitMulti();
+    const n = b.entries.length;
+    if (b.mode === "email") {
+      if (!atts.length) return flash("เตรียมไฟล์ไม่สำเร็จ", true);
+      setEmailDoc({ to: selCust?.email || "", label: `เอกสาร ${n} ฉบับ`, attachments: atts,
+        subject: `เอกสารจาก AMC AIR (${n} ฉบับ)`,
+        body: `เรียน ${selCust?.name || "ลูกค้า"}\n\nบริษัท AMC AIR ขอนำส่งเอกสาร ${n} ฉบับ ตามไฟล์แนบครับ หากมีข้อสงสัยหรือต้องการข้อมูลเพิ่มเติม ติดต่อกลับได้เลยครับ\n\nขอบคุณที่ใช้บริการครับ\nAMC AIR` });
+    } else if (b.mode === "pdf") {
+      if (texts.length) setText((cur) => (cur ? cur + "\n" : "") + texts.join("\n"));
+      flash(`แนบลิงก์ ${n} เอกสารในช่องแชตแล้ว — ตรวจแล้วกดส่ง ✓`);
+    } else {
+      if (imgs.length) setPending((s) => [...s, ...imgs]);
+      flash(`แนบ ${n} เอกสารในช่องแชตแล้ว — ตรวจแล้วกดส่ง ✓`);
+    }
+  }
   const [infoDocs, setInfoDocs] = React.useState([]);
   const [loadingInfoDocs, setLoadingInfoDocs] = React.useState(false);
   const [infoDocF, setInfoDocF] = React.useState("all");
@@ -254,6 +294,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   React.useEffect(() => { selRef.current = sel; }, [sel]);
+  React.useEffect(() => { setMultiSel(false); setSelDocs(new Set()); setBatch(null); }, [sel]);   // สลับห้อง → ล้างโหมดเลือกหลายใบ
   // teams + jobs for the คิวช่าง panel (so we can answer queue questions instantly)
   React.useEffect(() => { listTeams().then(setTeams).catch(() => {}); listJobOrders().then(setJobs).catch(() => {}); }, []);
   // เปิดห้องแชตใหม่ = กระโดดไปข้อความล่าสุด (ล่างสุด) ทันที · ข้อความใหม่ที่เข้ามาระหว่างเปิดอยู่ค่อยเลื่อนแบบนุ่ม
@@ -1108,7 +1149,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <button className="btn-ghost sm" onClick={() => onGoCustomers && onGoCustomers(cust.name)}>เปิดหน้าลูกค้า</button>
                     <button className="btn-ghost sm" onClick={() => onLink(null)}>ยกเลิกการเชื่อม</button>
                   </div>}
-                  <div className="ci-sec">ประวัติเอกสาร &amp; งาน ({infoDocs.length})</div>
+                  <div className="ci-sec" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <span>ประวัติเอกสาร &amp; งาน ({infoDocs.length})</span>
+                    {canSend && (multiSel
+                      ? <button className="btn-ghost sm" style={{ padding: "2px 8px", fontSize: 11 }} onClick={exitMulti}>✕ ยกเลิกเลือก</button>
+                      : <button className="btn-ghost sm" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => setMultiSel(true)} title="เลือกส่งหลายเอกสารพร้อมกัน">☑️ เลือกหลายใบ</button>)}
+                  </div>
                   <div className="cd-docfilter">
                     {DOC_FILTERS.map(([v, l]) => (
                       <button key={v} className={"cat-chip" + (infoDocF === v ? " on" : "")} onClick={() => setInfoDocF(v)}
@@ -1136,21 +1182,39 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       const dateTxt = e.type === "job" && e.scheduled_at ? scheduleLabel(e)
                         : (e.date ? new Date(e.date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) : "—");
                       const sendable = ["quote", "invoice", "receipt", "creditnote", "debitnote", "billing"].includes(e.type);
+                      const picked = multiSel && selDocs.has(docKey(e));
+                      const selectable = multiSel && sendable && canSend;
                       return (
-                        <div className="cd-job" key={e.type + e.no}>
+                        <div className={"cd-job" + (picked ? " picked" : "")} key={e.type + e.no}>
                           <span className={"cd-job-dot " + st[1]} />
-                          <div className="cd-job-body" role="button" tabIndex={0} onClick={() => openPeek(e.type, e.no)}>
-                            <div className="cd-job-top"><b><span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span>{e.title || ""}</b><span className={"job-badge " + st[1]}>{st[0]}</span></div>
+                          <div className="cd-job-body" role="button" tabIndex={0} onClick={() => (selectable ? toggleSelDoc(e) : openPeek(e.type, e.no))}>
+                            <div className="cd-job-top"><b>{selectable ? <span style={{ marginRight: 6 }}>{picked ? "☑️" : "⬜"}</span> : null}<span className={"doc-tag dl-" + e.type}>{TYPE_LABEL[e.type]}</span>{e.title || ""}</b><span className={"job-badge " + st[1]}>{st[0]}</span></div>
                             <div className="cd-job-meta">🗓 {dateTxt}{e.teamName ? ` · 👷 ${e.teamName}` : ""}{e.amount != null ? ` · ${fmtBaht(e.amount)}` : ""}</div>
                             <div className="cd-job-no-row">
-                              <span className="cd-job-no">{e.no} · ดูรายละเอียด ›</span>
-                              {sendable && canSend && <button className="cd-send" disabled={!!capJob} onClick={(ev) => { ev.stopPropagation(); setSendMenuFor(e); }}>📤 ส่ง</button>}
+                              <span className="cd-job-no">{e.no}{multiSel && sendable ? "" : " · ดูรายละเอียด ›"}{multiSel && !sendable ? " · (ส่งไม่ได้)" : ""}</span>
+                              {sendable && canSend && !multiSel && <button className="cd-send" disabled={!!capJob} onClick={(ev) => { ev.stopPropagation(); setSendMenuFor(e); }}>📤 ส่ง</button>}
                             </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
+                  {multiSel && (
+                    <div className="cd-batchbar">
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>เลือกแล้ว {selDocs.size} ใบ</div>
+                      {selDocs.size > 0 ? (() => {
+                        const chosen = shownDocs.filter((e) => selDocs.has(docKey(e)));
+                        return (
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            <button className="btn-ghost sm" disabled={!!batch} onClick={() => batchSend(chosen, "image")}>🖼 รูปเข้าแชต</button>
+                            <button className="btn-ghost sm" disabled={!!batch} onClick={() => batchSend(chosen, "pdf")}>📄 ลิงก์ PDF</button>
+                            {selCust?.email && <button className="btn-primary sm" style={{ background: "#7c3aed", borderColor: "#7c3aed" }} disabled={!!batch} onClick={() => batchSend(chosen, "email")}>📧 อีเมลรวม {selDocs.size} ใบ</button>}
+                          </div>
+                        );
+                      })() : <span className="jo-dim" style={{ fontSize: 12 }}>แตะเอกสารที่ต้องการส่ง</span>}
+                      {batch && <span className="jo-dim" style={{ fontSize: 12 }}>⏳ กำลังเตรียม {batch.i + 1}/{batch.entries.length}…</span>}
+                    </div>
+                  )}
                 </>) : (
                   <div className="ci-unlinked">
                     <div className="ci-unlinked-msg">แชตนี้ยังไม่ได้เชื่อมกับลูกค้า</div>
@@ -1502,6 +1566,11 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
           catch (e) { flash("เตรียมเอกสารไม่สำเร็จ: " + (e.message || e), true); }
           setCapJob(null);
         }} />}
+      {batch && batch.i < batch.entries.length && (
+        <DocCapture key={"batch" + batch.i} type={batch.entries[batch.i].type} no={batch.entries[batch.i].no}
+          onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setBatch(null); }}
+          onReady={batchOnReady} />
+      )}
       {emailDoc && <EmailDocModal draft={emailDoc} onClose={() => setEmailDoc(null)} flash={flash} />}
       {peekEl}
       {toast && <div className={"chat-toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
