@@ -1697,18 +1697,17 @@ export function listAccChart() {
     return data || [];
   });
 }
-// สมุดรายวัน + บรรทัด ในช่วงวันที่ (กรองกิจการได้: 'all'|'company'|'personal')
+// สมุดรายวัน + บรรทัด ในช่วงวันที่ (กรองกิจการได้: 'all'|'company'|'personal') — ดึงครบทุกหน้า (กันเพดาน 1000)
 export async function listJournal({ entity = "all", from, to } = {}) {
-  let q = supabase.from("acc_journal")
-    .select("*, lines:acc_journal_lines(*)")
-    .neq("status", "void")
-    .order("jdate", { ascending: false }).order("id", { ascending: false });
-  if (entity && entity !== "all") q = q.eq("entity", entity);
-  if (from) q = q.gte("jdate", from);
-  if (to)   q = q.lte("jdate", to);
-  const { data, error } = await q.range(0, 999);
-  if (error) throw error;
-  return data || [];
+  const build = (f, t) => {
+    let q = supabase.from("acc_journal").select("*, lines:acc_journal_lines(*)", { count: "exact" })
+      .neq("status", "void").order("jdate", { ascending: false }).order("id", { ascending: false });
+    if (entity && entity !== "all") q = q.eq("entity", entity);
+    if (from) q = q.gte("jdate", from);
+    if (to)   q = q.lte("jdate", to);
+    return q.range(f, t);
+  };
+  return await _fetchAll(build);
 }
 // ลงรายการสมุดรายวัน (บันทึกหัว + บรรทัด) — ต้องเดบิต=เครดิต และมีอย่างน้อย 2 บรรทัด
 export async function postJournal({ entity, jdate, ref_type = "manual", ref_no = null, memo = null, source = "manual", lines = [] }) {
@@ -1831,6 +1830,42 @@ export async function autoPostExpenses({ from, to } = {}) {
     catch (e) { errs.push(`${t.ref_type} ${t.ref_no}: ${e.message || e}`); }
   }
   return { posted: ok, total: tasks.length, errors: errs };
+}
+
+// ── ลงบัญชีอัตโนมัติจากเงินเดือน (payslips ที่จ่ายแล้ว) — แยกตามหน้าที่ · ทุกกิจการ = บริษัท ──
+// ช่าง/ผู้ช่วยช่าง → 5030 ต้นทุนบริการ · ขาย → 6010 · อื่นๆ (บริหาร/บัญชี/ธุรการ) → 7010
+export async function autoPostPayroll({ from, to } = {}) {
+  const _d = (ts) => (ts ? String(ts).slice(0, 10) : null);
+  const inR = (d) => d && (!from || d >= from) && (!to || d <= to);
+  const [slips, profs, posted] = await Promise.all([
+    _fetchAll((f, t) => supabase.from("payslips").select("*", { count: "exact" }).eq("status", "paid").order("id").range(f, t)),
+    _fetchAll((f, t) => supabase.from("profiles").select("id,name,role", { count: "exact" }).order("id").range(f, t)),
+    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_no", { count: "exact" }).eq("ref_type", "payroll").neq("status", "void").range(f, t)),
+  ]);
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const role = {}, nameOf = {}; profs.forEach((p) => { role[p.id] = p.role; nameOf[p.id] = p.name; });
+  const done = new Set(posted.map((x) => x.ref_no));
+  const acctOf = (r) => ["tech", "lead_tech", "assistant"].includes(r) ? "5030" : ["sales", "field_sales"].includes(r) ? "6010" : "7010";
+
+  let ok = 0; const errs = []; let n = 0;
+  for (const s of slips) {
+    const jdate = _d(s.paid_at); if (!inR(jdate)) continue;
+    if (done.has(String(s.id))) continue;
+    n++;
+    // ด้านเครดิต = เงินสุทธิ + รายการหักที่ต้องนำส่ง/หักคืน · ด้านเดบิต(ค่าใช้จ่ายเงินเดือน) = ผลรวมพอดี → สมดุลแน่นอน
+    const net = r2(s.net), sso = r2(s.d_sso), tax = r2(s.d_tax), recover = r2((Number(s.d_loan) || 0) + (Number(s.d_water) || 0) + (Number(s.d_electric) || 0));
+    const cr = [];
+    if (net > 0.005) cr.push({ account_code: "1020", debit: 0, credit: net });
+    if (sso > 0.005) cr.push({ account_code: "2130", debit: 0, credit: sso, memo: "ประกันสังคม" });
+    if (tax > 0.005) cr.push({ account_code: "2120", debit: 0, credit: tax, memo: "ภาษีหัก ณ ที่จ่าย (ภ.ง.ด.1)" });
+    if (recover > 0.005) cr.push({ account_code: "1110", debit: 0, credit: recover, memo: "หักคืนเงินยืม/ค่าน้ำ-ไฟ" });
+    const total = r2(cr.reduce((a, x) => a + x.credit, 0));
+    if (total <= 0.005) continue;
+    const lines = [{ account_code: acctOf(role[s.user_id]), debit: total, credit: 0, memo: nameOf[s.user_id] || null }, ...cr];
+    try { await postJournal({ entity: "company", jdate, ref_type: "payroll", ref_no: String(s.id), memo: `เงินเดือน ${s.period} · ${nameOf[s.user_id] || ""}`, source: "auto", lines }); ok++; }
+    catch (e) { errs.push(`payroll ${s.period}/${s.user_id}: ${e.message || e}`); }
+  }
+  return { posted: ok, total: n, errors: errs };
 }
 
 // ── ลงบัญชีอัตโนมัติจากใบเสร็จ (เกณฑ์เงินสด: เฉพาะใบเสร็จ status='paid') ──

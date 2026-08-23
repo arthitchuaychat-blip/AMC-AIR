@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccEntities, listAccChart, listJournal, postJournal, voidJournal, autoPostReceipts, autoPostExpenses } from "../lib/api";
+import { listAccEntities, listAccChart, listJournal, postJournal, voidJournal, autoPostReceipts, autoPostExpenses, autoPostPayroll } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 
@@ -12,7 +12,7 @@ const SCOPE_TAG = { company: "🏢 บริษัท", personal: "👤 บุ�
 const REFT = { manual: "ลงเอง", opening: "ยอดยกมา", quotation: "ใบเสนอราคา", invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", po: "ใบสั่งซื้อ", expense: "เบิกจ่าย", payroll: "เงินเดือน" };
 
 export default function Accounting() {
-  const [tab, setTab] = React.useState("tb");            // coa | journal | tb
+  const [tab, setTab] = React.useState("pl");            // pl | bs | tb | journal | coa
   const [entity, setEntity] = React.useState("all");     // all | company | personal
   const [entities, setEntities] = React.useState([]);
   const [chart, setChart] = React.useState([]);
@@ -56,6 +56,51 @@ export default function Accounting() {
 
   const jSum = (j, k) => (j.lines || []).reduce((s, l) => s + (Number(l[k]) || 0), 0);
 
+  // ── งบการเงิน (P&L + งบฐานะ) — ดึงรายการทั้งหมด "ถึงวันที่ to" มาคำนวณ ──
+  const [stmtRows, setStmtRows] = React.useState([]);
+  const [stmtLoading, setStmtLoading] = React.useState(false);
+  React.useEffect(() => {
+    if (tab !== "pl" && tab !== "bs") return;
+    setStmtLoading(true);
+    listJournal({ entity, to }).then(setStmtRows).catch((e) => flash(e.message || "โหลดไม่สำเร็จ", true)).finally(() => setStmtLoading(false));
+  }, [tab, entity, to]);
+
+  const stmt = React.useMemo(() => {
+    const yearStart = `${(to || ymd(new Date())).slice(0, 4)}-01-01`;
+    const bal = {}, balY = {};   // bal = สะสมถึง to (งบฐานะ) · balY = เฉพาะปีนี้ (งบกำไรขาดทุน)
+    stmtRows.forEach((j) => { const iy = j.jdate >= yearStart; (j.lines || []).forEach((l) => { const s = (Number(l.debit) || 0) - (Number(l.credit) || 0); bal[l.account_code] = (bal[l.account_code] || 0) + s; if (iy) balY[l.account_code] = (balY[l.account_code] || 0) + s; }); });
+    const meta = (c) => chartMap[c] || {};
+    const sumBy = (src, pred, sign) => Object.entries(src).reduce((a, [c, v]) => pred(meta(c)) ? a + sign * v : a, 0);
+    const acctRows = (src, pred, sign) => chart.filter(pred).map((a) => ({ code: a.code, name: a.name, amt: sign * (src[a.code] || 0) })).filter((r) => Math.abs(r.amt) > 0.005);
+    // P&L (ปีนี้)
+    const isExp = (m, st) => m.category === "expense" && m.subtype === st;
+    const revenue = sumBy(balY, (m) => m.category === "revenue", -1);
+    const cogs = sumBy(balY, (m) => isExp(m, "cogs"), 1), selling = sumBy(balY, (m) => isExp(m, "selling"), 1), admin = sumBy(balY, (m) => isExp(m, "admin"), 1), finance = sumBy(balY, (m) => isExp(m, "finance"), 1), taxExp = sumBy(balY, (m) => isExp(m, "tax"), 1);
+    const gross = revenue - cogs, operating = gross - selling - admin, netProfit = operating - finance - taxExp;
+    const pl = {
+      revenue, cogs, selling, admin, finance, taxExp, gross, operating, netProfit,
+      revRows: acctRows(balY, (a) => a.category === "revenue", -1),
+      cogsRows: acctRows(balY, (a) => a.category === "expense" && a.subtype === "cogs", 1),
+      sellRows: acctRows(balY, (a) => a.category === "expense" && a.subtype === "selling", 1),
+      adminRows: acctRows(balY, (a) => a.category === "expense" && a.subtype === "admin", 1),
+      finRows: acctRows(balY, (a) => a.category === "expense" && (a.subtype === "finance" || a.subtype === "tax"), 1),
+    };
+    // งบฐานะ (สะสมถึง to)
+    const assets = sumBy(bal, (m) => m.category === "asset", 1);
+    const liab = sumBy(bal, (m) => m.category === "liability", -1);
+    const equityAcct = sumBy(bal, (m) => m.category === "equity", -1);
+    const netIncomeAll = sumBy(bal, (m) => m.category === "revenue", -1) - sumBy(bal, (m) => m.category === "expense", 1);
+    const equity = equityAcct + netIncomeAll;
+    const bs = {
+      assets, liab, equity, netIncomeAll,
+      assetRows: acctRows(bal, (a) => a.category === "asset", 1),
+      liabRows: acctRows(bal, (a) => a.category === "liability", -1),
+      equityRows: acctRows(bal, (a) => a.category === "equity", -1),
+      balanced: Math.abs(assets - (liab + equity)) < 0.05,
+    };
+    return { yearStart, pl, bs };
+  }, [stmtRows, chart, chartMap, to]);
+
   async function doVoid(j) {
     const ok = await confirmDialog({ title: "ยกเลิกรายการบัญชี?", message: `รายการวันที่ ${thDate(j.jdate)} (${fmtBaht(jSum(j, "debit"))}) — จะถูกยกเลิก (เก็บประวัติไว้ ไม่ลบจริง)`, confirmText: "ยกเลิกรายการ", danger: true });
     if (!ok) return;
@@ -69,9 +114,9 @@ export default function Accounting() {
     if (!ok) return;
     setSyncing(true);
     try {
-      const [rc, ex] = await Promise.all([autoPostReceipts({ from, to }), autoPostExpenses({ from, to })]);
-      const n = (rc.posted || 0) + (ex.posted || 0), errN = (rc.errors?.length || 0) + (ex.errors?.length || 0);
-      flash(n ? `ลงบัญชีใหม่ ${n} รายการ (รับ ${rc.posted || 0} · จ่าย ${ex.posted || 0})${errN ? ` · พลาด ${errN}` : ""}` : "ไม่มีรายการใหม่ (ลงครบแล้ว)", !!errN);
+      const [rc, ex, pr] = await Promise.all([autoPostReceipts({ from, to }), autoPostExpenses({ from, to }), autoPostPayroll({ from, to })]);
+      const n = (rc.posted || 0) + (ex.posted || 0) + (pr.posted || 0), errN = (rc.errors?.length || 0) + (ex.errors?.length || 0) + (pr.errors?.length || 0);
+      flash(n ? `ลงบัญชีใหม่ ${n} รายการ (รับ ${rc.posted || 0} · จ่าย ${ex.posted || 0} · เงินเดือน ${pr.posted || 0})${errN ? ` · พลาด ${errN}` : ""}` : "ไม่มีรายการใหม่ (ลงครบแล้ว)", !!errN);
       loadJournal();
     } catch (e) { flash(e.message || "ไม่สำเร็จ", true); } finally { setSyncing(false); }
   }
@@ -95,22 +140,60 @@ export default function Accounting() {
 
       {/* ── แท็บ ── */}
       <div className="view-seg acc-tabs">
-        {[["tb", "งบทดลอง"], ["journal", "สมุดรายวัน"], ["coa", "ผังบัญชี"]].map(([k, lb]) => (
+        {[["pl", "งบกำไรขาดทุน"], ["bs", "งบแสดงฐานะ"], ["tb", "งบทดลอง"], ["journal", "สมุดรายวัน"], ["coa", "ผังบัญชี"]].map(([k, lb]) => (
           <button key={k} className={"seg-btn" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{lb}</button>
         ))}
       </div>
 
-      {/* ── ช่วงวันที่ (งบทดลอง/สมุดรายวัน) ── */}
+      {/* ── ช่วงวันที่ ── */}
       {tab !== "coa" && (
         <div className="acc-daterow">
-          <label>ตั้งแต่ <input type="date" className="inp" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-          <label>ถึง <input type="date" className="inp" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          {(tab === "tb" || tab === "journal") && <label>ตั้งแต่ <input type="date" className="inp" value={from} onChange={(e) => setFrom(e.target.value)} /></label>}
+          <label>{tab === "pl" ? "งวดถึง" : tab === "bs" ? "ณ วันที่" : "ถึง"} <input type="date" className="inp" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          {tab === "pl" && <span className="acc-hint">งวดปี {to.slice(0, 4)} (ม.ค. – {thDate(to)})</span>}
           {tab === "journal" && <button className="btn-ghost" disabled={syncing} onClick={runAutoPost}>{syncing ? "กำลังดึง…" : "⟳ ดึงเอกสารเข้าบัญชี"}</button>}
           {tab === "journal" && <button className="btn" onClick={() => setEntry(newEntry(entity))}>＋ ลงรายการเอง</button>}
         </div>
       )}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
+
+      {/* ═══ งบกำไรขาดทุน ═══ */}
+      {tab === "pl" && (
+        <div className="acc-card">
+          {stmtLoading ? <div className="empty">กำลังโหลด…</div> : (
+            <table className="acc-table acc-stmt">
+              <tbody>
+                <StmtSection title="รายได้" rows={stmt.pl.revRows} total={stmt.pl.revenue} />
+                <StmtSection title="หัก ต้นทุนขายและบริการ" rows={stmt.pl.cogsRows} total={stmt.pl.cogs} neg />
+                <StmtTotal label="กำไรขั้นต้น" amt={stmt.pl.gross} strong />
+                <StmtSection title="หัก ค่าใช้จ่ายในการขาย" rows={stmt.pl.sellRows} total={stmt.pl.selling} neg />
+                <StmtSection title="หัก ค่าใช้จ่ายในการบริหาร" rows={stmt.pl.adminRows} total={stmt.pl.admin} neg />
+                <StmtTotal label="กำไรจากการดำเนินงาน" amt={stmt.pl.operating} strong />
+                {(stmt.pl.finance + stmt.pl.taxExp) > 0.005 && <StmtSection title="หัก ต้นทุนการเงิน / ภาษี" rows={stmt.pl.finRows} total={stmt.pl.finance + stmt.pl.taxExp} neg />}
+                <StmtTotal label="กำไร(ขาดทุน)สุทธิ" amt={stmt.pl.netProfit} grand />
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* ═══ งบแสดงฐานะการเงิน ═══ */}
+      {tab === "bs" && (
+        <div className="acc-card">
+          {stmtLoading ? <div className="empty">กำลังโหลด…</div> : (
+            <table className="acc-table acc-stmt">
+              <tbody>
+                <StmtSection title="สินทรัพย์" rows={stmt.bs.assetRows} total={stmt.bs.assets} strong />
+                <tr className="acc-stmt-gap"><td colSpan={2}></td></tr>
+                <StmtSection title="หนี้สิน" rows={stmt.bs.liabRows} total={stmt.bs.liab} />
+                <StmtSection title="ส่วนของเจ้าของ" rows={[...stmt.bs.equityRows, { code: "—", name: "กำไร(ขาดทุน)สะสม + งวดนี้", amt: stmt.bs.netIncomeAll }]} total={stmt.bs.equity} />
+                <StmtTotal label={"รวมหนี้สินและส่วนของเจ้าของ" + (stmt.bs.balanced ? " ✓" : " ⚠ ไม่สมดุล")} amt={stmt.bs.liab + stmt.bs.equity} grand ok={stmt.bs.balanced} />
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* ═══ งบทดลอง ═══ */}
       {tab === "tb" && (
@@ -277,4 +360,19 @@ function EntryModal({ entry, setEntry, chart, onSaved, onError }) {
       </div>
     </div>
   );
+}
+
+function StmtSection({ title, rows, total, neg, strong }) {
+  return (
+    <>
+      <tr className="acc-stmt-head"><td>{title}</td><td className="r"></td></tr>
+      {rows.map((r) => (
+        <tr key={r.code} className="acc-stmt-line"><td><span className="mono acc-jl-code">{r.code}</span> {r.name}</td><td className="r mono">{fmtBaht(r.amt)}</td></tr>
+      ))}
+      <tr className={"acc-stmt-sub" + (strong ? " strong" : "")}><td>รวม{title.replace(/^หัก /, "")}</td><td className="r mono">{neg ? `(${fmtBaht(total)})` : fmtBaht(total)}</td></tr>
+    </>
+  );
+}
+function StmtTotal({ label, amt, strong, grand, ok }) {
+  return <tr className={"acc-stmt-total" + (grand ? " grand" : "") + (strong ? " strong" : "") + (ok === false ? " bad" : "")}><td>{label}</td><td className="r mono">{fmtBaht(amt)}</td></tr>;
 }
