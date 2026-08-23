@@ -1735,6 +1735,15 @@ export async function voidJournal(id) {
   const { error } = await supabase.from("acc_journal").update({ status: "void" }).eq("id", id);
   if (error) throw error;
 }
+// ล้างรายการที่ระบบลงอัตโนมัติ (source='auto') ในช่วงวันที่ — ไม่แตะรายการที่ลงเอง (manual)
+// ใช้ก่อนลงใหม่ เมื่อกติกาเปลี่ยน/เลขเพี้ยนจากการดึงหลายรอบ · บรรทัดลบตาม (ON DELETE CASCADE)
+export async function clearAutoJournal({ from, to } = {}) {
+  let q = supabase.from("acc_journal").delete().eq("source", "auto");
+  if (from) q = q.gte("jdate", from);
+  if (to) q = q.lte("jdate", to);
+  const { error } = await q;
+  if (error) throw error;
+}
 
 // จับประเภทรายได้จากชื่อ/รายละเอียดรายการ → รหัสบัญชีรายได้ 4010–4060
 function _revAccountOf(it) {

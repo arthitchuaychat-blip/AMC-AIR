@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccEntities, listAccChart, listJournal, postJournal, voidJournal, autoPostReceipts, autoPostExpenses, autoPostPayroll } from "../lib/api";
+import { listAccEntities, listAccChart, listJournal, postJournal, voidJournal, clearAutoJournal, autoPostReceipts, autoPostExpenses, autoPostPayroll } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 
@@ -142,6 +142,47 @@ export default function Accounting({ onOpenRef }) {
     } catch (e) { flash(e.message || "ไม่สำเร็จ", true); } finally { setSyncing(false); }
   }
 
+  async function runResync() {
+    const ok = await confirmDialog({ title: "ล้างรายการอัตโนมัติ + ลงใหม่?", message: `ลบรายการที่ระบบลงอัตโนมัติในช่วง ${thDate(from)} – ${thDate(to)} ทั้งหมด แล้วลงใหม่ตามกติกาล่าสุด\n\nใช้เมื่อเลขเพี้ยนจากการดึงหลายรอบ/เปลี่ยนกติกา · รายการที่ “ลงเอง” ไม่ถูกลบ`, confirmText: "ล้าง + ลงใหม่", danger: true });
+    if (!ok) return;
+    setSyncing(true);
+    try {
+      await clearAutoJournal({ from, to });
+      const [rc, ex, pr] = await Promise.all([autoPostReceipts({ from, to }), autoPostExpenses({ from, to }), autoPostPayroll({ from, to })]);
+      const n = (rc.posted || 0) + (ex.posted || 0) + (pr.posted || 0);
+      flash(`ล้างแล้วลงใหม่ ${n} รายการ`);
+      loadJournal();
+    } catch (e) { flash(e.message || "ไม่สำเร็จ", true); } finally { setSyncing(false); }
+  }
+
+  // ── รายงานภาษี VAT (ภ.พ.30) — ภาษีขาย(2100) − ภาษีซื้อ(1300) จากรายการในช่วง ──
+  const vat = React.useMemo(() => {
+    const byMonth = {}, sales = [], purch = [];
+    const M = (m) => (byMonth[m] ||= { outBase: 0, out: 0, inBase: 0, inp: 0 });
+    journal.forEach((j) => {
+      const L = j.lines || [];
+      const out = L.filter((l) => l.account_code === "2100").reduce((s, l) => s + (Number(l.credit) || 0) - (Number(l.debit) || 0), 0);
+      const inp = L.filter((l) => l.account_code === "1300").reduce((s, l) => s + (Number(l.debit) || 0) - (Number(l.credit) || 0), 0);
+      const m = (j.jdate || "").slice(0, 7);
+      if (out > 0.005) {
+        const base = L.filter((l) => chartMap[l.account_code]?.category === "revenue").reduce((s, l) => s + (Number(l.credit) || 0) - (Number(l.debit) || 0), 0);
+        const g = M(m); g.out += out; g.outBase += base;
+        sales.push({ date: j.jdate, ref_type: j.ref_type, ref_no: j.ref_no, base, vat: out });
+      }
+      if (inp > 0.005) {
+        const base = L.filter((l) => chartMap[l.account_code]?.subtype === "cogs").reduce((s, l) => s + (Number(l.debit) || 0) - (Number(l.credit) || 0), 0);
+        const g = M(m); g.inp += inp; g.inBase += base;
+        purch.push({ date: j.jdate, ref_type: j.ref_type, ref_no: j.ref_no, base, vat: inp });
+      }
+    });
+    const months = Object.keys(byMonth).sort();
+    const totOut = months.reduce((s, m) => s + byMonth[m].out, 0), totIn = months.reduce((s, m) => s + byMonth[m].inp, 0);
+    const totOutBase = months.reduce((s, m) => s + byMonth[m].outBase, 0), totInBase = months.reduce((s, m) => s + byMonth[m].inBase, 0);
+    sales.sort((a, b) => (a.date || "") < (b.date || "") ? -1 : 1);
+    purch.sort((a, b) => (a.date || "") < (b.date || "") ? -1 : 1);
+    return { months, byMonth, sales, purch, totOut, totIn, totOutBase, totInBase, net: totOut - totIn };
+  }, [journal, chartMap]);
+
   return (
     <div className="adm">
       <div className="adm-head">
@@ -161,7 +202,7 @@ export default function Accounting({ onOpenRef }) {
 
       {/* ── แท็บ ── */}
       <div className="view-seg acc-tabs">
-        {[["pl", "งบกำไรขาดทุน"], ["bs", "งบแสดงฐานะ"], ["ledger", "แยกประเภท"], ["tb", "งบทดลอง"], ["journal", "สมุดรายวัน"], ["coa", "ผังบัญชี"]].map(([k, lb]) => (
+        {[["pl", "งบกำไรขาดทุน"], ["bs", "งบแสดงฐานะ"], ["vat", "ภาษี VAT"], ["ledger", "แยกประเภท"], ["tb", "งบทดลอง"], ["journal", "สมุดรายวัน"], ["coa", "ผังบัญชี"]].map(([k, lb]) => (
           <button key={k} className={"seg-btn" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{lb}</button>
         ))}
       </div>
@@ -169,10 +210,11 @@ export default function Accounting({ onOpenRef }) {
       {/* ── ช่วงวันที่ ── */}
       {tab !== "coa" && (
         <div className="acc-daterow">
-          {(tab === "tb" || tab === "journal" || tab === "ledger") && <label>ตั้งแต่ <input type="date" className="inp" value={from} onChange={(e) => setFrom(e.target.value)} /></label>}
+          {(tab === "tb" || tab === "journal" || tab === "ledger" || tab === "vat") && <label>ตั้งแต่ <input type="date" className="inp" value={from} onChange={(e) => setFrom(e.target.value)} /></label>}
           <label>{tab === "pl" ? "งวดถึง" : tab === "bs" ? "ณ วันที่" : "ถึง"} <input type="date" className="inp" value={to} onChange={(e) => setTo(e.target.value)} /></label>
           {tab === "pl" && <span className="acc-hint">งวดปี {to.slice(0, 4)} (ม.ค. – {thDate(to)})</span>}
           {tab === "journal" && <button className="btn-ghost" disabled={syncing} onClick={runAutoPost}>{syncing ? "กำลังดึง…" : "⟳ ดึงเอกสารเข้าบัญชี"}</button>}
+          {tab === "journal" && <button className="btn-ghost acc-resync" disabled={syncing} onClick={runResync} title="ลบรายการอัตโนมัติแล้วลงใหม่ (แก้เลขเพี้ยน)">♻ ล้าง+ลงใหม่</button>}
           {tab === "journal" && <button className="btn" onClick={() => setEntry(newEntry(entity))}>＋ ลงรายการเอง</button>}
         </div>
       )}
@@ -213,6 +255,47 @@ export default function Accounting({ onOpenRef }) {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* ═══ รายงานภาษี VAT (ภ.พ.30) ═══ */}
+      {tab === "vat" && (
+        <div className="acc-card">
+          {entity === "personal" && <div className="acc-hint" style={{ marginBottom: 10 }}>⚠ ฝั่งบุคคลไม่จด VAT — เลือก “บริษัท” หรือ “รวม” เพื่อดูภาษี</div>}
+          {/* ภ.พ.30 สรุปงวด */}
+          <div className="acc-vat-box">
+            <div className="acc-vat-title">แบบ ภ.พ.30 · งวด {thDate(from)} – {thDate(to)}</div>
+            <div className="acc-vat-grid">
+              <div><span>ยอดขายที่เสียภาษี</span><b className="mono">{fmtBaht(vat.totOutBase)}</b></div>
+              <div><span>ภาษีขาย</span><b className="mono">{fmtBaht(vat.totOut)}</b></div>
+              <div><span>ยอดซื้อ</span><b className="mono">{fmtBaht(vat.totInBase)}</b></div>
+              <div><span>ภาษีซื้อ</span><b className="mono">{fmtBaht(vat.totIn)}</b></div>
+            </div>
+            <div className={"acc-vat-net " + (vat.net >= 0 ? "pay" : "credit")}>
+              {vat.net >= 0 ? "ภาษีที่ต้องชำระ" : "ภาษีชำระเกิน (ยกไปเดือนหน้า)"} : <b className="mono">{fmtBaht(Math.abs(vat.net))}</b>
+            </div>
+          </div>
+          {/* สรุปรายเดือน */}
+          {vat.months.length > 0 && (
+            <table className="acc-table" style={{ marginTop: 14 }}>
+              <thead><tr><th>เดือน</th><th className="r">ยอดขาย</th><th className="r">ภาษีขาย</th><th className="r">ยอดซื้อ</th><th className="r">ภาษีซื้อ</th><th className="r">สุทธิ</th></tr></thead>
+              <tbody>
+                {vat.months.map((m) => { const g = vat.byMonth[m]; const net = g.out - g.inp; return (
+                  <tr key={m}>
+                    <td className="mono">{m}</td>
+                    <td className="r mono">{fmtBaht(g.outBase)}</td><td className="r mono">{fmtBaht(g.out)}</td>
+                    <td className="r mono">{fmtBaht(g.inBase)}</td><td className="r mono">{fmtBaht(g.inp)}</td>
+                    <td className="r mono" style={{ color: net >= 0 ? "#b91c1c" : "#0a6b3d" }}>{fmtBaht(net)}</td>
+                  </tr>
+                ); })}
+              </tbody>
+            </table>
+          )}
+          {/* รายงานภาษีขาย / ภาษีซื้อ */}
+          <div className="acc-vat-details">
+            <VatList title="รายงานภาษีขาย" rows={vat.sales} onOpenRef={onOpenRef} />
+            <VatList title="รายงานภาษีซื้อ" rows={vat.purch} onOpenRef={onOpenRef} />
+          </div>
         </div>
       )}
 
@@ -439,4 +522,29 @@ function StmtSection({ title, rows, total, neg, strong }) {
 }
 function StmtTotal({ label, amt, strong, grand, ok }) {
   return <tr className={"acc-stmt-total" + (grand ? " grand" : "") + (strong ? " strong" : "") + (ok === false ? " bad" : "")}><td>{label}</td><td className="r mono">{fmtBaht(amt)}</td></tr>;
+}
+
+function VatList({ title, rows, onOpenRef }) {
+  const tot = rows.reduce((s, r) => s + r.vat, 0);
+  return (
+    <div className="acc-vat-list">
+      <div className="acc-vat-lhead">{title} <span>{rows.length} รายการ · ภาษี {fmtBaht(tot)}</span></div>
+      {rows.length === 0 ? <div className="empty" style={{ fontSize: 12.5 }}>ไม่มีรายการ</div> : (
+        <table className="acc-table">
+          <thead><tr><th>วันที่</th><th>เอกสาร</th><th className="r">มูลค่า</th><th className="r">ภาษี</th><th></th></tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td className="mono">{thDate(r.date)}</td>
+                <td>{REFT[r.ref_type] || r.ref_type}{r.ref_no ? ` ${r.ref_no}` : ""}</td>
+                <td className="r mono">{fmtBaht(r.base)}</td>
+                <td className="r mono">{fmtBaht(r.vat)}</td>
+                <td>{onOpenRef && LINKABLE.has(r.ref_type) && r.ref_no && <button className="acc-led-link" onClick={() => onOpenRef(r.ref_type, r.ref_no)}>↗</button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }
