@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, getCompanies, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, getCompanies, markQuoteSent, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -187,6 +187,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       if (imgs.length) setPending((s) => [...s, ...imgs]);
       flash(`แนบ ${n} เอกสารในช่องแชตแล้ว — ตรวจแล้วกดส่ง ✓`);
     }
+    b.entries.forEach((en) => { if (en.type === "quote") markQuoteSent(en.no); });   // ใบเสนอในชุด → "ส่งแล้ว" อัตโนมัติ
   }
   const [infoDocs, setInfoDocs] = React.useState([]);
   const [loadingInfoDocs, setLoadingInfoDocs] = React.useState(false);
@@ -1564,7 +1565,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               const atts = [];
               for (const cl of copies) atts.push(...(await captureDocForEmail(node, "pdf", capJob.label + suffix(cl), cl)));
               setEmailDoc({
-                to: capJob.email || "", label: capJob.label, attachments: atts,
+                to: capJob.email || "", label: capJob.label, attachments: atts, quoteNo: capJob.type === "quote" ? capJob.no : null,
                 subject: `${capJob.label} — AMC AIR`,
                 body: `เรียน ${capJob.custName || "ลูกค้า"}\n\nบริษัท AMC AIR ขอนำส่ง${capJob.label} ตามไฟล์แนบครับ หากมีข้อสงสัยหรือต้องการข้อมูลเพิ่มเติม ติดต่อกลับได้เลยครับ\n\nขอบคุณที่ใช้บริการครับ\nAMC AIR`,
               });
@@ -1578,6 +1579,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               }
               if (imgs.length) setPending((s) => [...s, ...imgs]);
               if (texts.length) setText((cur) => (cur ? cur + "\n" : "") + texts.join("\n"));
+              if (capJob.type === "quote") markQuoteSent(capJob.no);   // ส่งใบเสนอเข้าแชต → ร่างเป็น "ส่งแล้ว" อัตโนมัติ
               flash("แนบเอกสารไว้ในช่องแชตแล้ว — ตรวจแล้วกด “ส่ง” ✓");
             }
           }
@@ -1635,6 +1637,7 @@ function EmailDocModal({ draft, company, onClose, flash }) {
     setSending(true);
     try {
       await sendEmail({ to: to.trim(), subject: subject.trim() || draft.label, text: body, html: buildEmailHtml(company, body), attachments: atts });
+      if (draft.quoteNo) markQuoteSent(draft.quoteNo);   // อีเมลใบเสนอราคาสำเร็จ → ร่างเป็น "ส่งแล้ว" อัตโนมัติ
       flash(`ส่งอีเมล ${draft.label} ให้ลูกค้าแล้ว ✓`);
       onClose();
     } catch (e) { flash("ส่งอีเมลไม่สำเร็จ: " + (e.message || e), true); setSending(false); }

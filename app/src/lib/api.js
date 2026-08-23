@@ -2056,6 +2056,11 @@ export async function deleteQuotation(quote_no, reason) {
   syncCashEntriesFromDocs().catch(() => {}); // refresh cash flow after quote delete
 }
 
+// ส่งใบเสนอราคาให้ลูกค้าแล้ว → เปลี่ยน "ร่าง" เป็น "ส่งแล้ว" อัตโนมัติ (เฉพาะร่าง — ไม่แตะอนุมัติ/ปฏิเสธ/หมดอายุ) · best-effort
+export async function markQuoteSent(quote_no) {
+  if (!quote_no) return;
+  try { await supabase.from("quotations").update({ status: "sent" }).eq("quote_no", quote_no).eq("status", "draft"); } catch { /* ไม่ให้กระทบการส่ง */ }
+}
 export async function setQuotationStatus(quote_no, status, reason) {
   // อ่านสถานะเดิมก่อนอัปเดต — ไว้แยก "unapprove" (ถอนใบอนุมัติ) ออกจากการเปลี่ยนสถานะทั่วไปใน audit log
   let prevStatus = null;

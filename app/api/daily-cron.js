@@ -80,6 +80,20 @@ export default async function handler(req, res) {
     const today = thDay(0), tomorrow = thDay(1);
     const result = { date: today.ymd, apptReminders: { sent: 0, skippedNoLine: 0, list: [] }, digest: {} };
 
+    // ═══════════ (1) หมดอายุใบเสนอราคาอัตโนมัติ: ร่าง/ส่งแล้ว ที่เลยวันยืนราคา → หมดอายุ ═══════════
+    try {
+      if (dry) {
+        const over = await q(`quotations?select=quote_no&status=in.(draft,sent)&valid_until=lt.${today.ymd}`).catch(() => []);
+        result.quotesExpired = over.length;
+      } else {
+        const rr = await fetch(`${SB()}/rest/v1/quotations?status=in.(draft,sent)&valid_until=lt.${today.ymd}`, {
+          method: "PATCH", headers: { ...H(), Prefer: "return=representation" },
+          body: JSON.stringify({ status: "expired" }),
+        });
+        result.quotesExpired = rr.ok ? (await rr.json().catch(() => [])).length : 0;
+      }
+    } catch (_) { result.quotesExpired = 0; }
+
     // ═══════════ (2) เตือนนัดหมายลูกค้าล่วงหน้า 1 วัน (นัดพรุ่งนี้) ═══════════
     try {
       const range = `scheduled_at=gte.${enc(tomorrow.startISO)}&scheduled_at=lt.${enc(tomorrow.endISO)}`;
