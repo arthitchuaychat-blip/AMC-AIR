@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems, docNoTaken } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, expireOverdueQuotes, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems, docNoTaken } from "../lib/api";
 import DocSlip from "./DocSlip";
 import NumIn from "./NumIn";
 import DocTerms from "./DocTerms";
@@ -31,6 +31,7 @@ const STATUS = {
   cancelled: { th: "ยกเลิกแล้ว", cls: "b-red" },
 };
 const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"], ["approved", "อนุมัติ"], ["rejected", "ปฏิเสธ"], ["expired", "หมดอายุ"]];
+const ST_COLOR = { draft: "#64748b", sent: "#1d4ed8", approved: "#16a34a", rejected: "#dc2626", expired: "#b45309", cancelled: "#991b1b" };
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -66,6 +67,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
 
   async function load() {
     setLoading(true);
+    try { await expireOverdueQuotes(); } catch { /* best-effort — เลยวันยืนราคา → หมดอายุ ก่อนโหลดรายการ */ }
     try { const [q, c, m, b, co, dl] = await Promise.all([listQuotations(), listCustomers(), listMaterialsLite(), listBoqs(), getCompanies(), listDocLinks()]); setList(q); setCusts(c); setMats(m); setBoqs(b); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
@@ -229,6 +231,14 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
           <p className="page-sub">ดึงจาก BOQ ได้ (ไม่รวมของแถม) · ส่วนลด · VAT · ราคาขาย</p></div></div>
         <div className="doc-edit-wrap">
         <div className="card" style={{ flex: 1, maxWidth: 860 }}>
+          {/* สถานะเอกสาร — มุมขวาบน ปรับได้ทันที (ร่าง/ส่งแล้ว/หมดอายุ/ปฏิเสธ · อนุมัติจากปุ่มบนการ์ด) */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink-3)" }}>สถานะเอกสาร</span>
+            <Combo className="inp" style={{ width: "auto", flex: "none", minWidth: 138, fontWeight: 800, color: ST_COLOR[ed.status] || "var(--ink)", borderColor: ST_COLOR[ed.status] || "var(--line)", borderWidth: 1.5 }}
+              value={ed.status} onChange={(e) => setQ("status", e.target.value)}>
+              {STATUS_OPTS.filter(([v]) => v !== "approved" || ed.status === "approved").map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </Combo>
+          </div>
           <div className="fld-row">
             <label className="fld"><span>เลขที่ใบเสนอราคา</span><input className="inp" value={ed.quote_no} onChange={(e) => setQ("quote_no", e.target.value)} /></label>
             <label className="fld"><span>ชื่องาน</span><input className="inp" value={ed.title} onChange={(e) => setQ("title", e.target.value)} placeholder="เช่น ติดตั้งแอร์ออฟฟิศ" /></label>
@@ -370,14 +380,6 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             {ed.pay_method === "card_inst10" && <div><span>≈ ผ่อนเดือนละ</span><b>{fmtBaht(grand / 10)} × 10 เดือน</b></div>}
             {ed.wht && canWht && <div><span>หัก ณ ที่จ่าย {Number(ed.wht_rate) || 3}%</span><b style={{ color: "var(--down)" }}>− {fmtBaht(whtAmt)}</b></div>}
             {ed.wht && canWht && <div className="qt-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(netPay)}</b></div>}
-          </div>
-
-          <div className="fld-row">
-            <label className="fld"><span>สถานะ <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(อนุมัติได้จากปุ่มบนการ์ดเท่านั้น — มีบันทึกประวัติ)</span></span>
-              <Combo className="inp" value={ed.status} onChange={(e) => setQ("status", e.target.value)}>
-                {STATUS_OPTS.filter(([v]) => v !== "approved" || ed.status === "approved").map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </Combo>
-            </label>
           </div>
 
           <DocTerms payment={ed.terms_payment} freebies={ed.terms_freebies} warranty={ed.terms_warranty} docItems={ed.items} onChange={(k, v) => setQ(k, v)} />

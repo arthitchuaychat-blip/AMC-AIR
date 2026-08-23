@@ -2056,6 +2056,13 @@ export async function deleteQuotation(quote_no, reason) {
   syncCashEntriesFromDocs().catch(() => {}); // refresh cash flow after quote delete
 }
 
+// หมดอายุใบเสนอราคาอัตโนมัติ (ทันที + ย้อนหลัง): ร่าง/ส่งแล้ว ที่เลยวันยืนราคา → หมดอายุ · เรียกตอนเปิดหน้าใบเสนอราคา
+export async function expireOverdueQuotes() {
+  const d = new Date(Date.now() + 7 * 3600e3);   // เวลาไทย (UTC+7)
+  const today = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  try { const { data } = await supabase.from("quotations").update({ status: "expired" }).in("status", ["draft", "sent"]).lt("valid_until", today).select("quote_no"); return (data || []).length; }
+  catch { return 0; }   // best-effort — ไม่ให้กระทบการโหลดหน้า
+}
 // ส่งใบเสนอราคาให้ลูกค้าแล้ว → เปลี่ยน "ร่าง" เป็น "ส่งแล้ว" อัตโนมัติ (เฉพาะร่าง — ไม่แตะอนุมัติ/ปฏิเสธ/หมดอายุ) · best-effort
 export async function markQuoteSent(quote_no) {
   if (!quote_no) return;
