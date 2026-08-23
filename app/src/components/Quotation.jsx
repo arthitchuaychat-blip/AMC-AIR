@@ -52,7 +52,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const { draftKey, clearOnSaved, closeGuard } = useFormDraft(ed, setEd, { kind: "quote", idOf: (e) => (e._edit ? e.quote_no : null), label: "ใบเสนอราคา" });
   const [statusF, setStatusF] = React.useState("all");
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
-  const [docF, setDocF] = React.useState("all"); // all | no_invoice | no_job
+  const [docF, setDocF] = React.useState(() => new Set()); // เลือกหลายตัวได้ (ว่าง = ทุกใบ) · no_invoice/no_job/no_ac_po
+  const toggleDocF = (v) => setDocF((s) => { if (v === "all") return new Set(); const n = new Set(s); n.has(v) ? n.delete(v) : n.add(v); return n; });
   const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
   // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
   const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
@@ -406,6 +407,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const hasAc = (q) => (q.items || []).some((it) => it.kind === "ac");
   const noAcPo = (q) => hasAc(q) && q.status !== "cancelled" && !(docLinks.byQuote[q.quote_no]?.poNos || []).length; // มีแอร์แต่ยังไม่เปิดใบสั่งซื้อ
   const docPred = (q, f) => f === "all" ? true : f === "no_invoice" ? !q.hasInvoice : f === "no_job" ? !q.hasJob : noAcPo(q);
+  const docMatch = (q) => docF.size === 0 || [...docF].every((f) => docPred(q, f));   // เลือกหลายตัว = ต้องเข้าทุกเงื่อนไข (AND)
   const nStatus = (v) => fl0.filter((q) => v === "all" || q.status === v).length;
   const nVat = (v) => fl0.filter((q) => v === "all" || (v === "vat" ? !!q.vat : !q.vat)).length;
   const nDoc = (v) => fl0.filter((q) => docPred(q, v)).length;
@@ -413,11 +415,11 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   // ช่วงวันที่นับเป็น active เฉพาะเมื่อต่างจากค่าเริ่มต้น 6 เดือนล่าสุด (ไม่งั้นจะขึ้น 1 ตลอด)
   const _dfltR = defaultDocRange();
   const dateActive = (dateR.from || dateR.to) && !(dateR.from === _dfltR.from && dateR.to === _dfltR.to);
-  const activeCount = (statusF !== "all" ? 1 : 0) + (vatF !== "all" ? 1 : 0) + (docF !== "all" ? 1 : 0) + (byPerson ? 1 : 0) + (dateActive ? 1 : 0);
+  const activeCount = (statusF !== "all" ? 1 : 0) + (vatF !== "all" ? 1 : 0) + docF.size + (byPerson ? 1 : 0) + (dateActive ? 1 : 0);
   const fl = fl0.filter((q) => (statusF === "all" || q.status === statusF)
     && (vatF === "all" || (vatF === "vat" ? !!q.vat : !q.vat))
     && (!byPerson || (q.createdByName || "") === byPerson)
-    && docPred(q, docF));
+    && docMatch(q));
   return (
     <div className="adm">
       <div className="adm-head">
@@ -452,10 +454,13 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         )}
       </div>
       <div className="cat-filter" style={{ marginTop: -4 }}>
-        {[["all", "ทุกใบ"], ["no_invoice", "ยังไม่สร้างใบส่งของ/ใบแจ้งหนี้"], ["no_job", "ยังไม่สร้างใบงาน"], ["no_ac_po", "ยังไม่สั่งซื้อแอร์"]].map(([v, l]) => (
-          <button key={v} className={"cat-chip" + (docF === v ? " on" : "")} onClick={() => setDocF(v)}
-            style={docF === v ? { background: v === "no_ac_po" ? "#7c3aed" : "#0891b2", color: "#fff", borderColor: v === "no_ac_po" ? "#7c3aed" : "#0891b2" } : {}}>{l} ({nDoc(v)})</button>
-        ))}
+        {[["all", "ทุกใบ"], ["no_invoice", "ยังไม่สร้างใบส่งของ/ใบแจ้งหนี้"], ["no_job", "ยังไม่สร้างใบงาน"], ["no_ac_po", "ยังไม่สั่งซื้อแอร์"]].map(([v, l]) => {
+          const on = v === "all" ? docF.size === 0 : docF.has(v);
+          return (
+          <button key={v} className={"cat-chip" + (on ? " on" : "")} onClick={() => toggleDocF(v)}
+            style={on ? { background: v === "no_ac_po" ? "#7c3aed" : "#0891b2", color: "#fff", borderColor: v === "no_ac_po" ? "#7c3aed" : "#0891b2" } : {}}>{v !== "all" && docF.has(v) ? "✓ " : ""}{l} ({nDoc(v)})</button>
+          );
+        })}
       </div>
       </FilterBar>
 
