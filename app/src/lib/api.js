@@ -2238,7 +2238,7 @@ async function _loadQuotations(opts = {}) {
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
-  const billedByQ = {}; (inv.data || []).forEach((x) => { if (x.status !== "cancelled") billedByQ[x.quote_no] = (billedByQ[x.quote_no] || 0) + Number(x.total || 0); });
+  const billedByQ = {}, invCntByQ = {}; (inv.data || []).forEach((x) => { if (x.status !== "cancelled") { billedByQ[x.quote_no] = (billedByQ[x.quote_no] || 0) + Number(x.total || 0); invCntByQ[x.quote_no] = (invCntByQ[x.quote_no] || 0) + 1; } });
   const cb = await _creators(scoped ? _idsOf(qR.data, "created_by") : null);
   return (qR.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
@@ -2274,7 +2274,7 @@ async function _loadQuotations(opts = {}) {
       contactName: (s && s.contact_name) || ct0?.name || null, contactPhone: (s && s.phone) || ct0?.phone || null,
       jobNo: jobByQuote[qo.quote_no]?.job_no || null, hasJob: !!jobByQuote[qo.quote_no], jobScheduledAt: jobByQuote[qo.quote_no]?.scheduled_at || null,
       jobTeam: jobByQuote[qo.quote_no]?.assigned_team || null,   // ทีมช่างของงาน (ไว้กรองรายทีมบนแดชบอร์ด)
-      hasInvoice: (billedByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : 0,
+      hasInvoice: (invCntByQ[qo.quote_no] || 0) > 0, billedPct: grand > 0 ? (billedByQ[qo.quote_no] || 0) / grand * 100 : ((invCntByQ[qo.quote_no] || 0) > 0 ? 100 : 0),
       items: itemsX, subtotal, discount, afterDisc, payMethod, vatAmt, grand, whtOn, whtAmt, netPay: grand - whtAmt };
   });
 }
