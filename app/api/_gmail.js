@@ -46,18 +46,31 @@ function extractHtml(payload) {
   return html.slice(0, 400000);
 }
 
-// เดินหา part text/plain (ถ้าไม่มีใช้ text/html แล้วถอด tag)
+// เดินหา part text/plain (ถ้าไม่มีใช้ text/html แล้วถอด tag) + ดึงสาเหตุการตีกลับ (bounce)
 function extractBody(payload) {
-  let text = "", html = "";
+  let text = "", html = "", dsn = "";
   const walk = (p) => {
     if (!p) return;
     const mime = p.mimeType || "";
     if (mime === "text/plain" && p.body?.data) text += b64urlDecode(p.body.data);
     else if (mime === "text/html" && p.body?.data) html += b64urlDecode(p.body.data);
+    else if (mime === "message/delivery-status" && p.body?.data) dsn += b64urlDecode(p.body.data);
     (p.parts || []).forEach(walk);
   };
   walk(payload);
-  return (text.trim() || stripHtml(html)).slice(0, 20000);
+  let body = text.trim() || stripHtml(html);
+  // เมลตีกลับ (DSN): ดึง "ผู้รับที่ล้มเหลว + รหัส/สาเหตุ" มาแปะไว้บนสุด ให้เห็นทันทีว่าทำไมส่งไม่ได้
+  if (dsn.trim()) {
+    const rcpt = dsn.match(/Final-Recipient:\s*[^;]*;\s*([^\s\n]+)/i);
+    const diag = dsn.match(/Diagnostic-Code:\s*([^\n]*(?:\n[ \t]+[^\n]*)*)/i);
+    const stat = dsn.match(/Status:\s*([0-9.]+)/i);
+    const parts = [
+      rcpt ? `ผู้รับที่ส่งไม่สำเร็จ: ${rcpt[1]}` : null,
+      diag ? `สาเหตุ: ${diag[1].replace(/\s+/g, " ").trim()}` : (stat ? `รหัสสถานะ: ${stat[1]}` : null),
+    ].filter(Boolean);
+    if (parts.length) body = `⚠️ ส่งไม่สำเร็จ (ตีกลับ)\n${parts.join("\n")}\n\n─────────────\n${body}`;
+  }
+  return body.slice(0, 20000);
 }
 
 const parseAddr = (raw) => {

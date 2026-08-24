@@ -26,12 +26,20 @@ export default async function handler(req, res) {
     if (!ids.length) return res.status(200).json({ ok: true, listCount: 0, new: 0, threads: 0 });
 
     // ดึงเฉพาะที่ยังไม่มีในฐานข้อมูล
-    const existing = new Set((await sbGet(`email_messages?id=in.(${ids.map((i) => `"${i}"`).join(",")})&select=id`)).map((r) => r.id));
+    const listIds = ids.map((i) => `"${i}"`).join(",");
+    const existing = new Set((await sbGet(`email_messages?id=in.(${listIds})&select=id`)).map((r) => r.id));
     const newIds = ids.filter((i) => !existing.has(i));
+    // อ่านเมลตีกลับเก่า (mailer-daemon/postmaster) ซ้ำ เพื่ออัปเดตสาเหตุการตีกลับให้แสดง
+    let reparseIds = [];
+    try {
+      const br = await sbGet(`email_messages?id=in.(${listIds})&or=(from_email.ilike.*mailer-daemon*,from_email.ilike.*postmaster*)&select=id`);
+      reparseIds = br.map((r) => r.id).filter((id) => existing.has(id));
+    } catch {}
+    const toFetch = [...new Set([...newIds, ...reparseIds])];
 
     let parseErr = null;
     const parsed = [];
-    for (const id of newIds) {
+    for (const id of toFetch) {
       try { parsed.push(parseMessage(await gmail(`messages/${id}?format=full`, token), self)); }
       catch (e) { if (!parseErr) parseErr = String(e.message || e); }
     }
