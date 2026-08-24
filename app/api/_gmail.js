@@ -46,32 +46,34 @@ function extractHtml(payload) {
   return html.slice(0, 400000);
 }
 
-// เดินหา part text/plain (ถ้าไม่มีใช้ text/html แล้วถอด tag) + ดึงสาเหตุการตีกลับ (bounce)
+// เดินหา part text/plain (ถ้าไม่มีใช้ text/html แล้วถอด tag)
 function extractBody(payload) {
-  let text = "", html = "", dsn = "";
+  let text = "", html = "";
   const walk = (p) => {
     if (!p) return;
     const mime = p.mimeType || "";
     if (mime === "text/plain" && p.body?.data) text += b64urlDecode(p.body.data);
     else if (mime === "text/html" && p.body?.data) html += b64urlDecode(p.body.data);
-    else if (mime === "message/delivery-status" && p.body?.data) dsn += b64urlDecode(p.body.data);
     (p.parts || []).forEach(walk);
   };
   walk(payload);
-  let body = text.trim() || stripHtml(html);
-  // เมลตีกลับ (DSN): ดึง "ผู้รับที่ล้มเหลว + รหัส/สาเหตุ" มาแปะไว้บนสุด ให้เห็นทันทีว่าทำไมส่งไม่ได้
-  if (dsn.trim()) {
-    const rcpt = dsn.match(/Final-Recipient:\s*[^;]*;\s*([^\s\n]+)/i);
-    const diag = dsn.match(/Diagnostic-Code:\s*([^\n]*(?:\n[ \t]+[^\n]*)*)/i);
-    const stat = dsn.match(/Status:\s*([0-9.]+)/i);
-    const parts = [
-      rcpt ? `ผู้รับที่ส่งไม่สำเร็จ: ${rcpt[1]}` : null,
-      diag ? `สาเหตุ: ${diag[1].replace(/\s+/g, " ").trim()}` : (stat ? `รหัสสถานะ: ${stat[1]}` : null),
-    ].filter(Boolean);
-    if (parts.length) body = `⚠️ ส่งไม่สำเร็จ (ตีกลับ)\n${parts.join("\n")}\n\n─────────────\n${body}`;
-  }
-  return body.slice(0, 20000);
+  return (text.trim() || stripHtml(html)).slice(0, 20000);
 }
+
+// เมลตีกลับ (DSN): ดึง "ผู้รับที่ส่งไม่สำเร็จ + รหัส/สาเหตุ" จากส่วน message/delivery-status
+function bounceInfo(payload) {
+  let dsn = "";
+  const walk = (p) => { if (!p) return; if ((p.mimeType || "") === "message/delivery-status" && p.body?.data) dsn += b64urlDecode(p.body.data); (p.parts || []).forEach(walk); };
+  walk(payload);
+  if (!dsn.trim()) return null;
+  const rcpt = dsn.match(/Final-Recipient:\s*[^;]*;\s*([^\s\n]+)/i);
+  const diag = dsn.match(/Diagnostic-Code:\s*([^\n]*(?:\n[ \t]+[^\n]*)*)/i);
+  const stat = dsn.match(/Status:\s*([0-9.]+)/i);
+  const reason = diag ? diag[1].replace(/\s+/g, " ").trim() : (stat ? `สถานะ ${stat[1]}` : "");
+  if (!rcpt && !reason) return null;
+  return { rcpt: rcpt ? rcpt[1] : "", reason };
+}
+const esc = (s) => String(s || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
 const parseAddr = (raw) => {
   const s = String(raw || "");
@@ -110,6 +112,16 @@ export function parseMessage(msg, selfEmail) {
   const self = String(selfEmail || "").toLowerCase();
   const direction = from.email === self ? "out" : "in";
   const dateMs = Number(msg.internalDate) || Date.parse(headers["date"] || "") || null;
+  let body_text = extractBody(msg.payload);
+  let body_html = extractHtml(msg.payload) || null;
+  // เมลตีกลับ → แปะสาเหตุไว้บนสุดทั้งข้อความและ HTML (ให้เห็นแน่นอนไม่ว่าจะแสดงแบบไหน)
+  const bn = bounceInfo(msg.payload);
+  if (bn) {
+    const lines = [bn.rcpt ? `ผู้รับที่ส่งไม่สำเร็จ: ${bn.rcpt}` : null, bn.reason ? `สาเหตุ: ${bn.reason}` : null].filter(Boolean);
+    body_text = `⚠️ ส่งไม่สำเร็จ (ตีกลับ)\n${lines.join("\n")}\n\n─────────────\n${body_text}`;
+    const banner = `<div style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:10px 14px;border-radius:8px;margin:0 0 12px;font-family:sans-serif;font-size:14px;line-height:1.6"><b>⚠️ ส่งไม่สำเร็จ (ตีกลับ)</b><br>${lines.map(esc).join("<br>")}</div>`;
+    body_html = banner + (body_html || "");
+  }
   return {
     id: msg.id,
     thread_id: msg.threadId,
@@ -119,8 +131,8 @@ export function parseMessage(msg, selfEmail) {
     to_email: to.email,
     subject: headers["subject"] || "(ไม่มีหัวข้อ)",
     snippet: msg.snippet || "",
-    body_text: extractBody(msg.payload),
-    body_html: extractHtml(msg.payload) || null,
+    body_text,
+    body_html,
     spam: (msg.labelIds || []).includes("SPAM"),
     attachments: collectAttachments(msg.payload),
     message_id_header: headers["message-id"] || null,
