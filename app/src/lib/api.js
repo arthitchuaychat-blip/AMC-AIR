@@ -2281,10 +2281,14 @@ async function _loadQuotations(opts = {}) {
 
 export async function saveQuotation(q, items) {
   const { data: { user } } = await supabase.auth.getUser();
-  // guard ฝั่ง server: ใบที่อนุมัติแล้วห้ามบันทึกทับ (หน้าเก่าค้างจากอีกเครื่อง) — ต้องผ่านปุ่ม "คืนสถานะแก้ไข" (มี audit) เท่านั้น
+  // guard ฝั่ง server: บล็อกการบันทึกทับเฉพาะเมื่อ "ออกใบแจ้งหนี้แล้ว" (เงิน/บัญชีผูกแล้ว)
+  // มีใบงาน/อนุมัติแล้วยังแก้ได้จนกว่าจะแจ้งหนี้ (เจ้าของเคาะ 2026-08-24)
   const { data: cur, error: ce } = await supabase.from("quotations").select("status").eq("quote_no", q.quote_no).maybeSingle();
   if (ce) throw ce;
-  if (cur && cur.status === "approved") throw new Error(`ใบเสนอราคา ${q.quote_no} อนุมัติแล้ว — บันทึกทับไม่ได้\nถ้าจำเป็นต้องแก้ กด "คืนสถานะแก้ไข" บนการ์ดก่อน (หน้าอาจค้าง — รีเฟรชแล้วลองใหม่)`);
+  if (cur) {
+    const { count } = await supabase.from("invoices").select("invoice_no", { count: "exact", head: true }).eq("quote_no", q.quote_no).neq("status", "cancelled");
+    if (count > 0) throw new Error(`ใบเสนอราคา ${q.quote_no} มีใบแจ้งหนี้แล้ว — บันทึกทับไม่ได้\nต้องยกเลิกใบแจ้งหนี้/ใบเสร็จก่อน`);
+  }
   const head = {
     quote_no: q.quote_no, customer_id: q.customer_id || null, site_id: q.site_id || null, boq_no: q.boq_no || null,
     title: q.title?.trim() || null, status: q.status || "draft", job_type: q.job_type || null,

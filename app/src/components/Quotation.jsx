@@ -99,10 +99,11 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const lockMsg = (q) => (q.hasInvoice || q.hasJob)
     ? `แก้ไข/ลบใบเสนอราคานี้ไม่ได้ — มี${[q.hasInvoice && "ใบแจ้งหนี้", q.hasJob && `ใบงาน ${q.jobNo || ""}`].filter(Boolean).join(" และ ")}แล้ว\nต้องลบเอกสารถัดไป (ใบแจ้งหนี้/ใบเสร็จ/ใบงาน) ก่อน`
     : null;
-  function startEdit(q) {
-    // ล็อกใบอนุมัติแล้ว — ราคา/รายการคือสัญญากับลูกค้า ถ้าจำเป็นต้องแก้ ให้ "คืนสถานะแก้ไข" ก่อน (ลงประวัติ)
-    if (q.status === "approved") return alert(`ใบเสนอราคา ${q.quote_no} อนุมัติแล้ว — แก้ไขไม่ได้\nถ้าจำเป็นต้องแก้ กดปุ่ม "คืนสถานะแก้ไข" บนการ์ดก่อน (ระบบบันทึกเหตุผลไว้ในประวัติ)`);
-    const lk = lockMsg(q); if (lk) return alert(lk);
+  async function startEdit(q) {
+    // ล็อกเฉพาะเมื่อออกใบแจ้งหนี้แล้ว (เงิน/บัญชีผูกแล้ว) — มีใบงาน/อนุมัติยังแก้ได้จนกว่าจะแจ้งหนี้
+    if (q.hasInvoice) return alert(`ใบเสนอราคา ${q.quote_no} มีใบแจ้งหนี้แล้ว — แก้ไขไม่ได้\nต้องยกเลิกใบแจ้งหนี้/ใบเสร็จก่อน`);
+    // มีใบงานแล้วแต่ยังไม่แจ้งหนี้ → แก้ได้ แต่เตือนให้ตรวจใบงานให้ตรงกัน
+    if (q.hasJob && !(await confirmDialog({ title: "แก้ไขใบเสนอราคาที่มีใบงานแล้ว?", message: `ใบนี้เปิดใบงาน ${q.jobNo || ""} แล้ว (ยังไม่แจ้งหนี้) — แก้ไขได้\nถ้าแก้ราคา/รายการ ควรตรวจใบงานให้ตรงกันด้วย`, confirmText: "แก้ไขต่อ", danger: false }))) return;
     setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", job_type: q.job_type || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at, variation_of: q.variation_of || null,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), discount: Number(x.discount) || 0, kind: x.kind, description: x.description || "" })) });
   }
@@ -483,7 +484,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               <div className="job-lines"><div className="job-actions">
                 <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-                {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice || q.hasJob || q.status === "approved"} title={q.status === "approved" ? "อนุมัติแล้ว — กด 'คืนสถานะแก้ไข' ก่อน" : (lockMsg(q) || "")} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+                {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice} title={q.hasInvoice ? "มีใบแจ้งหนี้แล้ว — แก้ไขไม่ได้ (ยกเลิกใบแจ้งหนี้/ใบเสร็จก่อน)" : (q.hasJob ? "มีใบงานแล้ว — แก้ได้ (จะเตือนให้ตรวจใบงาน)" : "")} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && q.status === "approved" && !q.variation_of && <button className="btn-ghost sm" style={{ color: "#0891b2", borderColor: "#a5f0f5", background: "#ecfeff" }} title="งานเสริมหน้างาน — สร้างใบเสนอราคาเพิ่มเติม กำไรรวมกับงานนี้เป็นก้อนเดียว (ทำงานเสริมบนใบงานเดิม ไม่ต้องเปิดใบงานใหม่)" onClick={() => startVariation(q)}>➕ ใบเสนอเพิ่มเติม</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {canEdit && q.status === "approved" && !q.hasInvoice && !q.hasJob && !(docLinks.byQuote[q.quote_no]?.poNos || []).length &&
