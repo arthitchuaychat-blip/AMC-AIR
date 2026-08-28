@@ -2085,9 +2085,16 @@ export async function claimByCode(code, opts = {}) {
   const camp = (camps || [])[0];
   if (camp) {
     if (camp.claim_until && new Date(camp.claim_until + "T23:59:59") < new Date()) return { closed: true, campaign: camp };
-    const mine = await couponsForCustomer({ customer_id: opts.customer_id, phone: opts.phone, line_user_id: opts.line_user_id, fb_id: opts.fb_id });
-    const dup = mine.find((x) => x.campaign_id === camp.id);
-    if (dup) return { code: dup.code, campaign: camp, already: true };
+    // กันรับซ้ำ (นับรวมที่ใช้โค้ดไปแล้วด้วย) → คืนรหัสเดิม ไม่กินโควตาซ้ำ
+    const orF = [];
+    if (opts.customer_id) orF.push(`customer_id.eq.${opts.customer_id}`);
+    if (opts.phone) orF.push(`phone.eq.${encodeURIComponent(String(opts.phone).replace(/[^0-9+]/g, ""))}`);
+    if (opts.line_user_id) orF.push(`line_user_id.eq.${encodeURIComponent(opts.line_user_id)}`);
+    if (opts.fb_id) orF.push(`fb_id.eq.${encodeURIComponent(opts.fb_id)}`);
+    if (orF.length) {
+      const { data: dup } = await supabase.from("promo_coupons").select("code").eq("campaign_id", camp.id).neq("status", "void").or(orF.join(",")).limit(1);
+      if (dup && dup[0]) return { code: dup[0].code, campaign: camp, already: true };
+    }
     if (camp.quota > 0) {
       const { count } = await supabase.from("promo_coupons").select("code", { count: "exact", head: true }).eq("campaign_id", camp.id).neq("status", "void");
       if ((count || 0) >= camp.quota) return { full: true, campaign: camp };
