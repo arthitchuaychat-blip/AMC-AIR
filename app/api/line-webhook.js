@@ -329,12 +329,12 @@ async function autoReply(replyToken, convId, isNew, isUser, msgRow, meta = {}) {
     // ไม่ง้อ reply token — บางเหตุการณ์ของ LINE มาแบบไม่มีโทเคน (เจอจริงจากกล่องดำ): sendAuto จะ fallback ไปใช้ push เอง
     if (!isUser) { if (isText) await aiBlackbox(convId, msgRow.text, { skip: "not-1to1-user-chat", ...meta }); return; }
     if (meta.redeliv) { if (isText) await aiBlackbox(convId, msgRow.text, { skip: "line-redelivery(กันตอบซ้ำ)", ...meta }); return; }
-    // 🎟️ คีย์เวิร์ดรับคูปอง → ออกโค้ดให้ทันที + เก็บ line id (ก่อนบอท AI)
-    if (isText && /คูปอง|รับสิทธิ|รับส่วนลด|โค้ดส่วนลด/.test(msgRow.text)) {
+    const cfg = await getAutoReplyCfg();
+    // 🎟️ คีย์เวิร์ดรับคูปอง → ออกโค้ดให้ทันที + เก็บ line id · คุมด้วย coupon_kw (เปิดโดยปริยาย · ทำงานแม้ปิดบอท AI)
+    if (isText && cfg?.coupon_kw !== false && /คูปอง|รับสิทธิ|รับส่วนลด|โค้ดส่วนลด/.test(msgRow.text)) {
       const res = await issueCouponForChat(convId, "line", null);
       if (res) { await sendAuto(replyToken, convId, couponReply(res)); await aiBlackbox(convId, msgRow.text, { ok: true, note: "coupon-issued", code: res.code || null, ...meta }); return; }
     }
-    const cfg = await getAutoReplyCfg();
     if (!cfg || !cfg.enabled) { if (isText) await aiBlackbox(convId, msgRow?.text, { skip: "autoreply-master-disabled" }); return; }
     const afterHours = !isOpenNow(cfg);
     // 0) บอท AI: ตอบคำถามจริงจากแคตตาล็อกทุกข้อความ (ไม่มี cooldown — คุยต่อเนื่องได้)

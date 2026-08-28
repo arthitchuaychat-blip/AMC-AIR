@@ -100,12 +100,12 @@ const fbCouponReply = (res) => res.full
 async function fbAutoReply({ psid, text, token }) {
   try {
     if (!token) return;
-    // 🎟️ คีย์เวิร์ดรับคูปอง → ออกโค้ดให้ทันที (ก่อนบอท AI)
-    if (text && /คูปอง|รับสิทธิ|รับส่วนลด|โค้ดส่วนลด/.test(text)) {
+    const cfg = await getAutoReplyCfg();
+    // 🎟️ คีย์เวิร์ดรับคูปอง → ออกโค้ดให้ทันที · คุมด้วย coupon_kw (เปิดโดยปริยาย · ทำงานแม้ปิดบอท AI)
+    if (text && cfg?.coupon_kw !== false && /คูปอง|รับสิทธิ|รับส่วนลด|โค้ดส่วนลด/.test(text)) {
       const res = await issueCouponFb(psid, null);
       if (res) { await sendFbText(psid, fbCouponReply(res), token); await aiBlackboxFb(psid, text, { ok: true, note: "coupon-issued", code: res.code || null }); return; }
     }
-    const cfg = await getAutoReplyCfg();
     if (!cfg || !cfg.enabled) { await aiBlackboxFb(psid, text, { skip: "autoreply-master-disabled" }); return; }
     const afterHours = !isOpenNow(cfg);
     if (!(cfg.ai_enabled && (afterHours || cfg.ai_always))) { await aiBlackboxFb(psid, text, { skip: !cfg.ai_enabled ? "ai-disabled" : "in-business-hours(ai_always off)" }); return; }

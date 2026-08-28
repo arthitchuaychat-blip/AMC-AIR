@@ -1,5 +1,5 @@
 import React from "react";
-import { listCoupons, couponStats, redeemCoupon, voidCoupon, listCampaigns, saveCampaign, generateCoupons } from "../lib/api";
+import { listCoupons, couponStats, redeemCoupon, voidCoupon, listCampaigns, saveCampaign, generateCoupons, getAutoReply, saveAutoReply } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 
@@ -19,6 +19,7 @@ export default function Coupons() {
   const [rCode, setRCode] = React.useState(""); const [rName, setRName] = React.useState(""); const [rPhone, setRPhone] = React.useState(""); const [rRef, setRRef] = React.useState(""); const [rArea, setRArea] = React.useState(""); const [rAppoint, setRAppoint] = React.useState("");
   const [genN, setGenN] = React.useState(100);
   const [campModal, setCampModal] = React.useState(null);
+  const [kwOn, setKwOn] = React.useState(true); const [kwCfg, setKwCfg] = React.useState(null);
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 3200); };
 
@@ -29,6 +30,12 @@ export default function Coupons() {
     listCampaigns().then((cs) => { setCamps(cs); setCampId((id) => id || cs[0]?.id || "clean750"); }).catch(() => setCampId("clean750"));
   }, []);
   React.useEffect(() => { loadCamps(); }, [loadCamps]);
+  React.useEffect(() => { getAutoReply().then((c) => { setKwCfg(c || {}); setKwOn((c?.coupon_kw) !== false); }).catch(() => {}); }, []);
+  async function toggleKw() {
+    const next = !kwOn; setKwOn(next);
+    try { const cfg = { ...(kwCfg || {}), coupon_kw: next }; await saveAutoReply(cfg); setKwCfg(cfg); flash(next ? "เปิดบอทแจกคูปองในแชตแล้ว" : "ปิดบอทแจกคูปองในแชตแล้ว"); }
+    catch (e) { setKwOn(!next); flash(e.message || "บันทึกไม่สำเร็จ", true); }
+  }
 
   const load = React.useCallback(() => {
     if (!campId) return;
@@ -98,6 +105,9 @@ export default function Coupons() {
         {camp && <span className="cp-badge" style={{ background: "#eef2ff", color: "#3730a3" }}>ส่วนลด {discLabel(camp)}{camp.quota ? ` · ${camp.quota} สิทธิ์` : ""}</span>}
         <button className="btn-ghost sm" onClick={() => setCampModal(camp || {})} disabled={!camp}>✎ แก้ไข</button>
         <button className="btn sm" onClick={() => setCampModal({ _new: true, discount_type: "amount", active: true })}>＋ โปรโมชั่นใหม่</button>
+        <button className={"cp-kw" + (kwOn ? " on" : "")} onClick={toggleKw} title='ลูกค้าพิมพ์ "คูปอง" ในแชต LINE/FB แล้วบอทออกโค้ดให้อัตโนมัติ'>
+          <span className="cp-kw-dot" /> บอทแจกคูปองในแชต: {kwOn ? "เปิด" : "ปิด"}
+        </button>
       </div>
 
       {/* สรุป */}
