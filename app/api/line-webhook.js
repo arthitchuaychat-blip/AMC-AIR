@@ -287,41 +287,47 @@ async function aiBlackbox(convId, q, extra) {
   } catch (_) { /* กล่องดำห้ามพังงานหลัก */ }
 }
 
-// 🎟️ ออกคูปองให้ลูกค้าที่พิมพ์คีย์เวิร์ดในแชต — เก็บ line/fb id อัตโนมัติ · คืน {code,camp}/{already}/{full}/null
-async function issueCouponForChat(convId, source, name) {
-  try {
-    const camps = await tfetch(`${SB()}/rest/v1/promo_campaigns?active=eq.true&order=created_at.desc&select=*`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-    const now = new Date();
-    const camp = (camps || []).find((c) => !c.claim_until || new Date(c.claim_until + "T23:59:59") >= now);
-    if (!camp) return null;
+// 🎟️ คูปอง/โปรโมชั่นในแชต (ใช้ร่วม LINE/FB ผ่าน fx = fetch func) — 1 โปร มี "โค้ดโปร" เดียว
+//    ลูกค้าพิมพ์โค้ดโปร → เจนรหัสส่วนลดรายคน · พิมพ์ "โปร/ส่วนลด" → ลิสต์โปร · คืนข้อความตอบ หรือ null
+const couponMoney = (c) => (c.discount_type === "percent" ? c.value + "%" : "฿" + Number(c.value).toLocaleString());
+async function couponChatHandler(fx, text, source, convId) {
+  const camps = await fx(`${SB()}/rest/v1/promo_campaigns?active=eq.true&order=created_at.desc&select=*`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  const now = new Date();
+  const promos = (camps || []).filter((c) => !c.claim_until || new Date(c.claim_until + "T23:59:59") >= now);
+  const up = String(text || "").toUpperCase();
+  const camp = promos.find((c) => c.public_code && up.includes(String(c.public_code).toUpperCase()));
+  if (camp) {
     const idf = source === "fb" ? "fb_id" : "line_user_id";
-    const findEx = () => tfetch(`${SB()}/rest/v1/promo_coupons?campaign_id=eq.${encodeURIComponent(camp.id)}&${idf}=eq.${encodeURIComponent(convId)}&select=code&limit=1`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const findEx = () => fx(`${SB()}/rest/v1/promo_coupons?campaign_id=eq.${encodeURIComponent(camp.id)}&${idf}=eq.${encodeURIComponent(convId)}&select=code&limit=1`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
     const ex = await findEx();
-    if (ex[0]) return { code: ex[0].code, camp, already: true };
-    if (camp.quota > 0) {
-      const r = await tfetch(`${SB()}/rest/v1/promo_coupons?campaign_id=eq.${encodeURIComponent(camp.id)}&status=neq.void&select=code`, { headers: { ...sbH(), Prefer: "count=exact", Range: "0-0" } });
-      const total = Number((r.headers.get("content-range") || "").split("/")[1] || 0);
-      if (total >= camp.quota) return { full: true, camp };
+    let res = ex[0] ? { code: ex[0].code, already: true } : null;
+    if (!res && camp.quota > 0) {
+      const r = await fx(`${SB()}/rest/v1/promo_coupons?campaign_id=eq.${encodeURIComponent(camp.id)}&status=neq.void&select=code`, { headers: { ...sbH(), Prefer: "count=exact", Range: "0-0" } });
+      if (Number((r.headers.get("content-range") || "").split("/")[1] || 0) >= camp.quota) res = { full: true };
     }
-    const pfx = (String(camp.id).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()) || "CP";
-    const mk = () => { const s = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let x = ""; for (let i = 0; i < 6; i++) x += s[Math.floor(Math.random() * s.length)]; return pfx + "-" + x; };
-    for (let a = 0; a < 6; a++) {
-      const code = mk();
-      const row = { code, campaign_id: camp.id, status: "claimed", name: name || null, source, [idf]: convId, consent: true };
-      const r = await tfetch(`${SB()}/rest/v1/promo_coupons`, { method: "POST", headers: { ...sbH(), Prefer: "return=minimal" }, body: JSON.stringify(row) });
-      if (r.ok) return { code, camp };
-      const t = await r.text();
-      if (/duplicate key.*code|promo_coupons_pkey/i.test(t)) continue;
-      if (/promo_coupons_uq_/i.test(t)) { const e2 = await findEx(); if (e2[0]) return { code: e2[0].code, camp, already: true }; }
-      return null;
+    if (!res) {
+      const pfx = (String(camp.id).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()) || "CP";
+      const mk = () => { const s = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let x = ""; for (let i = 0; i < 6; i++) x += s[Math.floor(Math.random() * s.length)]; return pfx + "-" + x; };
+      for (let a = 0; a < 6 && !res; a++) {
+        const code = mk();
+        const rr = await fx(`${SB()}/rest/v1/promo_coupons`, { method: "POST", headers: { ...sbH(), Prefer: "return=minimal" }, body: JSON.stringify({ code, campaign_id: camp.id, status: "claimed", source, [idf]: convId, consent: true }) });
+        if (rr.ok) res = { code };
+        else { const t = await rr.text(); if (/duplicate key.*code|promo_coupons_pkey/i.test(t)) continue; if (/promo_coupons_uq_/i.test(t)) { const e2 = await findEx(); if (e2[0]) res = { code: e2[0].code, already: true }; } else break; }
+      }
     }
-    return null;
-  } catch { return null; }
+    if (!res) return null;
+    if (res.full) return `ขออภัยครับ โปร "${camp.name}" เต็มโควตาแล้ว 🙏 ติดตามโปรถัดไปได้เลยครับ`;
+    return `${res.already ? "คุณรับส่วนลดโปรนี้ไปแล้วครับ 🎟️" : "รับส่วนลดสำเร็จ! 🎉"}\n\n🎟️ ${camp.name}\nรหัสส่วนลดของคุณ: ${res.code}\nส่วนลด: ${couponMoney(camp)}\n\nแจ้งรหัสนี้กับทีมงานตอนนัดใช้บริการได้เลยครับ`;
+  }
+  if (/โปรโมชั่น|โปรโมท|โปร|ส่วนลด|คูปอง/.test(String(text || ""))) {
+    if (!promos.length) return "ตอนนี้ยังไม่มีโปรโมชั่นครับ 🙏 ติดตามได้เร็ว ๆ นี้";
+    let s = "🎉 โปรโมชั่นตอนนี้:";
+    promos.forEach((c) => { s += `\n\n🎟️ ${c.name} — ลด ${couponMoney(c)}`; if (c.public_code) s += `\n   พิมพ์โค้ด: ${c.public_code}`; if (c.note) s += `\n   (${c.note})`; });
+    s += "\n\nพิมพ์โค้ดโปรที่ต้องการ หรือส่งรูปคูปองมา รับรหัสส่วนลดได้เลยครับ 😊";
+    return s;
+  }
+  return null;
 }
-const couponMoney = (camp) => (camp.discount_type === "percent" ? camp.value + "%" : "฿" + Number(camp.value).toLocaleString());
-const couponReply = (res) => res.full
-  ? `ขออภัยครับ คูปอง "${res.camp.name}" แจกครบแล้ว 🙏 ติดตามโปรโมชั่นถัดไปได้เลยครับ`
-  : `${res.already ? "คุณรับคูปองไปแล้วครับ 🎟️" : "รับคูปองสำเร็จ! 🎉"}\n\n🎟️ ${res.camp.name}\nโค้ด: ${res.code}\nส่วนลด: ${couponMoney(res.camp)}\n\nแคปข้อความนี้ไว้ แล้วแจ้งโค้ดกับทีมงานตอนนัดใช้บริการได้เลยครับ`;
 
 async function autoReply(replyToken, convId, isNew, isUser, msgRow, meta = {}) {
   try {
@@ -330,10 +336,10 @@ async function autoReply(replyToken, convId, isNew, isUser, msgRow, meta = {}) {
     if (!isUser) { if (isText) await aiBlackbox(convId, msgRow.text, { skip: "not-1to1-user-chat", ...meta }); return; }
     if (meta.redeliv) { if (isText) await aiBlackbox(convId, msgRow.text, { skip: "line-redelivery(กันตอบซ้ำ)", ...meta }); return; }
     const cfg = await getAutoReplyCfg();
-    // 🎟️ คีย์เวิร์ดรับคูปอง → ออกโค้ดให้ทันที + เก็บ line id · คุมด้วย coupon_kw (เปิดโดยปริยาย · ทำงานแม้ปิดบอท AI)
-    if (isText && cfg?.coupon_kw !== false && /คูปอง|รับสิทธิ|รับส่วนลด|โค้ดส่วนลด/.test(msgRow.text)) {
-      const res = await issueCouponForChat(convId, "line", null);
-      if (res) { await sendAuto(replyToken, convId, couponReply(res)); await aiBlackbox(convId, msgRow.text, { ok: true, note: "coupon-issued", code: res.code || null, ...meta }); return; }
+    // 🎟️ โค้ดโปร/คีย์เวิร์ดโปรโมชั่น → ตอบส่วนลด/ลิสต์โปร · คุมด้วย coupon_kw (เปิดโดยปริยาย · ทำงานแม้ปิดบอท AI)
+    if (isText && cfg?.coupon_kw !== false) {
+      const reply = await couponChatHandler(tfetch, msgRow.text, "line", convId);
+      if (reply) { await sendAuto(replyToken, convId, reply); await aiBlackbox(convId, msgRow.text, { ok: true, note: "coupon-chat", ...meta }); return; }
     }
     if (!cfg || !cfg.enabled) { if (isText) await aiBlackbox(convId, msgRow?.text, { skip: "autoreply-master-disabled" }); return; }
     const afterHours = !isOpenNow(cfg);

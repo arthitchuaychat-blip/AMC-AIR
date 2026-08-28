@@ -1,5 +1,5 @@
 import React from "react";
-import { listCoupons, couponStats, redeemCoupon, voidCoupon, listCampaigns, saveCampaign, generateCoupons, getAutoReply, saveAutoReply } from "../lib/api";
+import { listCoupons, couponStats, redeemCoupon, voidCoupon, listCampaigns, saveCampaign, getAutoReply, saveAutoReply, claimByCode } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 
@@ -17,7 +17,6 @@ export default function Coupons() {
   const [busy, setBusy] = React.useState(false);
   const [q, setQ] = React.useState(""); const [statusF, setStatusF] = React.useState("all");
   const [rCode, setRCode] = React.useState(""); const [rName, setRName] = React.useState(""); const [rPhone, setRPhone] = React.useState(""); const [rRef, setRRef] = React.useState(""); const [rArea, setRArea] = React.useState(""); const [rAppoint, setRAppoint] = React.useState("");
-  const [genN, setGenN] = React.useState(100);
   const [campModal, setCampModal] = React.useState(null);
   const [kwOn, setKwOn] = React.useState(true); const [kwCfg, setKwCfg] = React.useState(null);
   const [toast, setToast] = React.useState(null);
@@ -48,16 +47,17 @@ export default function Coupons() {
   async function doRedeem() {
     if (!rCode.trim()) return flash("กรอกโค้ด", true);
     setBusy(true);
-    try { const row = await redeemCoupon(rCode, { name: rName, phone: rPhone, ref: rRef, area: rArea, appoint_at: rAppoint || null, source: "manual" }); flash(`ใช้โค้ดสำเร็จ · ${row.name || ""} (หัก ${discLabel(camp)})`); setRCode(""); setRName(""); setRPhone(""); setRRef(""); setRArea(""); setRAppoint(""); load(); }
-    catch (e) { flash(e.message || "ไม่สำเร็จ", true); } finally { setBusy(false); }
-  }
-  async function doGenerate() {
-    const n = Math.floor(Number(genN) || 0);
-    if (n < 1) return flash("ระบุจำนวนโค้ด", true);
-    if (stat?.canGenerate != null && n > stat.canGenerate) return flash(`เกินโควตา — สร้างได้อีก ${stat.canGenerate} โค้ด`, true);
-    if (!(await confirmDialog({ title: `สร้าง ${n} โค้ดสำหรับพิมพ์?`, message: `โค้ดสถานะ "พร้อมใช้" ${n} โค้ด ไว้พิมพ์ลงคูปองแจก · ยังไม่มีเจ้าของจนกว่าลูกค้าจะนำมาใช้`, confirmText: "สร้างโค้ด", danger: false }))) return;
-    setBusy(true);
-    try { const r = await generateCoupons(campId, n); flash(`สร้าง ${r.created} โค้ดแล้ว`); load(); }
+    try {
+      let code = rCode.trim();
+      // ถ้าเป็น "โค้ดโปร" (public code) → เจนรหัสส่วนลดรายคนก่อน แล้วค่อยใช้
+      const r = await claimByCode(code, { name: rName, phone: rPhone, source: "manual" });
+      if (r.code) code = r.code;
+      else if (r.full) throw new Error("โปรนี้เต็มโควตาแล้ว");
+      else if (r.closed) throw new Error("โปรนี้หมดเวลารับแล้ว");
+      // r.notfound = ไม่ใช่โค้ดโปร → ถือว่าเป็นรหัสรายคน ลอง redeem ตรง ๆ
+      const row = await redeemCoupon(code, { name: rName, phone: rPhone, ref: rRef, area: rArea, appoint_at: rAppoint || null, source: "manual" });
+      flash(`ใช้โค้ดสำเร็จ · ${row.name || rName || ""} (หัก ${discLabel(camp)})`); setRCode(""); setRName(""); setRPhone(""); setRRef(""); setRArea(""); setRAppoint(""); load();
+    }
     catch (e) { flash(e.message || "ไม่สำเร็จ", true); } finally { setBusy(false); }
   }
   async function doVoid(row) {
@@ -71,18 +71,16 @@ export default function Coupons() {
     const csv = "﻿" + [head.map(esc).join(","), ...body].join("\r\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `coupons-${campId}.csv`; a.click();
   }
-  async function copyCodes() {
-    const codes = rows.filter((r) => r.status === "available").map((r) => r.code);
-    if (!codes.length) return flash("ไม่มีโค้ดพร้อมใช้ให้คัดลอก (กดสร้างโค้ดก่อน)", true);
-    try { await navigator.clipboard.writeText(codes.join("\n")); flash(`คัดลอก ${codes.length} โค้ดแล้ว — วางในไฟล์พิมพ์คูปองได้เลย`); }
-    catch { flash("คัดลอกไม่ได้ — ใช้ปุ่มพิมพ์แทน", true); }
+  async function copyPub() {
+    if (!camp?.public_code) return flash("ยังไม่ได้ตั้งโค้ด", true);
+    try { await navigator.clipboard.writeText(camp.public_code); flash(`คัดลอกโค้ด ${camp.public_code} แล้ว`); }
+    catch { flash("คัดลอกไม่ได้", true); }
   }
-  function printCodes() {
-    const codes = rows.filter((r) => r.status === "available").map((r) => r.code);
-    if (!codes.length) return flash("ไม่มีโค้ดพร้อมใช้ให้พิมพ์ (กดสร้างโค้ดก่อน)", true);
+  function printCoupon() {
+    if (!camp?.public_code) return flash("ยังไม่ได้ตั้งโค้ด", true);
     const w = window.open("", "_blank"); if (!w) return;
-    const cond = camp?.note ? `<p style="color:#555">${camp.note}</p>` : "";
-    w.document.write(`<html><head><meta charset="utf-8"><title>โค้ดคูปอง</title><style>body{font-family:'Sarabun',sans-serif;padding:18px}h2{margin:0 0 2px}.c{display:inline-block;border:1.5px dashed #888;border-radius:10px;padding:12px 18px;margin:7px;font-size:19px;font-weight:800;letter-spacing:1.5px}</style></head><body><h2>${camp?.name || "คูปอง"} · ส่วนลด ${discLabel(camp)}</h2>${cond}<p>${codes.length} โค้ด</p>${codes.map((c) => `<span class="c">${c}</span>`).join("")}<script>window.onload=function(){window.print()}</script></body></html>`);
+    const cond = camp?.note ? `<p style="color:#475569;font-size:14px">${camp.note}</p>` : "";
+    w.document.write(`<html><head><meta charset="utf-8"><title>คูปอง ${camp.public_code}</title><style>body{font-family:'Sarabun',system-ui,sans-serif;padding:24px;text-align:center}.cp{max-width:420px;margin:0 auto;border:2.5px dashed #1466c4;border-radius:20px;padding:26px}.cp h1{margin:0 0 4px;color:#0d4f9e}.v{font-size:40px;font-weight:800;color:#0ea5a5;margin:6px 0}.code{font-size:30px;font-weight:800;letter-spacing:3px;background:#0f2540;color:#fff;border-radius:12px;padding:12px;margin:12px 0}.hint{font-size:13px;color:#475569}</style></head><body><div class="cp"><h1>${camp.name}</h1><div class="v">ลด ${discLabel(camp)}</div>${cond}<div class="hint">พิมพ์โค้ดนี้ในไลน์/เฟซบุ๊ก AMC AIR หรือส่งรูปคูปอง</div><div class="code">${camp.public_code}</div><div class="hint">AMC AIR · 099-262-9090 · www.amcair.net</div></div><script>window.onload=function(){window.print()}</script></body></html>`);
     w.document.close();
   }
 
@@ -113,10 +111,10 @@ export default function Coupons() {
       {/* สรุป */}
       {stat && (
         <div className="cp-stats">
-          <div className="cp-stat"><span>สร้างโค้ดแล้ว</span><b>{stat.total}{stat.quota ? ` / ${stat.quota}` : ""}</b></div>
-          <div className="cp-stat"><span>พร้อมใช้ (พิมพ์แจก)</span><b style={{ color: "#075985" }}>{stat.available}</b></div>
-          <div className="cp-stat"><span>ลูกค้ารับแล้ว</span><b>{stat.claimed}</b></div>
+          <div className="cp-stat"><span>รับส่วนลดแล้ว</span><b>{stat.total}{stat.quota ? ` / ${stat.quota}` : ""}</b></div>
+          <div className="cp-stat"><span>ยังไม่ใช้</span><b>{stat.claimed + stat.available}</b></div>
           <div className="cp-stat"><span>ใช้แล้ว</span><b className="ok">{stat.redeemed}</b></div>
+          <div className="cp-stat"><span>เหลือโควตา</span><b>{stat.canGenerate != null ? stat.canGenerate : "ไม่จำกัด"}</b></div>
           {stat.quota > 0 && <div className="cp-bar"><div className="cp-bar-fill" style={{ width: `${Math.min(100, stat.total / stat.quota * 100)}%` }} /></div>}
         </div>
       )}
@@ -142,17 +140,16 @@ export default function Coupons() {
           </div>
         </div>
         <div className="cp-box">
-          <div className="cp-box-t">🖨️ สร้างโค้ดสำหรับพิมพ์ลงคูปอง</div>
+          <div className="cp-box-t">🎟️ โค้ดโปรโมชั่นของโปรนี้ (พิมพ์ลงคูปองแจก)</div>
           <div className="cp-box-col">
-            <div className="cp-box-row">
-              <input className="inp" type="number" min="1" style={{ maxWidth: 110 }} value={genN} onChange={(e) => setGenN(e.target.value)} />
-              <span style={{ fontSize: 13, color: "var(--ink-3)", alignSelf: "center" }}>โค้ด {stat?.canGenerate != null ? `(เหลือโควตา ${stat.canGenerate})` : ""}</span>
-              <button className="btn-ghost" disabled={busy} onClick={doGenerate}>สร้างโค้ด</button>
-            </div>
-            <div className="cp-box-row">
-              <button className="btn-ghost sm" onClick={printCodes} disabled={!(stat?.available > 0)}>🖨️ พิมพ์ ({stat?.available || 0})</button>
-              <button className="btn-ghost sm" onClick={copyCodes} disabled={!(stat?.available > 0)}>📋 คัดลอกโค้ด</button>
-            </div>
+            {camp?.public_code
+              ? <><div className="cp-pubcode">{camp.public_code}</div>
+                <div className="cp-box-row">
+                  <button className="btn-ghost sm" onClick={copyPub}>📋 คัดลอกโค้ด</button>
+                  <button className="btn-ghost sm" onClick={printCoupon}>🖨️ พิมพ์คูปอง</button>
+                </div>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>ลูกค้าพิมพ์โค้ดนี้ในไลน์/FB หรือส่งรูปคูปอง → ระบบออกรหัสส่วนลดเฉพาะเขาให้เอง</span></>
+              : <span style={{ fontSize: 13, color: "var(--ink-3)" }}>ยังไม่ได้ตั้งโค้ด — กด “✎ แก้ไข” เพื่อกำหนดโค้ดโปรโมชั่น</span>}
           </div>
         </div>
       </div>
@@ -198,20 +195,14 @@ export default function Coupons() {
 }
 
 function CampaignModal({ init, onClose, onSaved, onError }) {
-  const [f, setF] = React.useState({ id: init.id, name: init.name || "", discount_type: init.discount_type || "amount", value: init.value ?? "", quota: init.quota ?? "", valid_from: init.valid_from || "", claim_until: init.claim_until || "", use_by: init.use_by || "", note: init.note || "", active: init.active !== false });
-  const [genNow, setGenNow] = React.useState(!!init._new);
+  const [f, setF] = React.useState({ id: init.id, name: init.name || "", public_code: init.public_code || "", discount_type: init.discount_type || "amount", value: init.value ?? "", quota: init.quota ?? "", valid_from: init.valid_from || "", claim_until: init.claim_until || "", use_by: init.use_by || "", note: init.note || "", active: init.active !== false });
   const [saving, setSaving] = React.useState(false);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
-  const qn = Math.floor(Number(f.quota) || 0);
   async function save() {
     if (!f.name.trim()) return onError("ตั้งชื่อโปรโมชั่น");
+    if (!f.public_code.trim()) return onError("กำหนดโค้ดโปรโมชั่น (เช่น CLEAN750)");
     setSaving(true);
-    try {
-      const id = await saveCampaign(f);
-      let note = "บันทึกโปรโมชั่นแล้ว";
-      if (genNow && qn > 0) { const r = await generateCoupons(id, qn); note = `บันทึก + สร้าง ${r.created} โค้ดพร้อมพิมพ์แล้ว`; }
-      onSaved(id, note);
-    } catch (e) { onError(e.message || "บันทึกไม่สำเร็จ"); setSaving(false); }
+    try { const id = await saveCampaign(f); onSaved(id, "บันทึกโปรโมชั่นแล้ว"); } catch (e) { onError(e.message || "บันทึกไม่สำเร็จ"); setSaving(false); }
   }
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -219,6 +210,7 @@ function CampaignModal({ init, onClose, onSaved, onError }) {
         <div className="modal-title">{init._new ? "สร้างโปรโมชั่นใหม่" : "แก้ไขโปรโมชั่น"} <button className="modal-x" onClick={onClose}>✕</button></div>
         <div className="cp-form">
           <label>ชื่อโปรโมชั่น<input className="inp" value={f.name} onChange={set("name")} placeholder="เช่น คูปองล้างแอร์ ฿750" /></label>
+          <label>โค้ดโปรโมชั่น (โค้ดเดียว · พิมพ์บนคูปอง/ให้ลูกค้าพิมพ์)<input className="inp" value={f.public_code} onChange={(e) => setF((s) => ({ ...s, public_code: e.target.value.toUpperCase() }))} placeholder="เช่น CLEAN750" style={{ fontWeight: 700, letterSpacing: 1 }} /></label>
           <div className="cp-box-row">
             <label style={{ flex: 1 }}>ประเภทส่วนลด
               <select className="inp" value={f.discount_type} onChange={set("discount_type")}><option value="amount">บาท (฿)</option><option value="percent">เปอร์เซ็นต์ (%)</option></select>
@@ -232,8 +224,7 @@ function CampaignModal({ init, onClose, onSaved, onError }) {
             <label style={{ flex: 1 }}>ใช้ภายใน<input className="inp" type="date" value={f.use_by} onChange={set("use_by")} /></label>
           </div>
           <label>เงื่อนไข (แสดงบนคูปอง/เว็บ)<textarea className="inp" rows={2} value={f.note} onChange={set("note")} placeholder="เช่น 1 สิทธิ์/ท่าน · เฉพาะล้างแอร์ · จองภายในวันที่กำหนด" /></label>
-          <label className="cp-check"><input type="checkbox" checked={f.active} onChange={(e) => setF((s) => ({ ...s, active: e.target.checked }))} /> เปิดใช้งาน (รับคูปองได้)</label>
-          {qn > 0 && <label className="cp-check"><input type="checkbox" checked={genNow} onChange={(e) => setGenNow(e.target.checked)} /> สร้างโค้ดทันที {qn} โค้ด (ไว้พิมพ์ลงคูปอง)</label>}
+          <label className="cp-check"><input type="checkbox" checked={f.active} onChange={(e) => setF((s) => ({ ...s, active: e.target.checked }))} /> เปิดใช้งาน (รับส่วนลดได้)</label>
         </div>
         <div className="acc-modal-foot"><button className="btn" disabled={saving} onClick={save}>{saving ? "กำลังบันทึก…" : "บันทึกโปรโมชั่น"}</button></div>
       </div>

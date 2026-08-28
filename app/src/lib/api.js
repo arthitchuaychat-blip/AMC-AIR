@@ -2006,10 +2006,12 @@ export async function saveCampaign(c) {
   const row = { id, name: c.name?.trim() || "โปรโมชั่น", discount_type: c.discount_type === "percent" ? "percent" : "amount",
     value: Number(c.value) || 0, quota: Math.max(0, Math.floor(Number(c.quota) || 0)),
     valid_from: c.valid_from || null, claim_until: c.claim_until || null, use_by: c.use_by || null,
+    public_code: c.public_code?.trim().toUpperCase() || null,
     note: c.note?.trim() || null, active: c.active !== false };
   let { error } = await supabase.from("promo_campaigns").upsert(row, { onConflict: "id" });
+  if (error && /public_code/i.test(error.message || "")) { delete row.public_code; ({ error } = await supabase.from("promo_campaigns").upsert(row, { onConflict: "id" })); } // pre-231 fallback
   if (error && /discount_type/i.test(error.message || "")) { delete row.discount_type; ({ error } = await supabase.from("promo_campaigns").upsert(row, { onConflict: "id" })); } // pre-229 fallback
-  if (error) throw error;
+  if (error) { if (/duplicate|unique/i.test(error.message || "")) throw new Error("โค้ดโปรโมชั่นนี้ถูกใช้แล้ว — เปลี่ยนโค้ดใหม่"); throw error; }
   return id;
 }
 // สร้างโค้ดล่วงหน้าเป็นชุด (สถานะ "available") — เอาไปพิมพ์ลงคูปองแจก · ยังไม่มีเจ้าของ
@@ -2072,6 +2074,46 @@ export async function findCoupon(code) {
   const c = String(code || "").trim().toUpperCase();
   const { data } = await supabase.from("promo_coupons").select("*, promo_campaigns(name,value,discount_type)").eq("code", c).maybeSingle();
   return data || null;
+}
+// รับส่วนลดจาก "โค้ดโปรโมชั่น" (public_code) → เจนรหัสส่วนลดเฉพาะลูกค้า · หรือถ้าเป็นรหัสรายคนอยู่แล้ว = ผูกลูกค้า
+// opts: {customer_id, line_user_id, fb_id, name, phone, source}
+export async function claimByCode(code, opts = {}) {
+  const c = String(code || "").trim().toUpperCase();
+  if (!c) throw new Error("ไม่มีโค้ด");
+  // 1) เป็น "โค้ดโปรโมชั่น" ไหม → เจนรหัสส่วนลดรายคน
+  const { data: camps } = await supabase.from("promo_campaigns").select("*").eq("active", true).ilike("public_code", c);
+  const camp = (camps || [])[0];
+  if (camp) {
+    if (camp.claim_until && new Date(camp.claim_until + "T23:59:59") < new Date()) return { closed: true, campaign: camp };
+    const mine = await couponsForCustomer({ customer_id: opts.customer_id, phone: opts.phone, line_user_id: opts.line_user_id, fb_id: opts.fb_id });
+    const dup = mine.find((x) => x.campaign_id === camp.id);
+    if (dup) return { code: dup.code, campaign: camp, already: true };
+    if (camp.quota > 0) {
+      const { count } = await supabase.from("promo_coupons").select("code", { count: "exact", head: true }).eq("campaign_id", camp.id).neq("status", "void");
+      if ((count || 0) >= camp.quota) return { full: true, campaign: camp };
+    }
+    const pfx = (String(camp.id).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()) || "CP";
+    const mk = () => { const s = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let x = ""; for (let i = 0; i < 6; i++) x += s[Math.floor(Math.random() * s.length)]; return pfx + "-" + x; };
+    for (let a = 0; a < 6; a++) {
+      const gen = mk();
+      const row = { code: gen, campaign_id: camp.id, status: "claimed", consent: true };
+      ["customer_id", "line_user_id", "fb_id", "name", "phone", "source"].forEach((k) => { if (opts[k]) row[k] = opts[k]; });
+      const { error } = await supabase.from("promo_coupons").insert(row);
+      if (!error) return { code: gen, campaign: camp };
+      if (/duplicate|unique/i.test(error.message || "")) continue;
+      throw error;
+    }
+    return { error: "ออกรหัสไม่สำเร็จ" };
+  }
+  // 2) เป็น "รหัสส่วนลดรายคน" อยู่แล้ว → ผูกลูกค้า
+  const ex = await findCoupon(c);
+  if (ex) {
+    if (ex.status === "redeemed") return { redeemed: true, code: c };
+    if (ex.status === "void") return { notfound: true };
+    await linkCoupon(c, opts);
+    return { code: c, campaign: ex.promo_campaigns, linked: true };
+  }
+  return { notfound: true };
 }
 // ผูกคูปองกับลูกค้า (ตอน AI เจอในแชต) — available → claimed
 export async function linkCoupon(code, opts = {}) {

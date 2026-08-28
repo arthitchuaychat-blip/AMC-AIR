@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, getCompanies, markQuoteSent, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply, scanCouponImage, findCoupon, linkCoupon } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, getCompanies, markQuoteSent, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply, scanCouponImage, claimByCode } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -702,14 +702,14 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
       if (!codes.length) { flash("ไม่พบรหัสคูปองในรูปนี้", true); return; }
       const done = [], bad = [];
       for (const code of codes) {
-        const cp = await findCoupon(code);
-        if (!cp) { bad.push(code + " (ไม่มีในระบบ)"); continue; }
-        if (cp.status === "redeemed") { bad.push(code + " (ใช้ไปแล้ว)"); continue; }
-        if (cp.status === "void") { bad.push(code + " (ยกเลิก)"); continue; }
-        await linkCoupon(code, { customer_id: selContact?.customer_id || null, [isFb ? "fb_id" : "line_user_id"]: sel, name: selCust?.name || selContact?.display_name || null, phone: selCust?.phone || null, source: isFb ? "fb" : "line" });
-        done.push(`${code} · ${cp.promo_campaigns?.name || "คูปอง"}`);
+        const r = await claimByCode(code, { customer_id: selContact?.customer_id || null, [isFb ? "fb_id" : "line_user_id"]: sel, name: selCust?.name || selContact?.display_name || null, phone: selCust?.phone || null, source: isFb ? "fb" : "line" });
+        if (r.notfound) { bad.push(code + " (ไม่มีในระบบ)"); continue; }
+        if (r.redeemed) { bad.push(code + " (ใช้ไปแล้ว)"); continue; }
+        if (r.full) { bad.push(code + " (เต็มโควตา)"); continue; }
+        if (r.closed) { bad.push(code + " (หมดเวลา)"); continue; }
+        if (r.code) done.push(`${r.code} · ${r.campaign?.name || "คูปอง"}${r.already ? " (มีอยู่แล้ว)" : ""}`);
       }
-      if (done.length) flash(`✓ ผูกคูปองกับลูกค้าแล้ว: ${done.join(" / ")}`);
+      if (done.length) flash(`✓ ออกรหัสส่วนลดให้ลูกค้าแล้ว: ${done.join(" / ")}`);
       else flash(`อ่านได้: ${bad.join(", ") || codes.join(", ")}`, true);
     } catch (e) { flash(e.message || "ตรวจคูปองไม่สำเร็จ", true); } finally { setScanning(false); }
   }
