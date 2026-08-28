@@ -18,6 +18,23 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
+  // GET ?campaign=xxx → ข้อมูลแคมเปญสาธารณะ (ไว้ให้หน้าเว็บฟอร์มแสดงชื่อ/ส่วนลด/เงื่อนไข/สถานะ)
+  if (req.method === "GET") {
+    try {
+      const campaign = String(req.query?.campaign || "clean750").trim();
+      const camp = (await sbGet(`promo_campaigns?id=eq.${encodeURIComponent(campaign)}&select=*`))[0];
+      if (!camp) return res.status(404).json({ error: "no_campaign" });
+      let remaining = null, closed = !camp.active;
+      if (camp.claim_until && new Date(camp.claim_until + "T23:59:59") < new Date()) closed = true;
+      if (camp.quota > 0) {
+        const r = await fetch(`${SB()}/rest/v1/promo_coupons?campaign_id=eq.${encodeURIComponent(campaign)}&status=neq.void&select=code`, { headers: { ...H(), Prefer: "count=exact", Range: "0-0" } });
+        const total = Number((r.headers.get("content-range") || "").split("/")[1] || 0);
+        remaining = Math.max(0, camp.quota - total);
+        if (remaining <= 0) closed = true;
+      }
+      return res.status(200).json({ id: camp.id, name: camp.name, value: camp.value, discount_type: camp.discount_type || "amount", note: camp.note || "", quota: camp.quota, remaining, closed });
+    } catch (e) { return res.status(500).json({ error: String(e?.message || e) }); }
+  }
   if (req.method !== "POST") return res.status(405).json({ error: "method" });
   try {
     const b = await readJson(req);

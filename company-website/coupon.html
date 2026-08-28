@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>รับคูปองส่วนลด · AMC AIR</title>
+<meta name="description" content="ลงทะเบียนรับคูปองส่วนลดล้างแอร์จาก AMC AIR — กรอกชื่อและเบอร์โทร รับโค้ดส่วนลดทันที">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/logo-sm.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --blue:#1466c4; --blue-d:#0d4f9e; --teal:#0ea5a5; --ink:#0f2540; --ink2:#4a5a70; --line:#e2e8f0; --bg:#eef5fd; }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{font-family:'Sarabun',system-ui,sans-serif;color:var(--ink);background:linear-gradient(160deg,#e8f2fe 0%,#f6fbff 55%,#eafaf7 100%);min-height:100vh;line-height:1.6}
+  .wrap{max-width:480px;margin:0 auto;padding:22px 18px 40px}
+  .brand{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:18px}
+  .brand img{height:40px} .brand b{font-size:19px;letter-spacing:.5px;color:var(--blue-d)}
+  .hero{text-align:center;margin-bottom:18px}
+  .tag{display:inline-block;background:#fff3d6;color:#a15c00;font-weight:700;font-size:13px;padding:4px 13px;border-radius:99px;margin-bottom:12px}
+  h1{font-size:27px;line-height:1.25;margin:0 0 8px;font-weight:800;text-wrap:balance}
+  .val{display:inline-flex;align-items:baseline;gap:6px;background:linear-gradient(135deg,var(--blue),var(--teal));color:#fff;padding:8px 20px;border-radius:16px;box-shadow:0 8px 22px rgba(20,102,196,.28);margin:6px 0}
+  .val b{font-size:38px;font-weight:800;line-height:1} .val span{font-size:15px;font-weight:600;opacity:.92}
+  .sub{color:var(--ink2);font-size:15px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px 18px;box-shadow:0 14px 40px rgba(15,37,64,.10)}
+  .cond{background:#f1f7ff;border-radius:12px;padding:11px 14px;font-size:13.5px;color:var(--ink2);margin-bottom:16px;white-space:pre-line}
+  label{display:block;font-size:13.5px;font-weight:600;margin:0 0 5px}
+  input[type=text],input[type=tel]{width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:16px;font-family:inherit;margin-bottom:14px;background:#fbfdff}
+  input:focus{outline:none;border-color:var(--blue);background:#fff}
+  .consent{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--ink2);margin-bottom:16px;font-weight:400}
+  .consent input{margin-top:3px;width:17px;height:17px;flex:none}
+  .btn{width:100%;border:none;background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;font-family:inherit;font-size:17px;font-weight:800;padding:15px;border-radius:14px;cursor:pointer;box-shadow:0 8px 20px rgba(20,102,196,.3)}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .foot{text-align:center;color:var(--ink2);font-size:13px;margin-top:18px}
+  .foot a{color:var(--blue-d);text-decoration:none;font-weight:600}
+  .msg{font-size:14px;padding:11px 14px;border-radius:12px;margin-bottom:12px;display:none}
+  .msg.err{display:block;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+  /* success */
+  .done{display:none;text-align:center}
+  .done.on{display:block} .card.hide{display:none}
+  .codebox{background:linear-gradient(135deg,#0f2540,#173a5e);color:#fff;border-radius:16px;padding:20px;margin:8px 0 4px}
+  .codebox .lbl{font-size:13px;opacity:.8} .code{font-size:30px;font-weight:800;letter-spacing:3px;margin:6px 0;word-break:break-all}
+  .steps{text-align:left;background:#f1f7ff;border-radius:14px;padding:14px 16px;font-size:14px;margin:16px 0}
+  .steps b{color:var(--blue-d)}
+  .line-btn{display:inline-flex;align-items:center;gap:8px;background:#06c755;color:#fff;font-weight:800;padding:13px 22px;border-radius:13px;text-decoration:none;font-size:16px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><img src="/logo.png" alt="AMC AIR" onerror="this.style.display='none'"><b>AMC AIR</b></div>
+
+  <div class="hero">
+    <span class="tag" id="tag">🎁 โปรพิเศษ · จำนวนจำกัด</span>
+    <h1 id="title">รับคูปองส่วนลดล้างแอร์</h1>
+    <div class="val"><b id="val">฿750</b><span id="valsub">ส่วนลด</span></div>
+    <div class="sub" id="remain"></div>
+  </div>
+
+  <div class="card" id="card">
+    <div class="cond" id="cond" style="display:none"></div>
+    <div class="msg err" id="err"></div>
+    <form id="form">
+      <label>ชื่อ-นามสกุล</label>
+      <input type="text" id="name" placeholder="เช่น สมชาย ใจดี" autocomplete="name" required>
+      <label>เบอร์โทรศัพท์</label>
+      <input type="tel" id="phone" placeholder="08X-XXX-XXXX" autocomplete="tel" inputmode="tel" required>
+      <label class="consent"><input type="checkbox" id="consent"><span>ยินยอมให้ AMC AIR เก็บชื่อและเบอร์โทร เพื่อติดต่อยืนยันสิทธิ์และแจ้งโปรโมชั่น (PDPA)</span></label>
+      <button class="btn" id="submit" type="submit">รับคูปองเลย</button>
+    </form>
+  </div>
+
+  <div class="done" id="done">
+    <div class="card">
+      <div style="font-size:44px">🎉</div>
+      <h1 style="font-size:22px" id="donetitle">รับคูปองสำเร็จ!</h1>
+      <div class="codebox"><div class="lbl">โค้ดส่วนลดของคุณ</div><div class="code" id="codeout">—</div><div class="lbl" id="codeval"></div></div>
+      <div class="steps">วิธีใช้สิทธิ์:<br>1. <b>แคปหน้าจอนี้ไว้</b> (หรือจดโค้ด)<br>2. <b>แอดไลน์ AMC AIR</b> แล้วส่งโค้ด/ภาพนี้มา<br>3. ทีมงานยืนยันสิทธิ์ + นัดหมายให้บริการ</div>
+      <a class="line-btn" id="lineadd" href="https://line.me/R/ti/p/@amcair" target="_blank">💬 แอดไลน์เพื่อใช้สิทธิ์</a>
+    </div>
+  </div>
+
+  <div class="foot">AMC AIR · โทร <a href="tel:0992629090">099-262-9090</a> · <a href="https://www.amcair.net">www.amcair.net</a></div>
+</div>
+
+<script>
+  var API = "https://app.amcair.net/api/coupon-claim";
+  var campaign = new URLSearchParams(location.search).get("c") || "clean750";
+  var elErr = document.getElementById("err");
+  function showErr(m){ elErr.textContent = m; elErr.style.display = "block"; }
+  function money(v, type){ return type === "percent" ? (v + "%") : ("฿" + Number(v).toLocaleString()); }
+
+  // โหลดข้อมูลแคมเปญ
+  fetch(API + "?campaign=" + encodeURIComponent(campaign)).then(function(r){ return r.json(); }).then(function(c){
+    if(c && c.name){
+      document.getElementById("title").textContent = c.name;
+      document.getElementById("val").textContent = money(c.value, c.discount_type);
+      document.title = c.name + " · AMC AIR";
+      if(c.note){ var cd=document.getElementById("cond"); cd.textContent = c.note; cd.style.display="block"; }
+      if(c.remaining != null) document.getElementById("remain").textContent = c.closed ? "" : ("เหลือ " + c.remaining + " สิทธิ์");
+      if(c.closed){ document.getElementById("card").innerHTML = '<div style="text-align:center;padding:10px 0"><div style="font-size:40px">🙏</div><h1 style="font-size:20px">คูปองแจกครบแล้ว</h1><p style="color:#4a5a70">ขอบคุณสำหรับความสนใจ ติดตามโปรถัดไปได้ที่ไลน์ AMC AIR</p><a class="line-btn" href="https://line.me/R/ti/p/@amcair" target="_blank">💬 แอดไลน์ AMC AIR</a></div>'; }
+    }
+  }).catch(function(){});
+
+  document.getElementById("form").addEventListener("submit", function(e){
+    e.preventDefault(); elErr.style.display="none";
+    var name = document.getElementById("name").value.trim();
+    var phone = document.getElementById("phone").value.trim();
+    var consent = document.getElementById("consent").checked;
+    if(!consent) return showErr("กรุณาติ๊กยินยอมให้เก็บข้อมูลก่อนรับคูปอง");
+    if(!name || !phone) return showErr("กรุณากรอกชื่อและเบอร์โทร");
+    var btn = document.getElementById("submit"); btn.disabled = true; btn.textContent = "กำลังรับคูปอง…";
+    fetch(API, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ campaign:campaign, name:name, phone:phone, source:"web", consent:true }) })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.full){ showErr(j.message || "คูปองแจกครบแล้ว"); btn.disabled=false; btn.textContent="รับคูปองเลย"; return; }
+        if(j.code){
+          document.getElementById("card").classList.add("hide");
+          document.getElementById("done").classList.add("on");
+          document.getElementById("codeout").textContent = j.code;
+          document.getElementById("codeval").textContent = "ส่วนลด " + money(j.value, j.discount_type || "amount");
+          if(j.already) document.getElementById("donetitle").textContent = "คุณรับคูปองไปแล้ว";
+          window.scrollTo(0,0);
+          return;
+        }
+        showErr(j.message || j.error || "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง");
+        btn.disabled=false; btn.textContent="รับคูปองเลย";
+      })
+      .catch(function(){ showErr("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง"); btn.disabled=false; btn.textContent="รับคูปองเลย"; });
+  });
+</script>
+</body>
+</html>

@@ -63,10 +63,48 @@ async function aiBlackboxFb(psid, q, extra) {
     });
   } catch { /* ห้ามพังงานหลัก */ }
 }
+// 🎟️ ออกคูปองให้ลูกค้าที่พิมพ์คีย์เวิร์ดในแชต FB — เก็บ fb_id (psid) อัตโนมัติ
+async function issueCouponFb(psid, name) {
+  try {
+    const camps = await fetch(`${SB()}/rest/v1/promo_campaigns?active=eq.true&order=created_at.desc&select=*`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const now = new Date();
+    const camp = (camps || []).find((c) => !c.claim_until || new Date(c.claim_until + "T23:59:59") >= now);
+    if (!camp) return null;
+    const findEx = () => fetch(`${SB()}/rest/v1/promo_coupons?campaign_id=eq.${encodeURIComponent(camp.id)}&fb_id=eq.${encodeURIComponent(psid)}&select=code&limit=1`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const ex = await findEx();
+    if (ex[0]) return { code: ex[0].code, camp, already: true };
+    if (camp.quota > 0) {
+      const r = await fetch(`${SB()}/rest/v1/promo_coupons?campaign_id=eq.${encodeURIComponent(camp.id)}&status=neq.void&select=code`, { headers: { ...sbH(), Prefer: "count=exact", Range: "0-0" } });
+      const total = Number((r.headers.get("content-range") || "").split("/")[1] || 0);
+      if (total >= camp.quota) return { full: true, camp };
+    }
+    const pfx = (String(camp.id).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()) || "CP";
+    const mk = () => { const s = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let x = ""; for (let i = 0; i < 6; i++) x += s[Math.floor(Math.random() * s.length)]; return pfx + "-" + x; };
+    for (let a = 0; a < 6; a++) {
+      const code = mk();
+      const r = await fetch(`${SB()}/rest/v1/promo_coupons`, { method: "POST", headers: { ...sbH(), Prefer: "return=minimal" }, body: JSON.stringify({ code, campaign_id: camp.id, status: "claimed", name: name || null, source: "fb", fb_id: psid, consent: true }) });
+      if (r.ok) return { code, camp };
+      const t = await r.text();
+      if (/duplicate key.*code|promo_coupons_pkey/i.test(t)) continue;
+      if (/promo_coupons_uq_/i.test(t)) { const e2 = await findEx(); if (e2[0]) return { code: e2[0].code, camp, already: true }; }
+      return null;
+    }
+    return null;
+  } catch { return null; }
+}
+const fbCouponReply = (res) => res.full
+  ? `ขออภัยครับ คูปอง "${res.camp.name}" แจกครบแล้ว 🙏 ติดตามโปรโมชั่นถัดไปได้เลยครับ`
+  : `${res.already ? "คุณรับคูปองไปแล้วครับ 🎟️" : "รับคูปองสำเร็จ! 🎉"}\n\n🎟️ ${res.camp.name}\nโค้ด: ${res.code}\nส่วนลด: ${res.camp.discount_type === "percent" ? res.camp.value + "%" : "฿" + Number(res.camp.value).toLocaleString()}\n\nแคปข้อความนี้ไว้ แล้วแจ้งโค้ดกับทีมงานตอนนัดใช้บริการได้เลยครับ`;
+
 // บอท AI ตอบเฟซ — ใช้ตั้งค่าชุดเดียวกับ LINE (app_config autoreply)
 async function fbAutoReply({ psid, text, token }) {
   try {
     if (!token) return;
+    // 🎟️ คีย์เวิร์ดรับคูปอง → ออกโค้ดให้ทันที (ก่อนบอท AI)
+    if (text && /คูปอง|รับสิทธิ|รับส่วนลด|โค้ดส่วนลด/.test(text)) {
+      const res = await issueCouponFb(psid, null);
+      if (res) { await sendFbText(psid, fbCouponReply(res), token); await aiBlackboxFb(psid, text, { ok: true, note: "coupon-issued", code: res.code || null }); return; }
+    }
     const cfg = await getAutoReplyCfg();
     if (!cfg || !cfg.enabled) { await aiBlackboxFb(psid, text, { skip: "autoreply-master-disabled" }); return; }
     const afterHours = !isOpenNow(cfg);
