@@ -36,9 +36,10 @@ const VAT_MODES = [["incl", "ราคารวม VAT (ถอด VAT ให้)
 function SupplierPicker({ value, onChange }) {
   const [sups, setSups] = React.useState([]);
   const [open, setOpen] = React.useState(false);
-  React.useEffect(() => { listSuppliers().then((s) => setSups(s.map((x) => x.name).filter(Boolean))).catch(() => {}); }, []);
+  React.useEffect(() => { listSuppliers().then((s) => setSups(s.map((x) => x.name).filter(Boolean).sort((a, b) => a.localeCompare(b, "th")))).catch(() => {}); }, []);
   const v = (value || "").trim();
-  const matches = (v ? sups.filter((n) => matchText(v, n)) : sups).slice(0, 8);
+  const list = v ? sups.filter((n) => matchText(v, n)) : sups;   // แสดงครบ (dropdown เลื่อนดูได้) — cap 100 กันแสดงเยอะเกิน
+  const matches = list.slice(0, 100);
   return (
     <div style={{ position: "relative" }}>
       <input className="inp" value={value} placeholder="พิมพ์ค้นหาชื่อผู้ขาย…"
@@ -49,6 +50,7 @@ function SupplierPicker({ value, onChange }) {
           {matches.map((n) => (
             <button type="button" key={n} className="sup-ac-item" onMouseDown={() => { onChange(n); setOpen(false); }}>{n}</button>
           ))}
+          {list.length > 100 && <div className="sup-ac-item" style={{ color: "var(--ink-3)", fontSize: 12, cursor: "default" }}>…อีก {list.length - 100} ราย — พิมพ์เพื่อค้นหา</div>}
         </div>
       )}
     </div>
