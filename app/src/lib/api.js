@@ -2060,6 +2060,48 @@ export async function voidCoupon(code) {
   const { error } = await supabase.from("promo_coupons").update({ status: "void" }).eq("code", String(code || "").trim().toUpperCase());
   if (error) throw error;
 }
+// AI อ่านรหัสคูปองจากรูปในแชต → คืนรายการโค้ด
+export async function scanCouponImage(imageUrl) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const r = await fetch("/api/coupon-scan", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` }, body: JSON.stringify({ imageUrl }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "อ่านคูปองไม่สำเร็จ");
+  return j.codes || [];
+}
+export async function findCoupon(code) {
+  const c = String(code || "").trim().toUpperCase();
+  const { data } = await supabase.from("promo_coupons").select("*, promo_campaigns(name,value,discount_type)").eq("code", c).maybeSingle();
+  return data || null;
+}
+// ผูกคูปองกับลูกค้า (ตอน AI เจอในแชต) — available → claimed
+export async function linkCoupon(code, opts = {}) {
+  const c = String(code || "").trim().toUpperCase();
+  const { data: row } = await supabase.from("promo_coupons").select("status,name,phone").eq("code", c).maybeSingle();
+  if (!row) throw new Error("ไม่พบโค้ดนี้ในระบบ");
+  if (row.status === "redeemed") throw new Error("โค้ดนี้ถูกใช้ไปแล้ว");
+  if (row.status === "void") throw new Error("โค้ดนี้ถูกยกเลิกแล้ว");
+  const patch = {};
+  ["customer_id", "line_user_id", "fb_id", "source"].forEach((k) => { if (opts[k]) patch[k] = opts[k]; });
+  if (opts.name && !row.name) patch.name = String(opts.name).trim();
+  if (opts.phone && !row.phone) patch.phone = String(opts.phone).replace(/[^0-9+]/g, "").trim();
+  if (row.status === "available") patch.status = "claimed";
+  const { error } = await supabase.from("promo_coupons").update(patch).eq("code", c);
+  if (error) throw error;
+  return { ...row, ...patch, code: c };
+}
+// คูปองที่ใช้ได้ของลูกค้าคนนี้ (ยังไม่ถูกใช้) — จับคู่ด้วย customer_id/เบอร์/line/fb
+export async function couponsForCustomer({ customer_id, phone, line_user_id, fb_id } = {}) {
+  const ors = [];
+  if (customer_id) ors.push(`customer_id.eq.${customer_id}`);
+  if (phone) ors.push(`phone.eq.${encodeURIComponent(String(phone).replace(/[^0-9+]/g, ""))}`);
+  if (line_user_id) ors.push(`line_user_id.eq.${encodeURIComponent(line_user_id)}`);
+  if (fb_id) ors.push(`fb_id.eq.${encodeURIComponent(fb_id)}`);
+  if (!ors.length) return [];
+  const { data, error } = await supabase.from("promo_coupons").select("*, promo_campaigns(name,value,discount_type)").or(ors.join(",")).in("status", ["available", "claimed"]);
+  if (error) return [];
+  return data || [];
+}
+
 // ออกโค้ดเอง (พนักงานออกให้ลูกค้าหน้าร้าน) — เรียก API เดียวกับเว็บ/แชต
 export async function issueCoupon({ campaign = "clean750", name, phone, source = "manual" }) {
   const r = await fetch("/api/coupon-claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campaign, name, phone, source, consent: true }) });

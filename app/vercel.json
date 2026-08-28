@@ -5,7 +5,8 @@
     "api/fb-send.js": { "maxDuration": 30 },
     "api/fb-backfill.js": { "maxDuration": 60 },
     "api/boq-ai.js": { "maxDuration": 300 },
-    "api/po-check.js": { "maxDuration": 120 }
+    "api/po-check.js": { "maxDuration": 120 },
+    "api/coupon-scan.js": { "maxDuration": 60 }
   },
   "crons": [
     { "path": "/api/hr-cron", "schedule": "15 2 * * *" },

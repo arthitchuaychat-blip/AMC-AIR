@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, expireOverdueQuotes, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems, docNoTaken } from "../lib/api";
+import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, expireOverdueQuotes, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems, docNoTaken, couponsForCustomer, redeemCoupon } from "../lib/api";
 import DocSlip from "./DocSlip";
 import NumIn from "./NumIn";
 import DocTerms from "./DocTerms";
@@ -161,6 +161,19 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   const grand = afterDisc + vatAmt;
   // หัก ณ ที่จ่าย — เฉพาะลูกค้านิติบุคคล และคิดจาก "ค่าบริการ" ก่อน VAT เท่านั้น (ค่าสินค้าไม่โดนหัก) — เฉลี่ยส่วนลดตามสัดส่วน
   const selCust = ed ? custs.find((c) => String(c.id) === String(ed.customer_id)) : null;
+
+  // 🎟️ คูปองที่ลูกค้าคนนี้มี (ยังไม่ถูกใช้) — เลือกมาเป็นส่วนลดได้
+  const [custCoupons, setCustCoupons] = React.useState([]);
+  React.useEffect(() => {
+    const cid = ed?.customer_id; if (!cid) { setCustCoupons([]); return; }
+    const cust = custs.find((c) => String(c.id) === String(cid));
+    couponsForCustomer({ customer_id: cid, phone: cust?.phone }).then(setCustCoupons).catch(() => setCustCoupons([]));
+  }, [ed?.customer_id, custs]);
+  function applyCoupon(cp) {
+    const cc = cp.promo_campaigns || {};
+    const isPct = cc.discount_type === "percent";
+    setEd((e) => ({ ...e, discount_type: isPct ? "percent" : "amount", discount_value: Number(cc.value) || 0, _coupon: cp.code, _couponName: cc.name || "คูปอง" }));
+  }
   const canWht = selCust?.type === "company";
   const svcSum = ed ? ed.items.reduce((a, x) => a + ((x.kind || matMap[x.code]?.kind) === "service" ? Number(x.qty) * adjUnit(x.unit_price) - lineDisc(x) : 0), 0) : 0;
   const whtAmt = ed && ed.wht && canWht && subtotal > 0 ? afterDisc * (svcSum / subtotal) * (Number(ed.wht_rate) || 3) / 100 : 0;
@@ -187,6 +200,8 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       const items = ed.items.map((x) => ({ ...x, discount: Math.min(Number(x.discount) || 0, Math.round(Number(x.qty) * adjUnit(x.unit_price) * 100) / 100) }));
       const sig = ed.sign_on ? mySignature() : null;
       await saveQuotation({ ...ed, quote_no: quoteNo, sign_url: sig?.url || null, sign_name: sig?.name || null }, items);
+      // 🎟️ ใช้คูปองที่เลือก → บันทึกว่าใช้กับใบเสนอนี้ (non-fatal ถ้าพลาด)
+      if (ed._coupon) { try { await redeemCoupon(ed._coupon, { ref: quoteNo, customer_id: ed.customer_id || null, name: selCust?.name, phone: selCust?.phone }); } catch (e) { flash("บันทึกใบแล้ว แต่ตัดคูปองไม่สำเร็จ: " + (e.message || e), true); } }
       // sync new items back into the linked BOQ (add only — never removes BOQ items)
       let synced = 0;
       if (ed.boq_no) {
@@ -341,6 +356,9 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 </Combo>
                 <NumIn className="inp" min="0" value={ed.discount_value} onChange={(n) => setQ("discount_value", n)} />
               </div>
+              {ed._coupon
+                ? <div className="q-coupon-on">🎟️ ใช้คูปอง {ed._coupon} ({ed._couponName}) <button type="button" onClick={() => setEd((e) => ({ ...e, _coupon: null, _couponName: null }))}>✕</button></div>
+                : custCoupons.length > 0 && <div className="q-coupon-pick">🎟️ ลูกค้ามีคูปอง: {custCoupons.slice(0, 4).map((cp) => <button type="button" key={cp.code} onClick={() => applyCoupon(cp)}>{cp.promo_campaigns?.name || "คูปอง"} {cp.promo_campaigns?.discount_type === "percent" ? `${cp.promo_campaigns?.value}%` : `฿${cp.promo_campaigns?.value}`}</button>)}</div>}
             </label>
             <label className="fld"><span>ภาษีมูลค่าเพิ่ม</span>
               <button type="button" className={"vat-toggle" + (ed.vat ? " on" : "")} onClick={() => setQ("vat", !ed.vat)}>{ed.vat ? "คิด VAT 7%" : "ไม่คิด VAT"}</button>

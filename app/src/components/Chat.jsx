@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, getCompanies, markQuoteSent, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, getCompanies, markQuoteSent, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply, scanCouponImage, findCoupon, linkCoupon } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -692,6 +692,27 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
 
   const selContact = contacts.find((c) => c.line_user_id === sel);
   const selCust = custs.find((c) => String(c.id) === String(selContact?.customer_id)) || null;   // ลูกค้าที่ผูกกับแชตนี้ (ใช้อีเมล/ที่อยู่)
+
+  // 🎟️ AI อ่านคูปองจากรูปที่ลูกค้าส่ง → ผูกคูปองกับลูกค้าคนนี้
+  const [scanning, setScanning] = React.useState(false);
+  async function scanCoupon(url) {
+    setScanning(true);
+    try {
+      const codes = await scanCouponImage(url);
+      if (!codes.length) { flash("ไม่พบรหัสคูปองในรูปนี้", true); return; }
+      const done = [], bad = [];
+      for (const code of codes) {
+        const cp = await findCoupon(code);
+        if (!cp) { bad.push(code + " (ไม่มีในระบบ)"); continue; }
+        if (cp.status === "redeemed") { bad.push(code + " (ใช้ไปแล้ว)"); continue; }
+        if (cp.status === "void") { bad.push(code + " (ยกเลิก)"); continue; }
+        await linkCoupon(code, { customer_id: selContact?.customer_id || null, [isFb ? "fb_id" : "line_user_id"]: sel, name: selCust?.name || selContact?.display_name || null, phone: selCust?.phone || null, source: isFb ? "fb" : "line" });
+        done.push(`${code} · ${cp.promo_campaigns?.name || "คูปอง"}`);
+      }
+      if (done.length) flash(`✓ ผูกคูปองกับลูกค้าแล้ว: ${done.join(" / ")}`);
+      else flash(`อ่านได้: ${bad.join(", ") || codes.join(", ")}`, true);
+    } catch (e) { flash(e.message || "ตรวจคูปองไม่สำเร็จ", true); } finally { setScanning(false); }
+  }
   // resolve a quoted message by its LINE id (to render the referenced message inside a reply)
   // map ข้อความตาม id ของแพลตฟอร์ม (LINE line_message_id / FB fb_message_id) → ใช้ resolve + เด้งไปข้อความที่ถูกอ้างถึง
   const byLineId = React.useMemo(() => { const m = {}; msgs.forEach((x) => { if (x.line_message_id) m[x.line_message_id] = x; if (x.fb_message_id) m[x.fb_message_id] = x; }); return m; }, [msgs]);
@@ -898,6 +919,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                             <span className="chat-media-acts">
                               <a href={m.image_url} target="_blank" rel="noreferrer">เปิด</a>
                               <button type="button" onClick={() => dlFile(m.image_url, "")}>ดาวน์โหลด</button>
+                              {!out && !isSup && !isCm && <button type="button" disabled={scanning} onClick={() => scanCoupon(m.image_url)}>{scanning ? "กำลังอ่าน…" : "🎟️ ตรวจคูปอง"}</button>}
                             </span>
                           </span>
                         ) : m.file_url ? (
