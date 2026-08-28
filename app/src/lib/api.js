@@ -1991,13 +1991,51 @@ export async function couponStats(campaign = "clean750") {
     supabase.from("promo_coupons").select("status").eq("campaign_id", campaign),
   ]);
   const list = r.data || [];
-  const claimed = list.filter((x) => x.status !== "void").length;
-  const redeemed = list.filter((x) => x.status === "redeemed").length;
+  const cnt = (s) => list.filter((x) => x.status === s).length;
+  const available = cnt("available"), claimed = cnt("claimed"), redeemed = cnt("redeemed");
+  const total = available + claimed + redeemed;   // โค้ดที่สร้างแล้วทั้งหมด (ไม่นับ void)
   const quota = c.data?.quota || 0;
-  return { campaign: c.data || null, quota, claimed, redeemed, remaining: quota > 0 ? Math.max(0, quota - claimed) : null };
+  return { campaign: c.data || null, quota, total, available, claimed, redeemed, canGenerate: quota > 0 ? Math.max(0, quota - total) : null };
 }
-// ใช้โค้ด (พนักงานกรอกตอนลูกค้าจอง) — ตรวจสถานะ + ผูกใบเสนอ/ใบงาน
-export async function redeemCoupon(code, ref) {
+export function listCampaigns() {
+  return supabase.from("promo_campaigns").select("*").order("created_at", { ascending: false }).then(({ data, error }) => { if (error) throw error; return data || []; });
+}
+// สร้าง/แก้โปรโมชั่น — id ใหม่ mint เอง (ถ้าไม่ส่ง)
+export async function saveCampaign(c) {
+  const id = c.id || ("cp" + Date.now().toString(36));
+  const row = { id, name: c.name?.trim() || "โปรโมชั่น", discount_type: c.discount_type === "percent" ? "percent" : "amount",
+    value: Number(c.value) || 0, quota: Math.max(0, Math.floor(Number(c.quota) || 0)),
+    valid_from: c.valid_from || null, claim_until: c.claim_until || null, use_by: c.use_by || null,
+    note: c.note?.trim() || null, active: c.active !== false };
+  let { error } = await supabase.from("promo_campaigns").upsert(row, { onConflict: "id" });
+  if (error && /discount_type/i.test(error.message || "")) { delete row.discount_type; ({ error } = await supabase.from("promo_campaigns").upsert(row, { onConflict: "id" })); } // pre-229 fallback
+  if (error) throw error;
+  return id;
+}
+// สร้างโค้ดล่วงหน้าเป็นชุด (สถานะ "available") — เอาไปพิมพ์ลงคูปองแจก · ยังไม่มีเจ้าของ
+export async function generateCoupons(campaign, count) {
+  count = Math.max(1, Math.min(2000, Math.floor(Number(count) || 0)));
+  const camp = (await supabase.from("promo_campaigns").select("id").eq("id", campaign).maybeSingle()).data;
+  if (!camp) throw new Error("ไม่พบแคมเปญ");
+  const pfx = (String(campaign).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()) || "CP";
+  const mk = () => { const s = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let r = ""; for (let i = 0; i < 6; i++) r += s[Math.floor(Math.random() * s.length)]; return `${pfx}-${r}`; };
+  const set = new Set(); while (set.size < count) set.add(mk());
+  const arr = [...set], created = [];
+  for (let i = 0; i < arr.length; i += 200) {
+    let chunk = arr.slice(i, i + 200);
+    for (let t = 0; t < 3; t++) {
+      const rows = chunk.map((code) => ({ code, campaign_id: campaign, status: "available", consent: false }));
+      const { error } = await supabase.from("promo_coupons").insert(rows);
+      if (!error) { created.push(...chunk); break; }
+      if (/duplicate|unique/i.test(error.message || "")) { chunk = chunk.map(() => mk()); continue; }  // โค้ดชน → สุ่มใหม่
+      throw error;
+    }
+  }
+  return { created: created.length, codes: created };
+}
+// ใช้โค้ด (พนักงานกรอกตอนลูกค้าจอง) — รับได้ทั้งโค้ดพร้อมใช้(available) + โค้ดที่ลูกค้ารับแล้ว(claimed)
+// เก็บชื่อ/เบอร์ตอนใช้ ถ้ายังไม่มี (กรณีโค้ดพิมพ์แจก) + ผูกใบเสนอ/ใบงาน
+export async function redeemCoupon(code, opts = {}) {
   const c = String(code || "").trim().toUpperCase();
   if (!c) throw new Error("กรอกโค้ด");
   const { data: row, error: e0 } = await supabase.from("promo_coupons").select("*").eq("code", c).maybeSingle();
@@ -2006,9 +2044,13 @@ export async function redeemCoupon(code, ref) {
   if (row.status === "redeemed") throw new Error(`โค้ดนี้ถูกใช้ไปแล้ว${row.redeemed_at ? " (" + row.redeemed_at.slice(0, 10) + ")" : ""}`);
   if (row.status === "void") throw new Error("โค้ดนี้ถูกยกเลิกแล้ว");
   const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from("promo_coupons").update({ status: "redeemed", redeemed_at: new Date().toISOString(), redeemed_ref: String(ref || "").trim() || null, redeemed_by: user?.id || null }).eq("code", c);
+  const patch = { status: "redeemed", redeemed_at: new Date().toISOString(), redeemed_ref: String(opts.ref || "").trim() || null, redeemed_by: user?.id || null };
+  if (opts.name && !row.name) patch.name = String(opts.name).trim();
+  if (opts.phone && !row.phone) patch.phone = String(opts.phone).replace(/[^0-9+]/g, "").trim();
+  if (opts.source && !row.source) patch.source = opts.source;
+  const { error } = await supabase.from("promo_coupons").update(patch).eq("code", c);
   if (error) throw error;
-  return row;
+  return { ...row, ...patch };
 }
 export async function voidCoupon(code) {
   const { error } = await supabase.from("promo_coupons").update({ status: "void" }).eq("code", String(code || "").trim().toUpperCase());
