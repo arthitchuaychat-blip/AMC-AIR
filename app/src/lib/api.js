@@ -1976,6 +1976,52 @@ export async function autoPostReceipts({ from, to } = {}) {
   return { posted: ok, total: tasks.length, errors: errs };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// คูปอง/โปรโมชั่น (promo_coupons · migration 228) — ดูรายชื่อ lead · ออกโค้ด · ใช้โค้ด (redeem)
+// การ "รับคูปอง" ออกโค้ดผ่าน /api/coupon-claim (service role: คุมโควตา+กันซ้ำ atomically)
+// ═══════════════════════════════════════════════════════════════════════════
+export async function listCoupons(campaign = "clean750") {
+  const { data, error } = await supabase.from("promo_coupons").select("*").eq("campaign_id", campaign).order("claimed_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+export async function couponStats(campaign = "clean750") {
+  const [c, r] = await Promise.all([
+    supabase.from("promo_campaigns").select("*").eq("id", campaign).maybeSingle(),
+    supabase.from("promo_coupons").select("status").eq("campaign_id", campaign),
+  ]);
+  const list = r.data || [];
+  const claimed = list.filter((x) => x.status !== "void").length;
+  const redeemed = list.filter((x) => x.status === "redeemed").length;
+  const quota = c.data?.quota || 0;
+  return { campaign: c.data || null, quota, claimed, redeemed, remaining: quota > 0 ? Math.max(0, quota - claimed) : null };
+}
+// ใช้โค้ด (พนักงานกรอกตอนลูกค้าจอง) — ตรวจสถานะ + ผูกใบเสนอ/ใบงาน
+export async function redeemCoupon(code, ref) {
+  const c = String(code || "").trim().toUpperCase();
+  if (!c) throw new Error("กรอกโค้ด");
+  const { data: row, error: e0 } = await supabase.from("promo_coupons").select("*").eq("code", c).maybeSingle();
+  if (e0) throw e0;
+  if (!row) throw new Error("ไม่พบโค้ดนี้ในระบบ");
+  if (row.status === "redeemed") throw new Error(`โค้ดนี้ถูกใช้ไปแล้ว${row.redeemed_at ? " (" + row.redeemed_at.slice(0, 10) + ")" : ""}`);
+  if (row.status === "void") throw new Error("โค้ดนี้ถูกยกเลิกแล้ว");
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from("promo_coupons").update({ status: "redeemed", redeemed_at: new Date().toISOString(), redeemed_ref: String(ref || "").trim() || null, redeemed_by: user?.id || null }).eq("code", c);
+  if (error) throw error;
+  return row;
+}
+export async function voidCoupon(code) {
+  const { error } = await supabase.from("promo_coupons").update({ status: "void" }).eq("code", String(code || "").trim().toUpperCase());
+  if (error) throw error;
+}
+// ออกโค้ดเอง (พนักงานออกให้ลูกค้าหน้าร้าน) — เรียก API เดียวกับเว็บ/แชต
+export async function issueCoupon({ campaign = "clean750", name, phone, source = "manual" }) {
+  const r = await fetch("/api/coupon-claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campaign, name, phone, source, consent: true }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.message || j.error || "ออกโค้ดไม่สำเร็จ");
+  return j;   // { code, value } หรือ { full } หรือ { already, code }
+}
+
 // test the FlowAccount OpenAPI connection (sandbox) via our serverless function
 export async function flowaccountTest() {
   const { data: { session } } = await supabase.auth.getSession();
