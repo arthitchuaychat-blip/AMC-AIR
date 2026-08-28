@@ -2062,6 +2062,11 @@ export async function voidCoupon(code) {
   const { error } = await supabase.from("promo_coupons").update({ status: "void" }).eq("code", String(code || "").trim().toUpperCase());
   if (error) throw error;
 }
+// ล้างรหัสส่วนลดที่ออกไปทั้งหมดของโปรนี้ (ไว้เริ่มทดสอบใหม่) — เก็บตัวโปรไว้
+export async function clearCoupons(campaign) {
+  const { error } = await supabase.from("promo_coupons").delete().eq("campaign_id", campaign);
+  if (error) throw error;
+}
 // AI อ่านรหัสคูปองจากรูปในแชต → คืนรายการโค้ด
 export async function scanCouponImage(imageUrl) {
   const { data: { session } } = await supabase.auth.getSession();

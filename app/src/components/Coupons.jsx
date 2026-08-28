@@ -1,5 +1,5 @@
 import React from "react";
-import { listCoupons, couponStats, redeemCoupon, voidCoupon, listCampaigns, saveCampaign, getAutoReply, saveAutoReply, claimByCode } from "../lib/api";
+import { listCoupons, couponStats, redeemCoupon, voidCoupon, listCampaigns, saveCampaign, getAutoReply, saveAutoReply, claimByCode, clearCoupons } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 
@@ -58,6 +58,12 @@ export default function Coupons() {
       const row = await redeemCoupon(code, { name: rName, phone: rPhone, ref: rRef, area: rArea, appoint_at: rAppoint || null, source: "manual" });
       flash(`ใช้โค้ดสำเร็จ · ${row.name || rName || ""} (หัก ${discLabel(camp)})`); setRCode(""); setRName(""); setRPhone(""); setRRef(""); setRArea(""); setRAppoint(""); load();
     }
+    catch (e) { flash(e.message || "ไม่สำเร็จ", true); } finally { setBusy(false); }
+  }
+  async function doClear() {
+    if (!(await confirmDialog({ title: "ล้างรหัสส่วนลดทั้งหมด?", message: `ลบรหัสส่วนลดที่ออกไปแล้วทั้งหมดของโปร "${camp?.name || campId}" (${rows.length} รหัส) เพื่อเริ่มทดสอบใหม่\n\nโปรโมชั่น + โค้ดโปร ไม่ถูกลบ`, confirmText: "ล้างรหัสทั้งหมด", danger: true, prompt: { label: "พิมพ์ ล้าง เพื่อยืนยัน", placeholder: "ล้าง", required: true } }))) return;
+    setBusy(true);
+    try { await clearCoupons(campId); flash("ล้างรหัสส่วนลดแล้ว — เริ่มทดสอบใหม่ได้เลย"); load(); }
     catch (e) { flash(e.message || "ไม่สำเร็จ", true); } finally { setBusy(false); }
   }
   async function doVoid(row) {
@@ -164,6 +170,7 @@ export default function Coupons() {
         <div className="cat-search" style={{ maxWidth: 300 }}><input placeholder="ค้นหา ชื่อ / เบอร์ / โค้ด" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <span className="acc-hint">{shown.length} รายการ</span>
         <button className="btn-ghost sm" style={{ marginLeft: "auto" }} onClick={exportCsv} disabled={!shown.length}>⬇ ออก Excel (CSV)</button>
+        <button className="btn-ghost sm" style={{ color: "#b91c1c" }} onClick={doClear} disabled={busy || !rows.length}>🗑️ ล้างรหัสทดสอบ</button>
       </div>
 
       <div className="acc-card" style={{ padding: 0 }}>
