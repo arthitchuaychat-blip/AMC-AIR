@@ -16,7 +16,7 @@ export default function Coupons() {
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
   const [q, setQ] = React.useState(""); const [statusF, setStatusF] = React.useState("all");
-  const [rCode, setRCode] = React.useState(""); const [rName, setRName] = React.useState(""); const [rPhone, setRPhone] = React.useState(""); const [rRef, setRRef] = React.useState("");
+  const [rCode, setRCode] = React.useState(""); const [rName, setRName] = React.useState(""); const [rPhone, setRPhone] = React.useState(""); const [rRef, setRRef] = React.useState(""); const [rArea, setRArea] = React.useState(""); const [rAppoint, setRAppoint] = React.useState("");
   const [genN, setGenN] = React.useState(100);
   const [campModal, setCampModal] = React.useState(null);
   const [toast, setToast] = React.useState(null);
@@ -41,7 +41,7 @@ export default function Coupons() {
   async function doRedeem() {
     if (!rCode.trim()) return flash("กรอกโค้ด", true);
     setBusy(true);
-    try { const row = await redeemCoupon(rCode, { name: rName, phone: rPhone, ref: rRef, source: "manual" }); flash(`ใช้โค้ดสำเร็จ · ${row.name || ""} (หัก ${discLabel(camp)})`); setRCode(""); setRName(""); setRPhone(""); setRRef(""); load(); }
+    try { const row = await redeemCoupon(rCode, { name: rName, phone: rPhone, ref: rRef, area: rArea, appoint_at: rAppoint || null, source: "manual" }); flash(`ใช้โค้ดสำเร็จ · ${row.name || ""} (หัก ${discLabel(camp)})`); setRCode(""); setRName(""); setRPhone(""); setRRef(""); setRArea(""); setRAppoint(""); load(); }
     catch (e) { flash(e.message || "ไม่สำเร็จ", true); } finally { setBusy(false); }
   }
   async function doGenerate() {
@@ -58,11 +58,17 @@ export default function Coupons() {
     try { await voidCoupon(row.code); flash("ยกเลิกแล้ว"); load(); } catch (e) { flash(e.message || "ไม่สำเร็จ", true); }
   }
   function exportCsv() {
-    const head = ["วันที่", "ชื่อ", "เบอร์", "ช่องทาง", "โค้ด", "สถานะ", "ใช้เมื่อ", "ผูกงาน"];
+    const head = ["วันที่", "ชื่อ", "เบอร์", "พื้นที่", "ช่องทาง", "โค้ด", "สถานะ", "ใช้เมื่อ", "วันนัด", "เลขงาน"];
     const esc = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
-    const body = shown.map((r) => [r.claimed_at, r.name, r.phone, r.source, r.code, r.status, r.redeemed_at || "", r.redeemed_ref || ""].map(esc).join(","));
+    const body = shown.map((r) => [r.claimed_at, r.name, r.phone, r.area || "", r.source, r.code, r.status, r.redeemed_at || "", r.appoint_at || "", r.redeemed_ref || ""].map(esc).join(","));
     const csv = "﻿" + [head.map(esc).join(","), ...body].join("\r\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `coupons-${campId}.csv`; a.click();
+  }
+  async function copyCodes() {
+    const codes = rows.filter((r) => r.status === "available").map((r) => r.code);
+    if (!codes.length) return flash("ไม่มีโค้ดพร้อมใช้ให้คัดลอก (กดสร้างโค้ดก่อน)", true);
+    try { await navigator.clipboard.writeText(codes.join("\n")); flash(`คัดลอก ${codes.length} โค้ดแล้ว — วางในไฟล์พิมพ์คูปองได้เลย`); }
+    catch { flash("คัดลอกไม่ได้ — ใช้ปุ่มพิมพ์แทน", true); }
   }
   function printCodes() {
     const codes = rows.filter((r) => r.status === "available").map((r) => r.code);
@@ -116,7 +122,11 @@ export default function Coupons() {
               <input className="inp" placeholder="เบอร์โทร" value={rPhone} onChange={(e) => setRPhone(e.target.value)} />
             </div>
             <div className="cp-box-row">
-              <input className="inp" placeholder="ผูกใบเสนอ/ใบงาน (ไม่บังคับ)" value={rRef} onChange={(e) => setRRef(e.target.value)} />
+              <input className="inp" placeholder="พื้นที่/เขต" value={rArea} onChange={(e) => setRArea(e.target.value)} />
+              <input className="inp" type="date" title="วันนัดหมาย" value={rAppoint} onChange={(e) => setRAppoint(e.target.value)} />
+            </div>
+            <div className="cp-box-row">
+              <input className="inp" placeholder="เลขที่งาน/ใบเสนอ (ไม่บังคับ)" value={rRef} onChange={(e) => setRRef(e.target.value)} />
               <button className="btn" disabled={busy} onClick={doRedeem}>ใช้โค้ด</button>
             </div>
           </div>
@@ -129,7 +139,10 @@ export default function Coupons() {
               <span style={{ fontSize: 13, color: "var(--ink-3)", alignSelf: "center" }}>โค้ด {stat?.canGenerate != null ? `(เหลือโควตา ${stat.canGenerate})` : ""}</span>
               <button className="btn-ghost" disabled={busy} onClick={doGenerate}>สร้างโค้ด</button>
             </div>
-            <button className="btn-ghost sm" onClick={printCodes} disabled={!(stat?.available > 0)}>🖨️ พิมพ์โค้ดพร้อมใช้ ({stat?.available || 0})</button>
+            <div className="cp-box-row">
+              <button className="btn-ghost sm" onClick={printCodes} disabled={!(stat?.available > 0)}>🖨️ พิมพ์ ({stat?.available || 0})</button>
+              <button className="btn-ghost sm" onClick={copyCodes} disabled={!(stat?.available > 0)}>📋 คัดลอกโค้ด</button>
+            </div>
           </div>
         </div>
       </div>
@@ -160,7 +173,7 @@ export default function Coupons() {
                   <td className="mono">{r.phone || "-"}</td>
                   <td><span className="cp-badge" style={{ background: src[1], color: src[2] }}>{src[0]}</span></td>
                   <td className="mono" style={{ fontWeight: 700 }}>{r.code}</td>
-                  <td><span className="cp-badge" style={{ background: st[1], color: st[2] }}>{st[0]}</span>{r.redeemed_ref ? <span className="acc-jl-memo"> · {r.redeemed_ref}</span> : null}</td>
+                  <td><span className="cp-badge" style={{ background: st[1], color: st[2] }}>{st[0]}</span>{[r.redeemed_ref, r.area, r.appoint_at && ("นัด " + r.appoint_at)].filter(Boolean).map((x, i) => <span key={i} className="acc-jl-memo"> · {x}</span>)}</td>
                   <td>{r.status !== "void" && r.status !== "redeemed" && <button className="acc-je-void" title="ยกเลิกโค้ด" onClick={() => doVoid(r)}>✕</button>}</td>
                 </tr>
               ); })}
@@ -169,19 +182,26 @@ export default function Coupons() {
         )}
       </div>
 
-      {campModal && <CampaignModal init={campModal} onClose={() => setCampModal(null)} onSaved={(id) => { setCampModal(null); loadCamps(); setCampId(id); flash("บันทึกโปรโมชั่นแล้ว"); }} onError={(m) => flash(m, true)} />}
+      {campModal && <CampaignModal init={campModal} onClose={() => setCampModal(null)} onSaved={(id, note) => { setCampModal(null); loadCamps(); setCampId(id); load(); flash(note || "บันทึกโปรโมชั่นแล้ว"); }} onError={(m) => flash(m, true)} />}
     </div>
   );
 }
 
 function CampaignModal({ init, onClose, onSaved, onError }) {
   const [f, setF] = React.useState({ id: init.id, name: init.name || "", discount_type: init.discount_type || "amount", value: init.value ?? "", quota: init.quota ?? "", valid_from: init.valid_from || "", claim_until: init.claim_until || "", use_by: init.use_by || "", note: init.note || "", active: init.active !== false });
+  const [genNow, setGenNow] = React.useState(!!init._new);
   const [saving, setSaving] = React.useState(false);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const qn = Math.floor(Number(f.quota) || 0);
   async function save() {
     if (!f.name.trim()) return onError("ตั้งชื่อโปรโมชั่น");
     setSaving(true);
-    try { const id = await saveCampaign(f); onSaved(id); } catch (e) { onError(e.message || "บันทึกไม่สำเร็จ"); setSaving(false); }
+    try {
+      const id = await saveCampaign(f);
+      let note = "บันทึกโปรโมชั่นแล้ว";
+      if (genNow && qn > 0) { const r = await generateCoupons(id, qn); note = `บันทึก + สร้าง ${r.created} โค้ดพร้อมพิมพ์แล้ว`; }
+      onSaved(id, note);
+    } catch (e) { onError(e.message || "บันทึกไม่สำเร็จ"); setSaving(false); }
   }
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -203,6 +223,7 @@ function CampaignModal({ init, onClose, onSaved, onError }) {
           </div>
           <label>เงื่อนไข (แสดงบนคูปอง/เว็บ)<textarea className="inp" rows={2} value={f.note} onChange={set("note")} placeholder="เช่น 1 สิทธิ์/ท่าน · เฉพาะล้างแอร์ · จองภายในวันที่กำหนด" /></label>
           <label className="cp-check"><input type="checkbox" checked={f.active} onChange={(e) => setF((s) => ({ ...s, active: e.target.checked }))} /> เปิดใช้งาน (รับคูปองได้)</label>
+          {qn > 0 && <label className="cp-check"><input type="checkbox" checked={genNow} onChange={(e) => setGenNow(e.target.checked)} /> สร้างโค้ดทันที {qn} โค้ด (ไว้พิมพ์ลงคูปอง)</label>}
         </div>
         <div className="acc-modal-foot"><button className="btn" disabled={saving} onClick={save}>{saving ? "กำลังบันทึก…" : "บันทึกโปรโมชั่น"}</button></div>
       </div>

@@ -2048,7 +2048,11 @@ export async function redeemCoupon(code, opts = {}) {
   if (opts.name && !row.name) patch.name = String(opts.name).trim();
   if (opts.phone && !row.phone) patch.phone = String(opts.phone).replace(/[^0-9+]/g, "").trim();
   if (opts.source && !row.source) patch.source = opts.source;
-  const { error } = await supabase.from("promo_coupons").update(patch).eq("code", c);
+  if (opts.area) patch.area = String(opts.area).trim();
+  if (opts.appoint_at) patch.appoint_at = opts.appoint_at;
+  if (opts.customer_id) patch.customer_id = opts.customer_id;
+  let { error } = await supabase.from("promo_coupons").update(patch).eq("code", c);
+  if (error && /area|appoint_at/i.test(error.message || "")) { delete patch.area; delete patch.appoint_at; ({ error } = await supabase.from("promo_coupons").update(patch).eq("code", c)); } // pre-230 fallback
   if (error) throw error;
   return { ...row, ...patch };
 }
