@@ -3879,15 +3879,24 @@ export async function listTransactionsSince(startDate) {
 
 // ต้นทุนวัสดุที่เบิก/คืน รวมต่อใบงาน → { job_no: { withdraw, return } }
 export async function jobMaterialCost() {
-  const rows = await _fetchAll((f, t) =>
-    supabase.from("transactions").select("job_no,type,value", { count: "exact" }).not("job_no", "is", null).order("id").range(f, t)   // ไม่มี order = แถวซ้ำ/หายระหว่างหน้า
-  );
+  const [rows, mats] = await Promise.all([
+    _fetchAll((f, t) => supabase.from("transactions").select("job_no,type,value,qty,material_code", { count: "exact" }).not("job_no", "is", null).order("id").range(f, t)),
+    listMaterialsLite().catch(() => []),
+  ]);
+  const matMap = Object.fromEntries((mats || []).map((x) => [x.code, x]));
   const m = {};
   rows.forEach((r) => {
     if (!r.job_no) return;
-    const j = m[r.job_no] || (m[r.job_no] = { withdraw: 0, return: 0 });
-    if (r.type === "withdraw" || r.type === "damage") j.withdraw += Number(r.value) || 0;
-    else if (r.type === "return") j.return += Number(r.value) || 0;
+    const j = m[r.job_no] || (m[r.job_no] = { withdraw: 0, return: 0, ac: 0, material: 0, items: [] });
+    const val = Number(r.value) || 0;
+    const isW = r.type === "withdraw" || r.type === "damage", isR = r.type === "return";
+    if (!isW && !isR) return;
+    if (isW) j.withdraw += val; else j.return += val;
+    // แยกชนิดสุทธิ (เบิก−คืน): แอร์ (kind=ac) vs วัสดุ/อื่น ๆ
+    const mm = matMap[r.material_code];
+    const bucket = mm?.kind === "ac" ? "ac" : "material";
+    j[bucket] += (isW ? 1 : -1) * val;
+    j.items.push({ code: r.material_code, name: mm?.name_th || mm?.th || mm?.name || r.material_code, kind: mm?.kind || "material", qty: Number(r.qty) || 0, value: val, type: r.type });
   });
   return m;
 }

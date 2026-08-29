@@ -41,7 +41,7 @@ export default function Profit({ onOpenJob }) {
       // ตัวเลขดิบต่อ 1 ใบเสนอ (รายได้ + ต้นทุนใบงานของใบนั้น)
       const quoteRaw = (q) => {
         const jobs = jobsByQuote[q.quote_no] || [];
-        const detail = jobs.map((j) => { const m = mat[j.job_no] || { withdraw: 0, return: 0 }; return { job: j, withdraw: m.withdraw, ret: m.return, matNet: m.withdraw - m.return, labor: Number(j.labor_total) || 0, expense: Number(exp[j.job_no]) || 0 }; });
+        const detail = jobs.map((j) => { const m = mat[j.job_no] || { withdraw: 0, return: 0, ac: 0, material: 0, items: [] }; return { job: j, withdraw: m.withdraw, ret: m.return, matNet: m.withdraw - m.return, acNet: m.ac || 0, goodsNet: m.material || 0, items: m.items || [], labor: Number(j.labor_total) || 0, expense: Number(exp[j.job_no]) || 0 }; });
         // ค่าธรรมเนียมบัตร = ส่วนต่างยอดขายราคาบัตร − ราคาเงินสด (จ่ายธนาคาร ไม่ใช่กำไร)
         let cardFee = 0;
         if (q.payMethod && q.payMethod !== "cash") {
@@ -68,6 +68,8 @@ export default function Profit({ onOpenJob }) {
         const withdraw = detail.reduce((a, d) => a + d.withdraw, 0);
         const ret = detail.reduce((a, d) => a + d.ret, 0);
         const matNet = withdraw - ret;                              // วัสดุใช้จริงสุทธิ (รวมทุกใบงานในกลุ่ม)
+        const acNet = detail.reduce((a, d) => a + d.acNet, 0);      // ค่าแอร์ (kind=ac) สุทธิ
+        const goodsNet = detail.reduce((a, d) => a + d.goodsNet, 0); // ค่าวัสดุ/อะไหล่ สุทธิ
         const labor = detail.reduce((a, d) => a + d.labor, 0);      // ค่าแรงช่างซัพ (รวมทุกใบงานในกลุ่ม)
         const expenses = detail.reduce((a, d) => a + d.expense, 0); // เบิกจ่ายของงาน (รวมทุกใบงานในกลุ่ม)
         const sale = raws.reduce((a, r) => a + r.sale, 0);          // รายได้ = ใบแม่ + ใบเสริมที่อนุมัติ (ก่อน VAT)
@@ -81,7 +83,7 @@ export default function Profit({ onOpenJob }) {
         const actualCost = matNet + labor + expenses + poPend + cardFee;
         const net = hasRealCost ? sale - actualCost : null;         // ยังไม่มีต้นทุนจริง → ไม่โชว์กำไรลวง
         const margin = net == null || sale <= 0 ? null : (net / sale) * 100;
-        out.push({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin });
+        out.push({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, acNet, goodsNet, labor, expenses, poPend, cardFee, net, margin });
       });
       setRows(out);
 
@@ -204,8 +206,8 @@ export default function Profit({ onOpenJob }) {
           {rows.length > 0 && shown.length === 0 && <div className="empty">ไม่พบงานตามตัวกรอง — ลองแก้คำค้น/ช่วงวันที่ หรือกด “ล้างตัวกรอง”</div>}
           {shown.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ (ประมาณ)</span><span className="r">กำไรประมาณการ</span><span className="r">วัสดุ/แอร์เบิกจริง</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ (จริง)</span><span className="r">%</span></div>
-              {shown.map(({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, labor, expenses, poPend, cardFee, net, margin }) => {
+              <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ (ประมาณ)</span><span className="r">กำไรประมาณการ</span><span className="r">❄ แอร์ / 🔧 วัสดุ (จริง)</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ (จริง)</span><span className="r">%</span></div>
+              {shown.map(({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, acNet, goodsNet, labor, expenses, poPend, cardFee, net, margin }) => {
                 const isOpen = !!open[q.quote_no];
                 return (
                   <React.Fragment key={q.quote_no}>
@@ -215,26 +217,49 @@ export default function Profit({ onOpenJob }) {
                       <span className="r">{fmtBaht(sale)}</span>
                       <span className="r">{cost == null ? "—" : fmtBaht(cost)}</span>
                       <span className="r" style={{ color: gross == null ? "var(--ink-3)" : gross >= 0 ? "var(--ink)" : "var(--down)" }}>{gross == null ? "—" : fmtBaht(gross)}</span>
-                      <span className="r">{matNet === 0 ? "—" : <span style={{ color: "var(--down)" }}>−{fmtBaht(matNet)}</span>}</span>
+                      <span className="r">{matNet === 0 ? "—" : <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.35, color: "var(--down)" }}>
+                        {acNet > 0.01 && <span title="ค่าแอร์">❄ −{fmtBaht(acNet)}</span>}
+                        {goodsNet > 0.01 && <span title="ค่าวัสดุ/อะไหล่">🔧 −{fmtBaht(goodsNet)}</span>}
+                        {(acNet <= 0.01 && goodsNet <= 0.01) && <span>−{fmtBaht(matNet)}</span>}
+                      </span>}</span>
                       <span className="r">{labor === 0 ? "—" : <span style={{ color: "var(--down)" }}>−{fmtBaht(labor)}</span>}</span>
                       <span className="r" style={{ color: net == null ? "var(--ink-3)" : net >= 0 ? "var(--up)" : "var(--down)", fontWeight: 700 }}>{net == null ? "—" : fmtBaht(net)}</span>
                       <span className="r" style={{ color: "var(--ink-3)" }}>{margin == null ? "—" : margin.toFixed(0) + "%"}</span>
                     </div>
                     {isOpen && (
                       <div style={{ padding: "6px 16px 12px 30px", background: "var(--surface-2)", borderBottom: "1px solid var(--line-2)", fontSize: 12 }}>
-                        {detail.map((d) => (
-                          <div key={d.job.job_no} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "4px 0", borderBottom: "1px dashed var(--line-2)" }}>
-                            <span>📋 <b>{d.job.job_no}</b>{d.job.teamName ? ` · ${d.job.teamName}` : ""}{d.job.status !== "done" ? ` · ${ST[d.job.status] || d.job.status}` : ""}</span>
-                            <span style={{ textAlign: "right", color: "var(--ink-2)" }}>
-                              {d.matNet === 0 ? "ไม่มีวัสดุ" : <>วัสดุ {fmtBaht(d.matNet)}{d.ret > 0 ? ` (เบิก ${fmtBaht(d.withdraw)} − คืน ${fmtBaht(d.ret)})` : ""}</>}
-                              {d.labor > 0 && <> · ค่าแรงซัพ {fmtBaht(d.labor)}</>}
-                              {d.expense > 0 && <> · ค่าใช้จ่ายเบิก {fmtBaht(d.expense)}</>}
-                            </span>
+                        {detail.map((d) => {
+                          // รวมรายการย่อยต่อรหัสสินค้า (เบิก−คืน)
+                          const agg = {}; (d.items || []).forEach((it) => { const a = agg[it.code] || (agg[it.code] = { name: it.name, kind: it.kind, qty: 0, value: 0 }); const s = it.type === "return" ? -1 : 1; a.value += s * (Number(it.value) || 0); a.qty += s * (Number(it.qty) || 0); });
+                          const itemList = Object.values(agg).filter((a) => Math.abs(a.value) > 0.01).sort((a, b) => b.value - a.value);
+                          return (
+                          <div key={d.job.job_no} style={{ padding: "5px 0", borderBottom: "1px dashed var(--line-2)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                              <span>📋 <b>{d.job.job_no}</b>{d.job.teamName ? ` · ${d.job.teamName}` : ""}{d.job.status !== "done" ? ` · ${ST[d.job.status] || d.job.status}` : ""}</span>
+                              <span style={{ textAlign: "right", color: "var(--ink-2)" }}>
+                                {d.acNet > 0.01 && <>❄ แอร์ {fmtBaht(d.acNet)} </>}
+                                {d.goodsNet > 0.01 && <>· 🔧 วัสดุ {fmtBaht(d.goodsNet)} </>}
+                                {d.labor > 0 && <>· 👷 ค่าแรงซัพ {fmtBaht(d.labor)} </>}
+                                {d.expense > 0 && <>· 🧾 เบิกจ่าย {fmtBaht(d.expense)}</>}
+                                {d.matNet === 0 && d.labor === 0 && d.expense === 0 ? "ไม่มีต้นทุนจริง" : ""}
+                              </span>
+                            </div>
+                            {itemList.length > 0 && (
+                              <div style={{ marginTop: 3, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 1 }}>
+                                {itemList.map((a, i) => (
+                                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, color: "var(--ink-3)", fontSize: 11.5 }}>
+                                    <span>{a.kind === "ac" ? "❄" : "🔧"} {a.name}{a.qty ? ` × ${a.qty}` : ""}</span>
+                                    <span>{fmtBaht(a.value)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        ))}
+                          );
+                        })}
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0 0", fontWeight: 700 }}>
                           <span>รวมทั้งงาน</span>
-                          <span style={{ textAlign: "right" }}>วัสดุ {fmtBaht(matNet)} · ค่าแรงซัพ {fmtBaht(labor)}{expenses > 0 ? ` · ค่าใช้จ่ายเบิก ${fmtBaht(expenses)}` : ""}{poPend > 0 ? ` · PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
+                          <span style={{ textAlign: "right" }}>{acNet > 0.01 ? `❄ แอร์ ${fmtBaht(acNet)} · ` : ""}{goodsNet > 0.01 ? `🔧 วัสดุ ${fmtBaht(goodsNet)} · ` : ""}👷 ค่าแรงซัพ {fmtBaht(labor)}{expenses > 0 ? ` · 🧾 เบิกจ่าย ${fmtBaht(expenses)}` : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · 💳 ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
                         </div>
                       </div>
                     )}
