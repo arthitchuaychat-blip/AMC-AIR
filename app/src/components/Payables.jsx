@@ -122,7 +122,7 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
         </div>
       </div>
 
-      <div className="kpi-grid">
+      <div className="kpi-grid jp-kpi">
         <div className="stat-card"><div className="stat-val" style={{ color: "#dc2626" }}>{fmtBaht(total)}</div><div className="stat-label">ยอดค้างจ่ายทั้งหมด</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#7c3aed" }}>{fmtBaht(sumOf("po"))}</div><div className="stat-label">ค่าสินค้า (PO)</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#d97706" }}>{fmtBaht(sumOf("expense"))}</div><div className="stat-label">เบิกจ่ายรอจ่าย</div></div>

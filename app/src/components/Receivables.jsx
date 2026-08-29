@@ -163,7 +163,7 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
         </div>
       </div>
 
-      <div className="kpi-grid">
+      <div className="kpi-grid jp-kpi">
         <div className="stat-card"><div className="stat-val" style={{ color: "#1d4ed8" }}>{fmtBaht(totalOwed)}</div><div className="stat-label">ยอดค้างรับทั้งหมด</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#dc2626" }}>{fmtBaht(overdueOwed)}</div><div className="stat-label">เกินกำหนดชำระ</div></div>
         <div className="stat-card"><div className="stat-val">{shown.length}</div><div className="stat-label">จำนวนใบแจ้งหนี้</div></div>
