@@ -637,15 +637,12 @@ select.inp{cursor:pointer}
 @media(max-width:1180px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.dash-grid{grid-template-columns:repeat(2,1fr)}.span-2{grid-column:span 2}.po-layout,.damage-layout{grid-template-columns:1fr}}
 @media(max-width:760px){.sidebar{display:none}.kpi-grid,.dash-grid{grid-template-columns:1fr}.span-2{grid-column:span 1}.brand-bell .nb-pop{left:auto;right:0}}
 
-/* กำไร/งาน — การ์ดสรุปแบบกระชับ 1 แถว (5 ใบ) */
-.jp-kpi{grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+/* การ์ดสรุปแบบกระชับ 1 แถว (กำไร/งาน · รายงานภาษี · กระแสเงินสด) — auto-fit เข้ากับจำนวนการ์ด 3–5 ใบ */
+.jp-kpi{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
 .jp-kpi .stat-card{padding:11px 13px}
 .jp-kpi .stat-val{font-size:19px;letter-spacing:-.5px}
 .jp-kpi .stat-label{font-size:11px;margin-top:4px;line-height:1.25}
 .jp-kpi .stat-sub{font-size:10.5px;margin-top:2px}
-@media(max-width:1180px){.jp-kpi{grid-template-columns:repeat(5,1fr)}}
-@media(max-width:900px){.jp-kpi{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:560px){.jp-kpi{grid-template-columns:repeat(2,1fr)}}
 
 /* ---------- additions for the real app (auth, catalog actions) ---------- */
 .login-stage{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(circle at 50% 0%,#eef1f7,#e3e7f0)}

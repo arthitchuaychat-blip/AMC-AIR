@@ -183,7 +183,7 @@ function DayView({ ents, opening, anchor, withProj, sgn, onEdit, onDel }) {
   let runA = priorActual, runF = priorForecast;
   return (
     <>
-      <div className="kpi-grid">
+      <div className="kpi-grid jp-kpi">
         <div className="stat-card"><div className="stat-val" style={{ color: "var(--up)" }}>{fmtBaht(actIn)}</div><div className="stat-label">รับจริง (เดือนนี้)</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "var(--down)" }}>−{fmtBaht(actOut)}</div><div className="stat-label">จ่ายจริง (เดือนนี้)</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: (actIn - actOut) >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(actIn - actOut)}</div><div className="stat-label">สุทธิจริง</div></div>
