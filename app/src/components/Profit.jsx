@@ -143,6 +143,10 @@ export default function Profit({ onOpenJob }) {
   React.useEffect(() => { load(); }, []);
 
   // กรองก่อนคิดยอดรวม — การ์ดสรุปสะท้อนเฉพาะรายการที่ผ่านตัวกรอง
+  // วันที่ล่าสุดของงาน (ใบเสนอ/อนุมัติ/วันนัดใบงาน) — ไว้เรียงล่าสุดบนสุด
+  const keyDate = (r) => Math.max(
+    +new Date(r.q.issue_date || 0) || 0, +new Date(r.q.approved_at || 0) || 0,
+    ...r.jobs.map((j) => +new Date(j.scheduled_at || 0) || 0), 0);
   const shown = rows.filter((r) => {
     const inDate = (!from && !to)
       || inRange(r.q.approved_at || r.q.issue_date, from, to)
@@ -150,7 +154,7 @@ export default function Profit({ onOpenJob }) {
     if (!inDate) return false;
     return matchText(query, r.q.quote_no, r.q.customerName, r.q.title,
       ...r.jobs.flatMap((j) => [j.job_no, j.teamName]));
-  });
+  }).sort((a, b) => keyDate(b) - keyDate(a));   // ล่าสุดอยู่บนสุดเสมอ
   const withEst = shown.filter((r) => r.gross != null);
   const sumGross = withEst.reduce((a, r) => a + r.gross, 0);           // กำไรประมาณการรวม (BOQ)
   const withNet = shown.filter((r) => r.net != null);                  // เฉพาะงานที่มีต้นทุนจริงบันทึกแล้ว
