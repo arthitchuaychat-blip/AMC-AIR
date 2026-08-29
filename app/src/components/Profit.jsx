@@ -1,5 +1,5 @@
 import React from "react";
-import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost, listPurchaseOrders, listAdjustmentNotes, setJobCategory } from "../lib/api";
+import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost, listPurchaseOrders, listAdjustmentNotes, setJobCategory, listAllJobs } from "../lib/api";
 import { fmtBaht, matchText, inRange } from "../lib/format";
 import { UIcon } from "../icons";
 
@@ -10,6 +10,7 @@ const thD = (s) => { if (!s) return ""; const d = new Date(String(s).length <= 1
 // กำไรขั้นต้น = ยอดขายสุทธิ (ก่อน VAT) − ต้นทุน BOQ
 // กำไรสุทธิ/งาน = กำไรขั้นต้น − วัสดุที่เบิกใช้จริง (เบิก−คืน รวมทุกใบงาน) − ค่าแรงช่างซัพ (รวมทุกใบงาน)
 const ST = { pending: "รอเริ่ม", in_progress: "กำลังทำ", awaiting_approval: "รออนุมัติ", reschedule: "ตั้งนัดเพิ่ม", done: "เสร็จ", cancelled: "ยกเลิก" };
+const BADGE = { fontSize: 10.5, fontWeight: 700, padding: "1px 7px", borderRadius: 20, whiteSpace: "nowrap" };
 
 export default function Profit({ onOpenJob }) {
   const [rows, setRows] = React.useState([]);
@@ -29,7 +30,9 @@ export default function Profit({ onOpenJob }) {
   async function load() {
     setLoading(true); setErr(null);
     try {
-      const [qs, bs, jos, mat, exp, pos, ans] = await Promise.all([listQuotations(), listBoqs(), listJobOrders(), jobMaterialCost(), jobExpenseCost(), listPurchaseOrders().catch(() => []), listAdjustmentNotes().catch(() => [])]);
+      const [qs, bs, jos, mat, exp, pos, ans, mjs] = await Promise.all([listQuotations(), listBoqs(), listJobOrders(), jobMaterialCost(), jobExpenseCost(), listPurchaseOrders().catch(() => []), listAdjustmentNotes().catch(() => []), listAllJobs().catch(() => [])]);
+      // สถานะ "ปิดงานวัสดุ" (ล็อกต้นทุน) จากเมนูวัสดุที่ใช้ในงาน — job_no → open/closed (ถ้าไม่มี = ยังไม่เบิก)
+      const matJobByNo = Object.fromEntries((mjs || []).map((j) => [j.job_no, j]));
       const boqCost = Object.fromEntries(bs.map((b) => [b.boq_no, b.total]));
       // ใบลด/เพิ่มหนี้ (issued) ปรับรายได้งานตามใบเสนอที่ผูก (ก่อน VAT · credit ลบ · debit บวก)
       const noteAdjByQuote = {};
@@ -46,7 +49,7 @@ export default function Profit({ onOpenJob }) {
       // ตัวเลขดิบต่อ 1 ใบเสนอ (รายได้ + ต้นทุนใบงานของใบนั้น)
       const quoteRaw = (q) => {
         const jobs = jobsByQuote[q.quote_no] || [];
-        const detail = jobs.map((j) => { const m = mat[j.job_no] || { withdraw: 0, return: 0, ac: 0, material: 0, items: [] }; return { job: j, withdraw: m.withdraw, ret: m.return, matNet: m.withdraw - m.return, acNet: m.ac || 0, goodsNet: m.material || 0, items: m.items || [], labor: Number(j.labor_total) || 0, expense: Number(exp[j.job_no]) || 0 }; });
+        const detail = jobs.map((j) => { const m = mat[j.job_no] || { withdraw: 0, return: 0, ac: 0, material: 0, items: [] }; const mj = matJobByNo[j.job_no]; return { job: j, withdraw: m.withdraw, ret: m.return, matNet: m.withdraw - m.return, acNet: m.ac || 0, goodsNet: m.material || 0, items: m.items || [], labor: Number(j.labor_total) || 0, expense: Number(exp[j.job_no]) || 0, matStatus: mj ? mj.status : null }; });
         // ค่าธรรมเนียมบัตร = ส่วนต่างยอดขายราคาบัตร − ราคาเงินสด (จ่ายธนาคาร ไม่ใช่กำไร)
         let cardFee = 0;
         if (q.payMethod && q.payMethod !== "cash") {
@@ -191,7 +194,7 @@ export default function Profit({ onOpenJob }) {
             {filtered && <span className="page-sub" style={{ margin: 0 }}>แสดง {shown.length} จาก {rows.length} งาน</span>}
           </div>
 
-          <div className="kpi-grid">
+          <div className="kpi-grid jp-kpi">
             <div className="stat-card"><div className="stat-val">{fmtBaht(sumGross)}</div><div className="stat-label">กำไรประมาณการรวม (BOQ)</div><div className="stat-sub">{shown.length} งานที่เสร็จ{filtered ? ` (กรองจาก ${rows.length})` : ""}</div></div>
             <div className="stat-card"><div className="stat-val" style={{ color: "var(--down)" }}>−{fmtBaht(sumMat)}</div><div className="stat-label">วัสดุ/แอร์ที่เบิกใช้จริง (สุทธิ)</div></div>
             <div className="stat-card"><div className="stat-val" style={{ color: "var(--down)" }}>−{fmtBaht(sumLabor)}</div><div className="stat-label">ค่าแรงช่างซัพรวม</div></div>
@@ -273,7 +276,17 @@ export default function Profit({ onOpenJob }) {
                           return (
                           <div key={d.job.job_no} style={{ padding: "5px 0", borderBottom: "1px dashed var(--line-2)" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                              <span>📋 <b>{d.job.job_no}</b>{d.job.teamName ? ` · ${d.job.teamName}` : ""}{d.job.scheduled_at ? ` · 📅 ${thD(d.job.scheduled_at)}` : ""}{d.job.status !== "done" ? ` · ${ST[d.job.status] || d.job.status}` : ""}</span>
+                              <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                <span>📋 <b>{d.job.job_no}</b>{d.job.teamName ? ` · ${d.job.teamName}` : ""}{d.job.scheduled_at ? ` · 📅 ${thD(d.job.scheduled_at)}` : ""}</span>
+                                {d.job.status === "done"
+                                  ? <span style={{ ...BADGE, background: "#dcfce7", color: "#15803d" }}>✓ เสร็จปิดงาน</span>
+                                  : <span style={{ ...BADGE, background: "#fef3c7", color: "#b45309" }}>{ST[d.job.status] || d.job.status}</span>}
+                                {d.matStatus === "closed"
+                                  ? <span style={{ ...BADGE, background: "#dcfce7", color: "#15803d" }}>🔒 ปิดวัสดุแล้ว</span>
+                                  : d.matStatus === "open"
+                                  ? <span style={{ ...BADGE, background: "#fee2e2", color: "#b91c1c" }}>🔓 ยังไม่ปิดวัสดุ</span>
+                                  : null}
+                              </span>
                               <span style={{ textAlign: "right", color: "var(--ink-2)" }}>
                                 {d.acNet > 0.01 && <>❄ แอร์ {fmtBaht(d.acNet)} </>}
                                 {d.goodsNet > 0.01 && <>· 🔧 วัสดุ {fmtBaht(d.goodsNet)} </>}
