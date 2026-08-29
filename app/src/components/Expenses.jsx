@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders, listPurchaseOrders, requestPoPaymentBatch } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, payExpensesBatch } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
@@ -379,11 +379,17 @@ function PayVendorModal({ onClose, onDone, flash }) {
   const [sel, setSel] = React.useState({});
   const [q2, setQ2] = React.useState("");   // กรองในรายการ PO: เลขใบ / ลูกค้า / ใบเสนอ
   const [topQ, setTopQ] = React.useState("");   // ค้นหาบนสุด: ผู้ขาย / ผู้เบิก / เลขใบ
+  const [mode, setMode] = React.useState("po");   // po = ใบสั่งซื้อ · exp = เบิกทั่วไป
+  const [exps, setExps] = React.useState(null);   // เบิกทั่วไป (อนุมัติ · รอจ่าย · ไม่ใช่ PO)
+  const [expReq, setExpReq] = React.useState("");   // ผู้เบิกที่เลือก (โหมดเบิกทั่วไป)
+  const [accounts, setAccounts] = React.useState([]); const [payAcct, setPayAcct] = React.useState(""); const [proof, setProof] = React.useState([]);
+  const expRem = (e) => Math.round(((Number(e.amount) || 0) - (Number(e.paid_amount) || 0)) * 100) / 100;
+  const switchMode = (m) => { setMode(m); setSel({}); setSup(""); setExpReq(""); setTopQ(""); };
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => {
     // ค้างจ่าย = ยังไม่จ่ายเงินจริง: ทั้งใบที่ยังไม่ตั้งเบิก และใบที่ตั้งเบิกรายใบค้างอยู่ (ใบเบิกยังไม่จ่ายสักบาท → ยุบรวมได้)
-    Promise.all([listPurchaseOrders(), listExpenses().catch(() => [])])
-      .then(([p, ex]) => {
+    Promise.all([listPurchaseOrders(), listExpenses().catch(() => []), listAccounts().catch(() => [])])
+      .then(([p, ex, acc]) => {
         const exById = Object.fromEntries((ex || []).map((e) => [e.id, e]));
         setPos(p.filter((x) => {
           if (x.status === "cancelled" || !(x.total > 0) || x.paymentStatus === "paid") return false;
@@ -392,6 +398,10 @@ function PayVendorModal({ onClose, onDone, flash }) {
           if (!e) return true;   // ใบเบิกเดิมถูกลบไปแล้ว — ถือว่ายังไม่ตั้งเบิก
           return (e.status === "pending" || e.status === "approved") && !(Number(e.paid_amount) > 0);
         }));
+        setAccounts(acc || []); setPayAcct((acc || [])[0]?.id || "");
+        // เบิกทั่วไป = อนุมัติแล้ว · ยังจ่ายไม่ครบ · ไม่ใช่ใบที่ผูก PO (PO มีโหมดของตัวเอง)
+        const poExpIds = new Set(p.filter((x) => x.expense_id).map((x) => x.expense_id));
+        setExps((ex || []).filter((e) => e.status === "approved" && !poExpIds.has(e.id) && ((Number(e.amount) || 0) - (Number(e.paid_amount) || 0)) > 0.005));
       })
       .catch((e) => { flash(L("โหลดใบสั่งซื้อไม่สำเร็จ: ", "ဝယ်ယူလွှာ ဖွင့်မရ: ") + (e.message || e), true); setPos([]); });
   }, []);
@@ -410,6 +420,24 @@ function PayVendorModal({ onClose, onDone, flash }) {
   const chosen = list.filter((x) => sel[x.po_no]);
   const total = chosen.reduce((a, x) => a + (Number(x.total) || 0), 0);
   const allOn = list.length > 0 && chosen.length === list.length;
+  // ── โหมดเบิกทั่วไป: จัดกลุ่มตามผู้เบิก + เลือกหลายใบ จ่ายทีเดียว ──
+  const noReq = L("(ไม่ระบุผู้เบิก)", "(တောင်းသူ မသတ်မှတ်)");
+  const expF = (exps || []).filter((e) => !topQ.trim() || matchText(topQ, e.requesterName, e.title, e.category, e.job_no));
+  const reqs = (() => { const m = {}; expF.forEach((e) => { const k = e.requesterName || noReq; const s = m[k] || (m[k] = { n: 0, sum: 0 }); s.n++; s.sum += expRem(e); }); return Object.entries(m).sort((a, b) => b[1].sum - a[1].sum); })();
+  const expList = expF.filter((e) => (e.requesterName || noReq) === expReq && matchText(q2, e.title, e.category, e.job_no, e.note));
+  const expChosen = expList.filter((e) => sel[e.id]);
+  const expTotal = expChosen.reduce((a, e) => a + expRem(e), 0);
+  const expAllOn = expList.length > 0 && expChosen.length === expList.length;
+  React.useEffect(() => { if (mode === "exp" && topQ.trim() && reqs.length === 1 && reqs[0][0] !== expReq) { setExpReq(reqs[0][0]); setSel({}); } }, [topQ, mode]);
+  async function payExps() {
+    if (!expChosen.length) return;
+    if (!payAcct) return flash(L("เลือกบัญชีที่จ่าย", "ငွေပေးမည့် အကောင့် ရွေးပါ"), true);
+    if (!await confirmDialog({ title: L(`จ่ายเบิกทั่วไป ${expChosen.length} ใบ?`, `တောင်းခံ ${expChosen.length} စောင် ပေးမလား?`), message: L(`รวม ${fmtBaht(expTotal)} · จ่ายจากบัญชีที่เลือก แนบสลิปเดียวกันทุกใบ · ทุกใบจะขึ้น "จ่ายแล้ว"`, `စုစုပေါင်း ${fmtBaht(expTotal)}`), confirmText: L("จ่ายเงิน", "ငွေပေး"), danger: false })) return;
+    setBusy(true);
+    try { const r = await payExpensesBatch(expChosen.map((e) => e.id), { accountId: payAcct, proof }); flash(r.errors.length ? L(`จ่าย ${r.paid} ใบ · พลาด ${r.errors.length}`, `ပေး ${r.paid}`) : L(`จ่ายเบิก ${r.paid} ใบ · ${fmtBaht(expTotal)} แล้ว ✓`, `ပြီး ${r.paid}`), !!r.errors.length); onDone(); }
+    catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); }
+    setBusy(false);
+  }
   async function save() {
     if (!chosen.length) return;
     const merges = chosen.filter((x) => x.expense_id).length;
@@ -424,8 +452,15 @@ function PayVendorModal({ onClose, onDone, flash }) {
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 620, maxWidth: "94vw" }}>
         <div className="modal-head"><div className="modal-title">🏭 {L("จ่ายเจ้าหนี้หลายใบในคราวเดียว", "မြီရှင် များစွာ တစ်ကြိမ်တည်း ပေးချေ")}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
-          <div className="jo-dim" style={{ marginBottom: 10 }}>{L("เลือกผู้ขาย → ติ๊กใบสั่งซื้อที่ค้างจ่าย → ระบบตั้งเบิกจ่ายให้เป็นใบเดียว (เหมือนใบวางบิลฝั่งซื้อ)", "ရောင်းသူ ရွေး → ငွေပေးရန်ကျန် ဝယ်ယူလွှာ အမှတ်ခြစ် → စနစ်က လွှာတစ်စောင်တည်း အဖြစ် တောင်းခံ ဖွင့်ပေးမည် (ဝယ်ဘက် ငွေတောင်းခံစာကဲ့သို့)")}</div>
-          {pos === null ? <div className="empty">{L("กำลังโหลดใบสั่งซื้อ…", "ဝယ်ယူလွှာ ဖွင့်နေသည်…")}</div>
+          <div className="view-seg" style={{ marginBottom: 10 }}>
+            <button className={"seg-btn" + (mode === "po" ? " on" : "")} onClick={() => switchMode("po")}>🏭 {L("ใบสั่งซื้อ (PO)", "ဝယ်ယူလွှာ")}</button>
+            <button className={"seg-btn" + (mode === "exp" ? " on" : "")} onClick={() => switchMode("exp")}>⛽ {L("เบิกทั่วไป", "အထွေထွေ တောင်းခံ")}{exps ? ` (${exps.length})` : ""}</button>
+          </div>
+          <div className="jo-dim" style={{ marginBottom: 10 }}>{mode === "po"
+            ? L("เลือกผู้ขาย → ติ๊กใบสั่งซื้อที่ค้างจ่าย → ตั้งเบิกจ่ายให้เป็นใบเดียว", "ရောင်းသူ ရွေး → ငွေပေးရန်ကျန် ဝယ်ယူလွှာ ရွေး → တစ်စောင်တည်း တောင်းခံ")
+            : L("เลือกผู้เบิก → ติ๊กใบเบิกที่รอจ่าย → เลือกบัญชี + แนบสลิป → จ่ายทีเดียวทุกใบ", "တောင်းသူ ရွေး → ရွေး → အကောင့်+ဆလစ် → တစ်ကြိမ်တည်း ပေး")}</div>
+          {mode === "po" && (
+          <>{pos === null ? <div className="empty">{L("กำลังโหลดใบสั่งซื้อ…", "ဝယ်ယူလွှာ ဖွင့်နေသည်…")}</div>
             : pos.length === 0 ? <div className="empty">🎉 {L("ไม่มีใบสั่งซื้อค้างจ่าย", "ငွေပေးရန်ကျန် ဝယ်ယူလွှာ မရှိပါ")}<br /><small style={{ color: "var(--ink-3)" }}>{L("(ใบที่จ่ายเงินไปแล้วบางส่วน จะไม่แสดงที่นี่ — จ่ายต่อที่ใบเบิกเดิม)", "(တစ်စိတ်တစ်ပိုင်း ငွေပေးပြီးသော လွှာများ ဤနေရာတွင် မပြ — ယခင် တောင်းခံလွှာတွင် ဆက်ပေးပါ)")}</small></div>
             : (<>
           <div className="cat-search" style={{ marginBottom: 8 }}>
@@ -464,11 +499,54 @@ function PayVendorModal({ onClose, onDone, flash }) {
             </>
           )}
             </>)}
+          </>)}
+          {mode === "exp" && (
+          <>{exps === null ? <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div>
+            : exps.length === 0 ? <div className="empty">🎉 {L("ไม่มีเบิกทั่วไปรอจ่าย", "ပေးရန်ကျန် အထွေထွေ တောင်းခံ မရှိ")}</div>
+            : (<>
+          <div className="cat-search" style={{ marginBottom: 8 }}>
+            <UIcon name="search" size={15} color="var(--ink-3)" />
+            <input placeholder={L("ค้นหา ผู้เบิก / รายการ", "ရှာဖွေ တောင်းသူ / အကြောင်းအရာ")} value={topQ} onChange={(e) => setTopQ(e.target.value)} />
+          </div>
+          <label className="fld"><span>{L("ผู้เบิก", "တောင်းသူ")}</span>
+            <select className="inp" value={expReq} onChange={(e) => { setExpReq(e.target.value); setSel({}); }}>
+              <option value="">{reqs.length ? L("— เลือกผู้เบิก —", "— တောင်းသူ ရွေး —") : L("— ไม่พบผู้เบิกที่ตรงคำค้นหา —", "— မတွေ့ —")}</option>
+              {reqs.map(([name, s]) => <option key={name} value={name}>{name} · {L(`${s.n} ใบ`, `${s.n} စောင်`)} ({fmtBaht(s.sum)})</option>)}
+            </select></label>
+          {expReq && (<>
+            <div style={{ border: "1px solid var(--line)", borderRadius: 11, marginTop: 8, overflow: "hidden" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", background: "var(--surface-2)", borderBottom: "1px solid var(--line-2)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+                <input type="checkbox" checked={expAllOn} onChange={() => setSel(expAllOn ? {} : Object.fromEntries(expList.map((e) => [e.id, true])))} />
+                {L(`เลือกทั้งหมด (${expList.length} ใบ)`, `အားလုံး ရွေး (${expList.length})`)}
+              </label>
+              {expList.map((e) => (
+                <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", borderBottom: "1px solid var(--line-2)", cursor: "pointer", fontSize: 13 }}>
+                  <input type="checkbox" checked={!!sel[e.id]} onChange={() => setSel((s) => ({ ...s, [e.id]: !s[e.id] }))} />
+                  <b style={{ flex: 1 }}>{e.title || e.category || L("เบิกจ่าย", "တောင်းခံ")}</b>
+                  <span className="jo-dim">{fmtD(e.created_at)}{e.job_no ? ` · ${e.job_no}` : ""}</span>
+                  <b>{fmtBaht(expRem(e))}</b>
+                </label>
+              ))}
+            </div>
+            <label className="fld" style={{ marginTop: 8 }}><span>{L("จ่ายจากบัญชี", "မှ အကောင့်")}</span>
+              <select className="inp" value={payAcct} onChange={(e) => setPayAcct(e.target.value)}>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({L("คงเหลือ", "ကျန်ငွေ")} {fmtBaht(a.balance)})</option>)}
+              </select></label>
+            <div className="fld" style={{ marginTop: 8 }}><span>💸 {L("แนบสลิปโอนเงิน (ใช้ร่วมทุกใบ)", "ငွေလွှဲ ဆလစ် (အားလုံး အတူ)")}</span><AttachRow files={proof} onChange={setProof} flash={flash} label={L("แนบสลิป", "ဆလစ် တွဲ")} /></div>
+          </>)}
+            </>)}
+          </>)}
         </div>
         <div className="modal-foot">
+          {mode === "po" ? <>
           <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: chosen.length ? "var(--ink)" : "var(--ink-3)" }}>{chosen.length ? L(`เลือก ${chosen.length} ใบ · รวม ${fmtBaht(total)}`, `ရွေးထား ${chosen.length} စောင် · စုစုပေါင်း ${fmtBaht(total)}`) : L("ยังไม่ได้เลือกใบสั่งซื้อ", "ဝယ်ယူလွှာ မရွေးရသေး")}</span>
           <button className="btn-ghost" onClick={onClose}>{L("ยกเลิก", "ပယ်ဖျက်")}</button>
           <button className="btn-primary" disabled={busy || !chosen.length} onClick={save}>{L("ตั้งเบิกจ่าย", "တောင်းခံ ဖွင့်")} {chosen.length > 0 ? L(`${chosen.length} ใบ`, `${chosen.length} စောင်`) : ""}</button>
+          </> : <>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: expChosen.length ? "var(--ink)" : "var(--ink-3)" }}>{expChosen.length ? L(`เลือก ${expChosen.length} ใบ · รวม ${fmtBaht(expTotal)}`, `ရွေးထား ${expChosen.length} · ${fmtBaht(expTotal)}`) : L("ยังไม่ได้เลือกใบเบิก", "မရွေးရသေး")}</span>
+          <button className="btn-ghost" onClick={onClose}>{L("ยกเลิก", "ပယ်ဖျက်")}</button>
+          <button className="btn-primary" disabled={busy || !expChosen.length} onClick={payExps}>💸 {L("จ่ายเงิน", "ငွေပေး")} {expChosen.length > 0 ? L(`${expChosen.length} ใบ`, `${expChosen.length}`) : ""}</button>
+          </>}
         </div>
       </div>
     </div>

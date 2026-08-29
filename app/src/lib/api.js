@@ -4756,6 +4756,15 @@ export async function payExpense(id, { accountId, proof, payDate, amount, expect
   notify([ex.requester], { category: "hr", title: `💸 ${fully ? "จ่ายเงินเบิกครบแล้ว" : "จ่ายเงินเบิกบางส่วน"} "${ex.title}" ${payAmt.toLocaleString()} บาท`, body: fully ? "แนบหลักฐานการจ่ายเรียบร้อย" : `คงเหลืออีก ${(remaining - payAmt).toLocaleString()} บาท`, url: "expenses", ref_type: "expense" });
 }
 // ยกเลิกการจ่ายเงินเบิก (ผู้บริหารเท่านั้น — gate ที่ UI) — คืนสถานะ "อนุมัติ · รอจ่าย" + ถอนรายการเงินออก
+// จ่ายเบิกทั่วไปหลายใบทีเดียว (บัญชี + สลิปชุดเดียว) — จ่ายยอดคงเหลือแต่ละใบ · คืน {paid, errors}
+export async function payExpensesBatch(ids, opts = {}) {
+  let paid = 0; const errors = [];
+  for (const id of ids || []) {
+    try { await payExpense(id, opts); paid++; }
+    catch (e) { errors.push(`${id}: ${e.message || e}`); }
+  }
+  return { paid, errors };
+}
 export async function unpayExpense(id, reason) {
   const { data: ex, error: e0 } = await supabase.from("expense_requests").select("*").eq("id", id).single();
   if (e0) throw e0;
