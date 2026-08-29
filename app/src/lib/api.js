@@ -1787,7 +1787,8 @@ export async function autoPostExpenses({ from, to } = {}) {
   const _d = (ts) => (ts ? String(ts).slice(0, 10) : null);
   const inR = (d) => d && (!from || d >= from) && (!to || d <= to);
   const [exp, po, poItems, payouts, jobs, quotes, posted] = await Promise.all([
-    _fetchAll((f, t) => supabase.from("expense_requests").select("id,title,category,job_no,amount,paid_amount,status,decided_at,last_paid_at,paid_at,created_at", { count: "exact" }).in("status", ["approved", "paid"]).order("id").range(f, t)),
+    _fetchAll((f, t) => supabase.from("expense_requests").select("id,title,category,job_no,amount,paid_amount,status,decided_at,last_paid_at,paid_at,created_at,vat_amt", { count: "exact" }).in("status", ["approved", "paid"]).order("id").range(f, t))
+      .catch((e) => /vat_amt/i.test(e.message || "") ? _fetchAll((f, t) => supabase.from("expense_requests").select("id,title,category,job_no,amount,paid_amount,status,decided_at,last_paid_at,paid_at,created_at", { count: "exact" }).in("status", ["approved", "paid"]).order("id").range(f, t)) : Promise.reject(e)),   // pre-232 fallback (ยังไม่มีคอลัมน์ vat_amt)
     _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,quote_no,status,vat,paid_at,expense_id,created_at", { count: "exact" }).order("po_no").range(f, t)),
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at", { count: "exact" }).eq("status", "paid").order("id").range(f, t)),
@@ -1856,7 +1857,14 @@ export async function autoPostExpenses({ from, to } = {}) {
     const jdate = _d(x.last_paid_at || x.paid_at || x.created_at); if (!inR(jdate)) return;
     if (done.has("expense:" + x.id)) return;
     const entity = entOf(null, x.job_no);
-    tasks.push({ entity, jdate, ref_type: "expense", ref_no: String(x.id), memo: `เบิกจ่าย: ${x.title || ""}${x.job_no ? " · งาน " + x.job_no : ""}`, lines: [{ account_code: _expAccountOf((x.category || "") + " " + (x.title || ""), !!x.job_no), debit: paid, credit: 0 }, { account_code: bank(entity), debit: 0, credit: paid }] });
+    // ภาษีซื้อจากบิลหน้างาน (ถ้ากรอก vat_amt) — เฉพาะบริษัท (จด VAT) · เฉลี่ยตามสัดส่วนที่จ่ายจริง
+    const amt = r2(x.amount);
+    const vatShare = (entity === "company" && amt > 0.005) ? r2((Number(x.vat_amt) || 0) * paid / amt) : 0;
+    const net = r2(paid - vatShare);
+    const eLines = [{ account_code: _expAccountOf((x.category || "") + " " + (x.title || ""), !!x.job_no), debit: net, credit: 0 }];
+    if (vatShare > 0.005) eLines.push({ account_code: "1300", debit: vatShare, credit: 0, memo: "ภาษีซื้อ" });
+    eLines.push({ account_code: bank(entity), debit: 0, credit: paid });
+    tasks.push({ entity, jdate, ref_type: "expense", ref_no: String(x.id), memo: `เบิกจ่าย: ${x.title || ""}${x.job_no ? " · งาน " + x.job_no : ""}`, lines: eLines });
   });
   // 3) ช่างซัพ (จ่ายแล้ว) → ค่าแรงช่างซัพ = ต้นทุนบริการ (5040) · กิจการ = บริษัท
   payouts.forEach((x) => {
@@ -4609,10 +4617,12 @@ export async function uploadExpenseFile(file) {
 }
 export async function submitExpense(e) {
   const uid = await _uid();
-  const { error } = await supabase.from("expense_requests").insert({
-    requester: uid, job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0,
+  const row = {
+    requester: uid, job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0, vat_amt: Number(e.vat_amt) || 0,
     note: e.note?.trim() || null, attachments: e.attachments || [], created_by: uid,
-  });
+  };
+  let { error } = await supabase.from("expense_requests").insert(row);
+  if (error && /vat_amt|PGRST204/i.test(error.message || "")) { delete row.vat_amt; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-232 fallback
   if (error) throw error;
   const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🧾 ${me?.name || "พนักงาน"} ขอเบิกค่าใช้จ่าย ${Number(e.amount) || 0} บาท`, body: e.title || "", url: "expenses", ref_type: "expense" });
@@ -4788,14 +4798,17 @@ export async function requestExpensePaymentBatch(expenseIds, label) {
   const payable = (exps || []).filter((e) => e.status === "approved" && !(Number(e.paid_amount) > 0));
   if (!payable.length) throw new Error("ไม่มีใบเบิกที่รวมได้ (ต้องอนุมัติแล้ว + ยังไม่จ่ายเงิน)");
   const total = r2(payable.reduce((a, e) => a + r2(e.amount), 0));
+  const vatTot = r2(payable.reduce((a, e) => a + (Number(e.vat_amt) || 0), 0));   // รวมภาษีซื้อของบิลในชุด → ยกไปกับใบรวม
   const atts = [...new Set(payable.flatMap((e) => e.attachments || []))];
-  const { data: ex, error } = await supabase.from("expense_requests").insert({
+  const insBundle = (withVat) => supabase.from("expense_requests").insert({
     requester: uid, job_no: null, category: "รวมเบิกจ่าย",
     title: payable.length === 1 ? `ชำระเบิก: ${payable[0].title || ""}` : `ชำระเบิกรวม ${payable.length} ใบ${label ? " · " + label : ""}`,
-    amount: total,
+    amount: total, ...(withVat ? { vat_amt: vatTot } : {}),
     note: "รวมใบเบิก: " + payable.map((e) => `${e.title || "#" + String(e.id).slice(0, 6)} (${r2(e.amount).toLocaleString("en-US")})`).join(" · "),
     attachments: atts, created_by: uid,
   }).select("id").single();
+  let { data: ex, error } = await insBundle(true);
+  if (error && /vat_amt|PGRST204/i.test(error.message || "")) ({ data: ex, error } = await insBundle(false));   // pre-232 fallback
   if (error) throw error;
   const { error: eR } = await supabase.from("expense_requests").update({ status: "rejected", decide_note: "ยุบรวมเข้าใบขอจ่ายรวม (จ่ายรวมหลายใบ)" }).in("id", payable.map((e) => e.id));
   if (eR) { await supabase.from("expense_requests").delete().eq("id", ex.id); throw eR; }

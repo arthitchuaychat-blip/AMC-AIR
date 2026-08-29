@@ -211,7 +211,7 @@ function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">{L("คำขอเบิกของฉัน", "ကျွန်ုပ်၏ တောင်းခံစာရင်း")}</div><div className="sec-sub">{L("เบิกค่าใช้จ่ายทั่วไป หรือเบิกจากใบงาน (ค่าใช้จ่ายงานจะรวมเป็นต้นทุนงาน)", "ယေဘုယျ ကုန်ကျစရိတ် သို့မဟုတ် အလုပ်လွှာမှ တောင်းခံ (အလုပ်စရိတ်ကို အလုပ်ကုန်ကျစရိတ်တွင် ပေါင်းမည်)")}
         {pendRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 {L(`ค้างแนบใบเสร็จ ${pendRcpt} รายการ`, `ဘောက်ချာ တွဲရန်ကျန် ${pendRcpt} ခု`)}</b>}</div></div>
-        <button className="btn-primary" onClick={() => setForm({ title: "", amount: "", category: "", job_no: "", note: "", attachments: [] })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> {L("ขอเบิกใหม่", "အသစ် တောင်းခံ")}</button></div>
+        <button className="btn-primary" onClick={() => setForm({ title: "", amount: "", category: "", job_no: "", note: "", attachments: [], has_vat: false })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> {L("ขอเบิกใหม่", "အသစ် တောင်းခံ")}</button></div>
       <FilterBar id="expenses-mine" count={activeCount}>
         <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
           <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("ค้นหา ลูกค้า / เลข PO / ชื่อรายการ…", "ရှာဖွေ ဖောက်သည် / PO နံပါတ် / အမည်…")} /></div>
@@ -273,7 +273,8 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
     if (!form.title.trim()) return flash(L("ใส่ชื่อรายการ", "အမည် ဖြည့်ပါ"), true);
     if (!(Number(form.amount) > 0)) return flash(L("ใส่จำนวนเงิน", "ပမာဏ ဖြည့်ပါ"), true);
     setBusy(true);
-    try { await submitExpense(form); flash(L("ส่งคำขอเบิกแล้ว รออนุมัติ ✓", "တောင်းခံစာ တင်ပြီး · အတည်ပြုရန် စောင့် ✓")); onSaved(); }
+    const vat_amt = form.has_vat ? Math.round((Number(form.amount) || 0) * 7 / 107 * 100) / 100 : 0;   // บิลราคารวม VAT → ถอดภาษีซื้อ 7/107
+    try { await submitExpense({ ...form, vat_amt }); flash(L("ส่งคำขอเบิกแล้ว รออนุมัติ ✓", "တောင်းခံစာ တင်ပြီး · အတည်ပြုရန် စောင့် ✓")); onSaved(); }
     catch (e) { flash(L("ส่งไม่สำเร็จ: ", "တင်၍ မအောင်မြင်: ") + (e.message || e), true); }
     setBusy(false);
   }
@@ -287,6 +288,11 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
             <label className="fld"><span>{L("จำนวนเงิน (บาท)", "ပမာဏ (ဘတ်)")}</span><span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)} /></span></label>
             <label className="fld"><span>{L("หมวดค่าใช้จ่าย", "ကုန်ကျစရိတ် အမျိုးအစား")}</span><CategoryPicker value={form.category} onChange={(v) => set("category", v)} flash={flash} /></label>
           </div>
+          <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={!!form.has_vat} onChange={(e) => set("has_vat", e.target.checked)} style={{ width: 16, height: 16 }} />
+            <span style={{ margin: 0 }}>🧾 {L("บิลนี้มีใบกำกับภาษีซื้อ VAT 7% (ยอดข้างบนรวม VAT แล้ว)", "ဤဘီလ်တွင် ဝယ်ခွန် VAT 7% ပါသည် (ပမာဏတွင် VAT ပါပြီး)")}
+              {form.has_vat && Number(form.amount) > 0 ? <b style={{ color: "#0d9488" }}> · {L("ภาษีซื้อ", "ဝယ်ခွန်")} ฿{(Math.round(Number(form.amount) * 7 / 107 * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}</b> : ""}</span>
+          </label>
           <label className="fld"><span>{L("เบิกจากใบงาน (ถ้ามี — จะรวมเป็นต้นทุนงาน)", "အလုပ်လွှာမှ တောင်းခံ (ရှိလျှင် — အလုပ်ကုန်ကျစရိတ်တွင် ပေါင်းမည်)")}</span>
             <select className="inp" value={form.job_no} onChange={(e) => set("job_no", e.target.value)}>
               <option value="">{L("— ไม่ผูกกับงาน (ค่าใช้จ่ายทั่วไป) —", "— အလုပ်နှင့် မချိတ် (ယေဘုယျ စရိတ်) —")}</option>

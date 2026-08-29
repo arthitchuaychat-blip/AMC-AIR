@@ -1,5 +1,5 @@
 import React from "react";
-import { listReceipts, listPurchaseOrders, listSubPayouts, listTeams, listAdjustmentNotes } from "../lib/api";
+import { listReceipts, listPurchaseOrders, listSubPayouts, listTeams, listAdjustmentNotes, listExpenses } from "../lib/api";
 import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
 
@@ -11,22 +11,27 @@ export default function TaxReport({ role }) {
   const [receipts, setReceipts] = React.useState(null);
   const [notes, setNotes] = React.useState([]);   // ใบลด/เพิ่มหนี้ → ปรับภาษีขาย/ยอดขาย
   const [pos, setPos] = React.useState([]);   // ใบสั่งซื้อที่ติ๊ก VAT → ภาษีซื้อ
+  const [expVat, setExpVat] = React.useState([]);   // ใบเบิกจ่าย (ไม่ผ่าน PO) ที่มีภาษีซื้อ + จ่ายแล้ว → ภาษีซื้อเพิ่ม
   const [payouts, setPayouts] = React.useState([]);   // ใบจ่ายช่างซัพที่จ่ายแล้ว → ภาษีที่เราหักไว้ ต้องนำส่ง (ภ.ง.ด.53)
   const [teamName, setTeamName] = React.useState({});
   const [year, setYear] = React.useState(() => new Date().getFullYear());
   const [openMonth, setOpenMonth] = React.useState(null);
   const [tab, setTab] = React.useState("vat");   // vat = ภ.พ.30 (ขาย/ซื้อ) · wht = ภ.ง.ด.53 (ที่เราหักช่างซัพ)
+  const [ent, setEnt] = React.useState("company");   // กิจการ: company = บริษัท (จด VAT) · personal = บุคคล (ไม่จด) · all = รวม
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
 
   async function load() {
     try {
-      const [r, p, sp, an] = await Promise.all([listReceipts(), listPurchaseOrders().catch(() => []), listSubPayouts().catch(() => []), listAdjustmentNotes().catch(() => [])]);
+      const [r, p, sp, an, ex] = await Promise.all([listReceipts(), listPurchaseOrders().catch(() => []), listSubPayouts().catch(() => []), listAdjustmentNotes().catch(() => []), listExpenses().catch(() => [])]);
       setReceipts(r.filter((x) => x.status !== "cancelled" && x.issue_date));
       setNotes((an || []).filter((x) => x.status === "issued" && x.issue_date));
       // ภาษีซื้อรับรู้เมื่อ "รับของ/จ่ายเงิน" แล้วเท่านั้น — ใบที่ยังไม่รับของยังไม่มีใบกำกับภาษีซื้อในมือ
       // เดิมนับทุกใบที่ติ๊ก VAT ตั้งแต่วันสั่ง → ใบที่สั่งค้างไว้ไม่รับของเลยก็ยังนับเป็นภาษีซื้อตลอดไป
       setPos(p.filter((x) => x.status !== "cancelled" && x.vat && (x.status === "received" || x.paid_at)));
+      // ใบเบิกจ่ายที่มีภาษีซื้อ (บิลหน้างานไม่ผ่าน PO) + จ่ายเงินแล้ว · ตัดใบที่เป็นการจ่าย PO ออก (กันซ้ำกับภาษีซื้อ PO)
+      const poExpIds = new Set((p || []).map((x) => x.expense_id).filter(Boolean));
+      setExpVat((ex || []).filter((x) => Number(x.vat_amt) > 0 && Number(x.paid_amount) > 0 && !poExpIds.has(x.id)));
       // ภาษีที่ "เราหักจากช่างซัพ" แล้วต้องนำส่งสรรพากร (ภ.ง.ด.53) — คนละขากับ wht ในใบเสร็จที่ลูกค้าหักเรา
       setPayouts((sp || []).filter((x) => x.status === "paid" && Number(x.wht_amt) > 0));
       try { const ts = await listTeams(); setTeamName(Object.fromEntries((ts || []).map((t) => [t.id, t]))); } catch (_) { /* ชื่อทีมโหลดไม่ได้ก็ยังโชว์รหัสทีมได้ */ }
@@ -45,9 +50,12 @@ export default function TaxReport({ role }) {
     return Array.from(ys).sort((a, b) => b - a);
   }, [receipts]);
 
-  const ofYear = React.useMemo(() => (receipts || []).filter((r) => (r.issue_date || "").slice(0, 4) === String(year)), [receipts, year]);
+  // นิติบุคคลของเอกสาร: มี VAT = บริษัท (จด VAT) · ไม่มี VAT = บุคคล (ตรงกับกติกาลงบัญชี api.js) — ภ.พ.30 ต้องเป็นของบริษัทเท่านั้น
+  const entOfDoc = (r) => (Number(r.vat_amt) || 0) > 0.005 ? "company" : "personal";
+  const keepEnt = (e) => ent === "all" || e === ent;
+  const ofYear = React.useMemo(() => (receipts || []).filter((r) => (r.issue_date || "").slice(0, 4) === String(year) && keepEnt(entOfDoc(r))), [receipts, year, ent]);
   // ใบลด/เพิ่มหนี้ปีนี้ → แปลงเป็น "แถวแบบใบเสร็จ" ที่มียอดติดเครื่องหมาย (credit ลบ · debit บวก) เพื่อรวมเข้ารายงานภาษีขาย
-  const ofYearNotes = React.useMemo(() => (notes || []).filter((a) => (a.issue_date || "").slice(0, 4) === String(year)).map((a) => {
+  const ofYearNotes = React.useMemo(() => (notes || []).filter((a) => (a.issue_date || "").slice(0, 4) === String(year) && keepEnt(entOfDoc(a))).map((a) => {
     const sign = a.kind === "debit" ? 1 : -1;
     return { receipt_no: a.note_no, issue_date: a.issue_date, customerName: a.customerName, customerTaxId: a.customerTaxId,
       base: sign * (Number(a.base) || 0), vat_amt: sign * (Number(a.vat_amt) || 0), wht_amt: sign * (Number(a.wht_amt) || 0), net: sign * (Number(a.net) || 0), _adj: a.kind };
@@ -71,16 +79,27 @@ export default function TaxReport({ role }) {
       const b = m[mi];
       b.base += r.base; b.vat += r.vat_amt; b.wht += r.wht_amt; b.net += r.net; b.rows.push(r);
     });
-    pos.forEach((x) => {
+    // ภาษีซื้อ = เครดิตของ "บริษัท" เท่านั้น (ใบกำกับภาษีซื้อออกในนามบริษัทที่จด VAT) — มุมมองบุคคลไม่มีภาษีซื้อ
+    if (ent !== "personal") pos.forEach((x) => {
       const d = poDate(x);
       if ((d || "").slice(0, 4) !== String(year)) return;
       const mi = Number((d || "").slice(5, 7)) - 1;
       if (mi < 0 || mi > 11) return;
       m[mi].buyVat += Number(x.vatAmt) || 0; m[mi].buyCount++;
     });
+    // ภาษีซื้อจากใบเบิกจ่าย (บิลหน้างาน) — ลงเดือนตามวันจ่ายเงิน · เฉลี่ยตามสัดส่วนที่จ่ายจริง · บริษัทเท่านั้น
+    if (ent !== "personal") expVat.forEach((x) => {
+      const d = bkkDay(x.last_paid_at || x.paid_at) || (x.created_at || "").slice(0, 10);
+      if ((d || "").slice(0, 4) !== String(year)) return;
+      const mi = Number((d || "").slice(5, 7)) - 1;
+      if (mi < 0 || mi > 11) return;
+      const amt = Number(x.amount) || 0;
+      const share = amt > 0 ? (Number(x.vat_amt) || 0) * (Number(x.paid_amount) || 0) / amt : 0;
+      m[mi].buyVat += share; m[mi].buyCount++;
+    });
     m.forEach((b) => { b.base = round2(b.base); b.vat = round2(b.vat); b.buyVat = round2(b.buyVat); b.wht = round2(b.wht); b.net = round2(b.net); b.vatDue = round2(b.vat - b.buyVat); b.rows.sort((a, c) => (a.issue_date < c.issue_date ? -1 : 1)); });
     return m;
-  }, [ofYear, ofYearNotes, pos, year]);
+  }, [ofYear, ofYearNotes, pos, expVat, year, ent]);
 
   const tot = months.reduce((a, b) => ({ count: a.count + b.count, base: round2(a.base + b.base), vat: round2(a.vat + b.vat), buyVat: round2(a.buyVat + b.buyVat), buyCount: a.buyCount + b.buyCount, wht: round2(a.wht + b.wht), net: round2(a.net + b.net) }), { count: 0, base: 0, vat: 0, buyVat: 0, buyCount: 0, wht: 0, net: 0 });
   tot.vatDue = round2(tot.vat - tot.buyVat);
@@ -122,18 +141,19 @@ export default function TaxReport({ role }) {
     downloadCsv(`ภงด53-ภาษีหักช่างซัพ-${year + 543}`, headers, rows);
   }
 
+  const entTag = ent === "company" ? "บริษัท" : ent === "personal" ? "บุคคล" : "รวม";
   function exportMonthly() {
     const headers = ["เดือน", "จำนวนใบเสร็จ", "ยอดก่อน VAT", "ภาษีขาย", "ภาษีซื้อ (ประมาณการ)", "VAT นำส่ง (ขาย−ซื้อ)", "หัก ณ ที่จ่าย", "รับสุทธิ"];
     const rows = months.map((b, i) => [`${TH_MONTHS[i]} ${year + 543}`, b.count, b.base, b.vat, b.buyVat, b.vatDue, b.wht, b.net]);
     rows.push(["รวมทั้งปี", tot.count, tot.base, tot.vat, tot.buyVat, tot.vatDue, tot.wht, tot.net]);
-    downloadCsv(`รายงานภาษี-สรุปรายเดือน-${year + 543}`, headers, rows);
+    downloadCsv(`รายงานภาษี-สรุปรายเดือน-${entTag}-${year + 543}`, headers, rows);
   }
   function exportDetail() {
     const headers = ["วันที่", "เลขใบเสร็จ", "ลูกค้า", "เลขผู้เสียภาษี", "ยอดก่อน VAT", "VAT 7%", "หัก ณ ที่จ่าย", "รับสุทธิ"];
     const rows = ofYear.slice().sort((a, b) => (a.issue_date < b.issue_date ? -1 : 1))
       .map((r) => [r.issue_date, r.receipt_no, r.customerName || "", r.customerTaxId || "", round2(r.base), round2(r.vat_amt), round2(r.wht_amt), round2(netOf(r))]);
     if (!rows.length) return flash("ไม่มีข้อมูลในปีนี้", true);
-    downloadCsv(`รายงานภาษี-รายใบ-${year + 543}`, headers, rows);
+    downloadCsv(`รายงานภาษี-รายใบ-${entTag}-${year + 543}`, headers, rows);
   }
 
   return (
@@ -154,6 +174,15 @@ export default function TaxReport({ role }) {
         <button className={"cat-chip" + (tab === "wht" ? " on" : "")} onClick={() => setTab("wht")}>ภาษีหัก ณ ที่จ่าย ที่เราหักไว้ (ภ.ง.ด.53){whtTot.count ? ` · ${whtTot.count}` : ""}</button>
       </div>
 
+      {tab === "vat" && (
+        <div className="cat-chips" style={{ marginBottom: 10 }}>
+          <span className="page-sub" style={{ margin: "0 6px 0 2px", alignSelf: "center", fontSize: 12.5 }}>กิจการ:</span>
+          <button className={"cat-chip" + (ent === "company" ? " on" : "")} onClick={() => setEnt("company")}>🏢 บริษัท (จด VAT)</button>
+          <button className={"cat-chip" + (ent === "personal" ? " on" : "")} onClick={() => setEnt("personal")}>👤 บุคคล (ไม่จด VAT)</button>
+          <button className={"cat-chip" + (ent === "all" ? " on" : "")} onClick={() => setEnt("all")}>รวมทั้งสองกิจการ</button>
+        </div>
+      )}
+
       <div className="cf-bar">
         <div className="sched-nav">
           <button className="btn-ghost sm" onClick={() => setYear((y) => y - 1)}><UIcon name="chevR" size={15} style={{ transform: "rotate(180deg)" }} /></button>
@@ -168,10 +197,15 @@ export default function TaxReport({ role }) {
       </div>
 
       {tab === "vat" ? (<>
-      <div className="kpi-grid">
+      {ent === "personal" && (
+        <div className="card" style={{ padding: "10px 14px", marginBottom: 10, borderLeft: "3px solid #6d28d9", background: "#f5f3ff", fontSize: 12.5, color: "#5b21b6" }}>
+          👤 <b>กิจการบุคคล (อาทิตย์ ช่วยชาติ) ไม่ได้จด VAT</b> — ยอดขายส่วนนี้<b>ไม่ต้องยื่น ภ.พ.30</b> และไม่มีภาษีซื้อ/ภาษีขาย (แสดงไว้เพื่อดูยอดเฉย ๆ)
+        </div>
+      )}
+      <div className="kpi-grid jp-kpi">
         <div className="stat-card"><div className="stat-val">{fmtBaht(tot.base)}</div><div className="stat-label">ยอดขายก่อน VAT (ปีนี้) · {tot.count} ใบ</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#1d4ed8" }}>{fmtBaht(tot.vat)}</div><div className="stat-label">ภาษีขาย (จากใบกำกับ)</div></div>
-        <div className="stat-card"><div className="stat-val" style={{ color: "#0d9488" }}>{fmtBaht(tot.buyVat)}</div><div className="stat-label">ภาษีซื้อ (PO รับของแล้ว · {tot.buyCount} ใบ)</div></div>
+        <div className="stat-card"><div className="stat-val" style={{ color: "#0d9488" }}>{fmtBaht(tot.buyVat)}</div><div className="stat-label">ภาษีซื้อ (PO + บิลหน้างาน · {tot.buyCount} ใบ)</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: tot.vatDue > 0 ? "#dc2626" : "#16a34a" }}>{fmtBaht(Math.abs(tot.vatDue))}</div><div className="stat-label">{tot.vatDue >= 0 ? "VAT นำส่งสุทธิ (ขาย − ซื้อ)" : "VAT ขอคืน (ซื้อ > ขาย)"}</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#d97706" }}>{fmtBaht(tot.wht)}</div><div className="stat-label">ภาษีหัก ณ ที่จ่าย (เครดิตคืน)</div></div>
       </div>
@@ -233,7 +267,8 @@ export default function TaxReport({ role }) {
         )}
 
       <p className="page-sub" style={{ marginTop: 12, fontSize: 12 }}>
-        💡 <b>ภาษีขาย</b>คิดจากใบเสร็จ/ใบกำกับภาษีที่ยังไม่ถูกยกเลิก ตามวันที่ในใบเสร็จ · <b>ภาษีซื้อ</b>ประมาณการจากใบสั่งซื้อที่ติ๊ก VAT <b>เฉพาะใบที่รับของ/จ่ายแล้ว</b> ลงเดือนตามวันรับของ (ยังไม่รวมบิลหน้างานที่เบิกจ่ายโดยไม่ผ่านใบสั่งซื้อ · ตอนยื่น ภพ.30 ให้ใช้ยอดจากใบกำกับภาษีซื้อจริงของผู้ขาย) · <b>VAT นำส่ง</b> = ภาษีขาย − ภาษีซื้อ (ติดลบ = ขอคืน/ยกยอด) · หัก ณ ที่จ่าย = ภาษีที่ลูกค้าหักไว้ (เครดิตคืน)
+        💡 <b>กิจการ:</b> ภ.พ.30 ยื่นในนาม<b>บริษัท (จด VAT) เท่านั้น</b> — ยอดฝั่งบุคคลแยกไว้ดูต่างหาก · <b>ภาษีขาย</b>คิดจากใบเสร็จ/ใบกำกับภาษีที่ยังไม่ถูกยกเลิก ตามวันที่ในใบเสร็จ · <b>ภาษีซื้อ</b>ประมาณการจากใบสั่งซื้อที่ติ๊ก VAT <b>เฉพาะใบที่รับของ/จ่ายแล้ว</b> (ลงเดือนตามวันรับของ) <b>+ บิลหน้างาน</b>ที่ติ๊ก "มีใบกำกับภาษีซื้อ VAT" ในเมนูเบิกจ่าย (ลงเดือนตามวันจ่าย) · ตอนยื่น ภพ.30 ให้ใช้ยอดจากใบกำกับภาษีซื้อจริงของผู้ขาย · หัก ณ ที่จ่าย = ภาษีที่ลูกค้าหักไว้ (เครดิตคืน)
+        <br />⚠️ <b>ภ.พ.30 ยื่นแยกรายเดือน</b> — เดือนที่ภาษีซื้อ &gt; ภาษีขายจะ<b>ยกเครดิตไปหักเดือนถัดไป</b> (ไม่ได้เอามาสุทธิกับทั้งปี) ให้ดูยอดนำส่ง <b>ราย</b>เดือนในตารางเป็นหลัก · การ์ด "รวมทั้งปี" ไว้ดูภาพรวมเท่านั้น
       </p>
       </>) : (<>
       <div className="kpi-grid">
