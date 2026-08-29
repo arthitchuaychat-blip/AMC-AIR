@@ -378,6 +378,7 @@ function PayVendorModal({ onClose, onDone, flash }) {
   const [sup, setSup] = React.useState("");
   const [sel, setSel] = React.useState({});
   const [q2, setQ2] = React.useState("");   // กรองในรายการ PO: เลขใบ / ลูกค้า / ใบเสนอ
+  const [topQ, setTopQ] = React.useState("");   // ค้นหาบนสุด: ผู้ขาย / ผู้เบิก / เลขใบ
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => {
     // ค้างจ่าย = ยังไม่จ่ายเงินจริง: ทั้งใบที่ยังไม่ตั้งเบิก และใบที่ตั้งเบิกรายใบค้างอยู่ (ใบเบิกยังไม่จ่ายสักบาท → ยุบรวมได้)
@@ -395,13 +396,17 @@ function PayVendorModal({ onClose, onDone, flash }) {
       .catch((e) => { flash(L("โหลดใบสั่งซื้อไม่สำเร็จ: ", "ဝယ်ယူလွှာ ဖွင့်မရ: ") + (e.message || e), true); setPos([]); });
   }, []);
   const supName = (x) => x.supplier?.trim() || L("(ไม่ระบุผู้ขาย)", "(ရောင်းသူ မသတ်မှတ်)");
+  // ค้นหาบนสุด: ชื่อผู้ขาย / ผู้เบิก(ผู้สร้างใบ) / เลขใบ / ลูกค้า → กรอง dropdown ผู้ขาย + รายการ
+  const posF = React.useMemo(() => (pos || []).filter((x) => !topQ.trim() || matchText(topQ, supName(x), x.createdByName, x.po_no, x.customerName, x.jobNo, x.teamName)), [pos, topQ]);
   const sups = React.useMemo(() => {
     const m = {};
-    (pos || []).forEach((x) => { const s = m[supName(x)] || (m[supName(x)] = { n: 0, sum: 0 }); s.n += 1; s.sum += Number(x.total) || 0; });
+    posF.forEach((x) => { const s = m[supName(x)] || (m[supName(x)] = { n: 0, sum: 0 }); s.n += 1; s.sum += Number(x.total) || 0; });
     return Object.entries(m).sort((a, b) => b[1].sum - a[1].sum);
-  }, [pos]);
-  const list = (pos || []).filter((x) => supName(x) === sup
-    && matchText(q2, x.po_no, x.quote_no, x.customerName, x.jobNo, x.teamName, x.note, x.internal_note));
+  }, [posF]);
+  // พิมพ์ค้นหาแล้วเหลือผู้ขายเดียว → เลือกให้เลย
+  React.useEffect(() => { if (topQ.trim() && sups.length === 1 && sups[0][0] !== sup) { setSup(sups[0][0]); setSel({}); } }, [topQ, sups]);
+  const list = posF.filter((x) => supName(x) === sup
+    && matchText(q2, x.po_no, x.quote_no, x.customerName, x.jobNo, x.teamName, x.note, x.internal_note, x.createdByName));
   const chosen = list.filter((x) => sel[x.po_no]);
   const total = chosen.reduce((a, x) => a + (Number(x.total) || 0), 0);
   const allOn = list.length > 0 && chosen.length === list.length;
@@ -423,9 +428,13 @@ function PayVendorModal({ onClose, onDone, flash }) {
           {pos === null ? <div className="empty">{L("กำลังโหลดใบสั่งซื้อ…", "ဝယ်ယူလွှာ ဖွင့်နေသည်…")}</div>
             : pos.length === 0 ? <div className="empty">🎉 {L("ไม่มีใบสั่งซื้อค้างจ่าย", "ငွေပေးရန်ကျန် ဝယ်ယူလွှာ မရှိပါ")}<br /><small style={{ color: "var(--ink-3)" }}>{L("(ใบที่จ่ายเงินไปแล้วบางส่วน จะไม่แสดงที่นี่ — จ่ายต่อที่ใบเบิกเดิม)", "(တစ်စိတ်တစ်ပိုင်း ငွေပေးပြီးသော လွှာများ ဤနေရာတွင် မပြ — ယခင် တောင်းခံလွှာတွင် ဆက်ပေးပါ)")}</small></div>
             : (<>
+          <div className="cat-search" style={{ marginBottom: 8 }}>
+            <UIcon name="search" size={15} color="var(--ink-3)" />
+            <input placeholder={L("ค้นหา ผู้ขาย / ผู้เบิก / เลขใบ", "ရှာဖွေ ရောင်းသူ / တောင်းသူ / လွှာနံပါတ်")} value={topQ} onChange={(e) => setTopQ(e.target.value)} />
+          </div>
           <label className="fld"><span>{L("ผู้ขาย / เจ้าหนี้", "ရောင်းသူ / မြီရှင်")}</span>
             <select className="inp" value={sup} onChange={(e) => { setSup(e.target.value); setSel({}); }}>
-              <option value="">{L("— เลือกผู้ขาย —", "— ရောင်းသူ ရွေး —")}</option>
+              <option value="">{sups.length ? L("— เลือกผู้ขาย —", "— ရောင်းသူ ရွေး —") : L("— ไม่พบผู้ขายที่ตรงคำค้นหา —", "— ရှာဖွေမှု မတွေ့ —")}</option>
               {sups.map(([name, s]) => <option key={name} value={name}>{name} · {L(`ค้าง ${s.n} ใบ`, `ကျန် ${s.n} စောင်`)} ({fmtBaht(s.sum)})</option>)}
             </select></label>
           {sup && (
