@@ -16,10 +16,13 @@ const weekEndYmd = (startYmd) => { const d = new Date(startYmd + "T00:00:00"); d
 const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", labor_owed: "ค่าแรงช่างซัพ (รอเบิก)", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย", expense_paid: "เบิกจ่าย (จ่ายแล้ว)", expense_due: "เบิกจ่าย (ค้างจ่าย)", advance: "เบิกเงินล่วงหน้า" };
 const GRAINS = [["day", "รายวัน"], ["week", "สัปดาห์"], ["month", "เดือน"], ["year", "ปี"]];
 
+const ENTS = [["all", "รวม 2 กิจการ"], ["company", "🏢 บริษัท"], ["personal", "👤 บุคคล"]];
+
 export default function CashFlow() {
   const [entries, setEntries] = React.useState([]);
-  const [opening, setOpening] = React.useState(0);
+  const [opening, setOpening] = React.useState({ company: 0, personal: 0 });
   const [openingInput, setOpeningInput] = React.useState("");
+  const [ent, setEnt] = React.useState("all");   // กิจการ: all=รวม · company=บริษัท · personal=บุคคล
   const [grain, setGrain] = React.useState("day");
   const [anchor, setAnchor] = React.useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [withProj, setWithProj] = React.useState(true);
@@ -31,7 +34,7 @@ export default function CashFlow() {
 
   async function load(silent) {
     if (!silent) setLoading(true);
-    try { const [e, ob] = await Promise.all([listCashEntries(), getOpeningBalance()]); setEntries(e); setOpening(ob); setOpeningInput(String(ob || 0)); }
+    try { const [e, ob] = await Promise.all([listCashEntries(), getOpeningBalance()]); setEntries(e); setOpening(ob); setOpeningInput(String((ent === "personal" ? ob.personal : ob.company) || 0)); }
     catch (err) { flash("โหลดไม่สำเร็จ: " + (err.message || err), true); }
     if (!silent) setLoading(false);
   }
@@ -39,14 +42,19 @@ export default function CashFlow() {
   React.useEffect(() => { (async () => { await load(); try { await syncCashEntriesFromDocs(); await load(true); } catch { /* keep showing existing */ } })(); }, []);
 
   const sgn = (e) => (e.direction === "in" ? 1 : -1);
-  const ents = React.useMemo(() => entries.filter((e) => e.source_type !== "opening"), [entries]);
+  const entOf = (e) => (e.entity === "personal" ? "personal" : "company");
+  const ents = React.useMemo(() => entries.filter((e) => e.source_type !== "opening" && (ent === "all" || entOf(e) === ent)), [entries, ent]);
+  const openingVal = ent === "all" ? (Number(opening.company) || 0) + (Number(opening.personal) || 0) : (Number(opening[ent]) || 0);
+  // เปลี่ยนกิจการ → เติมค่ายกมาของกิจการนั้นในช่องกรอก
+  React.useEffect(() => { setOpeningInput(String((ent === "personal" ? opening.personal : opening.company) || 0)); }, [ent, opening]);
   const year = anchor.getFullYear();
   const move = (n) => setAnchor((a) => grain === "day" ? new Date(a.getFullYear(), a.getMonth() + n, 1) : new Date(a.getFullYear() + n, a.getMonth(), 1));
   const title = grain === "day" ? thMonth(anchor) : grain === "year" ? "ทุกปี" : `ปี ${year + 543}`;
 
   async function saveOpening() {
-    const v = Number(openingInput) || 0; if (v === opening) return;
-    try { await setOpeningBalance(v); setOpening(v); flash("บันทึกเงินสดยกมาแล้ว ✓"); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    if (ent === "all") return;   // โหมดรวม = อ่านอย่างเดียว (แก้ยกมาต้องเลือกกิจการก่อน)
+    const v = Number(openingInput) || 0; if (v === (Number(opening[ent]) || 0)) return;
+    try { await setOpeningBalance(ent, v); setOpening((o) => ({ ...o, [ent]: v })); flash("บันทึกเงินสดยกมาแล้ว ✓"); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function sync() {
     setBusy(true);
@@ -79,9 +87,9 @@ export default function CashFlow() {
       else { if (e.direction === "in") b.projIn += amt; else b.projOut += amt; }
     });
     const arr = Object.values(map).sort((a, b) => a.sort.localeCompare(b.sort));
-    let run = opening; arr.forEach((b) => { run += b.actIn - b.actOut; b.balA = run; });
+    let run = openingVal; arr.forEach((b) => { run += b.actIn - b.actOut; b.balA = run; });
     return arr;
-  }, [ents, grain, opening]);
+  }, [ents, grain, openingVal]);
 
   // สัปดาห์คร่อมปีใหม่ (เริ่ม 29 ธ.ค. จบ 4 ม.ค.) ต้องโผล่ทั้ง 2 ปี — เทียบทั้งวันเริ่มและวันจบสัปดาห์
   const viewBuckets = grain === "year" ? buckets : buckets.filter((b) => b.sort.slice(0, 4) === String(year)
@@ -98,8 +106,9 @@ export default function CashFlow() {
             <button className={"seg-btn" + (!withProj ? " on" : "")} onClick={() => setWithProj(false)}>จริง</button>
             <button className={"seg-btn" + (withProj ? " on" : "")} onClick={() => setWithProj(true)}>+ คาดการณ์</button>
           </div>
+          <div className="seg">{ENTS.map(([v, l]) => <button key={v} className={"seg-btn" + (ent === v ? " on" : "")} onClick={() => setEnt(v)}>{l}</button>)}</div>
           <button className="btn-ghost sm" disabled={busy} onClick={sync}><UIcon name="withdraw" size={15} /> ซิงค์จากเอกสาร</button>
-          <button className="btn-primary sm" onClick={() => setEdit({ direction: "in", status: "actual", entry_date: todayYmd(), amount: "", note: "" })}><UIcon name="plus" size={15} color="#fff" /> เพิ่มรายการ</button>
+          <button className="btn-primary sm" onClick={() => setEdit({ direction: "in", status: "actual", entry_date: todayYmd(), amount: "", note: "", entity: ent === "personal" ? "personal" : "company" })}><UIcon name="plus" size={15} color="#fff" /> เพิ่มรายการ</button>
         </div>
       </div>
 
@@ -112,13 +121,18 @@ export default function CashFlow() {
           </>}
           <div className="sched-title">{title}</div>
         </div>
-        <label className="cf-opening">เงินสดยกมา <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span>
-          <input type="number" value={openingInput} onChange={(e) => setOpeningInput(e.target.value)} onBlur={saveOpening} /></span></label>
+        <label className="cf-opening">เงินสดยกมา{ent === "company" ? " (บริษัท)" : ent === "personal" ? " (บุคคล)" : ""} <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span>
+          <input type="number" value={ent === "all" ? (Number(opening.company) || 0) + (Number(opening.personal) || 0) : openingInput} disabled={ent === "all"} title={ent === "all" ? "เลือกกิจการ (บริษัท/บุคคล) ก่อนจึงจะแก้ยอดยกมาได้" : ""} onChange={(e) => setOpeningInput(e.target.value)} onBlur={saveOpening} /></span></label>
       </div>
 
+      {ent !== "all" && <div className="cf-carry" style={{ background: ent === "personal" ? "#f5f3ff" : "#eff6ff", borderColor: ent === "personal" ? "#ddd6fe" : "#bfdbfe" }}>
+        {ent === "personal"
+          ? "👤 กิจการบุคคล — รายได้จากบิล 'ไม่เอา VAT' เข้าที่นี่ · ต้นทุน/เงินเดือน/ช่างซัพ ลงบริษัททั้งหมด (ปรับได้ด้วยการแก้รายการเอง)"
+          : "🏢 กิจการบริษัท — รายได้จากบิล VAT + ต้นทุน/เงินเดือน/ช่างซัพทั้งหมดเข้าที่นี่"}
+      </div>}
       {loading ? <div className="empty">กำลังโหลด…</div> : (
         grain === "day"
-          ? <DayView ents={ents} opening={opening} anchor={anchor} withProj={withProj} sgn={sgn} onEdit={setEdit} onDel={removeEntry} />
+          ? <DayView ents={ents} opening={openingVal} anchor={anchor} withProj={withProj} sgn={sgn} onEdit={setEdit} onDel={removeEntry} />
           : <SummaryTable buckets={viewBuckets} withProj={withProj} grain={grain} />
       )}
 
@@ -241,7 +255,7 @@ function CfCol({ title, entries, onEdit, onDel }) {
 
 function CashEntryModal({ entry, onClose, onSaved, flash }) {
   const isNew = !entry.id;
-  const [f, setF] = React.useState({ direction: entry.direction || "in", status: entry.status || "actual", entry_date: entry.entry_date || todayYmd(), amount: entry.amount ?? "", note: entry.note || "" });
+  const [f, setF] = React.useState({ direction: entry.direction || "in", status: entry.status || "actual", entity: entry.entity === "personal" ? "personal" : "company", entry_date: entry.entry_date || todayYmd(), amount: entry.amount ?? "", note: entry.note || "" });
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   async function save() {
@@ -273,6 +287,12 @@ function CashEntryModal({ entry, onClose, onSaved, flash }) {
                 <option value="actual">จริง (เกิดขึ้นแล้ว)</option><option value="projected">ประมาณการ</option>
               </select></label>
           </div>
+          ); })()}
+          {(() => { const locked = !isNew && entry?.source_type && entry.source_type !== "manual"; return (
+          <label className="fld"><span>กิจการ{locked ? " 🔒" : ""}</span>
+            <select className="inp" value={f.entity} disabled={locked} onChange={(e) => set("entity", e.target.value)}>
+              <option value="company">🏢 บริษัท (เงินเข้า/ออกบัญชีบริษัท)</option><option value="personal">👤 บุคคล (อาทิตย์)</option>
+            </select></label>
           ); })()}
           <div className="fld-row">
             <label className="fld"><span>วันที่</span><input className="inp" type="date" value={f.entry_date} onChange={(e) => set("entry_date", e.target.value)} /></label>

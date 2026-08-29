@@ -5970,17 +5970,21 @@ export async function listCashEntries() {
 }
 export async function addCashEntry(e) {
   const uid = await _uid();
-  const { error } = await supabase.from("cash_entries").insert({
-    direction: e.direction, status: e.status, entry_date: e.entry_date,
+  const row = {
+    direction: e.direction, status: e.status, entry_date: e.entry_date, entity: e.entity === "personal" ? "personal" : "company",
     amount: Number(e.amount) || 0, note: e.note || null, source_type: "manual", edited: true, created_by: uid,
-  });
+  };
+  let { error } = await supabase.from("cash_entries").insert(row);
+  if (error && /entity|PGRST204/i.test(error.message || "")) { delete row.entity; ({ error } = await supabase.from("cash_entries").insert(row)); }   // pre-233 fallback
   if (error) throw error;
 }
 export async function updateCashEntry(id, f) {
   const patch = { updated_at: new Date().toISOString(), edited: true };
   ["direction", "status", "entry_date", "note"].forEach((k) => { if (f[k] !== undefined) patch[k] = f[k]; });
   if (f.amount !== undefined) patch.amount = Number(f.amount) || 0;
-  const { error } = await supabase.from("cash_entries").update(patch).eq("id", id);
+  if (f.entity !== undefined) patch.entity = f.entity === "personal" ? "personal" : "company";
+  let { error } = await supabase.from("cash_entries").update(patch).eq("id", id);
+  if (error && /entity|PGRST204/i.test(error.message || "")) { delete patch.entity; ({ error } = await supabase.from("cash_entries").update(patch).eq("id", id)); }   // pre-233 fallback
   if (error) throw error;
 }
 export async function deleteCashEntry(id, reason) {
@@ -5991,21 +5995,31 @@ export async function deleteCashEntry(id, reason) {
 }
 export async function getOpeningBalance() {
   // ห้าม maybeSingle — ถ้าแถว opening ซ้ำ (บันทึกชนกัน 2 เครื่อง) maybeSingle จะ error เงียบแล้วได้ 0 → ยอดสะสมทั้งจอจมลบทั้งที่รายวันถูก
-  const { data, error } = await supabase.from("cash_entries").select("id,amount").eq("source_type", "opening").order("id");
+  // คืนยอดยกมาแยกกิจการ { company, personal } · pre-233 (ยังไม่มี entity) = ก้อนเดียวเข้าบริษัท
+  let { data, error } = await supabase.from("cash_entries").select("id,amount,entity").eq("source_type", "opening").order("id");
+  if (error && /entity/i.test(error.message || "")) { const r = await supabase.from("cash_entries").select("id,amount").eq("source_type", "opening").order("id"); data = (r.data || []).map((x) => ({ ...x, entity: "company" })); error = r.error; }
   if (error) throw error;
-  return Number(data?.[0]?.amount) || 0;
+  const out = { company: 0, personal: 0 };
+  (data || []).forEach((r) => { const e = r.entity === "personal" ? "personal" : "company"; out[e] = Number(r.amount) || 0; });
+  return out;
 }
-export async function setOpeningBalance(amount) {
-  const { data, error } = await supabase.from("cash_entries").select("id").eq("source_type", "opening").order("id");
+export async function setOpeningBalance(entity, amount) {
+  const ent = entity === "personal" ? "personal" : "company";
+  let { data, error } = await supabase.from("cash_entries").select("id,entity").eq("source_type", "opening").order("id");
+  let hasEnt = true;
+  if (error && /entity/i.test(error.message || "")) { hasEnt = false; const r = await supabase.from("cash_entries").select("id").eq("source_type", "opening").order("id"); data = r.data; error = r.error; }
   if (error) throw error;
-  if (data && data.length) {
-    const { error: e1 } = await supabase.from("cash_entries").update({ amount: Number(amount) || 0, updated_at: new Date().toISOString() }).eq("id", data[0].id);
+  const rows = (data || []).filter((r) => hasEnt ? ((r.entity === "personal" ? "personal" : "company") === ent) : ent === "company");
+  if (rows.length) {
+    const { error: e1 } = await supabase.from("cash_entries").update({ amount: Number(amount) || 0, updated_at: new Date().toISOString() }).eq("id", rows[0].id);
     if (e1) throw e1;
     // ล้างแถวซ้ำที่เกิดจากบันทึกชนกัน (mig 147 ใส่ unique index กันเกิดใหม่)
-    if (data.length > 1) await supabase.from("cash_entries").delete().in("id", data.slice(1).map((x) => x.id));
+    if (rows.length > 1) await supabase.from("cash_entries").delete().in("id", rows.slice(1).map((x) => x.id));
   } else {
     const uid = await _uid();
-    const { error: e2 } = await supabase.from("cash_entries").insert({ direction: "in", status: "actual", entry_date: "2000-01-01", amount: Number(amount) || 0, note: "เงินสดยกมา", source_type: "opening", source_ref: "opening", created_by: uid });
+    const base = { direction: "in", status: "actual", entry_date: "2000-01-01", amount: Number(amount) || 0, note: "เงินสดยกมา", source_type: "opening", source_ref: "opening-" + ent, created_by: uid };
+    let { error: e2 } = await supabase.from("cash_entries").insert({ ...base, entity: ent });
+    if (e2 && /entity|PGRST204/i.test(e2.message || "")) ({ error: e2 } = await supabase.from("cash_entries").insert({ ...base, source_ref: "opening" }));   // pre-233 fallback (แถวเดียว)
     if (e2) throw e2;
   }
 }
@@ -6019,10 +6033,13 @@ export async function syncCashEntriesFromDocs() {
     if (!["admin", "exec", "finance"].includes(me?.role)) return;
   } catch { return; }
   const _d = (ts) => (ts ? String(ts).slice(0, 10) : null);
+  // มีคอลัมน์ entity แล้วหรือยัง (mig 233) — ถ้ายังไม่รัน ให้ข้ามการเขียน entity (ระบบยังทำงานได้ปกติ)
+  let hasEntity = true;
+  try { const pe = await supabase.from("cash_entries").select("entity").limit(1); if (pe.error) hasEntity = false; } catch { hasEntity = false; }
   const [inv, rec, pay, po, poItems, cust, team, existing, salaryProfiles, laborJobs, expReq] = await Promise.all([
     // ตารางเอกสารโตเรื่อย ๆ — ถ้าอ่านไม่ครบ (เพดาน 1000 แถว) sync จะลบ cash lines ของใบที่อ่านไม่ถึง
-    _fetchAll((f, t) => supabase.from("invoices").select("invoice_no,due_date,issue_date,total,wht_amt,status,customer_id", { count: "exact" }).order("invoice_no").range(f, t)).then((rows) => ({ data: rows })),
-    _fetchAll((f, t) => supabase.from("receipts").select("receipt_no,issue_date,net,total,wht_amt,status,customer_id", { count: "exact" }).order("receipt_no").range(f, t)).then((rows) => ({ data: rows })),
+    _fetchAll((f, t) => supabase.from("invoices").select("invoice_no,due_date,issue_date,total,vat_amt,wht_amt,status,customer_id", { count: "exact" }).order("invoice_no").range(f, t)).then((rows) => ({ data: rows })),
+    _fetchAll((f, t) => supabase.from("receipts").select("receipt_no,issue_date,net,total,vat_amt,wht_amt,status,customer_id", { count: "exact" }).order("receipt_no").range(f, t)).then((rows) => ({ data: rows })),
     _fetchAll((f, t) => supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })),
     _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat,paid_at,expense_id", { count: "exact" }).order("po_no").range(f, t)).then((rows) => ({ data: rows })),
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
@@ -6043,8 +6060,10 @@ export async function syncCashEntriesFromDocs() {
 
   const desired = [];
   // only UNPAID invoices are "expected income" — once paid, the money shows as its receipt (no double count)
-  (inv.data || []).forEach((x) => { if (x.status !== "unpaid") return; desired.push({ source_type: "invoice", source_ref: x.invoice_no, direction: "in", status: "projected", entry_date: x.due_date || x.issue_date, amount: Math.max(0, (Number(x.total) || 0) - (Number(x.wht_amt) || 0)), note: `ใบแจ้งหนี้ ${x.invoice_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
-  (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entry_date: x.issue_date, amount: Number(x.net || ((Number(x.total) || 0) - (Number(x.wht_amt) || 0))) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); }); // fallback = total − WHT (เงินเข้าจริง)
+  // entity ของรายได้: มี VAT = บริษัท (เข้าธนาคารบริษัท) · ไม่มี VAT = บุคคล — ต้นทุน/เงินเดือน/ช่างซัพ = บริษัททั้งหมด
+  const revEnt = (vatAmt) => (Number(vatAmt) || 0) > 0.005 ? "company" : "personal";
+  (inv.data || []).forEach((x) => { if (x.status !== "unpaid") return; desired.push({ source_type: "invoice", source_ref: x.invoice_no, direction: "in", status: "projected", entity: revEnt(x.vat_amt), entry_date: x.due_date || x.issue_date, amount: Math.max(0, (Number(x.total) || 0) - (Number(x.wht_amt) || 0)), note: `ใบแจ้งหนี้ ${x.invoice_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); });
+  (rec.data || []).forEach((x) => { if (x.status !== "paid") return; desired.push({ source_type: "receipt", source_ref: x.receipt_no, direction: "in", status: "actual", entity: revEnt(x.vat_amt), entry_date: x.issue_date, amount: Number(x.net || ((Number(x.total) || 0) - (Number(x.wht_amt) || 0))) || 0, note: `ใบเสร็จ ${x.receipt_no}${cn[x.customer_id] ? " · " + cn[x.customer_id] : ""}` }); }); // fallback = total − WHT (เงินเข้าจริง)
   (pay.data || []).forEach((x) => { const paid = x.status === "paid"; desired.push({ source_type: "payout", source_ref: String(x.id), direction: "out", status: paid ? "actual" : "projected", entry_date: paid ? _d(x.paid_at) : _d(x.created_at), amount: Number(x.net) || 0, note: `จ่ายช่างซัพ${tn[x.team] ? " " + tn[x.team] : ""}` }); });
   // PO: จ่ายจริงเมื่อ "จ่ายเงินแล้ว" (paid_at ผ่านเมนูเบิกจ่าย) — ไม่ผูกกับการรับของ (รับก่อน/จ่ายก่อน เครดิตได้)
   // (fallback pre-100 เดิมถูกถอด — po มาจาก _fetchAll ซึ่ง throw แทนการคืน .error ทำให้ branch นั้นเป็นโค้ดตาย · DB จริงรันเกิน mig 100 ไปไกลแล้ว)
@@ -6100,10 +6119,13 @@ export async function syncCashEntriesFromDocs() {
     if (!d.entry_date || !(d.amount > 0)) continue;
     desiredKeys.add(`${d.source_type}:${d.source_ref}`);
     const ex = exMap[`${d.source_type}:${d.source_ref}`];
-    if (!ex) toInsert.push({ ...d, created_by: uid });
-    else if (!ex.edited) { await supabase.from("cash_entries").update({ direction: d.direction, status: d.status, entry_date: d.entry_date, amount: d.amount, note: d.note, updated_at: new Date().toISOString() }).eq("id", ex.id); updated++; }
+    const { entity: _dEnt, ...dRest } = d;
+    const entity = _dEnt || "company";
+    if (!ex) toInsert.push({ ...dRest, ...(hasEntity ? { entity } : {}), created_by: uid });
+    else if (!ex.edited) { await supabase.from("cash_entries").update({ direction: d.direction, status: d.status, entry_date: d.entry_date, amount: d.amount, note: d.note, ...(hasEntity ? { entity } : {}), updated_at: new Date().toISOString() }).eq("id", ex.id); updated++; }
   }
   if (toInsert.length) {
+    // ถอด key ที่ไม่ใช่คอลัมน์จริง (entity ถูกจัดการแล้วผ่าน hasEntity) — กัน insert พังถ้ามี field แปลกปลอม
     let { error } = await supabase.from("cash_entries").insert(toInsert);
     // pre-147: CHECK constraint ยังไม่รับ 'advance' — insert ส่วนที่เหลือไปก่อน อย่าให้ sync ทั้งก้อนพัง
     if (error && /source_type|check/i.test(error.message || "")) {
