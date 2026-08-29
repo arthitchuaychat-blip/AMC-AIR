@@ -3,6 +3,8 @@ import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCos
 import { fmtBaht, matchText, inRange } from "../lib/format";
 import { UIcon } from "../icons";
 
+const thD = (s) => { if (!s) return ""; const d = new Date(String(s).length <= 10 ? s + "T00:00:00" : s); return isNaN(d) ? "" : d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }); };
+
 // กำไร/งาน — 1 ใบเสนอราคา = 1 งาน (รวมทุกใบงานที่อยู่ใต้ใบเสนอราคานั้น รวมใบงานเชื่อม)
 // ยอดขาย/ต้นทุน BOQ นับครั้งเดียวต่อใบเสนอราคา (ไม่ซ้ำซ้อน)
 // กำไรขั้นต้น = ยอดขายสุทธิ (ก่อน VAT) − ต้นทุน BOQ
@@ -245,7 +247,7 @@ export default function Profit({ onOpenJob }) {
                   <React.Fragment key={q.quote_no}>
                     <div className="jp-row" style={{ cursor: "pointer" }} onClick={() => toggle(q.quote_no)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && toggle(q.quote_no)}>
                       <span className="jp-name"><b>{isOpen ? "▾ " : "▸ "}{q.quote_no}</b><br />
-                        <span className="jp-cust">{q.customerName || "-"} · {jobs.length} ใบงาน{kids && kids.length > 0 ? ` · ➕ รวมส่วนเพิ่ม ${kids.length} ใบ (${kids.map((k) => k.quote_no).join(", ")})` : ""}{cost == null ? " · ไม่อ้าง BOQ" : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · 💳 ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}</span></span>
+                        <span className="jp-cust">{q.customerName || "-"}{(q.issue_date || q.approved_at) ? ` · 📅 ${thD(q.issue_date || q.approved_at)}` : ""} · {jobs.length} ใบงาน{kids && kids.length > 0 ? ` · ➕ รวมส่วนเพิ่ม ${kids.length} ใบ (${kids.map((k) => k.quote_no).join(", ")})` : ""}{cost == null ? " · ไม่อ้าง BOQ" : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · 💳 ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}</span></span>
                       <span className="r">{fmtBaht(sale)}</span>
                       <span className="r">{cost == null ? "—" : fmtBaht(cost)}</span>
                       <span className="r" style={{ color: gross == null ? "var(--ink-3)" : gross >= 0 ? "var(--ink)" : "var(--down)" }}>{gross == null ? "—" : fmtBaht(gross)}</span>
@@ -267,7 +269,7 @@ export default function Profit({ onOpenJob }) {
                           return (
                           <div key={d.job.job_no} style={{ padding: "5px 0", borderBottom: "1px dashed var(--line-2)" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                              <span>📋 <b>{d.job.job_no}</b>{d.job.teamName ? ` · ${d.job.teamName}` : ""}{d.job.status !== "done" ? ` · ${ST[d.job.status] || d.job.status}` : ""}</span>
+                              <span>📋 <b>{d.job.job_no}</b>{d.job.teamName ? ` · ${d.job.teamName}` : ""}{d.job.scheduled_at ? ` · 📅 ${thD(d.job.scheduled_at)}` : ""}{d.job.status !== "done" ? ` · ${ST[d.job.status] || d.job.status}` : ""}</span>
                               <span style={{ textAlign: "right", color: "var(--ink-2)" }}>
                                 {d.acNet > 0.01 && <>❄ แอร์ {fmtBaht(d.acNet)} </>}
                                 {d.goodsNet > 0.01 && <>· 🔧 วัสดุ {fmtBaht(d.goodsNet)} </>}
