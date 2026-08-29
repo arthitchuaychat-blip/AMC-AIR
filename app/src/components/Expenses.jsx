@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
@@ -104,7 +104,7 @@ export default function Expenses({ role, me, onOpenDoc, focus, onFocusConsumed }
   );
 }
 
-function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
+function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const st = EST[x.status] || EST.pending;
@@ -122,7 +122,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
         </>}
         title={x.title} titleFallback={L("— ไม่ระบุรายการ —", "— အမည် မသတ်မှတ် —")}
-        sub={[x.category, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null].filter(Boolean).join(" · ") || null}
+        sub={[x.category, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null].filter(Boolean).join(" · ") || null}
         by={x.requesterName} date={x.created_at}
         amountNode={partial ? (
           <div className="rec-amt-bd">
@@ -177,6 +177,15 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected }) {
           <input type="date" className="inp" style={{ width: 160, padding: "4px 8px" }} value={x.expected_pay_date || ""} onChange={(e) => onSetExpected(x.id, e.target.value)} />
         </div></div>
       )}
+      {onSetVat && x.status !== "rejected" && (() => { const v7 = Math.round((Number(x.amount) || 0) * 7 / 107 * 100) / 100; return (
+        <div className="job-lines"><div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--ink-2)", flexWrap: "wrap", padding: "2px 0" }}>
+          🧾 <span>{L("ภาษีซื้อ (VAT) ในบิลนี้:", "ဤဘီလ်၏ ဝယ်ခွန် (VAT):")}</span>
+          <span className="inp inp-unit" style={{ width: 120 }}><span className="unit-pre">฿</span>
+            <input type="number" min="0" step="0.01" defaultValue={Number(x.vat_amt) || 0} onBlur={(e) => onSetVat(x.id, e.target.value, x)} /></span>
+          <button type="button" className="btn-ghost sm" onClick={() => onSetVat(x.id, v7, x)} title={L("บิลราคารวม VAT → ถอด 7/107", "ဘီလ်စျေးနှုန်း VAT ပါ → 7/107 ခွဲ")}>= 7% ({fmtBaht(v7)})</button>
+          {Number(x.vat_amt) > 0 ? <span style={{ color: "#0d9488", fontWeight: 700 }}>{L("มีใบกำกับภาษี", "အခွန်ပြေစာ ရှိ")}</span> : <span className="jo-dim">{L("ไม่มี VAT", "VAT မရှိ")}</span>}
+        </div></div>
+      ); })()}
       {(x.attachments?.length > 0 || x.payment_proof?.length > 0) && (
         <div className="exp-atts">
           {x.attachments?.length > 0 && <div className="exp-att-grp"><span>🧾 {L("ใบเสร็จ/บิล:", "ဘောက်ချာ/ဘီလ်:")}</span><div className="tb-attach-grid">{x.attachments.map((u, i) => <div className="tb-att" key={i}><AttachThumb url={u} /></div>)}</div></div>}
@@ -357,7 +366,8 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
       {list && shown.length === 0 && <div className="empty">{L("ไม่มีรายการ", "စာရင်း မရှိပါ")}</div>}
       <div className="job-cards">
         {shown.map((x) => (
-          <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} onSetExpected={async (id, d) => { try { await setExpenseExpectedDate(id, d); flash(L("ตั้งวันประมาณการจ่ายแล้ว ✓", "ခန့်မှန်း ငွေပေးရက် သတ်မှတ်ပြီး ✓")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); } }}>
+          <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} onSetExpected={async (id, d) => { try { await setExpenseExpectedDate(id, d); flash(L("ตั้งวันประมาณการจ่ายแล้ว ✓", "ခန့်မှန်း ငွေပေးရက် သတ်မှတ်ပြီး ✓")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); } }}
+            onSetVat={async (id, v, ex) => { const nv = Math.max(0, Math.round((Number(v) || 0) * 100) / 100); if (Math.round((Number(ex.vat_amt) || 0) * 100) / 100 === nv) return; try { await setExpenseVat(id, nv); flash(L("บันทึกภาษีซื้อแล้ว ✓", "ဝယ်ခွန် သိမ်းပြီး ✓")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); } }}>
             {x.status === "pending" && <><button className="btn-primary sm ok" onClick={() => decide(x, "approved")}>✓ {L("อนุมัติ", "အတည်ပြု")}</button>
               <button className="btn-ghost sm" onClick={() => decide(x, "rejected")}>{L("ไม่อนุมัติ", "ပယ်ချ")}</button></>}
             {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> {Number(x.paid_amount) > 0 ? L("จ่ายงวดต่อไป", "နောက်အရစ် ပေးချေ") : L("จ่ายเงิน + แนบสลิปโอน", "ငွေပေး + လွှဲဆလစ် တွဲ")}</button>

@@ -4840,6 +4840,11 @@ export async function setExpenseExpectedDate(id, date) {
   if (error) throw error;
   syncCashEntriesFromDocs().catch(() => {});
 }
+// แก้ภาษีซื้อ (input VAT) ของใบเบิกภายหลัง — ออฟฟิศเติมให้ครบถ้าพนักงานลืมติ๊ก (เข้ารายงานภาษี ภ.พ.30)
+export async function setExpenseVat(id, vat_amt) {
+  const { error } = await supabase.from("expense_requests").update({ vat_amt: Math.max(0, Number(vat_amt) || 0) }).eq("id", id);
+  if (error) throw (/vat_amt|column|PGRST204/i.test(error.message || "") ? new Error("ต้องรัน migration 232 ก่อน (เพิ่มคอลัมน์ vat_amt)") : error);
+}
 // approved/paid expense cost rolled up per job → adds to job cost in Profit
 export async function jobExpenseCost() {
   // ต้องผ่าน _fetchAll — เดิม select ตรง ๆ โดนเพดาน 1000 แถว ใบเบิกของงานเก่าหลุดหายเงียบ
