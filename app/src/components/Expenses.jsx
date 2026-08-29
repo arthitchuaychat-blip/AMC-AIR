@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
@@ -118,6 +118,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
       <DocCardHead no={L("เบิก #", "တောင်းခံ #") + String(x.id || "").slice(0, 8).toUpperCase()}
         badges={<>
           <span className={"job-badge " + st.c}>{L(st.t, st.m)}</span>
+          <span className="job-badge" style={x.entity === "personal" ? { background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe" } : { background: "#eff6ff", color: "#1d4ed8", borderColor: "#bfdbfe" }}>{x.entity === "personal" ? L("👤 บุคคล", "👤 ပုဂ္ဂိုလ်") : L("🏢 บริษัท", "🏢 ကုမ္ပဏီ")}</span>
           {partial && <span className="job-badge b-amber">{L("จ่ายบางส่วน", "တစ်စိတ်တစ်ပိုင်း ပေးပြီး")}</span>}
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
         </>}
@@ -342,6 +343,13 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
     if (reason === false) return;
     try { await unpayExpense(x.id, reason); flash("ยกเลิกการจ่ายแล้ว — กลับเป็นรอจ่าย ✓"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
+  // ทวงใบเสร็จ — แจ้งเตือนผู้ขอเบิกทุกคนที่จ่ายเงินไปแล้วแต่ยังไม่แนบใบเสร็จ
+  async function nudge() {
+    const ids = (list || []).filter(needReceipt).map((x) => x.id);
+    if (!ids.length) return flash(L("ไม่มีรายการค้างใบเสร็จ", "ဘောက်ချာ ကျန်နေသည် မရှိ"));
+    if (!await confirmDialog(L(`ส่งแจ้งเตือนทวงใบเสร็จ ${ids.length} รายการ ให้ผู้ขอเบิก?`, `ဘောက်ချာ ကျန် ${ids.length} ခုအတွက် တောင်းခံသူများကို အသိပေးမလား?`))) return;
+    try { const r = await nudgeExpenseReceipts(ids); flash(L(`ทวงแล้ว ✓ แจ้ง ${r.notified} คน`, `တောင်းပြီး ✓ ${r.notified} ဦး အသိပေးပြီး`)); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); }
+  }
   const nRcpt = (list || []).filter(needReceipt).length;
   const shown = (list || []).filter((x) => (statusF === "needReceipt" ? needReceipt(x) : (statusF === "all" || x.status === statusF)) && expMatch(x, q, dateR));
   const cnt = (s) => (list || []).filter((x) => x.status === s).length;
@@ -350,7 +358,10 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">{L("อนุมัติ / จ่ายเงินเบิก", "အတည်ပြု / တောင်းခံငွေ ပေးချေ")}</div>
         <div className="sec-sub">{L(`รออนุมัติ ${cnt("pending")} · รอจ่าย ${cnt("approved")}`, `အတည်ပြုရန် စောင့် ${cnt("pending")} · ငွေပေးရန် စောင့် ${cnt("approved")}`)}{nRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 {L(`ค้างแนบใบเสร็จ ${nRcpt}`, `ဘောက်ချာ တွဲရန်ကျန် ${nRcpt}`)}</b>}</div></div>
-        <button className="btn-primary" onClick={() => setVendorPay(true)} title={L("เลือกใบสั่งซื้อค้างจ่ายของร้านเดียวกันหลายใบ ตั้งเบิกจ่ายครั้งเดียว (เหมือนใบวางบิลฝั่งซื้อ)", "တူညီသော ရောင်းသူ၏ ငွေပေးရန်ကျန် ဝယ်ယူလွှာ များစွာကို ရွေး၍ တစ်ကြိမ်တည်း တောင်းခံ (ဝယ်ဘက် ငွေတောင်းခံစာကဲ့သို့)")}>🏭 {L("จ่ายเจ้าหนี้หลายใบ", "မြီရှင် များစွာ ပေးချေ")}</button></div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {nRcpt > 0 && <button className="btn-ghost" style={{ color: "#d97706", borderColor: "#fcd34d" }} onClick={nudge} title={L("แจ้งเตือนผู้ขอเบิกที่จ่ายเงินไปแล้วให้กลับมาแนบใบเสร็จ", "ငွေပေးပြီးသူများကို ဘောက်ချာ ပြန်တွဲရန် အသိပေး")}>🔔 {L("ทวงใบเสร็จ", "ဘောက်ချာ တောင်း")} ({nRcpt})</button>}
+          <button className="btn-primary" onClick={() => setVendorPay(true)} title={L("เลือกใบสั่งซื้อค้างจ่ายของร้านเดียวกันหลายใบ ตั้งเบิกจ่ายครั้งเดียว (เหมือนใบวางบิลฝั่งซื้อ)", "တူညီသော ရောင်းသူ၏ ငွေပေးရန်ကျန် ဝယ်ယူလွှာ များစွာကို ရွေး၍ တစ်ကြိမ်တည်း တောင်းခံ (ဝယ်ဘက် ငွေတောင်းခံစာကဲ့သို့)")}>🏭 {L("จ่ายเจ้าหนี้หลายใบ", "မြီရှင် များစွာ ပေးချေ")}</button>
+        </div></div>
       <FilterBar id="expenses-approve" count={activeCount}>
         <div className="cat-filter">
         {[["pending", L("รออนุมัติ", "အတည်ပြုရန် စောင့်")], ["approved", L("รอจ่าย", "ငွေပေးရန် စောင့်")], ["paid", L("จ่ายแล้ว", "ပေးပြီး")], ["needReceipt", `📎 ${L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန်ကျန်")}${nRcpt ? ` (${nRcpt})` : ""}`], ["rejected", L("ไม่อนุมัติ", "ပယ်ချ")], ["all", L("ทั้งหมด", "အားလုံး")]].map(([v, l]) => (

@@ -4657,7 +4657,7 @@ async function _enrichExpenseJobs(rows) {
   // หน้าเบิกจ่ายจะขึ้นชื่องาน/ชื่อลูกค้าเป็นช่องว่าง เหมือนใบเบิกไม่ได้ผูกงานไว้ (พังเงียบ)
   const [joRes, quRes, cuRes] = await Promise.all([
     _allRows((f, t) => supabase.from("job_orders").select("job_no,quote_no,customer_id,title,status", { count: "exact" }).order("job_no").range(f, t)),
-    _allRows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),
+    _allRows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title,vat", { count: "exact" }).order("quote_no").range(f, t)),
     _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
   ]);
   const custName = Object.fromEntries((cuRes.data || []).map((c) => [c.id, c.name]));
@@ -4679,7 +4679,9 @@ async function _enrichExpenseJobs(rows) {
       customerName: p.quote_no ? (custName[quoteInfo[p.quote_no]?.customer_id] ?? null) : null,
       delivery_date: p.delivery_date || null, delivery_method: p.delivery_method || null,   // วันรับ/ส่งของ (เหมือนใน PO)
     }));
-    return { ...x, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null,
+    // กิจการที่รับต้นทุน: ผูกใบเสนอที่ "ไม่เอา VAT" → บุคคล · ไม่ผูก/ผูกใบ VAT → บริษัท (ตรงกับกติกาลงบัญชี)
+    const entity = qi && qi.vat === false ? "personal" : "company";
+    return { ...x, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null, entity,
       customerName: custId != null ? custName[custId] || null : null, poNo: po?.po_no || null, poNos: poList.map((p) => p.po_no), poDetails, quoteNo };
   });
 }
@@ -4839,6 +4841,21 @@ export async function setExpenseExpectedDate(id, date) {
   const { error } = await supabase.from("expense_requests").update({ expected_pay_date: date || null }).eq("id", id);
   if (error) throw error;
   syncCashEntriesFromDocs().catch(() => {});
+}
+// ทวงใบเสร็จ — แจ้งเตือนผู้ขอเบิกที่จ่ายเงินไปแล้วแต่ยังไม่แนบใบเสร็จ (รวมต่อคน)
+export async function nudgeExpenseReceipts(ids) {
+  const list = [...new Set((ids || []).filter(Boolean))];
+  if (!list.length) return { notified: 0 };
+  const { data: rows, error } = await supabase.from("expense_requests").select("id,requester,title").in("id", list);
+  if (error) throw error;
+  const byReq = {};
+  (rows || []).forEach((r) => { if (r.requester) (byReq[r.requester] = byReq[r.requester] || []).push(r); });
+  const reqs = Object.keys(byReq);
+  for (const uid of reqs) {
+    const items = byReq[uid];
+    await notify([uid], { category: "hr", title: `📎 ทวงใบเสร็จ ${items.length} รายการ`, body: items.map((i) => i.title).filter(Boolean).slice(0, 3).join(", ") || "กรุณาแนบใบเสร็จค่าใช้จ่ายที่เบิกไปแล้ว", url: "expenses", ref_type: "expense" });
+  }
+  return { notified: reqs.length };
 }
 // แก้ภาษีซื้อ (input VAT) ของใบเบิกภายหลัง — ออฟฟิศเติมให้ครบถ้าพนักงานลืมติ๊ก (เข้ารายงานภาษี ภ.พ.30)
 export async function setExpenseVat(id, vat_amt) {
