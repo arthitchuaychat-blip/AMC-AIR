@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, payExpensesBatch } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
@@ -429,12 +429,11 @@ function PayVendorModal({ onClose, onDone, flash }) {
   const expTotal = expChosen.reduce((a, e) => a + expRem(e), 0);
   const expAllOn = expList.length > 0 && expChosen.length === expList.length;
   React.useEffect(() => { if (mode === "exp" && topQ.trim() && reqs.length === 1 && reqs[0][0] !== expReq) { setExpReq(reqs[0][0]); setSel({}); } }, [topQ, mode]);
-  async function payExps() {
+  async function doBatchExp() {
     if (!expChosen.length) return;
-    if (!payAcct) return flash(L("เลือกบัญชีที่จ่าย", "ငွေပေးမည့် အကောင့် ရွေးပါ"), true);
-    if (!await confirmDialog({ title: L(`จ่ายเบิกทั่วไป ${expChosen.length} ใบ?`, `တောင်းခံ ${expChosen.length} စောင် ပေးမလား?`), message: L(`รวม ${fmtBaht(expTotal)} · จ่ายจากบัญชีที่เลือก แนบสลิปเดียวกันทุกใบ · ทุกใบจะขึ้น "จ่ายแล้ว"`, `စုစုပေါင်း ${fmtBaht(expTotal)}`), confirmText: L("จ่ายเงิน", "ငွေပေး"), danger: false })) return;
+    if (!await confirmDialog({ title: L(`ตั้งเบิกจ่ายรวม ${expChosen.length} ใบ?`, `တောင်းခံ ${expChosen.length} စောင် ပေါင်းစည်းမလား?`), message: L(`รวม ${fmtBaht(expTotal)} · ${expReq}\nระบบจะรวมเป็นใบขอจ่ายใบเดียว → เข้าคิวรออนุมัติ → อนุมัติแล้วค่อยจ่าย (เหมือน PO)\nใบเบิกเดิม ${expChosen.length} ใบจะถูกยุบรวม (ปิดใบเก่าอัตโนมัติ)`, `စုစုပေါင်း ${fmtBaht(expTotal)}`), confirmText: L("ตั้งเบิกจ่าย", "တောင်းခံ ဖွင့်"), danger: false })) return;
     setBusy(true);
-    try { const r = await payExpensesBatch(expChosen.map((e) => e.id), { accountId: payAcct, proof }); flash(r.errors.length ? L(`จ่าย ${r.paid} ใบ · พลาด ${r.errors.length}`, `ပေး ${r.paid}`) : L(`จ่ายเบิก ${r.paid} ใบ · ${fmtBaht(expTotal)} แล้ว ✓`, `ပြီး ${r.paid}`), !!r.errors.length); onDone(); }
+    try { await requestExpensePaymentBatch(expChosen.map((e) => e.id), expReq); flash(L(`ตั้งเบิกจ่ายรวม ${expChosen.length} ใบ · ${fmtBaht(expTotal)} แล้ว — รออนุมัติ ✓`, `ပေါင်းစည်း တောင်းခံ ${expChosen.length} စောင် ဖွင့်ပြီး`)); onDone(); }
     catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); }
     setBusy(false);
   }
@@ -458,7 +457,7 @@ function PayVendorModal({ onClose, onDone, flash }) {
           </div>
           <div className="jo-dim" style={{ marginBottom: 10 }}>{mode === "po"
             ? L("เลือกผู้ขาย → ติ๊กใบสั่งซื้อที่ค้างจ่าย → ตั้งเบิกจ่ายให้เป็นใบเดียว", "ရောင်းသူ ရွေး → ငွေပေးရန်ကျန် ဝယ်ယူလွှာ ရွေး → တစ်စောင်တည်း တောင်းခံ")
-            : L("เลือกผู้เบิก → ติ๊กใบเบิกที่รอจ่าย → เลือกบัญชี + แนบสลิป → จ่ายทีเดียวทุกใบ", "တောင်းသူ ရွေး → ရွေး → အကောင့်+ဆလစ် → တစ်ကြိမ်တည်း ပေး")}</div>
+            : L("เลือกผู้เบิก → ติ๊กใบเบิกที่รอจ่าย → รวมเป็นใบขอจ่ายใบเดียว เข้าคิวรออนุมัติ (จ่ายที่ขั้นอนุมัติ เหมือน PO)", "တောင်းသူ ရွေး → ရွေး → တစ်စောင်တည်း ပေါင်း၍ အတည်ပြုရန် (PO ကဲ့သို့)")}</div>
           {mode === "po" && (
           <>{pos === null ? <div className="empty">{L("กำลังโหลดใบสั่งซื้อ…", "ဝယ်ယူလွှာ ဖွင့်နေသည်…")}</div>
             : pos.length === 0 ? <div className="empty">🎉 {L("ไม่มีใบสั่งซื้อค้างจ่าย", "ငွေပေးရန်ကျန် ဝယ်ယူလွှာ မရှိပါ")}<br /><small style={{ color: "var(--ink-3)" }}>{L("(ใบที่จ่ายเงินไปแล้วบางส่วน จะไม่แสดงที่นี่ — จ่ายต่อที่ใบเบิกเดิม)", "(တစ်စိတ်တစ်ပိုင်း ငွေပေးပြီးသော လွှာများ ဤနေရာတွင် မပြ — ယခင် တောင်းခံလွှာတွင် ဆက်ပေးပါ)")}</small></div>
@@ -528,11 +527,6 @@ function PayVendorModal({ onClose, onDone, flash }) {
                 </label>
               ))}
             </div>
-            <label className="fld" style={{ marginTop: 8 }}><span>{L("จ่ายจากบัญชี", "မှ အကောင့်")}</span>
-              <select className="inp" value={payAcct} onChange={(e) => setPayAcct(e.target.value)}>
-                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({L("คงเหลือ", "ကျန်ငွေ")} {fmtBaht(a.balance)})</option>)}
-              </select></label>
-            <div className="fld" style={{ marginTop: 8 }}><span>💸 {L("แนบสลิปโอนเงิน (ใช้ร่วมทุกใบ)", "ငွေလွှဲ ဆလစ် (အားလုံး အတူ)")}</span><AttachRow files={proof} onChange={setProof} flash={flash} label={L("แนบสลิป", "ဆလစ် တွဲ")} /></div>
           </>)}
             </>)}
           </>)}
@@ -545,7 +539,7 @@ function PayVendorModal({ onClose, onDone, flash }) {
           </> : <>
           <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: expChosen.length ? "var(--ink)" : "var(--ink-3)" }}>{expChosen.length ? L(`เลือก ${expChosen.length} ใบ · รวม ${fmtBaht(expTotal)}`, `ရွေးထား ${expChosen.length} · ${fmtBaht(expTotal)}`) : L("ยังไม่ได้เลือกใบเบิก", "မရွေးရသေး")}</span>
           <button className="btn-ghost" onClick={onClose}>{L("ยกเลิก", "ပယ်ဖျက်")}</button>
-          <button className="btn-primary" disabled={busy || !expChosen.length} onClick={payExps}>💸 {L("จ่ายเงิน", "ငွေပေး")} {expChosen.length > 0 ? L(`${expChosen.length} ใบ`, `${expChosen.length}`) : ""}</button>
+          <button className="btn-primary" disabled={busy || !expChosen.length} onClick={doBatchExp}>{L("ตั้งเบิกจ่าย", "တောင်းခံ ဖွင့်")} {expChosen.length > 0 ? L(`${expChosen.length} ใบ`, `${expChosen.length}`) : ""}</button>
           </>}
         </div>
       </div>

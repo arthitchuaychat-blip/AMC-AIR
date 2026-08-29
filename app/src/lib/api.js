@@ -4756,14 +4756,32 @@ export async function payExpense(id, { accountId, proof, payDate, amount, expect
   notify([ex.requester], { category: "hr", title: `💸 ${fully ? "จ่ายเงินเบิกครบแล้ว" : "จ่ายเงินเบิกบางส่วน"} "${ex.title}" ${payAmt.toLocaleString()} บาท`, body: fully ? "แนบหลักฐานการจ่ายเรียบร้อย" : `คงเหลืออีก ${(remaining - payAmt).toLocaleString()} บาท`, url: "expenses", ref_type: "expense" });
 }
 // ยกเลิกการจ่ายเงินเบิก (ผู้บริหารเท่านั้น — gate ที่ UI) — คืนสถานะ "อนุมัติ · รอจ่าย" + ถอนรายการเงินออก
-// จ่ายเบิกทั่วไปหลายใบทีเดียว (บัญชี + สลิปชุดเดียว) — จ่ายยอดคงเหลือแต่ละใบ · คืน {paid, errors}
-export async function payExpensesBatch(ids, opts = {}) {
-  let paid = 0; const errors = [];
-  for (const id of ids || []) {
-    try { await payExpense(id, opts); paid++; }
-    catch (e) { errors.push(`${id}: ${e.message || e}`); }
-  }
-  return { paid, errors };
+// รวมเบิกทั่วไปหลายใบ → ตั้งเป็น "ใบขอจ่ายรวม" ใบเดียว (รออนุมัติ → จ่าย) เหมือน PO
+// ใบเดิมถูกยุบรวม (มาร์ค rejected + โน้ต) · แนบสลิป/รูปของใบเดิมติดไปด้วย
+export async function requestExpensePaymentBatch(expenseIds, label) {
+  const ids = [...new Set((expenseIds || []).filter(Boolean))];
+  if (!ids.length) throw new Error("เลือกใบเบิกอย่างน้อย 1 ใบ");
+  const uid = await _uid();
+  const { data: exps, error: e0 } = await supabase.from("expense_requests").select("*").in("id", ids);
+  if (e0) throw e0;
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const payable = (exps || []).filter((e) => e.status === "approved" && !(Number(e.paid_amount) > 0));
+  if (!payable.length) throw new Error("ไม่มีใบเบิกที่รวมได้ (ต้องอนุมัติแล้ว + ยังไม่จ่ายเงิน)");
+  const total = r2(payable.reduce((a, e) => a + r2(e.amount), 0));
+  const atts = [...new Set(payable.flatMap((e) => e.attachments || []))];
+  const { data: ex, error } = await supabase.from("expense_requests").insert({
+    requester: uid, job_no: null, category: "รวมเบิกจ่าย",
+    title: payable.length === 1 ? `ชำระเบิก: ${payable[0].title || ""}` : `ชำระเบิกรวม ${payable.length} ใบ${label ? " · " + label : ""}`,
+    amount: total,
+    note: "รวมใบเบิก: " + payable.map((e) => `${e.title || "#" + String(e.id).slice(0, 6)} (${r2(e.amount).toLocaleString("en-US")})`).join(" · "),
+    attachments: atts, created_by: uid,
+  }).select("id").single();
+  if (error) throw error;
+  const { error: eR } = await supabase.from("expense_requests").update({ status: "rejected", decide_note: "ยุบรวมเข้าใบขอจ่ายรวม (จ่ายรวมหลายใบ)" }).in("id", payable.map((e) => e.id));
+  if (eR) { await supabase.from("expense_requests").delete().eq("id", ex.id); throw eR; }
+  const me = await _meSafe();
+  notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `⛽ ${me?.name || "พนักงาน"} ตั้งเบิกจ่ายรวม ${payable.length} ใบ · ${total.toLocaleString("en-US")} บาท`, body: label || "", url: "expenses", ref_type: "expense" });
+  return ex.id;
 }
 export async function unpayExpense(id, reason) {
   const { data: ex, error: e0 } = await supabase.from("expense_requests").select("*").eq("id", id).single();
