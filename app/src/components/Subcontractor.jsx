@@ -839,7 +839,15 @@ function PayoutSlip({ payout, team, jobByNo = {}, onClose, flash }) {
   const [rooms, setRooms] = React.useState([]);
   const [roomId, setRoomId] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  React.useEffect(() => { listChatRooms().then((r) => { setRooms(r); setRoomId(r[0]?.id || ""); }).catch(() => {}); }, []);
+  React.useEffect(() => {
+    listChatRooms().then((r) => {
+      setRooms(r);
+      // เลือกห้องแชตให้ตรงทีมของใบจ่ายอัตโนมัติ (จับจากชื่อห้อง เช่น "Team หนึ่ง")
+      const key = (team?.name || "").toLowerCase().replace("team ", "").trim();
+      const guess = key ? r.find((x) => (x.title || "").toLowerCase().includes(key)) : null;
+      setRoomId((guess || r[0])?.id || "");
+    }).catch(() => {});
+  }, []);
   const rawLines = payout.lines || (payout.job_nos || []).map((n) => ({ job_no: n, amount: null, customerName: null, vat: null }));
   // enrich each line with live job info (phone/address) + this-round / remaining split
   const lines = rawLines.map((l) => {
