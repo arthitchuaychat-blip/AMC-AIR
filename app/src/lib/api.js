@@ -3220,6 +3220,17 @@ export async function addJobLog(job_no, { note, photos, author, parent_id }) {
 
 const _JOB_ST_TH = { pending: "รอเริ่มงาน", scheduled: "นัดแล้ว", in_progress: "กำลังทำ", awaiting_approval: "รออนุมัติ", reschedule: "นัดหมายเพิ่ม", quote_pending: "รอทำใบเสนอราคา", done: "เสร็จแล้ว", cancelled: "ยกเลิก" };
 
+// จัดหมวดใบงานสำหรับหน้ากำไร: สำรวจ (survey) · งานแก้ไข (rework_of → หักกำไรงานเดิม) · เคลม/ฟรี (is_claim)
+export async function setJobCategory(job_no, patch = {}) {
+  const upd = {};
+  if (patch.job_type !== undefined) upd.job_type = patch.job_type || "install";
+  if (patch.rework_of !== undefined) upd.rework_of = patch.rework_of || null;
+  if (patch.is_claim !== undefined) upd.is_claim = !!patch.is_claim;
+  if (!Object.keys(upd).length) return;
+  let { error } = await supabase.from("job_orders").update(upd).eq("job_no", job_no);
+  if (error && /rework_of/i.test(error.message || "")) { delete upd.rework_of; ({ error } = await supabase.from("job_orders").update(upd).eq("job_no", job_no)); } // pre-188 fallback
+  if (error) throw error;
+}
 export async function saveJobOrder(jo, author) {
   const { data: { user } } = await supabase.auth.getUser();
   // การ์ดฝั่ง server: ใบที่ยกเลิกแล้วห้ามบันทึกทับ (หน้าเก่าค้างจากอีกเครื่อง) + เอาไว้คงสถานะ quote_pending/ปลดล็อกตอนนัดรอบใหม่

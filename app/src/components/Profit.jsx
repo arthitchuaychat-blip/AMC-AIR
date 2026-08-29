@@ -1,5 +1,5 @@
 import React from "react";
-import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost, listPurchaseOrders, listAdjustmentNotes } from "../lib/api";
+import { listQuotations, listBoqs, listJobOrders, jobMaterialCost, jobExpenseCost, listPurchaseOrders, listAdjustmentNotes, setJobCategory } from "../lib/api";
 import { fmtBaht, matchText, inRange } from "../lib/format";
 import { UIcon } from "../icons";
 
@@ -13,6 +13,9 @@ export default function Profit({ onOpenJob }) {
   const [rows, setRows] = React.useState([]);
   const [orphans, setOrphans] = React.useState([]);
   const [surveyCost, setSurveyCost] = React.useState({ count: 0, total: 0 }); // ค่าสำรวจหน้างาน (ค่าใช้จ่ายการขาย)
+  const [claimCost, setClaimCost] = React.useState({ count: 0, total: 0 });   // เคลม/รับประกัน/ฟรี (ค่าใช้จ่ายบริการ)
+  const [allJobs, setAllJobs] = React.useState([]);   // ใบงานทั้งหมด (ไว้เลือกใบต้นเรื่องตอนจัดหมวด)
+  const [tagFor, setTagFor] = React.useState(null);   // ใบงานที่กำลังจัดหมวด
   const [open, setOpen] = React.useState({});       // quote_no → expanded breakdown
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState(null);
@@ -52,6 +55,19 @@ export default function Profit({ onOpenJob }) {
         return { jobs, detail, sale: (q.afterDisc || 0) + (noteAdjByQuote[q.quote_no] || 0), cardFee, poPend: poPendByQuote[q.quote_no] || 0, boq_no: q.boq_no };
       };
 
+      // 🔁 งานแก้ไข/เคลมที่อ้างใบงานต้นเรื่อง (rework_of) → ต้นทุนวิ่งกลับหักกำไร "งานเดิม"
+      const reworkByQuote = {}; const rolledJobNos = new Set();
+      jos.forEach((j) => {
+        if (!j.rework_of) return;
+        const orig = jobByNo[j.rework_of]; const tq = orig?.quote_no;
+        if (!tq) return;   // ต้นเรื่องไม่มีใบเสนอ → ปล่อยไปเป็นเคลม/orphan ตามปกติ
+        const m = mat[j.job_no] || {}; const matNet = (m.withdraw || 0) - (m.return || 0);
+        const labor = Number(j.labor_total) || 0; const expense = Number((exp || {})[j.job_no]) || 0;
+        const c = matNet + labor + expense; if (c <= 0.01) return;
+        const g = reworkByQuote[tq] || (reworkByQuote[tq] = { cost: 0, jobs: [] });
+        g.cost += c; g.jobs.push({ jobNo: j.job_no, matNet, labor, expense, cost: c }); rolledJobNos.add(j.job_no);
+      });
+
       const out = [];
       qs.forEach((q) => {
         if (q.variation_of) return;                      // ใบลูก (ใบเสนอเพิ่มเติม) → ยุบเข้าใบแม่ ไม่โชว์แถวแยก
@@ -79,13 +95,17 @@ export default function Profit({ onOpenJob }) {
         let cost = null; const boqSeen = new Set();
         group.forEach((g) => { if (g.boq_no && !boqSeen.has(g.boq_no) && boqCost[g.boq_no] != null) { boqSeen.add(g.boq_no); cost = (cost || 0) + boqCost[g.boq_no]; } });
         const gross = cost == null ? null : sale - cost;            // กำไรตามประมาณการ (BOQ)
-        const hasRealCost = matNet + labor + expenses + poPend > 0;
-        const actualCost = matNet + labor + expenses + poPend + cardFee;
+        // 🔁 ต้นทุนงานแก้ไข/เคลมของกลุ่มนี้ (รวมใบแม่ + ใบเสริม)
+        const reworkCost = group.reduce((a, g) => a + (reworkByQuote[g.quote_no]?.cost || 0), 0);
+        const reworkJobs = group.flatMap((g) => reworkByQuote[g.quote_no]?.jobs || []);
+        const hasRealCost = matNet + labor + expenses + poPend + reworkCost > 0;
+        const actualCost = matNet + labor + expenses + poPend + cardFee + reworkCost;
         const net = hasRealCost ? sale - actualCost : null;         // ยังไม่มีต้นทุนจริง → ไม่โชว์กำไรลวง
         const margin = net == null || sale <= 0 ? null : (net / sale) * 100;
-        out.push({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, acNet, goodsNet, labor, expenses, poPend, cardFee, net, margin });
+        out.push({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, acNet, goodsNet, labor, expenses, poPend, cardFee, reworkCost, reworkJobs, net, margin });
       });
       setRows(out);
+      setAllJobs(jos);
 
       // ต้นทุนของใบงานที่ไม่ผูกใบเสนอราคา → ตกหล่นจากการคิดกำไรทั้งหมด
       // ⚠️ เดิมกล่องเตือนนี้ดูแค่ "วัสดุที่เบิกจากคลัง" ใบงานซ่อมด่วนที่จ่ายค่าแรงช่างซัพ + ค่าอะไหล่ผ่านเบิกจ่าย
@@ -105,13 +125,16 @@ export default function Profit({ onOpenJob }) {
           const expense = Number((exp || {})[jobNo]) || 0;
           return { jobNo, job, matNet, labor, expense, net: matNet + labor + expense };
         })
-        .filter((o) => o.net > 0.01 && (!o.job || !o.job.quote_no))
+        .filter((o) => o.net > 0.01 && (!o.job || !o.job.quote_no) && !rolledJobNos.has(o.jobNo))
         .sort((a, b) => b.net - a.net);
-      // งานสำรวจหน้างาน = ต้นทุนหาลูกค้า (lead) ไม่ควรมีใบเสนอ → แยกเป็น "ค่าใช้จ่ายการขาย" ไม่ปนกล่องเตือน
+      // แยก 3 กล่อง: สำรวจ (ค่าใช้จ่ายการขาย) · เคลม/รับประกัน/ฟรี (ค่าใช้จ่ายบริการ) · ที่เหลือ = ลืมผูกใบเสนอจริง
       const isSurvey = (o) => o.job?.job_type === "survey";
-      setOrphans(orph.filter((o) => !isSurvey(o)));
+      const isClaim = (o) => o.job?.is_claim || ["fix", "warranty", "free", "claim"].includes(o.job?.job_type);
+      setOrphans(orph.filter((o) => !isSurvey(o) && !isClaim(o)));
       const svy = orph.filter(isSurvey);
       setSurveyCost({ count: svy.length, total: svy.reduce((a, o) => a + o.net, 0) });
+      const clm = orph.filter((o) => !isSurvey(o) && isClaim(o));
+      setClaimCost({ count: clm.length, total: clm.reduce((a, o) => a + o.net, 0) });
     } catch (e) { setErr(e.message || String(e)); }
     setLoading(false);
   }
@@ -179,6 +202,13 @@ export default function Profit({ onOpenJob }) {
             </div>
           )}
 
+          {claimCost.count > 0 && (
+            <div className="card" style={{ padding: "11px 16px", marginBottom: 14, borderLeft: "3px solid #7c3aed", background: "#f5f3ff" }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#6d28d9" }}>🎁 งานเคลม/รับประกัน/บริการฟรี (ค่าใช้จ่ายบริการ): {claimCost.count} งาน · {fmtBaht(claimCost.total)}</div>
+              <div className="page-sub" style={{ marginTop: 4, marginBottom: 0 }}>งานที่ทำฟรี/รับประกัน (ไม่มีต้นเรื่องให้หักกำไร) — นับเป็น<b>ค่าใช้จ่ายบริการ</b>ของบริษัท ไม่ปนกำไรรายงาน</div>
+            </div>
+          )}
+
           {orphans.length > 0 && (
             <div className="card" style={{ padding: "12px 16px", marginBottom: 14, borderLeft: "3px solid var(--down)" }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: "var(--down)", marginBottom: 6 }}>
@@ -187,15 +217,17 @@ export default function Profit({ onOpenJob }) {
               <div className="page-sub" style={{ marginTop: 0, marginBottom: 8 }}>เงินที่จ่ายออกไปจริงเหล่านี้ยัง<b>ไม่ถูกนำไปคิดกำไร</b> เพราะใบงานไม่ได้อ้างใบเสนอราคา — {onOpenJob ? "กดที่ใบงานเพื่อเปิด แล้วใช้ปุ่ม “🧾 ใบเสนอย้อนหลัง” (ลูกค้าเก่าก่อนใช้ระบบ)" : "ให้ผูกใบงานกับใบเสนอราคา หรือใช้ปุ่ม “ใบงานเชื่อม” กับงานหลัก"}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {orphans.map((o) => (
-                  <span key={o.jobNo} onClick={() => onOpenJob && onOpenJob(o.jobNo)} title={onOpenJob ? "เปิดใบงานนี้" : undefined}
-                    style={{ fontSize: 12, background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, padding: "3px 9px", cursor: onOpenJob ? "pointer" : "default" }}>
-                    {o.jobNo}{o.job?.customerName ? ` · ${o.job.customerName}` : ""} · <b style={{ color: "var(--down)" }}>{fmtBaht(o.net)}</b>
-                    {/* แยกให้เห็นว่าตกหล่นจากทางไหน จะได้ตามถูกที่ */}
-                    <span style={{ color: "var(--ink-3)" }}>
-                      {o.matNet > 0.01 ? ` · วัสดุ ${fmtBaht(o.matNet)}` : ""}
-                      {o.labor > 0.01 ? ` · ค่าแรงซัพ ${fmtBaht(o.labor)}` : ""}
-                      {o.expense > 0.01 ? ` · เบิกจ่าย ${fmtBaht(o.expense)}` : ""}
+                  <span key={o.jobNo}
+                    style={{ fontSize: 12, background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, padding: "3px 9px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span onClick={() => onOpenJob && onOpenJob(o.jobNo)} title={onOpenJob ? "เปิดใบงานนี้" : undefined} style={{ cursor: onOpenJob ? "pointer" : "default" }}>
+                      {o.jobNo}{o.job?.customerName ? ` · ${o.job.customerName}` : ""} · <b style={{ color: "var(--down)" }}>{fmtBaht(o.net)}</b>
+                      <span style={{ color: "var(--ink-3)" }}>
+                        {o.matNet > 0.01 ? ` · วัสดุ ${fmtBaht(o.matNet)}` : ""}
+                        {o.labor > 0.01 ? ` · ค่าแรงซัพ ${fmtBaht(o.labor)}` : ""}
+                        {o.expense > 0.01 ? ` · เบิกจ่าย ${fmtBaht(o.expense)}` : ""}
+                      </span>
                     </span>
+                    <button onClick={() => setTagFor(o)} title="จัดหมวดงานนี้" style={{ border: "1px solid var(--line)", background: "var(--surface)", borderRadius: 7, fontSize: 11, fontWeight: 700, padding: "2px 7px", cursor: "pointer", color: "var(--primary)" }}>จัดหมวด</button>
                   </span>
                 ))}
               </div>
@@ -207,7 +239,7 @@ export default function Profit({ onOpenJob }) {
           {shown.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div className="jp-row jp-head"><span>เลขที่ / ลูกค้า</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน BOQ (ประมาณ)</span><span className="r">กำไรประมาณการ</span><span className="r">❄ แอร์ / 🔧 วัสดุ (จริง)</span><span className="r">ค่าแรงช่างซัพ</span><span className="r">กำไรสุทธิ (จริง)</span><span className="r">%</span></div>
-              {shown.map(({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, acNet, goodsNet, labor, expenses, poPend, cardFee, net, margin }) => {
+              {shown.map(({ q, kids, jobs, detail, sale, cost, gross, withdraw, ret, matNet, acNet, goodsNet, labor, expenses, poPend, cardFee, reworkCost, reworkJobs, net, margin }) => {
                 const isOpen = !!open[q.quote_no];
                 return (
                   <React.Fragment key={q.quote_no}>
@@ -257,9 +289,15 @@ export default function Profit({ onOpenJob }) {
                           </div>
                           );
                         })}
+                        {(reworkJobs || []).map((rj) => (
+                          <div key={rj.jobNo} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "4px 0", borderBottom: "1px dashed var(--line-2)", color: "#b45309" }}>
+                            <span>🔁 <b>{rj.jobNo}</b> · งานแก้ไข/เคลม (หักกำไรงานนี้)</span>
+                            <span style={{ textAlign: "right" }}>{rj.matNet > 0.01 ? `วัสดุ ${fmtBaht(rj.matNet)} ` : ""}{rj.labor > 0.01 ? `· ค่าแรง ${fmtBaht(rj.labor)} ` : ""}{rj.expense > 0.01 ? `· เบิกจ่าย ${fmtBaht(rj.expense)}` : ""}</span>
+                          </div>
+                        ))}
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0 0", fontWeight: 700 }}>
                           <span>รวมทั้งงาน</span>
-                          <span style={{ textAlign: "right" }}>{acNet > 0.01 ? `❄ แอร์ ${fmtBaht(acNet)} · ` : ""}{goodsNet > 0.01 ? `🔧 วัสดุ ${fmtBaht(goodsNet)} · ` : ""}👷 ค่าแรงซัพ {fmtBaht(labor)}{expenses > 0 ? ` · 🧾 เบิกจ่าย ${fmtBaht(expenses)}` : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · 💳 ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
+                          <span style={{ textAlign: "right" }}>{acNet > 0.01 ? `❄ แอร์ ${fmtBaht(acNet)} · ` : ""}{goodsNet > 0.01 ? `🔧 วัสดุ ${fmtBaht(goodsNet)} · ` : ""}👷 ค่าแรงซัพ {fmtBaht(labor)}{reworkCost > 0.01 ? ` · 🔁 งานแก้ไข ${fmtBaht(reworkCost)}` : ""}{expenses > 0 ? ` · 🧾 เบิกจ่าย ${fmtBaht(expenses)}` : ""}{poPend > 0 ? ` · 🛒 PO รอรับของ ${fmtBaht(poPend)}` : ""}{cardFee > 0 ? ` · 💳 ค่าธรรมเนียมบัตร ${fmtBaht(cardFee)}` : ""}{ret > 0 ? ` · (เบิกรวม ${fmtBaht(withdraw)} − คืน ${fmtBaht(ret)})` : ""}</span>
                         </div>
                       </div>
                     )}
@@ -271,6 +309,46 @@ export default function Profit({ onOpenJob }) {
           <p className="page-sub" style={{ marginTop: 12 }}>* กดที่แถวเพื่อกางดูวัสดุ + ค่าแรงช่างซัพรายใบงาน · นับเฉพาะใบเสนอราคาที่<b>อนุมัติแล้ว</b> (กติกาเดียวกับรายงานขาย) และใบงาน “เสร็จ” ครบทุกใบ · กำไรสุทธิคิดจาก<b>ต้นทุนจริง</b> (วัสดุเบิกจริง + ค่าแรงซัพ + เบิกจ่าย + PO รอรับของ + 💳 ค่าธรรมเนียมบัตร) — งานที่ยังไม่บันทึกต้นทุนจริงจะขึ้น “—” เพื่อไม่ให้กำไรลวง · BOQ เป็นประมาณการไว้เทียบ · ยอดขายเป็นราคาก่อน VAT</p>
         </>
       )}
+      {tagFor && <TagModal o={tagFor} allJobs={allJobs} onClose={() => setTagFor(null)} onDone={() => { setTagFor(null); load(); }} />}
+    </div>
+  );
+}
+
+// จัดหมวดใบงานตกหล่น: สำรวจ / งานแก้ไข (ผูกใบต้นเรื่อง) / เคลม-ฟรี
+function TagModal({ o, allJobs, onClose, onDone }) {
+  const [busy, setBusy] = React.useState(false);
+  const [pick, setPick] = React.useState(false);   // โหมดเลือกใบต้นเรื่อง
+  const [q, setQ] = React.useState("");
+  const cands = (allJobs || []).filter((j) => j.job_no !== o.jobNo && j.quote_no && (!q.trim() || matchText(q, j.job_no, j.customerName, j.title, j.quote_no))).slice(0, 40);
+  async function apply(patch) { setBusy(true); try { await setJobCategory(o.jobNo, patch); onDone(); } catch (e) { alert(e.message || "ไม่สำเร็จ"); setBusy(false); } }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ width: 460, maxWidth: "94vw" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><div className="modal-title">จัดหมวด {o.jobNo}</div><button className="modal-x" onClick={onClose}>✕</button></div>
+        <div className="modal-body">
+          <div className="jo-dim" style={{ marginBottom: 12 }}>{o.job?.customerName || ""} · ต้นทุน {fmtBaht(o.net)} — เลือกว่างานนี้คืออะไร เพื่อให้ระบบคิดกำไรถูก</div>
+          {!pick ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button className="btn-ghost" disabled={busy} onClick={() => apply({ job_type: "survey" })} style={{ justifyContent: "flex-start", textAlign: "left" }}>🔍 <b>งานสำรวจ</b> — ค่าใช้จ่ายการขาย (หาลูกค้า)</button>
+              <button className="btn-ghost" disabled={busy} onClick={() => setPick(true)} style={{ justifyContent: "flex-start", textAlign: "left" }}>🔁 <b>งานแก้ไข/เคลมงานเดิม</b> — เลือกใบงานต้นเรื่อง (หักกำไรงานนั้น)</button>
+              <button className="btn-ghost" disabled={busy} onClick={() => apply({ is_claim: true, job_type: "free" })} style={{ justifyContent: "flex-start", textAlign: "left" }}>🎁 <b>เคลม/รับประกัน/บริการฟรี</b> — ค่าใช้จ่ายบริการบริษัท</button>
+            </div>
+          ) : (
+            <>
+              <div className="cat-search" style={{ marginBottom: 8 }}><input placeholder="ค้นหาใบงานต้นเรื่อง (เลข/ลูกค้า/ใบเสนอ)" value={q} onChange={(e) => setQ(e.target.value)} autoFocus /></div>
+              <div style={{ maxHeight: 300, overflow: "auto", border: "1px solid var(--line)", borderRadius: 10 }}>
+                {cands.length === 0 && <div className="empty sm" style={{ padding: 12 }}>ไม่พบใบงานที่มีใบเสนอราคา</div>}
+                {cands.map((j) => (
+                  <button key={j.job_no} disabled={busy} onClick={() => apply({ job_type: "fix", rework_of: j.job_no })} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", borderBottom: "1px solid var(--line-2)", background: "none", border: "none", cursor: "pointer", fontSize: 13 }}>
+                    <b style={{ fontFamily: "var(--mono)" }}>{j.job_no}</b>{j.customerName ? ` · ${j.customerName}` : ""}{j.quote_no ? ` · ${j.quote_no}` : ""}
+                  </button>
+                ))}
+              </div>
+              <button className="btn-ghost sm" style={{ marginTop: 8 }} onClick={() => setPick(false)}>← กลับ</button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
