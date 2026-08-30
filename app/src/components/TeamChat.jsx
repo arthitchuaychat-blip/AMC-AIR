@@ -138,6 +138,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   const [msgs, setMsgs]     = React.useState([]);
   const [text, setText]     = React.useState("");
   const [sending, setSending] = React.useState(false);
+  const [msgSearch, setMsgSearch] = React.useState("");   // ค้นหาข้อความในห้องที่เปิดอยู่
   const [q, setQ]           = React.useState("");
   const [kindF, setKindF]   = React.useState("all");
   const [modal, setModal]   = React.useState(null); // "dm"|"group"|"members"|"joblink"
@@ -284,7 +285,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
   React.useEffect(() => { if (focus == null) return; setSel(Number(focus)); onFocusConsumed && onFocusConsumed(); }, [focus]);
   React.useEffect(() => {
     if (!sel) return;
-    setRename(null);   // สลับห้อง — ปิดโหมดแก้ชื่อค้าง
+    setRename(null); setMsgSearch("");   // สลับห้อง — ปิดโหมดแก้ชื่อค้าง + ล้างคำค้น
     loadMsgs(sel);
     markChatRead(sel).then(loadRooms).catch(() => {});
   }, [sel]);
@@ -307,6 +308,14 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
     const rt = replyTo?.id || null;
     setText(""); setMentionQ(null); setReplyTo(null); setSending(true);
     try { await sendChatMessage(sel, t, ids, rt); await loadMsgs(sel); } catch { flash(L("ส่งไม่สำเร็จ", "ပို့၍မရ")); setText(t); }
+    setSending(false);
+  }
+  // ข้อความสำเร็จรูป (แตะครั้งเดียวส่ง) — ช่างในสนามใช้บอกสถานะเร็ว ๆ
+  const QUICK = [L("กำลังไป 🚗", "လာနေ 🚗"), L("ถึงหน้างานแล้ว 📍", "ရောက်ပြီ 📍"), L("เสร็จงานแล้ว ✅", "ပြီးပြီ ✅"), L("รับทราบครับ 👍", "သဘောပေါက် 👍")];
+  async function sendQuick(t) {
+    if (!sel || sending) return;
+    setSending(true);
+    try { await sendChatMessage(sel, t, [], null); await loadMsgs(sel); } catch { flash(L("ส่งไม่สำเร็จ", "ပို့၍မရ")); }
     setSending(false);
   }
   // รีแอกชัน + ลบข้อความตัวเอง (mig 190)
@@ -533,6 +542,11 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                     {selRoom.ref_no ? ` · ${L("งาน", "အလုပ်")} ${selRoom.ref_no}` : ""}
                   </div>
                 </div>
+                <span className="cat-search" style={{ maxWidth: 190, minWidth: 120 }}>
+                  <UIcon name="search" size={14} color="var(--ink-3)" />
+                  <input value={msgSearch} onChange={(e) => setMsgSearch(e.target.value)} placeholder={L("ค้นหาในห้อง…", "အခန်းထဲ ရှာ…")} />
+                  {msgSearch && <button className="tc-reply-x" title={L("ล้าง", "ရှင်း")} onClick={() => setMsgSearch("")} style={{ marginLeft: 2 }}>✕</button>}
+                </span>
                 <button className="btn-ghost sm" title={L("โน้ตประจำห้อง — ปักข้อมูลสำคัญ แนบรูปได้ไม่จำกัด", "အခန်းမှတ်စု — အရေးကြီးအချက် ပင်ထား၊ ဓာတ်ပုံ အကန့်အသတ်မဲ့ တွဲနိုင်")} onClick={() => setModal("notes")}>📝 {L("โน้ต", "မှတ်စု")}</button>
                 {OFFICE.includes(me?.role) && (selRoom.kind === "group" || selRoom.kind === "project") &&
                   <button className="btn-ghost sm" onClick={() => setModal("members")}>
@@ -545,12 +559,17 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
               </div>
 
               <div className="tc-msgs" ref={msgsRef}>
-                {hasMore && (
+                {!msgSearch && hasMore && (
                   <button className="btn-ghost sm" style={{ alignSelf: "center", margin: "2px auto 10px", display: "block" }} onClick={loadOlder}>
                     ⌃ {L("ดูข้อความเก่าก่อนหน้า", "အရင်စာဟောင်းများ ကြည့်")}
                   </button>
                 )}
-                {msgs.map((m) => {
+                {msgSearch && (() => { const n = msgs.filter((m) => !m.deleted_at && String(m.text || "").toLowerCase().includes(msgSearch.trim().toLowerCase())).length; return (
+                  <div className="tc-main-sub" style={{ textAlign: "center", padding: "4px 0 8px" }}>
+                    🔍 {L(`พบ ${n} ข้อความ (ค้นในที่โหลดแล้ว — เลื่อนดูเก่ากว่านี้ก่อนถ้าไม่เจอ)`, `${n} စာ တွေ့ (ဖွင့်ထားသည်တွင် ရှာ)`)}
+                  </div>
+                ); })()}
+                {msgs.filter((m) => !msgSearch || (!m.deleted_at && String(m.text || "").toLowerCase().includes(msgSearch.trim().toLowerCase()))).map((m) => {
                   const out = m.sender === me?.id;
                   const jc  = parseJobCard(m.text);
                   return (
@@ -650,6 +669,9 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                   <button className="tc-reply-x" title={L("ยกเลิก", "ဖျက်")} onClick={() => setReplyTo(null)}>✕</button>
                 </div>
               )}
+              <div className="tc-quick" style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "0 4px 6px" }}>
+                {QUICK.map((qm) => <button key={qm} type="button" className="cat-chip" disabled={!sel || sending} onClick={() => sendQuick(qm)} style={{ fontSize: 12.5 }}>{qm}</button>)}
+              </div>
               <div className="chat-compose">
                 <label className={"chat-tool" + (sending ? " disabled" : "")} title={L("ส่งรูป (เลือกได้หลายรูป)", "ဓာတ်ပုံ ပို့ (အများကြီး ရွေးနိုင်)")}>
                   📷<input type="file" accept="image/*" multiple hidden disabled={sending} onChange={onImage} />
