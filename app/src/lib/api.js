@@ -2396,6 +2396,8 @@ export async function setJobStatus(job_no, status, reason) {
     ({ error } = await supabase.from("job_orders").update({ status }).eq("job_no", job_no)); // pre-150 fallback
   }
   if (error) throw error;
+  // บันทึกเวลาเปลี่ยนสถานะลง timeline เสมอ (ให้ตรงกับ updateJobStatus ของช่าง) — วัด "งานเสร็จตรงเวลา"/รอบเวลางานได้ครบ
+  try { const { data: { user } } = await supabase.auth.getUser(); await supabase.from("job_logs").insert({ job_no, type: "status", status, created_by: user?.id || null }); } catch (_) { /* best-effort */ }
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "job_order", target_no: job_no, reason });
   syncCashEntriesFromDocs().catch(() => {}); // job's linked PO/labor projections → refresh cash flow
 }
