@@ -1430,15 +1430,17 @@ export async function followupState() {
     supabase.from("profiles").select("id,name,email").then((r) => r.data || []),
   ]);
   const nm = Object.fromEntries(profs.map((p) => [p.id, p.name || p.email]));
-  const scheduled = [], suppress = [];
+  const scheduled = [], suppress = [], all = [];
   (cs || []).forEach((c) => {
     const closed = _CLOSED_STAGE.has(c.stage);
     const due = c.next_followup && c.next_followup <= today;
     const future = c.next_followup && c.next_followup > today;
     if (closed || future) suppress.push(c.id);   // ปิดดีลแล้ว หรือ นัดไว้วันหน้าแล้ว → ไม่ต้องเด้งวันนี้
-    if (due && !closed) scheduled.push({ ...c, ownerName: c.owner_id ? nm[c.owner_id] || null : null });
+    const row = { ...c, ownerName: c.owner_id ? nm[c.owner_id] || null : null };
+    if (due && !closed) scheduled.push(row);
+    if (c.next_followup && !closed) all.push(row);   // นัดทั้งหมด (อดีต+อนาคต) — สำหรับปฏิทิน
   });
-  return { scheduled, suppress };
+  return { scheduled, suppress, all };
 }
 // (คงชื่อเดิมไว้ให้ที่อื่นเรียกได้) — คืนเฉพาะรายการนัดถึงกำหนด
 export async function followupScheduled() { return (await followupState()).scheduled; }
@@ -2439,6 +2441,19 @@ export async function setBoqStatus(boq_no, status, reason) {
   if (error) throw error;
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "boq", target_no: boq_no, reason });
 }
+// จดวันเข้าบริการล่าสุด/แรก บนลูกค้า เมื่อปิดงาน (best-effort · pre-238 = ไม่มีคอลัมน์ ก็ข้ามเงียบ ๆ)
+async function _stampService(job_no) {
+  try {
+    const { data: jo } = await supabase.from("job_orders").select("customer_id,scheduled_at").eq("job_no", job_no).maybeSingle();
+    if (!jo?.customer_id) return;
+    const d = String(jo.scheduled_at || new Date().toISOString()).slice(0, 10);
+    const { data: c } = await supabase.from("customers").select("first_service_at,last_service_at").eq("id", jo.customer_id).maybeSingle();
+    const upd = {};
+    if (!c?.last_service_at || d > c.last_service_at) upd.last_service_at = d;
+    if (!c?.first_service_at || d < c.first_service_at) upd.first_service_at = d;
+    if (Object.keys(upd).length) await supabase.from("customers").update(upd).eq("id", jo.customer_id);
+  } catch (_) { /* ไม่มีคอลัมน์/สิทธิ์ = ข้าม */ }
+}
 export async function setJobStatus(job_no, status, reason) {
   // ผ่าน RPC (mig 150): ยกเลิกใบงาน → ปิดรอบที่ยังไม่จบให้ด้วย (กันจอช่างค้างกด "ส่งอนุมัติ" แล้วคืนชีพงานที่ยกเลิก)
   let { error } = await supabase.rpc("set_job_status", { p_job: job_no, p_status: status });
@@ -2449,6 +2464,7 @@ export async function setJobStatus(job_no, status, reason) {
   // บันทึกเวลาเปลี่ยนสถานะลง timeline เสมอ (ให้ตรงกับ updateJobStatus ของช่าง) — วัด "งานเสร็จตรงเวลา"/รอบเวลางานได้ครบ
   try { const { data: { user } } = await supabase.auth.getUser(); await supabase.from("job_logs").insert({ job_no, type: "status", status, created_by: user?.id || null }); } catch (_) { /* best-effort */ }
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "job_order", target_no: job_no, reason });
+  if (status === "done") _stampService(job_no).catch(() => {});   // จดวันบริการล่าสุด → เตือนรอบดูแล
   syncCashEntriesFromDocs().catch(() => {}); // job's linked PO/labor projections → refresh cash flow
 }
 
@@ -3399,6 +3415,7 @@ export async function updateJobStatus(job_no, status, author) {
   // record the status change on the timeline (best-effort — don't fail the status update if logging fails)
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("job_logs").insert({ job_no, type: "status", status, author: author || null, created_by: user?.id || null });
+  if (status === "done") _stampService(job_no).catch(() => {});   // จดวันบริการล่าสุด → เตือนรอบดูแล
   { const [w, cn] = await Promise.all([_jobWatchers(job_no), _jobCust(job_no)]); notify(w, { category: "job", title: `📋 ${cn || "งาน"} · ${job_no}`, body: `สถานะ → ${_JOB_ST_TH[status] || status}`, url: "joborders", ref_type: "job", ref_no: job_no }); }
 }
 

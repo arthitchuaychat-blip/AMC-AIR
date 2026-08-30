@@ -18,6 +18,13 @@ function agoText(days) {
   const y = Math.floor(days / 365), m = Math.floor((days % 365) / 30);
   return m ? `${y} ปี ${m} เดือนที่แล้ว` : `${y} ปีที่แล้ว`;
 }
+// ช่วงเวลาแบบ "X ปี Y เดือน" (อายุลูกค้า)
+function spanText(days) {
+  if (days < 30) return `${Math.max(0, days)} วัน`;
+  if (days < 365) return `${Math.floor(days / 30)} เดือน`;
+  const y = Math.floor(days / 365), m = Math.floor((days % 365) / 30);
+  return m ? `${y} ปี ${m} เดือน` : `${y} ปี`;
+}
 
 // recency buckets — first bucket whose `max` (days) covers the elapsed time
 const BUCKETS = [
@@ -48,6 +55,9 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
   const [tab, setTab] = React.useState("today");   // today=ติดตามวันนี้ · service=รอบบริการ · quotes=ใบเสนอค้างตอบ · approved · unpaid · donepay
   const [sched, setSched] = React.useState([]);   // ลูกค้าที่ถึงกำหนดนัดติดตาม (customers.next_followup ≤ วันนี้)
   const [suppress, setSuppress] = React.useState(() => new Set());   // customer_id ที่ปิดดีล/เลื่อนนัดแล้ว → ซ่อนจากรายการอัตโนมัติ
+  const [schedAll, setSchedAll] = React.useState([]);   // นัดทั้งหมด (อดีต+อนาคต) — สำหรับปฏิทิน
+  const [calMonth, setCalMonth] = React.useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [calSel, setCalSel] = React.useState(null);   // วันที่เลือกในปฏิทิน (ymd)
   const [logFor, setLogFor] = React.useState(null);   // รายการที่กำลังบันทึกผลติดตาม
   const [qAge, setQAge] = React.useState(7);         // ค้างตอบเกินกี่วันถึงนับ
   const [cadence, setCadence] = React.useState(180);   // "รอบติดตาม" default 6 months
@@ -62,7 +72,7 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
   async function load() {
     try {
       const [j, q, inv, fs] = await Promise.all([listJobOrders(), listQuotations().catch(() => []), listInvoices().catch(() => []), followupState().catch(() => ({ scheduled: [], suppress: [] }))]);
-      setJobs(j); setQuotes(q || []); setInvoices(inv || []); setSched(fs.scheduled || []); setSuppress(new Set(fs.suppress || []));
+      setJobs(j); setQuotes(q || []); setInvoices(inv || []); setSched(fs.scheduled || []); setSuppress(new Set(fs.suppress || [])); setSchedAll(fs.all || []);
     }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setJobs([]); setQuotes([]); setInvoices([]); }
   }
@@ -96,8 +106,10 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
     return Object.values(m).map((c) => {
       c.jobs.sort((a, b) => (a.date < b.date ? 1 : -1));   // newest first
       const last = c.jobs[0];
+      const first = c.jobs[c.jobs.length - 1];   // งานแรกสุด = จุดเริ่มเป็นลูกค้า
       const days = dayDiff(last.date, today);
-      return { ...c, last, days, bucket: bucketOf(days), times: c.jobs.length, due: days >= cadence };
+      const ageDays = dayDiff(first.date, today);   // อายุลูกค้า = ตั้งแต่บริการครั้งแรก
+      return { ...c, last, first, days, ageDays, bucket: bucketOf(days), times: c.jobs.length, due: days >= cadence };
     }).sort((a, b) => b.days - a.days); // most overdue first
   }, [jobs, today, cadence]);
 
@@ -135,6 +147,25 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
     pendingQuotes.forEach((q) => { if (suppress.has(q.customer_id)) return; add(q.customer_id, q.customerName, q.contact_phone || q.mainContactPhone || null, "quote", q.days, { quote_no: q.quote_no, days: q.days }); });
     return Object.values(m).sort((a, b) => b.maxDays - a.maxDays);
   }, [sched, customers, pendingQuotes, today, salesF, suppress]);
+
+  // ── ปฏิทินติดตาม ──
+  const addDays = (ymd, n) => { const d = new Date(String(ymd).slice(0, 10) + "T00:00:00"); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const calData = React.useMemo(() => {
+    const m = {};
+    const push = (ymd, kind, item) => { (m[ymd] = m[ymd] || { care: [], sales: [], quote: [] })[kind].push(item); };
+    const clamp = (d) => (d < today ? today : d);   // เกินกำหนด → กองรวมที่วันนี้
+    customers.forEach((c) => { if (suppress.has(c.customer_id) || (salesF && !(c.salesSet && c.salesSet.has(salesF)))) return; push(clamp(addDays(c.last.date, cadence)), "care", { customer_id: c.customer_id, name: c.name, phone: c.phone, lastDate: c.last.date, times: c.times }); });
+    (schedAll || []).forEach((c) => { if (salesF && (c.ownerName || "") !== salesF) return; push(clamp(String(c.next_followup).slice(0, 10)), "sales", { customer_id: c.id, name: c.name, ownerName: c.ownerName, date: c.next_followup }); });
+    pendingQuotes.forEach((q) => { if (suppress.has(q.customer_id)) return; push(today, "quote", { customer_id: q.customer_id, name: q.customerName, quote_no: q.quote_no, days: q.days }); });
+    return m;
+  }, [customers, schedAll, pendingQuotes, cadence, today, suppress, salesF]);
+  const calCells = React.useMemo(() => {
+    const y = calMonth.getFullYear(), mo = calMonth.getMonth();
+    const startDow = (new Date(y, mo, 1).getDay() + 6) % 7;   // จันทร์ = 0
+    const start = new Date(y, mo, 1 - startDow);
+    return Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return { ymd: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, day: d.getDate(), inMonth: d.getMonth() === mo }; });
+  }, [calMonth]);
+  const calMonthLabel = calMonth.toLocaleDateString("th-TH", { month: "long", year: "numeric" });
 
   // อนุมัติแล้วแต่ยังไม่แจ้งหนี้ — ต้องรีบออกใบส่งของ/ใบแจ้งหนี้ (ปิดยอดขาย)
   const approvedNoInvoice = React.useMemo(() => {
@@ -205,6 +236,7 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
           <span className="fu-dot" style={{ background: b.color }} />
           <span className="fu-name">{c.name}</span>
           {c.due && <span className="fu-due">🔔 ถึงเวลาติดตาม</span>}
+          <span className="fu-times" title="อายุลูกค้า — นับจากบริการครั้งแรก">🎂 ลูกค้า {spanText(c.ageDays)}</span>
           <span className="fu-times">ใช้บริการ {c.times} ครั้ง</span>
           <span className="fu-ago" style={{ color: b.color }}>{agoText(c.days)}</span>
         </div>
@@ -269,6 +301,8 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
       <div className="cat-filter" style={{ marginBottom: 10 }}>
         <button className={"cat-chip" + (tab === "today" ? " on" : "")} onClick={() => setTab("today")}
           style={tab === "today" ? { background: "#059669", color: "#fff", borderColor: "#059669" } : {}}>📅 ติดตามวันนี้ ({todayList.length})</button>
+        <button className={"cat-chip" + (tab === "calendar" ? " on" : "")} onClick={() => setTab("calendar")}
+          style={tab === "calendar" ? { background: "#2563eb", color: "#fff", borderColor: "#2563eb" } : {}}>🗓️ ปฏิทิน</button>
         <span style={{ alignSelf: "center", color: "var(--line)" }}>|</span>
         <button className={"cat-chip" + (tab === "service" ? " on" : "")} onClick={() => setTab("service")}
           style={tab === "service" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>🔁 รอบบริการ ({customers.length})</button>
@@ -283,7 +317,61 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
           style={tab === "donepay" ? { background: "#b91c1c", color: "#fff", borderColor: "#b91c1c" } : {}}>🏁 งานเสร็จยังไม่ได้เงิน ({doneNotPaid.length})</button>
       </div>
 
-      {tab === "today" ? (
+      {tab === "calendar" ? (
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button className="btn-ghost sm" onClick={() => setCalMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>‹</button>
+              <b style={{ fontSize: 16, minWidth: 130, textAlign: "center" }}>{calMonthLabel}</b>
+              <button className="btn-ghost sm" onClick={() => setCalMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>›</button>
+              <button className="btn-ghost sm" onClick={() => { setCalMonth(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); }); setCalSel(today); }}>วันนี้</button>
+            </div>
+            <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--ink-2)", flexWrap: "wrap" }}>
+              <span>🔵 ดูแลอัตโนมัติ</span><span>🔴 นัดที่ตั้งเอง</span><span>🟠 ใบเสนอค้าง</span>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5 }}>
+            {["จ", "อ", "พ", "พฤ", "ศ", "ส", "อา"].map((d) => <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--ink-3)", padding: "2px 0" }}>{d}</div>)}
+            {calCells.map((cell) => {
+              const dd = calData[cell.ymd] || { care: [], sales: [], quote: [] };
+              const tot = dd.care.length + dd.sales.length + dd.quote.length;
+              const isToday = cell.ymd === today, on = calSel === cell.ymd;
+              return (
+                <button key={cell.ymd} type="button" onClick={() => setCalSel(on ? null : cell.ymd)}
+                  style={{ minHeight: 62, textAlign: "left", border: "1px solid " + (on ? "#2563eb" : "var(--line-2)"), background: on ? "#eff6ff" : "var(--surface)", borderRadius: 9, padding: 5, cursor: "pointer", opacity: cell.inMonth ? 1 : .4, display: "flex", flexDirection: "column", gap: 2, boxShadow: isToday ? "0 0 0 1px #059669" : "none" }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: isToday ? "#059669" : "var(--ink-2)" }}>{cell.day}{isToday ? " •" : ""}</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: "auto" }}>
+                    {dd.care.length > 0 && <span style={{ fontSize: 9.5, fontWeight: 700, background: "#dbeafe", color: "#2563eb", borderRadius: 4, padding: "0 4px" }}>ดูแล {dd.care.length}</span>}
+                    {dd.sales.length > 0 && <span style={{ fontSize: 9.5, fontWeight: 700, background: "#fee2e2", color: "#dc2626", borderRadius: 4, padding: "0 4px" }}>นัด {dd.sales.length}</span>}
+                    {dd.quote.length > 0 && <span style={{ fontSize: 9.5, fontWeight: 700, background: "#ffedd5", color: "#ea580c", borderRadius: 4, padding: "0 4px" }}>เสนอ {dd.quote.length}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {calSel && (() => { const dd = calData[calSel] || { care: [], sales: [], quote: [] }; const items = [...dd.sales.map((x) => ({ ...x, reason: "sales" })), ...dd.care.map((x) => ({ ...x, reason: "service" })), ...dd.quote.map((x) => ({ ...x, reason: "quote" }))];
+            return (
+            <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+              <b style={{ fontSize: 14 }}>{thDate(calSel)} · {items.length} รายการ</b>
+              {items.length === 0 && <div className="empty sm">ว่าง</div>}
+              <div className="job-cards" style={{ marginTop: 8 }}>
+                {items.map((it, i) => { const d = RSN[it.reason]; return (
+                  <div className="card" key={i} style={{ padding: "10px 12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <div><b>{it.name}</b> <span className="job-badge" style={{ background: d.bg, color: d.c, borderColor: d.bg }}>{d.t}{it.reason === "service" && it.times ? ` · เคยใช้ ${it.times} ครั้ง` : ""}{it.reason === "quote" ? ` · ${it.quote_no}` : ""}{it.reason === "sales" && it.ownerName ? ` · ${it.ownerName}` : ""}</span></div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {it.phone && <a className="btn-ghost sm" href={`tel:${it.phone}`}><UIcon name="user" size={13} /> โทร</a>}
+                        <ChatCustomerLink role={role} customerId={it.customer_id} onGoChat={onGoChat} />
+                        <button className="btn-primary sm" onClick={() => setLogFor({ customer_id: it.customer_id, name: it.name, reason: it.reason })}>✅ บันทึกผล</button>
+                      </div>
+                    </div>
+                  </div>
+                ); })}
+              </div>
+            </div>
+          ); })()}
+        </div>
+      ) : tab === "today" ? (
         jobs === null ? <div className="empty">กำลังโหลด…</div>
         : todayList.length === 0 ? <div className="empty" style={{ padding: 40 }}>🎉 วันนี้ไม่มีลูกค้าที่ต้องติดตาม — เคลียร์หมดแล้ว</div>
         : (

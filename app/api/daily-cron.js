@@ -195,19 +195,25 @@ export default async function handler(req, res) {
       result.digest.preview = title + "\n" + body;
     } catch (e) { result.digest.error = String(e.message || e); }
 
-    // ═══════════ (4) เตือนติดตามลูกค้ารายวัน — ส่งให้ผู้ดูแล (owner) แต่ละคน ═══════════
+    // ═══════════ (4) เตือนติดตาม + รอบดูแลลูกค้ารายวัน — ส่งให้ผู้ดูแล (owner) แต่ละคน ═══════════
     result.followups = {};
     try {
-      const due = await q(`customers?select=owner_id,stage,next_followup&next_followup=lte.${today.ymd}&owner_id=not.is.null`).catch(() => []);
+      // รอบดูแล = บริการล่าสุดเกิน 6 เดือน (mig 238) · นัด = next_followup ถึงกำหนด
+      const cutoff = (() => { const d = new Date(); d.setMonth(d.getMonth() - 6); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+      const [dueSched, dueCare] = await Promise.all([
+        q(`customers?select=id,owner_id,stage&next_followup=lte.${today.ymd}&owner_id=not.is.null`).catch(() => []),
+        q(`customers?select=id,owner_id,stage&last_service_at=lte.${cutoff}&owner_id=not.is.null`).catch(() => []),   // pre-238 = คอลัมน์ยังไม่มี → []
+      ]);
       const CLOSED = new Set(["won", "lost", "closed", "ปิดการขาย", "จบแล้ว", "ไม่สนใจ"]);
-      const byOwner = {};
-      due.forEach((c) => { if (CLOSED.has(c.stage)) return; byOwner[c.owner_id] = (byOwner[c.owner_id] || 0) + 1; });
-      const owners = Object.keys(byOwner);
-      result.followups = { owners: owners.length, total: Object.values(byOwner).reduce((a, b) => a + b, 0) };
+      const perOwner = {};
+      const addc = (c) => { if (CLOSED.has(c.stage)) return; (perOwner[c.owner_id] = perOwner[c.owner_id] || new Set()).add(c.id); };
+      dueSched.forEach(addc); dueCare.forEach(addc);
+      const owners = Object.keys(perOwner);
+      result.followups = { owners: owners.length, total: owners.reduce((a, id) => a + perOwner[id].size, 0) };
       if (!dry && owners.length) {
-        const rows = owners.map((id) => ({ user_id: id, category: "job", title: `🔔 วันนี้มี ${byOwner[id]} ลูกค้าต้องติดตาม`, body: "เปิดเมนู ติดตามลูกค้า → แท็บ “ติดตามวันนี้”", url: "followup", ref_type: "followup" }));
+        const rows = owners.map((id) => ({ user_id: id, category: "job", title: `🔔 วันนี้มี ${perOwner[id].size} ลูกค้าต้องติดตาม/ดูแล`, body: "เปิดเมนู ติดตามลูกค้า → แท็บ “ติดตามวันนี้” หรือ “ปฏิทิน”", url: "followup", ref_type: "followup" }));
         await fetch(`${SB()}/rest/v1/notifications`, { method: "POST", headers: H(), body: JSON.stringify(rows) }).catch(() => {});
-        for (const id of owners) await pushUsers([id], `🔔 ${byOwner[id]} ลูกค้าต้องติดตามวันนี้`, "เปิด ติดตามลูกค้า → ติดตามวันนี้", "followup");
+        for (const id of owners) await pushUsers([id], `🔔 ${perOwner[id].size} ลูกค้าต้องดูแลวันนี้`, "เปิด ติดตามลูกค้า", "followup");
       }
     } catch (e) { result.followups.error = String(e.message || e); }
 
