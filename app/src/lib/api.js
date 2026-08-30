@@ -1418,6 +1418,45 @@ export async function setCustomerPipeline(id, patch) {
   bustCache("listCustomers"); bustCache("listCustomersLite");   // ล้างแคชให้บอร์ด/ลิสต์เห็นค่าล่าสุด
 }
 
+// ---------- ติดตามลูกค้า: ประวัติ + คิววันนี้ (customer_followups, mig 237) ----------
+// ลูกค้าที่ "ถึงกำหนดนัดติดตาม" (next_followup <= today) + ยังเปิดอยู่ (ไม่ปิด/ไม่ทิ้ง) — สำหรับแท็บ "ติดตามวันนี้" + ป้ายเตือน
+export async function followupScheduled() {
+  const today = new Date().toISOString().slice(0, 10);
+  const [cs, profs] = await Promise.all([
+    _fetchAll((f, t) => supabase.from("customers").select("id,name,owner_id,stage,next_followup,source", { count: "exact" }).not("next_followup", "is", null).lte("next_followup", today).order("next_followup").range(f, t)).catch(() => []),
+    supabase.from("profiles").select("id,name,email").then((r) => r.data || []),
+  ]);
+  const nm = Object.fromEntries(profs.map((p) => [p.id, p.name || p.email]));
+  const CLOSED = new Set(["won", "lost", "closed", "ปิดการขาย", "จบแล้ว", "ไม่สนใจ"]);
+  return (cs || []).filter((c) => !CLOSED.has(c.stage)).map((c) => ({ ...c, ownerName: c.owner_id ? nm[c.owner_id] || null : null }));
+}
+// จำนวนที่ต้องติดตามวันนี้ (ป้ายเมนู) — เฉพาะของฉัน ถ้าไม่ใช่ผู้จัดการ
+export async function followupDueCount(myId, isManager) {
+  const list = await followupScheduled().catch(() => []);
+  return isManager ? list.length : list.filter((c) => c.owner_id === myId).length;
+}
+// บันทึกผลติดตาม 1 ครั้ง + อัปเดตวันนัดถัดไป/สถานะบนลูกค้า
+export async function logFollowup({ customer_id, reason, outcome, note, next_at }) {
+  const uid = await _uid();
+  const { data: c } = await supabase.from("customers").select("owner_id").eq("id", customer_id).maybeSingle();
+  const row = { customer_id, owner_id: c?.owner_id || null, reason: reason || null, outcome: outcome || null, note: note?.trim() || null, next_at: next_at || null, created_by: uid };
+  const { error } = await supabase.from("customer_followups").insert(row);
+  if (error) throw (/customer_followups|relation|does not exist/i.test(error.message || "") ? new Error("ต้องรัน migration 237 ก่อน") : error);
+  // อัปเดตลูกค้า: won/lost → ปิดสถานะ + ล้างนัด · อื่น ๆ → ตั้งวันนัดถัดไป
+  const upd = {};
+  if (outcome === "won") { upd.stage = "won"; upd.next_followup = null; }
+  else if (outcome === "lost") { upd.stage = "lost"; upd.next_followup = null; if (note) upd.lost_reason = note.trim(); }
+  else upd.next_followup = next_at || null;
+  const { error: e2 } = await supabase.from("customers").update(upd).eq("id", customer_id);
+  if (e2 && !/stage|next_followup|lost_reason|column|PGRST204/i.test(e2.message || "")) throw e2;
+  bustCache("listCustomers"); bustCache("listCustomersLite");
+}
+export async function listFollowupLog(customer_id) {
+  const { data, error } = await supabase.from("customer_followups").select("*").eq("customer_id", customer_id).order("created_at", { ascending: false }).limit(50);
+  if (error) { if (/customer_followups|relation|does not exist/i.test(error.message || "")) return []; throw error; }
+  return data || [];
+}
+
 export async function saveCustomer(cust, contacts, sites) {
   const { data: { user } } = await supabase.auth.getUser();
   const fields = { type: cust.type, name: cust.name.trim(), address: cust.address?.trim() || null, tax_id: cust.tax_id?.trim() || null, branch: cust.type === "company" ? (cust.branch?.trim() || "สำนักงานใหญ่") : null, email: cust.email?.trim() || null, vat: !!cust.vat, note: cust.note?.trim() || null, credit_days: Math.max(0, Math.round(Number(cust.credit_days) || 0)),

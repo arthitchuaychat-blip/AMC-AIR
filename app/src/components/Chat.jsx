@@ -14,6 +14,7 @@ import { can } from "../lib/permissions";
 import { QR_MY } from "../lib/i18n";
 import { UIcon, MaterialThumb } from "../icons";
 import CustomerFormModal from "./CustomerFormModal";
+import { FollowupModal } from "./CustomerFollowup";
 import DocCapture from "./DocCapture";
 import { useDocPeek } from "./DocPeek";
 import { captureDocToStage, captureDocForEmail } from "../lib/sendDoc";
@@ -97,6 +98,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
   const [allC, setAllC] = React.useState({ line: [], fb: [] });   // ผู้ติดต่อทั้ง 2 แหล่ง — ไว้โชว์ยอดค้างอ่านทุกแท็บพร้อมกัน
   const [custs, setCusts] = React.useState([]);
   const [sel, setSel] = React.useState(null);          // selected line_user_id
+  const [followFor, setFollowFor] = React.useState(null);   // ตั้งเตือนติดตามลูกค้าจากแชต
   const [msgs, setMsgs] = React.useState([]);
   const [moreOld, setMoreOld] = React.useState(false);   // ยังมีข้อความเก่ากว่าที่โหลดมาอีกไหม
   const [loadingOld, setLoadingOld] = React.useState(false);
@@ -1116,6 +1118,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                       ? <Combo className="inp" value={selContact.assigned_to || ""} onChange={(e) => changeOwner(e.target.value || null)}><option value="">— ยังไม่มอบหมาย —</option>{ownerStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Combo>
                       : <span style={{ fontSize: 13 }}>{(selContact.assigned_to && staffMap[selContact.assigned_to]) || "—"}</span>}
                   </label>
+                  {canSend && (
+                    <div className="ci-field"><span>🔔 ติดตามลูกค้า</span>
+                      {selCust ? <button className="btn-ghost sm" style={{ alignSelf: "flex-start" }} onClick={() => setFollowFor({ customer_id: selCust.id, name: selCust.name, reason: "sales" })}>ตั้งเตือน + บันทึกผลติดตาม</button>
+                        : <span style={{ fontSize: 12.5, color: "var(--ink-3)" }}>ผูกกับลูกค้าก่อน จึงตั้งเตือนติดตามได้</span>}
+                    </div>
+                  )}
                   <label className="ci-field"><span>📝 โน้ต (ภายใน · ลูกค้าไม่เห็น)</span>
                     {canSend
                       ? <textarea key={"note" + sel} className="inp" rows={2} style={{ resize: "vertical" }} defaultValue={selContact.note || ""} placeholder="โน้ตเกี่ยวกับลูกค้ารายนี้… (บันทึกเมื่อคลิกออกจากช่อง)" onBlur={(e) => { const v = e.target.value.trim(); if (v !== (selContact.note || "")) changeNote(v); }} />
@@ -1576,6 +1584,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
         );
       })()}
       {custForm && <CustomerFormModal initial={custForm.initial} onClose={() => setCustForm(null)} onSaved={onCustSaved} />}
+      {followFor && <FollowupModal item={followFor} onClose={() => setFollowFor(null)} onSaved={() => { setFollowFor(null); flash("ตั้งเตือนติดตามแล้ว ✓"); }} flash={flash} />}
       {capJob && <DocCapture type={capJob.type} no={capJob.no}
         onError={(m) => { flash("เตรียมเอกสารไม่สำเร็จ: " + m, true); setCapJob(null); }}
         onReady={async (node) => {

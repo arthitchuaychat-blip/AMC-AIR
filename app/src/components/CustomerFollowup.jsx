@@ -1,6 +1,7 @@
 import React from "react";
 // ⚠️ listQuotations() ไม่ส่ง opts = โหลดทั้งประวัติโดยตั้งใจ — ใบที่ค้างตอบอาจเก่ากว่าหน้าต่างวันที่ใด ๆ
-import { listJobOrders, listQuotations, listInvoices } from "../lib/api";
+import { listJobOrders, listQuotations, listInvoices, followupScheduled, logFollowup } from "../lib/api";
+import { confirmDialog } from "./ConfirmDialog";
 import { JOB_TYPES, jobTypeDef } from "../lib/schedule";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -44,7 +45,9 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
   const [quotes, setQuotes] = React.useState(null);
   const [invoices, setInvoices] = React.useState(null);
   const [salesF, setSalesF] = React.useState("");   // ตัวกรองพนักงานขายที่รับผิดชอบ (createdByName ของใบเสนอ/ใบแจ้งหนี้ · salesName ของงาน)
-  const [tab, setTab] = React.useState("service");   // service=รอบบริการ · quotes=ใบเสนอค้างตอบ · approved=อนุมัติยังไม่แจ้งหนี้ · unpaid=แจ้งหนี้รอชำระ · donepay=งานเสร็จยังไม่ได้เงิน
+  const [tab, setTab] = React.useState("today");   // today=ติดตามวันนี้ · service=รอบบริการ · quotes=ใบเสนอค้างตอบ · approved · unpaid · donepay
+  const [sched, setSched] = React.useState([]);   // ลูกค้าที่ถึงกำหนดนัดติดตาม (customers.next_followup ≤ วันนี้)
+  const [logFor, setLogFor] = React.useState(null);   // รายการที่กำลังบันทึกผลติดตาม
   const [qAge, setQAge] = React.useState(7);         // ค้างตอบเกินกี่วันถึงนับ
   const [cadence, setCadence] = React.useState(180);   // "รอบติดตาม" default 6 months
   const [dueOnly, setDueOnly] = React.useState(false); // show only customers past the cadence
@@ -57,8 +60,8 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
 
   async function load() {
     try {
-      const [j, q, inv] = await Promise.all([listJobOrders(), listQuotations().catch(() => []), listInvoices().catch(() => [])]);
-      setJobs(j); setQuotes(q || []); setInvoices(inv || []);
+      const [j, q, inv, sc] = await Promise.all([listJobOrders(), listQuotations().catch(() => []), listInvoices().catch(() => []), followupScheduled().catch(() => [])]);
+      setJobs(j); setQuotes(q || []); setInvoices(inv || []); setSched(sc || []);
     }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setJobs([]); setQuotes([]); setInvoices([]); }
   }
@@ -113,6 +116,23 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
     }).map((q) => ({ ...q, days: dayDiff(String(q.issue_date || q.created_at).slice(0, 10), today) }))
       .sort((a, b) => b.days - a.days);
   }, [quotes, qAge, today, salesF]);
+
+  // ── คิว "ติดตามวันนี้" — รวม 3 แหล่ง (นัดถึงกำหนด · ถึงรอบล้างแอร์ · ใบเสนอค้างปิด) ต่อลูกค้า ──
+  const RSN = { sales: { t: "นัดติดตาม", c: "#dc2626", bg: "#fee2e2" }, service: { t: "ถึงรอบล้างแอร์", c: "#2563eb", bg: "#dbeafe" }, quote: { t: "ใบเสนอค้างปิด", c: "#ea580c", bg: "#ffedd5" } };
+  const todayList = React.useMemo(() => {
+    const m = {};
+    const add = (cid, name, phone, reason, days, extra) => {
+      if (cid == null) return;
+      const e = m[cid] || (m[cid] = { customer_id: cid, name, phone: phone || null, reasons: [], maxDays: -1e9 });
+      e.reasons.push({ reason, ...extra });
+      if (days > e.maxDays) e.maxDays = days;
+      if (!e.phone && phone) e.phone = phone;
+    };
+    (sched || []).forEach((c) => { if (salesF && (c.ownerName || "") !== salesF) return; add(c.id, c.name, null, "sales", dayDiff(c.next_followup, today), { date: c.next_followup, ownerName: c.ownerName }); });
+    customers.filter((c) => c.due).forEach((c) => { if (salesF && !(c.salesSet && c.salesSet.has(salesF))) return; add(c.customer_id, c.name, c.phone, "service", c.days, { lastDate: c.last.date, times: c.times }); });
+    pendingQuotes.forEach((q) => add(q.customer_id, q.customerName, q.contact_phone || q.mainContactPhone || null, "quote", q.days, { quote_no: q.quote_no, days: q.days }));
+    return Object.values(m).sort((a, b) => b.maxDays - a.maxDays);
+  }, [sched, customers, pendingQuotes, today, salesF]);
 
   // อนุมัติแล้วแต่ยังไม่แจ้งหนี้ — ต้องรีบออกใบส่งของ/ใบแจ้งหนี้ (ปิดยอดขาย)
   const approvedNoInvoice = React.useMemo(() => {
@@ -245,6 +265,9 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
       </div>
 
       <div className="cat-filter" style={{ marginBottom: 10 }}>
+        <button className={"cat-chip" + (tab === "today" ? " on" : "")} onClick={() => setTab("today")}
+          style={tab === "today" ? { background: "#059669", color: "#fff", borderColor: "#059669" } : {}}>📅 ติดตามวันนี้ ({todayList.length})</button>
+        <span style={{ alignSelf: "center", color: "var(--line)" }}>|</span>
         <button className={"cat-chip" + (tab === "service" ? " on" : "")} onClick={() => setTab("service")}
           style={tab === "service" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>🔁 รอบบริการ ({customers.length})</button>
         <button className={"cat-chip" + (tab === "quotes" ? " on" : "")} onClick={() => setTab("quotes")}
@@ -258,7 +281,35 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
           style={tab === "donepay" ? { background: "#b91c1c", color: "#fff", borderColor: "#b91c1c" } : {}}>🏁 งานเสร็จยังไม่ได้เงิน ({doneNotPaid.length})</button>
       </div>
 
-      {tab === "quotes" ? (
+      {tab === "today" ? (
+        jobs === null ? <div className="empty">กำลังโหลด…</div>
+        : todayList.length === 0 ? <div className="empty" style={{ padding: 40 }}>🎉 วันนี้ไม่มีลูกค้าที่ต้องติดตาม — เคลียร์หมดแล้ว</div>
+        : (
+          <div className="job-cards">
+            {todayList.map((c) => (
+              <div className="card" key={c.customer_id} style={{ padding: "12px 14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <b style={{ fontSize: 15 }}>{c.name}</b>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 5 }}>
+                      {c.reasons.map((r, i) => { const d = RSN[r.reason]; return (
+                        <span key={i} className="job-badge" style={{ background: d.bg, color: d.c, borderColor: d.bg }} title={r.quote_no ? `ใบเสนอ ${r.quote_no}` : r.lastDate ? `ล้างล่าสุด ${thDate(r.lastDate)}` : r.date ? `นัด ${thDate(r.date)}` : ""}>
+                          {d.t}{r.reason === "service" && r.times ? ` · เคยใช้ ${r.times} ครั้ง` : ""}{r.reason === "quote" ? ` · ค้าง ${r.days} วัน` : ""}{r.reason === "sales" && r.ownerName ? ` · ${r.ownerName}` : ""}
+                        </span>
+                      ); })}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {c.phone && <a className="btn-ghost sm" href={`tel:${c.phone}`}><UIcon name="user" size={13} /> โทร</a>}
+                    <ChatCustomerLink role={role} customerId={c.customer_id} onGoChat={onGoChat} />
+                    <button className="btn-primary sm" onClick={() => setLogFor({ customer_id: c.customer_id, name: c.name, reason: c.reasons[0]?.reason || "sales" })}>✅ บันทึกผล + ตั้งนัด</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : tab === "quotes" ? (
         quotes === null ? <div className="empty">กำลังโหลด…</div>
         : pendingQuotes.length === 0 ? <div className="empty" style={{ padding: 40 }}>ไม่มีใบเสนอราคาค้างตอบเกิน {qAge} วัน 👍</div>
         : (
@@ -403,7 +454,51 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
         )}
       </>)}
 
+      {logFor && <FollowupModal item={logFor} onClose={() => setLogFor(null)} onSaved={() => { setLogFor(null); load(); flash("บันทึกผลติดตามแล้ว ✓"); }} flash={flash} />}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
+    </div>
+  );
+}
+
+// บันทึกผลติดตาม + ตั้งนัดครั้งถัดไป (ใช้ทั้งหน้าติดตามลูกค้า + หน้าแชต)
+export function FollowupModal({ item, onClose, onSaved, flash }) {
+  const plus = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const [outcome, setOutcome] = React.useState("reschedule");
+  const [nextAt, setNextAt] = React.useState(plus(3));
+  const [note, setNote] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const needDate = outcome === "reschedule" || outcome === "no_answer";
+  async function save() {
+    if (needDate && !nextAt) return flash("เลือกวันนัดติดตามถัดไป", true);
+    setBusy(true);
+    try { await logFollowup({ customer_id: item.customer_id, reason: item.reason || "sales", outcome, note, next_at: needDate ? nextAt : null }); onSaved(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  const OUT = [["reschedule", "📅 คุยแล้ว · นัดติดตามใหม่"], ["no_answer", "📵 ติดต่อไม่ได้ · ลองใหม่"], ["won", "✅ ปิดการขาย/รับงานแล้ว"], ["lost", "✕ ไม่สนใจ/ปิดดีล"]];
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
+        <div className="modal-head"><div className="modal-title">บันทึกผลติดตาม · {item.name || "ลูกค้า"}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="fld"><span>ผลการติดตาม</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {OUT.map(([v, l]) => <button key={v} type="button" className={"cat-chip" + (outcome === v ? " on" : "")} style={{ textAlign: "left", ...(outcome === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}) }} onClick={() => setOutcome(v)}>{l}</button>)}
+            </div>
+          </div>
+          {needDate && (
+            <label className="fld"><span>นัดติดตามครั้งถัดไป</span>
+              <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+                {[["พรุ่งนี้", 1], ["3 วัน", 3], ["1 สัปดาห์", 7], ["1 เดือน", 30], ["3 เดือน", 90]].map(([l, d]) => <button key={d} type="button" className="btn-ghost sm" onClick={() => setNextAt(plus(d))}>{l}</button>)}
+              </div>
+              <input className="inp" type="date" value={nextAt} onChange={(e) => setNextAt(e.target.value)} />
+            </label>
+          )}
+          <label className="fld"><span>โน้ต (คุยอะไร/ผลเป็นไง)</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น ขอคิดดูก่อน · รอบล้างเดือนหน้า · ราคาสูงไป" /></label>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy} onClick={save}>บันทึก</button></div>
+      </div>
     </div>
   );
 }

@@ -195,6 +195,22 @@ export default async function handler(req, res) {
       result.digest.preview = title + "\n" + body;
     } catch (e) { result.digest.error = String(e.message || e); }
 
+    // ═══════════ (4) เตือนติดตามลูกค้ารายวัน — ส่งให้ผู้ดูแล (owner) แต่ละคน ═══════════
+    result.followups = {};
+    try {
+      const due = await q(`customers?select=owner_id,stage,next_followup&next_followup=lte.${today.ymd}&owner_id=not.is.null`).catch(() => []);
+      const CLOSED = new Set(["won", "lost", "closed", "ปิดการขาย", "จบแล้ว", "ไม่สนใจ"]);
+      const byOwner = {};
+      due.forEach((c) => { if (CLOSED.has(c.stage)) return; byOwner[c.owner_id] = (byOwner[c.owner_id] || 0) + 1; });
+      const owners = Object.keys(byOwner);
+      result.followups = { owners: owners.length, total: Object.values(byOwner).reduce((a, b) => a + b, 0) };
+      if (!dry && owners.length) {
+        const rows = owners.map((id) => ({ user_id: id, category: "job", title: `🔔 วันนี้มี ${byOwner[id]} ลูกค้าต้องติดตาม`, body: "เปิดเมนู ติดตามลูกค้า → แท็บ “ติดตามวันนี้”", url: "followup", ref_type: "followup" }));
+        await fetch(`${SB()}/rest/v1/notifications`, { method: "POST", headers: H(), body: JSON.stringify(rows) }).catch(() => {});
+        for (const id of owners) await pushUsers([id], `🔔 ${byOwner[id]} ลูกค้าต้องติดตามวันนี้`, "เปิด ติดตามลูกค้า → ติดตามวันนี้", "followup");
+      }
+    } catch (e) { result.followups.error = String(e.message || e); }
+
     return res.status(200).json({ dry, ...result });
   } catch (e) {
     return res.status(500).json({ error: String(e.message || e) });
