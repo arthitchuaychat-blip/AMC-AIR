@@ -1241,13 +1241,14 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [busy, setBusy] = React.useState(false);
   const [company, setCompany] = React.useState({});
   const [printSlip, setPrintSlip] = React.useState(null); // { row, calc } for the off-screen payslip
+  const [printAll, setPrintAll] = React.useState(false);  // พิมพ์สลิปทุกคนในรอบทีเดียว (เก็บเป็นชุด)
   const [payModal, setPayModal] = React.useState(false);  // จ่ายทั้งรอบ: เลือกบัญชี + สลิปโอน
   const [dmBusy, setDmBusy] = React.useState(null);       // user_id ที่กำลังส่งสลิป DM
   const printWin = React.useRef(null);
   const lastDay = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
   const payDate = `${ym}-${pad(lastDay)}`;
   React.useEffect(() => { getCompanies().then((co) => setCompany((co?.vat && Object.keys(co.vat).length ? co.vat : co?.novat) || {})).catch(() => {}); }, []);
-  React.useEffect(() => { if (!printSlip) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintSlip(null); }, 150); return () => clearTimeout(t); }, [printSlip]);
+  React.useEffect(() => { if (!printSlip && !printAll) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintSlip(null); setPrintAll(false); }, 200); return () => clearTimeout(t); }, [printSlip, printAll]);
 
   async function load() {
     setLoading(true);
@@ -1457,6 +1458,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           )}
           <button className="btn-ghost sm" disabled={!payable.length} title="ไฟล์นำส่งประกันสังคม สปส.1-10 (CSV เปิดใน Excel)" onClick={exportSso}>⬇ ปกส.</button>
           <button className="btn-ghost sm" disabled={!payable.length} title="สรุปเงินได้รอบเดือนสำหรับยื่น ภงด.1 (CSV)" onClick={exportPnd}>⬇ ภงด.1</button>
+          <button className="btn-ghost sm" disabled={!payable.length} title="พิมพ์สลิปเงินเดือนทุกคนในรอบทีเดียว (เก็บเป็น PDF ได้)" onClick={() => { printWin.current = openPrintWindow(); setPrintAll(true); }}>🖨️ พิมพ์สลิปทั้งรอบ</button>
         </div>
       </div>
       {!loading && noOut.length > 0 && paidStatus !== "paid" && (
@@ -1546,42 +1548,59 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       {detailFor && <PayDetailModal r={detailFor} c={calcOf(detailFor)} advRows={advRowsByUser[detailFor.p.id] || []} otRows={otRowsByUser[detailFor.p.id] || []}
         settings={settings} period={`${from} ถึง ${to}`} onClose={() => setDetailFor(null)} />}
 
-      {printSlip && (() => { const r = printSlip.row, c = printSlip.calc, p = r.p; return (
+      {printSlip && (
         <div className="print-area payslip-print">
-          <div className="ps-co-name">{company.name || "AMC AIR"}</div>
-          {company.address && <div className="ps-co-addr">{company.address}</div>}
-          <div className="ps-title">สลิปเงินเดือน · PAYSLIP</div>
-          <div className="ps-period">รอบเดือน {ym} · งวด {from} ถึง {to} · จ่ายวันที่ {payDate}</div>
-          <div className="ps-emp"><b>{p.name || p.email}</b>{p.department ? ` · ${p.department}` : ""} · {p.pay_type === "daily" ? "รายวัน" : "รายเดือน"}</div>
-          <table className="ps-tbl">
-            <tbody>
-              <tr className="ps-h"><td colSpan={2}>รายได้</td></tr>
-              <tr><td>{p.pay_type === "daily" ? `ค่าแรง (${r.st.present} วัน)` : "เงินเดือน"}</td><td className="r">{fmtBaht(c.base)}</td></tr>
-              {c.otPay > 0 && <tr><td>ค่าล่วงเวลา OT ({c.otHours.toFixed(1)} ชม.)</td><td className="r">{fmtBaht(c.otPay)}</td></tr>}
-              {c.holPay > 0 && <tr><td>ค่าทำงานวันหยุด{c._frozen ? "" : ` (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`}</td><td className="r">{fmtBaht(c.holPay)}</td></tr>}
-              {c.bonus > 0 && <tr><td>โบนัส/เบี้ยเลี้ยง</td><td className="r">{fmtBaht(c.bonus)}</td></tr>}
-              <tr className="ps-sub"><td>รวมรายได้</td><td className="r">{fmtBaht(c.gross)}</td></tr>
-              <tr className="ps-h"><td colSpan={2}>รายการหัก</td></tr>
-              {c.dLate > 0 && <tr><td>หักมาสาย</td><td className="r">−{fmtBaht(c.dLate)}</td></tr>}
-              {c.dAbsent > 0 && <tr><td>หักขาดงาน</td><td className="r">−{fmtBaht(c.dAbsent)}</td></tr>}
-              {c.dLeave > 0 && <tr><td>หักลาเกินสิทธิ์/ลาไม่รับค่าแรง</td><td className="r">−{fmtBaht(c.dLeave)}</td></tr>}
-              {c.dSso > 0 && <tr><td>ประกันสังคม 5%</td><td className="r">−{fmtBaht(c.dSso)}</td></tr>}
-              {c.dAdvance > 0 && <tr><td>หักเบิกเงินล่วงหน้า</td><td className="r">−{fmtBaht(c.dAdvance)}</td></tr>}
-              {c.dTax > 0 && <tr><td>ภาษีหัก ณ ที่จ่าย</td><td className="r">−{fmtBaht(c.dTax)}</td></tr>}
-              {c.dLoan > 0 && <tr><td>หักเงินยืม</td><td className="r">−{fmtBaht(c.dLoan)}</td></tr>}
-              {c.dWater > 0 && <tr><td>หักค่าน้ำ</td><td className="r">−{fmtBaht(c.dWater)}</td></tr>}
-              {c.dElectric > 0 && <tr><td>หักค่าไฟ</td><td className="r">−{fmtBaht(c.dElectric)}</td></tr>}
-              {c.otherDeduct > 0 && <tr><td>หักอื่นๆ</td><td className="r">−{fmtBaht(c.otherDeduct)}</td></tr>}
-              <tr className="ps-sub"><td>รวมรายการหัก</td><td className="r">−{fmtBaht(c.ded)}</td></tr>
-              <tr className="ps-net"><td>เงินได้สุทธิ</td><td className="r">{fmtBaht(c.net)}</td></tr>
-            </tbody>
-          </table>
-          <div className="ps-att">สถิติงวดนี้: มา {r.st.present} · ขาด {r.st.absent} · ลา {r.st.leaveDays} · สาย {r.st.lateCnt} ครั้ง · OT {(r.st.otHours || 0).toFixed(1)} ชม.</div>
-          <div className="ps-sign"><div>ลงชื่อ ........................ ผู้จ่ายเงิน</div><div>ลงชื่อ ........................ ผู้รับเงิน</div></div>
+          <SlipBody r={printSlip.row} c={printSlip.calc} company={company} ym={ym} from={from} to={to} payDate={payDate} />
         </div>
-      ); })()}
+      )}
+      {printAll && (
+        <div className="print-area">
+          {payable.map((r) => (
+            <div className="payslip-print" style={{ pageBreakAfter: "always" }} key={r.p.id}>
+              <SlipBody r={r} c={calcOf(r)} company={company} ym={ym} from={from} to={to} payDate={payDate} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+// เนื้อสลิปเงินเดือน 1 ใบ (ใช้ทั้งพิมพ์รายคน + พิมพ์ทั้งรอบ)
+function SlipBody({ r, c, company, ym, from, to, payDate }) {
+  const p = r.p;
+  return (<>
+    <div className="ps-co-name">{company.name || "AMC AIR"}</div>
+    {company.address && <div className="ps-co-addr">{company.address}</div>}
+    <div className="ps-title">สลิปเงินเดือน · PAYSLIP</div>
+    <div className="ps-period">รอบเดือน {ym} · งวด {from} ถึง {to} · จ่ายวันที่ {payDate}</div>
+    <div className="ps-emp"><b>{p.name || p.email}</b>{p.department ? ` · ${p.department}` : ""} · {p.pay_type === "daily" ? "รายวัน" : "รายเดือน"}</div>
+    <table className="ps-tbl">
+      <tbody>
+        <tr className="ps-h"><td colSpan={2}>รายได้</td></tr>
+        <tr><td>{p.pay_type === "daily" ? `ค่าแรง (${r.st.present} วัน)` : "เงินเดือน"}</td><td className="r">{fmtBaht(c.base)}</td></tr>
+        {c.otPay > 0 && <tr><td>ค่าล่วงเวลา OT ({c.otHours.toFixed(1)} ชม.)</td><td className="r">{fmtBaht(c.otPay)}</td></tr>}
+        {c.holPay > 0 && <tr><td>ค่าทำงานวันหยุด{c._frozen ? "" : ` (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`}</td><td className="r">{fmtBaht(c.holPay)}</td></tr>}
+        {c.bonus > 0 && <tr><td>โบนัส/เบี้ยเลี้ยง</td><td className="r">{fmtBaht(c.bonus)}</td></tr>}
+        <tr className="ps-sub"><td>รวมรายได้</td><td className="r">{fmtBaht(c.gross)}</td></tr>
+        <tr className="ps-h"><td colSpan={2}>รายการหัก</td></tr>
+        {c.dLate > 0 && <tr><td>หักมาสาย</td><td className="r">−{fmtBaht(c.dLate)}</td></tr>}
+        {c.dAbsent > 0 && <tr><td>หักขาดงาน</td><td className="r">−{fmtBaht(c.dAbsent)}</td></tr>}
+        {c.dLeave > 0 && <tr><td>หักลาเกินสิทธิ์/ลาไม่รับค่าแรง</td><td className="r">−{fmtBaht(c.dLeave)}</td></tr>}
+        {c.dSso > 0 && <tr><td>ประกันสังคม 5%</td><td className="r">−{fmtBaht(c.dSso)}</td></tr>}
+        {c.dAdvance > 0 && <tr><td>หักเบิกเงินล่วงหน้า</td><td className="r">−{fmtBaht(c.dAdvance)}</td></tr>}
+        {c.dTax > 0 && <tr><td>ภาษีหัก ณ ที่จ่าย</td><td className="r">−{fmtBaht(c.dTax)}</td></tr>}
+        {c.dLoan > 0 && <tr><td>หักเงินยืม</td><td className="r">−{fmtBaht(c.dLoan)}</td></tr>}
+        {c.dWater > 0 && <tr><td>หักค่าน้ำ</td><td className="r">−{fmtBaht(c.dWater)}</td></tr>}
+        {c.dElectric > 0 && <tr><td>หักค่าไฟ</td><td className="r">−{fmtBaht(c.dElectric)}</td></tr>}
+        {c.otherDeduct > 0 && <tr><td>หักอื่นๆ</td><td className="r">−{fmtBaht(c.otherDeduct)}</td></tr>}
+        <tr className="ps-sub"><td>รวมรายการหัก</td><td className="r">−{fmtBaht(c.ded)}</td></tr>
+        <tr className="ps-net"><td>เงินได้สุทธิ</td><td className="r">{fmtBaht(c.net)}</td></tr>
+      </tbody>
+    </table>
+    <div className="ps-att">สถิติงวดนี้: มา {r.st.present} · ขาด {r.st.absent} · ลา {r.st.leaveDays} · สาย {r.st.lateCnt} ครั้ง · OT {(r.st.otHours || 0).toFixed(1)} ชม.</div>
+    <div className="ps-sign"><div>ลงชื่อ ........................ ผู้จ่ายเงิน</div><div>ลงชื่อ ........................ ผู้รับเงิน</div></div>
+  </>);
 }
 
 // one editable salary row — controlled so saved values show clearly (and re-sync after reload)
