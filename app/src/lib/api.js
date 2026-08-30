@@ -5783,6 +5783,39 @@ export async function saveHrProfile(userId, fields) {
   await logAudit({ action: "update", target_type: "hr_profile", target_no: userId, reason: "แก้ประวัติพนักงาน" }).catch(() => {});
 }
 
+// ---------- คู่มือตำแหน่งงาน: ประกาศ/อัปเดต + รับทราบ (handbook_notes / handbook_ack, mig 236) ----------
+export async function listHandbookNotes() {
+  const { data, error } = await supabase.from("handbook_notes").select("*").order("role").order("sort").order("id");
+  if (error) { if (/handbook_notes|relation|does not exist/i.test(error.message || "")) return []; throw error; }
+  return data || [];
+}
+export async function saveHandbookNote(n) {
+  const uid = await _uid();
+  const row = { role: n.role, title: n.title?.trim() || null, body: n.body?.trim(), sort: Number(n.sort) || 0, updated_at: new Date().toISOString(), updated_by: uid };
+  if (n.id) { const { error } = await supabase.from("handbook_notes").update(row).eq("id", n.id); if (error) throw error; return n.id; }
+  const { data, error } = await supabase.from("handbook_notes").insert(row).select("id").single();
+  if (error) throw (/handbook_notes|relation|does not exist/i.test(error.message || "") ? new Error("ต้องรัน migration 236 ก่อน") : error);
+  return data.id;
+}
+export async function deleteHandbookNote(id) {
+  const { error } = await supabase.from("handbook_notes").delete().eq("id", id);
+  if (error) throw error;
+}
+export async function ackHandbook(role) {
+  const uid = await _uid();
+  const { error } = await supabase.from("handbook_ack").upsert({ user_id: uid, role, acked_at: new Date().toISOString() }, { onConflict: "user_id,role" });
+  if (error) throw (/handbook_ack|relation|does not exist/i.test(error.message || "") ? new Error("ต้องรัน migration 236 ก่อน") : error);
+}
+export async function listHandbookAcks() {
+  const { data, error } = await supabase.from("handbook_ack").select("user_id,role,acked_at");
+  if (error) { if (/handbook_ack|relation|does not exist/i.test(error.message || "")) return []; throw error; }
+  return data || [];
+}
+export async function resetHandbookAcks(role) {
+  const { error } = await supabase.from("handbook_ack").delete().eq("role", role);
+  if (error) throw error;
+}
+
 // admin/HR manually set a person's check-in/out for a day (correction). times = ISO or null.
 export async function adminSaveAttendance(userId, workDate, checkInAt, checkOutAt) {
   const { error } = await supabase.from("hr_attendance").upsert(

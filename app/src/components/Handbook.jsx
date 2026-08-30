@@ -1,7 +1,11 @@
 import React from "react";
 import { ROLE_GUIDE, ROLE_GUIDE_MY, GUIDE_ORDER, DEPT_COLOR, DEPT_LABEL, PROCESS_FLOWS, COMPANY_TARGETS } from "../lib/handbook";
+import { listHandbookNotes, saveHandbookNote, deleteHandbookNote, ackHandbook, listHandbookAcks, resetHandbookAcks, listProfiles } from "../lib/api";
+import { confirmDialog } from "./ConfirmDialog";
 import { useLang } from "../lib/i18n";
 import { UIcon } from "../icons";
+
+const fmtDT = (s) => { try { return new Date(s).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }); } catch { return ""; } };
 
 // คู่มือตำแหน่งงาน — ทุกตำแหน่งเปิดดูของตัวเองได้ + บันทึก/พิมพ์ PDF
 export default function Handbook({ role, me }) {
@@ -15,6 +19,23 @@ export default function Handbook({ role, me }) {
   // เนื้อหาคู่มือ: ถ้าเลือกภาษาพม่า และตำแหน่งนั้นมีคำแปล → ใช้ช่องพม่าทับ (ช่องที่ไม่มียังเป็นไทย) · ไม่มีคู่มือ = null (ห้าม fallback ไป exec = ข้อมูลตำแหน่งอื่น)
   const g = ROLE_GUIDE[sel] ? ((lang === "my" && ROLE_GUIDE_MY[sel]) ? { ...ROLE_GUIDE[sel], ...ROLE_GUIDE_MY[sel] } : ROLE_GUIDE[sel]) : null;
   const c = DEPT_COLOR[g?.dept] || "#0d9488";
+  const canEdit = ["admin", "exec"].includes(myRole);   // แก้ประกาศ/รีเซ็ตการรับทราบ
+  const [notes, setNotes] = React.useState([]);
+  const [acks, setAcks] = React.useState([]);
+  const [staff, setStaff] = React.useState([]);
+  const [noteEdit, setNoteEdit] = React.useState(null);
+  const [toast, setToast] = React.useState(null);
+  const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
+  async function loadNotes() { try { const [n, a] = await Promise.all([listHandbookNotes(), listHandbookAcks()]); setNotes(n); setAcks(a); } catch (_) { /* ยังไม่รัน 236 */ } }
+  React.useEffect(() => { loadNotes(); if (canBrowseAll) listProfiles().then(setStaff).catch(() => {}); }, []);
+  const roleNotes = notes.filter((n) => n.role === sel);
+  const myAck = acks.find((a) => a.role === myRole && a.user_id === (me?.id));
+  const ackedByRole = acks.filter((a) => a.role === sel);
+  const ackSet = new Set(ackedByRole.map((a) => a.user_id));
+  const roleStaff = staff.filter((s) => (s.role === sel) && s.active !== false);
+  async function doAck() { try { await ackHandbook(myRole); flash(L("บันทึกว่าอ่านแล้ว ✓", "ဖတ်ပြီးကြောင်း မှတ်ပြီး ✓")); loadNotes(); } catch (e) { flash((e.message || e), true); } }
+  async function delNote(n) { if (!await confirmDialog(L("ลบประกาศนี้?", "ဒီကြေညာချက် ဖျက်မလား?"))) return; try { await deleteHandbookNote(n.id); flash(L("ลบแล้ว", "ဖျက်ပြီး")); loadNotes(); } catch (e) { flash((e.message || e), true); } }
+  async function resetAcks() { if (!await confirmDialog(L(`รีเซ็ตการรับทราบของตำแหน่ง "${g?.th || sel}" ? ทุกคนต้องกดอ่านใหม่`, "ပြန်စမလား?"))) return; try { await resetHandbookAcks(sel); flash(L("รีเซ็ตแล้ว", "ပြန်စပြီး")); loadNotes(); } catch (e) { flash((e.message || e), true); } }
   const secLab = { fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3, #718890)", display: "flex", alignItems: "center", gap: 6, marginBottom: 7 };
   const dot = (col) => ({ width: 7, height: 7, borderRadius: 2, background: col, display: "inline-block" });
 
@@ -166,10 +187,76 @@ export default function Handbook({ role, me }) {
       </div>
       )}
 
+      {g && (
+        <div className="card" style={{ marginTop: 12, borderTop: `3px solid ${c}` }}>
+          <div className="sec-head" style={{ marginBottom: 8 }}>
+            <div><div className="sec-title">📢 {L("ประกาศ / อัปเดตล่าสุด", "ကြေညာချက် / နောက်ဆုံး")} — {lang === "my" && g.th_my ? g.th_my : g.th}</div>
+              <div className="sec-sub">{L("ข้อมูลที่เปลี่ยนบ่อย (แก้ในแอปได้) เช่น นโยบายใหม่ · เป้าเดือนนี้ · เตือนความจำ", "မကြာခဏ ပြောင်းသော အချက် (အက်ပ်တွင် ပြင်နိုင်)")}</div></div>
+            {canEdit && <button className="btn-ghost sm" onClick={() => setNoteEdit({ role: sel, title: "", body: "", sort: roleNotes.length })}><UIcon name="plus" size={13} /> {L("เพิ่มประกาศ", "ကြေညာချက် ထည့်")}</button>}
+          </div>
+          {roleNotes.length === 0 ? <div className="jo-dim" style={{ fontSize: 13 }}>{L("ยังไม่มีประกาศ", "ကြေညာချက် မရှိသေး")}</div> : roleNotes.map((n) => (
+            <div key={n.id} style={{ borderLeft: `3px solid ${c}`, background: `color-mix(in srgb, ${c} 5%, transparent)`, borderRadius: 8, padding: "9px 12px", marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <b>{n.title || L("ประกาศ", "ကြေညာချက်")}</b>
+                {canEdit && <span style={{ display: "flex", gap: 6, flex: "none" }}>
+                  <button className="tb-cmt-x" onClick={() => setNoteEdit(n)}><UIcon name="edit" size={12} /></button>
+                  <button className="tb-cmt-x" onClick={() => delNote(n)}><UIcon name="trash" size={12} /></button>
+                </span>}
+              </div>
+              <div style={{ whiteSpace: "pre-wrap", fontSize: 13.5, marginTop: 3 }}>{n.body}</div>
+              <div className="jo-dim" style={{ fontSize: 11, marginTop: 4 }}>{L("อัปเดต", "ပြင်ဆင်")} {fmtDT(n.updated_at)}</div>
+            </div>
+          ))}
+          {sel === myRole && (
+            <div style={{ marginTop: 6 }}>
+              {myAck ? <span className="job-badge b-green">✓ {L("อ่านแล้ว", "ဖတ်ပြီး")} · {fmtDT(myAck.acked_at)}</span>
+                : <button className="btn-primary sm" onClick={doAck}>✓ {L("ฉันอ่านคู่มือตำแหน่งนี้แล้ว", "ဤလက်စွဲ ဖတ်ပြီးပါပြီ")}</button>}
+            </div>
+          )}
+          {canBrowseAll && roleStaff.length > 0 && (
+            <div style={{ marginTop: 10, borderTop: "1px solid var(--line, #e2e8f0)", paddingTop: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <b style={{ fontSize: 12.5 }}>📖 {L("อ่านแล้ว", "ဖတ်ပြီး")} {roleStaff.filter((s) => ackSet.has(s.id)).length}/{roleStaff.length} {L("คน", "ဦး")}</b>
+                {canEdit && <button className="btn-ghost sm" onClick={resetAcks}>↻ {L("รีเซ็ตให้อ่านใหม่", "ပြန်ဖတ်ခိုင်း")}</button>}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                {roleStaff.map((s) => <span key={s.id} className="job-badge" style={ackSet.has(s.id) ? { background: "#dcfce7", color: "#15803d", borderColor: "#bbf7d0" } : { background: "#fef3c7", color: "#b45309", borderColor: "#fde68a" }}>{ackSet.has(s.id) ? "✓" : "○"} {s.name || s.email}</span>)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <p className="jo-dim" style={{ fontSize: 12.5, marginTop: 12 }}>
         {L(<>💡 กด “บันทึก/พิมพ์ PDF” แล้วเลือกปลายทางเป็น <b>Save as PDF</b> เพื่อได้ไฟล์ PDF · “พิมพ์ทั้งเล่ม” = คู่มือครบทุกตำแหน่ง + กระบวนการหลัก</>,
           <>💡 “PDF သိမ်း/ပရင့်” ကိုနှိပ်ပြီး ဦးတည်ရာကို <b>Save as PDF</b> ရွေးပါ · “အားလုံး ပရင့်” = ရာထူးအားလုံး လက်စွဲ + အဓိက လုပ်ငန်းစဉ်များ · <b>(ပရင့်ထုတ်စာရွက်မှာ ထိုင်းဘာသာဖြင့်သာ)</b></>)}
       </p>
+      {noteEdit && <NoteEditModal note={noteEdit} L={L} onClose={() => setNoteEdit(null)} onSaved={() => { setNoteEdit(null); loadNotes(); }} flash={flash} />}
+      {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
+    </div>
+  );
+}
+
+function NoteEditModal({ note, L, onClose, onSaved, flash }) {
+  const [f, setF] = React.useState({ ...note });
+  const [busy, setBusy] = React.useState(false);
+  async function save() {
+    if (!f.body?.trim()) return flash(L("ใส่เนื้อหาประกาศก่อน", "ကြေညာချက် ဖြည့်ပါ"), true);
+    setBusy(true);
+    try { await saveHandbookNote(f); flash(L("บันทึกแล้ว ✓", "သိမ်းပြီး ✓")); onSaved(); } catch (e) { flash((e.message || e), true); }
+    setBusy(false);
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
+        <div className="modal-head"><div className="modal-title">{f.id ? L("แก้ประกาศ", "ပြင်") : L("เพิ่มประกาศ", "ထည့်")}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <label className="fld"><span>{L("หัวข้อ (ไม่บังคับ)", "ခေါင်းစဉ် (မဖြစ်မနေမဟုတ်)")}</span><input className="inp" value={f.title || ""} autoFocus onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} placeholder={L("เช่น นโยบายใหม่ · เป้าเดือนนี้", "ဥပမာ မူဝါဒအသစ်")} /></label>
+          <label className="fld"><span>{L("เนื้อหา", "အကြောင်းအရာ")}</span><textarea className="inp" rows={5} style={{ resize: "vertical" }} value={f.body || ""} onChange={(e) => setF((s) => ({ ...s, body: e.target.value }))} /></label>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>{L("ยกเลิก", "မလုပ်တော့")}</button>
+          <button className="btn-primary" disabled={busy} onClick={save}>{L("บันทึก", "သိမ်း")}</button></div>
+      </div>
     </div>
   );
 }
