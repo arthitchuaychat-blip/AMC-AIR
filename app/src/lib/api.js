@@ -4345,17 +4345,19 @@ export async function listMyTasks(myId) {
   return data || [];
 }
 export async function listTasks() {
-  const [t, profs, cc, cu] = await Promise.all([
+  const [t, profs, cc, cu, jo] = await Promise.all([
     _allRows((f, t) => supabase.from("tasks").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("profiles").select("id,name,email", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("task_comments").select("task_id", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("job_orders").select("job_no,title,customer_id", { count: "exact" }).order("job_no").range(f, t)).catch(() => ({ data: [] })),
   ]);
   // _allRows คืนแค่ { data } — ถ้ายังเช็ค t.error ต่อไปจะกลืน error ตลอดกาล (_fetchAll โยนออกมาเองอยู่แล้ว)
   const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
   const cnm = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const jm = Object.fromEntries((jo.data || []).map((j) => [j.job_no, j]));
   const cnt = {}; (cc.data || []).forEach((c) => { cnt[c.task_id] = (cnt[c.task_id] || 0) + 1; });
-  return (t.data || []).map((x) => ({ ...x, assignerName: nm[x.assigner] || "—", assigneeName: nm[x.assignee] || "—", customerName: x.customer_id ? (cnm[x.customer_id] || null) : null, commentCount: cnt[x.id] || 0 }));
+  return (t.data || []).map((x) => { const j = x.job_no ? jm[x.job_no] : null; return { ...x, assignerName: nm[x.assigner] || "—", assigneeName: nm[x.assignee] || "—", customerName: x.customer_id ? (cnm[x.customer_id] || null) : (j?.customer_id ? cnm[j.customer_id] || null : null), jobTitle: j?.title || null, commentCount: cnt[x.id] || 0 }; });
 }
 export async function saveTask(t) {
   const uid = await _uid();
@@ -4365,12 +4367,17 @@ export async function saveTask(t) {
     assignee: t.assignee || null, priority: t.priority || "normal",
     status: t.status || "todo", due_date: t.due_date || null, customer_id: t.customer_id || null,
     attachments: t.attachments || [], updated_at: new Date().toISOString(),
+    job_no: t.job_no || null, repeat_months: Number(t.repeat_months) || 0, checklist: t.checklist || [],
   };
-  if (t.id) { const { error } = await supabase.from("tasks").update(row).eq("id", t.id); if (error) throw error;
+  const _stripNew = (r) => { const { job_no, repeat_months, checklist, ...rest } = r; return rest; };   // pre-234 fallback
+  if (t.id) { let { error } = await supabase.from("tasks").update(row).eq("id", t.id);
+    if (error && /job_no|repeat_months|checklist|column|PGRST204/i.test(error.message || "")) ({ error } = await supabase.from("tasks").update(_stripNew(row)).eq("id", t.id));
+    if (error) throw error;
     if (row.assignee) notify([row.assignee], { category: "task", title: `📌 ${me?.name || "หัวหน้า"} อัปเดตงาน: ${row.title}`, body: row.detail || "", url: "tasks", ref_type: "task", ref_no: t.id });
     return t.id; }
   row.assigner = uid;
-  const { data, error } = await supabase.from("tasks").insert(row).select("id").single();
+  let { data, error } = await supabase.from("tasks").insert(row).select("id").single();
+  if (error && /job_no|repeat_months|checklist|column|PGRST204/i.test(error.message || "")) ({ data, error } = await supabase.from("tasks").insert({ ..._stripNew(row), assigner: uid }).select("id").single());
   if (error) throw error;
   if (row.assignee) notify([row.assignee], { category: "task", title: `📌 ${me?.name || "หัวหน้า"} มอบงานให้คุณ: ${row.title}`, body: `${row.detail ? row.detail + " · " : ""}${row.due_date ? "กำหนด " + row.due_date : ""}`.trim().replace(/ · $/, "") || "", url: "tasks", ref_type: "task", ref_no: data.id });
   return data.id;
@@ -4379,8 +4386,28 @@ export async function setTaskStatus(id, status) {
   const { error } = await supabase.from("tasks").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) throw error;
   const ST = { todo: "รอเริ่ม", doing: "กำลังทำ", done: "เสร็จ", cancelled: "ยกเลิก" };
-  const { data: t } = await supabase.from("tasks").select("title,assigner,assignee").eq("id", id).maybeSingle();
+  const { data: t } = await supabase.from("tasks").select("*").eq("id", id).maybeSingle();
   if (t) notify([t.assigner, t.assignee], { category: "task", title: `🔄 งาน "${t.title}" → ${ST[status] || status}`, url: "tasks", ref_type: "task", ref_no: id });
+  // งานทำซ้ำ: ปิดงาน (done) + repeat_months>0 → สร้างงานรอบถัดไป (เลื่อนกำหนด +N เดือน) แล้วปลด repeat ของใบเดิม (กันสร้างซ้ำถ้ากด done อีก)
+  if (t && status === "done" && Number(t.repeat_months) > 0) {
+    const n = Number(t.repeat_months);
+    const base = t.due_date ? new Date(t.due_date + "T00:00:00") : new Date();
+    base.setMonth(base.getMonth() + n);
+    const nextDue = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+    try {
+      await supabase.from("tasks").insert({
+        title: t.title, detail: t.detail, assignee: t.assignee, assigner: t.assigner, priority: t.priority,
+        status: "todo", due_date: nextDue, customer_id: t.customer_id, job_no: t.job_no, attachments: t.attachments || [],
+        repeat_months: n, checklist: (t.checklist || []).map((c) => ({ ...c, done: false })), updated_at: new Date().toISOString(),
+      });
+      await supabase.from("tasks").update({ repeat_months: 0 }).eq("id", id);
+      if (t.assignee) notify([t.assignee], { category: "task", title: `🔁 งานทำซ้ำรอบถัดไป: ${t.title}`, body: `กำหนด ${nextDue}`, url: "tasks", ref_type: "task" });
+    } catch (_) { /* ยังไม่รัน 234 = ไม่มีคอลัมน์ repeat → ข้ามการทำซ้ำเงียบ ๆ */ }
+  }
+}
+export async function setTaskChecklist(id, checklist) {
+  const { error } = await supabase.from("tasks").update({ checklist: checklist || [], updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw (/checklist|column|PGRST204/i.test(error.message || "") ? new Error("ต้องรัน migration 234 ก่อน") : error);
 }
 export async function deleteTask(id) {
   const { error } = await supabase.from("tasks").delete().eq("id", id);

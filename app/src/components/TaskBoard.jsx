@@ -1,5 +1,5 @@
 import React from "react";
-import { listTasks, saveTask, setTaskStatus, deleteTask, listTaskComments, addTaskComment, deleteTaskComment, uploadTaskFile, listProfiles, listCustomers } from "../lib/api";
+import { listTasks, saveTask, setTaskStatus, setTaskChecklist, deleteTask, listTaskComments, addTaskComment, deleteTaskComment, uploadTaskFile, listProfiles, listCustomers, listJobOrders } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import AttachThumb from "./AttachThumb";
@@ -23,6 +23,7 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
   const [tasks, setTasks] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
+  const [jobs, setJobs] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [scope, setScope] = React.useState("all");      // all | assigned (ที่ฉันสั่ง) | received (มอบให้ฉัน)
   const [personF, setPersonF] = React.useState("all");  // filter by a specific staff member
@@ -36,7 +37,7 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
 
   async function load() {
     setLoading(true);
-    try { const [t, s, c] = await Promise.all([listTasks(), listProfiles(), listCustomers()]); setTasks(t); setStaff(s); setCusts(c); }
+    try { const [t, s, c, j] = await Promise.all([listTasks(), listProfiles(), listCustomers(), listJobOrders().catch(() => [])]); setTasks(t); setStaff(s); setCusts(c); setJobs((j || []).filter((x) => x.status !== "cancelled")); }
     catch (e) { flash(L("โหลดไม่สำเร็จ: ", "ဖွင့်၍ မရပါ: ") + (e.message || e), true); }
     setLoading(false);
   }
@@ -44,7 +45,7 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
   // open the create form prefilled from chat ("สร้างงานติดตาม") — with the linked customer + a title hint
   React.useEffect(() => {
     if (!prefill) return;
-    setEditTask({ title: prefill.name ? `ติดตามลูกค้า: ${prefill.name}` : "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: prefill.customerId || "" });
+    setEditTask({ title: prefill.name ? `ติดตามลูกค้า: ${prefill.name}` : "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: prefill.customerId || "", job_no: "", repeat_months: 0, checklist: [] });
     onPrefillConsumed && onPrefillConsumed();
   }, [prefill]);
   // open a specific task's detail (from a notification / reminder bar) — show cancelled too in case it was
@@ -81,7 +82,7 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
       <div className="adm-head">
         <div><h1 className="page-title">{L("กระดานสั่งงาน", "အလုပ် ဘုတ်")} <span className="page-title-en">Task Board</span></h1>
           <p className="page-sub">{L("สั่งงาน · มอบหมาย · แนบไฟล์/รูป · คอมเมนต์ · ลากการ์ดเปลี่ยนสถานะ · เรียงด่วน/ใกล้กำหนดขึ้นก่อน", "အလုပ်ခွဲဝေ · တာဝန်ပေး · ဖိုင်/ဓာတ်ပုံ တွဲ · မှတ်ချက် · ကတ်ဆွဲ၍ အခြေအနေ ပြောင်း")}</p></div>
-        <button className="btn-primary" onClick={() => setEditTask({ title: "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: "" })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> {L("สั่งงานใหม่", "အလုပ်အသစ် ခွဲဝေ")}</button>
+        <button className="btn-primary" onClick={() => setEditTask({ title: "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: "", job_no: "", repeat_months: 0, checklist: [] })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> {L("สั่งงานใหม่", "အလုပ်အသစ် ခွဲဝေ")}</button>
       </div>
 
       <div className="cat-filter">
@@ -129,9 +130,12 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
                       <div className="tb-card-meta">
                         <span>👤 {t.assigneeName}</span>
                         {t.due_date && <span className="tb-due">📅 {fmtDate(t.due_date)}</span>}
+                        {Number(t.repeat_months) > 0 && <span className="tb-due" style={{ background: "#ede9fe", color: "#6d28d9", borderColor: "#ddd6fe" }} title={L("งานทำซ้ำ", "ထပ်ခါ အလုပ်")}>🔁 {L(`ทุก ${t.repeat_months} ด.`, `${t.repeat_months}လ`)}</span>}
                       </div>
+                      {t.job_no && <div className="tb-card-cust" style={{ color: "#c2410c" }}>📋 {t.job_no}{t.jobTitle ? ` · ${t.jobTitle}` : ""}</div>}
                       {t.customerName && <div className="tb-card-cust" onClick={(e) => { e.stopPropagation(); onGoChat && onGoChat(t.customer_id); }} role="button" title={L("เปิดแชตลูกค้า", "ဖောက်သည် ချက်ဖွင့်ရန်")}>🏢 {t.customerName} <span className="tb-card-chat">💬 {L("แชต", "ချက်")}</span></div>}
                       <div className="tb-card-foot">
+                        {(t.checklist?.length || 0) > 0 && <span title={L("รายการย่อย", "အသေးစိတ်")}>☑ {t.checklist.filter((c) => c.done).length}/{t.checklist.length}</span>}
                         {(t.attachments?.length || 0) > 0 && <span>📎 {t.attachments.length}</span>}
                         {t.commentCount > 0 && <span>💬 {t.commentCount}</span>}
                         <span className="tb-by">{L("สั่งโดย", "ခွဲဝေသူ")} {t.assignerName}</span>
@@ -145,9 +149,9 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
         </div>
       )}
 
-      {editTask && <TaskEditor task={editTask} staff={staff} custs={custs} onClose={() => setEditTask(null)} onSaved={() => { setEditTask(null); load(); }} flash={flash} />}
+      {editTask && <TaskEditor task={editTask} staff={staff} custs={custs} jobs={jobs} onClose={() => setEditTask(null)} onSaved={() => { setEditTask(null); load(); }} flash={flash} />}
       {detail && <TaskDetail task={detail} me={me} canManage={canManage(detail)} canStatus={canStatus(detail)} staff={staff} onGoChat={onGoChat}
-        onClose={() => setDetailId(null)} onMove={move} onEdit={(t) => { setDetailId(null); setEditTask({ id: t.id, title: t.title, detail: t.detail || "", assignee: t.assignee || "", priority: t.priority, due_date: t.due_date || "", attachments: t.attachments || [], status: t.status, customer_id: t.customer_id ? String(t.customer_id) : "" }); }}
+        onClose={() => setDetailId(null)} onMove={move} onEdit={(t) => { setDetailId(null); setEditTask({ id: t.id, title: t.title, detail: t.detail || "", assignee: t.assignee || "", priority: t.priority, due_date: t.due_date || "", attachments: t.attachments || [], status: t.status, customer_id: t.customer_id ? String(t.customer_id) : "", job_no: t.job_no || "", repeat_months: t.repeat_months || 0, checklist: t.checklist || [] }); }}
         onDelete={del} onChanged={load} flash={flash} />}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
@@ -183,10 +187,14 @@ function AttachRow({ files, onChange, flash }) {
   );
 }
 
-function TaskEditor({ task, staff, custs = [], onClose, onSaved, flash }) {
+function TaskEditor({ task, staff, custs = [], jobs = [], onClose, onSaved, flash }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const [f, setF] = React.useState(task);
+  const [ckNew, setCkNew] = React.useState("");
+  const checklist = f.checklist || [];
+  const addCk = () => { const t = ckNew.trim(); if (!t) return; setF((s) => ({ ...s, checklist: [...(s.checklist || []), { t, done: false }] })); setCkNew(""); };
+  const rmCk = (i) => setF((s) => ({ ...s, checklist: (s.checklist || []).filter((_, j) => j !== i) }));
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   async function save() {
@@ -220,7 +228,34 @@ function TaskEditor({ task, staff, custs = [], onClose, onSaved, flash }) {
               <option value="">— {L("ไม่ผูกกับลูกค้า", "ဖောက်သည်နှင့် မချိတ်")} —</option>
               {custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Combo></label>
+          <div className="fld-row">
+            <label className="fld"><span>{L("ผูกใบงาน (ไม่บังคับ)", "အလုပ်လွှာ ချိတ်")}</span>
+              <Combo className="inp" value={f.job_no || ""} onChange={(e) => set("job_no", e.target.value)} placeholder={L("— ไม่ผูกใบงาน —", "— အလုပ်လွှာ မချိတ် —")}>
+                <option value="">— {L("ไม่ผูกใบงาน", "အလုပ်လွှာ မချိတ်")} —</option>
+                {jobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no}{j.customerName ? ` · ${j.customerName}` : j.title ? ` · ${j.title}` : ""}</option>)}
+              </Combo></label>
+            <label className="fld"><span>{L("ทำซ้ำ (งานบำรุงรักษา)", "ထပ်ခါလုပ်")}</span>
+              <select className="inp" value={f.repeat_months || 0} onChange={(e) => set("repeat_months", Number(e.target.value))}>
+                <option value={0}>{L("ไม่ทำซ้ำ", "မထပ်")}</option>
+                {[1, 2, 3, 6, 12].map((n) => <option key={n} value={n}>{L(`ทุก ${n} เดือน`, `${n} လတိုင်း`)}</option>)}
+              </select></label>
+          </div>
+          {Number(f.repeat_months) > 0 && <div className="jo-dim" style={{ fontSize: 12, marginTop: -6, marginBottom: 8 }}>🔁 {L(`พอปิดงานนี้ ระบบจะสร้างงานรอบถัดไปให้อัตโนมัติ (เลื่อนกำหนด +${f.repeat_months} เดือน)`, "ဤအလုပ် ပြီးလျှင် နောက်တစ်ကြိမ် အလိုအလျောက် ဖန်တီးမည်")}</div>}
           <label className="fld"><span>{L("กำหนดเสร็จ (ไม่บังคับ)", "ပြီးရမည့်ရက် (မဖြစ်မနေမဟုတ်)")}</span><input className="inp" type="date" value={f.due_date} onChange={(e) => set("due_date", e.target.value)} /></label>
+          <div className="fld"><span>{L("รายการย่อย (checklist)", "အသေးစိတ် (checklist)")}</span>
+            {checklist.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 6 }}>
+              {checklist.map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
+                  <span style={{ flex: 1 }}>• {c.t}</span>
+                  <button type="button" className="tb-cmt-x" onClick={() => rmCk(i)}><UIcon name="x" size={12} /></button>
+                </div>
+              ))}
+            </div>}
+            <div style={{ display: "flex", gap: 6 }}>
+              <input className="inp" value={ckNew} onChange={(e) => setCkNew(e.target.value)} placeholder={L("เพิ่มรายการย่อย เช่น ตรวจน้ำยา / ล้างฟิลเตอร์", "အသေးစိတ် ထည့်ရန်")} onKeyDown={(e) => { if (e.nativeEvent?.isComposing || e.keyCode === 229) return; if (e.key === "Enter") { e.preventDefault(); addCk(); } }} />
+              <button type="button" className="btn-ghost sm" onClick={addCk}><UIcon name="plus" size={13} /> {L("เพิ่ม", "ထည့်")}</button>
+            </div>
+          </div>
           <div className="fld"><span>{L("ไฟล์/รูปแนบ", "တွဲဖိုင်/ဓာတ်ပုံ")}</span><AttachRow files={f.attachments} onChange={(a) => set("attachments", a)} flash={flash} /></div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>{L("ยกเลิก", "မလုပ်တော့")}</button>
@@ -247,6 +282,10 @@ function TaskDetail({ task, me, canManage, canStatus, onGoChat, onClose, onMove,
     setBusy(false);
   }
   async function delC(c) { if (!await confirmDialog(L("ลบคอมเมนต์นี้?", "ဒီမှတ်ချက် ဖျက်မလား?"))) return; try { await deleteTaskComment(c.id); await loadC(); onChanged(); } catch (e) { flash(L("ลบไม่สำเร็จ", "ဖျက်၍ မရပါ"), true); } }
+  async function toggleCk(i) {
+    const next = (task.checklist || []).map((c, j) => j === i ? { ...c, done: !c.done } : c);
+    try { await setTaskChecklist(task.id, next); onChanged(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); }
+  }
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 620, maxHeight: "92vh", display: "flex", flexDirection: "column" }}>
@@ -258,8 +297,21 @@ function TaskDetail({ task, me, canManage, canStatus, onGoChat, onClose, onMove,
             <div><span>{L("ผู้รับมอบหมาย", "တာဝန်ခံ")}</span><b>{task.assigneeName}</b></div>
             <div><span>{L("ความสำคัญ", "ဦးစားပေး")}</span><b style={{ color: PRIO[task.priority]?.c }}>{PRIO[task.priority] ? L(PRIO[task.priority].th, PRIO[task.priority].my) : ""}</b></div>
             {task.due_date && <div><span>{L("กำหนดเสร็จ", "ပြီးရမည့်ရက်")}</span><b>{fmtDate(task.due_date)}</b></div>}
+            {Number(task.repeat_months) > 0 && <div><span>{L("ทำซ้ำ", "ထပ်ခါ")}</span><b style={{ color: "#6d28d9" }}>🔁 {L(`ทุก ${task.repeat_months} เดือน`, `${task.repeat_months} လတိုင်း`)}</b></div>}
+            {task.job_no && <div><span>{L("ใบงาน", "အလုပ်လွှာ")}</span><b style={{ color: "#c2410c" }}>📋 {task.job_no}{task.jobTitle ? ` · ${task.jobTitle}` : ""}</b></div>}
             {task.customerName && <div><span>{L("ลูกค้า", "ဖောက်သည်")}</span><b>🏢 {task.customerName} {onGoChat && <button className="tb-chat-link" onClick={() => onGoChat(task.customer_id)}>💬 {L("เปิดแชต", "ချက်ဖွင့်")}</button>}</b></div>}
           </div>
+          {(task.checklist?.length || 0) > 0 && (
+            <div style={{ margin: "4px 0 12px", border: "1px solid var(--line)", borderRadius: 10, padding: "9px 12px" }}>
+              <div className="sec-title" style={{ fontSize: 13, marginBottom: 6 }}>☑ {L("รายการย่อย", "အသေးစိတ်")} · {task.checklist.filter((c) => c.done).length}/{task.checklist.length}</div>
+              {task.checklist.map((c, i) => (
+                <label key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0", fontSize: 13.8, cursor: canStatus ? "pointer" : "default" }}>
+                  <input type="checkbox" checked={!!c.done} disabled={!canStatus} onChange={() => toggleCk(i)} style={{ width: 16, height: 16 }} />
+                  <span style={{ textDecoration: c.done ? "line-through" : "none", color: c.done ? "var(--ink-3)" : "inherit" }}>{c.t}</span>
+                </label>
+              ))}
+            </div>
+          )}
           {task.detail && <div className="tb-detail-body">{task.detail}</div>}
           {(task.attachments?.length || 0) > 0 && <div className="tb-attach-grid" style={{ marginBottom: 10 }}>{task.attachments.map((u, i) => <div className="tb-att" key={i}><AttachThumb url={u} /></div>)}</div>}
 
