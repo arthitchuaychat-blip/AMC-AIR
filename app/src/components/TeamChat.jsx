@@ -273,6 +273,8 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
         }
         queueLoadRooms();
       })
+      // ลบ/แก้ข้อความของคนอื่น (soft-delete mig 190) → รีโหลดห้องที่เปิดอยู่ ไม่งั้นคนอื่นยังเห็นข้อความที่ถูกลบค้างอยู่
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, (payload) => { if (payload.new?.room_id === selRef.current) loadMsgs(selRef.current); })
       // รีแอกชันของคนอื่น (mig 190) → โหลดข้อความห้องที่เปิดอยู่ใหม่เพื่ออัปเดตตัวเลข
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_reactions" }, () => { if (selRef.current) loadMsgs(selRef.current); })
       .subscribe();
@@ -676,6 +678,7 @@ export default function TeamChat({ focus, onFocusConsumed, onJobClick }) {
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Escape") { setMentionQ(null); return; }
+                    if (e.nativeEvent?.isComposing || e.keyCode === 229) return;   // กำลังพิมพ์ไทย/พม่า (IME) — อย่าเพิ่งส่ง
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (mentionQ !== null && mentionMembers.length) { pickMention(mentionMembers[0]); } else { send(); } }
                   }} />
                 <button className="btn-primary" disabled={!text.trim() || sending} onClick={send}>{L("ส่ง", "ပို့")}</button>

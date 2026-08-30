@@ -10,10 +10,11 @@ export default function Handbook({ role, me }) {
   const myRole = me?.role || role;
   // พนักงานทั่วไปเห็นเฉพาะคู่มือตำแหน่งตัวเอง · เฉพาะ ธุรการ/ผู้บริหาร/บุคคล ดูทุกตำแหน่ง + พิมพ์ทั้งเล่มได้
   const canBrowseAll = ["admin", "exec", "hr"].includes(myRole);
-  const [sel, setSel] = React.useState(ROLE_GUIDE[myRole] ? myRole : "exec");
-  // เนื้อหาคู่มือ: ถ้าเลือกภาษาพม่า และตำแหน่งนั้นมีคำแปล → ใช้ช่องพม่าทับ (ช่องที่ไม่มียังเป็นไทย)
-  const g = (lang === "my" && ROLE_GUIDE_MY[sel]) ? { ...(ROLE_GUIDE[sel] || ROLE_GUIDE.exec), ...ROLE_GUIDE_MY[sel] } : (ROLE_GUIDE[sel] || ROLE_GUIDE.exec);
-  const c = DEPT_COLOR[g.dept] || "#0d9488";
+  // ตำแหน่งที่ไม่มีคู่มือ: ผู้ที่ดูได้ทุกตำแหน่ง → เริ่มที่ exec · พนักงานทั่วไป → คงตำแหน่งตัวเอง (แล้วโชว์ "ยังไม่มีคู่มือ" ไม่ใช่ไปเห็นคู่มือ exec)
+  const [sel, setSel] = React.useState(ROLE_GUIDE[myRole] ? myRole : (canBrowseAll ? "exec" : myRole));
+  // เนื้อหาคู่มือ: ถ้าเลือกภาษาพม่า และตำแหน่งนั้นมีคำแปล → ใช้ช่องพม่าทับ (ช่องที่ไม่มียังเป็นไทย) · ไม่มีคู่มือ = null (ห้าม fallback ไป exec = ข้อมูลตำแหน่งอื่น)
+  const g = ROLE_GUIDE[sel] ? ((lang === "my" && ROLE_GUIDE_MY[sel]) ? { ...ROLE_GUIDE[sel], ...ROLE_GUIDE_MY[sel] } : ROLE_GUIDE[sel]) : null;
+  const c = DEPT_COLOR[g?.dept] || "#0d9488";
   const secLab = { fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3, #718890)", display: "flex", alignItems: "center", gap: 6, marginBottom: 7 };
   const dot = (col) => ({ width: 7, height: 7, borderRadius: 2, background: col, display: "inline-block" });
 
@@ -46,7 +47,7 @@ export default function Handbook({ role, me }) {
           <p className="page-sub">{canBrowseAll ? L("SOP: วัตถุประสงค์ · หน้าที่ · ขั้นตอนการทำงาน · กิจวัตร · กฎ · KPI ของแต่ละตำแหน่ง — เปิดดูของคุณ หรือเลือกดูตำแหน่งอื่นได้", "SOP: ရည်ရွယ်ချက် · တာဝန် · လုပ်ငန်းအဆင့်ဆင့် · ပုံမှန်လုပ်ငန်း · စည်းကမ်း · KPI — ကိုယ့်ရာထူး ဒါမှမဟုတ် အခြားရာထူးများ ကြည့်နိုင်သည်") : L("SOP ประจำตำแหน่งของคุณ: วัตถุประสงค์ · หน้าที่ · ขั้นตอนการทำงาน · กิจวัตร · กฎ · KPI", "သင့်ရာထူးအတွက် SOP: ရည်ရွယ်ချက် · တာဝန် · လုပ်ငန်းအဆင့်ဆင့် · ပုံမှန်လုပ်ငန်း · စည်းကမ်း · KPI")}</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn-ghost" onClick={() => printHandbook([sel])}>🖨️ {L("บันทึก/พิมพ์ PDF (ตำแหน่งนี้)", "PDF သိမ်း/ပရင့် (ဤရာထူး)")}</button>
+          <button className="btn-ghost" disabled={!g} onClick={() => printHandbook([sel])}>🖨️ {L("บันทึก/พิมพ์ PDF (ตำแหน่งนี้)", "PDF သိမ်း/ပရင့် (ဤရာထူး)")}</button>
           {canBrowseAll && <button className="btn-primary" onClick={() => printHandbook(GUIDE_ORDER)}>📚 {L("พิมพ์ทั้งเล่ม", "အားလုံး ပရင့်")}</button>}
         </div>
       </div>
@@ -77,6 +78,11 @@ export default function Handbook({ role, me }) {
         </div>
       </div>
 
+      {!g ? (
+      <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--ink-3, #718890)" }}>
+        📭 {L("ยังไม่มีคู่มือสำหรับตำแหน่งนี้ — ติดต่อผู้ดูแลระบบให้เพิ่มให้", "ဤရာထူးအတွက် လက်စွဲ မရှိသေးပါ — စီမံခန့်ခွဲသူထံ ဆက်သွယ်ပါ")}
+      </div>
+      ) : (
       <div className="card" style={{ borderTop: `3px solid ${c}`, marginTop: 4 }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
           <div style={{ width: 52, height: 52, borderRadius: 13, display: "grid", placeItems: "center", fontSize: 28, flex: "none", background: `color-mix(in srgb, ${c} 15%, transparent)` }}>{g.icon}</div>
@@ -158,6 +164,7 @@ export default function Handbook({ role, me }) {
           </div>
         </div>
       </div>
+      )}
 
       <p className="jo-dim" style={{ fontSize: 12.5, marginTop: 12 }}>
         {L(<>💡 กด “บันทึก/พิมพ์ PDF” แล้วเลือกปลายทางเป็น <b>Save as PDF</b> เพื่อได้ไฟล์ PDF · “พิมพ์ทั้งเล่ม” = คู่มือครบทุกตำแหน่ง + กระบวนการหลัก</>,

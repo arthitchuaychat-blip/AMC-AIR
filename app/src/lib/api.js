@@ -4319,9 +4319,10 @@ export async function markAllNotificationsRead() {
 // unread notification counts per menu (grouped by url = module id) → sidebar badges per menu
 export async function unreadByModule() {
   const uid = await _uid();
-  const { data, error } = await supabase.from("notifications").select("url").eq("user_id", uid).is("read_at", null).not("url", "is", null).order("id").limit(1000);   // limit = เพดานพอดี แต่ป้ายนับพลาดไม่กระทบเงิน จึงยอมได้ ขอแค่ผลคงที่
+  const { data, error } = await supabase.from("notifications").select("url,ref_type").eq("user_id", uid).is("read_at", null).not("url", "is", null).order("id").limit(1000);   // limit = เพดานพอดี แต่ป้ายนับพลาดไม่กระทบเงิน จึงยอมได้ ขอแค่ผลคงที่
   if (error) throw error;
-  const m = {}; (data || []).forEach((n) => { if (n.url) m[n.url] = (m[n.url] || 0) + 1; });
+  // เช็คอิน/เช็คเอาท์ (ref_type=attendance) เป็นการแจ้งเพื่อทราบ ไม่ใช่งานค้างอนุมัติ → ไม่นับเข้าป้ายเมนู (ป้าย HR ควรสะท้อนเฉพาะ ลา/OT/เบิก ที่ต้องทำ)
+  const m = {}; (data || []).forEach((n) => { if (n.url && n.ref_type !== "attendance") m[n.url] = (m[n.url] || 0) + 1; });
   return m;
 }
 // mark every unread notification for one menu read (when the user opens it)
@@ -5266,6 +5267,7 @@ export async function saveMySignature(url) {
 }
 
 export async function uploadAttendancePhoto(blob) {
+  try { blob = await downscaleImage(blob, 1280, 0.8); } catch { /* ย่อไม่ได้ก็อัปไฟล์เดิม — ดีกว่าเช็คอินไม่สำเร็จ */ }   // เซลฟี่กล้องมือถือ 3-8MB → ย่อ ~1280px ก่อนอัป (เบา 4G)
   const path = `attendance/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`;
   const { error } = await supabase.storage.from("photos").upload(path, blob, { upsert: true, contentType: "image/jpeg" });
   if (error) throw error;

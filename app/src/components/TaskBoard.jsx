@@ -269,7 +269,7 @@ function TaskDetail({ task, me, canManage, canStatus, onGoChat, onClose, onMove,
         <div className="tb-composer">
           <AttachRow files={atts} onChange={setAtts} flash={flash} />
           <div className="tb-composer-row">
-            <input className="inp" value={body} onChange={(e) => setBody(e.target.value)} placeholder={L("เขียนคอมเมนต์…", "မှတ်ချက် ရေးရန်…")} onKeyDown={(e) => e.key === "Enter" && send()} />
+            <input className="inp" value={body} onChange={(e) => setBody(e.target.value)} placeholder={L("เขียนคอมเมนต์…", "မှတ်ချက် ရေးရန်…")} onKeyDown={(e) => { if (e.nativeEvent?.isComposing || e.keyCode === 229) return; if (e.key === "Enter") send(); }} />
             <button className="btn-primary" disabled={busy || (!body.trim() && !atts.length)} onClick={send}><UIcon name="chat" size={15} color="#fff" /> {L("ส่ง", "ပို့")}</button>
           </div>
           <div className="tb-detail-actions">
