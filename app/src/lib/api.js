@@ -6199,7 +6199,8 @@ export async function syncCashEntriesFromDocs() {
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const yy = d.getFullYear(), mm = String(d.getMonth() + 1).padStart(2, "0");
-      desired.push({ source_type: "salary", source_ref: `salary-${yy}-${mm}`, direction: "out", status: "projected", entry_date: `${yy}-${mm}-01`, amount: totalSalary, note: `เงินเดือนพนักงาน ${salaryList.length} คน` });
+      const lastD = String(new Date(yy, d.getMonth() + 1, 0).getDate()).padStart(2, "0");   // จ่ายเงินเดือนวันสิ้นเดือน (ตรงกับวันจ่ายจริง)
+      desired.push({ source_type: "salary", source_ref: `salary-${yy}-${mm}`, direction: "out", status: "projected", entry_date: `${yy}-${mm}-${lastD}`, amount: totalSalary, note: `เงินเดือนพนักงาน ${salaryList.length} คน` });
     }
   }
 
