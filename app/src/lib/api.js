@@ -4007,13 +4007,29 @@ export async function listKpiScorecard(from, to) {
 // ---------- KPI ธุรการขาย (Sale Admin) — คำนวณฝั่ง client จากเอกสาร (ไม่ต้อง RPC/migration) ----------
 // วัดต่อ "ผู้สร้างใบเสนอราคา": จำนวนใบเสนอ · อัตราปิด (ใบเสนอ→ใบงาน) · ความเร็วทำใบเสนอ · ความถูกต้อง · ความพอใจ
 export async function saleAdminKpi(from, to) {
-  const [qs, jos, profs, boqs] = await Promise.all([
+  const today = new Date().toISOString().slice(0, 10);
+  const [qs, jos, profs, boqs, lineMsgs, custs] = await Promise.all([
     _fetchAll((f, t) => supabase.from("quotations").select("quote_no,boq_no,created_by,status,issue_date,approved_at,variation_of", { count: "exact" }).order("quote_no").range(f, t)),
     _fetchAll((f, t) => supabase.from("job_orders").select("job_no,quote_no,status,rating", { count: "exact" }).order("job_no").range(f, t)),
     supabase.from("profiles").select("id,name,email,role").then((r) => r.data || []),
     _fetchAll((f, t) => supabase.from("boqs").select("boq_no,created_at", { count: "exact" }).order("boq_no").range(f, t)).catch(() => []),
+    // ข้อความแชตลูกค้าในช่วง (เรียงตามเวลา) — คิดเวลาตอบลีด · sent_by = พนักงานที่ตอบ (null = บอท/ระบบ ไม่นับ)
+    _fetchAll((f, t) => { let b = supabase.from("line_messages").select("line_user_id,direction,sent_by,created_at", { count: "exact" }).order("created_at").range(f, t); if (from) b = b.gte("created_at", from); if (to) b = b.lte("created_at", to + "T23:59:59"); return b; }).catch(() => []),
+    // ลูกค้าในมือ (owner) — คิดวินัยติดตาม ณ ปัจจุบัน (นัดติดตามเลยกำหนด/ไม่มีนัด)
+    _fetchAll((f, t) => supabase.from("customers").select("owner_id,stage,next_followup", { count: "exact" }).not("owner_id", "is", null).order("id").range(f, t)).catch(() => []),
   ]);
   const nm = Object.fromEntries(profs.map((p) => [p.id, { name: p.name || p.email, role: p.role }]));
+  // ── เวลาตอบลีดเฉลี่ย ต่อพนักงาน (นาที) — ลูกค้าทัก → พนักงานตอบครั้งแรก · ตัดเดต้า > 8 ชม. (ข้ามคืน) ──
+  const respSum = {}, respN = {}, conv = {};
+  (lineMsgs || []).forEach((m) => {
+    const c = conv[m.line_user_id] || (conv[m.line_user_id] = { pend: null });
+    if (m.direction === "in") { if (c.pend == null) c.pend = Date.parse(m.created_at); }
+    else { if (c.pend != null && m.sent_by) { const d = (Date.parse(m.created_at) - c.pend) / 60000; if (d >= 0 && d <= 480) { respSum[m.sent_by] = (respSum[m.sent_by] || 0) + d; respN[m.sent_by] = (respN[m.sent_by] || 0) + 1; } c.pend = null; } else if (m.sent_by) c.pend = null; }
+  });
+  // ── วินัยติดตาม ต่อ owner — ลีดในมือที่ยัง "เปิดอยู่" กี่ % ที่ไม่มีนัดติดตามค้างเกินกำหนด ──
+  const CLOSED = new Set(["won", "closed", "lost", "ปิดการขาย", "จบแล้ว", "ไม่สนใจ"]);
+  const fuOpen = {}, fuOverdue = {};
+  (custs || []).forEach((c) => { if (CLOSED.has(c.stage)) return; const o = c.owner_id; fuOpen[o] = (fuOpen[o] || 0) + 1; if (!c.next_followup || c.next_followup < today) fuOverdue[o] = (fuOverdue[o] || 0) + 1; });
   const boqAt = Object.fromEntries((boqs || []).map((b) => [b.boq_no, (b.created_at || "").slice(0, 10)]));
   // ใบงานต่อใบเสนอ (มีงาน = ปิดได้) + คะแนนรีวิว
   const jobByQuote = {}, ratingByQuote = {};
@@ -4035,17 +4051,22 @@ export async function saleAdminKpi(from, to) {
   });
   // คะแนน 0-100 ตามช่วงเป้า (เขียว=100 · เหลือง=70 · แดง=40) · invert = ยิ่งน้อยยิ่งดี
   const band = (v, g, y, inv) => v == null ? null : inv ? (v <= g ? 100 : v <= y ? 70 : 40) : (v >= g ? 100 : v >= y ? 70 : 40);
-  const rows = Object.values(agg).filter((a) => a.quotes > 0 || a.cancelled > 0).map((a) => {
+  // รายชื่อ = คนที่มีใบเสนอ หรือ ตอบลีด หรือ ถือลีดในมือ
+  const ids = new Set([...Object.keys(agg), ...Object.keys(respN), ...Object.keys(fuOpen)]);
+  const rows = [...ids].map((id) => {
+    const a = agg[id] || { quotes: 0, closed: 0, cancelled: 0, ttN: 0, ttSum: 0, rateN: 0, rateSum: 0 };
     const closeRate = a.quotes ? a.closed / a.quotes : null;
     const errRate = (a.quotes + a.cancelled) ? a.cancelled / (a.quotes + a.cancelled) : null;
     const turnaround = a.ttN ? a.ttSum / a.ttN : null;
     const rating = a.rateN ? a.rateSum / a.rateN : null;
-    // ถ่วงน้ำหนักตาม Playbook เฉพาะหมวดที่มีข้อมูล: ปิด25 · ทำเร็ว15 · ถูกต้อง10 · พอใจ10 (ตอบลีด/ติดตาม ยังไม่เชื่อม)
-    const parts = [[band(closeRate, .5, .3), 25], [band(turnaround, 1, 2, true), 15], [band(errRate, .03, .07, true), 10], [band(rating, 4.5, 4.0), 10]];
+    const respMin = respN[id] ? respSum[id] / respN[id] : null;
+    const followup = fuOpen[id] ? 1 - (fuOverdue[id] || 0) / fuOpen[id] : null;
+    // ถ่วงน้ำหนักตาม Playbook (เฉพาะหมวดที่มีข้อมูล): ตอบลีด20 · ทำเร็ว15 · ติดตาม20 · ปิด25 · ถูกต้อง10 · พอใจ10
+    const parts = [[band(respMin, 15, 30, true), 20], [band(turnaround, 1, 2, true), 15], [band(followup, .9, .75), 20], [band(closeRate, .5, .3), 25], [band(errRate, .03, .07, true), 10], [band(rating, 4.5, 4.0), 10]];
     let s = 0, w = 0; parts.forEach(([sc, wt]) => { if (sc != null) { s += sc * wt; w += wt; } });
     const score = w ? Math.round(s / w) : null;
-    return { id: a.id, name: nm[a.id]?.name || "—", role: nm[a.id]?.role || "", quotes: a.quotes, closed: a.closed, closeRate, errRate, turnaround, rating, score };
-  }).sort((x, y) => (y.score ?? -1) - (x.score ?? -1));
+    return { id, name: nm[id]?.name || "—", role: nm[id]?.role || "", quotes: a.quotes, closed: a.closed, closeRate, errRate, turnaround, rating, respMin, followup, leads: fuOpen[id] || 0, score };
+  }).filter((r) => r.quotes > 0 || r.respMin != null || r.leads > 0).sort((x, y) => (y.score ?? -1) - (x.score ?? -1));
   return rows;
 }
 

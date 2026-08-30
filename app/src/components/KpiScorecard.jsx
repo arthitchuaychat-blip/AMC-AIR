@@ -105,23 +105,25 @@ export default function KpiScorecard() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="sec-head"><div>
             <div className="sec-title">ธุรการขาย · Sale Admin (ต่อคน)</div>
-            <div className="sec-sub">วัดจากใบเสนอราคาที่สร้าง — อัตราปิด ≥ 50% · ทำใบเสนอ ≤ 1 วัน · เอกสารผิด ≤ 3% · พอใจ ≥ 4.5 · คะแนนรวม ≥ 85 = ดีเยี่ยม <span style={{ color: "#b45309" }}>(ตอบลีด/ติดตาม ยังรอเชื่อมข้อมูล)</span></div>
+            <div className="sec-sub">วัดจากงานจริง — ตอบลีด ≤ 15น. · ทำใบเสนอ ≤ 1 วัน · ติดตาม ≥ 90% · อัตราปิด ≥ 50% · เอกสารผิด ≤ 3% · พอใจ ≥ 4.5 · คะแนนรวม ≥ 85 = ดีเยี่ยม</div>
           </div></div>
-          {(saData || []).length === 0 && <div className="empty sm">ยังไม่มีใบเสนอราคาในเดือนนี้</div>}
+          {(saData || []).length === 0 && <div className="empty sm">ยังไม่มีข้อมูล Sale Admin ในเดือนนี้</div>}
           {(saData || []).length > 0 && (
             <div className="kpi-table-wrap">
               <table className="kpi-table">
                 <thead><tr>
                   <th style={{ textAlign: "left" }}>พนักงาน</th>
-                  <th>ใบเสนอ</th><th>อัตราปิด</th><th>ทำใบเสนอ</th><th>เอกสารผิด</th><th>ความพอใจ</th><th>คะแนนรวม</th>
+                  <th>ตอบลีด</th><th>ทำใบเสนอ</th><th>ติดตาม</th><th>ใบเสนอ</th><th>อัตราปิด</th><th>เอกสารผิด</th><th>พอใจ</th><th>คะแนนรวม</th>
                 </tr></thead>
                 <tbody>
                   {saData.map((s) => (
                     <tr key={s.id}>
                       <td style={{ textAlign: "left" }}><b>{s.name || "-"}</b><span className="jo-dim" style={{ display: "block", fontSize: 11 }}>{ROLE_LABEL[s.role] || s.role || ""}</span></td>
+                      <td>{s.respMin == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.respMin, 15, 30, true)}>{s.respMin < 60 ? Math.round(s.respMin) + " น." : (s.respMin / 60).toFixed(1) + " ชม."}</span>}</td>
+                      <td>{s.turnaround == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.turnaround, 1, 2, true)}>{s.turnaround.toFixed(1)} ว.</span>}</td>
+                      <td>{s.followup == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.followup * 100, 90, 75)} title={`ลีดในมือ ${s.leads} ราย`}>{Math.round(s.followup * 100)}%</span>}</td>
                       <td>{fmtInt(s.quotes)}</td>
                       <td>{s.closeRate == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.closeRate * 100, 50, 30)}>{Math.round(s.closeRate * 100)}%</span>}</td>
-                      <td>{s.turnaround == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.turnaround, 1, 2, true)}>{s.turnaround.toFixed(1)} ว.</span>}</td>
                       <td>{s.errRate == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.errRate * 100, 3, 7, true)}>{Math.round(s.errRate * 100)}%</span>}</td>
                       <td>{s.rating == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.rating, 4.5, 4)}>{s.rating.toFixed(1)} ★</span>}</td>
                       <td>{s.score == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.score, 85, 70)} style={{ fontWeight: 800 }}>{s.score}</span>}</td>
