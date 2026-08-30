@@ -4004,6 +4004,51 @@ export async function listKpiScorecard(from, to) {
   return { sales: Array.isArray(d.sales) ? d.sales : [], teams: Array.isArray(d.teams) ? d.teams : [] };
 }
 
+// ---------- KPI ธุรการขาย (Sale Admin) — คำนวณฝั่ง client จากเอกสาร (ไม่ต้อง RPC/migration) ----------
+// วัดต่อ "ผู้สร้างใบเสนอราคา": จำนวนใบเสนอ · อัตราปิด (ใบเสนอ→ใบงาน) · ความเร็วทำใบเสนอ · ความถูกต้อง · ความพอใจ
+export async function saleAdminKpi(from, to) {
+  const [qs, jos, profs, boqs] = await Promise.all([
+    _fetchAll((f, t) => supabase.from("quotations").select("quote_no,boq_no,created_by,status,issue_date,approved_at,variation_of", { count: "exact" }).order("quote_no").range(f, t)),
+    _fetchAll((f, t) => supabase.from("job_orders").select("job_no,quote_no,status,rating", { count: "exact" }).order("job_no").range(f, t)),
+    supabase.from("profiles").select("id,name,email,role").then((r) => r.data || []),
+    _fetchAll((f, t) => supabase.from("boqs").select("boq_no,created_at", { count: "exact" }).order("boq_no").range(f, t)).catch(() => []),
+  ]);
+  const nm = Object.fromEntries(profs.map((p) => [p.id, { name: p.name || p.email, role: p.role }]));
+  const boqAt = Object.fromEntries((boqs || []).map((b) => [b.boq_no, (b.created_at || "").slice(0, 10)]));
+  // ใบงานต่อใบเสนอ (มีงาน = ปิดได้) + คะแนนรีวิว
+  const jobByQuote = {}, ratingByQuote = {};
+  (jos || []).forEach((j) => { if (j.quote_no) { jobByQuote[j.quote_no] = true; if (Number(j.rating) > 0) (ratingByQuote[j.quote_no] = ratingByQuote[j.quote_no] || []).push(Number(j.rating)); } });
+  const inRange = (d) => d && (!from || d >= from) && (!to || d <= to);
+  const agg = {};   // created_by → ตัวนับ
+  (qs || []).forEach((q) => {
+    if (q.variation_of) return;   // ใบเพิ่มเติม ไม่นับซ้ำ
+    const who = q.created_by; if (!who) return;
+    const issued = inRange(q.issue_date);
+    const cancelledInRange = q.status === "cancelled" && inRange(q.issue_date);
+    if (!issued && !cancelledInRange) return;
+    const a = agg[who] || (agg[who] = { id: who, quotes: 0, closed: 0, cancelled: 0, ttSum: 0, ttN: 0, rateSum: 0, rateN: 0 });
+    if (q.status === "cancelled") { a.cancelled++; return; }
+    a.quotes++;
+    if (jobByQuote[q.quote_no] || q.approved_at) a.closed++;
+    if (q.boq_no && boqAt[q.boq_no] && q.issue_date) { const d = Math.max(0, Math.round((Date.parse(q.issue_date) - Date.parse(boqAt[q.boq_no])) / 86400000)); if (d <= 60) { a.ttSum += d; a.ttN++; } }
+    (ratingByQuote[q.quote_no] || []).forEach((r) => { a.rateSum += r; a.rateN++; });
+  });
+  // คะแนน 0-100 ตามช่วงเป้า (เขียว=100 · เหลือง=70 · แดง=40) · invert = ยิ่งน้อยยิ่งดี
+  const band = (v, g, y, inv) => v == null ? null : inv ? (v <= g ? 100 : v <= y ? 70 : 40) : (v >= g ? 100 : v >= y ? 70 : 40);
+  const rows = Object.values(agg).filter((a) => a.quotes > 0 || a.cancelled > 0).map((a) => {
+    const closeRate = a.quotes ? a.closed / a.quotes : null;
+    const errRate = (a.quotes + a.cancelled) ? a.cancelled / (a.quotes + a.cancelled) : null;
+    const turnaround = a.ttN ? a.ttSum / a.ttN : null;
+    const rating = a.rateN ? a.rateSum / a.rateN : null;
+    // ถ่วงน้ำหนักตาม Playbook เฉพาะหมวดที่มีข้อมูล: ปิด25 · ทำเร็ว15 · ถูกต้อง10 · พอใจ10 (ตอบลีด/ติดตาม ยังไม่เชื่อม)
+    const parts = [[band(closeRate, .5, .3), 25], [band(turnaround, 1, 2, true), 15], [band(errRate, .03, .07, true), 10], [band(rating, 4.5, 4.0), 10]];
+    let s = 0, w = 0; parts.forEach(([sc, wt]) => { if (sc != null) { s += sc * wt; w += wt; } });
+    const score = w ? Math.round(s / w) : null;
+    return { id: a.id, name: nm[a.id]?.name || "—", role: nm[a.id]?.role || "", quotes: a.quotes, closed: a.closed, closeRate, errRate, turnaround, rating, score };
+  }).sort((x, y) => (y.score ?? -1) - (x.score ?? -1));
+  return rows;
+}
+
 // หัวหน้าทีมช่างซัพดู "งานค้างจ่าย" ของทีมตัวเอง (อ่านอย่างเดียว) — ผ่าน RPC security definer (mig 197)
 // คืน { jobs:[งานยืนยันค่าแรงแล้วยังจ่ายไม่ครบ], payouts:[ใบจ่ายที่ออกแล้วรอโอน] } เฉพาะทีมของผู้เรียก
 // ถ้ายังไม่รัน mig 197 → คืนโครงว่าง (หน้าจอไม่พัง)

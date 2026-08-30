@@ -1,5 +1,5 @@
 import React from "react";
-import { listKpiScorecard } from "../lib/api";
+import { listKpiScorecard, saleAdminKpi } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { ROLE_LABEL } from "../lib/permissions";
 
@@ -24,13 +24,15 @@ function rag(val, good, ok, invert) {
 export default function KpiScorecard() {
   const [month, setMonth] = React.useState(monthNow);
   const [data, setData] = React.useState(null);
+  const [saData, setSaData] = React.useState(null);   // KPI ธุรการขาย (Sale Admin)
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState(null);
 
   React.useEffect(() => {
     let alive = true;
-    setLoading(true); setErr(null);
+    setLoading(true); setErr(null); setSaData(null);
     const { from, to } = monthRange(month);
+    saleAdminKpi(from, to).then((d) => { if (alive) setSaData(d); }).catch(() => { if (alive) setSaData([]); });
     listKpiScorecard(from, to)
       .then((d) => { if (alive) setData(d); })
       .catch((e) => { if (alive) setErr(e.message || String(e)); })
@@ -91,6 +93,38 @@ export default function KpiScorecard() {
                       <td>{fmtInt(s.quotes)}</td>
                       <td>{fmtInt(s.won)}</td>
                       <td>{s.close_rate == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.close_rate, 30, 20)}>{s.close_rate}%</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ธุรการขาย (Sale Admin) */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="sec-head"><div>
+            <div className="sec-title">ธุรการขาย · Sale Admin (ต่อคน)</div>
+            <div className="sec-sub">วัดจากใบเสนอราคาที่สร้าง — อัตราปิด ≥ 50% · ทำใบเสนอ ≤ 1 วัน · เอกสารผิด ≤ 3% · พอใจ ≥ 4.5 · คะแนนรวม ≥ 85 = ดีเยี่ยม <span style={{ color: "#b45309" }}>(ตอบลีด/ติดตาม ยังรอเชื่อมข้อมูล)</span></div>
+          </div></div>
+          {(saData || []).length === 0 && <div className="empty sm">ยังไม่มีใบเสนอราคาในเดือนนี้</div>}
+          {(saData || []).length > 0 && (
+            <div className="kpi-table-wrap">
+              <table className="kpi-table">
+                <thead><tr>
+                  <th style={{ textAlign: "left" }}>พนักงาน</th>
+                  <th>ใบเสนอ</th><th>อัตราปิด</th><th>ทำใบเสนอ</th><th>เอกสารผิด</th><th>ความพอใจ</th><th>คะแนนรวม</th>
+                </tr></thead>
+                <tbody>
+                  {saData.map((s) => (
+                    <tr key={s.id}>
+                      <td style={{ textAlign: "left" }}><b>{s.name || "-"}</b><span className="jo-dim" style={{ display: "block", fontSize: 11 }}>{ROLE_LABEL[s.role] || s.role || ""}</span></td>
+                      <td>{fmtInt(s.quotes)}</td>
+                      <td>{s.closeRate == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.closeRate * 100, 50, 30)}>{Math.round(s.closeRate * 100)}%</span>}</td>
+                      <td>{s.turnaround == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.turnaround, 1, 2, true)}>{s.turnaround.toFixed(1)} ว.</span>}</td>
+                      <td>{s.errRate == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.errRate * 100, 3, 7, true)}>{Math.round(s.errRate * 100)}%</span>}</td>
+                      <td>{s.rating == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.rating, 4.5, 4)}>{s.rating.toFixed(1)} ★</span>}</td>
+                      <td>{s.score == null ? <span className="jo-dim">—</span> : <span className={"job-badge " + rag(s.score, 85, 70)} style={{ fontWeight: 800 }}>{s.score}</span>}</td>
                     </tr>
                   ))}
                 </tbody>
