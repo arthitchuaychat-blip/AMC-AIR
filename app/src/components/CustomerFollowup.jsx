@@ -1,6 +1,6 @@
 import React from "react";
 // ⚠️ listQuotations() ไม่ส่ง opts = โหลดทั้งประวัติโดยตั้งใจ — ใบที่ค้างตอบอาจเก่ากว่าหน้าต่างวันที่ใด ๆ
-import { listJobOrders, listQuotations, listInvoices, followupScheduled, logFollowup } from "../lib/api";
+import { listJobOrders, listQuotations, listInvoices, followupState, logFollowup } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { JOB_TYPES, jobTypeDef } from "../lib/schedule";
 import { fmtBaht } from "../lib/format";
@@ -47,6 +47,7 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
   const [salesF, setSalesF] = React.useState("");   // ตัวกรองพนักงานขายที่รับผิดชอบ (createdByName ของใบเสนอ/ใบแจ้งหนี้ · salesName ของงาน)
   const [tab, setTab] = React.useState("today");   // today=ติดตามวันนี้ · service=รอบบริการ · quotes=ใบเสนอค้างตอบ · approved · unpaid · donepay
   const [sched, setSched] = React.useState([]);   // ลูกค้าที่ถึงกำหนดนัดติดตาม (customers.next_followup ≤ วันนี้)
+  const [suppress, setSuppress] = React.useState(() => new Set());   // customer_id ที่ปิดดีล/เลื่อนนัดแล้ว → ซ่อนจากรายการอัตโนมัติ
   const [logFor, setLogFor] = React.useState(null);   // รายการที่กำลังบันทึกผลติดตาม
   const [qAge, setQAge] = React.useState(7);         // ค้างตอบเกินกี่วันถึงนับ
   const [cadence, setCadence] = React.useState(180);   // "รอบติดตาม" default 6 months
@@ -60,8 +61,8 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
 
   async function load() {
     try {
-      const [j, q, inv, sc] = await Promise.all([listJobOrders(), listQuotations().catch(() => []), listInvoices().catch(() => []), followupScheduled().catch(() => [])]);
-      setJobs(j); setQuotes(q || []); setInvoices(inv || []); setSched(sc || []);
+      const [j, q, inv, fs] = await Promise.all([listJobOrders(), listQuotations().catch(() => []), listInvoices().catch(() => []), followupState().catch(() => ({ scheduled: [], suppress: [] }))]);
+      setJobs(j); setQuotes(q || []); setInvoices(inv || []); setSched(fs.scheduled || []); setSuppress(new Set(fs.suppress || []));
     }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setJobs([]); setQuotes([]); setInvoices([]); }
   }
@@ -129,10 +130,11 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
       if (!e.phone && phone) e.phone = phone;
     };
     (sched || []).forEach((c) => { if (salesF && (c.ownerName || "") !== salesF) return; add(c.id, c.name, null, "sales", dayDiff(c.next_followup, today), { date: c.next_followup, ownerName: c.ownerName }); });
-    customers.filter((c) => c.due).forEach((c) => { if (salesF && !(c.salesSet && c.salesSet.has(salesF))) return; add(c.customer_id, c.name, c.phone, "service", c.days, { lastDate: c.last.date, times: c.times }); });
-    pendingQuotes.forEach((q) => add(q.customer_id, q.customerName, q.contact_phone || q.mainContactPhone || null, "quote", q.days, { quote_no: q.quote_no, days: q.days }));
+    // อัตโนมัติ (รอบบริการ/ใบเสนอค้าง) — ข้ามลูกค้าที่ปิดดีลแล้ว หรือเลื่อนนัดไปวันหน้าแล้ว
+    customers.filter((c) => c.due && !suppress.has(c.customer_id)).forEach((c) => { if (salesF && !(c.salesSet && c.salesSet.has(salesF))) return; add(c.customer_id, c.name, c.phone, "service", c.days, { lastDate: c.last.date, times: c.times }); });
+    pendingQuotes.forEach((q) => { if (suppress.has(q.customer_id)) return; add(q.customer_id, q.customerName, q.contact_phone || q.mainContactPhone || null, "quote", q.days, { quote_no: q.quote_no, days: q.days }); });
     return Object.values(m).sort((a, b) => b.maxDays - a.maxDays);
-  }, [sched, customers, pendingQuotes, today, salesF]);
+  }, [sched, customers, pendingQuotes, today, salesF, suppress]);
 
   // อนุมัติแล้วแต่ยังไม่แจ้งหนี้ — ต้องรีบออกใบส่งของ/ใบแจ้งหนี้ (ปิดยอดขาย)
   const approvedNoInvoice = React.useMemo(() => {

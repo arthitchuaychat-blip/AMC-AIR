@@ -1419,18 +1419,29 @@ export async function setCustomerPipeline(id, patch) {
 }
 
 // ---------- ติดตามลูกค้า: ประวัติ + คิววันนี้ (customer_followups, mig 237) ----------
-// ลูกค้าที่ "ถึงกำหนดนัดติดตาม" (next_followup <= today) + ยังเปิดอยู่ (ไม่ปิด/ไม่ทิ้ง) — สำหรับแท็บ "ติดตามวันนี้" + ป้ายเตือน
-export async function followupScheduled() {
+// สถานะติดตามลูกค้า สำหรับแท็บ "ติดตามวันนี้":
+//  - scheduled = ลูกค้าที่ถึงกำหนดนัด (next_followup <= today) + ยังเปิดอยู่ → ต้องติดตามวันนี้
+//  - suppress  = customer_id ที่ต้อง "ซ่อน" ออกจากรายการอัตโนมัติ (ใบเสนอค้าง/รอบบริการ) เพราะปิดดีลแล้ว หรือเลื่อนนัดไปวันหน้าแล้ว
+const _CLOSED_STAGE = new Set(["won", "lost", "closed", "ปิดการขาย", "จบแล้ว", "ไม่สนใจ"]);
+export async function followupState() {
   const today = new Date().toISOString().slice(0, 10);
   const [cs, profs] = await Promise.all([
-    _fetchAll((f, t) => supabase.from("customers").select("id,name,owner_id,stage,next_followup,source", { count: "exact" }).not("next_followup", "is", null).lte("next_followup", today).order("next_followup").range(f, t)).catch(() => []),
+    _fetchAll((f, t) => supabase.from("customers").select("id,name,owner_id,stage,next_followup", { count: "exact" }).or("stage.not.is.null,next_followup.not.is.null").order("id").range(f, t)).catch(() => []),
     supabase.from("profiles").select("id,name,email").then((r) => r.data || []),
   ]);
   const nm = Object.fromEntries(profs.map((p) => [p.id, p.name || p.email]));
-  const CLOSED = new Set(["won", "lost", "closed", "ปิดการขาย", "จบแล้ว", "ไม่สนใจ"]);
-  return (cs || []).filter((c) => !CLOSED.has(c.stage)).map((c) => ({ ...c, ownerName: c.owner_id ? nm[c.owner_id] || null : null }));
+  const scheduled = [], suppress = [];
+  (cs || []).forEach((c) => {
+    const closed = _CLOSED_STAGE.has(c.stage);
+    const due = c.next_followup && c.next_followup <= today;
+    const future = c.next_followup && c.next_followup > today;
+    if (closed || future) suppress.push(c.id);   // ปิดดีลแล้ว หรือ นัดไว้วันหน้าแล้ว → ไม่ต้องเด้งวันนี้
+    if (due && !closed) scheduled.push({ ...c, ownerName: c.owner_id ? nm[c.owner_id] || null : null });
+  });
+  return { scheduled, suppress };
 }
-// จำนวนที่ต้องติดตามวันนี้ (ป้ายเมนู) — เฉพาะของฉัน ถ้าไม่ใช่ผู้จัดการ
+// (คงชื่อเดิมไว้ให้ที่อื่นเรียกได้) — คืนเฉพาะรายการนัดถึงกำหนด
+export async function followupScheduled() { return (await followupState()).scheduled; }
 export async function followupDueCount(myId, isManager) {
   const list = await followupScheduled().catch(() => []);
   return isManager ? list.length : list.filter((c) => c.owner_id === myId).length;
