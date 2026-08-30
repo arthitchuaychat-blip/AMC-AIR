@@ -292,11 +292,13 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
                   <div style={{ minWidth: 0 }}>
                     <b style={{ fontSize: 15 }}>{c.name}</b>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 5 }}>
-                      {c.reasons.map((r, i) => { const d = RSN[r.reason]; return (
-                        <span key={i} className="job-badge" style={{ background: d.bg, color: d.c, borderColor: d.bg }} title={r.quote_no ? `ใบเสนอ ${r.quote_no}` : r.lastDate ? `ล้างล่าสุด ${thDate(r.lastDate)}` : r.date ? `นัด ${thDate(r.date)}` : ""}>
-                          {d.t}{r.reason === "service" && r.times ? ` · เคยใช้ ${r.times} ครั้ง` : ""}{r.reason === "quote" ? ` · ค้าง ${r.days} วัน` : ""}{r.reason === "sales" && r.ownerName ? ` · ${r.ownerName}` : ""}
-                        </span>
-                      ); })}
+                      {c.reasons.map((r, i) => { const d = RSN[r.reason];
+                        const txt = `${d.t}${r.reason === "service" && r.times ? ` · เคยใช้ ${r.times} ครั้ง` : ""}${r.reason === "quote" ? ` · ${r.quote_no} · ค้าง ${r.days} วัน` : ""}${r.reason === "sales" && r.ownerName ? ` · ${r.ownerName}` : ""}`;
+                        const st = { background: d.bg, color: d.c, borderColor: d.bg };
+                        return (r.reason === "quote" && r.quote_no && onOpenQuote)
+                          ? <button key={i} type="button" className="job-badge" style={{ ...st, cursor: "pointer", fontWeight: 600 }} title="เปิดใบเสนอราคาไปจัดการ" onClick={() => onOpenQuote(r.quote_no)}>{txt} ↗</button>
+                          : <span key={i} className="job-badge" style={st} title={r.lastDate ? `ล้างล่าสุด ${thDate(r.lastDate)}` : r.date ? `นัด ${thDate(r.date)}` : ""}>{txt}</span>;
+                      })}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
