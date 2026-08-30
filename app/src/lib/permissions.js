@@ -15,7 +15,7 @@
 // ลำดับนี้ = ลำดับที่โชว์ในดรอปดาวน์ตำแหน่ง + คอลัมน์ตารางสิทธิ์ (ตามที่เจ้าของกำหนด 2026-07-28)
 export const ROLES = ["exec", "admin", "finance", "hr", "sales", "field_sales", "graphic", "stock", "maid", "lead_tech", "tech", "assistant"];
 export const ROLE_LABEL = {
-  exec: "ผู้บริหาร", admin: "ธุรการ", finance: "บัญชีการเงิน", hr: "บุคคล", sales: "ขาย",
+  exec: "ผู้บริหาร", admin: "ผู้จัดการ", finance: "บัญชีการเงิน", hr: "บุคคล", sales: "ขาย",
   field_sales: "ขายภาคสนาม",
   graphic: "การตลาดและกราฟิก", stock: "คลังสินค้าวัสดุ", maid: "แม่บ้าน",
   lead_tech: "หัวหน้าช่าง", tech: "ช่าง", assistant: "ผู้ช่วยช่าง",
@@ -72,7 +72,8 @@ const E = "edit", V = "view", N = "none";
 
 // DEFAULT_PERMS[role][module] — see the matrix shared with the user. ธุรการ is the most powerful.
 export const DEFAULT_PERMS = {
-  admin:     { promo: E, accounting: E, dashboard: V, kpi: V, customers: E, pipeline: E, reviews: E, followup: V, weborders: V, website: E, chat: E, email: E, teamchat: E, tasks: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, adjnote: E, billing: E, receivables: V, payables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, handover: E, schedule: E, catalog: E, movements: E, stockcount: E, jobs: E, subcontract: E, suppliers: E, prep: E, po: E, tools: E, handbook: V, settings: E },
+  // ผู้จัดการ = อำนาจเต็มเทียบผู้บริหาร (ดูแล-บริหารทุกด้าน) — E ครบทุกโมดูล + ลบถาวรได้
+  admin:     { promo: E, accounting: E, dashboard: V, kpi: V, customers: E, pipeline: E, reviews: E, followup: V, weborders: E, website: E, chat: E, email: E, teamchat: E, tasks: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, adjnote: E, billing: E, receivables: V, payables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, handover: E, schedule: E, catalog: E, movements: E, stockcount: E, jobs: E, subcontract: E, suppliers: E, prep: E, po: E, tools: E, handbook: V, settings: E },
   exec:      { promo: E, accounting: E, dashboard: V, kpi: V, customers: E, pipeline: E, reviews: E, followup: V, weborders: V, website: E, chat: E, email: E, teamchat: E, tasks: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, receipt: E, adjnote: E, billing: E, receivables: V, payables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: E, handover: E, schedule: E, catalog: V, movements: V, stockcount: E, jobs: V, subcontract: E, suppliers: E, prep: E, po: E, tools: E, handbook: V, settings: E },
   finance:   { accounting: E, dashboard: V, kpi: V, customers: E, pipeline: V, followup: N, weborders: V, website: N, chat: E, email: E, teamchat: E, tasks: E, attendance: E, hr: N, boq: V, quote: V, invoice: E, receipt: E, adjnote: E, billing: E, receivables: V, payables: V, tax: V, profit: V, cashflow: E, expenses: E, myjobs: N, joborders: V, handover: V, schedule: V, catalog: V, movements: V, stockcount: V, jobs: V, subcontract: E, suppliers: E, prep: E, po: E, tools: V, handbook: V, settings: N }, // เจ้าของเคาะ 2026-07-17: บัญชีดู ขาย/การเงิน/จัดซื้อ/จ่าย ได้ครบ (เปิด movements เป็น V)
   // เจ้าของเคาะ 2026-07-24: ฝ่ายขายเป็นคนสั่งแอร์ พอของมาถึงต้องกดรับเข้าสต๊อกเองได้ → เปิด movements เป็น E
