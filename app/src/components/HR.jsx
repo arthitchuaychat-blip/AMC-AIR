@@ -6,12 +6,13 @@ import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
 import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
 import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, hrEditOt, otHoursFromTimes, createAutoOt, removeAutoOt, listOtOn, AUTO_OT_REASON, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186/191)
+import { listHrProfiles, saveHrProfile } from "../lib/api";   // ประวัติพนักงาน + เอกสาร (mig 235)
 import { fmtBaht } from "../lib/format";
 import { ROLE_GUIDE, DEPT_COLOR } from "../lib/handbook";   // KPI ตามตำแหน่ง (แสดงในรายงานประสิทธิผล)
 import { UIcon } from "../icons";
 import PayDetailModal from "./PayDetail";
 
-const TABS = [["today", "วันนี้"], ["calendar", "ปฏิทิน"], ["leaves", "อนุมัติลา"], ["ot", "อนุมัติ OT"], ["advances", "เบิกล่วงหน้า"], ["loans", "เงินยืม"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
+const TABS = [["today", "วันนี้"], ["calendar", "ปฏิทิน"], ["leaves", "อนุมัติลา"], ["ot", "อนุมัติ OT"], ["advances", "เบิกล่วงหน้า"], ["loans", "เงินยืม"], ["employees", "ประวัติพนักงาน"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
@@ -49,12 +50,109 @@ export default function HR({ role }) {
       {tab === "ot" && <OtTab canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "advances" && <AdvancesTab canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "loans" && <LoansTab staff={staff} canManage={canManage} flash={flash} />}
+      {tab === "employees" && <EmployeesTab staff={staff} canManage={canManage} flash={flash} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "staff" && <StaffTab staff={staff} settings={settings} holidays={holidays} onReload={loadBase} flash={flash} />}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
+    </div>
+  );
+}
+
+// ---------- ประวัติพนักงาน + เอกสาร (mig 235) ----------
+function EmployeesTab({ staff, canManage, flash }) {
+  const [profs, setProfs] = React.useState(null);
+  const [q, setQ] = React.useState("");
+  const [edit, setEdit] = React.useState(null);
+  async function load() { try { setProfs(await listHrProfiles()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setProfs({}); } }
+  React.useEffect(() => { load(); }, []);
+  const list = staff.filter((s) => !q.trim() || [s.name, s.email, s.department].some((f) => String(f || "").toLowerCase().includes(q.toLowerCase())));
+  return (
+    <div className="card">
+      <div className="sec-head"><div><div className="sec-title">ประวัติพนักงาน & เอกสาร</div>
+        <div className="sec-sub">ข้อมูลติดต่อ · ผู้ติดต่อฉุกเฉิน · บัญชีธนาคาร · สัญญา/เอกสาร — เห็นได้เฉพาะเจ้าของ + ธุรการ/ผู้บริหาร/บุคคล (ต้องรัน migration 235)</div></div></div>
+      <div className="cat-search" style={{ maxWidth: 360, marginBottom: 12 }}><UIcon name="search" size={15} color="var(--ink-3)" /><input placeholder="ค้นหาพนักงาน" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+      {profs === null ? <div className="empty">กำลังโหลด…</div> : list.length === 0 ? <div className="empty">ไม่พบพนักงาน</div> : (
+        <div className="job-cards">
+          {list.map((s) => {
+            const p = profs[s.id] || {}; const docs = p.documents || [];
+            const filled = [p.phone, p.address, p.emergency_phone, p.bank_account].filter(Boolean).length;
+            return (
+              <div className="card job-card" key={s.id}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <b>{s.name}</b>{p.nickname ? <span className="jo-dim"> ({p.nickname})</span> : null}
+                    <div className="jo-dim" style={{ fontSize: 12.5, marginTop: 2 }}>{s.department || s.role}{s.hire_date ? ` · เริ่มงาน ${s.hire_date}` : ""}</div>
+                    <div className="jo-dim" style={{ fontSize: 12.5 }}>{p.phone ? `📞 ${p.phone}` : "— ยังไม่มีเบอร์ —"}{docs.length ? ` · 📎 ${docs.length} เอกสาร` : ""}{filled < 4 ? <span style={{ color: "#d97706" }}> · ⚠ ข้อมูลไม่ครบ</span> : ""}</div>
+                  </div>
+                  {canManage && <button className="btn-ghost sm" onClick={() => setEdit({ id: s.id, staff: s, ...p })}><UIcon name="edit" size={13} /> แก้ประวัติ</button>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {edit && <EmployeeModal emp={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
+    </div>
+  );
+}
+function EmployeeModal({ emp, onClose, onSaved, flash }) {
+  const [f, setF] = React.useState({ nickname: emp.nickname || "", phone: emp.phone || "", address: emp.address || "", birth_date: emp.birth_date || "", emergency_name: emp.emergency_name || "", emergency_phone: emp.emergency_phone || "", bank_name: emp.bank_name || "", bank_account: emp.bank_account || "", position_title: emp.position_title || "", note: emp.note || "", documents: emp.documents || [] });
+  const [busy, setBusy] = React.useState(false);
+  const [upBusy, setUpBusy] = React.useState(false);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const fileRef = React.useRef(null);
+  const s = emp.staff || {};
+  async function pickDocs(e) {
+    const list = Array.from(e.target.files || []); e.target.value = ""; if (!list.length) return;
+    setUpBusy(true);
+    try { const add = []; for (const file of list) { const url = await uploadExpenseFile(file); add.push({ name: file.name, url }); } set("documents", [...(f.documents || []), ...add]); }
+    catch (err) { flash("อัปโหลดไม่สำเร็จ: " + (err.message || err), true); }
+    setUpBusy(false);
+  }
+  async function save() { setBusy(true); try { await saveHrProfile(emp.id, f); flash("บันทึกประวัติแล้ว ✓"); onSaved(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } setBusy(false); }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 560, maxHeight: "92vh", display: "flex", flexDirection: "column" }}>
+        <div className="modal-head"><div className="modal-title">ประวัติ · {s.name}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body" style={{ overflowY: "auto" }}>
+          <div className="jo-dim" style={{ marginBottom: 10, fontSize: 12.5 }}>{s.department || s.role}{s.hire_date ? ` · เริ่มงาน ${s.hire_date}` : ""}{s.citizen_id ? ` · เลขบัตร ${s.citizen_id}` : ""}</div>
+          <div className="fld-row">
+            <label className="fld"><span>ชื่อเล่น</span><input className="inp" value={f.nickname} onChange={(e) => set("nickname", e.target.value)} /></label>
+            <label className="fld"><span>เบอร์โทร</span><input className="inp" value={f.phone} onChange={(e) => set("phone", e.target.value)} placeholder="08x-xxx-xxxx" /></label>
+          </div>
+          <div className="fld-row">
+            <label className="fld"><span>วันเกิด</span><input className="inp" type="date" value={f.birth_date || ""} onChange={(e) => set("birth_date", e.target.value)} /></label>
+            <label className="fld"><span>ตำแหน่งตามสัญญา</span><input className="inp" value={f.position_title} onChange={(e) => set("position_title", e.target.value)} placeholder="เช่น ช่างเทคนิค" /></label>
+          </div>
+          <label className="fld"><span>ที่อยู่</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={f.address} onChange={(e) => set("address", e.target.value)} /></label>
+          <div className="fld-row">
+            <label className="fld"><span>ผู้ติดต่อฉุกเฉิน</span><input className="inp" value={f.emergency_name} onChange={(e) => set("emergency_name", e.target.value)} placeholder="ชื่อ · ความสัมพันธ์" /></label>
+            <label className="fld"><span>เบอร์ฉุกเฉิน</span><input className="inp" value={f.emergency_phone} onChange={(e) => set("emergency_phone", e.target.value)} /></label>
+          </div>
+          <div className="fld-row">
+            <label className="fld"><span>ธนาคาร</span><input className="inp" value={f.bank_name} onChange={(e) => set("bank_name", e.target.value)} placeholder="เช่น กสิกรไทย" /></label>
+            <label className="fld"><span>เลขบัญชี (จ่ายเงินเดือน)</span><input className="inp" value={f.bank_account} onChange={(e) => set("bank_account", e.target.value)} /></label>
+          </div>
+          <label className="fld"><span>หมายเหตุ</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={f.note} onChange={(e) => set("note", e.target.value)} /></label>
+          <div className="fld"><span>📎 เอกสาร (สัญญาจ้าง · สำเนาบัตร · วุฒิ ฯลฯ)</span>
+            {(f.documents || []).length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5, margin: "4px 0 8px" }}>
+              {f.documents.map((d, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, background: "var(--surface-2)", borderRadius: 8, padding: "5px 10px" }}>
+                  <a href={d.url} target="_blank" rel="noreferrer" style={{ flex: 1, color: "var(--primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {d.name || "เอกสาร"}</a>
+                  <button type="button" className="tb-cmt-x" onClick={() => set("documents", f.documents.filter((_, j) => j !== i))}><UIcon name="x" size={12} /></button>
+                </div>
+              ))}
+            </div>}
+            <input ref={fileRef} type="file" multiple hidden onChange={pickDocs} />
+            <button type="button" className="btn-ghost sm" disabled={upBusy} onClick={() => fileRef.current?.click()}><UIcon name="plus" size={13} /> {upBusy ? "กำลังอัปโหลด…" : "แนบเอกสาร"}</button>
+          </div>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy} onClick={save}>บันทึกประวัติ</button></div>
+      </div>
     </div>
   );
 }

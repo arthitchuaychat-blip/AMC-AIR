@@ -5763,6 +5763,26 @@ export async function updateHrProfile(id, fields) {
   }
 }
 
+// ---------- ประวัติพนักงาน + เอกสาร (hr_profiles, mig 235) ----------
+export async function listHrProfiles() {
+  const { data, error } = await supabase.from("hr_profiles").select("*");
+  if (error) { if (/hr_profiles|relation|does not exist/i.test(error.message || "")) return {}; throw error; }   // ยังไม่รัน 235
+  return Object.fromEntries((data || []).map((r) => [r.user_id, r]));
+}
+export async function getHrProfile(userId) {
+  const { data, error } = await supabase.from("hr_profiles").select("*").eq("user_id", userId).maybeSingle();
+  if (error) { if (/hr_profiles|relation|does not exist/i.test(error.message || "")) return null; throw error; }
+  return data || null;
+}
+export async function saveHrProfile(userId, fields) {
+  const row = { user_id: userId, updated_at: new Date().toISOString() };
+  ["nickname", "phone", "address", "birth_date", "emergency_name", "emergency_phone", "bank_name", "bank_account", "position_title", "note", "documents"]
+    .forEach((k) => { if (fields[k] !== undefined) row[k] = k === "birth_date" ? (fields[k] || null) : fields[k]; });
+  const { error } = await supabase.from("hr_profiles").upsert(row, { onConflict: "user_id" });
+  if (error) throw (/hr_profiles|relation|does not exist/i.test(error.message || "") ? new Error("ต้องรัน migration 235 ก่อน") : error);
+  await logAudit({ action: "update", target_type: "hr_profile", target_no: userId, reason: "แก้ประวัติพนักงาน" }).catch(() => {});
+}
+
 // admin/HR manually set a person's check-in/out for a day (correction). times = ISO or null.
 export async function adminSaveAttendance(userId, workDate, checkInAt, checkOutAt) {
   const { error } = await supabase.from("hr_attendance").upsert(
