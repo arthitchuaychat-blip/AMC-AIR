@@ -1374,7 +1374,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   }
   const setA = (id, k, v) => setAdj((s) => ({ ...s, [id]: { ...s[id], [k]: Number(v) || 0 } }));
   const payable = (rows || []).filter((r) => (Number(r.p.base_pay) || 0) > 0 || r.st.present > 0);
-  const totalNet = payable.reduce((a, r) => a + calcOf(r).net, 0);
+  // ยอดรวมทุกคอลัมน์ (แถวรวมท้ายตาราง)
+  const colTot = payable.reduce((a, r) => { const c = calcOf(r); ["base", "otPay", "holPay", "dLate", "dAbsent", "dLeave", "dSso", "dTax", "dAdvance", "dLoan", "dWater", "dElectric", "bonus", "otherDeduct", "net"].forEach((k) => { a[k] = (a[k] || 0) + (Number(c[k]) || 0); }); return a; }, {});
+  const totalNet = colTot.net || 0;
 
   async function saveRun(markPaid, meta) {
     setBusy(true);
@@ -1535,7 +1537,25 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                 </tr>
               ); })}
             </tbody>
-            <tfoot><tr><td style={{ textAlign: "left" }}>รวมจ่ายสุทธิ ({payable.length} คน)</td><td colSpan={14} /><td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td><td /></tr></tfoot>
+            <tfoot><tr style={{ fontWeight: 700 }}>
+              <td style={{ textAlign: "left" }}>รวม ({payable.length} คน)</td>
+              <td>{fmtBaht(colTot.base || 0)}</td>
+              <td className="hr-ok">{colTot.otPay ? fmtBaht(colTot.otPay) : "—"}</td>
+              <td className="hr-ok">{colTot.holPay ? fmtBaht(colTot.holPay) : "—"}</td>
+              <td className={colTot.dLate ? "hr-bad" : ""}>{colTot.dLate ? "−" + fmtBaht(colTot.dLate) : "—"}</td>
+              <td className={colTot.dAbsent ? "hr-bad" : ""}>{colTot.dAbsent ? "−" + fmtBaht(colTot.dAbsent) : "—"}</td>
+              <td className={colTot.dLeave ? "hr-bad" : ""}>{colTot.dLeave ? "−" + fmtBaht(colTot.dLeave) : "—"}</td>
+              <td className={colTot.dSso ? "hr-bad" : ""}>{colTot.dSso ? "−" + fmtBaht(colTot.dSso) : "—"}</td>
+              <td className={colTot.dTax ? "hr-bad" : ""}>{colTot.dTax ? "−" + fmtBaht(colTot.dTax) : "—"}</td>
+              <td className={colTot.dAdvance ? "hr-bad" : ""}>{colTot.dAdvance ? "−" + fmtBaht(colTot.dAdvance) : "—"}</td>
+              <td className={colTot.dLoan ? "hr-bad" : ""}>{colTot.dLoan ? "−" + fmtBaht(colTot.dLoan) : "—"}</td>
+              <td className={colTot.dWater ? "hr-bad" : ""}>{colTot.dWater ? "−" + fmtBaht(colTot.dWater) : "—"}</td>
+              <td className={colTot.dElectric ? "hr-bad" : ""}>{colTot.dElectric ? "−" + fmtBaht(colTot.dElectric) : "—"}</td>
+              <td className="hr-ok">{colTot.bonus ? fmtBaht(colTot.bonus) : "—"}</td>
+              <td className={colTot.otherDeduct ? "hr-bad" : ""}>{colTot.otherDeduct ? "−" + fmtBaht(colTot.otherDeduct) : "—"}</td>
+              <td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td>
+              <td />
+            </tr></tfoot>
           </table>
         </div>
       )}
