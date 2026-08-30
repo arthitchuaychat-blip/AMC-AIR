@@ -29,6 +29,8 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
   const [showCancelled, setShowCancelled] = React.useState(false);
   const [editTask, setEditTask] = React.useState(null);
   const [detailId, setDetailId] = React.useState(null);
+  const [dragId, setDragId] = React.useState(null);   // การ์ดที่กำลังลาก
+  const [overCol, setOverCol] = React.useState(null);  // คอลัมน์ปลายทางที่เมาส์อยู่
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
 
@@ -62,13 +64,23 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
   const detail = detailId ? tasks.find((t) => t.id === detailId) : null;
 
   async function move(t, status) { try { await setTaskStatus(t.id, status); await load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်ပါ: ") + (e.message || e), true); } }
+  // เรียงในคอลัมน์: ด่วนก่อน → แล้วกำหนดเสร็จใกล้สุดก่อน (ไม่มีกำหนดไปท้าย)
+  const PRIO_RANK = { high: 0, normal: 1, low: 2 };
+  const sortCol = (arr) => arr.slice().sort((a, b) => { const pr = (PRIO_RANK[a.priority] ?? 1) - (PRIO_RANK[b.priority] ?? 1); if (pr) return pr; const ad = a.due_date || "9999-12-31", bd = b.due_date || "9999-12-31"; return ad < bd ? -1 : ad > bd ? 1 : 0; });
+  // ลากการ์ดวางในคอลัมน์ → เปลี่ยนสถานะ (เฉพาะคนที่มีสิทธิ์เปลี่ยนสถานะงานนั้น)
+  async function onDropCol(sv) {
+    const t = tasks.find((x) => x.id === dragId); setDragId(null); setOverCol(null);
+    if (!t || t.status === sv) return;
+    if (!canStatus(t)) return flash(L("ไม่มีสิทธิ์ย้ายงานนี้", "ဤအလုပ်ကို ရွှေ့ခွင့် မရှိ"), true);
+    await move(t, sv);
+  }
   async function del(t) { if (!await confirmDialog(L(`ลบงาน "${t.title}" ? (กู้คืนไม่ได้)`, `အလုပ် "${t.title}" ဖျက်မလား? (ပြန်ရမည်မဟုတ်)`))) return; try { await deleteTask(t.id); setDetailId(null); flash(L("ลบแล้ว", "ဖျက်ပြီး")); await load(); } catch (e) { flash(L("ลบไม่สำเร็จ: ", "ဖျက်၍ မရပါ: ") + (e.message || e), true); } }
 
   return (
     <div className="adm">
       <div className="adm-head">
         <div><h1 className="page-title">{L("กระดานสั่งงาน", "အလုပ် ဘုတ်")} <span className="page-title-en">Task Board</span></h1>
-          <p className="page-sub">{L("สั่งงาน · มอบหมาย · แนบไฟล์/รูป · คอมเมนต์ · ติดตามสถานะ", "အလုပ်ခွဲဝေ · တာဝန်ပေး · ဖိုင်/ဓာတ်ပုံ တွဲ · မှတ်ချက် · အခြေအနေ ခြေရာခံ")}</p></div>
+          <p className="page-sub">{L("สั่งงาน · มอบหมาย · แนบไฟล์/รูป · คอมเมนต์ · ลากการ์ดเปลี่ยนสถานะ · เรียงด่วน/ใกล้กำหนดขึ้นก่อน", "အလုပ်ခွဲဝေ · တာဝန်ပေး · ဖိုင်/ဓာတ်ပုံ တွဲ · မှတ်ချက် · ကတ်ဆွဲ၍ အခြေအနေ ပြောင်း")}</p></div>
         <button className="btn-primary" onClick={() => setEditTask({ title: "", detail: "", assignee: "", priority: "normal", due_date: "", attachments: [], customer_id: "" })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> {L("สั่งงานใหม่", "အလုပ်အသစ် ခွဲဝေ")}</button>
       </div>
 
@@ -95,14 +107,21 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
       {loading ? <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div> : (
         <div className="tb-board">
           {COLS.map((sv) => {
-            const col = visible.filter((t) => t.status === sv);
+            const col = sortCol(visible.filter((t) => t.status === sv));
             return (
-              <div className="tb-col" key={sv}>
+              <div className={"tb-col" + (overCol === sv ? " tb-col-over" : "")} key={sv}
+                onDragOver={(e) => { if (dragId) { e.preventDefault(); setOverCol(sv); } }}
+                onDragLeave={(e) => { if (e.currentTarget === e.target) setOverCol(null); }}
+                onDrop={(e) => { e.preventDefault(); onDropCol(sv); }}>
                 <div className="tb-col-head"><span className={"job-badge " + STATUS[sv].c}>{L(STATUS[sv].th, STATUS[sv].my)}</span><span className="tb-col-n">{col.length}</span></div>
                 <div className="tb-col-body">
-                  {col.length === 0 && <div className="tb-empty">— {L("ว่าง", "ဗလာ")} —</div>}
+                  {col.length === 0 && <div className="tb-empty">— {L("ว่าง · ลากการ์ดมาวางได้", "ဗလာ")} —</div>}
                   {col.map((t) => (
-                    <button type="button" className="tb-card" key={t.id} onClick={() => setDetailId(t.id)}>
+                    <div role="button" tabIndex={0} className={"tb-card" + (dragId === t.id ? " tb-card-drag" : "")} key={t.id}
+                      draggable={canStatus(t)}
+                      onDragStart={(e) => { setDragId(t.id); e.dataTransfer.effectAllowed = "move"; }}
+                      onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                      onClick={() => setDetailId(t.id)} onKeyDown={(e) => { if (e.key === "Enter") setDetailId(t.id); }}>
                       <div className="tb-card-top">
                         <span className="tb-prio" style={{ background: PRIO[t.priority]?.c || "#2563eb" }} title={L("ความสำคัญ: ", "ဦးစားပေး: ") + (PRIO[t.priority] ? L(PRIO[t.priority].th, PRIO[t.priority].my) : "")} />
                         <span className="tb-card-title">{t.title}</span>
@@ -117,7 +136,7 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
                         {t.commentCount > 0 && <span>💬 {t.commentCount}</span>}
                         <span className="tb-by">{L("สั่งโดย", "ခွဲဝေသူ")} {t.assignerName}</span>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
