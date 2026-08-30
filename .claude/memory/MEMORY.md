@@ -15,6 +15,7 @@
 - [i18n ไทย↔พม่า](i18n-burmese.md) — สลับภาษาพม่าให้แรงงาน (tech/assistant/lead_tech/maid) ผ่าน lib/i18n.js + useLang + L(th,my); v532 เปิดให้แม่บ้าน + แปล TaskBoard/Expenses/TeamChat/คู่มือ; ออฟฟิศเป็นไทยเสมอ
 - [Team chat push](team-chat-push.md) — team-chat unread badges + Web Push/PWA (sw.js, push-send.js, migration 040); needs VAPID env on Vercel + Add-to-Home-Screen.
 - [HR system](hr-system.md) — attendance (selfie+GPS check-in/out), leave, holidays, monthly stats; lib/hr.js schedules, migration 041; set staff work_pattern in HR settings.
+- [Job handbook](job-handbook.md) — คู่มือตำแหน่งงาน (SOP/KPI ต่อ role ใน lib/handbook.js) + ประกาศแก้ในแอป + ปุ่มอ่านแล้ว/ติดตามคนอ่าน (mig 236, Handbook.jsx).
 - [Subcontractor system](subcontractor-system.md) — sub teams: per-job labor (80% default), payouts with WHT-on-VAT, team scorecard; migration 042; feeds Profit.
 - [Google Calendar feed](gcal-feed.md) — job schedule → Google Calendar via token-gated ICS feed (api/calendar.js); needs CALENDAR_FEED_TOKEN env; subscribe UI in Schedule.
 - [Cash flow](cash-flow.md) — money in/out by day, projected vs actual; cash_entries ledger seeded from docs + manual lines; migration 046; CashFlow.jsx.
