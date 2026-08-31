@@ -130,8 +130,16 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
       .sort((a, b) => b.days - a.days);
   }, [quotes, qAge, today, salesF]);
 
+  // ── ใบเสนอราคา "หมดอายุ" ที่ยังไม่ปิด — ลูกค้าอุ่น ที่ต้องกลับไปตามกลับ (re-engage) ──
+  const expiredQuotes = React.useMemo(() => {
+    if (!quotes) return [];
+    return quotes.filter((q) => q.status === "expired" && !q.hasJob && !q.hasInvoice && bySales(q.createdByName))
+      .map((q) => ({ ...q, days: dayDiff(String(q.issue_date || q.created_at || "").slice(0, 10), today) }))
+      .sort((a, b) => a.days - b.days);   // เพิ่งหมดอายุก่อน (ยังอุ่นสุด)
+  }, [quotes, today, salesF]);
+
   // ── คิว "ติดตามวันนี้" — รวม 3 แหล่ง (นัดถึงกำหนด · ถึงรอบล้างแอร์ · ใบเสนอค้างปิด) ต่อลูกค้า ──
-  const RSN = { sales: { t: "นัดติดตาม", c: "#dc2626", bg: "#fee2e2" }, service: { t: "ถึงรอบล้างแอร์", c: "#2563eb", bg: "#dbeafe" }, quote: { t: "ใบเสนอค้างปิด", c: "#ea580c", bg: "#ffedd5" } };
+  const RSN = { sales: { t: "นัดติดตาม", c: "#dc2626", bg: "#fee2e2" }, service: { t: "ถึงรอบล้างแอร์", c: "#2563eb", bg: "#dbeafe" }, quote: { t: "ใบเสนอค้างปิด", c: "#ea580c", bg: "#ffedd5" }, expired: { t: "ใบเสนอหมดอายุ", c: "#7c3aed", bg: "#ede9fe" } };
   const todayList = React.useMemo(() => {
     const m = {};
     const add = (cid, name, phone, reason, days, extra) => {
@@ -152,13 +160,14 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
   const addDays = (ymd, n) => { const d = new Date(String(ymd).slice(0, 10) + "T00:00:00"); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
   const calData = React.useMemo(() => {
     const m = {};
-    const push = (ymd, kind, item) => { (m[ymd] = m[ymd] || { care: [], sales: [], quote: [] })[kind].push(item); };
+    const push = (ymd, kind, item) => { (m[ymd] = m[ymd] || { care: [], sales: [], quote: [], expired: [] })[kind].push(item); };
     const clamp = (d) => (d < today ? today : d);   // เกินกำหนด → กองรวมที่วันนี้
     customers.forEach((c) => { if (suppress.has(c.customer_id) || (salesF && !(c.salesSet && c.salesSet.has(salesF)))) return; push(clamp(addDays(c.last.date, cadence)), "care", { customer_id: c.customer_id, name: c.name, phone: c.phone, lastDate: c.last.date, times: c.times }); });
     (schedAll || []).forEach((c) => { if (salesF && (c.ownerName || "") !== salesF) return; push(clamp(String(c.next_followup).slice(0, 10)), "sales", { customer_id: c.id, name: c.name, ownerName: c.ownerName, date: c.next_followup }); });
     pendingQuotes.forEach((q) => { if (suppress.has(q.customer_id)) return; push(today, "quote", { customer_id: q.customer_id, name: q.customerName, quote_no: q.quote_no, days: q.days }); });
+    expiredQuotes.forEach((q) => { if (suppress.has(q.customer_id)) return; push(today, "expired", { customer_id: q.customer_id, name: q.customerName, quote_no: q.quote_no, days: q.days }); });
     return m;
-  }, [customers, schedAll, pendingQuotes, cadence, today, suppress, salesF]);
+  }, [customers, schedAll, pendingQuotes, expiredQuotes, cadence, today, suppress, salesF]);
   const calCells = React.useMemo(() => {
     const y = calMonth.getFullYear(), mo = calMonth.getMonth();
     const startDow = (new Date(y, mo, 1).getDay() + 6) % 7;   // จันทร์ = 0
@@ -308,6 +317,8 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
           style={tab === "service" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>🔁 รอบบริการ ({customers.length})</button>
         <button className={"cat-chip" + (tab === "quotes" ? " on" : "")} onClick={() => setTab("quotes")}
           style={tab === "quotes" ? { background: "#dc2626", color: "#fff", borderColor: "#dc2626" } : {}}>📝 ใบเสนอค้างตอบ ({pendingQuotes.length})</button>
+        <button className={"cat-chip" + (tab === "expired" ? " on" : "")} onClick={() => setTab("expired")}
+          style={tab === "expired" ? { background: "#7c3aed", color: "#fff", borderColor: "#7c3aed" } : {}}>⌛ ใบเสนอหมดอายุ ({expiredQuotes.filter((q) => !suppress.has(q.customer_id)).length})</button>
         <span style={{ alignSelf: "center", color: "var(--line)" }}>|</span>
         <button className={"cat-chip" + (tab === "approved" ? " on" : "")} onClick={() => setTab("approved")}
           style={tab === "approved" ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>✅ อนุมัติแล้วยังไม่แจ้งหนี้ ({approvedNoInvoice.length})</button>
@@ -327,14 +338,13 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
               <button className="btn-ghost sm" onClick={() => { setCalMonth(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); }); setCalSel(today); }}>วันนี้</button>
             </div>
             <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--ink-2)", flexWrap: "wrap" }}>
-              <span>🔵 ดูแลอัตโนมัติ</span><span>🔴 นัดที่ตั้งเอง</span><span>🟠 ใบเสนอค้าง</span>
+              <span>🔵 ดูแลอัตโนมัติ</span><span>🔴 นัดที่ตั้งเอง</span><span>🟠 ใบเสนอค้าง</span><span>🟣 หมดอายุ</span>
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5 }}>
             {["จ", "อ", "พ", "พฤ", "ศ", "ส", "อา"].map((d) => <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--ink-3)", padding: "2px 0" }}>{d}</div>)}
             {calCells.map((cell) => {
-              const dd = calData[cell.ymd] || { care: [], sales: [], quote: [] };
-              const tot = dd.care.length + dd.sales.length + dd.quote.length;
+              const dd = calData[cell.ymd] || { care: [], sales: [], quote: [], expired: [] };
               const isToday = cell.ymd === today, on = calSel === cell.ymd;
               return (
                 <button key={cell.ymd} type="button" onClick={() => setCalSel(on ? null : cell.ymd)}
@@ -344,12 +354,13 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
                     {dd.care.length > 0 && <span style={{ fontSize: 9.5, fontWeight: 700, background: "#dbeafe", color: "#2563eb", borderRadius: 4, padding: "0 4px" }}>ดูแล {dd.care.length}</span>}
                     {dd.sales.length > 0 && <span style={{ fontSize: 9.5, fontWeight: 700, background: "#fee2e2", color: "#dc2626", borderRadius: 4, padding: "0 4px" }}>นัด {dd.sales.length}</span>}
                     {dd.quote.length > 0 && <span style={{ fontSize: 9.5, fontWeight: 700, background: "#ffedd5", color: "#ea580c", borderRadius: 4, padding: "0 4px" }}>เสนอ {dd.quote.length}</span>}
+                    {dd.expired.length > 0 && <span style={{ fontSize: 9.5, fontWeight: 700, background: "#ede9fe", color: "#7c3aed", borderRadius: 4, padding: "0 4px" }}>หมดอายุ {dd.expired.length}</span>}
                   </div>
                 </button>
               );
             })}
           </div>
-          {calSel && (() => { const dd = calData[calSel] || { care: [], sales: [], quote: [] }; const items = [...dd.sales.map((x) => ({ ...x, reason: "sales" })), ...dd.care.map((x) => ({ ...x, reason: "service" })), ...dd.quote.map((x) => ({ ...x, reason: "quote" }))];
+          {calSel && (() => { const dd = calData[calSel] || { care: [], sales: [], quote: [], expired: [] }; const items = [...dd.sales.map((x) => ({ ...x, reason: "sales" })), ...dd.expired.map((x) => ({ ...x, reason: "expired" })), ...dd.care.map((x) => ({ ...x, reason: "service" })), ...dd.quote.map((x) => ({ ...x, reason: "quote" }))];
             return (
             <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
               <b style={{ fontSize: 14 }}>{thDate(calSel)} · {items.length} รายการ</b>
@@ -358,10 +369,11 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
                 {items.map((it, i) => { const d = RSN[it.reason]; return (
                   <div className="card" key={i} style={{ padding: "10px 12px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <div><b>{it.name}</b> <span className="job-badge" style={{ background: d.bg, color: d.c, borderColor: d.bg }}>{d.t}{it.reason === "service" && it.times ? ` · เคยใช้ ${it.times} ครั้ง` : ""}{it.reason === "quote" ? ` · ${it.quote_no}` : ""}{it.reason === "sales" && it.ownerName ? ` · ${it.ownerName}` : ""}</span></div>
+                      <div><b>{it.name}</b> <span className="job-badge" style={{ background: d.bg, color: d.c, borderColor: d.bg }}>{d.t}{it.reason === "service" && it.times ? ` · เคยใช้ ${it.times} ครั้ง` : ""}{(it.reason === "quote" || it.reason === "expired") ? ` · ${it.quote_no}` : ""}{it.reason === "sales" && it.ownerName ? ` · ${it.ownerName}` : ""}</span></div>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {it.phone && <a className="btn-ghost sm" href={`tel:${it.phone}`}><UIcon name="user" size={13} /> โทร</a>}
                         <ChatCustomerLink role={role} customerId={it.customer_id} onGoChat={onGoChat} />
+                        {(it.reason === "quote" || it.reason === "expired") && it.quote_no && onOpenQuote && <button className="btn-ghost sm" onClick={() => onOpenQuote(it.quote_no)}>เปิดใบ ↗</button>}
                         <button className="btn-primary sm" onClick={() => setLogFor({ customer_id: it.customer_id, name: it.name, reason: it.reason })}>✅ บันทึกผล</button>
                       </div>
                     </div>
@@ -371,6 +383,37 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
             </div>
           ); })()}
         </div>
+      ) : tab === "expired" ? (
+        quotes === null ? <div className="empty">กำลังโหลด…</div>
+        : (() => { const list = expiredQuotes.filter((q) => !suppress.has(q.customer_id)); return list.length === 0
+          ? <div className="empty" style={{ padding: 40 }}>ไม่มีใบเสนอราคาหมดอายุที่ต้องตามกลับ 👍</div>
+          : (<>
+            <div className="card" style={{ padding: "11px 16px", marginBottom: 12, borderLeft: "3px solid #7c3aed", background: "#f5f3ff" }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#6d28d9" }}>⌛ ลูกค้าอุ่นที่ต้องตามกลับ — เคยขอราคาแล้วแต่ยังไม่ปิด</div>
+              <div className="page-sub" style={{ marginTop: 4, marginBottom: 0 }}>ตามกลับด้วย: <b>ยืนราคาเดิม / เสนอราคาใหม่</b> · <b>ส่งคูปองส่วนลด</b> (แชต) · ถามเหตุผล แล้ว<b>บันทึกผล</b> · ตาม 2-3 ครั้งไม่ตอบ → มาร์ค "ไม่สนใจ"</div>
+            </div>
+            <div className="job-cards">
+              {list.map((q) => (
+                <div className="card" key={q.quote_no} style={{ padding: "12px 14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <b style={{ fontSize: 15 }}>{q.customerName || "(ไม่ระบุลูกค้า)"}</b>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 5, alignItems: "center" }}>
+                        <span className="job-badge" style={{ background: "#ede9fe", color: "#7c3aed", borderColor: "#ede9fe" }}>⌛ หมดอายุ · {q.quote_no}</span>
+                        <span className="jo-dim" style={{ fontSize: 12.5 }}>เสนอเมื่อ {thDate(q.issue_date || q.created_at)} · {agoText(q.days)}{q.afterDisc ? ` · ${fmtBaht(q.afterDisc)}` : ""}{q.createdByName ? ` · ${q.createdByName}` : ""}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <ChatCustomerLink role={role} customerId={q.customer_id} onGoChat={onGoChat} />
+                      {onOpenQuote && <button className="btn-ghost sm" onClick={() => onOpenQuote(q.quote_no)}><UIcon name="clipboard" size={13} /> เปิดใบ · ต่ออายุ/เสนอใหม่ ↗</button>}
+                      <button className="btn-primary sm" onClick={() => setLogFor({ customer_id: q.customer_id, name: q.customerName, reason: "expired" })}>✅ บันทึกผล</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>);
+        })()
       ) : tab === "today" ? (
         jobs === null ? <div className="empty">กำลังโหลด…</div>
         : todayList.length === 0 ? <div className="empty" style={{ padding: 40 }}>🎉 วันนี้ไม่มีลูกค้าที่ต้องติดตาม — เคลียร์หมดแล้ว</div>
