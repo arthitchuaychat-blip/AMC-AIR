@@ -91,9 +91,9 @@ export function computePayslip(emp, st, opt = {}) {
   const base = monthly ? basePay : r0((st.present || 0) * daily);   // daily wage → paid per day present
   // OT credited in ½-hour blocks (rounded down per day) — periodStats provides the pre-rounded sum
   const otHours = st.otHours != null ? Number(st.otHours) || 0 : (st.otMin || 0) / 60;
-  // รายเดือน: เรต OT คิดจากฐานเงินเดือนเสมอ (÷30÷8×1.5) — อัปเดตอัตโนมัติเมื่อขึ้นเงินเดือน ไม่ค้างเรตเก่า
-  // รายวัน: ใช้เรตที่ตั้งไว้ (ฐานเป็นค่าแรง/วัน) ถ้ายังไม่ตั้ง fallback = ค่าแรงวัน÷8×1.5
-  const otRate = monthly ? autoOtRate(basePay, true) : (Number(emp.ot_rate) || autoOtRate(basePay, false));
+  // เรต OT คิดจากฐานเสมอ (กฎหมาย ×1.5) — อัปเดตอัตโนมัติเมื่อฐานเปลี่ยน ไม่ค้างเรตเก่า/เรตที่ตั้งผิดสูตร
+  //   รายเดือน = เงินเดือน÷30÷8×1.5 · รายวัน = ค่าแรงวัน÷8×1.5
+  const otRate = autoOtRate(basePay, monthly);
   const otPay = r0(otHours * otRate);
   const overLeave = Number(st.overLeave) || 0;
   const dLate = opt.deductLate === false ? 0 : r0((st.lateMin || 0) / 60 * hourly);

@@ -1777,29 +1777,23 @@ function PayRow({ p, onSave }) {
     const fields = {};
     if (v !== (Number(p.base_pay) || 0)) fields.base_pay = v;
     const isMonthly = (payType || "monthly") === "monthly";
-    // รายเดือน: เรต OT อิงฐานเงินเดือนเสมอ (อัปเดตทุกครั้งที่เปลี่ยนฐาน) · รายวัน: เติมให้เฉพาะตอนยังไม่ตั้ง
+    // เรต OT อิงฐานเสมอ (อัปเดตทุกครั้งที่เปลี่ยนฐาน) — รายเดือน ÷30÷8×1.5 · รายวัน ÷8×1.5
     if (v > 0) {
-      const auto = calcAutoOt(v);
-      if (isMonthly ? auto !== (Number(p.ot_rate) || 0) : (Number(p.ot_rate) || 0) === 0) { fields.ot_rate = auto; setOtRate(auto); }
+      const auto = isMonthly ? calcAutoOt(v) : autoDailyOt(v);
+      if (auto !== (Number(p.ot_rate) || 0)) { fields.ot_rate = auto; setOtRate(auto); }
     }
     if (Object.keys(fields).length) onSave(fields);
   };
   return (
     <div className="hr-pay-row">
       <div className="hr-name"><b>{p.name || p.email}</b></div>
-      <select className="inp" style={{ width: 110 }} value={payType} onChange={(e) => { const nt = e.target.value; setPayType(nt); const f = { pay_type: nt }; if (nt === "monthly" && Number(basePay) > 0) { const a = calcAutoOt(basePay); f.ot_rate = a; setOtRate(a); } onSave(f); }}>
+      <select className="inp" style={{ width: 110 }} value={payType} onChange={(e) => { const nt = e.target.value; setPayType(nt); const f = { pay_type: nt }; if (Number(basePay) > 0) { const a = nt === "daily" ? autoDailyOt(basePay) : calcAutoOt(basePay); f.ot_rate = a; setOtRate(a); } onSave(f); }}>
         <option value="monthly">รายเดือน</option><option value="daily">รายวัน</option>
       </select>
       <span className="inp inp-unit" style={{ width: 130 }} title={payType === "daily" ? "ค่าแรงต่อวัน" : "เงินเดือนต่อเดือน"}><span className="unit-pre">฿</span>
         <input type="number" min="0" value={basePay} onChange={(e) => setBasePay(e.target.value)} onBlur={(e) => saveBase(e.target.value)} /></span>
-      {payType === "monthly" ? (
-        <span className="inp inp-unit" style={{ width: 200, opacity: .8 }} title="เรต OT รายเดือนคิดจากฐานเงินเดือนอัตโนมัติ: เงินเดือน ÷ 30 ÷ 8 × 1.5 — เปลี่ยนตามฐานเสมอ"><span className="unit-pre">OT ฿</span>
-          <input type="number" value={calcAutoOt(basePay)} readOnly tabIndex={-1} style={{ cursor: "default" }} /><span className="unit-suf">/ชม. · อัตโนมัติ</span></span>
-      ) : (<>
-        <span className="inp inp-unit" style={{ width: 140 }} title="เรต OT ต่อชั่วโมง (รายวัน — ตั้งเอง)"><span className="unit-pre">OT ฿</span>
-          <input type="number" min="0" value={otRate} onChange={(e) => setOtRate(e.target.value)} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (Number(p.ot_rate) || 0)) onSave({ ot_rate: v }); }} /><span className="unit-suf">/ชม.</span></span>
-        <button className="btn-ghost sm" type="button" title={`ค่าแรงวัน ÷ 8 × 1.5 = ${autoDailyOt(basePay)} บ./ชม.`} onClick={() => { const v = autoDailyOt(basePay); setOtRate(v); onSave({ ot_rate: v }); }} style={{ fontSize: 11, padding: "2px 6px" }}>÷8×1.5</button>
-      </>)}
+      <span className="inp inp-unit" style={{ width: 210, opacity: .8 }} title={payType === "daily" ? "เรต OT รายวันคิดจากค่าแรง/วันอัตโนมัติ: ค่าแรงวัน ÷ 8 × 1.5" : "เรต OT รายเดือนคิดจากเงินเดือนอัตโนมัติ: เงินเดือน ÷ 30 ÷ 8 × 1.5"}><span className="unit-pre">OT ฿</span>
+        <input type="number" value={payType === "daily" ? autoDailyOt(basePay) : calcAutoOt(basePay)} readOnly tabIndex={-1} style={{ cursor: "default" }} /><span className="unit-suf">/ชม. · อัตโนมัติ</span></span>
       <label className="hr-sso"><input type="checkbox" checked={sso} onChange={(e) => { setSso(e.target.checked); onSave({ sso: e.target.checked }); }} /> ประกันสังคม</label>
       <input className="inp" style={{ width: 150 }} placeholder="เลขบัตร ปชช." title="ใช้ออกไฟล์ประกันสังคม (สปส.1-10) และสรุปยื่น ภงด.1 (ต้องรัน migration 130)" value={cid}
         onChange={(e) => setCid(e.target.value)} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (p.citizen_id || "")) onSave({ citizen_id: v || null }); }} />
