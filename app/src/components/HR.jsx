@@ -1361,7 +1361,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         ${ALLOWANCE_KINDS.map((x) => line(x.label, c.allow?.[x.k])).join("")}
         ${line("หักมาสาย", c.dLate, 1)}${line("หักขาดงาน", c.dAbsent, 1)}${line("หักลาเกินโควต้า/ลาไม่รับค่าแรง", c.dLeave, 1)}
         ${line("ประกันสังคม", c.dSso, 1)}${line("ภาษีหัก ณ ที่จ่าย", c.dTax, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักเงินยืม", c.dLoan, 1)}${line("หักค่าน้ำ", c.dWater, 1)}${line("หักค่าไฟ", c.dElectric, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
-        <tr><td style="padding:8px 10px;border-top:2px solid #0ea5e9;font-weight:800">รับสุทธิ</td><td style="padding:8px 12px;border-top:2px solid #0ea5e9;text-align:right;font-weight:800;font-size:16px;color:#0a6b3d">${fmtBaht(c.net)}</td></tr>
+        <tr><td style="padding:8px 10px;border-top:2px solid #0ea5e9;font-weight:800">${c.net < 0 ? "ค้างบริษัท (หักเกินเงินเดือน)" : "รับสุทธิ"}</td><td style="padding:8px 12px;border-top:2px solid #0ea5e9;text-align:right;font-weight:800;font-size:16px;color:${c.net < 0 ? "#b91c1c" : "#0a6b3d"}">${fmtBaht(c.net)}</td></tr>
       </table></div>`;
     const host = document.createElement("div"); host.style.cssText = "position:fixed;left:-99999px;top:0;background:#fff;"; host.innerHTML = html; document.body.appendChild(host);
     try {
@@ -1601,7 +1601,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
                   {ALLOWANCE_KINDS.map((x) => <td key={x.k}><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.["al_" + x.k] || 0} onChange={(e) => setA(r.p.id, "al_" + x.k, e.target.value)} /></span></td>)}
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
-                  <td style={{ fontWeight: 800, color: "var(--up)", cursor: "zoom-in" }} onClick={() => setDetailFor(r)} title="กดดูรายละเอียดรายวัน">{fmtBaht(c.net)}{rowPaid && <span className="job-badge b-green" style={{ display: "block", marginTop: 2, fontSize: 10 }}>📤 ส่งเบิกแล้ว</span>}</td>
+                  <td style={{ fontWeight: 800, color: c.net < 0 ? "var(--down)" : "var(--up)", cursor: "zoom-in" }} onClick={() => setDetailFor(r)} title={c.net < 0 ? "ยอดหักเกินเงินเดือน — พนักงานค้างบริษัท" : "กดดูรายละเอียดรายวัน"}>{fmtBaht(c.net)}{c.net < 0 && <span className="job-badge b-red" style={{ display: "block", marginTop: 2, fontSize: 10 }}>🔴 ค้างบริษัท {fmtBaht(-c.net)}</span>}{rowPaid && <span className="job-badge b-green" style={{ display: "block", marginTop: 2, fontSize: 10 }}>📤 ส่งเบิกแล้ว</span>}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <button className="btn-ghost sm" title="พิมพ์สลิป" onClick={() => { printWin.current = openPrintWindow(); setPrintSlip({ row: r, calc: c }); }}><UIcon name="catalog" size={14} /></button>
                     {rowPaid && <button className="btn-ghost sm" title="ส่งสลิปเข้าแชตส่วนตัวของพนักงาน" disabled={dmBusy === r.p.id} onClick={() => sendSlipDm(r, c)}>{dmBusy === r.p.id ? "…" : "📲"}</button>}
@@ -1730,7 +1730,7 @@ function SlipBody({ r, c, company, ym, from, to, payDate }) {
         {c.dElectric > 0 && <tr><td>หักค่าไฟ</td><td className="r">−{fmtBaht(c.dElectric)}</td></tr>}
         {c.otherDeduct > 0 && <tr><td>หักอื่นๆ</td><td className="r">−{fmtBaht(c.otherDeduct)}</td></tr>}
         <tr className="ps-sub"><td>รวมรายการหัก</td><td className="r">−{fmtBaht(c.ded)}</td></tr>
-        <tr className="ps-net"><td>เงินได้สุทธิ</td><td className="r">{fmtBaht(c.net)}</td></tr>
+        <tr className="ps-net"><td>{c.net < 0 ? "ค้างบริษัท (หักเกินเงินเดือน)" : "เงินได้สุทธิ"}</td><td className="r">{fmtBaht(c.net)}</td></tr>
       </tbody>
     </table>
     <div className="ps-att">สถิติงวดนี้: มา {r.st.present} · ขาด {r.st.absent} · ลา {r.st.leaveDays} · สาย {r.st.lateCnt} ครั้ง · OT {(r.st.otHours || 0).toFixed(1)} ชม.</div>

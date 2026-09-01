@@ -116,8 +116,8 @@ export default function PayDetailModal({ r, c, advRows, otRows, settings, period
             </Sec>
           )}
           <div style={{ borderTop: "2px solid var(--ink)", paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-            <b>{t("รวมรายได้", "စုစုပေါင်းဝင်ငွေ")} {fmtBaht(c.gross)} − {t("รายการหัก", "ဖြတ်ငွေ")} {fmtBaht(c.ded)}</b>
-            <b style={{ color: "var(--up)" }}>{t("สุทธิ", "အသားတင်")} {fmtBaht(c.net)}</b>
+            <b>{t("รวมรายได้", "စုစုပေါင်းဝင်ငွေ")} {fmtBaht(c.gross)} − {t("รายการหัก", "ဖြတ်ငွེ")} {fmtBaht(c.ded)}</b>
+            <b style={{ color: c.net < 0 ? "var(--down)" : "var(--up)" }}>{t("สุทธิ", "အသားတင်")} {fmtBaht(c.net)}{c.net < 0 ? ` (${t("ค้างบริษัท", "ကုမ္ပဏီကို ကြွေးကျန်")})` : ""}</b>
           </div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>{t("ปิด", "ပိတ်")}</button></div>
