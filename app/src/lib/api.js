@@ -5633,14 +5633,20 @@ export async function markAdvancesPaid(period, ids) {
   if (error) throw error;
 }
 // ปิดเบิกล่วงหน้าของรอบ + ยกส่วนที่หักไม่หมด (carry) ไปเป็น "ใบยอดยกมา" หักรอบหน้า
-// list: [{ userId, advIds:[...], carry:number }] — ปิดใบเดิมทุกใบของคนนั้น แล้วสร้างใบยกมาเท่า carry (ถ้ามี)
+// list: [{ userId, carry:number }] — ดึงใบเบิกที่เปิดอยู่จริงจาก DB (ไม่พึ่ง state) ปิดทุกใบของคนนั้น แล้วสร้างใบยกมาเท่า carry
 export async function settlePayrollAdvances(period, list) {
   const uid = await _uid();
-  // กันซ้ำ: ลบใบ "ยอดยกมา" ของรอบนี้ที่ยังไม่ถูกหัก (เผื่อกดปิดรอบซ้ำ)
+  const userIds = [...new Set((list || []).map((x) => x.userId).filter(Boolean))];
+  if (!userIds.length) return;
+  // กันซ้ำ: ลบใบ "ยอดยกมา" ของรอบนี้ที่ยังไม่ถูกหัก (เผื่อกดปิดรอบซ้ำ) — ทำก่อนดึงใบที่เปิดอยู่
   try { await supabase.from("hr_advances").delete().ilike("reason", `%ยกมาจากรอบ ${period}%`).is("period", null); } catch (_) {}
+  // ใบเบิกที่ "เปิดอยู่จริง" (อนุมัติแล้ว ยังไม่ผูกรอบ) ของทุกคนในลิสต์ — อ่านสด กัน state ค้าง
+  const { data: open } = await supabase.from("hr_advances").select("id, user_id").in("user_id", userIds).is("period", null).eq("status", "approved");
+  const byUser = {};
+  (open || []).forEach((a) => (byUser[a.user_id] = byUser[a.user_id] || []).push(a.id));
   const carryRows = [];
   for (const it of (list || [])) {
-    const ids = (it.advIds || []).filter(Boolean);
+    const ids = byUser[it.userId] || [];
     if (ids.length) { const { error } = await supabase.from("hr_advances").update({ status: "paid", period }).in("id", ids); if (error) throw error; }
     const carry = Math.round((Number(it.carry) || 0) * 100) / 100;
     if (carry > 0.005) carryRows.push({ user_id: it.userId, amount: carry, status: "approved", reason: `ยกมาจากรอบ ${period} (เบิกล่วงหน้าหักไม่หมด)`, decided_by: uid, decided_at: new Date().toISOString(), created_by: uid, paid_out_at: new Date().toISOString() });
