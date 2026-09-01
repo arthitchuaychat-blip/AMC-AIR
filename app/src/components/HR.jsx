@@ -4,7 +4,7 @@ import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
-import { payPeriod, periodStats, computePayslip, frozenPayslip } from "../lib/payroll";
+import { payPeriod, periodStats, computePayslip, frozenPayslip, parseAllowances, allowanceNote, ALLOWANCE_KINDS } from "../lib/payroll";
 import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, hrEditOt, otHoursFromTimes, createAutoOt, removeAutoOt, listOtOn, AUTO_OT_REASON, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186/191)
 import { listHrProfiles, saveHrProfile } from "../lib/api";   // ประวัติพนักงาน + เอกสาร (mig 235)
 import { fmtBaht } from "../lib/format";
@@ -1310,7 +1310,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         // หักค่าแรง = ส่วนเกินโควตาที่เกิดในรอบนี้ + ลาไม่รับค่าแรงทั้งหมดในรอบ (เต็มวัน/ราย ชม. คิดเศษวัน)
         st.overLeave = Math.round((Math.min(st.leaveDays - (st.unpaidLeave || 0), Math.max(0, over)) + (st.unpaidLeave || 0)) * 100) / 100;
         const slip = slipBy[p.id];
-        initAdj[p.id] = { bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0, water: Number(slip?.d_water) || 0, electric: Number(slip?.d_electric) || 0 };
+        const al = parseAllowances(slip?.other_note);
+        initAdj[p.id] = { bonus: Number(slip?.bonus) || 0, other_deduct: Number(slip?.other_deduct) || 0, water: Number(slip?.d_water) || 0, electric: Number(slip?.d_electric) || 0,
+          ...Object.fromEntries(ALLOWANCE_KINDS.map((x) => ["al_" + x.k, Number(al[x.k]) || 0])) };
         return { p, st, slip };
       });
       setAdj(initAdj); setRows(result);
@@ -1321,9 +1323,10 @@ function PayrollTab({ staff, settings, holSet, flash }) {
 
   // รอบที่จ่ายแล้วอ่านจากสลิปที่บันทึก — สูตรอยู่ที่ lib/payroll.js frozenPayslip() ใช้ร่วมกับหน้า เข้างาน/ลา
 
+  const alOf = (id) => Object.fromEntries(ALLOWANCE_KINDS.map((x) => [x.k, adj[id]?.["al_" + x.k] || 0]));   // เงินเพิ่ม/สวัสดิการรายคน (จากช่องในตาราง)
   const calcOf = (r) => (r.slip?.status === "paid" ? frozenPayslip(r.slip)
     : computePayslip({ ...r.p, bonus: adj[r.p.id]?.bonus || 0, other_deduct: adj[r.p.id]?.other_deduct || 0, advance: advByUser[r.p.id] || 0,
-        loan: loanByUser[r.p.id] || 0, water: adj[r.p.id]?.water || 0, electric: adj[r.p.id]?.electric || 0 }, r.st, {}));
+        loan: loanByUser[r.p.id] || 0, water: adj[r.p.id]?.water || 0, electric: adj[r.p.id]?.electric || 0, allow: alOf(r.p.id) }, r.st, {}));
   // ---- export CSV ราชการ (BOM นำหน้าให้ Excel อ่านไทยถูก) ----
   const dlCsv = (name, rowsArr) => { const csv = "﻿" + rowsArr.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = name; a.click(); };
   function exportSso() {
@@ -1354,6 +1357,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         ${line(`ค่าล่วงเวลา OT (${c.otHours.toFixed(1)} ชม.)`, c.otPay)}
         ${line(c._frozen ? "ค่าทำงานวันหยุด" : `ค่าทำงานวันหยุด (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`, c.holPay)}
         ${line("โบนัส/เบี้ยเลี้ยง", c.bonus)}
+        ${ALLOWANCE_KINDS.map((x) => line(x.label, c.allow?.[x.k])).join("")}
         ${line("หักมาสาย", c.dLate, 1)}${line("หักขาดงาน", c.dAbsent, 1)}${line("หักลาเกินโควต้า/ลาไม่รับค่าแรง", c.dLeave, 1)}
         ${line("ประกันสังคม", c.dSso, 1)}${line("ภาษีหัก ณ ที่จ่าย", c.dTax, 1)}${line("หักเบิกล่วงหน้า", c.dAdvance, 1)}${line("หักเงินยืม", c.dLoan, 1)}${line("หักค่าน้ำ", c.dWater, 1)}${line("หักค่าไฟ", c.dElectric, 1)}${line("หักอื่น ๆ", c.otherDeduct, 1)}
         <tr><td style="padding:8px 10px;border-top:2px solid #0ea5e9;font-weight:800">รับสุทธิ</td><td style="padding:8px 12px;border-top:2px solid #0ea5e9;text-align:right;font-weight:800;font-size:16px;color:#0a6b3d">${fmtBaht(c.net)}</td></tr>
@@ -1396,7 +1400,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           //    frozenPayslip อ่าน ot_min/60 กลับมาโชว์ชั่วโมง ถ้าเก็บดิบ สลิปจะโชว์ ชม.มากกว่าที่จ่าย (3.3 ชม. × 60 ≠ 150)
           late_min: r.st.lateMin, ot_min: Math.round((c.otHours || 0) * 60), d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
           d_loan: c.dLoan || 0, d_water: c.dWater || 0, d_electric: c.dElectric || 0,   // เงินยืม/ค่าน้ำ/ค่าไฟ (mig 184)
-          bonus: c.bonus, other_deduct: c.otherDeduct, d_tax: c.dTax || 0, net: c.net, status: markPaid ? "paid" : "draft" };
+          bonus: c.bonus, other_deduct: c.otherDeduct, d_tax: c.dTax || 0, other_note: allowanceNote(alOf(r.p.id)), net: c.net, status: markPaid ? "paid" : "draft" };
       });
       await savePayslips(rows);
       if (markPaid) {
@@ -1439,7 +1443,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         const c = calcOf(r);
         const dTot = (c.dLate || 0) + (c.dAbsent || 0) + (c.dLeave || 0) + (c.dSso || 0) + (c.dTax || 0) + (c.dAdvance || 0) + (c.dLoan || 0) + (c.dWater || 0) + (c.dElectric || 0) + (c.otherDeduct || 0);
         return { user_id: r.p.id, name: r.p.name || r.p.email, net: c.net,
-          breakdown: `รอบ ${ym} · ฐาน ${fmtBaht(c.base)}${c.otPay ? ` · OT ${fmtBaht(c.otPay)}` : ""}${c.holPay ? ` · วันหยุด ${fmtBaht(c.holPay)}` : ""}${c.bonus ? ` · โบนัส ${fmtBaht(c.bonus)}` : ""}${dTot ? ` · หักรวม −${fmtBaht(dTot)}` : ""} = สุทธิ ${fmtBaht(c.net)}` };
+          breakdown: `รอบ ${ym} · ฐาน ${fmtBaht(c.base)}${c.otPay ? ` · OT ${fmtBaht(c.otPay)}` : ""}${c.holPay ? ` · วันหยุด ${fmtBaht(c.holPay)}` : ""}${c.bonus ? ` · โบนัส ${fmtBaht(c.bonus)}` : ""}${c.allowance ? ` · เงินเพิ่ม ${fmtBaht(c.allowance)}` : ""}${dTot ? ` · หักรวม −${fmtBaht(dTot)}` : ""} = สุทธิ ${fmtBaht(c.net)}` };
       });
       const made = await pushPayrollToExpenses(ym, people, { payDate: meta?.payDate || payDate });
       flash(made ? `ส่งเงินเดือน ${made} คนเข้าเมนูเบิกจ่ายแล้ว ✓ — ไปกด “จ่าย” (แบ่งจ่ายได้) ที่เมนูเบิกจ่าย` : "รอบนี้ถูกส่งเข้าเบิกจ่ายไปแล้วก่อนหน้านี้ (ไม่มีใบใหม่)");
@@ -1456,7 +1460,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       base: c.base, ot_pay: c.otPay, hol_pay: c.holPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
       late_min: r.st.lateMin, ot_min: Math.round((c.otHours || 0) * 60), d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
       d_loan: c.dLoan || 0, d_water: c.dWater || 0, d_electric: c.dElectric || 0,
-      bonus: c.bonus, other_deduct: c.otherDeduct, d_tax: c.dTax || 0, net: c.net, status: paid ? "paid" : "draft" };
+      bonus: c.bonus, other_deduct: c.otherDeduct, d_tax: c.dTax || 0, other_note: allowanceNote(alOf(r.p.id)), net: c.net, status: paid ? "paid" : "draft" };
   }
   // จ่ายเงินเดือนทีละคน (ทยอยจ่ายจนครบ)
   async function payOne(r, meta) {
@@ -1570,7 +1574,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       {loading ? <div className="empty">กำลังคำนวณ…</div> : payable.length === 0 ? <div className="empty">ยังไม่มีพนักงานที่ตั้งฐานเงินเดือน — ไปตั้งที่แท็บ “กะ & ตั้งค่า”</div> : (
         <div style={{ overflowX: "auto" }}>
           <table className="hr-table pay-table">
-            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>ค่าวันหยุด</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>ภาษี</th><th>หักเบิกล่วงหน้า</th><th>เงินยืม</th><th>ค่าน้ำ</th><th>ค่าไฟ</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
+            <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>ค่าวันหยุด</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>ภาษี</th><th>หักเบิกล่วงหน้า</th><th>เงินยืม</th><th>ค่าน้ำ</th><th>ค่าไฟ</th><th>โบนัส</th><th>ค่าโทรศัพท์</th><th>ค่า AI</th><th>ค่าที่พัก</th><th>สวัสดิการอื่น</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
             <tbody>
               {payable.map((r) => { const c = calcOf(r); const rowPaid = r.slip?.status === "paid"; const openD = { onClick: () => setDetailFor(r), style: { cursor: "zoom-in" }, title: "กดดูรายละเอียดรายวัน" }; return (
                 <tr key={r.p.id}>
@@ -1588,6 +1592,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.water || 0} onChange={(e) => setA(r.p.id, "water", e.target.value)} /></span></td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.electric || 0} onChange={(e) => setA(r.p.id, "electric", e.target.value)} /></span></td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
+                  {ALLOWANCE_KINDS.map((x) => <td key={x.k}><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.["al_" + x.k] || 0} onChange={(e) => setA(r.p.id, "al_" + x.k, e.target.value)} /></span></td>)}
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
                   <td style={{ fontWeight: 800, color: "var(--up)", cursor: "zoom-in" }} onClick={() => setDetailFor(r)} title="กดดูรายละเอียดรายวัน">{fmtBaht(c.net)}{rowPaid && <span className="job-badge b-green" style={{ display: "block", marginTop: 2, fontSize: 10 }}>📤 ส่งเบิกแล้ว</span>}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
@@ -1612,6 +1617,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
               <td className={colTot.dWater ? "hr-bad" : ""}>{colTot.dWater ? "−" + fmtBaht(colTot.dWater) : "—"}</td>
               <td className={colTot.dElectric ? "hr-bad" : ""}>{colTot.dElectric ? "−" + fmtBaht(colTot.dElectric) : "—"}</td>
               <td className="hr-ok">{colTot.bonus ? fmtBaht(colTot.bonus) : "—"}</td>
+              {ALLOWANCE_KINDS.map((x) => { const s = payable.reduce((a, r) => a + (Number(adj[r.p.id]?.["al_" + x.k]) || 0), 0); return <td key={x.k} className="hr-ok">{s ? fmtBaht(s) : "—"}</td>; })}
               <td className={colTot.otherDeduct ? "hr-bad" : ""}>{colTot.otherDeduct ? "−" + fmtBaht(colTot.otherDeduct) : "—"}</td>
               <td style={{ fontWeight: 800 }}>{fmtBaht(totalNet)}</td>
               <td />
@@ -1662,6 +1668,7 @@ function SlipBody({ r, c, company, ym, from, to, payDate }) {
         {c.otPay > 0 && <tr><td>ค่าล่วงเวลา OT ({c.otHours.toFixed(1)} ชม.)</td><td className="r">{fmtBaht(c.otPay)}</td></tr>}
         {c.holPay > 0 && <tr><td>ค่าทำงานวันหยุด{c._frozen ? "" : ` (${c.holNormHours} ชม.${c.holOtHours ? ` + OT ${c.holOtHours} ชม.×3` : ""})`}</td><td className="r">{fmtBaht(c.holPay)}</td></tr>}
         {c.bonus > 0 && <tr><td>โบนัส/เบี้ยเลี้ยง</td><td className="r">{fmtBaht(c.bonus)}</td></tr>}
+        {ALLOWANCE_KINDS.map((x) => (Number(c.allow?.[x.k]) || 0) > 0 ? <tr key={x.k}><td>{x.label}</td><td className="r">{fmtBaht(c.allow[x.k])}</td></tr> : null)}
         <tr className="ps-sub"><td>รวมรายได้</td><td className="r">{fmtBaht(c.gross)}</td></tr>
         <tr className="ps-h"><td colSpan={2}>รายการหัก</td></tr>
         {c.dLate > 0 && <tr><td>หักมาสาย</td><td className="r">−{fmtBaht(c.dLate)}</td></tr>}

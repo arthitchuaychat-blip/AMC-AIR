@@ -2,6 +2,7 @@ import React from "react";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 import { leaveLabel, hrParseYmd } from "../lib/hr";
+import { ALLOWANCE_KINDS } from "../lib/payroll";
 
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 
@@ -87,6 +88,11 @@ export default function PayDetailModal({ r, c, advRows, otRows, settings, period
             {(advRows || []).length === 0 && <Row l={t("ไม่มีเบิกล่วงหน้าค้างหักในรอบนี้", "ဒီကာလ ကြိုတင်ငွေ ဖြတ်စရာ မရှိပါ")} v="" dim />}
             {(advRows || []).map((a) => <Row key={a.id} l={`${a.created_at ? thDate(a.created_at.slice(0, 10)) : ""}${a.reason ? ` · ${a.reason}` : ""}`} v={"−" + fmtBaht(a.amount)} />)}
           </Sec>
+          {(c.allowance || 0) > 0 && (
+            <Sec title={t("เงินเพิ่ม/สวัสดิการ", "ထောက်ပံ့ကြေး")} amount={c.allowance}>
+              {ALLOWANCE_KINDS.map((x) => (Number(c.allow?.[x.k]) || 0) > 0 ? <Row key={x.k} l={t(x.label, x.my)} v={"+" + fmtBaht(c.allow[x.k])} /> : null)}
+            </Sec>
+          )}
           {c.dLoan > 0 && (
             <Sec title={t("หักเงินยืม (งวดรอบนี้)", "ချေးငွေ ဖြတ် (ဒီကာလ)")} amount={c.dLoan} neg>
               <Row l={t("งวดผ่อนเงินยืมที่ตัดอัตโนมัติในรอบนี้", "ဒီကာလ အလိုအလျောက် ဖြတ်သည့် ချေးငွေအရစ်")} v="" dim />

@@ -102,6 +102,7 @@ export function computePayslip(emp, st, opt = {}) {
   const ssoBase = monthly ? basePay : base;
   const dSso = emp.sso ? r0(Math.min(ssoBase, SSO_BASE_CAP) * 0.05) : 0;
   const bonus = Number(emp.bonus) || 0, otherDeduct = Number(emp.other_deduct) || 0;
+  const allow = emp.allow || {}, allowance = allowanceTotal(allow);   // เงินเพิ่ม/สวัสดิการ (ค่าโทร/AI/ที่พัก/อื่น) — บวกเข้ารายได้
   const dLoan = Number(emp.loan) || 0, dWater = Number(emp.water) || 0, dElectric = Number(emp.electric) || 0;   // เงินยืม(ผ่อน)/ค่าน้ำ/ค่าไฟ (mig 184)
   const dAdvance = Number(emp.advance) || 0;   // เบิกเงินล่วงหน้า ที่อนุมัติแล้ว → หักในรอบนี้
   // ค่าทำงานวันหยุด (พ.ร.บ.คุ้มครองแรงงาน ม.62–63 · เจ้าของเคาะ 2026-07-17 จ่ายตามกฎหมายเต็ม):
@@ -110,7 +111,7 @@ export function computePayslip(emp, st, opt = {}) {
   const holNormHours = Number(st.holNormHours) || 0;
   const holOtHours = Number(st.holOtHours) || 0;
   const holPay = r0(holNormHours * hourly * (monthly ? 1 : 2) + holOtHours * hourly * 3);
-  const gross = base + otPay + holPay + bonus;
+  const gross = base + otPay + holPay + bonus + allowance;
   // เบิกล่วงหน้ามากกว่าเงินที่เหลือรับ → เดิมสุทธิติดลบ แล้วระบบปิดใบเบิกทั้งหมดว่า "หักแล้ว" หนี้ส่วนเกินหายไปเฉย ๆ
   // ⇒ หักได้ไม่เกินยอดที่เหลือจริง · ส่วนที่หักไม่ไหวส่งกลับไปเป็น advanceCarry ให้ยกไปหักรอบถัดไป
   // ภาษีหัก ณ ที่จ่าย ภ.ง.ด.1 — ยอดคงที่ต่อเดือนที่บัญชีเคาะ (mig 161) ยังไม่คิดขั้นบันไดอัตโนมัติ
@@ -123,13 +124,28 @@ export function computePayslip(emp, st, opt = {}) {
   const advanceCarry = r0(dAdvance - dAdvanceApplied);   // > 0 = ยังค้าง ต้องยกไปรอบหน้า
   const ded = dedBefore + dAdvanceApplied;
   return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso, dTax, dLoan, dWater, dElectric,
-    dAdvance: dAdvanceApplied, advanceCarry, bonus, otherDeduct, gross, ded, net: r0(gross - ded) };
+    dAdvance: dAdvanceApplied, advanceCarry, bonus, otherDeduct, allow, allowance, gross, ded, net: r0(gross - ded) };
 }
+// เงินเพิ่ม/สวัสดิการ (เก็บใน payslips.other_note เป็น JSON {al:{phone,ai,lodging,welfare}} — ไม่ต้อง migration)
+export const ALLOWANCE_KINDS = [
+  { k: "phone", label: "ค่าโทรศัพท์", my: "ဖုန်းခ" },
+  { k: "ai", label: "ค่า AI", my: "AI ခ" },
+  { k: "lodging", label: "ค่าที่พัก", my: "နေရာထိုင်ခင်းခ" },
+  { k: "welfare", label: "สวัสดิการอื่น", my: "အခြားထောက်ပံ့ကြေး" },
+];
+export function parseAllowances(note) {
+  if (!note) return {};
+  try { const o = typeof note === "string" ? JSON.parse(note) : note; return (o && o.al) || {}; } catch { return {}; }
+}
+export function allowanceTotal(al) { al = al || {}; return ALLOWANCE_KINDS.reduce((s, x) => s + (Number(al[x.k]) || 0), 0); }
+// ทำ JSON เก็บลง other_note — คืน null ถ้าไม่มีเงินเพิ่มเลย (กันเขียนขยะ)
+export function allowanceNote(al) { const t = allowanceTotal(al); return t > 0 ? JSON.stringify({ al: Object.fromEntries(ALLOWANCE_KINDS.map((x) => [x.k, Number(al?.[x.k]) || 0])) }) : null; }
 
 // ⚠️ รอบที่จ่ายแล้ว = ประวัติ ต้องอ่านจากสลิปที่บันทึกไว้ ห้ามคำนวณใหม่
 //    ไม่งั้นแก้กติกาการนับทีไร ตัวเลขเดือนที่จ่ายไปแล้วขยับตาม พนักงานเปิดสลิปเก่าแล้วเลขไม่ตรงกับเงินที่ได้รับจริง
 //    ใช้ร่วมกัน 2 หน้า: ตารางเงินเดือนฝั่ง HR และ "เงินเดือนของฉัน" ในหน้าเข้างาน/ลา — ห้ามก๊อปไปไว้คนละที่อีก
 export function frozenPayslip(s) {
+  const allow = parseAllowances(s.other_note), allowance = allowanceTotal(allow);
   return {
     monthly: (s.pay_type || "monthly") === "monthly",
     base: Number(s.base) || 0, otHours: (Number(s.ot_min) || 0) / 60, otPay: Number(s.ot_pay) || 0,
@@ -137,8 +153,8 @@ export function frozenPayslip(s) {
     dLate: Number(s.d_late) || 0, dAbsent: Number(s.d_absent) || 0, dLeave: Number(s.d_leave) || 0,
     dSso: Number(s.d_sso) || 0, dTax: Number(s.d_tax) || 0, dAdvance: Number(s.d_advance) || 0, advanceCarry: 0,
     dLoan: Number(s.d_loan) || 0, dWater: Number(s.d_water) || 0, dElectric: Number(s.d_electric) || 0,
-    bonus: Number(s.bonus) || 0, otherDeduct: Number(s.other_deduct) || 0,
-    gross: (Number(s.base) || 0) + (Number(s.ot_pay) || 0) + (Number(s.hol_pay) || 0) + (Number(s.bonus) || 0),
+    bonus: Number(s.bonus) || 0, otherDeduct: Number(s.other_deduct) || 0, allow, allowance,
+    gross: (Number(s.base) || 0) + (Number(s.ot_pay) || 0) + (Number(s.hol_pay) || 0) + (Number(s.bonus) || 0) + allowance,
     // ⚠️ ห้ามใส่ 0 ตายตัว — เดิม ded: 0 ทำให้สลิปที่จ่ายแล้วพิมพ์ "รวมรายการหัก −฿0.00"
     //    ทั้งที่บรรทัดหักมาสาย/ขาดงาน/ประกันสังคม/ภาษี ด้านบนมีตัวเลขจริง เลขบนสลิปเลยบวกไม่ลง
     //    และปุ่มส่งสลิปให้พนักงานทำงานเฉพาะรอบที่จ่ายแล้ว = ทุกใบที่ส่งออกไปถือเลข 0 นี้
