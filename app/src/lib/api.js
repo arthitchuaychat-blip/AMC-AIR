@@ -6070,6 +6070,15 @@ export async function pushPayrollToExpenses(period, people, { payDate } = {}) {
   }
   return made + updated;
 }
+// สลิปโอนเงินของพนักงานคนหนึ่งในรอบ — ดึงจาก payment_proof ของใบเบิกเงินเดือน (จ่ายผ่านเมนูเบิกจ่าย)
+// ใช้ตอนส่งสลิปเงินเดือนเข้าแชต ให้แนบสลิปโอนไปด้วย
+export async function getSalarySlipProof(period, name) {
+  if (!name) return [];
+  const { data } = await supabase.from("expense_requests").select("title, payment_proof").eq("category", "เงินเดือน").ilike("title", `%· รอบ ${period}%`);
+  const proofs = [];
+  (data || []).filter((e) => (e.title || "").includes(name)).forEach((e) => (e.payment_proof || []).forEach((u) => u && proofs.push(u)));
+  return [...new Set(proofs)];
+}
 // ลบใบเบิก "ถ้ามีสิทธิ์ DELETE (mig 240)" — ถ้า RLS ยังบล็อก (ยังไม่มี policy) ให้ถอยเป็น "ไม่อนุมัติ" แทน
 //   → อย่างน้อยหลุดจากคิว "รอจ่าย" ทันทีโดยไม่ต้องรัน SQL (ตีกลับได้ด้วยปุ่ม "นำกลับมา")
 async function _removeOrRejectExpenses(ids, note) {

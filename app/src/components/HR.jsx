@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
@@ -1370,11 +1370,16 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       const canvas = await html2canvas(host.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
       const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
       const url = await uploadChatImage(new File([blob], `payslip-${ym}.png`, { type: "image/png" }));
+      // สลิปโอนเงิน: ดึงจากใบเบิกเงินเดือนในเมนูเบิกจ่าย (payment_proof) + ของเดิมบนสลิป (ถ้ามี)
+      const proofs = await getSalarySlipProof(ym, r.p.name || r.p.email).catch(() => []);
+      if (r.slip?.pay_slip_url && !proofs.includes(r.slip.pay_slip_url)) proofs.push(r.slip.pay_slip_url);
       const rid = await createDmRoom(r.p.id);
-      await sendChatMessage(rid, `🧾 สลิปเงินเดือนรอบ ${ym} · รับสุทธิ ${fmtBaht(c.net)}`);
+      await sendChatMessage(rid, `🧾 สลิปเงินเดือนรอบ ${ym} · รับสุทธิ ${fmtBaht(c.net)}${proofs.length ? "\n💸 แนบสลิปการโอนเงินด้วย" : ""}`);
       await sendChatImage(rid, url);
-      if (r.slip?.pay_slip_url) await sendChatImage(rid, r.slip.pay_slip_url);   // สลิปโอนเงินของรอบตามไปด้วย
-      flash(`ส่งสลิปให้ ${r.p.name || "พนักงาน"} ทางแชตส่วนตัวแล้ว ✓`);
+      for (const u of proofs) await sendChatImage(rid, u);   // สลิปการโอนเงินตามไปด้วย
+      flash(proofs.length
+        ? `ส่งสลิปเงินเดือน + สลิปโอน ${proofs.length} รูป ให้ ${r.p.name || "พนักงาน"} แล้ว ✓`
+        : `ส่งสลิปเงินเดือนให้ ${r.p.name || "พนักงาน"} แล้ว ✓ (ยังไม่มีสลิปโอน — จ่ายเงิน+แนบสลิปที่เมนูเบิกจ่ายก่อน)`, !proofs.length);
     } catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
     document.body.removeChild(host);
     setDmBusy(null);
