@@ -3090,7 +3090,8 @@ export async function claimReceiptFlowAccount(receipt_no) {
 }
 // ปล่อยการจอง เมื่อส่งไม่สำเร็จ (ยังไม่ได้เลขจริงจาก FlowAccount) — ให้แก้แล้วส่งใหม่ได้
 export async function releaseReceiptFlowAccount(receipt_no) {
-  await supabase.rpc("release_receipt_flowaccount", { p_receipt_no: receipt_no }).catch(() => {});
+  // ⚠️ supabase.rpc() builder ไม่มี .catch — ต้องใช้ try/catch (เดิม .catch(() => {}) โยน "catch is not a function" บดบัง error จริงของการส่ง)
+  try { await supabase.rpc("release_receipt_flowaccount", { p_receipt_no: receipt_no }); } catch (_) { /* ปล่อยจองไม่สำเร็จก็ไม่บล็อกการแจ้ง error จริง */ }
 }
 // ปลดล็อกใบที่ "มาร์คว่าส่งแล้ว" แต่ไม่มีเอกสารจริงใน FlowAccount (flowaccount_id ยัง null — เช่น เผลอกรอกเลขผิด)
 // → ล้างเลขทิ้ง ให้ส่งใหม่ได้ · ใบที่มีเลขจริง (id) จะปลดไม่ได้ (กันส่งซ้ำเอกสารจริง)
