@@ -43,7 +43,7 @@ export const leaveAmountText = (l) => Number(l?.hours) > 0
   ? `${Number(l.hours)} ชม.${l.time_from && l.time_to ? ` (${String(l.time_from).slice(0, 5)}–${String(l.time_to).slice(0, 5)})` : ""}`
   : `${Number(l?.days) || 0} วัน`;
 
-export const DEFAULT_HR_SETTINGS = { start: "08:00", end: "17:00", graceMin: 15, otNeedsApproval: false,
+export const DEFAULT_HR_SETTINGS = { start: "08:00", end: "17:00", lunchStart: "12:00", lunchEnd: "13:00", graceMin: 15, otNeedsApproval: false,
   quota: { vacation: 6, personal: 3, sick: 30 } };
 
 const ymd = (d) => { const x = new Date(d); const p = (n) => String(n).padStart(2, "0"); return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}`; };

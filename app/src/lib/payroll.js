@@ -59,9 +59,18 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
     // OT rounded per-day (½-hour blocks) then summed — so sub-30-min days never accumulate
     // เปิดตั้งค่า "OT ต้องรับรอง" (mig 144): นับ OT เฉพาะวันที่ HR กดรับรองแล้ว (ot_ok) — กัน OT อัตโนมัติจากการเช็คเอาท์ช้า
     if (a?.check_in_at) {
-      // ลาคาบช่วงเช้า (from ≤ เวลาเข้ากะ) → เริ่มนับสายจากเวลาเลิกลา (เช่น ลา 08:00–12:00 เข้า 12:12 = ไม่สาย)
+      // ลาคาบช่วงเช้า (from ≤ เวลาเข้ากะ) → เริ่มนับสายจากเวลาเลิกลา · เลิกลาตกช่วงพักเที่ยง → เริ่มงานหลังพัก
+      // (เช่น ลา 08:00–12:00 + พักเที่ยง 12:00–13:00 → เริ่มนับสายจาก 13:00)
       let startOv = null;
-      if (lv?.h && lv.from && lv.to) { const shiftStart = minutesOf(settings?.start || "08:00"); const lf = minutesOf(lv.from), lt = minutesOf(lv.to); if (lf != null && lt != null && lf <= shiftStart) startOv = lt; }
+      if (lv?.h && lv.from && lv.to) {
+        const shiftStart = minutesOf(settings?.start || "08:00");
+        const lf = minutesOf(lv.from); let lt = minutesOf(lv.to);
+        if (lf != null && lt != null && lf <= shiftStart) {
+          const lunchS = minutesOf(settings?.lunchStart || "12:00"), lunchE = minutesOf(settings?.lunchEnd || "13:00");
+          if (lunchS != null && lunchE != null && lt >= lunchS && lt < lunchE) lt = lunchE;   // เลิกลาช่วงพักเที่ยง → เริ่มงานหลังพัก
+          startOv = lt;
+        }
+      }
       present++; const s = dayStat(a, settings, startOv);
       const counted = !settings?.otNeedsApproval || !!a.ot_ok;
       if (s.isLate) { lateCnt++; lateMin += s.lateMin; }
