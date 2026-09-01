@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, settlePayrollAdvances, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, settlePayrollAdvances, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof, checkPriorRoundClosed } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
@@ -1246,6 +1246,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [payOneFor, setPayOneFor] = React.useState(null);  // (เดิม) จ่ายรายคนในตัว — ปิดใช้แล้ว
   const [sendModal, setSendModal] = React.useState(false);  // ส่งเงินเดือนทั้งรอบเข้าเมนูเบิกจ่าย (รายคน)
   const [otAudit, setOtAudit] = React.useState(false);  // ตารางตรวจเรต OT ทุกคน (เทียบเรตเก่า↔ใหม่)
+  const [priorWarn, setPriorWarn] = React.useState(null);  // เตือนถ้ารอบก่อนหน้ายังไม่ปิด (กันปิดข้ามเดือน)
   const [dmBusy, setDmBusy] = React.useState(null);       // user_id ที่กำลังส่งสลิป DM
   const printWin = React.useRef(null);
   const lastDay = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
@@ -1317,6 +1318,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         return { p, st, slip };
       });
       setAdj(initAdj); setRows(result);
+      checkPriorRoundClosed(ym).then(setPriorWarn).catch(() => setPriorWarn(null));   // เตือนถ้ารอบก่อนหน้ายังไม่ปิด
     } catch (e) { flash("คำนวณไม่สำเร็จ: " + (e.message || e) + " (รัน 051_payroll.sql แล้วหรือยัง?)", true); setRows([]); }
     setLoading(false);
   }
@@ -1435,6 +1437,14 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   // ส่งเงินเดือนทั้งรอบเข้าเมนู "เบิกจ่าย" เป็นใบเบิกรายคน — จ่าย/แบ่งจ่ายที่นั่นเหมือนค่าใช้จ่ายอื่น
   // ล็อกสลิป (paid = ปิดรอบ) + เคลียร์เบิกล่วงหน้า/OT/เงินยืม แต่ "ไม่" เดินบัญชี/กระแสเงินสดตรงนี้ (ให้การจ่ายใบเบิกเป็นตัวเดินเงิน)
   async function sendRoundToExpenses(meta) {
+    // กันปิดรอบข้ามเดือน — ถ้ารอบก่อนหน้ายังไม่ปิด ยอดเบิกล่วงหน้า/เงินยืมอาจตัดผิดรอบ/ยกยอดพลาด
+    const prior = await checkPriorRoundClosed(ym).catch(() => null);
+    if (prior?.needsClose) {
+      const go = await confirmDialog({ title: `⚠️ รอบ ${prior.prevYm} ยังไม่ได้ปิด`,
+        message: `ควรปิด/ส่งเข้าเบิกจ่าย “รอบ ${prior.prevYm}” ก่อนรอบ ${ym}\n\nถ้าปิดข้ามลำดับเดือน ยอดเบิกล่วงหน้า/เงินยืมอาจตัดผิดรอบ หรือยกยอดพลาด\n\nยืนยันจะปิดรอบ ${ym} เลยไหม?`,
+        confirmText: `ปิดรอบ ${ym} เลย (ข้ามคำเตือน)` });
+      if (!go) return;
+    }
     setBusy(true);
     try {
       await savePayslips(payable.map((r) => slipRowOf(r, true)));   // แช่แข็งตัวเลข ณ ตอนส่ง
@@ -1545,6 +1555,12 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           <button className="btn-ghost sm" disabled={!payable.length} title="พิมพ์สลิปเงินเดือนทุกคนในรอบทีเดียว (เก็บเป็น PDF ได้)" onClick={() => { printWin.current = openPrintWindow(); setPrintAll(true); }}>🖨️ พิมพ์สลิปทั้งรอบ</button>
         </div>
       </div>
+      {!loading && priorWarn?.needsClose && paidStatus !== "paid" && (
+        <div style={{ border: "1.5px solid #f59e0b", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, color: "#b45309" }}>⚠️ รอบ {priorWarn.prevYm} ยังไม่ได้ปิด — ควรปิดรอบก่อนหน้าก่อน</div>
+          <div className="jo-dim" style={{ marginTop: 2 }}>ปิดรอบเรียงตามเดือนเสมอ (เก่า → ใหม่) ไม่งั้นยอดเบิกล่วงหน้า/เงินยืมอาจตัดผิดรอบหรือยกยอดพลาด · <button className="btn-ghost sm" style={{ padding: "1px 8px" }} onClick={() => setYm(priorWarn.prevYm)}>ไปรอบ {priorWarn.prevYm}</button></div>
+        </div>
+      )}
       {!loading && noOut.length > 0 && paidStatus !== "paid" && (
         <div style={{ border: "1.5px solid #dc2626", background: "#fef2f2", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
           <div style={{ fontWeight: 800, color: "#b91c1c", marginBottom: 4 }}>

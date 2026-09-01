@@ -6049,6 +6049,21 @@ export async function savePayslips(list) {
   if (error) throw error;
 }
 const _roundDayCols = (r) => { ["present_days", "absent_days", "leave_days", "over_leave_days"].forEach((k) => { if (r[k] != null) r[k] = Math.round(Number(r[k]) || 0); }); };
+// เช็คว่ารอบก่อนหน้าปิด/ส่งเข้าเบิกจ่ายแล้วหรือยัง — กันปิดรอบข้ามเดือน (ยอดเบิกล่วงหน้า/ยกยอดจะเพี้ยน)
+export async function checkPriorRoundClosed(ym) {
+  const [y, m] = (ym || "").split("-").map(Number);
+  if (!y || !m) return { prevYm: null, needsClose: false };
+  const pd = new Date(y, m - 2, 1);   // เดือนก่อนหน้า (prevYm)
+  const prevYm = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}`;
+  const { data: slips } = await supabase.from("payslips").select("status").eq("period", prevYm);
+  if ((slips || []).some((s) => s.status === "paid")) return { prevYm, needsClose: false };   // ปิดแล้ว (มีสลิปจ่าย/ส่ง)
+  // ยังไม่ปิด — ถ้ารอบก่อนหน้ามีการเข้างานจริง = ควรปิดก่อน (ไม่ใช่เดือนก่อนเริ่มใช้ระบบ)
+  const _d = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const from = _d(new Date(pd.getFullYear(), pd.getMonth() - 1, 26));
+  const to = _d(new Date(pd.getFullYear(), pd.getMonth(), 25));
+  const { count } = await supabase.from("hr_attendance").select("id", { count: "exact", head: true }).gte("work_date", from).lte("work_date", to);
+  return { prevYm, needsClose: (count || 0) > 0 };
+}
 // ── เงินเดือน → เมนูเบิกจ่าย ──────────────────────────────────────────────
 // ส่งเงินเดือนทั้งรอบเข้า "เบิกจ่าย" เป็นใบเบิกรายคน (อนุมัติแล้ว รอจ่าย) → แบ่งจ่ายได้เหมือนค่าใช้จ่ายอื่น
 // ไม่ลงเดินบัญชี/กระแสเงินสดตรงนี้ — ให้การ "จ่ายใบเบิก" (payExpense) เป็นตัวเดินเงินจริง (syncCashEntriesFromDocs)
