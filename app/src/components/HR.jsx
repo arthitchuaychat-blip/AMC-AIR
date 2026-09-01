@@ -1455,6 +1455,19 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     setBusy(false);
   }
 
+  // ซ่อมยอดเบิกล่วงหน้าของรอบที่ปิดแล้ว (เช่นปิดไว้ด้วยเวอร์ชันเก่า ใบเบิกไม่ถูกปิดผูกรอบ)
+  //   ปิดใบเบิกที่ยังค้าง (อ่านสดจาก DB) ผูกกับรอบนี้ + ยกส่วนเกิน (สรุปจากสลิปที่แช่แข็ง) ไปหักรอบหน้า
+  async function repairAdvances() {
+    if (!await confirmDialog({ title: `ซ่อมยอดเบิกล่วงหน้ารอบ ${ym}?`, message: "ปิดใบเบิกล่วงหน้าที่ยัง “ค้าง” ให้ผูกกับรอบนี้ + ยกส่วนที่หักไม่หมดไปหักรอบหน้า\n(ใช้กรณีปิดรอบไว้ด้วยเวอร์ชันเก่า แล้วยอดยกมาไม่ขึ้นในรอบถัดไป)", confirmText: "ซ่อมเลย" })) return;
+    setBusy(true);
+    try {
+      // carry ต่อคน = ยอดเบิกที่ยังค้าง (advByUser) − ยอดที่หักจริงในสลิปรอบนี้ (d_advance ที่แช่แข็ง)
+      const list = payable.map((r) => ({ userId: r.p.id, carry: Math.max(0, Math.round(((advByUser[r.p.id] || 0) - (Number(r.slip?.d_advance) || 0)) * 100) / 100) }));
+      await settlePayrollAdvances(ym, list);
+      flash("ซ่อมยอดเบิกล่วงหน้าแล้ว ✓ — ไปดูรอบถัดไป ยอดยกมาควรขึ้นแล้ว"); await load();
+    } catch (e) { flash("ซ่อมไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
   // cancel a paid run → revert slips to draft, un-settle the advances, remove the cash-flow line; redo anytime
   // แถวสลิปเงินเดือน 1 คน (ใช้ทั้งจ่ายทั้งรอบ + จ่ายรายคน)
   function slipRowOf(r, paid) {
@@ -1517,6 +1530,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           {paidStatus === "paid" ? (
             <>
               <span className="job-badge b-green">📤 ส่งเข้าเบิกจ่ายแล้ว</span>
+              <button className="btn-ghost sm" disabled={busy} title="ปิดใบเบิกล่วงหน้าที่ยังค้าง + ยกส่วนเกินไปหักรอบหน้า (ใช้เมื่อปิดรอบด้วยเวอร์ชันเก่า แล้วยอดยกมาไม่ขึ้น)" onClick={repairAdvances}>🔄 ซ่อมยอดเบิก</button>
               <button className="btn-ghost sm danger" disabled={busy} title="เปิดรอบใหม่ + ลบใบเบิกที่ยังไม่จ่าย" onClick={cancelPay}>ยกเลิก/เปิดรอบใหม่</button>
             </>
           ) : (
