@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
@@ -1243,6 +1243,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [printSlip, setPrintSlip] = React.useState(null); // { row, calc } for the off-screen payslip
   const [printAll, setPrintAll] = React.useState(false);  // พิมพ์สลิปทุกคนในรอบทีเดียว (เก็บเป็นชุด)
   const [payModal, setPayModal] = React.useState(false);  // จ่ายทั้งรอบ: เลือกบัญชี + สลิปโอน
+  const [payOneFor, setPayOneFor] = React.useState(null);  // จ่ายรายคน (ทยอยจ่าย)
   const [dmBusy, setDmBusy] = React.useState(null);       // user_id ที่กำลังส่งสลิป DM
   const printWin = React.useRef(null);
   const lastDay = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
@@ -1295,7 +1296,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       const dayBefore = (s) => { const d = hrParseYmd(s); d.setDate(d.getDate() - 1); return hrYmd(d); };
       const usedThru = (uid, t, cutoff) => leaves.reduce((s, l) => (l.user_id === uid && l.type === t) ? s + leaveDaysInRange(l, yearStart, cutoff) : s, 0);
       const slipBy = Object.fromEntries(slips.map((s) => [s.user_id, s]));
-      setPaidStatus(slips.length && slips.every((s) => s.status === "paid") ? "paid" : "draft");
+      { const np = slips.filter((s) => s.status === "paid").length; setPaidStatus(!slips.length || np === 0 ? "draft" : np === slips.length ? "paid" : "partial"); }
       const initAdj = {};
       const result = staff.map((p) => {
         const st = periodStats(p, attByUserDay, leaveDaySet, from, to, holSet, settings);
@@ -1377,6 +1378,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   // ยอดรวมทุกคอลัมน์ (แถวรวมท้ายตาราง)
   const colTot = payable.reduce((a, r) => { const c = calcOf(r); ["base", "otPay", "holPay", "dLate", "dAbsent", "dLeave", "dSso", "dTax", "dAdvance", "dLoan", "dWater", "dElectric", "bonus", "otherDeduct", "net"].forEach((k) => { a[k] = (a[k] || 0) + (Number(c[k]) || 0); }); return a; }, {});
   const totalNet = colTot.net || 0;
+  const paidCnt = payable.filter((r) => r.slip?.status === "paid").length;   // จ่ายไปแล้วกี่คน (ทยอยจ่าย)
+  const remainRows = payable.filter((r) => r.slip?.status !== "paid");
+  const remainNet = remainRows.reduce((a, r) => a + calcOf(r).net, 0);
 
   async function saveRun(markPaid, meta) {
     setBusy(true);
@@ -1420,6 +1424,34 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   }
 
   // cancel a paid run → revert slips to draft, un-settle the advances, remove the cash-flow line; redo anytime
+  // แถวสลิปเงินเดือน 1 คน (ใช้ทั้งจ่ายทั้งรอบ + จ่ายรายคน)
+  function slipRowOf(r, paid) {
+    const c = calcOf(r);
+    return { period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
+      base: c.base, ot_pay: c.otPay, hol_pay: c.holPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
+      late_min: r.st.lateMin, ot_min: Math.round((c.otHours || 0) * 60), d_late: c.dLate, d_absent: c.dAbsent, d_leave: c.dLeave, d_sso: c.dSso, d_advance: c.dAdvance,
+      d_loan: c.dLoan || 0, d_water: c.dWater || 0, d_electric: c.dElectric || 0,
+      bonus: c.bonus, other_deduct: c.otherDeduct, d_tax: c.dTax || 0, net: c.net, status: paid ? "paid" : "draft" };
+  }
+  // จ่ายเงินเดือนทีละคน (ทยอยจ่ายจนครบ)
+  async function payOne(r, meta) {
+    setBusy(true);
+    try {
+      const c = calcOf(r);
+      await savePayslips([slipRowOf(r, true)]);
+      await setPayslipPaidOne(ym, r.p.id, true, meta || {});
+      if (!(c.advanceCarry > 0)) await markAdvancesPaid(ym, advIdsByUser[r.p.id] || []).catch(() => {});
+      await markOtPaid(ym, otIdsByUser[r.p.id] || []).catch(() => {});
+      await markLoanPaid(ym, loanItemsByUser[r.p.id] || []).catch(() => {});
+      // ลงเดินบัญชี + กระแสเงินสด ด้วย "ยอดที่จ่ายไปแล้วสะสม" (รวมคนนี้)
+      const paidNet = payable.reduce((a, x) => a + (x.slip?.status === "paid" ? Number(x.slip.net) || 0 : 0), 0) + c.net;
+      const paidCnt = payable.filter((x) => x.slip?.status === "paid").length + 1;
+      if (meta?.accountId) await bookSalaryEntry(ym, meta.accountId, paidNet, meta.payDate || payDate, paidCnt).catch(() => {});
+      await upsertPayrollCashEntry(ym, paidNet, meta?.payDate || payDate, paidCnt).catch(() => {});
+      flash(`จ่าย ${r.p.name || "พนักงาน"} แล้ว ✓ (${fmtBaht(c.net)})`); await load();
+    } catch (e) { flash("จ่ายไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
   async function cancelPay() {
     // กติกาเดียวกับเอกสารขาย: ยกเลิกต้องระบุเหตุผลเสมอ — ลง audit log ไว้ตรวจย้อนหลัง
     const reason = await confirmDialog({ title: `ยกเลิกการจ่ายเงินเดือนรอบ ${ym}?`,
@@ -1444,13 +1476,19 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     <div className="card">
       <div className="sec-head">
         <div><div className="sec-title">เงินเดือน · รอบ {ym}</div>
-          <div className="sec-sub">รอบตัดวันที่ 25 — {from} ถึง {to} · จ่ายวันสิ้นเดือน (วันที่ {lastDay}) {paidStatus === "paid" ? "· ✅ จ่ายแล้ว" : ""}</div></div>
+          <div className="sec-sub">รอบตัดวันที่ 25 — {from} ถึง {to} · จ่ายวันสิ้นเดือน (วันที่ {lastDay}){paidStatus === "paid" ? " · ✅ จ่ายครบแล้ว" : paidStatus === "partial" ? ` · 🟡 ทยอยจ่าย ${paidCnt}/${payable.length} คน · ค้างจ่าย ${fmtBaht(remainNet)}` : ""}</div></div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} />
           {paidStatus === "paid" ? (
             <>
-              <span className="job-badge b-green">✅ จ่ายแล้ว · เข้ากระแสเงินสด</span>
-              <button className="btn-ghost sm danger" disabled={busy} onClick={cancelPay}>ยกเลิกจ่าย</button>
+              <span className="job-badge b-green">✅ จ่ายครบแล้ว · เข้ากระแสเงินสด</span>
+              <button className="btn-ghost sm danger" disabled={busy} onClick={cancelPay}>ยกเลิกจ่ายทั้งรอบ</button>
+            </>
+          ) : paidStatus === "partial" ? (
+            <>
+              <span className="job-badge b-amber">🟡 จ่ายแล้ว {paidCnt}/{payable.length} คน</span>
+              <button className="btn-primary sm ok" disabled={busy || !remainRows.length} title="จ่ายคนที่เหลือทั้งหมดในคราวเดียว" onClick={() => setPayModal(true)}>จ่ายที่เหลือ ({remainRows.length})</button>
+              <button className="btn-ghost sm danger" disabled={busy} onClick={cancelPay}>ยกเลิกจ่ายทั้งรอบ</button>
             </>
           ) : (
             <>
@@ -1512,7 +1550,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           <table className="hr-table pay-table">
             <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ฐาน</th><th>OT (ชม.)</th><th>ค่าวันหยุด</th><th>หักสาย</th><th>หักขาด</th><th>หักลาเกิน</th><th>ปกส.</th><th>ภาษี</th><th>หักเบิกล่วงหน้า</th><th>เงินยืม</th><th>ค่าน้ำ</th><th>ค่าไฟ</th><th>โบนัส</th><th>หักอื่นๆ</th><th>สุทธิ</th><th>สลิป</th></tr></thead>
             <tbody>
-              {payable.map((r) => { const c = calcOf(r); const openD = { onClick: () => setDetailFor(r), style: { cursor: "zoom-in" }, title: "กดดูรายละเอียดรายวัน" }; return (
+              {payable.map((r) => { const c = calcOf(r); const rowPaid = r.slip?.status === "paid"; const openD = { onClick: () => setDetailFor(r), style: { cursor: "zoom-in" }, title: "กดดูรายละเอียดรายวัน" }; return (
                 <tr key={r.p.id}>
                   <td style={{ textAlign: "left", cursor: "zoom-in" }} onClick={() => setDetailFor(r)} title="กดดูรายละเอียดรายวัน"><b>{r.p.name || r.p.email}</b><div className="jo-dim">{r.p.pay_type === "daily" ? `รายวัน · มา ${r.st.present} วัน` : "รายเดือน"}{r.st.absent ? ` · ขาด ${r.st.absent}` : ""}{r.st.lateMin ? ` · สาย ${Math.round(r.st.lateMin)} น.` : ""}{r.st.holidayDays ? <b style={{ color: "#b45309" }}> · 🔶 ทำงานวันหยุด {r.st.holidayDays} วัน ({r.st.holidayHours} ชม.)</b> : ""}</div></td>
                   <td {...openD}>{fmtBaht(c.base)}</td>
@@ -1525,14 +1563,15 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                   <td className={c.dTax ? "hr-bad" : ""} {...openD}>{c.dTax ? "−" + fmtBaht(c.dTax) : "—"}</td>
                   <td className={c.dAdvance ? "hr-bad" : ""} {...openD}>{c.dAdvance ? "−" + fmtBaht(c.dAdvance) : "—"}</td>
                   <td className={c.dLoan ? "hr-bad" : ""} {...openD} title="งวดผ่อนเงินยืมรอบนี้ (อัตโนมัติ)">{c.dLoan ? "−" + fmtBaht(c.dLoan) : "—"}</td>
-                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.water || 0} onChange={(e) => setA(r.p.id, "water", e.target.value)} /></span></td>
-                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.electric || 0} onChange={(e) => setA(r.p.id, "electric", e.target.value)} /></span></td>
-                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
-                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
-                  <td style={{ fontWeight: 800, color: "var(--up)", cursor: "zoom-in" }} onClick={() => setDetailFor(r)} title="กดดูรายละเอียดรายวัน">{fmtBaht(c.net)}</td>
+                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.water || 0} onChange={(e) => setA(r.p.id, "water", e.target.value)} /></span></td>
+                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.electric || 0} onChange={(e) => setA(r.p.id, "electric", e.target.value)} /></span></td>
+                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
+                  <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
+                  <td style={{ fontWeight: 800, color: "var(--up)", cursor: "zoom-in" }} onClick={() => setDetailFor(r)} title="กดดูรายละเอียดรายวัน">{fmtBaht(c.net)}{rowPaid && <span className="job-badge b-green" style={{ display: "block", marginTop: 2, fontSize: 10 }}>✅ จ่ายแล้ว</span>}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
+                    {!rowPaid && <button className="btn-primary sm" title="จ่ายเงินเดือนคนนี้ (ทยอยจ่ายได้)" disabled={busy} onClick={() => setPayOneFor({ r, c })}>💵 จ่าย</button>}
                     <button className="btn-ghost sm" title="พิมพ์สลิป" onClick={() => { printWin.current = openPrintWindow(); setPrintSlip({ row: r, calc: c }); }}><UIcon name="catalog" size={14} /></button>
-                    {paidStatus === "paid" && <button className="btn-ghost sm" title="ส่งสลิปเข้าแชตส่วนตัวของพนักงาน" disabled={dmBusy === r.p.id} onClick={() => sendSlipDm(r, c)}>{dmBusy === r.p.id ? "…" : "📲"}</button>}
+                    {rowPaid && <button className="btn-ghost sm" title="ส่งสลิปเข้าแชตส่วนตัวของพนักงาน" disabled={dmBusy === r.p.id} onClick={() => sendSlipDm(r, c)}>{dmBusy === r.p.id ? "…" : "📲"}</button>}
                   </td>
                 </tr>
               ); })}
@@ -1562,8 +1601,10 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (เพดานฐาน 17,500 = สูงสุด 875) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ” · 🔶 <b>ค่าวันหยุด</b>คิดอัตโนมัติตามกฎหมาย: 8 ชม.แรก รายเดือน +1 เท่า / รายวัน 2 เท่า · เกิน 8 ชม. = OT วันหยุด 3 เท่า (หักพักเที่ยง 1 ชม. เมื่ออยู่เกิน 5 ชม.) · 🔍 <b>กดที่ช่องไหนก็ได้ในแถว</b> เพื่อดูรายละเอียดรายวัน (OT วันไหน/สายวันไหน/ขาดวันไหน ฯลฯ)</p>
       {paidStatus === "paid" && <p className="page-sub" style={{ marginTop: 6, color: "var(--down)", fontWeight: 600 }}>🔒 รอบนี้จ่ายแล้ว — ตัวเลขในตารางอัปเดตตามข้อมูลล่าสุดเสมอ แต่สลิปที่บันทึก + รายการกระแสเงินสด ถูกล็อกไว้ ณ ตอนจ่าย · ถ้าแก้เวลาเข้างาน/ลา/เบิกล่วงหน้า แล้วต้องการให้มีผลกับสลิปและกระแสเงินสด ให้กด “ยกเลิกจ่าย” แล้ว “ทำจ่ายทั้งรอบ” ใหม่</p>}
 
-      {payModal && <PayRunModal total={totalNet} count={payable.length} defaultDate={payDate}
+      {payModal && <PayRunModal total={paidStatus === "partial" ? remainNet : totalNet} count={paidStatus === "partial" ? remainRows.length : payable.length} defaultDate={payDate}
         onClose={() => setPayModal(false)} onConfirm={(meta) => { setPayModal(false); saveRun(true, meta); }} flash={flash} />}
+      {payOneFor && <PayRunModal total={payOneFor.c.net} count={1} label={`จ่ายเงินเดือน · ${payOneFor.r.p.name || payOneFor.r.p.email}`} defaultDate={payDate}
+        onClose={() => setPayOneFor(null)} onConfirm={(meta) => { const r = payOneFor.r; setPayOneFor(null); payOne(r, meta); }} flash={flash} />}
 
       {detailFor && <PayDetailModal r={detailFor} c={calcOf(detailFor)} advRows={advRowsByUser[detailFor.p.id] || []} otRows={otRowsByUser[detailFor.p.id] || []}
         settings={settings} period={`${from} ถึง ${to}`} onClose={() => setDetailFor(null)} />}
@@ -1625,7 +1666,7 @@ function SlipBody({ r, c, company, ym, from, to, payDate }) {
 
 // one editable salary row — controlled so saved values show clearly (and re-sync after reload)
 // จ่ายเงินเดือนทั้งรอบ — เลือกบัญชี + วันที่ + แนบสลิปโอน (จำเป็น) เหมือนจ่ายช่างซัพ/เบิกล่วงหน้า
-function PayRunModal({ total, count, defaultDate, onClose, onConfirm, flash }) {
+function PayRunModal({ total, count, defaultDate, label, onClose, onConfirm, flash }) {
   const [accounts, setAccounts] = React.useState(null);
   const [accountId, setAccountId] = React.useState("");
   const [payDate, setPayDate] = React.useState(defaultDate || new Date().toISOString().slice(0, 10));
@@ -1646,7 +1687,7 @@ function PayRunModal({ total, count, defaultDate, onClose, onConfirm, flash }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
-        <div className="modal-head"><div className="modal-title">ทำจ่ายเงินเดือนทั้งรอบ · {fmtBaht(total)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-head"><div className="modal-title">{label || "ทำจ่ายเงินเดือนทั้งรอบ"} · {fmtBaht(total)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
           <div className="jo-dim" style={{ marginBottom: 10 }}>{count} คน · รวมจ่ายสุทธิ {fmtBaht(total)}</div>
           <label className="fld"><span>จ่ายจากบัญชี</span>

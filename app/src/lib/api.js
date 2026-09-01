@@ -6018,6 +6018,15 @@ export async function setPayslipPaid(period, paid, meta = {}) {
   if (error && /paid_from|pay_slip_url|PGRST204/i.test(error.message || "")) { delete patch.paid_from; delete patch.pay_slip_url; ({ error } = await supabase.from("payslips").update(patch).eq("period", period)); } // pre-130 fallback
   if (error) throw error;
 }
+// จ่ายเงินเดือนรายคน (ทยอยจ่าย) — มาร์คสลิปของคนเดียวเป็นจ่าย/ยกเลิกจ่าย
+export async function setPayslipPaidOne(period, userId, paid, meta = {}) {
+  const patch = paid
+    ? { status: "paid", paid_at: new Date().toISOString(), paid_from: meta.accountId || null, pay_slip_url: meta.slipUrl || null }
+    : { status: "draft", paid_at: null, paid_from: null, pay_slip_url: null };
+  let { error } = await supabase.from("payslips").update(patch).eq("period", period).eq("user_id", userId);
+  if (error && /paid_from|pay_slip_url|PGRST204/i.test(error.message || "")) { delete patch.paid_from; delete patch.pay_slip_url; ({ error } = await supabase.from("payslips").update(patch).eq("period", period).eq("user_id", userId)); }
+  if (error) throw error;
+}
 // ลงเดินบัญชี: เงินเดือนทั้งรอบ = เงินออกก้อนเดียวจากบัญชีที่เลือก (อ้าง ref salary + รอบ ไว้ลบตอนยกเลิกจ่าย)
 export async function bookSalaryEntry(ym, accountId, amount, payDate, headcount) {
   const uid = await _uid();
