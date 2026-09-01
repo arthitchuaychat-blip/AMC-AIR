@@ -78,16 +78,24 @@ export default async function handler(req, res) {
     remarks: input.remarks || "", items,
   };
 
-  // 3) create the document
-  try {
+  // 3) create the document — ถ้ารหัสผู้ติดต่อชนกับที่มีใน FlowAccount (CONTACT_CODE_DUPLICATE)
+  //    ให้ลองใหม่โดยไม่ส่ง contactCode (ปล่อยให้ FlowAccount จับคู่/สร้างผู้ติดต่อเอง)
+  async function create(payload) {
     const dr = await fetch(`https://openapi.flowaccount.com/${env}/${path}`, {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
-      body: JSON.stringify(doc),
+      body: JSON.stringify(payload),
     });
     const txt = await dr.text();
     let j = {}; try { j = JSON.parse(txt); } catch {}
-    if (!dr.ok) return res.status(200).json({ ok: false, reason: "create-failed", status: dr.status, msg: txt.slice(0, 600) });
-    const data = j.data || j;
-    return res.status(200).json({ ok: true, env, docPath: path, id: data.recordId || data.id || null, serial: data.documentSerial || data.documentNumber || null, raw: j });
+    return { ok: dr.ok, status: dr.status, txt, j };
+  }
+  try {
+    let r = await create(doc);
+    if (!r.ok && /CONTACT_CODE_DUPLICATE/i.test(r.txt || "")) {
+      r = await create({ ...doc, contactCode: "" });   // รหัสชน → ส่งใหม่ไม่ระบุรหัส
+    }
+    if (!r.ok) return res.status(200).json({ ok: false, reason: "create-failed", status: r.status, msg: (r.txt || "").slice(0, 600) });
+    const data = r.j.data || r.j;
+    return res.status(200).json({ ok: true, env, docPath: path, id: data.recordId || data.id || null, serial: data.documentSerial || data.documentNumber || null, raw: r.j });
   } catch (e) { return res.status(200).json({ ok: false, reason: "network", msg: String(e) }); }
 }
