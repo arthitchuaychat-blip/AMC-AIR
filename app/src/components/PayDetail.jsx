@@ -3,6 +3,7 @@ import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
 import { leaveLabel, hrParseYmd } from "../lib/hr";
 import { ALLOWANCE_KINDS } from "../lib/payroll";
+import { debugAdvances } from "../lib/api";
 
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 
@@ -12,6 +13,7 @@ export default function PayDetailModal({ r, c, advRows, otRows, settings, period
   // lang="my" = ช่างพม่า (สวิตช์ภาษาหน้า เข้างาน/ลา) — หัวข้อ/ข้อความหลักเป็นพม่า · ตัวเลข/วันที่คงรูปแบบไทยเหมือนหน้าอื่น
   const t = (th, my) => (lang === "my" && my ? my : th);
   const p = r.p, st = r.st, days = st.days || [];
+  const [advDbg, setAdvDbg] = React.useState(null);
   const otRate = c.otRate != null ? c.otRate : (Number(p.ot_rate) || 0);   // เรต OT ที่ใช้จริง (รายเดือนคิดจากฐานอัตโนมัติ)
   const monthly = (p.pay_type || "monthly") === "monthly";
   const basePay = Number(p.base_pay) || 0;
@@ -88,6 +90,15 @@ export default function PayDetailModal({ r, c, advRows, otRows, settings, period
           <Sec title={t("หักเบิกเงินล่วงหน้า", "ကြိုတင်ငွေ ဖြတ်")} amount={c.dAdvance} neg>
             {(advRows || []).length === 0 && <Row l={t("ไม่มีเบิกล่วงหน้าค้างหักในรอบนี้", "ဒီကာလ ကြိုတင်ငွေ ဖြတ်စရာ မရှိပါ")} v="" dim />}
             {(advRows || []).map((a) => <Row key={a.id} l={`${a.created_at ? thDate(a.created_at.slice(0, 10)) : ""}${a.reason ? ` · ${a.reason}` : ""}`} v={"−" + fmtBaht(a.amount)} />)}
+            <button type="button" className="btn-ghost sm" style={{ marginTop: 6, fontSize: 11 }} onClick={async () => { try { setAdvDbg(await debugAdvances(p.id)); } catch (e) { setAdvDbg([{ id: "err", reason: String(e.message || e) }]); } }}>🔍 เช็คสถานะใบเบิกทั้งหมดในระบบ</button>
+            {advDbg && <div style={{ marginTop: 6, padding: "6px 8px", background: "var(--surface-2)", borderRadius: 8, fontSize: 11.5 }}>
+              {advDbg.length === 0 ? <div className="jo-dim">— ไม่มีใบเบิกในระบบ —</div> : advDbg.map((a) => (
+                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "2px 0" }}>
+                  <span>{a.request_date || "?"} · <b>{fmtBaht(a.amount)}</b> · <span style={{ color: a.status === "approved" && !a.period ? "#b45309" : "#0d9488" }}>{a.status}{a.period ? ` · ผูกรอบ ${a.period}` : " · ยังไม่ผูกรอบ"}</span>{a.reason ? ` · ${a.reason}` : ""}</span>
+                </div>
+              ))}
+              <div className="jo-dim" style={{ marginTop: 4 }}>* "ยังไม่ผูกรอบ" (สีส้ม) = ยังถูกหักซ้ำได้ · "ผูกรอบ XXXX-XX" = ปิดแล้ว</div>
+            </div>}
             {(() => { const total = (advRows || []).reduce((s, a) => s + (Number(a.amount) || 0), 0); const carry = Number(c.advanceCarry) || 0; return carry > 0 ? (<>
               <Row l={t("เบิกทั้งหมด", "စုစုပေါင်း ကြိုတင်ငွေ")} v={fmtBaht(total)} dim />
               <Row l={<b style={{ color: "#b45309" }}>{t("⚠️ หักได้แค่เท่าเงินที่เหลือ — ส่วนเกินยกไปหักรอบหน้า", "⚠️ ကျန်ငွေအတိုင်းသာ ဖြတ်နိုင် — ပိုသည့်အပိုင်း နောက်ကာလသို့")}</b>} v={<b style={{ color: "#b45309" }}>{t("ยกไป", "လွှဲ")} {fmtBaht(carry)}</b>} />

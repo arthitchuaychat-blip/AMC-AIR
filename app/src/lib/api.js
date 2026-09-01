@@ -6095,6 +6095,12 @@ export async function pushPayrollToExpenses(period, people, { payDate } = {}) {
   }
   return made + updated;
 }
+// diagnostic: ดูใบเบิกล่วงหน้าทั้งหมดของคนหนึ่ง (ทุกสถานะ/รอบ) — ใช้ไล่บั๊กยอดยกมา
+export async function debugAdvances(userId) {
+  const { data, error } = await supabase.from("hr_advances").select("id, amount, status, period, reason, request_date, paid_out_at").eq("user_id", userId).order("request_date", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
 // สลิปโอนเงินของพนักงานคนหนึ่งในรอบ — ดึงจาก payment_proof ของใบเบิกเงินเดือน (จ่ายผ่านเมนูเบิกจ่าย)
 // ใช้ตอนส่งสลิปเงินเดือนเข้าแชต ให้แนบสลิปโอนไปด้วย
 export async function getSalarySlipProof(period, name) {
