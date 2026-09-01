@@ -88,6 +88,10 @@ export default function PayDetailModal({ r, c, advRows, otRows, settings, period
           <Sec title={t("หักเบิกเงินล่วงหน้า", "ကြိုတင်ငွေ ဖြတ်")} amount={c.dAdvance} neg>
             {(advRows || []).length === 0 && <Row l={t("ไม่มีเบิกล่วงหน้าค้างหักในรอบนี้", "ဒီကာလ ကြိုတင်ငွေ ဖြတ်စရာ မရှိပါ")} v="" dim />}
             {(advRows || []).map((a) => <Row key={a.id} l={`${a.created_at ? thDate(a.created_at.slice(0, 10)) : ""}${a.reason ? ` · ${a.reason}` : ""}`} v={"−" + fmtBaht(a.amount)} />)}
+            {(() => { const total = (advRows || []).reduce((s, a) => s + (Number(a.amount) || 0), 0); const carry = Number(c.advanceCarry) || 0; return carry > 0 ? (<>
+              <Row l={t("เบิกทั้งหมด", "စုစုပေါင်း ကြိုတင်ငွေ")} v={fmtBaht(total)} dim />
+              <Row l={<b style={{ color: "#b45309" }}>{t("⚠️ หักได้แค่เท่าเงินที่เหลือ — ส่วนเกินยกไปหักรอบหน้า", "⚠️ ကျန်ငွေအတိုင်းသာ ဖြတ်နိုင် — ပိုသည့်အပိုင်း နောက်ကာလသို့")}</b>} v={<b style={{ color: "#b45309" }}>{t("ยกไป", "လွှဲ")} {fmtBaht(carry)}</b>} />
+            </>) : null; })()}
           </Sec>
           {(c.allowance || 0) > 0 && (
             <Sec title={t("เงินเพิ่ม/สวัสดิการ", "ထောက်ပံ့ကြေး")} amount={c.allowance}>
