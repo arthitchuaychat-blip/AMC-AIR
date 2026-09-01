@@ -5632,6 +5632,25 @@ export async function markAdvancesPaid(period, ids) {
   const { error } = await supabase.from("hr_advances").update({ status: "paid", period }).in("id", ids);
   if (error) throw error;
 }
+// ปิดเบิกล่วงหน้าของรอบ + ยกส่วนที่หักไม่หมด (carry) ไปเป็น "ใบยอดยกมา" หักรอบหน้า
+// list: [{ userId, advIds:[...], carry:number }] — ปิดใบเดิมทุกใบของคนนั้น แล้วสร้างใบยกมาเท่า carry (ถ้ามี)
+export async function settlePayrollAdvances(period, list) {
+  const uid = await _uid();
+  // กันซ้ำ: ลบใบ "ยอดยกมา" ของรอบนี้ที่ยังไม่ถูกหัก (เผื่อกดปิดรอบซ้ำ)
+  try { await supabase.from("hr_advances").delete().ilike("reason", `%ยกมาจากรอบ ${period}%`).is("period", null); } catch (_) {}
+  const carryRows = [];
+  for (const it of (list || [])) {
+    const ids = (it.advIds || []).filter(Boolean);
+    if (ids.length) { const { error } = await supabase.from("hr_advances").update({ status: "paid", period }).in("id", ids); if (error) throw error; }
+    const carry = Math.round((Number(it.carry) || 0) * 100) / 100;
+    if (carry > 0.005) carryRows.push({ user_id: it.userId, amount: carry, status: "approved", reason: `ยกมาจากรอบ ${period} (เบิกล่วงหน้าหักไม่หมด)`, decided_by: uid, decided_at: new Date().toISOString(), created_by: uid, paid_out_at: new Date().toISOString() });
+  }
+  if (carryRows.length) {
+    let { error } = await supabase.from("hr_advances").insert(carryRows);
+    if (error && /paid_out_at|PGRST204/i.test(error.message || "")) { carryRows.forEach((r) => delete r.paid_out_at); ({ error } = await supabase.from("hr_advances").insert(carryRows)); }
+    if (error) throw error;
+  }
+}
 // โอนเงินเบิกล่วงหน้าให้พนักงานจริง (mig 129) — แนบสลิป + ลงเดินบัญชี · ไม่แตะสถานะหักเงินเดือน
 export async function payAdvanceOut(id, { accountId, payDate, slipUrl }) {
   const uid = await _uid();
@@ -6176,6 +6195,8 @@ export async function removePayrollCashEntry(ym) {
 }
 // revert advances settled in this pay period back to "approved" (so a re-run deducts them again)
 export async function unsettleAdvances(period) {
+  // ลบใบ "ยอดยกมา" ที่สร้างตอนปิดรอบนี้ (กันหักซ้ำเมื่อเปิดรอบใหม่)
+  try { await supabase.from("hr_advances").delete().ilike("reason", `%ยกมาจากรอบ ${period}%`).is("period", null); } catch (_) {}
   const { error } = await supabase.from("hr_advances").update({ status: "approved", period: null }).eq("period", period).eq("status", "paid");
   if (error) throw error;
 }

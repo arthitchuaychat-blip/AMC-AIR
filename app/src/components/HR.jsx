@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, settlePayrollAdvances, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
@@ -1411,10 +1411,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       await savePayslips(rows);
       if (markPaid) {
         await setPayslipPaid(ym, true, meta || {});
-        // settle the advances deducted this run so they aren't deducted again next month
-        // ⚠️ ปิดเฉพาะคนที่หักได้ครบจริง — ถ้าเงินไม่พอหัก (advanceCarry > 0) ต้องคงใบไว้ให้ยกไปหักรอบหน้า
-        const ids = payable.filter((r) => !(calcOf(r).advanceCarry > 0)).flatMap((r) => advIdsByUser[r.p.id] || []);
-        await markAdvancesPaid(ym, ids);
+        // ปิดเบิกล่วงหน้าที่หักรอบนี้ + ยกส่วนที่หักไม่หมด (carry) ไปเป็นใบยอดยกมาหักรอบหน้า
+        await settlePayrollAdvances(ym, payable.map((r) => ({ userId: r.p.id, advIds: advIdsByUser[r.p.id] || [], carry: calcOf(r).advanceCarry || 0 })));
         // ปิด OT ที่อนุมัติ (→ paid) + บันทึกงวดผ่อนเงินยืม (ลด balance) ของคนที่จ่ายรอบนี้ (mig 184)
         await markOtPaid(ym, payable.flatMap((r) => otIdsByUser[r.p.id] || [])).catch(() => {});
         await markLoanPaid(ym, payable.flatMap((r) => loanItemsByUser[r.p.id] || [])).catch(() => {});
@@ -1441,8 +1439,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     try {
       await savePayslips(payable.map((r) => slipRowOf(r, true)));   // แช่แข็งตัวเลข ณ ตอนส่ง
       await setPayslipPaid(ym, true, {});                            // ปิดรอบ (สลิปทุกคน = ส่งแล้ว)
-      const ids = payable.filter((r) => !(calcOf(r).advanceCarry > 0)).flatMap((r) => advIdsByUser[r.p.id] || []);
-      await markAdvancesPaid(ym, ids);
+      await settlePayrollAdvances(ym, payable.map((r) => ({ userId: r.p.id, advIds: advIdsByUser[r.p.id] || [], carry: calcOf(r).advanceCarry || 0 })));
       await markOtPaid(ym, payable.flatMap((r) => otIdsByUser[r.p.id] || [])).catch(() => {});
       await markLoanPaid(ym, payable.flatMap((r) => loanItemsByUser[r.p.id] || [])).catch(() => {});
       const people = payable.map((r) => {
@@ -1475,7 +1472,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       const c = calcOf(r);
       await savePayslips([slipRowOf(r, true)]);
       await setPayslipPaidOne(ym, r.p.id, true, meta || {});
-      if (!(c.advanceCarry > 0)) await markAdvancesPaid(ym, advIdsByUser[r.p.id] || []).catch(() => {});
+      await settlePayrollAdvances(ym, [{ userId: r.p.id, advIds: advIdsByUser[r.p.id] || [], carry: c.advanceCarry || 0 }]).catch(() => {});
       await markOtPaid(ym, otIdsByUser[r.p.id] || []).catch(() => {});
       await markLoanPaid(ym, loanItemsByUser[r.p.id] || []).catch(() => {});
       // ลงเดินบัญชี + กระแสเงินสด ด้วย "ยอดที่จ่ายไปแล้วสะสม" (รวมคนนี้)
