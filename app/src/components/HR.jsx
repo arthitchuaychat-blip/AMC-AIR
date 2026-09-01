@@ -1104,7 +1104,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
         if (j.status === "done") m.done++; if (j.rating > 0) { m.ratingSum += j.rating; m.ratingN++; } if (j.is_claim) m.claims++; if (j.status === "reschedule") m.resched++;
       });
       const result = staff.map((p) => {
-        const st = periodStats(p, attByUserDay, leaveDaySet, from, calcTo, holSet, settings);
+        const st = periodStats(p, attByUserDay, leaveDaySet, from, calcTo, holSet, settings, new Date().toLocaleDateString("en-CA"));
         // ตรงเวลา = สัดส่วน "วันที่มาตรงเวลา" จากวันที่มาทำงานจริง (ไม่ปนการขาด — การขาดคิดในหมวด "มาทำงาน" แล้ว)
         const onTime = st.present ? Math.round((st.present - st.lateCnt) / st.present * 100) : null;
         const m = jm[p.team] || { done: 0, ratingSum: 0, ratingN: 0, claims: 0, resched: 0 };
@@ -1301,7 +1301,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       { const np = slips.filter((s) => s.status === "paid").length; setPaidStatus(!slips.length || np === 0 ? "draft" : np === slips.length ? "paid" : "partial"); }
       const initAdj = {};
       const result = staff.map((p) => {
-        const st = periodStats(p, attByUserDay, leaveDaySet, from, to, holSet, settings);
+        const st = periodStats(p, attByUserDay, leaveDaySet, from, to, holSet, settings, new Date().toLocaleDateString("en-CA"));
         st.otHours = otH[p.id] || 0; st.otMin = Math.round(st.otHours * 60);   // OT จากใบขอที่อนุมัติ (mig 184)
         let over = 0;
         ["vacation", "personal", "sick"].forEach((t) => {

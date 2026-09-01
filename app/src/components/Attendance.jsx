@@ -126,7 +126,7 @@ export default function Attendance({ me }) {
       attRows.filter((a) => a.work_date >= from && a.work_date <= to).forEach((a) => { attByUserDay[me.id][a.work_date] = a; });
       const approved = lvAll.filter((l) => l.status === "approved");
       const leaveDaySet = buildLeaveDaySet(approved, from, to);
-      const stp = periodStats(me, attByUserDay, leaveDaySet, from, to, holSet, hset);
+      const stp = periodStats(me, attByUserDay, leaveDaySet, from, to, holSet, hset, new Date().toLocaleDateString("en-CA"));
       // OT คิดจากใบขอที่ HR อนุมัติเท่านั้น (mig 184) — override OT อัตโนมัติจากเช็คเอาท์
       const otIn = (myOt || []).filter((o) => o.ot_date >= from && o.ot_date <= to && ((o.status === "approved" && Number(o.hours) > 0) || (o.status === "paid" && o.period === payYm)));
       stp.otHours = Math.round(otIn.reduce((s, o) => s + (Number(o.hours) || 0), 0) * 100) / 100;

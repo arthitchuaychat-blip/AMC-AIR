@@ -12,7 +12,7 @@ export function payPeriod(ym) {
 
 // attendance/leave stats for one person over [from,to]
 // leaveDaySet values are { t: type, h: hours|null } (see buildLeaveDaySet) — ลาราย ชม. นับเป็นเศษวัน และวันนั้นยังนับเข้างานตามปกติ
-export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, settings) {
+export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, settings, todayYmd) {
   let present = 0, lateCnt = 0, lateMin = 0, otMin = 0, otHours = 0, absent = 0, workdays = 0, leaveDays = 0, unpaidLeave = 0, holidayDays = 0, holidayMin = 0, holNormMin = 0, holOtHours = 0;
   const r2 = (n) => Math.round(n * 100) / 100;
   const days = [];   // รายละเอียดรายวัน — ให้หน้าเงินเดือนกดดูที่มาของทุกช่องได้ (OT วันไหน/สายวันไหน/ขาดวันไหน ฯลฯ)
@@ -76,6 +76,7 @@ export function periodStats(emp, attByUserDay, leaveDaySet, from, to, holSet, se
       if (s.isLate) { lateCnt++; lateMin += s.lateMin; }
       if (counted) { otMin += s.otMin; otHours += s.otHours; }
       days.push({ d: k, kind: "work", lateMin: s.isLate ? s.lateMin : 0, otH: s.otHours, otCounted: counted, leaveH: lv?.h || 0, lt: lv?.t || null });
+    } else if (todayYmd && k > todayYmd) { days.push({ d: k, kind: "future" });   // ยังไม่ถึงวันทำงาน — ไม่นับขาด (รอบยังไม่จบ)
     } else { absent++; days.push({ d: k, kind: "absent", leaveH: lv?.h || 0, lt: lv?.t || null }); }
   }
   return { present, lateCnt, lateMin, otMin, otHours, absent, workdays, leaveDays: r2(leaveDays), unpaidLeave: r2(unpaidLeave), holidayDays, holidayHours: r2(holidayMin / 60), holNormHours: r2(holNormMin / 60), holOtHours: r2(holOtHours), days };
