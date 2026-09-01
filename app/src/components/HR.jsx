@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
@@ -1242,8 +1242,9 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [company, setCompany] = React.useState({});
   const [printSlip, setPrintSlip] = React.useState(null); // { row, calc } for the off-screen payslip
   const [printAll, setPrintAll] = React.useState(false);  // พิมพ์สลิปทุกคนในรอบทีเดียว (เก็บเป็นชุด)
-  const [payModal, setPayModal] = React.useState(false);  // จ่ายทั้งรอบ: เลือกบัญชี + สลิปโอน
-  const [payOneFor, setPayOneFor] = React.useState(null);  // จ่ายรายคน (ทยอยจ่าย)
+  const [payModal, setPayModal] = React.useState(false);  // (เดิม) จ่ายทั้งรอบในตัว — ปิดใช้แล้ว
+  const [payOneFor, setPayOneFor] = React.useState(null);  // (เดิม) จ่ายรายคนในตัว — ปิดใช้แล้ว
+  const [sendModal, setSendModal] = React.useState(false);  // ส่งเงินเดือนทั้งรอบเข้าเมนูเบิกจ่าย (รายคน)
   const [dmBusy, setDmBusy] = React.useState(null);       // user_id ที่กำลังส่งสลิป DM
   const printWin = React.useRef(null);
   const lastDay = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
@@ -1423,6 +1424,30 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     setBusy(false);
   }
 
+  // ส่งเงินเดือนทั้งรอบเข้าเมนู "เบิกจ่าย" เป็นใบเบิกรายคน — จ่าย/แบ่งจ่ายที่นั่นเหมือนค่าใช้จ่ายอื่น
+  // ล็อกสลิป (paid = ปิดรอบ) + เคลียร์เบิกล่วงหน้า/OT/เงินยืม แต่ "ไม่" เดินบัญชี/กระแสเงินสดตรงนี้ (ให้การจ่ายใบเบิกเป็นตัวเดินเงิน)
+  async function sendRoundToExpenses(meta) {
+    setBusy(true);
+    try {
+      await savePayslips(payable.map((r) => slipRowOf(r, true)));   // แช่แข็งตัวเลข ณ ตอนส่ง
+      await setPayslipPaid(ym, true, {});                            // ปิดรอบ (สลิปทุกคน = ส่งแล้ว)
+      const ids = payable.filter((r) => !(calcOf(r).advanceCarry > 0)).flatMap((r) => advIdsByUser[r.p.id] || []);
+      await markAdvancesPaid(ym, ids);
+      await markOtPaid(ym, payable.flatMap((r) => otIdsByUser[r.p.id] || [])).catch(() => {});
+      await markLoanPaid(ym, payable.flatMap((r) => loanItemsByUser[r.p.id] || [])).catch(() => {});
+      const people = payable.map((r) => {
+        const c = calcOf(r);
+        const dTot = (c.dLate || 0) + (c.dAbsent || 0) + (c.dLeave || 0) + (c.dSso || 0) + (c.dTax || 0) + (c.dAdvance || 0) + (c.dLoan || 0) + (c.dWater || 0) + (c.dElectric || 0) + (c.otherDeduct || 0);
+        return { user_id: r.p.id, name: r.p.name || r.p.email, net: c.net,
+          breakdown: `รอบ ${ym} · ฐาน ${fmtBaht(c.base)}${c.otPay ? ` · OT ${fmtBaht(c.otPay)}` : ""}${c.holPay ? ` · วันหยุด ${fmtBaht(c.holPay)}` : ""}${c.bonus ? ` · โบนัส ${fmtBaht(c.bonus)}` : ""}${dTot ? ` · หักรวม −${fmtBaht(dTot)}` : ""} = สุทธิ ${fmtBaht(c.net)}` };
+      });
+      const made = await pushPayrollToExpenses(ym, people, { payDate: meta?.payDate || payDate });
+      flash(made ? `ส่งเงินเดือน ${made} คนเข้าเมนูเบิกจ่ายแล้ว ✓ — ไปกด “จ่าย” (แบ่งจ่ายได้) ที่เมนูเบิกจ่าย` : "รอบนี้ถูกส่งเข้าเบิกจ่ายไปแล้วก่อนหน้านี้ (ไม่มีใบใหม่)");
+      await load();
+    } catch (e) { flash("ส่งเข้าเบิกจ่ายไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+
   // cancel a paid run → revert slips to draft, un-settle the advances, remove the cash-flow line; redo anytime
   // แถวสลิปเงินเดือน 1 คน (ใช้ทั้งจ่ายทั้งรอบ + จ่ายรายคน)
   function slipRowOf(r, paid) {
@@ -1454,20 +1479,23 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   }
   async function cancelPay() {
     // กติกาเดียวกับเอกสารขาย: ยกเลิกต้องระบุเหตุผลเสมอ — ลง audit log ไว้ตรวจย้อนหลัง
-    const reason = await confirmDialog({ title: `ยกเลิกการจ่ายเงินเดือนรอบ ${ym}?`,
-      message: "• สลิปกลับเป็นฉบับร่าง (แก้ไข/คำนวณใหม่ได้)\n• ยอดเบิกล่วงหน้าที่หักไป คืนสภาพ\n• ลบรายการในกระแสเงินสด",
-      confirmText: "ยกเลิกจ่าย", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น เวลาเข้างานผิด · ลืมหักเบิก", required: true } });
+    const reason = await confirmDialog({ title: `ยกเลิก/เปิดรอบเงินเดือน ${ym} ใหม่?`,
+      message: "• สลิปกลับเป็นฉบับร่าง (แก้ไข/คำนวณใหม่ได้)\n• ยอดเบิกล่วงหน้า/OT/เงินยืมที่หักไป คืนสภาพ\n• ลบใบเบิกเงินเดือนในเมนูเบิกจ่าย “เฉพาะใบที่ยังไม่ได้จ่าย” · ใบที่จ่าย/จ่ายบางส่วนแล้วคงไว้ (เงินออกจริงแล้ว)",
+      confirmText: "ยกเลิก/เปิดรอบใหม่", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น เวลาเข้างานผิด · ลืมหักเบิก", required: true } });
     if (reason === false) return;
     setBusy(true);
     try {
       await logAudit({ action: "cancel_pay", target_type: "payroll", target_no: ym, reason }).catch(() => {});
+      const voided = await voidPayrollExpenses(ym).catch(() => ({ removed: 0, kept: 0 }));   // ลบใบเบิกเงินเดือนที่ยังไม่จ่าย
       await setPayslipPaid(ym, false);
       await unsettleAdvances(ym);
       await unsettleOt(ym).catch(() => {});      // คืน OT ที่ปิดไปให้ approved (mig 184)
       await unsettleLoan(ym).catch(() => {});    // คืนงวดผ่อนเงินยืม + balance กลับ
-      await removeSalaryEntry(ym).catch(() => {});        // ลบรายการเดินบัญชีของรอบ (best-effort)
+      await removeSalaryEntry(ym).catch(() => {});        // ลบรายการเดินบัญชีของรอบ (best-effort · รอบเก่าที่เดินบัญชีตรง)
       await removePayrollCashEntry(ym).catch(() => {});   // best-effort (hr อาจไม่มีสิทธิ์กระแสเงินสด)
-      flash("ยกเลิกการจ่ายแล้ว — แก้ไขข้อมูลแล้วกด “ทำจ่ายทั้งรอบ” ใหม่ได้"); await load();
+      flash(voided.kept > 0
+        ? `เปิดรอบใหม่แล้ว — แต่มีใบเบิก ${voided.kept} ใบที่จ่าย/จ่ายบางส่วนไปแล้วในเมนูเบิกจ่าย ยังคงอยู่ (ต้องไปยกเลิกจ่ายที่นั่นเองถ้าต้องการ)`
+        : "ยกเลิก/เปิดรอบใหม่แล้ว — แก้ไขข้อมูลแล้วกด “ส่งเข้าเบิกจ่าย” ใหม่ได้", voided.kept > 0); await load();
     } catch (e) { flash("ยกเลิกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -1476,24 +1504,18 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     <div className="card">
       <div className="sec-head">
         <div><div className="sec-title">เงินเดือน · รอบ {ym}</div>
-          <div className="sec-sub">รอบตัดวันที่ 25 — {from} ถึง {to} · จ่ายวันสิ้นเดือน (วันที่ {lastDay}){paidStatus === "paid" ? " · ✅ จ่ายครบแล้ว" : paidStatus === "partial" ? ` · 🟡 ทยอยจ่าย ${paidCnt}/${payable.length} คน · ค้างจ่าย ${fmtBaht(remainNet)}` : ""}</div></div>
+          <div className="sec-sub">รอบตัดวันที่ 25 — {from} ถึง {to} · จ่ายวันสิ้นเดือน (วันที่ {lastDay}){paidStatus === "paid" ? " · 📤 ส่งเข้าเบิกจ่ายแล้ว (จ่ายที่เมนูเบิกจ่าย)" : paidStatus === "partial" ? ` · 🟡 ส่งบางส่วน ${paidCnt}/${payable.length} คน` : ""}</div></div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} />
           {paidStatus === "paid" ? (
             <>
-              <span className="job-badge b-green">✅ จ่ายครบแล้ว · เข้ากระแสเงินสด</span>
-              <button className="btn-ghost sm danger" disabled={busy} onClick={cancelPay}>ยกเลิกจ่ายทั้งรอบ</button>
-            </>
-          ) : paidStatus === "partial" ? (
-            <>
-              <span className="job-badge b-amber">🟡 จ่ายแล้ว {paidCnt}/{payable.length} คน</span>
-              <button className="btn-primary sm ok" disabled={busy || !remainRows.length} title="จ่ายคนที่เหลือทั้งหมดในคราวเดียว" onClick={() => setPayModal(true)}>จ่ายที่เหลือ ({remainRows.length})</button>
-              <button className="btn-ghost sm danger" disabled={busy} onClick={cancelPay}>ยกเลิกจ่ายทั้งรอบ</button>
+              <span className="job-badge b-green">📤 ส่งเข้าเบิกจ่ายแล้ว</span>
+              <button className="btn-ghost sm danger" disabled={busy} title="เปิดรอบใหม่ + ลบใบเบิกที่ยังไม่จ่าย" onClick={cancelPay}>ยกเลิก/เปิดรอบใหม่</button>
             </>
           ) : (
             <>
               <button className="btn-ghost sm" disabled={busy || !payable.length} onClick={() => saveRun(false)}>บันทึกรอบ</button>
-              <button className="btn-primary sm ok" disabled={busy || !payable.length} onClick={() => setPayModal(true)}>ทำจ่ายทั้งรอบ</button>
+              <button className="btn-primary sm ok" disabled={busy || !payable.length} title="ปิดรอบ + ส่งเงินเดือนทุกคนเข้าเมนูเบิกจ่าย (จ่าย/แบ่งจ่ายที่นั่น)" onClick={() => setSendModal(true)}>📤 ส่งเข้าเบิกจ่าย</button>
             </>
           )}
           <button className="btn-ghost sm" disabled={!payable.length} title="ไฟล์นำส่งประกันสังคม สปส.1-10 (CSV เปิดใน Excel)" onClick={exportSso}>⬇ ปกส.</button>
@@ -1567,9 +1589,8 @@ function PayrollTab({ staff, settings, holSet, flash }) {
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.electric || 0} onChange={(e) => setA(r.p.id, "electric", e.target.value)} /></span></td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.bonus || 0} onChange={(e) => setA(r.p.id, "bonus", e.target.value)} /></span></td>
                   <td><span className="inp inp-unit pay-adj"><span className="unit-pre">฿</span><input type="number" disabled={rowPaid} value={adj[r.p.id]?.other_deduct || 0} onChange={(e) => setA(r.p.id, "other_deduct", e.target.value)} /></span></td>
-                  <td style={{ fontWeight: 800, color: "var(--up)", cursor: "zoom-in" }} onClick={() => setDetailFor(r)} title="กดดูรายละเอียดรายวัน">{fmtBaht(c.net)}{rowPaid && <span className="job-badge b-green" style={{ display: "block", marginTop: 2, fontSize: 10 }}>✅ จ่ายแล้ว</span>}</td>
+                  <td style={{ fontWeight: 800, color: "var(--up)", cursor: "zoom-in" }} onClick={() => setDetailFor(r)} title="กดดูรายละเอียดรายวัน">{fmtBaht(c.net)}{rowPaid && <span className="job-badge b-green" style={{ display: "block", marginTop: 2, fontSize: 10 }}>📤 ส่งเบิกแล้ว</span>}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    {!rowPaid && <button className="btn-primary sm" title="จ่ายเงินเดือนคนนี้ (ทยอยจ่ายได้)" disabled={busy} onClick={() => setPayOneFor({ r, c })}>💵 จ่าย</button>}
                     <button className="btn-ghost sm" title="พิมพ์สลิป" onClick={() => { printWin.current = openPrintWindow(); setPrintSlip({ row: r, calc: c }); }}><UIcon name="catalog" size={14} /></button>
                     {rowPaid && <button className="btn-ghost sm" title="ส่งสลิปเข้าแชตส่วนตัวของพนักงาน" disabled={dmBusy === r.p.id} onClick={() => sendSlipDm(r, c)}>{dmBusy === r.p.id ? "…" : "📲"}</button>}
                   </td>
@@ -1599,12 +1620,10 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         </div>
       )}
       <p className="page-sub" style={{ marginTop: 10 }}>* ฐานรายเดือน = เงินเดือนเต็ม · ฐานรายวัน = วันที่มา × ค่าแรง/วัน · OT = ชม.OT × เรตที่ตั้ง · หักสาย/ขาด คิดจากเรตรายชั่วโมง/วัน · ปกส. 5% (เพดานฐาน 17,500 = สูงสุด 875) · แก้โบนัส/หักอื่นๆ ได้ในตาราง แล้วกด “บันทึกรอบ” · 🔶 <b>ค่าวันหยุด</b>คิดอัตโนมัติตามกฎหมาย: 8 ชม.แรก รายเดือน +1 เท่า / รายวัน 2 เท่า · เกิน 8 ชม. = OT วันหยุด 3 เท่า (หักพักเที่ยง 1 ชม. เมื่ออยู่เกิน 5 ชม.) · 🔍 <b>กดที่ช่องไหนก็ได้ในแถว</b> เพื่อดูรายละเอียดรายวัน (OT วันไหน/สายวันไหน/ขาดวันไหน ฯลฯ)</p>
-      {paidStatus === "paid" && <p className="page-sub" style={{ marginTop: 6, color: "var(--down)", fontWeight: 600 }}>🔒 รอบนี้จ่ายแล้ว — ตัวเลขในตารางอัปเดตตามข้อมูลล่าสุดเสมอ แต่สลิปที่บันทึก + รายการกระแสเงินสด ถูกล็อกไว้ ณ ตอนจ่าย · ถ้าแก้เวลาเข้างาน/ลา/เบิกล่วงหน้า แล้วต้องการให้มีผลกับสลิปและกระแสเงินสด ให้กด “ยกเลิกจ่าย” แล้ว “ทำจ่ายทั้งรอบ” ใหม่</p>}
+      {paidStatus === "paid" && <p className="page-sub" style={{ marginTop: 6, color: "var(--down)", fontWeight: 600 }}>🔒 รอบนี้ปิด + ส่งเข้าเบิกจ่ายแล้ว — สลิปถูกล็อกไว้ ณ ตอนส่ง · <b>ไปกด “จ่าย” รายคน (จ่ายเต็ม/แบ่งจ่ายได้) ที่เมนูเบิกจ่าย</b> เงินจะเดินบัญชี + เข้ากระแสเงินสดเมื่อกดจ่ายที่นั่น · ถ้าแก้เวลาเข้างาน/ลา/เบิกล่วงหน้าแล้วต้องคิดใหม่ ให้กด “ยกเลิก/เปิดรอบใหม่” (ลบเฉพาะใบเบิกที่ยังไม่จ่าย) แล้วส่งใหม่</p>}
 
-      {payModal && <PayRunModal total={paidStatus === "partial" ? remainNet : totalNet} count={paidStatus === "partial" ? remainRows.length : payable.length} defaultDate={payDate}
-        onClose={() => setPayModal(false)} onConfirm={(meta) => { setPayModal(false); saveRun(true, meta); }} flash={flash} />}
-      {payOneFor && <PayRunModal total={payOneFor.c.net} count={1} label={`จ่ายเงินเดือน · ${payOneFor.r.p.name || payOneFor.r.p.email}`} defaultDate={payDate}
-        onClose={() => setPayOneFor(null)} onConfirm={(meta) => { const r = payOneFor.r; setPayOneFor(null); payOne(r, meta); }} flash={flash} />}
+      {sendModal && <SendToExpenseModal total={totalNet} count={payable.length} defaultDate={payDate}
+        onClose={() => setSendModal(false)} onConfirm={(meta) => { setSendModal(false); sendRoundToExpenses(meta); }} />}
 
       {detailFor && <PayDetailModal r={detailFor} c={calcOf(detailFor)} advRows={advRowsByUser[detailFor.p.id] || []} otRows={otRowsByUser[detailFor.p.id] || []}
         settings={settings} period={`${from} ถึง ${to}`} onClose={() => setDetailFor(null)} />}
@@ -1711,6 +1730,25 @@ function PayRunModal({ total, count, defaultDate, label, onClose, onConfirm, fla
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
           <button className="btn-primary" disabled={uploading || accounts === null} onClick={confirmPay}>ยืนยันจ่ายทั้งรอบ</button></div>
+      </div>
+    </div>
+  );
+}
+
+// ส่งเงินเดือนทั้งรอบเข้าเมนูเบิกจ่าย เป็นใบเบิกรายคน (แบ่งจ่ายได้เหมือนค่าใช้จ่ายอื่น) — ไม่ต้องเลือกบัญชี/แนบสลิปที่นี่
+function SendToExpenseModal({ total, count, defaultDate, onClose, onConfirm }) {
+  const [payDate, setPayDate] = React.useState(defaultDate || new Date().toISOString().slice(0, 10));
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
+        <div className="modal-head"><div className="modal-title">📤 ส่งเงินเดือนเข้าเบิกจ่าย · {fmtBaht(total)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div className="jo-dim" style={{ marginBottom: 10 }}>{count} คน · รวมสุทธิ {fmtBaht(total)}</div>
+          <label className="fld"><span>วันคาดจ่าย (ตั้งไว้ในใบเบิกทุกใบ — แก้ตอนจ่ายจริงได้)</span><input type="date" className="inp" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></label>
+          <div className="jo-dim">ระบบจะ<b>ปิดรอบ</b> (ล็อกสลิปทุกคน) + เคลียร์เบิกล่วงหน้า/OT/เงินยืม แล้วสร้าง<b>ใบเบิกเงินเดือนรายคน</b> (อนุมัติแล้ว รอจ่าย) ในเมนูเบิกจ่าย — ไปกดจ่ายเต็ม/แบ่งจ่ายที่นั่นเหมือนค่าใช้จ่ายอื่น · เงินจะเดินบัญชี + เข้ากระแสเงินสด<b>ตอนจ่ายจริง</b></div>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" onClick={() => onConfirm({ payDate })}>📤 ส่งเข้าเบิกจ่าย</button></div>
       </div>
     </div>
   );

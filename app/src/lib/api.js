@@ -6019,6 +6019,39 @@ export async function savePayslips(list) {
   if (error && /(d_loan|d_water|d_electric)/i.test(error.message || "")) { rows.forEach((r) => { delete r.d_loan; delete r.d_water; delete r.d_electric; }); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); }   // pre-184 fallback
   if (error) throw error;
 }
+// ── เงินเดือน → เมนูเบิกจ่าย ──────────────────────────────────────────────
+// ส่งเงินเดือนทั้งรอบเข้า "เบิกจ่าย" เป็นใบเบิกรายคน (อนุมัติแล้ว รอจ่าย) → แบ่งจ่ายได้เหมือนค่าใช้จ่ายอื่น
+// ไม่ลงเดินบัญชี/กระแสเงินสดตรงนี้ — ให้การ "จ่ายใบเบิก" (payExpense) เป็นตัวเดินเงินจริง (syncCashEntriesFromDocs)
+// idempotent: จับคู่ด้วยชื่อใบ "…· รอบ {period}" กันสร้างซ้ำเมื่อกดส่งใหม่
+export async function pushPayrollToExpenses(period, people, { payDate } = {}) {
+  const uid = await _uid();
+  const tag = `· รอบ ${period}`;
+  const { data: existing } = await supabase.from("expense_requests").select("title").eq("category", "เงินเดือน").ilike("title", `%${tag}%`);
+  const have = new Set((existing || []).map((e) => (e.title || "").trim()));
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const rows = (people || [])
+    .filter((p) => r2(p.net) > 0.005)
+    .map((p) => ({ requester: uid, category: "เงินเดือน", job_no: null,
+      title: `เงินเดือน ${p.name} ${tag}`, amount: r2(p.net), status: "approved", approver: uid, decided_at: new Date().toISOString(),
+      expected_pay_date: payDate || null, note: p.breakdown || "", created_by: uid }))
+    .filter((r) => !have.has(r.title.trim()));
+  if (rows.length) {
+    let { error } = await supabase.from("expense_requests").insert(rows);
+    if (error && /expected_pay_date|approver|decided_at|PGRST204/i.test(error.message || "")) { rows.forEach((r) => { delete r.expected_pay_date; delete r.approver; delete r.decided_at; }); ({ error } = await supabase.from("expense_requests").insert(rows)); }
+    if (error) throw error;
+    const me = await _meSafe();
+    notify(await _usersByRole(["admin", "finance", "exec"]), { category: "hr", title: `💵 ${me?.name || "ธุรการ"} ส่งเงินเดือน ${rows.length} คนเข้าเบิกจ่าย · รอบ ${period}`, body: `รวม ${r2(rows.reduce((a, r) => a + r.amount, 0)).toLocaleString("en-US")} บาท — ไปกดจ่าย (แบ่งจ่ายได้) ที่เมนูเบิกจ่าย`, url: "expenses", ref_type: "expense" }).catch(() => {});
+  }
+  return rows.length;
+}
+// ยกเลิกส่งเข้าเบิกจ่าย: ลบใบเบิกเงินเดือนของรอบที่ "ยังไม่ได้จ่ายเลย" · ใบที่จ่าย/จ่ายบางส่วนแล้วคงไว้ (เงินออกจริงแล้ว)
+export async function voidPayrollExpenses(period) {
+  const { data, error } = await supabase.from("expense_requests").select("id, status, paid_amount").eq("category", "เงินเดือน").ilike("title", `%· รอบ ${period}%`);
+  if (error) return { removed: 0, kept: 0 };
+  const rm = (data || []).filter((e) => e.status !== "paid" && !(Number(e.paid_amount) > 0));
+  if (rm.length) { const { error: eD } = await supabase.from("expense_requests").delete().in("id", rm.map((e) => e.id)); if (eD) throw eD; }
+  return { removed: rm.length, kept: (data || []).length - rm.length };
+}
 export async function setPayslipPaid(period, paid, meta = {}) {
   const patch = paid
     ? { status: "paid", paid_at: new Date().toISOString(), paid_from: meta.accountId || null, pay_slip_url: meta.slipUrl || null }
