@@ -140,7 +140,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
         res = await flowaccountSendDoc({
           // ที่อยู่บนใบกำกับภาษี = ที่อยู่หลักที่จดทะเบียนไว้เสมอ (ห้ามใช้ที่อยู่ไซต์งาน — สรรพากรดูที่อยู่จดทะเบียน)
           docType: "tax-invoice", contactName: x.customerName, contactAddress: x.customerAddr,
-          contactTaxId: x.customerTaxId, contactCode: custCode(x.customerCode), contactNumber: x.mainContactPhone || x.contactPhone,
+          contactTaxId: x.customerTaxId, contactCode: custCode(x.customerCode), contactBranch: x.customerBranch || "สำนักงานใหญ่", contactNumber: x.mainContactPhone || x.contactPhone,
           publishedOn: x.issue_date, dueDate: x.issue_date, isVat: true, isVatInclusive: false,
           discountAmount, items,
           remarks: `อ้างอิงใบเสร็จ ${x.receipt_no}` + (x.wht_amt > 0 ? ` · หัก ณ ที่จ่าย ${x.wht_rate || 3}% = ${fmtBaht(x.wht_amt)} · รับสุทธิ ${fmtBaht(x.net)}` : ""),
