@@ -178,7 +178,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
           <input type="date" className="inp" style={{ width: 160, padding: "4px 8px" }} value={x.expected_pay_date || ""} onChange={(e) => onSetExpected(x.id, e.target.value)} />
         </div></div>
       )}
-      {onSetVat && x.status !== "rejected" && (() => { const v7 = Math.round((Number(x.amount) || 0) * 7 / 107 * 100) / 100; return (
+      {onSetVat && x.status !== "rejected" && x.category !== "เงินเดือน" && (() => { const v7 = Math.round((Number(x.amount) || 0) * 7 / 107 * 100) / 100; return (
         <div className="job-lines"><div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--ink-2)", flexWrap: "wrap", padding: "2px 0" }}>
           🧾 <span>{L("ภาษีซื้อ (VAT) ในบิลนี้:", "ဤဘီလ်၏ ဝယ်ခွန် (VAT):")}</span>
           <span className="inp inp-unit" style={{ width: 120 }}><span className="unit-pre">฿</span>
