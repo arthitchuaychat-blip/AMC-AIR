@@ -87,6 +87,21 @@ export default function PayDetailModal({ r, c, advRows, otRows, settings, period
             {(advRows || []).length === 0 && <Row l={t("ไม่มีเบิกล่วงหน้าค้างหักในรอบนี้", "ဒီကာလ ကြိုတင်ငွေ ဖြတ်စရာ မရှိပါ")} v="" dim />}
             {(advRows || []).map((a) => <Row key={a.id} l={`${a.created_at ? thDate(a.created_at.slice(0, 10)) : ""}${a.reason ? ` · ${a.reason}` : ""}`} v={"−" + fmtBaht(a.amount)} />)}
           </Sec>
+          {c.dLoan > 0 && (
+            <Sec title={t("หักเงินยืม (งวดรอบนี้)", "ချေးငွေ ဖြတ် (ဒီကာလ)")} amount={c.dLoan} neg>
+              <Row l={t("งวดผ่อนเงินยืมที่ตัดอัตโนมัติในรอบนี้", "ဒီကာလ အလိုအလျောက် ဖြတ်သည့် ချေးငွေအရစ်")} v="" dim />
+            </Sec>
+          )}
+          {c.dWater > 0 && (
+            <Sec title={t("หักค่าน้ำ", "ရေဖိုး ဖြတ်")} amount={c.dWater} neg>
+              <Row l={t("ยอดที่ระบุในตารางเงินเดือนรอบนี้", "ဒီကာလ လစာဇယားတွင် သတ်မှတ်သည့်ပမာဏ")} v="" dim />
+            </Sec>
+          )}
+          {c.dElectric > 0 && (
+            <Sec title={t("หักค่าไฟ", "မီးဖိုး ဖြတ်")} amount={c.dElectric} neg>
+              <Row l={t("ยอดที่ระบุในตารางเงินเดือนรอบนี้", "ဒီကာလ လစာဇယားတွင် သတ်မှတ်သည့်ပမာဏ")} v="" dim />
+            </Sec>
+          )}
           {(c.bonus > 0 || c.otherDeduct > 0) && (
             <Sec title={t("ปรับมือรอบนี้", "ဒီကာလ ချိန်ညှိ")} amount={null}>
               {c.bonus > 0 && <Row l={t("โบนัส/เบี้ยเลี้ยง", "ဘောနပ်စ်/စရိတ်")} v={"+" + fmtBaht(c.bonus)} />}
