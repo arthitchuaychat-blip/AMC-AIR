@@ -6007,6 +6007,7 @@ export async function savePayslip(p) {
   if (error && /hol_pay/i.test(error.message || "")) { delete row.hol_pay; ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); } // pre-148 fallback
   if (error && /d_tax/i.test(error.message || "")) { delete row.d_tax; ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); }   // pre-161 fallback
   if (error && /(d_loan|d_water|d_electric)/i.test(error.message || "")) { delete row.d_loan; delete row.d_water; delete row.d_electric; ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); }   // pre-184 fallback
+  if (error && /invalid input syntax for type integer/i.test(error.message || "")) { _roundDayCols(row); ({ error } = await supabase.from("payslips").upsert(row, { onConflict: "period,user_id" })); }   // pre-239 fallback (ปัดวันเป็นจำนวนเต็ม)
   if (error) throw error;
 }
 // บันทึกสลิปทั้งรอบใน "คำสั่งเดียว" — เดิมวนทีละคน เน็ตหลุดกลางทางแล้วได้รอบครึ่ง ๆ กลาง ๆ
@@ -6017,8 +6018,12 @@ export async function savePayslips(list) {
   if (error && /hol_pay/i.test(error.message || "")) { rows.forEach((r) => delete r.hol_pay); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); } // pre-148 fallback
   if (error && /d_tax/i.test(error.message || "")) { rows.forEach((r) => delete r.d_tax); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); }   // pre-161 fallback
   if (error && /(d_loan|d_water|d_electric)/i.test(error.message || "")) { rows.forEach((r) => { delete r.d_loan; delete r.d_water; delete r.d_electric; }); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); }   // pre-184 fallback
+  // pre-239 fallback: คอลัมน์วัน (present/absent/leave/over_leave_days) ยังเป็น int → ลาครึ่งวันทำให้เป็นเศษ (6.5) เซฟไม่ได้
+  //   วันเหล่านี้เป็นแค่ตัวเลขโชว์ (เงินหักอยู่ที่ d_* แยก) → ปัดจำนวนเต็มแล้วเซฟใหม่ได้ ไม่กระทบยอดเงิน
+  if (error && /invalid input syntax for type integer/i.test(error.message || "")) { rows.forEach(_roundDayCols); ({ error } = await supabase.from("payslips").upsert(rows, { onConflict: "period,user_id" })); }
   if (error) throw error;
 }
+const _roundDayCols = (r) => { ["present_days", "absent_days", "leave_days", "over_leave_days"].forEach((k) => { if (r[k] != null) r[k] = Math.round(Number(r[k]) || 0); }); };
 // ── เงินเดือน → เมนูเบิกจ่าย ──────────────────────────────────────────────
 // ส่งเงินเดือนทั้งรอบเข้า "เบิกจ่าย" เป็นใบเบิกรายคน (อนุมัติแล้ว รอจ่าย) → แบ่งจ่ายได้เหมือนค่าใช้จ่ายอื่น
 // ไม่ลงเดินบัญชี/กระแสเงินสดตรงนี้ — ให้การ "จ่ายใบเบิก" (payExpense) เป็นตัวเดินเงินจริง (syncCashEntriesFromDocs)
