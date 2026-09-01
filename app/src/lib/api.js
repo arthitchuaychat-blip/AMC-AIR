@@ -3092,6 +3092,14 @@ export async function claimReceiptFlowAccount(receipt_no) {
 export async function releaseReceiptFlowAccount(receipt_no) {
   await supabase.rpc("release_receipt_flowaccount", { p_receipt_no: receipt_no }).catch(() => {});
 }
+// ปลดล็อกใบที่ "มาร์คว่าส่งแล้ว" แต่ไม่มีเอกสารจริงใน FlowAccount (flowaccount_id ยัง null — เช่น เผลอกรอกเลขผิด)
+// → ล้างเลขทิ้ง ให้ส่งใหม่ได้ · ใบที่มีเลขจริง (id) จะปลดไม่ได้ (กันส่งซ้ำเอกสารจริง)
+export async function clearReceiptFlowAccount(receipt_no) {
+  const { data, error } = await supabase.from("receipts").update({ flowaccount_no: null, flowaccount_id: null, flowaccount_at: null })
+    .eq("receipt_no", receipt_no).is("flowaccount_id", null).select("receipt_no");
+  if (error) throw error;
+  return (data || []).length > 0;   // true = ปลดล็อกแล้ว · false = มีเลขจริงในระบบ ปลดไม่ได้
+}
 export async function saveReceiptFlowAccount(receipt_no, faId, faNo) {
   // RPC ประทับเลขแบบ "เขียนครั้งเดียว" (mig 175 — มีเลขแล้วไม่ทับ) · gate เฉพาะ role ที่ส่ง FlowAccount ได้
   // ⚠️ ห้ามกลืน error — ถ้า FA สร้างเอกสารแล้วแต่บันทึกเลขกลับไม่ได้ ผู้เรียกต้องรู้ เพื่อเตือนไม่ให้กดส่งซ้ำ

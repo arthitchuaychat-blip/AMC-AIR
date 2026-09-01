@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks, flowaccountSendDoc, saveReceiptFlowAccount, claimReceiptFlowAccount, releaseReceiptFlowAccount, docNoTaken } from "../lib/api";
+import { listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks, flowaccountSendDoc, saveReceiptFlowAccount, claimReceiptFlowAccount, releaseReceiptFlowAccount, clearReceiptFlowAccount, docNoTaken } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -173,9 +173,20 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
       prompt: { label: "เลขที่ FlowAccount (ถ้ามีใบแล้ว)", placeholder: "เว้นว่าง = ยังไม่มี ปลดล็อกส่งใหม่", required: false },
     });
     if (no === false) return;   // กดยกเลิก
+    const val = String(no || "").trim();
     try {
-      if (no && String(no).trim()) { await saveReceiptFlowAccount(x.receipt_no, null, String(no).trim()); flash("บันทึกเลข FlowAccount แล้ว ✓ (ส่งซ้ำไม่ได้)"); }
+      // กันเผลอพิมพ์คำใบ้ "ยังไม่มี"/"ไม่มี" ลงช่อง → ถือว่าเว้นว่าง (ปลดล็อก) ไม่ใช่บันทึกเป็นเลข
+      if (val && !/^(ยังไม่มี|ไม่มี|-|none|no)$/i.test(val)) { await saveReceiptFlowAccount(x.receipt_no, null, val); flash("บันทึกเลข FlowAccount แล้ว ✓ (ส่งซ้ำไม่ได้)"); }
       else { await releaseReceiptFlowAccount(x.receipt_no); flash("ปลดล็อกแล้ว — ส่งใหม่ได้"); }
+      await load();
+    } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // ปลดล็อกใบที่ "มาร์คว่าส่งแล้ว" แต่ไม่มีเอกสารจริงใน FlowAccount (เช่น เผลอกรอกเลขผิด/พิมพ์คำใบ้)
+  async function clearFlow(x) {
+    if (!await confirmDialog({ title: `ปลดล็อก FlowAccount ของ ${x.receipt_no}?`, message: "ใช้เมื่อ “มาร์คว่าส่งแล้ว” แต่จริง ๆ ไม่มีเอกสารใน FlowAccount (เช่น กรอกเลขผิด)\n\nยืนยันก่อนว่าเช็กใน FlowAccount แล้วไม่มีใบกำกับของใบนี้จริง — ระบบจะล้างเลขทิ้ง ให้ส่งใหม่ได้", confirmText: "ปลดล็อก · ส่งใหม่ได้", danger: true })) return;
+    try {
+      const ok = await clearReceiptFlowAccount(x.receipt_no);
+      flash(ok ? "ปลดล็อกแล้ว — กด ↗ FlowAccount ส่งใหม่ได้" : "ปลดไม่ได้ — ใบนี้มีเลขเอกสารจริงในระบบ (กันส่งซ้ำ)", !ok);
       await load();
     } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
@@ -320,7 +331,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
                   ใบที่เคยกดส่งแต่ยังไม่ได้เลขกลับ (จองค้าง) → ป้ายเตือนให้เช็ก FlowAccount ก่อนส่งใหม่ */}
               {canSendFlow && Number(x.vat_amt) > 0 && x.status !== "cancelled" && (
                 x.flowaccount_no
-                  ? <span className="fa-sent-badge vat-badge vat-on" title={`ส่ง FlowAccount แล้ว เลขที่ ${x.flowaccount_no} · ส่งซ้ำไม่ได้`}>✓ ส่ง FlowAccount แล้ว</span>
+                  ? (x.flowaccount_id
+                      ? <span className="fa-sent-badge vat-badge vat-on" title={`ส่ง FlowAccount แล้ว เลขที่ ${x.flowaccount_no} · ส่งซ้ำไม่ได้`}>✓ ส่ง FlowAccount แล้ว</span>
+                      : <button className="btn-ghost sm" style={{ color: "#b45309" }} title={`มาร์คว่าส่งแล้ว (เลข ${x.flowaccount_no}) แต่ไม่มีเอกสารจริงในระบบ — กดปลดล็อกถ้า FlowAccount ไม่มีใบนี้จริง`} onClick={() => clearFlow(x)}>🔓 ปลดล็อก · ส่งใหม่</button>)
                   : x.flowaccount_at
                     ? <button className="btn-ghost sm" style={{ color: "#b45309" }} disabled={faBusy === x.receipt_no} title="ค้างสถานะกำลังส่ง — เช็กใน FlowAccount ว่ามีเอกสารใบนี้แล้วหรือยัง แล้วบันทึกเลข/ปลดล็อก (ไม่ส่งซ้ำอัตโนมัติ)" onClick={() => resolvePending(x)}>⚠️ ค้างส่ง — จัดการ</button>
                     : <button className="btn-ghost sm" disabled={faBusy === x.receipt_no} title="ส่งใบกำกับภาษีเข้า FlowAccount" onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : "↗ FlowAccount"}</button>
