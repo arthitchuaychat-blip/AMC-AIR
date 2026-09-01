@@ -31,7 +31,7 @@ export function buildLeaveDaySet(leaves, from, to) {
   (leaves || []).forEach((l) => {
     for (let d = parseYmd(l.start_date); d <= parseYmd(l.end_date); d.setDate(d.getDate() + 1)) {
       const k = ymd(d);
-      if (k >= from && k <= to) (set[l.user_id] = set[l.user_id] || {})[k] = { t: l.type, h: Number(l.hours) > 0 ? Number(l.hours) : null };
+      if (k >= from && k <= to) (set[l.user_id] = set[l.user_id] || {})[k] = { t: l.type, h: Number(l.hours) > 0 ? Number(l.hours) : null, from: l.time_from || null, to: l.time_to || null };
     }
   });
   return set;
@@ -84,8 +84,10 @@ export function isWorkday(dateStr, pattern, satGroup, holidaySet) {
 export const otCreditHours = (min) => Math.floor((Number(min) || 0) / 30) * 0.5;
 
 // derive the day's status + late/ot minutes from an attendance row + settings
-export function dayStat(att, settings = DEFAULT_HR_SETTINGS) {
-  const start = minutesOf(settings.start || "08:00"), end = minutesOf(settings.end || "17:00");
+// startOverride (นาที) = เวลาเริ่มที่คาดหวังใหม่ เช่น ลาครึ่งเช้า 08:00–12:00 → เริ่มนับสายจาก 12:00 (ไม่ใช่ 08:00)
+export function dayStat(att, settings = DEFAULT_HR_SETTINGS, startOverride = null) {
+  const shiftStart = minutesOf(settings.start || "08:00"), end = minutesOf(settings.end || "17:00");
+  const start = startOverride != null && startOverride > shiftStart ? startOverride : shiftStart;
   const grace = Number(settings.graceMin || 0);
   const ci = att && att.check_in_at ? minutesOf(att.check_in_at) : null;
   const co = att && att.check_out_at ? minutesOf(att.check_out_at) : null;
