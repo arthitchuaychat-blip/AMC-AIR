@@ -6027,27 +6027,48 @@ const _roundDayCols = (r) => { ["present_days", "absent_days", "leave_days", "ov
 // ── เงินเดือน → เมนูเบิกจ่าย ──────────────────────────────────────────────
 // ส่งเงินเดือนทั้งรอบเข้า "เบิกจ่าย" เป็นใบเบิกรายคน (อนุมัติแล้ว รอจ่าย) → แบ่งจ่ายได้เหมือนค่าใช้จ่ายอื่น
 // ไม่ลงเดินบัญชี/กระแสเงินสดตรงนี้ — ให้การ "จ่ายใบเบิก" (payExpense) เป็นตัวเดินเงินจริง (syncCashEntriesFromDocs)
-// idempotent: จับคู่ด้วยชื่อใบ "…· รอบ {period}" กันสร้างซ้ำเมื่อกดส่งใหม่
+// จับคู่ด้วยชื่อใบ "เงินเดือน {name} · รอบ {period}":
+//   • มีใบเดิม "จ่าย/จ่ายบางส่วนแล้ว" → ข้าม (กันเงินซ้ำ)
+//   • มีใบเดิมที่ยังไม่จ่าย (รอจ่าย หรือถูกตีกลับตอนเปิดรอบใหม่) → อัปเดตยอด/รายละเอียดใหม่ + คืนเป็น "รอจ่าย"
+//   • ไม่มีใบเดิม → สร้างใหม่
+// ⇒ เปิดรอบใหม่ → แก้เงินเดือน → ส่งอีกครั้ง ยอดที่เปลี่ยนจะอัปเดตเข้าใบเบิกให้ตรงเสมอ
 export async function pushPayrollToExpenses(period, people, { payDate } = {}) {
   const uid = await _uid();
+  const now = new Date().toISOString();
   const tag = `· รอบ ${period}`;
-  const { data: existing } = await supabase.from("expense_requests").select("title").eq("category", "เงินเดือน").ilike("title", `%${tag}%`);
-  const have = new Set((existing || []).map((e) => (e.title || "").trim()));
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-  const rows = (people || [])
-    .filter((p) => r2(p.net) > 0.005)
-    .map((p) => ({ requester: uid, category: "เงินเดือน", job_no: null,
-      title: `เงินเดือน ${p.name} ${tag}`, amount: r2(p.net), status: "approved", approver: uid, decided_at: new Date().toISOString(),
-      expected_pay_date: payDate || null, note: p.breakdown || "", created_by: uid }))
-    .filter((r) => !have.has(r.title.trim()));
-  if (rows.length) {
-    let { error } = await supabase.from("expense_requests").insert(rows);
-    if (error && /expected_pay_date|approver|decided_at|PGRST204/i.test(error.message || "")) { rows.forEach((r) => { delete r.expected_pay_date; delete r.approver; delete r.decided_at; }); ({ error } = await supabase.from("expense_requests").insert(rows)); }
-    if (error) throw error;
-    const me = await _meSafe();
-    notify(await _usersByRole(["admin", "finance", "exec"]), { category: "hr", title: `💵 ${me?.name || "ธุรการ"} ส่งเงินเดือน ${rows.length} คนเข้าเบิกจ่าย · รอบ ${period}`, body: `รวม ${r2(rows.reduce((a, r) => a + r.amount, 0)).toLocaleString("en-US")} บาท — ไปกดจ่าย (แบ่งจ่ายได้) ที่เมนูเบิกจ่าย`, url: "expenses", ref_type: "expense" }).catch(() => {});
+  const { data: existing } = await supabase.from("expense_requests").select("id, title, status, paid_amount").eq("category", "เงินเดือน").ilike("title", `%${tag}%`);
+  const byTitle = {};
+  (existing || []).forEach((e) => { const t = (e.title || "").trim(); (byTitle[t] = byTitle[t] || []).push(e); });
+  const toInsert = []; let updated = 0;
+  for (const p of (people || [])) {
+    const net = r2(p.net);
+    if (net <= 0.005) continue;
+    const title = `เงินเดือน ${p.name} ${tag}`;
+    const rows = byTitle[title.trim()] || [];
+    if (rows.some((e) => e.status === "paid" || Number(e.paid_amount) > 0)) continue;   // จ่าย/จ่ายบางส่วนแล้ว — ไม่แตะ
+    const reuse = rows.find((e) => e.status !== "rejected") || rows[0];   // มีใบ active อยู่แล้วอัปเดตใบนั้น · ไม่งั้นคืนใบที่ถูกตีกลับ
+    if (reuse) {
+      const patch = { status: "approved", amount: net, note: p.breakdown || "", expected_pay_date: payDate || null, approver: uid, decided_at: now, decide_note: null };
+      let { error } = await supabase.from("expense_requests").update(patch).eq("id", reuse.id);
+      if (error && /expected_pay_date|PGRST204/i.test(error.message || "")) { delete patch.expected_pay_date; ({ error } = await supabase.from("expense_requests").update(patch).eq("id", reuse.id)); }
+      if (!error) updated++;
+    } else {
+      toInsert.push({ requester: uid, category: "เงินเดือน", job_no: null, title, amount: net, status: "approved", approver: uid, decided_at: now, expected_pay_date: payDate || null, note: p.breakdown || "", created_by: uid });
+    }
   }
-  return rows.length;
+  let made = 0;
+  if (toInsert.length) {
+    let { error } = await supabase.from("expense_requests").insert(toInsert);
+    if (error && /expected_pay_date|approver|decided_at|PGRST204/i.test(error.message || "")) { toInsert.forEach((r) => { delete r.expected_pay_date; delete r.approver; delete r.decided_at; }); ({ error } = await supabase.from("expense_requests").insert(toInsert)); }
+    if (error) throw error;
+    made = toInsert.length;
+  }
+  if (made + updated > 0) {
+    const me = await _meSafe();
+    notify(await _usersByRole(["admin", "finance", "exec"]), { category: "hr", title: `💵 ${me?.name || "ธุรการ"} ส่งเงินเดือนเข้าเบิกจ่าย · รอบ ${period}`, body: `ใบใหม่ ${made} · อัปเดตยอด ${updated} รายการ — ไปกดจ่าย (แบ่งจ่ายได้) ที่เมนูเบิกจ่าย`, url: "expenses", ref_type: "expense" }).catch(() => {});
+  }
+  return made + updated;
 }
 // ลบใบเบิก "ถ้ามีสิทธิ์ DELETE (mig 240)" — ถ้า RLS ยังบล็อก (ยังไม่มี policy) ให้ถอยเป็น "ไม่อนุมัติ" แทน
 //   → อย่างน้อยหลุดจากคิว "รอจ่าย" ทันทีโดยไม่ต้องรัน SQL (ตีกลับได้ด้วยปุ่ม "นำกลับมา")
