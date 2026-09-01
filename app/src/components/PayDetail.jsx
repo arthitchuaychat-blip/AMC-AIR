@@ -12,6 +12,7 @@ export default function PayDetailModal({ r, c, advRows, otRows, settings, period
   // lang="my" = ช่างพม่า (สวิตช์ภาษาหน้า เข้างาน/ลา) — หัวข้อ/ข้อความหลักเป็นพม่า · ตัวเลข/วันที่คงรูปแบบไทยเหมือนหน้าอื่น
   const t = (th, my) => (lang === "my" && my ? my : th);
   const p = r.p, st = r.st, days = st.days || [];
+  const otRate = c.otRate != null ? c.otRate : (Number(p.ot_rate) || 0);   // เรต OT ที่ใช้จริง (รายเดือนคิดจากฐานอัตโนมัติ)
   const monthly = (p.pay_type || "monthly") === "monthly";
   const basePay = Number(p.base_pay) || 0;
   const hourly = monthly ? basePay / 30 / 8 : basePay / 8;
@@ -47,14 +48,14 @@ export default function PayDetailModal({ r, c, advRows, otRows, settings, period
             {!monthly && <Row l={`${t("วันที่มาทำงาน", "အလုပ်လာသည့်ရက်")} ${st.present} ${t("วัน", "ရက်")}`} v={presentDays.map((d) => thDate(d.d)).join(" · ") || "—"} dim />}
             {monthly && <Row l={`${t("เงินเดือนเต็ม", "လစာအပြည့်")} · ${t("เรตรายวัน", "တစ်ရက်နှုန်း")} ${fmtBaht(daily)} · ${t("รายชั่วโมง", "တစ်နာရီနှုန်း")} ${fmtBaht(hourly)}`} v="" dim />}
           </Sec>
-          <Sec title={`${t("ค่าล่วงเวลา OT", "အချိန်ပို OT")} (${(c.otHours || 0).toFixed(1)} ${t("ชม.", "နာရီ")} × ${fmtBaht(Number(p.ot_rate) || 0)}/${t("ชม.", "နာရီ")})`} amount={c.otPay}>
+          <Sec title={`${t("ค่าล่วงเวลา OT", "အချိန်ပို OT")} (${(c.otHours || 0).toFixed(1)} ${t("ชม.", "နာရီ")} × ${fmtBaht(c.otRate != null ? c.otRate : (Number(p.ot_rate) || 0))}/${t("ชม.", "နာရီ")})`} amount={c.otPay}>
             {/* จากใบขอ OT จริง (mig 184) — โชว์เลขงาน+รายละเอียด · ถอยไปใช้ OT อัตโนมัติรายวันเฉพาะกรณีเก่าที่ไม่ได้ส่ง otRows */}
             {otRows ? (<>
               {otRows.length === 0 && <Row l={t("ไม่มี OT ในรอบนี้", "ဒီကာလတွင် OT မရှိပါ")} v="" dim />}
-              {otRows.map((o) => <Row key={o.id} l={`${thDate(o.ot_date)} · ${o.time_from || ""}${o.time_to ? `–${o.time_to}` : ""}${o.job_no ? ` · 🔧 ${o.job_no}${o.jobCustomer ? ` ${o.jobCustomer}` : ""}${o.jobDetails ? ` (${o.jobDetails})` : ""}` : ""}`} v={`${Number(o.hours || 0).toFixed(1)} ${t("ชม.", "နာရီ")}${Number(o.hours) > 0 ? ` = ${fmtBaht(Number(o.hours) * (Number(p.ot_rate) || 0))}` : t(" · ⏳ รอเช็คเอาท์", " · ⏳ ထွက်ရန်")}`} />)}
+              {otRows.map((o) => <Row key={o.id} l={`${thDate(o.ot_date)} · ${o.time_from || ""}${o.time_to ? `–${o.time_to}` : ""}${o.job_no ? ` · 🔧 ${o.job_no}${o.jobCustomer ? ` ${o.jobCustomer}` : ""}${o.jobDetails ? ` (${o.jobDetails})` : ""}` : ""}`} v={`${Number(o.hours || 0).toFixed(1)} ${t("ชม.", "နာရီ")}${Number(o.hours) > 0 ? ` = ${fmtBaht(Number(o.hours) * otRate)}` : t(" · ⏳ รอเช็คเอาท์", " · ⏳ ထွက်ရန်")}`} />)}
             </>) : (<>
               {otDays.length === 0 && <Row l={t("ไม่มี OT ในรอบนี้", "ဒီကာလတွင် OT မရှိပါ")} v="" dim />}
-              {otDays.map((d) => <Row key={d.d} l={thDate(d.d)} v={`${d.otH.toFixed(1)} ${t("ชม.", "နာရီ")}${d.otCounted ? ` = ${fmtBaht(d.otH * (Number(p.ot_rate) || 0))}` : t(" · ⏳ ยังไม่รับรอง (ไม่ถูกคิดเงิน)", " · ⏳ မအတည်ပြုရသေး (မတွက်သေးပါ)")}`} />)}
+              {otDays.map((d) => <Row key={d.d} l={thDate(d.d)} v={`${d.otH.toFixed(1)} ${t("ชม.", "နာရီ")}${d.otCounted ? ` = ${fmtBaht(d.otH * otRate)}` : t(" · ⏳ ยังไม่รับรอง (ไม่ถูกคิดเงิน)", " · ⏳ မအတည်ပြုရသေး (မတွက်သေးပါ)")}`} />)}
             </>)}
           </Sec>
           <Sec title={t("ค่าทำงานวันหยุด", "နားရက် အလုပ်ခ")} amount={c.holPay}>

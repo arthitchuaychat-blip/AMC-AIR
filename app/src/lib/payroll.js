@@ -91,7 +91,10 @@ export function computePayslip(emp, st, opt = {}) {
   const base = monthly ? basePay : r0((st.present || 0) * daily);   // daily wage → paid per day present
   // OT credited in ½-hour blocks (rounded down per day) — periodStats provides the pre-rounded sum
   const otHours = st.otHours != null ? Number(st.otHours) || 0 : (st.otMin || 0) / 60;
-  const otPay = r0(otHours * (Number(emp.ot_rate) || 0));
+  // รายเดือน: เรต OT คิดจากฐานเงินเดือนเสมอ (÷30÷8×1.5) — อัปเดตอัตโนมัติเมื่อขึ้นเงินเดือน ไม่ค้างเรตเก่า
+  // รายวัน: ใช้เรตที่ตั้งไว้ (ฐานเป็นค่าแรง/วัน) ถ้ายังไม่ตั้ง fallback = ค่าแรงวัน÷8×1.5
+  const otRate = monthly ? autoOtRate(basePay, true) : (Number(emp.ot_rate) || autoOtRate(basePay, false));
+  const otPay = r0(otHours * otRate);
   const overLeave = Number(st.overLeave) || 0;
   const dLate = opt.deductLate === false ? 0 : r0((st.lateMin || 0) / 60 * hourly);
   const dAbsent = (opt.deductAbsent === false || !monthly) ? 0 : r0((st.absent || 0) * daily); // daily: absence already unpaid
@@ -123,8 +126,13 @@ export function computePayslip(emp, st, opt = {}) {
   const dAdvanceApplied = Math.min(dAdvance, advCap);
   const advanceCarry = r0(dAdvance - dAdvanceApplied);   // > 0 = ยังค้าง ต้องยกไปรอบหน้า
   const ded = dedBefore + dAdvanceApplied;
-  return { monthly, base, otHours, otPay, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso, dTax, dLoan, dWater, dElectric,
+  return { monthly, base, otHours, otPay, otRate, holPay, holNormHours, holOtHours, dLate, dAbsent, dLeave, dSso, dTax, dLoan, dWater, dElectric,
     dAdvance: dAdvanceApplied, advanceCarry, bonus, otherDeduct, allow, allowance, gross, ded, net: r0(gross - ded) };
+}
+// เรต OT ตามกฎหมาย (×1.5) — รายเดือน: เงินเดือน÷30÷8 · รายวัน: ค่าแรงวัน÷8
+export function autoOtRate(basePay, monthly = true) {
+  const b = Number(basePay) || 0;
+  return r0((monthly ? b / 30 / 8 : b / 8) * 1.5);
 }
 // เงินเพิ่ม/สวัสดิการ (เก็บใน payslips.other_note เป็น JSON {al:{phone,ai,lodging,welfare}} — ไม่ต้อง migration)
 export const ALLOWANCE_KINDS = [
@@ -149,6 +157,7 @@ export function frozenPayslip(s) {
   return {
     monthly: (s.pay_type || "monthly") === "monthly",
     base: Number(s.base) || 0, otHours: (Number(s.ot_min) || 0) / 60, otPay: Number(s.ot_pay) || 0,
+    otRate: (Number(s.ot_min) || 0) > 0 ? r0((Number(s.ot_pay) || 0) / ((Number(s.ot_min) || 0) / 60)) : 0,
     holPay: Number(s.hol_pay) || 0, holNormHours: 0, holOtHours: 0,
     dLate: Number(s.d_late) || 0, dAbsent: Number(s.d_absent) || 0, dLeave: Number(s.d_leave) || 0,
     dSso: Number(s.d_sso) || 0, dTax: Number(s.d_tax) || 0, dAdvance: Number(s.d_advance) || 0, advanceCarry: 0,
