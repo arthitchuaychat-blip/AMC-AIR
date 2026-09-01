@@ -4,7 +4,7 @@ import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
-import { payPeriod, periodStats, computePayslip, frozenPayslip, parseAllowances, allowanceNote, ALLOWANCE_KINDS } from "../lib/payroll";
+import { payPeriod, periodStats, computePayslip, frozenPayslip, parseAllowances, allowanceNote, ALLOWANCE_KINDS, autoOtRate } from "../lib/payroll";
 import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, hrEditOt, otHoursFromTimes, createAutoOt, removeAutoOt, listOtOn, AUTO_OT_REASON, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186/191)
 import { listHrProfiles, saveHrProfile } from "../lib/api";   // ประวัติพนักงาน + เอกสาร (mig 235)
 import { fmtBaht } from "../lib/format";
@@ -1245,6 +1245,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const [payModal, setPayModal] = React.useState(false);  // (เดิม) จ่ายทั้งรอบในตัว — ปิดใช้แล้ว
   const [payOneFor, setPayOneFor] = React.useState(null);  // (เดิม) จ่ายรายคนในตัว — ปิดใช้แล้ว
   const [sendModal, setSendModal] = React.useState(false);  // ส่งเงินเดือนทั้งรอบเข้าเมนูเบิกจ่าย (รายคน)
+  const [otAudit, setOtAudit] = React.useState(false);  // ตารางตรวจเรต OT ทุกคน (เทียบเรตเก่า↔ใหม่)
   const [dmBusy, setDmBusy] = React.useState(null);       // user_id ที่กำลังส่งสลิป DM
   const printWin = React.useRef(null);
   const lastDay = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
@@ -1522,6 +1523,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
               <button className="btn-primary sm ok" disabled={busy || !payable.length} title="ปิดรอบ + ส่งเงินเดือนทุกคนเข้าเมนูเบิกจ่าย (จ่าย/แบ่งจ่ายที่นั่น)" onClick={() => setSendModal(true)}>📤 ส่งเข้าเบิกจ่าย</button>
             </>
           )}
+          <button className="btn-ghost sm" disabled={!payable.length} title="ตรวจเรต OT ทุกคน — เทียบเรตเก่าที่บันทึกไว้ กับเรตอัตโนมัติจากฐาน" onClick={() => setOtAudit(true)}>🔍 ตรวจ OT</button>
           <button className="btn-ghost sm" disabled={!payable.length} title="ไฟล์นำส่งประกันสังคม สปส.1-10 (CSV เปิดใน Excel)" onClick={exportSso}>⬇ ปกส.</button>
           <button className="btn-ghost sm" disabled={!payable.length} title="สรุปเงินได้รอบเดือนสำหรับยื่น ภงด.1 (CSV)" onClick={exportPnd}>⬇ ภงด.1</button>
           <button className="btn-ghost sm" disabled={!payable.length} title="พิมพ์สลิปเงินเดือนทุกคนในรอบทีเดียว (เก็บเป็น PDF ได้)" onClick={() => { printWin.current = openPrintWindow(); setPrintAll(true); }}>🖨️ พิมพ์สลิปทั้งรอบ</button>
@@ -1630,6 +1632,47 @@ function PayrollTab({ staff, settings, holSet, flash }) {
 
       {sendModal && <SendToExpenseModal total={totalNet} count={payable.length} defaultDate={payDate}
         onClose={() => setSendModal(false)} onConfirm={(meta) => { setSendModal(false); sendRoundToExpenses(meta); }} />}
+
+      {otAudit && (() => {
+        const list = payable.map((r) => {
+          const monthly = (r.p.pay_type || "monthly") === "monthly";
+          const auto = autoOtRate(r.p.base_pay, monthly);
+          const old = Number(r.p.ot_rate) || 0;
+          const c = calcOf(r);
+          return { r, monthly, base: Number(r.p.base_pay) || 0, auto, old, otHours: c.otHours || 0, otPay: c.otPay || 0, paid: r.slip?.status === "paid", diff: Math.abs(auto - old) > 0.005 };
+        });
+        const off = list.filter((x) => x.diff);
+        return (
+          <div className="modal-overlay" onClick={() => setOtAudit(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 760, maxWidth: "96vw" }}>
+              <div className="modal-head"><div className="modal-title">🔍 ตรวจเรต OT ทุกคน · รอบ {ym}<span>เรตอัตโนมัติจากฐาน (×1.5) — รายเดือน ÷30÷8 · รายวัน ÷8</span></div><button className="modal-x" onClick={() => setOtAudit(false)}><UIcon name="x" size={18} /></button></div>
+              <div className="modal-body">
+                <div className="jo-dim" style={{ marginBottom: 8 }}>{off.length ? `⚠️ มี ${off.length} คนที่เรตเก่าที่บันทึกไว้ไม่ตรงสูตร — ระบบใช้เรตใหม่ (อัตโนมัติ) ให้แล้วในรอบที่ยังไม่ปิด` : "✅ เรต OT ทุกคนตรงสูตรแล้ว"}</div>
+                <div style={{ overflowX: "auto" }}>
+                  <table className="hr-table" style={{ minWidth: 700 }}>
+                    <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>ชนิด</th><th>ฐาน</th><th>เรตเก่า</th><th>เรตใหม่ (สูตร)</th><th>OT รอบนี้</th><th>เป็นเงิน</th></tr></thead>
+                    <tbody>
+                      {list.map((x) => (
+                        <tr key={x.r.p.id}>
+                          <td style={{ textAlign: "left" }}><b>{x.r.p.name || x.r.p.email}</b></td>
+                          <td>{x.monthly ? "รายเดือน" : "รายวัน"}</td>
+                          <td>{fmtBaht(x.base)}{x.monthly ? "" : "/วัน"}</td>
+                          <td className={x.diff ? "hr-bad" : ""} style={{ textDecoration: x.diff ? "line-through" : "none" }}>{fmtBaht(x.old)}</td>
+                          <td className="hr-ok" style={{ fontWeight: 800 }}>{fmtBaht(x.auto)}{x.diff && <span title="เรตที่บันทึกไว้ไม่ตรงสูตร" style={{ marginLeft: 4 }}>⚠️</span>}</td>
+                          <td>{x.otHours ? `${x.otHours.toFixed(1)} ชม.` : "—"}</td>
+                          <td className="hr-ok">{x.otPay ? fmtBaht(x.otPay) : "—"}{x.paid && <span className="job-badge b-green" style={{ display: "block", fontSize: 9 }}>ล็อก (จ่ายแล้ว)</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="page-sub" style={{ marginTop: 10 }}>* "เรตใหม่" คือเรตที่ระบบใช้จริงในรอบที่ยังไม่ปิด (คิดจากฐานอัตโนมัติ) · "เรตเก่า" = ค่าที่เคยบันทึกในโปรไฟล์ (ไม่ถูกใช้แล้วสำหรับรายเดือน) · แถวที่ <b>จ่ายแล้ว</b> ยอด OT ถูกล็อกไว้ตามเรต ณ ตอนจ่าย (ประวัติ) — ถ้าต้องการคิดใหม่ตามเรตที่ถูก ให้กด "ยกเลิก/เปิดรอบใหม่" แล้วส่งเข้าเบิกจ่ายอีกครั้ง</p>
+              </div>
+              <div className="modal-foot"><button className="btn-ghost" onClick={() => setOtAudit(false)}>ปิด</button></div>
+            </div>
+          </div>
+        );
+      })()}
 
       {detailFor && <PayDetailModal r={detailFor} c={calcOf(detailFor)} advRows={advRowsByUser[detailFor.p.id] || []} otRows={otRowsByUser[detailFor.p.id] || []}
         settings={settings} period={`${from} ถึง ${to}`} onClose={() => setDetailFor(null)} />}
