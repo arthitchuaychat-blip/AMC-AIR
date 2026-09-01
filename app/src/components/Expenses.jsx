@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
@@ -343,6 +343,18 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
     if (reason === false) return;
     try { await unpayExpense(x.id, reason); flash("ยกเลิกการจ่ายแล้ว — กลับเป็นรอจ่าย ✓"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
+  // ใบเบิกเงินเดือน (หมวด "เงินเดือน") — ยกเลิกแล้วต้องเปิดรอบเงินเดือนกลับให้ทำใหม่ (ลบใบทั้งรอบ + คืนสลิปเป็นร่าง)
+  const salaryPeriod = (x) => (x.category === "เงินเดือน" ? ((x.title || "").match(/รอบ\s*(\d{4}-\d{2})/) || [])[1] || null : null);
+  async function reopenPayroll(x) {
+    const period = salaryPeriod(x);
+    if (!period) return flash("ไม่พบรอบเงินเดือนในใบนี้", true);
+    const reason = await confirmDialog({ title: `ยกเลิกใบเบิกเงินเดือน + เปิดรอบ ${period} ใหม่?`,
+      message: `• ลบใบเบิกเงินเดือน "ทุกคน" ของรอบ ${period} ที่ยังไม่ได้จ่าย\n• เปิดรอบเงินเดือนกลับให้แก้/คำนวณใหม่ได้ (สลิปกลับเป็นร่าง)\n• คืนเบิกล่วงหน้า/OT/เงินยืม กลับสภาพ\n\n➡️ ทำเงินเดือนใหม่แล้วกด “ส่งเข้าเบิกจ่าย” อีกครั้งที่แท็บเงินเดือน`,
+      confirmText: "ยกเลิก + เปิดรอบใหม่", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น คิด OT ผิด · ยอดหักผิด", required: true } });
+    if (reason === false) return;
+    try { const r = await reopenPayrollRound(period); flash(`ยกเลิก + เปิดรอบ ${period} ใหม่แล้ว ✓ (ลบใบเบิก ${r.removed} ใบ) — ไปทำเงินเดือนใหม่ที่แท็บ HR › เงินเดือน`); load(); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
   // ทวงใบเสร็จ — แจ้งเตือนผู้ขอเบิกทุกคนที่จ่ายเงินไปแล้วแต่ยังไม่แนบใบเสร็จ
   async function nudge() {
     const ids = (list || []).filter(needReceipt).map((x) => x.id);
@@ -382,7 +394,9 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
             {x.status === "pending" && <><button className="btn-primary sm ok" onClick={() => decide(x, "approved")}>✓ {L("อนุมัติ", "အတည်ပြု")}</button>
               <button className="btn-ghost sm" onClick={() => decide(x, "rejected")}>{L("ไม่อนุมัติ", "ပယ်ချ")}</button></>}
             {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> {Number(x.paid_amount) > 0 ? L("จ่ายงวดต่อไป", "နောက်အရစ် ပေးချေ") : L("จ่ายเงิน + แนบสลิปโอน", "ငွေပေး + လွှဲဆလစ် တွဲ")}</button>
-              {!(Number(x.paid_amount) > 0) && <button className="btn-ghost sm danger" onClick={() => decide(x, "pending")}>{L("ยกเลิกอนุมัติ", "အတည်ပြုမှု ပယ်ဖျက်")}</button>}</>}
+              {!(Number(x.paid_amount) > 0) && (salaryPeriod(x)
+                ? <button className="btn-ghost sm danger" title={L("ยกเลิกใบเบิกเงินเดือนทั้งรอบ + เปิดรอบให้ทำเงินเดือนใหม่", "လစာ တောင်းခံလွှာ တစ်ကာလလုံး ပယ်ဖျက် + ကာလ ပြန်ဖွင့်")} onClick={() => reopenPayroll(x)}>↩️ {L("ยกเลิก + เปิดรอบเงินเดือนใหม่", "ပယ်ဖျက် + လစာကာလ ပြန်ဖွင့်")}</button>
+                : <button className="btn-ghost sm danger" onClick={() => decide(x, "pending")}>{L("ยกเลิกอนุมัติ", "အတည်ပြုမှု ပယ်ဖျက်")}</button>)}</>}
             {needReceipt(x) && <button className="btn-ghost sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จแทนพนักงาน", "ဝန်ထမ်းကိုယ်စား ဘောက်ချာ တွဲ")}</button>}
             {/* ยกเลิกการจ่าย — ผู้บริหารเท่านั้น (เจ้าของเคาะ) */}
             {(x.status === "paid" || Number(x.paid_amount) > 0) && role === "exec" && <button className="btn-ghost sm danger" onClick={() => unpay(x)}>↩️ {L("ยกเลิกการจ่าย", "ငွေပေးမှု ပယ်ဖျက်")}</button>}

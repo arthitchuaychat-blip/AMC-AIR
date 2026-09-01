@@ -6057,6 +6057,23 @@ export async function voidPayrollExpenses(period) {
   if (rm.length) { const { error: eD } = await supabase.from("expense_requests").delete().in("id", rm.map((e) => e.id)); if (eD) throw eD; }
   return { removed: rm.length, kept: (data || []).length - rm.length };
 }
+// เปิดรอบเงินเดือนใหม่ "จากฝั่งเมนูเบิกจ่าย" — ลบใบเบิกเงินเดือนทั้งรอบ + คืนสลิปเป็นร่าง (ทำเงินเดือนใหม่ได้)
+// บล็อกถ้ามีใบที่จ่าย/จ่ายบางส่วนแล้ว (เงินออกจริง) — ต้องไป "ยกเลิกการจ่าย" ใบนั้นก่อน (ผู้บริหาร)
+export async function reopenPayrollRound(period) {
+  const { data, error } = await supabase.from("expense_requests").select("id, status, paid_amount").eq("category", "เงินเดือน").ilike("title", `%· รอบ ${period}%`);
+  if (error) throw error;
+  const paid = (data || []).filter((e) => e.status === "paid" || Number(e.paid_amount) > 0);
+  if (paid.length) throw new Error(`มีใบเบิกเงินเดือน ${paid.length} ใบที่จ่าย/จ่ายบางส่วนแล้ว — กด “ยกเลิกการจ่าย” ใบเหล่านั้นก่อน (ผู้บริหาร) แล้วค่อยเปิดรอบใหม่`);
+  const ids = (data || []).map((e) => e.id);
+  if (ids.length) { const { error: eD } = await supabase.from("expense_requests").delete().in("id", ids); if (eD) throw eD; }
+  await setPayslipPaid(period, false);                    // สลิปกลับร่าง = เปิดรอบใหม่
+  await unsettleAdvances(period).catch(() => {});         // คืนเบิกล่วงหน้า
+  await unsettleOt(period).catch(() => {});               // คืน OT ที่ปิดไป (mig 184)
+  await unsettleLoan(period).catch(() => {});             // คืนงวดผ่อนเงินยืม
+  await removeSalaryEntry(period).catch(() => {});        // ลบเดินบัญชีของรอบ (ถ้ามี — รอบเก่าที่เดินบัญชีตรง)
+  await removePayrollCashEntry(period).catch(() => {});   // ลบกระแสเงินสดของรอบ
+  return { removed: ids.length };
+}
 export async function setPayslipPaid(period, paid, meta = {}) {
   const patch = paid
     ? { status: "paid", paid_at: new Date().toISOString(), paid_from: meta.accountId || null, pay_slip_url: meta.slipUrl || null }
