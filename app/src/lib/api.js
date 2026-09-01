@@ -6049,13 +6049,24 @@ export async function pushPayrollToExpenses(period, people, { payDate } = {}) {
   }
   return rows.length;
 }
-// ยกเลิกส่งเข้าเบิกจ่าย: ลบใบเบิกเงินเดือนของรอบที่ "ยังไม่ได้จ่ายเลย" · ใบที่จ่าย/จ่ายบางส่วนแล้วคงไว้ (เงินออกจริงแล้ว)
+// ลบใบเบิก "ถ้ามีสิทธิ์ DELETE (mig 240)" — ถ้า RLS ยังบล็อก (ยังไม่มี policy) ให้ถอยเป็น "ไม่อนุมัติ" แทน
+//   → อย่างน้อยหลุดจากคิว "รอจ่าย" ทันทีโดยไม่ต้องรัน SQL (ตีกลับได้ด้วยปุ่ม "นำกลับมา")
+async function _removeOrRejectExpenses(ids, note) {
+  const list = [...new Set((ids || []).filter(Boolean))];
+  if (!list.length) return 0;
+  let deleted = [];
+  try { const { data } = await supabase.from("expense_requests").delete().in("id", list).select("id"); deleted = (data || []).map((r) => r.id); } catch (_) { /* RLS/permission → ถอยไป reject */ }
+  const rest = list.filter((id) => !deleted.includes(id));
+  if (rest.length) { try { await supabase.from("expense_requests").update({ status: "rejected", decide_note: note || "ยกเลิกอัตโนมัติ" }).in("id", rest); } catch (_) {} }
+  return list.length;
+}
+// ยกเลิกส่งเข้าเบิกจ่าย: เอาใบเบิกเงินเดือนของรอบที่ "ยังไม่ได้จ่ายเลย" ออก · ใบที่จ่าย/จ่ายบางส่วนแล้วคงไว้ (เงินออกจริงแล้ว)
 export async function voidPayrollExpenses(period) {
   const { data, error } = await supabase.from("expense_requests").select("id, status, paid_amount").eq("category", "เงินเดือน").ilike("title", `%· รอบ ${period}%`);
   if (error) return { removed: 0, kept: 0 };
-  const rm = (data || []).filter((e) => e.status !== "paid" && !(Number(e.paid_amount) > 0));
-  if (rm.length) { const { error: eD } = await supabase.from("expense_requests").delete().in("id", rm.map((e) => e.id)); if (eD) throw eD; }
-  return { removed: rm.length, kept: (data || []).length - rm.length };
+  const rmIds = (data || []).filter((e) => e.status !== "paid" && !(Number(e.paid_amount) > 0)).map((e) => e.id);
+  await _removeOrRejectExpenses(rmIds, `ยกเลิก/เปิดรอบเงินเดือน ${period} ใหม่`);
+  return { removed: rmIds.length, kept: (data || []).length - rmIds.length };
 }
 // เปิดรอบเงินเดือนใหม่ "จากฝั่งเมนูเบิกจ่าย" — ลบใบเบิกเงินเดือนทั้งรอบ + คืนสลิปเป็นร่าง (ทำเงินเดือนใหม่ได้)
 // บล็อกถ้ามีใบที่จ่าย/จ่ายบางส่วนแล้ว (เงินออกจริง) — ต้องไป "ยกเลิกการจ่าย" ใบนั้นก่อน (ผู้บริหาร)
@@ -6065,7 +6076,7 @@ export async function reopenPayrollRound(period) {
   const paid = (data || []).filter((e) => e.status === "paid" || Number(e.paid_amount) > 0);
   if (paid.length) throw new Error(`มีใบเบิกเงินเดือน ${paid.length} ใบที่จ่าย/จ่ายบางส่วนแล้ว — กด “ยกเลิกการจ่าย” ใบเหล่านั้นก่อน (ผู้บริหาร) แล้วค่อยเปิดรอบใหม่`);
   const ids = (data || []).map((e) => e.id);
-  if (ids.length) { const { error: eD } = await supabase.from("expense_requests").delete().in("id", ids); if (eD) throw eD; }
+  await _removeOrRejectExpenses(ids, `เปิดรอบเงินเดือน ${period} ใหม่`);   // ลบ (ถ้ามีสิทธิ์) หรือถอยเป็นไม่อนุมัติ
   await setPayslipPaid(period, false);                    // สลิปกลับร่าง = เปิดรอบใหม่
   await unsettleAdvances(period).catch(() => {});         // คืนเบิกล่วงหน้า
   await unsettleOt(period).catch(() => {});               // คืน OT ที่ปิดไป (mig 184)
