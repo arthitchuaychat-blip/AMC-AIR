@@ -1,10 +1,10 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, settlePayrollAdvances, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof, checkPriorRoundClosed } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, listPayslipsFull, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, settlePayrollAdvances, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof, checkPriorRoundClosed } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
 import { DEFAULT_HR_SETTINGS, dayStat, fmtMin, fmtTime, isWorkday, WORK_PATTERNS, patternLabel, leaveLabel, leaveDays, leaveDaysInYear, leaveDaysInRange, LEAVE_TYPES, LEAVE_HOURS_PER_DAY, buildLeaveDaySet, leaveFrac, leaveAmountText, minutesOf, distKm, hrYmd, hrParseYmd, todayYmd, clockSkewFlag } from "../lib/hr";
-import { payPeriod, periodStats, computePayslip, frozenPayslip, parseAllowances, allowanceNote, ALLOWANCE_KINDS, autoOtRate } from "../lib/payroll";
+import { payPeriod, periodStats, computePayslip, frozenPayslip, parseAllowances, allowanceNote, allowanceTotal, ALLOWANCE_KINDS, autoOtRate } from "../lib/payroll";
 import { listOt, decideOt, markOtPaid, unsettleOt, hrCheckoutOt, hrEditOt, otHoursFromTimes, createAutoOt, removeAutoOt, listOtOn, AUTO_OT_REASON, listLoans, saveLoan, deleteLoan, markLoanPaid, unsettleLoan } from "../lib/api";   // OT + เงินยืม (mig 184/186/191)
 import { listHrProfiles, saveHrProfile } from "../lib/api";   // ประวัติพนักงาน + เอกสาร (mig 235)
 import { fmtBaht } from "../lib/format";
@@ -1064,6 +1064,8 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
   }
 
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <PayrollTrend flash={flash} />
     <div className="card">
       <div className="sec-head">
         <div><div className="sec-title">สถิติรายเดือน <span className="sec-sub" style={{ fontWeight: 400 }}>(นับถึงวันนี้)</span></div><div className="sec-sub">กดที่ชื่อเพื่อดูรายวัน · เรียงคนขาด/สายมากสุดขึ้นก่อน</div></div>
@@ -1098,6 +1100,85 @@ function ReportTab({ staff, settings, holSet, canManage, flash }) {
 
       {detail && <PersonDetail row={(rows || []).find((r) => r.p.id === detail.p.id) || detail} days={personDays(detail.p)}
         otNeeds={!!settings.otNeedsApproval} canManage={canManage} flash={flash} onChanged={run} onClose={() => setDetail(null)} />}
+    </div>
+    </div>
+  );
+}
+
+// ---------- ต้นทุนเงินเดือนย้อนหลัง (แนวโน้ม) ----------
+function PayrollTrend({ flash }) {
+  const [data, setData] = React.useState(null);
+  const [months, setMonths] = React.useState(6);
+  React.useEffect(() => { (async () => {
+    try {
+      const now = new Date();
+      const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const fd = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+      const from = `${fd.getFullYear()}-${String(fd.getMonth() + 1).padStart(2, "0")}`;
+      const slips = await listPayslipsFull(from, to);
+      const by = {};
+      (slips || []).filter((s) => s.status === "paid").forEach((s) => {
+        const g = (by[s.period] = by[s.period] || { period: s.period, base: 0, ot: 0, hol: 0, bonus: 0, allow: 0, ded: 0, net: 0, n: 0 });
+        g.base += Number(s.base) || 0; g.ot += Number(s.ot_pay) || 0; g.hol += Number(s.hol_pay) || 0; g.bonus += Number(s.bonus) || 0;
+        g.allow += allowanceTotal(parseAllowances(s.other_note));
+        g.ded += (Number(s.d_late) || 0) + (Number(s.d_absent) || 0) + (Number(s.d_leave) || 0) + (Number(s.d_sso) || 0) + (Number(s.d_tax) || 0) + (Number(s.d_advance) || 0) + (Number(s.d_loan) || 0) + (Number(s.d_water) || 0) + (Number(s.d_electric) || 0) + (Number(s.other_deduct) || 0);
+        g.net += Number(s.net) || 0; g.n += 1;
+      });
+      setData(Object.values(by).sort((a, b) => (a.period < b.period ? -1 : 1)));
+    } catch (e) { flash("โหลดต้นทุนเงินเดือนไม่สำเร็จ: " + (e.message || e), true); setData([]); }
+  })(); }, []);
+
+  if (!data) return <div className="card"><div className="empty">กำลังโหลดต้นทุนเงินเดือน…</div></div>;
+  const shown = data.slice(-months);
+  if (shown.length === 0) return (
+    <div className="card"><div className="sec-title">💵 ต้นทุนเงินเดือนย้อนหลัง</div><div className="empty">ยังไม่มีรอบที่จ่ายแล้ว</div></div>
+  );
+  const gross = (g) => g.base + g.ot + g.hol + g.bonus + g.allow;   // รายจ่ายก่อนหักฝั่งพนักงาน = ต้นทุนบริษัทโดยประมาณ
+  const maxG = Math.max(...shown.map(gross), 1);
+  const last = shown[shown.length - 1], prev = shown.length > 1 ? shown[shown.length - 2] : null;
+  const delta = prev ? gross(last) - gross(prev) : 0;
+  const thMon = (p) => { const [y, m] = p.split("-"); return new Date(y, m - 1, 1).toLocaleDateString("th-TH", { month: "short", year: "2-digit" }); };
+
+  return (
+    <div className="card">
+      <div className="sec-head"><div><div className="sec-title">💵 ต้นทุนเงินเดือนย้อนหลัง</div>
+        <div className="sec-sub">รวมค่าจ้าง+OT+วันหยุด+โบนัส+สวัสดิการ (ก่อนหักฝั่งพนักงาน) = ต้นทุนบริษัทโดยประมาณ · เฉพาะรอบที่จ่ายแล้ว</div></div>
+        <select className="inp" value={months} onChange={(e) => setMonths(Number(e.target.value))} style={{ width: 120 }}>
+          <option value={3}>3 เดือน</option><option value={6}>6 เดือน</option><option value={12}>12 เดือน</option>
+        </select></div>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "12px 14px" }}>
+          <div className="jo-dim" style={{ fontSize: 12 }}>ต้นทุนเดือนล่าสุด ({thMon(last.period)})</div>
+          <div style={{ fontWeight: 800, fontSize: 22, color: "var(--up)" }}>{fmtBaht(gross(last))}</div>
+          {prev && <div className="jo-dim" style={{ fontSize: 12 }}>{delta >= 0 ? "▲" : "▼"} {fmtBaht(Math.abs(delta))} จากเดือนก่อน</div>}
+        </div>
+        <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "12px 14px" }}>
+          <div className="jo-dim" style={{ fontSize: 12 }}>OT เดือนล่าสุด</div>
+          <div style={{ fontWeight: 800, fontSize: 22, color: "var(--up)" }}>{fmtBaht(last.ot)}</div>
+          <div className="jo-dim" style={{ fontSize: 12 }}>{gross(last) ? Math.round(last.ot / gross(last) * 100) : 0}% ของต้นทุน</div>
+        </div>
+        <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "12px 14px" }}>
+          <div className="jo-dim" style={{ fontSize: 12 }}>จ่ายจริง (สุทธิ) ล่าสุด</div>
+          <div style={{ fontWeight: 800, fontSize: 22 }}>{fmtBaht(last.net)}</div>
+          <div className="jo-dim" style={{ fontSize: 12 }}>{last.n} คน</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {shown.map((g) => (
+          <div key={g.period} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 62, flex: "none", fontSize: 12.5, color: "var(--ink-2)", textAlign: "right" }}>{thMon(g.period)}</div>
+            <div style={{ flex: 1, background: "var(--surface-2)", borderRadius: 7, height: 22, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${gross(g) / maxG * 100}%`, background: "linear-gradient(90deg,var(--brand,#0ea5e9),#0d9488)", borderRadius: 7, minWidth: 2 }} />
+              {g.ot > 0 && <div title="สัดส่วน OT" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${g.ot / maxG * 100}%`, background: "rgba(0,0,0,.18)", borderRadius: "7px 0 0 7px" }} />}
+            </div>
+            <div style={{ width: 96, flex: "none", fontSize: 12.5, fontWeight: 700, textAlign: "right" }}>{fmtBaht(gross(g))}</div>
+            <div style={{ width: 40, flex: "none", fontSize: 11.5, color: "var(--ink-3)", textAlign: "right" }}>{g.n} คน</div>
+          </div>
+        ))}
+      </div>
+      <p className="page-sub" style={{ marginTop: 10 }}>* แถบเข้มด้านซ้าย = สัดส่วน OT · ต้นทุนนี้ยังไม่รวมเงินสมทบประกันสังคมฝั่งนายจ้าง (อีก 5%)</p>
     </div>
   );
 }

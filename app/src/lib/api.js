@@ -4198,6 +4198,15 @@ export async function listPayslipsRange(fromYM, toYM) {
     return b;
   });
 }
+// สลิปแบบเต็ม (แยกรายได้/หัก) ในช่วงงวด — ใช้ทำรายงานต้นทุนเงินเดือนย้อนหลัง
+export async function listPayslipsFull(fromYM, toYM) {
+  return _fetchAll((f, t) => {
+    let b = supabase.from("payslips").select("period,status,base,ot_pay,hol_pay,bonus,net,d_late,d_absent,d_leave,d_sso,d_tax,d_advance,d_loan,d_water,d_electric,other_deduct,other_note", { count: "exact" }).order("period").range(f, t);
+    if (fromYM) b = b.gte("period", fromYM);
+    if (toYM) b = b.lte("period", toYM);
+    return b;
+  });
+}
 const _r2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
 // create a payout batch for a sub team from per-job allocation lines (supports partial / split payments).
 // lines: [{job_no, amount, vat, total, customerName}]  → wht 3% applies only to the VAT-billed jobs' allocated amount.
