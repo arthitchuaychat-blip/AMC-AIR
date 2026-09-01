@@ -12,7 +12,7 @@ import { ROLE_GUIDE, DEPT_COLOR } from "../lib/handbook";   // KPI ตามต�
 import { UIcon } from "../icons";
 import PayDetailModal from "./PayDetail";
 
-const TABS = [["today", "วันนี้"], ["calendar", "ปฏิทิน"], ["leaves", "อนุมัติลา"], ["ot", "อนุมัติ OT"], ["advances", "เบิกล่วงหน้า"], ["loans", "เงินยืม"], ["employees", "ประวัติพนักงาน"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
+const TABS = [["today", "วันนี้"], ["calendar", "ปฏิทิน"], ["leaves", "อนุมัติลา"], ["ot", "อนุมัติ OT"], ["advances", "เบิกล่วงหน้า"], ["loans", "เงินยืม"], ["employees", "ประวัติพนักงาน"], ["overview", "ภาพรวม/ค้าง"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
@@ -51,6 +51,7 @@ export default function HR({ role }) {
       {tab === "advances" && <AdvancesTab canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "loans" && <LoansTab staff={staff} canManage={canManage} flash={flash} />}
       {tab === "employees" && <EmployeesTab staff={staff} canManage={canManage} flash={flash} />}
+      {tab === "overview" && <OverviewTab staff={staff} canManage={canManage} flash={flash} onGoTab={setTab} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
       {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
       {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
@@ -152,6 +153,81 @@ function EmployeeModal({ emp, onClose, onSaved, flash }) {
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
           <button className="btn-primary" disabled={busy} onClick={save}>บันทึกประวัติ</button></div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- ภาพรวม/ค้าง (ค้างบริษัท + ข้อมูลพนักงานไม่ครบ) ----------
+function OverviewTab({ staff, canManage, flash, onGoTab }) {
+  const [d, setD] = React.useState(null);
+  React.useEffect(() => { (async () => {
+    try {
+      const [advs, loans, profs] = await Promise.all([listAdvances("approved"), listLoans(true), listHrProfiles()]);
+      const adv = {}; (advs || []).filter((a) => !a.period).forEach((a) => { adv[a.user_id] = (adv[a.user_id] || 0) + (Number(a.amount) || 0); });
+      const loan = {}; (loans || []).forEach((l) => { loan[l.user_id] = (loan[l.user_id] || 0) + (Number(l.balance) || 0); });
+      setD({ adv, loan, profs: profs || {} });
+    } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setD({ adv: {}, loan: {}, profs: {} }); }
+  })(); }, []);
+  if (!d) return <div className="card"><div className="empty">กำลังโหลด…</div></div>;
+
+  const debt = staff.map((s) => ({ s, adv: d.adv[s.id] || 0, loan: d.loan[s.id] || 0 }))
+    .map((x) => ({ ...x, total: Math.round((x.adv + x.loan) * 100) / 100 }))
+    .filter((x) => x.total > 0.5).sort((a, b) => b.total - a.total);
+  const advTot = debt.reduce((a, x) => a + x.adv, 0), loanTot = debt.reduce((a, x) => a + x.loan, 0), debtTot = advTot + loanTot;
+
+  const REQ = [["citizen_id", "เลขบัตร", (s, p) => s.citizen_id, true], ["phone", "เบอร์", (s, p) => p.phone], ["bank_account", "บัญชีธนาคาร", (s, p) => p.bank_account], ["address", "ที่อยู่", (s, p) => p.address], ["emergency_phone", "เบอร์ฉุกเฉิน", (s, p) => p.emergency_phone]];
+  const inc = staff.map((s) => { const p = d.profs[s.id] || {}; return { s, missing: REQ.filter(([k, l, get]) => !get(s, p)).map(([k, l, get, crit]) => ({ l, crit })) }; })
+    .filter((x) => x.missing.length).sort((a, b) => b.missing.length - a.missing.length);
+  const critCnt = inc.filter((x) => x.missing.some((m) => m.crit)).length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="card">
+        <div className="sec-head"><div><div className="sec-title">💰 ค้างบริษัท</div>
+          <div className="sec-sub">เบิกล่วงหน้าคงค้าง + เงินยืมคงเหลือ ต่อคน — ยอดที่ยังต้องคืน/ถูกหักต่อ</div></div>
+          <span className="job-badge b-amber" style={{ fontSize: 13 }}>รวมค้าง {fmtBaht(debtTot)}</span></div>
+        {debt.length === 0 ? <div className="empty">🎉 ไม่มีใครค้างบริษัท</div> : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="hr-table">
+              <thead><tr><th style={{ textAlign: "left" }}>พนักงาน</th><th>เบิกล่วงหน้าคงค้าง</th><th>เงินยืมคงเหลือ</th><th>รวมค้าง</th></tr></thead>
+              <tbody>
+                {debt.map((x) => (
+                  <tr key={x.s.id}>
+                    <td style={{ textAlign: "left" }}><b>{x.s.name || x.s.email}</b><div className="jo-dim">{x.s.department || x.s.role}</div></td>
+                    <td className={x.adv ? "hr-bad" : ""}>{x.adv ? fmtBaht(x.adv) : "—"}</td>
+                    <td className={x.loan ? "hr-bad" : ""}>{x.loan ? fmtBaht(x.loan) : "—"}</td>
+                    <td style={{ fontWeight: 800, color: "var(--down)" }}>{fmtBaht(x.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr style={{ fontWeight: 700 }}><td style={{ textAlign: "left" }}>รวม {debt.length} คน</td><td>{advTot ? fmtBaht(advTot) : "—"}</td><td>{loanTot ? fmtBaht(loanTot) : "—"}</td><td style={{ color: "var(--down)" }}>{fmtBaht(debtTot)}</td></tr></tfoot>
+            </table>
+          </div>
+        )}
+        <p className="page-sub" style={{ marginTop: 8 }}>* เบิกล่วงหน้าคงค้าง = ใบที่อนุมัติแล้วยังไม่ถูกหักในรอบเงินเดือน · เงินยืมคงเหลือ = ยอดผ่อนที่เหลือ · ทั้งคู่หักอัตโนมัติในรอบถัดไป</p>
+      </div>
+
+      <div className="card">
+        <div className="sec-head"><div><div className="sec-title">📋 ข้อมูลพนักงานที่ยังไม่ครบ</div>
+          <div className="sec-sub">ข้อมูลที่ขาด — โดยเฉพาะ “เลขบัตร ปชช.” ที่ต้องใช้ออกไฟล์ ปกส. (สปส.1-10) และ ภงด.1</div></div>
+          {critCnt > 0 && <span className="job-badge b-red" style={{ fontSize: 13 }}>⚠️ ขาดเลขบัตร {critCnt} คน</span>}</div>
+        {inc.length === 0 ? <div className="empty">✅ ข้อมูลพนักงานครบทุกคน</div> : (
+          <div className="job-cards">
+            {inc.map((x) => (
+              <div className="card job-card" key={x.s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <b>{x.s.name || x.s.email}</b> <span className="jo-dim">· {x.s.department || x.s.role}</span>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 5 }}>
+                    {x.missing.map((m, i) => <span key={i} className={"job-badge " + (m.crit ? "b-red" : "b-amber")} style={{ fontSize: 11 }}>ขาด{m.l}</span>)}
+                  </div>
+                </div>
+                {canManage && <button className="btn-ghost sm" onClick={() => onGoTab && onGoTab(x.missing.some((m) => !m.crit) ? "employees" : "staff")}>ไปเติมข้อมูล →</button>}
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="page-sub" style={{ marginTop: 8 }}>* เลขบัตรตั้งได้ที่แท็บ “กะ &amp; ตั้งค่า” · เบอร์/บัญชี/ที่อยู่/เบอร์ฉุกเฉิน ตั้งที่แท็บ “ประวัติพนักงาน”</p>
       </div>
     </div>
   );
