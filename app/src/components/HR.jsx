@@ -1,5 +1,5 @@
 import React from "react";
-import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, listPayslipsFull, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, settlePayrollAdvances, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof, checkPriorRoundClosed } from "../lib/api";
+import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, listPayslipsFull, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, settlePayrollAdvances, saleAdminKpi, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof, checkPriorRoundClosed } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 import { confirmDialog } from "./ConfirmDialog";
@@ -1241,7 +1241,8 @@ function PerfTab({ staff, settings, holSet, flash }) {
     try {
       const [from, to] = monthRange(ym);
       const today = todayYmd(); const calcTo = to < today ? to : today;
-      const [att, leaves, jobs, teams, otAll] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved"), listJobOrders(), listTeams(), listOt().catch(() => [])]);
+      const [att, leaves, jobs, teams, otAll, saRows] = await Promise.all([listAttendance(from, calcTo), listLeaves("approved"), listJobOrders(), listTeams(), listOt().catch(() => []), saleAdminKpi(from, calcTo).catch(() => [])]);
+      const saByUser = Object.fromEntries((saRows || []).map((x) => [x.id, x]));   // KPI ขาย/แชต/ติดตาม ต่อคน (วัดจริง)
       const attByUserDay = {}; att.forEach((a) => { (attByUserDay[a.user_id] = attByUserDay[a.user_id] || {})[a.work_date] = a; });
       const leaveDaySet = buildLeaveDaySet(leaves, from, calcTo);
       const teamName = Object.fromEntries(teams.map((t) => [t.id, (t.name || "").replace("Team ", "")]));
@@ -1273,7 +1274,7 @@ function PerfTab({ staff, settings, holSet, flash }) {
         if (avgRating != null) { score += (avgRating / 5 * 100) * 0.3; wsum += 0.3; }
         let comp = wsum ? Math.round(score / wsum) : null;
         if (comp != null) comp = Math.max(0, comp - m.claims * 5);
-        return { p, st, onTime, otHours, m, avgRating, comp, team: teamName[p.team] || "—" };
+        return { p, st, onTime, otHours, m, avgRating, comp, team: teamName[p.team] || "—", sa: saByUser[p.id] || null };
       });
       result.sort((a, b) => (b.comp ?? -1) - (a.comp ?? -1));
       setRows(result);
@@ -1333,7 +1334,23 @@ function kpiActual(k, r) {
   if (/งานเสร็จ|จำนวนงาน|งานต่อวัน|ปริมาณงาน/.test(key)) return { txt: `${r.m.done} งาน (ทีม)`, tone: "neutral", auto: true };
   if (/เลื่อนนัด|เลื่อน/.test(key)) return { txt: `${r.m.resched} ครั้ง`, tone: r.m.resched === 0 ? "ok" : "warn", auto: true };
   if (/OT|ล่วงเวลา/.test(key)) return { txt: `${(r.otHours || 0).toFixed(1)} ชม.`, tone: "neutral", auto: true };
-  return null;   // วัดเอง/นอกระบบ (เช่น ยอดขาย, DSO, checklist) — โชว์เป้า + เมนูที่ต้องไปวัด
+  // ── KPI ฝั่งขาย/แชต/ติดตาม (จาก saleAdminKpi) — ครอบคลุม Sale Admin / ฝ่ายขาย / ผู้จัดการที่ทำเอกสารเอง ──
+  const sa = r.sa;
+  if (sa) {
+    if (/ตอบแชต|เวลาตอบ|ตอบลูกค้า/.test(key) && sa.respMin != null)
+      return { txt: `${Math.round(sa.respMin)} นาที`, tone: sa.respMin <= 15 ? "ok" : sa.respMin <= 30 ? "warn" : "bad", auto: true };
+    if (/ปิดการขาย|อัตราปิด/.test(key) && sa.closeRate != null)
+      return { txt: `${Math.round(sa.closeRate * 100)}%`, tone: sa.closeRate >= .5 ? "ok" : sa.closeRate >= .3 ? "warn" : "bad", auto: true };
+    if (/ออกใบเสนอ|ใบเสนอราคาภายใน|ความเร็ว.*เสนอ|ทำใบเสนอ/.test(key) && sa.turnaround != null)
+      return { txt: `${sa.turnaround.toFixed(1)} วัน`, tone: sa.turnaround <= 1 ? "ok" : sa.turnaround <= 2 ? "warn" : "bad", auto: true };
+    if (/เอกสาร(แก้ไข|ยกเลิก)|ยกเลิกย้อนหลัง|แก้ไข\/ยกเลิก/.test(key) && sa.errRate != null)
+      return { txt: `${Math.round(sa.errRate * 100)}%`, tone: sa.errRate <= .03 ? "ok" : sa.errRate <= .07 ? "warn" : "bad", auto: true };
+    if (/ติดตาม/.test(key) && sa.followup != null)
+      return { txt: `${Math.round(sa.followup * 100)}%`, tone: sa.followup >= .9 ? "ok" : sa.followup >= .75 ? "warn" : "bad", auto: true };
+    if (/จำนวนใบเสนอ|ปริมาณใบเสนอ|ออกเอกสาร/.test(key) && sa.quotes != null)
+      return { txt: `${sa.quotes} ใบ`, tone: "neutral", auto: true };
+  }
+  return null;   // วัดเอง/นอกระบบ (เช่น ยอดขาย(บาท), DSO, สต๊อก, checklist) — โชว์เป้า + เมนูที่ต้องไปวัด
 }
 
 function KpiDetailModal({ r, ym, onClose }) {
@@ -1365,6 +1382,9 @@ function KpiDetailModal({ r, ym, onClose }) {
             ); })}
             <div style={{ marginTop: 12, background: "var(--surface-2, #f3f7f8)", borderRadius: 10, padding: "10px 12px", fontSize: 12.5, color: "var(--ink-2)" }}>
               <b>คะแนนรวมงวดนี้: {r.comp != null ? r.comp : "—"}</b> · สรุปจาก ตรงเวลา {r.onTime != null ? r.onTime + "%" : "—"} · มา/ขาด/ลา {r.st.present}/{r.st.absent}/{r.st.leaveDays} · คะแนนงานทีม {r.avgRating != null ? "★ " + r.avgRating.toFixed(1) : "—"} · เคลม {r.m.claims}
+              {r.sa && (r.sa.quotes > 0 || r.sa.respMin != null || r.sa.leads > 0) && <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--line)" }}>
+                🛒 <b>งานขาย/แชต:</b> ใบเสนอ {r.sa.quotes} ใบ{r.sa.closeRate != null ? ` · ปิด ${Math.round(r.sa.closeRate * 100)}%` : ""}{r.sa.respMin != null ? ` · ตอบแชต ${Math.round(r.sa.respMin)} นาที` : ""}{r.sa.followup != null ? ` · ติดตาม ${Math.round(r.sa.followup * 100)}%` : ""}{r.sa.leads ? ` · ลีดในมือ ${r.sa.leads}` : ""}{r.sa.score != null ? ` · คะแนนขาย ${r.sa.score}` : ""}
+              </div>}
             </div>
           </>)}
         </div>
