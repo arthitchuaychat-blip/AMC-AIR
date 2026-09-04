@@ -4810,6 +4810,56 @@ export async function submitExpense(e) {
   const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🧾 ${me?.name || "พนักงาน"} ขอเบิกค่าใช้จ่าย ${Number(e.amount) || 0} บาท`, body: e.title || "", url: "expenses", ref_type: "expense" });
 }
+// ── หนี้สิน / สินเชื่อ-เช่าซื้อบริษัท (ตาราง loans · mig 242) — คนละอันกับ hr_loans (เงินยืมพนักงาน) ──
+export async function listFinancings() {
+  const { data, error } = await supabase.from("loans").select("*").order("active", { ascending: false }).order("kind").order("name");
+  if (error) { if (/relation|does not exist|schema|PGRST/i.test(error.message || "")) return { rows: [], needMigration: true }; throw error; }
+  return { rows: data || [] };
+}
+export async function saveFinancing(loan) {
+  const uid = await _uid();
+  const row = {
+    name: (loan.name || "").trim(), kind: loan.kind || "vehicle", method: loan.method || "flat",
+    asset_tag: loan.asset_tag || null, lender: loan.lender || null, contract_no: loan.contract_no || null,
+    principal: loan.principal != null && loan.principal !== "" ? Number(loan.principal) : null,
+    rate: loan.rate != null && loan.rate !== "" ? Number(loan.rate) : null,
+    installment: Number(loan.installment) || 0, vat_per: Number(loan.vat_per) || 0,
+    term_months: Number(loan.term_months) || 0, start_date: loan.start_date || null,
+    due_day: Number(loan.due_day) || 5, paid_count: Number(loan.paid_count) || 0,
+    note: loan.note || null, active: loan.active !== false, updated_at: new Date().toISOString(),
+  };
+  let res;
+  if (loan.id) res = await supabase.from("loans").update(row).eq("id", loan.id);
+  else res = await supabase.from("loans").insert({ ...row, created_by: uid });
+  if (res.error) throw res.error;
+  syncCashEntriesFromDocs().catch(() => {});   // อัปเดตประมาณการค่างวดในกระแสเงินสด
+  return true;
+}
+export async function deleteFinancing(id) {
+  const { error } = await supabase.from("loans").delete().eq("id", id);
+  if (error) throw error;
+  syncCashEntriesFromDocs().catch(() => {});
+  return true;
+}
+// จ่ายงวดถัดไป → ตั้งใบเบิกในเมนูเบิกจ่าย (แบ่งจ่าย/แนบสลิปได้) + เดินงวด +1
+export async function payFinancingInstallment(id) {
+  const { data: ln, error } = await supabase.from("loans").select("*").eq("id", id).maybeSingle();
+  if (error || !ln) throw error || new Error("ไม่พบสัญญา");
+  const seq = (Number(ln.paid_count) || 0) + 1;
+  if (seq > (Number(ln.term_months) || 0)) throw new Error("ผ่อนครบทุกงวดแล้ว");
+  await submitExpense({
+    category: ln.kind === "vehicle" ? "ค่าผ่อนรถ" : "ค่าผ่อนสินเชื่อ",
+    kind: "opex", pay_method: "direct", asset_tag: ln.asset_tag || null,
+    title: `ค่างวด ${ln.name} (งวด ${seq}/${ln.term_months})`,
+    amount: Number(ln.installment) || 0, vat_amt: Number(ln.vat_per) || 0,
+    note: `#สินเชื่อ ${ln.name} งวด ${seq}${ln.contract_no ? " · สัญญา " + ln.contract_no : ""}`,
+  });
+  const { error: e2 } = await supabase.from("loans").update({ paid_count: seq, updated_at: new Date().toISOString() }).eq("id", id);
+  if (e2) throw e2;
+  syncCashEntriesFromDocs().catch(() => {});
+  return { seq };
+}
+
 // เติม เลขงาน · ชื่องาน · ชื่อลูกค้า ให้ใบเบิกจ่าย
 //  - ใบเบิกที่มี job_no ตรง ๆ (ค่าใช้จ่ายเข้างาน) → จากใบงานนั้น
 //  - ใบเบิกค่าสินค้า PO (job_no ว่าง) → โยงผ่าน PO.expense_id → ใบเสนอราคา → ลูกค้า + ใบงาน
@@ -6546,6 +6596,31 @@ export async function syncCashEntriesFromDocs() {
   } catch (_) { advRows = null; }
   if (advRows) advRows.forEach((x) => desired.push({ source_type: "advance", source_ref: String(x.id), direction: "out", status: "actual", entry_date: _d(x.paid_out_at), amount: Number(x.amount) || 0, note: `เบิกเงินล่วงหน้า${pnAdv[x.user_id] ? " · " + pnAdv[x.user_id] : ""}` }));
 
+  // ค่างวดผ่อน (สินเชื่อ/เช่าซื้อ · mig 242) → ประมาณการจ่ายรายเดือน 12 เดือนข้างหน้า (rolling window เหมือนเงินเดือน)
+  let loanRows = null;
+  try {
+    const lr = await supabase.from("loans").select("id,name,installment,term_months,start_date,due_day,paid_count,active").eq("active", true);
+    if (!lr.error) loanRows = lr.data || [];
+  } catch { loanRows = null; }
+  if (loanRows) {
+    const now = new Date();
+    loanRows.forEach((ln) => {
+      const inst = Number(ln.installment) || 0, term = Number(ln.term_months) || 0, paid = Number(ln.paid_count) || 0;
+      const dueDay = Number(ln.due_day) || 5;
+      if (!inst || !term || !ln.start_date) return;
+      const start = new Date(ln.start_date + "T00:00:00");
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const seq = (d.getFullYear() - start.getFullYear()) * 12 + (d.getMonth() - start.getMonth()) + 1;
+        if (seq <= paid || seq > term) continue;   // จ่ายไปแล้ว หรือเกินงวดสุดท้าย
+        const yy = d.getFullYear(), mm = String(d.getMonth() + 1).padStart(2, "0");
+        const lastD = new Date(yy, d.getMonth() + 1, 0).getDate();
+        const dd = String(Math.min(dueDay, lastD)).padStart(2, "0");
+        desired.push({ source_type: "loan", source_ref: `loan-${ln.id}-${yy}-${mm}`, direction: "out", status: "projected", entity: "company", entry_date: `${yy}-${mm}-${dd}`, amount: inst, note: `ค่างวด ${ln.name} (งวด ${seq}/${term})` });
+      }
+    });
+  }
+
   const exMap = {}; (existing.data || []).forEach((e) => { exMap[`${e.source_type}:${e.source_ref}`] = e; });
   const uid = await _uid();
   const desiredKeys = new Set();
@@ -6575,7 +6650,7 @@ export async function syncCashEntriesFromDocs() {
   // แต่พอเอกสารต้นทางถูกยกเลิก/ลบ/จ่ายแล้ว เส้นเงินต้องถูกลบตามเสมอ (เคยเว้น edited ไว้ → ใบแจ้งหนี้ยกเลิกแล้วยอดค้างในประมาณการตลอดกาล)
   // ยกเว้น "salary": desired มีแค่ 12 เดือนข้างหน้า (ไม่ใช่ snapshot ครบชุด) — แถวเงินเดือนจ่ายจริงของเดือนเก่า (edited=true จาก upsertPayrollCashEntry)
   // อยู่นอกหน้าต่างโดยชอบธรรม ห้ามกวาดทิ้ง · ลบได้เฉพาะตัวประมาณการ (ไม่ edited) ที่หลุดหน้าต่าง
-  const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary", "labor_owed", "expense_paid", "expense_due", ...(advRows ? ["advance"] : [])]); // advance จัดการเฉพาะรอบที่อ่าน hr_advances ได้ครบ
+  const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary", "labor_owed", "expense_paid", "expense_due", ...(advRows ? ["advance"] : []), ...(loanRows ? ["loan"] : [])]); // advance/loan จัดการเฉพาะรอบที่อ่านตารางต้นทางได้ครบ
   const staleIds = (existing.data || []).filter((e) => MANAGED.has(e.source_type) && !desiredKeys.has(`${e.source_type}:${e.source_ref}`)
     && (e.source_type !== "salary" || !e.edited)).map((e) => e.id);
   for (let i = 0; i < staleIds.length; i += 100) {
