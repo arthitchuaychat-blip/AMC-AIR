@@ -6,7 +6,19 @@ export const LOAN_KINDS = { vehicle: "🚗 รถ (เช่าซื้อ)", o
 export const LOAN_METHODS = {
   flat: "เช่าซื้อ (ดอกเบี้ยคงที่)",
   reducing: "ลดต้นลดดอก (effective)",
+  stepped: "ค่างวดขั้นบันได (ปรับโครงสร้าง/บอลลูน)",
 };
+
+// ค่างวดของงวดที่ seq — reducing/flat ใช้ค่างวดคงที่ · stepped อ่านจากช่วง steps + งวดบอลลูนสุดท้าย
+export function installmentAt(loan, seq) {
+  if ((loan.method || "flat") === "stepped") {
+    const term = Number(loan.term_months) || 0, balloon = Number(loan.balloon) || 0;
+    if (balloon > 0 && seq === term) return balloon;
+    const st = (Array.isArray(loan.steps) ? loan.steps : []).find((s) => seq >= (Number(s.from) || 0) && seq <= (Number(s.to) || 0));
+    return st ? Number(st.amount) || 0 : 0;
+  }
+  return Number(loan.installment) || 0;
+}
 
 // วันครบกำหนดของงวดที่ seq (นับ 1) = เดือนของ start_date + (seq-1) เดือน, วันที่ = due_day
 export function dueDateOf(startDate, seq, dueDay) {
@@ -26,6 +38,17 @@ export function buildSchedule(loan) {
   const method = loan.method || "flat";
   const dueDay = Number(loan.due_day) || 5;
   const rows = [];
+  if (method === "stepped") {
+    // ค่างวดขั้นบันได — ไม่แยกเงินต้น/ดอก (สินเชื่อปรับโครงสร้างพักดอกเบี้ย) · balance คือยอดจ่ายคงเหลือ
+    let remain = 0;
+    for (let i = 1; i <= term; i++) remain += installmentAt(loan, i);
+    for (let i = 1; i <= term; i++) {
+      const amt = installmentAt(loan, i);
+      remain = r2(remain - amt);
+      rows.push({ seq: i, due: dueDateOf(loan.start_date, i, dueDay), installment: amt, vat: 0, interest: null, principal: null, balance: r2(Math.max(0, remain)), balloon: !!(Number(loan.balloon) > 0 && i === term) });
+    }
+    return rows;
+  }
   if (method === "reducing") {
     const rMonthly = (Number(loan.rate) || 0) / 1200;  // rate เก็บเป็น %/ปี
     let bal = Number(loan.principal) || 0;
@@ -60,14 +83,15 @@ export function loanStatus(loan) {
   const term = sched.length;
   const paid = Math.min(Math.max(0, Number(loan.paid_count) || 0), term);
   const remainInst = Math.max(0, term - paid);
-  const opening = Number(loan.principal) || (sched[0] ? r2(sched[0].balance + sched[0].principal) : 0);
-  const principalLeft = paid > 0 ? (sched[paid - 1]?.balance ?? 0) : opening;
-  const totalInterest = r2(sched.reduce((s, x) => s + x.interest, 0));
-  const interestLeft = r2(sched.slice(paid).reduce((s, x) => s + x.interest, 0));
-  const payoffLeft = r2(remainInst * (Number(loan.installment) || 0));   // หนี้ที่ต้องจ่ายจริง = งวดคงเหลือ × ค่างวด
+  const stepped = (loan.method || "flat") === "stepped";
+  const payoffLeft = r2(sched.slice(paid).reduce((s, x) => s + (Number(x.installment) || 0), 0));  // หนี้ที่ต้องจ่ายจริง = ผลรวมค่างวดที่เหลือ
+  const opening = Number(loan.principal) || (!stepped && sched[0] ? r2(sched[0].balance + sched[0].principal) : 0);
+  const principalLeft = stepped ? null : (paid > 0 ? (sched[paid - 1]?.balance ?? 0) : opening);   // สินเชื่อขั้นบันไดพักดอกเบี้ย → ไม่แยกเงินต้น
+  const totalInterest = stepped ? null : r2(sched.reduce((s, x) => s + (x.interest || 0), 0));
+  const interestLeft = stepped ? null : r2(sched.slice(paid).reduce((s, x) => s + (x.interest || 0), 0));
   const next = sched[paid] || null;                                       // งวดถัดไปที่ต้องจ่าย
   const last = sched[term - 1] || null;
-  return { sched, term, paid, remainInst, opening, principalLeft, interestLeft, totalInterest, payoffLeft, next, last };
+  return { sched, term, paid, remainInst, stepped, opening, principalLeft, interestLeft, totalInterest, payoffLeft, next, last };
 }
 
 // ประมาณการจ่ายล่วงหน้า (งวดที่ยังไม่จ่าย) — ป้อนกระแสเงินสด/กราฟ

@@ -17,6 +17,8 @@ create table if not exists loans (
   start_date  date,                               -- วันครบกำหนดงวดที่ 1
   due_day     int not null default 5,             -- วันครบกำหนดชำระแต่ละเดือน
   paid_count  int not null default 0,             -- จ่ายไปแล้วกี่งวด
+  steps       jsonb not null default '[]'::jsonb,  -- ค่างวดขั้นบันได [{from,to,amount}] (method=stepped)
+  balloon     numeric,                             -- งวดสุดท้ายจ่ายก้อนใหญ่ (balloon) ถ้ามี
   attachments jsonb not null default '[]'::jsonb,  -- ไฟล์สัญญา/เอกสาร [{url,name}]
   note        text,
   active      boolean not null default true,
@@ -25,6 +27,8 @@ create table if not exists loans (
   updated_at  timestamptz default now()
 );
 alter table loans add column if not exists attachments jsonb not null default '[]'::jsonb;  -- เผื่อรัน create ไปก่อนมีคอลัมน์นี้
+alter table loans add column if not exists steps jsonb not null default '[]'::jsonb;         -- ค่างวดขั้นบันได
+alter table loans add column if not exists balloon numeric;                                  -- งวดบอลลูน
 alter table loans enable row level security;
 drop policy if exists loans_read on loans;
 create policy loans_read on loans for select using (true);
