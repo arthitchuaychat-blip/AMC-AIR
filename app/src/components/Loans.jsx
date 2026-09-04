@@ -286,7 +286,7 @@ function LoanForm({ loan, onClose, onSaved, flash }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
           <Row label="จำนวนงวดทั้งหมด *"><input className="inp" type="number" value={f.term_months} onChange={(e) => set("term_months", e.target.value)} placeholder="เช่น 72" /></Row>
           <Row label="จ่ายไปแล้ว (งวด)"><input className="inp" type="number" value={f.paid_count} onChange={(e) => set("paid_count", e.target.value)} /></Row>
-          <Row label="วันครบกำหนด"><input className="inp" type="number" min="1" max="28" value={f.due_day} onChange={(e) => set("due_day", e.target.value)} /></Row>
+          <Row label="วันครบกำหนด (31=สิ้นเดือน)"><input className="inp" type="number" min="1" max="31" value={f.due_day} onChange={(e) => set("due_day", e.target.value)} /></Row>
         </div>
         <Row label="วันครบกำหนดงวดแรก (งวด 1) *"><input className="inp" type="date" value={f.start_date} onChange={(e) => set("start_date", e.target.value)} /></Row>
         <Row label="หมายเหตุ"><input className="inp" value={f.note || ""} onChange={(e) => set("note", e.target.value)} /></Row>
