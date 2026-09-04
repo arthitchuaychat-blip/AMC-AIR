@@ -1,5 +1,5 @@
 import React from "react";
-import { listFinancings, saveFinancing, deleteFinancing, payFinancingInstallment, uploadLoanFile } from "../lib/api";
+import { listFinancings, saveFinancing, deleteFinancing, payFinancingInstallment, confirmFinancingPaid, uploadLoanFile } from "../lib/api";
 import { loanStatus, monthlyOutlook, LOAN_KINDS, LOAN_METHODS, r2 } from "../lib/loans";
 import { ASSET_GROUPS } from "../lib/expenseTaxonomy";
 import { confirmDialog } from "./ConfirmDialog";
@@ -55,6 +55,16 @@ export default function Loans({ role, onGoExpenses, onGoCashflow }) {
     setBusy(false);
   }
 
+  async function doConfirm(l) {
+    const seq = Math.max(Number(l.submitted_seq) || 0, (Number(l.paid_count) || 0) + 1);
+    const ok = await confirmDialog({ title: `ยืนยันจ่ายงวด ${seq} เสร็จแล้ว?`, message: `${l.name}\nจ่ายเงินจริงในเมนูเบิกจ่ายแล้ว → เดินไปงวดถัดไป`, confirmText: "จ่ายเสร็จแล้ว" });
+    if (!ok) return;
+    setBusy(true);
+    try { await confirmFinancingPaid(l.id); flash(`บันทึกจ่ายงวด ${seq} เสร็จ ✓`); await load(true); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+
   async function doDelete(l) {
     const reason = await confirmDialog({ title: `ลบสัญญา ${l.name}?`, message: "จะลบประมาณการค่างวดในกระแสเงินสดด้วย", confirmText: "ลบ", prompt: { label: "เหตุผล", required: true } });
     if (!reason) return;
@@ -103,12 +113,12 @@ export default function Loans({ role, onGoExpenses, onGoCashflow }) {
           ยังไม่มีสัญญาสินเชื่อ {canEdit && <>— กด <b>+ เพิ่มสินเชื่อ</b> เพื่อเริ่ม</>}
         </div>}
         <div style={{ display: "grid", gap: 10 }}>
-          {rows.map((l) => <LoanRow key={l.id} loan={l} onOpen={() => setDetail(l)} onPay={() => doPay(l)} onEdit={() => setEdit({ ...l })} canEdit={canEdit} busy={busy} />)}
+          {rows.map((l) => <LoanRow key={l.id} loan={l} onOpen={() => setDetail(l)} onPay={() => doPay(l)} onConfirm={() => doConfirm(l)} onEdit={() => setEdit({ ...l })} canEdit={canEdit} busy={busy} />)}
         </div>
       </>}
 
       {edit && <LoanForm loan={edit} onClose={() => setEdit(null)} onSaved={async () => { setEdit(null); await load(true); flash("บันทึกสัญญาแล้ว ✓"); }} flash={flash} />}
-      {detail && <LoanDetail loan={detail} onClose={() => setDetail(null)} onPay={() => doPay(detail)} onDelete={canEdit ? () => doDelete(detail) : null} onEdit={canEdit ? () => { setDetail(null); setEdit({ ...detail }); } : null} onGoExpenses={onGoExpenses} busy={busy} />}
+      {detail && <LoanDetail loan={detail} onClose={() => setDetail(null)} onPay={() => doPay(detail)} onConfirm={() => doConfirm(detail)} onDelete={canEdit ? () => doDelete(detail) : null} onEdit={canEdit ? () => { setDetail(null); setEdit({ ...detail }); } : null} onGoExpenses={onGoExpenses} busy={busy} />}
       {toast && <div style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", background: toast.bad ? "#b42318" : "#0f766e", color: "#fff", padding: "10px 18px", borderRadius: 10, zIndex: 60, fontSize: 14, boxShadow: "0 6px 20px #0004" }}>{toast.m}</div>}
     </div>
   );
@@ -122,11 +132,12 @@ function SumCard({ k, v, sub, accent, warn }) {
   </div>;
 }
 
-function LoanRow({ loan, onOpen, onPay, onEdit, canEdit, busy }) {
+function LoanRow({ loan, onOpen, onPay, onConfirm, onEdit, canEdit, busy }) {
   const st = loanStatus(loan);
   const pct = st.term ? Math.round((st.paid / st.term) * 100) : 0;
   const done = st.remainInst <= 0;
   const nm = nowM();
+  const submitted = (Number(loan.submitted_seq) || 0) > st.paid;   // งวดปัจจุบันตั้งจ่ายแล้ว รอจ่ายจริง
   const dueNow = st.next && (st.next.due.getFullYear() * 12 + st.next.due.getMonth()) <= nm;
   return <div className="card" style={{ padding: "12px 14px", opacity: loan.active === false ? 0.55 : 1 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -150,17 +161,21 @@ function LoanRow({ loan, onOpen, onPay, onEdit, canEdit, busy }) {
       </div>
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 6 }}>
         {done ? <span style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 99, background: "var(--teal-soft,#0f766e18)", color: "var(--teal,#0f766e)" }}>ผ่อนครบ ✓</span>
+          : submitted ? <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 10px", borderRadius: 99, background: "#137a5416", color: "var(--green,#137a54)", whiteSpace: "nowrap" }}>✓ ตั้งจ่ายแล้ว</span>
           : <span style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 99, background: dueNow ? "#b4530915" : "var(--line,#eef)", color: dueNow ? "#b45309" : "var(--muted,#667)", whiteSpace: "nowrap" }}>{st.next ? thFull(st.next.due) : "—"}</span>}
-        {canEdit && !done && <button className="btn sm" disabled={busy} onClick={onPay} title="ตั้งเบิกค่างวดถัดไป">จ่ายงวด</button>}
+        {canEdit && !done && (submitted
+          ? <button className="btn sm" disabled={busy} onClick={onConfirm} title="จ่ายเงินจริงในเมนูเบิกจ่ายแล้ว → เดินงวด" style={{ background: "var(--green,#137a54)", color: "#fff", borderColor: "transparent" }}>จ่ายเสร็จ</button>
+          : <button className="btn sm" disabled={busy} onClick={onPay} title="ตั้งเบิกค่างวดถัดไป">จ่ายงวด</button>)}
         {canEdit && <button className="btn-icon sm" onClick={onEdit} title="แก้ไข">✏️</button>}
       </div>
     </div>
   </div>;
 }
 
-function LoanDetail({ loan, onClose, onPay, onDelete, onEdit, onGoExpenses, busy }) {
+function LoanDetail({ loan, onClose, onPay, onConfirm, onDelete, onEdit, onGoExpenses, busy }) {
   const st = loanStatus(loan);
   const sched = st.sched;
+  const submitted = (Number(loan.submitted_seq) || 0) > st.paid;   // งวดปัจจุบันตั้งจ่ายแล้ว
   // โฟกัสรอบ ๆ งวดปัจจุบัน
   const [showAll, setShowAll] = React.useState(false);
   const from = showAll ? 0 : Math.max(0, st.paid - 3);
@@ -207,14 +222,17 @@ function LoanDetail({ loan, onClose, onPay, onDelete, onEdit, onGoExpenses, busy
               <td style={{ textAlign: "right", padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", fontVariantNumeric: "tabular-nums", color: "var(--muted,#99a)" }}>{r.interest == null ? "—" : fmtBaht(r.interest)}</td>
               <td style={{ textAlign: "right", padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", fontVariantNumeric: "tabular-nums" }}>{r.principal == null ? "—" : fmtBaht(r.principal)}</td>
               <td style={{ textAlign: "right", padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmtBaht(r.balance)}</td>
-              <td style={{ textAlign: "center", padding: "6px 8px", borderBottom: "1px solid var(--line,#eef)", fontSize: 10.5 }}>{r.balloon ? <span style={{ color: "#b45309", fontWeight: 700 }}>🎈 บอลลูน</span> : paid ? <span style={{ color: "var(--teal,#0f766e)" }}>จ่ายแล้ว</span> : isNext ? <span style={{ color: "#b45309", fontWeight: 600 }}>งวดถัดไป</span> : <span style={{ color: "var(--muted,#aab)" }}>ประมาณการ</span>}</td>
+              <td style={{ textAlign: "center", padding: "6px 8px", borderBottom: "1px solid var(--line,#eef)", fontSize: 10.5 }}>{r.balloon ? <span style={{ color: "#b45309", fontWeight: 700 }}>🎈 บอลลูน</span> : paid ? <span style={{ color: "var(--teal,#0f766e)" }}>จ่ายแล้ว</span> : isNext && submitted ? <span style={{ color: "var(--green,#137a54)", fontWeight: 700 }}>✓ ตั้งจ่ายแล้ว</span> : isNext ? <span style={{ color: "#b45309", fontWeight: 600 }}>งวดถัดไป</span> : <span style={{ color: "var(--muted,#aab)" }}>ประมาณการ</span>}</td>
             </tr>; })}
           </tbody>
         </table>
       </div>
 
       <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--line,#e3e8ee)", flexWrap: "wrap", alignItems: "center" }}>
-        {st.remainInst > 0 && <button className="btn primary" disabled={busy} onClick={onPay}>💸 ตั้งเบิกจ่ายงวด {st.paid + 1}</button>}
+        {st.remainInst > 0 && (submitted
+          ? <button className="btn" disabled={busy} onClick={onConfirm} style={{ background: "var(--green,#137a54)", color: "#fff", borderColor: "transparent" }}>✓ จ่ายเสร็จแล้ว (เดินงวด {st.paid + 1})</button>
+          : <button className="btn primary" disabled={busy} onClick={onPay}>💸 ตั้งเบิกจ่ายงวด {st.paid + 1}</button>)}
+        {submitted && <span style={{ fontSize: 12, color: "var(--green,#137a54)", fontWeight: 600, alignSelf: "center" }}>✓ ตั้งจ่ายงวด {st.paid + 1} แล้ว รอจ่ายจริง</span>}
         {onGoExpenses && <button className="btn" onClick={onGoExpenses}>ไปเมนูเบิกจ่าย →</button>}
         <div style={{ flex: 1 }} />
         {onEdit && <button className="btn sm" onClick={onEdit}>✏️ แก้ไข</button>}

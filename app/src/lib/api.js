@@ -4855,12 +4855,13 @@ export async function deleteFinancing(id) {
   syncCashEntriesFromDocs().catch(() => {});
   return true;
 }
-// จ่ายงวดถัดไป → ตั้งใบเบิกในเมนูเบิกจ่าย (แบ่งจ่าย/แนบสลิปได้) + เดินงวด +1
+// จ่ายงวดถัดไป → ตั้งใบเบิกในเมนูเบิกจ่าย + มาร์คงวดเป็น "ตั้งจ่ายแล้ว" (submitted_seq) กันตั้งซ้ำ (ยังไม่เดินงวดจนกดจ่ายเสร็จ)
 export async function payFinancingInstallment(id) {
   const { data: ln, error } = await supabase.from("loans").select("*").eq("id", id).maybeSingle();
   if (error || !ln) throw error || new Error("ไม่พบสัญญา");
   const seq = (Number(ln.paid_count) || 0) + 1;
   if (seq > (Number(ln.term_months) || 0)) throw new Error("ผ่อนครบทุกงวดแล้ว");
+  if ((Number(ln.submitted_seq) || 0) >= seq) throw new Error("งวดนี้ตั้งจ่ายไปแล้ว");
   const amt = installmentAt(ln, seq) || Number(ln.installment) || 0;
   await submitExpense({
     category: ln.kind === "vehicle" ? "ค่าผ่อนรถ" : "ค่าผ่อนสินเชื่อ",
@@ -4869,10 +4870,27 @@ export async function payFinancingInstallment(id) {
     amount: amt, vat_amt: (ln.method === "stepped" ? 0 : Number(ln.vat_per) || 0),
     note: `#สินเชื่อ ${ln.name} งวด ${seq}${ln.contract_no ? " · สัญญา " + ln.contract_no : ""}`,
   });
-  const { error: e2 } = await supabase.from("loans").update({ paid_count: seq, updated_at: new Date().toISOString() }).eq("id", id);
+  // มาร์ค submitted_seq (ตั้งจ่ายแล้ว) — ถ้าคอลัมน์ยังไม่มี (pre-mig) fallback เดินงวดแบบเดิม
+  let { error: e2 } = await supabase.from("loans").update({ submitted_seq: seq, updated_at: new Date().toISOString() }).eq("id", id);
+  if (e2 && /submitted_seq|column|PGRST/i.test(e2.message || "")) ({ error: e2 } = await supabase.from("loans").update({ paid_count: seq, updated_at: new Date().toISOString() }).eq("id", id));
   if (e2) throw e2;
   syncCashEntriesFromDocs().catch(() => {});
   return { seq };
+}
+// จ่ายจริงเสร็จแล้ว (จ่ายในเมนูเบิกจ่ายแล้ว) → เดินงวด +1 แล้วเคลียร์สถานะตั้งจ่าย
+export async function confirmFinancingPaid(id) {
+  const { data: ln, error } = await supabase.from("loans").select("paid_count,submitted_seq").eq("id", id).maybeSingle();
+  if (error || !ln) throw error || new Error("ไม่พบสัญญา");
+  const target = Math.max(Number(ln.submitted_seq) || 0, (Number(ln.paid_count) || 0) + 1);
+  const { error: e2 } = await supabase.from("loans").update({ paid_count: target, submitted_seq: 0, updated_at: new Date().toISOString() }).eq("id", id);
+  if (e2) throw e2;
+  return { paid: target };
+}
+// ยกเลิกการตั้งจ่าย (เผื่อกดผิด) — เคลียร์ submitted_seq (ใบเบิกที่ตั้งไว้ยกเลิกในเมนูเบิกจ่ายเอง)
+export async function cancelFinancingSubmit(id) {
+  const { error } = await supabase.from("loans").update({ submitted_seq: 0, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+  return true;
 }
 
 // เติม เลขงาน · ชื่องาน · ชื่อลูกค้า ให้ใบเบิกจ่าย
@@ -6614,7 +6632,7 @@ export async function syncCashEntriesFromDocs() {
   // ค่างวดผ่อน (สินเชื่อ/เช่าซื้อ · mig 242) → ประมาณการจ่ายรายเดือน 12 เดือนข้างหน้า (rolling window เหมือนเงินเดือน)
   let loanRows = null;
   try {
-    const lr = await supabase.from("loans").select("id,name,method,entity,installment,steps,balloon,term_months,start_date,due_day,paid_count,active").eq("active", true);
+    const lr = await supabase.from("loans").select("id,name,method,entity,installment,steps,balloon,term_months,start_date,due_day,paid_count,submitted_seq,active").eq("active", true);
     if (!lr.error) loanRows = lr.data || [];
     else if (/entity|steps|balloon|method|column/i.test(lr.error.message || "")) { const lr2 = await supabase.from("loans").select("id,name,installment,term_months,start_date,due_day,paid_count,active").eq("active", true); if (!lr2.error) loanRows = lr2.data || []; }
   } catch { loanRows = null; }
@@ -6622,13 +6640,14 @@ export async function syncCashEntriesFromDocs() {
     const now = new Date();
     loanRows.forEach((ln) => {
       const term = Number(ln.term_months) || 0, paid = Number(ln.paid_count) || 0;
+      const covered = Math.max(paid, Number(ln.submitted_seq) || 0);   // งวดที่ตั้งจ่ายแล้วมีใบเบิกคุมกระแสเงินสดแทน → ไม่ต้อง project ซ้ำ
       const dueDay = Number(ln.due_day) || 5;
       if (!term || !ln.start_date) return;
       const start = new Date(ln.start_date + "T00:00:00");
       for (let i = 0; i < 12; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
         const seq = (d.getFullYear() - start.getFullYear()) * 12 + (d.getMonth() - start.getMonth()) + 1;
-        if (seq <= paid || seq > term) continue;   // จ่ายไปแล้ว หรือเกินงวดสุดท้าย
+        if (seq <= covered || seq > term) continue;   // จ่าย/ตั้งจ่ายแล้ว หรือเกินงวดสุดท้าย
         const amt = installmentAt(ln, seq);
         if (!(amt > 0)) continue;                    // งวดบอลลูนที่ยังไม่รู้ยอด (0) → ข้าม
         const yy = d.getFullYear(), mm = String(d.getMonth() + 1).padStart(2, "0");
