@@ -4800,9 +4800,11 @@ export async function submitExpense(e) {
   const uid = await _uid();
   const row = {
     requester: uid, job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0, vat_amt: Number(e.vat_amt) || 0,
+    kind: e.kind || null, pay_method: e.pay_method || null, asset_tag: e.asset_tag || null, recurring: !!e.recurring,   // โครงสร้างทำจ่าย (mig 241)
     note: e.note?.trim() || null, attachments: e.attachments || [], created_by: uid,
   };
   let { error } = await supabase.from("expense_requests").insert(row);
+  if (error && /kind|pay_method|asset_tag|recurring|PGRST204/i.test(error.message || "")) { delete row.kind; delete row.pay_method; delete row.asset_tag; delete row.recurring; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-241 fallback
   if (error && /vat_amt|PGRST204/i.test(error.message || "")) { delete row.vat_amt; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-232 fallback
   if (error) throw error;
   const me = await _meSafe();

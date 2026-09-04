@@ -1,6 +1,7 @@
 import React from "react";
 import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
+import { EXPENSE_CATS, CAT_BY_NAME, ASSET_GROUPS, PAY_METHODS, PAY_LABEL, kindOf, KIND_LABEL } from "../lib/expenseTaxonomy";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import AttachThumb from "./AttachThumb";
@@ -123,7 +124,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
         </>}
         title={x.title} titleFallback={L("— ไม่ระบุรายการ —", "— အမည် မသတ်မှတ် —")}
-        sub={[x.category, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null].filter(Boolean).join(" · ") || null}
+        sub={[x.category, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, x.kind === "cost" ? "🔧 ต้นทุนงาน" : x.kind === "opex" ? "🏢 ค่าใช้จ่าย" : null, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null].filter(Boolean).join(" · ") || null}
         by={x.requesterName} date={x.created_at}
         amountNode={partial ? (
           <div className="rec-amt-bd">
@@ -279,12 +280,17 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
   const L = (th, my) => (lang === "my" ? my : th);
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const [customMode, setCustomMode] = React.useState(!!form.category && !CAT_BY_NAME[form.category]);
+  const cat = CAT_BY_NAME[form.category];
+  const assetList = cat?.assets ? ASSET_GROUPS[cat.assets] : null;
+  const curKind = kindOf(form.category, form.job_no);
   async function save() {
     if (!form.title.trim()) return flash(L("ใส่ชื่อรายการ", "အမည် ဖြည့်ပါ"), true);
     if (!(Number(form.amount) > 0)) return flash(L("ใส่จำนวนเงิน", "ပမာဏ ဖြည့်ပါ"), true);
     setBusy(true);
     const vat_amt = form.has_vat ? Math.round((Number(form.amount) || 0) * 7 / 107 * 100) / 100 : 0;   // บิลราคารวม VAT → ถอดภาษีซื้อ 7/107
-    try { await submitExpense({ ...form, vat_amt }); flash(L("ส่งคำขอเบิกแล้ว รออนุมัติ ✓", "တောင်းခံစာ တင်ပြီး · အတည်ပြုရန် စောင့် ✓")); onSaved(); }
+    const kind = kindOf(form.category, form.job_no);   // ต้นทุน(cost) ถ้าหมวด cost หรือผูกงาน · ไม่งั้น opex
+    try { await submitExpense({ ...form, vat_amt, kind, pay_method: form.pay_method || "reimburse", asset_tag: form.asset_tag || null }); flash(L("ส่งคำขอเบิกแล้ว รออนุมัติ ✓", "တောင်းခံစာ တင်ပြီး · အတည်ပြုရန် စောင့် ✓")); onSaved(); }
     catch (e) { flash(L("ส่งไม่สำเร็จ: ", "တင်၍ မအောင်မြင်: ") + (e.message || e), true); }
     setBusy(false);
   }
@@ -296,8 +302,24 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
           <label className="fld"><span>{L("รายการ/เรื่องที่เบิก", "တောင်းခံသည့် အကြောင်းအရာ")}</span><input className="inp" value={form.title} autoFocus onChange={(e) => set("title", e.target.value)} placeholder={L("เช่น ค่าน้ำมัน / ค่าทางด่วน / ซื้อของหน้างาน", "ဥပမာ ဆီဖိုး / အမြန်လမ်းခ / လုပ်ငန်းခွင် ပစ္စည်းဝယ်")} /></label>
           <div className="fld-row">
             <label className="fld"><span>{L("จำนวนเงิน (บาท)", "ပမာဏ (ဘတ်)")}</span><span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" min="0" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)} /></span></label>
-            <label className="fld"><span>{L("หมวดค่าใช้จ่าย", "ကုန်ကျစရိတ် အမျိုးအစား")}</span><CategoryPicker value={form.category} onChange={(v) => set("category", v)} flash={flash} /></label>
+            <label className="fld"><span>{L("หมวด", "အမျိုးအစား")} <span style={{ fontSize: 11, fontWeight: 700, color: curKind === "cost" ? "#b45309" : "#1d4ed8" }}>· {KIND_LABEL[curKind]}</span></span>
+              <select className="inp" value={customMode ? "__custom__" : (form.category || "")} onChange={(e) => { const v = e.target.value; if (v === "__custom__") { setCustomMode(true); set("category", ""); set("asset_tag", ""); } else { setCustomMode(false); set("category", v); set("asset_tag", ""); } }}>
+                <option value="">{L("— เลือกหมวด —", "— အမျိုးအစား ရွေး —")}</option>
+                <optgroup label="🔧 ต้นทุนงาน">{EXPENSE_CATS.filter((c) => c.kind === "cost").map((c) => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}</optgroup>
+                <optgroup label="🏢 ค่าใช้จ่ายดำเนินงาน">{EXPENSE_CATS.filter((c) => c.kind === "opex").map((c) => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}</optgroup>
+                <option value="__custom__">✏️ {L("อื่นๆ (ระบุเอง)", "အခြား")}</option>
+              </select></label>
           </div>
+          {customMode && <label className="fld"><span>{L("ระบุหมวดเอง", "အမျိုးအစား ကိုယ်တိုင်ဖြည့်")}</span><input className="inp" value={form.category} onChange={(e) => set("category", e.target.value)} placeholder={L("พิมพ์ชื่อหมวด", "အမျိုးအစား ရိုက်ထည့်")} /></label>}
+          {assetList && <label className="fld"><span>{cat.icon} {L("รายการย่อย", "အသေးစိတ်")} — {cat.name}</span>
+            <select className="inp" value={form.asset_tag || ""} onChange={(e) => set("asset_tag", e.target.value)}>
+              <option value="">{L("— เลือก" + (cat.assets.startsWith("veh") ? "คัน" : cat.assets === "phone" ? "เบอร์" : "สถานที่") + " —", "— ရွေး —")}</option>
+              {assetList.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select></label>}
+          <label className="fld"><span>{L("วิธีจ่าย", "ငွေပေးနည်း")}</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              {PAY_METHODS.map(([k, l, d]) => <button type="button" key={k} title={d} onClick={() => set("pay_method", k)} className={"cat-chip" + ((form.pay_method || "reimburse") === k ? " on" : "")} style={(form.pay_method || "reimburse") === k ? { background: "#111", color: "#fff", borderColor: "#111", flex: 1 } : { flex: 1 }}>{l}</button>)}
+            </div></label>
           <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <input type="checkbox" checked={!!form.has_vat} onChange={(e) => set("has_vat", e.target.checked)} style={{ width: 16, height: 16 }} />
             <span style={{ margin: 0 }}>🧾 {L("บิลนี้มีใบกำกับภาษีซื้อ VAT 7% (ยอดข้างบนรวม VAT แล้ว)", "ဤဘီလ်တွင် ဝယ်ခွန် VAT 7% ပါသည် (ပမာဏတွင် VAT ပါပြီး)")}
