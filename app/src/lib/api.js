@@ -1245,7 +1245,7 @@ export async function listPayables() {
     rows.push({
       type: "expense", refNo: `เบิก #${x.id}`, name: cb[x.requester] || cb[x.created_by] || "(ไม่ระบุผู้ขอ)",
       title: x.title || x.category || null, amount: owed,
-      date: (x.created_at || "").slice(0, 10),
+      date: (x.created_at || "").slice(0, 10), dueDate: x.expected_pay_date || null,
       status: paid > 0 ? `จ่ายแล้ว ${money(paid)} · ค้างจริง ${money(owed)}` : "อนุมัติแล้ว · รอจ่าย", expenseId: x.id,
     });
   });
