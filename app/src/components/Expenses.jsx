@@ -79,7 +79,7 @@ export default function Expenses({ role, me, onOpenDoc, focus, onFocusConsumed }
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const office = OFFICE.includes(role);
-  const TABS = [["mine", L("ขอเบิกของฉัน", "ကျွန်ုပ်၏ တောင်းခံစာရင်း")], ...(office ? [["approve", L("อนุมัติ / จ่าย", "အတည်ပြု / ငွေပေး")], ["accounts", L("บัญชี & โอนเงิน", "အကောင့် & ငွေလွှဲ")], ["report", L("เดินบัญชี & กระทบแบงค์", "အကောင့်လှုပ်ရှား & ဘဏ်တိုက်ဆိုင်")]] : [])];
+  const TABS = [["mine", L("ขอเบิกของฉัน", "ကျွန်ုပ်၏ တောင်းခံစာရင်း")], ...(office ? [["approve", L("อนุมัติ / จ่าย", "အတည်ပြု / ငွေပေး")], ["summary", L("📊 สรุปค่าใช้จ่าย", "📊 ကုန်ကျစရိတ် အနှစ်ချုပ်")], ["accounts", L("บัญชี & โอนเงิน", "အကောင့် & ငွေလွှဲ")], ["report", L("เดินบัญชี & กระทบแบงค์", "အကောင့်လှုပ်ရှား & ဘဏ်တိုက်ဆိုင်")]] : [])];
   const [tab, setTab] = React.useState("mine");
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
@@ -97,6 +97,7 @@ export default function Expenses({ role, me, onOpenDoc, focus, onFocusConsumed }
       </div>
       {tab === "mine" && <MineTab role={role} flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} />}
       {tab === "approve" && office && <ApproveTab role={role} flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} />}
+      {tab === "summary" && office && <ExpenseSummaryTab flash={flash} />}
       {tab === "accounts" && office && <AccountsTab flash={flash} />}
       {tab === "report" && office && <ReportTab flash={flash} />}
       {peekEl}
@@ -1027,6 +1028,71 @@ function AddEntryModal({ accounts, defaultAccountId, onClose, onSaved, flash }) 
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>{L("ยกเลิก", "ပယ်ဖျက်")}</button>
           <button className="btn-primary" disabled={busy} onClick={save}>{L("บันทึก", "သိမ်း")}</button></div>
       </div>
+    </div>
+  );
+}
+
+// ---------- 📊 สรุปค่าใช้จ่าย (แยกต้นทุน/ค่าใช้จ่าย + หมวด + รายการย่อย) ----------
+function ExpenseSummaryTab({ flash }) {
+  const lang = useLang(); const L = (th, my) => (lang === "my" ? my : th);
+  const [list, setList] = React.useState(null);
+  const [ym, setYm] = React.useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+  const [open, setOpen] = React.useState({});
+  React.useEffect(() => { listExpenses().then(setList).catch(() => { flash(L("โหลดไม่สำเร็จ", "ဖွင့်မရ"), true); setList([]); }); }, []);   // eslint-disable-line
+  if (!list) return <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div>;
+  const inMonth = list.filter((x) => x.status !== "rejected" && (x.created_at || "").slice(0, 7) === ym);
+  const kindOfX = (x) => x.kind || kindOf(x.category, x.job_no);
+  const groups = { cost: {}, opex: {} };
+  inMonth.forEach((x) => {
+    const k = kindOfX(x); const c = x.category || L("(ไม่ระบุหมวด)", "(အမျိုးအစား မသတ်မှတ်)");
+    const g = groups[k][c] || (groups[k][c] = { sum: 0, n: 0, assets: {} });
+    const amt = Number(x.amount) || 0; g.sum += amt; g.n++;
+    if (x.asset_tag) { const a = g.assets[x.asset_tag] || (g.assets[x.asset_tag] = { sum: 0, n: 0 }); a.sum += amt; a.n++; }
+  });
+  const totCost = Object.values(groups.cost).reduce((a, g) => a + g.sum, 0);
+  const totOpex = Object.values(groups.opex).reduce((a, g) => a + g.sum, 0);
+  const Section = ({ title, color, data }) => {
+    const rows = Object.entries(data).sort((a, b) => b[1].sum - a[1].sum);
+    const max = Math.max(...rows.map(([, g]) => g.sum), 1);
+    const tot = rows.reduce((a, [, g]) => a + g.sum, 0);
+    return (
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="sec-head"><div className="sec-title" style={{ color }}>{title}</div><span className="job-badge" style={{ fontSize: 13 }}>{fmtBaht(tot)}</span></div>
+        {rows.length === 0 ? <div className="empty sm">{L("ไม่มีรายการเดือนนี้", "ဒီလ စာရင်းမရှိ")}</div> : rows.map(([c, g]) => {
+          const assets = Object.entries(g.assets).sort((a, b) => b[1].sum - a[1].sum);
+          const isOpen = open[title + c];
+          return (
+            <div key={c} style={{ borderTop: "1px solid var(--line)", padding: "8px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: assets.length ? "pointer" : "default" }} onClick={() => assets.length && setOpen((o) => ({ ...o, [title + c]: !o[title + c] }))}>
+                <div style={{ width: 180, flex: "none", fontSize: 13 }}>{assets.length ? (isOpen ? "▾ " : "▸ ") : ""}{c}</div>
+                <div style={{ flex: 1, background: "var(--surface-2)", borderRadius: 6, height: 16, overflow: "hidden" }}><div style={{ width: `${g.sum / max * 100}%`, height: "100%", background: color, borderRadius: 6, minWidth: 2 }} /></div>
+                <div style={{ width: 104, textAlign: "right", fontWeight: 700, fontSize: 13 }}>{fmtBaht(g.sum)}</div>
+                <div style={{ width: 34, textAlign: "right", fontSize: 11.5, color: "var(--ink-3)" }}>{g.n}</div>
+              </div>
+              {isOpen && assets.map(([a, v]) => (
+                <div key={a} style={{ display: "flex", gap: 10, padding: "3px 0 3px 26px", fontSize: 12.5, color: "var(--ink-2)" }}>
+                  <div style={{ flex: 1 }}>📍 {a}</div><div style={{ width: 104, textAlign: "right", fontWeight: 600 }}>{fmtBaht(v.sum)}</div><div style={{ width: 34, textAlign: "right", color: "var(--ink-3)" }}>{v.n}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+  return (
+    <div className="card">
+      <div className="sec-head"><div><div className="sec-title">📊 {L("สรุปค่าใช้จ่าย", "ကုန်ကျစရိတ် အနှစ်ချုပ်")} · {ym}</div>
+        <div className="sec-sub">{L("แยกต้นทุนงาน / ค่าใช้จ่ายดำเนินงาน · คลิกหมวดที่มีลูกศรเพื่อดูรายการย่อย (รถ/สถานที่/เบอร์)", "အလုပ်ကုန်ကျ / လုပ်ငန်းစရိတ် ခွဲ · မြှားရှိ အမျိုးအစားကို နှိပ်၍ အသေးစိတ်ကြည့်")}</div></div>
+        <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} /></div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "4px 0 16px" }}>
+        <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>🔧 {L("ต้นทุนงาน", "အလုပ်ကုန်ကျ")}</div><div style={{ fontWeight: 800, fontSize: 21, color: "#b45309" }}>{fmtBaht(totCost)}</div></div>
+        <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>🏢 {L("ค่าใช้จ่ายดำเนินงาน", "လုပ်ငန်းစရိတ်")}</div><div style={{ fontWeight: 800, fontSize: 21, color: "#1d4ed8" }}>{fmtBaht(totOpex)}</div></div>
+        <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>{L("รวมเดือนนี้", "ဒီလ စုစုပေါင်း")}</div><div style={{ fontWeight: 800, fontSize: 21 }}>{fmtBaht(totCost + totOpex)}</div></div>
+      </div>
+      <Section title="🔧 ต้นทุนงาน" color="#b45309" data={groups.cost} />
+      <Section title="🏢 ค่าใช้จ่ายดำเนินงาน" color="#1d4ed8" data={groups.opex} />
+      <p className="page-sub" style={{ marginTop: 6 }}>{L("* นับใบเบิกที่ยังไม่ถูกปฏิเสธ (รออนุมัติ/รอจ่าย/จ่ายแล้ว) ตามเดือนที่สร้างรายการ · รายการย่อยโชว์เมื่อระบุไว้", "* ပယ်ချမခံရသေးသော တောင်းခံစာများ")}</p>
     </div>
   );
 }
