@@ -225,7 +225,7 @@ function LoanDetail({ loan, onClose, onPay, onDelete, onEdit, onGoExpenses, busy
 }
 function Fact({ l, n }) { return <div><div style={{ fontSize: 11, color: "var(--muted,#889)" }}>{l}</div><div style={{ fontSize: 14.5, fontWeight: 600, marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{n}</div></div>; }
 
-function blankLoan() { return { name: "", kind: "vehicle", method: "flat", asset_tag: "", lender: "", contract_no: "", principal: "", rate: "", installment: "", vat_per: "", term_months: "", start_date: "", due_day: 5, paid_count: 0, steps: [], balloon: "", note: "", attachments: [], active: true }; }
+function blankLoan() { return { name: "", kind: "vehicle", method: "flat", entity: "company", asset_tag: "", lender: "", contract_no: "", principal: "", rate: "", installment: "", vat_per: "", term_months: "", start_date: "", due_day: 5, paid_count: 0, steps: [], balloon: "", note: "", attachments: [], active: true }; }
 
 const fileIcon = (a) => (/\.pdf($|\?)/i.test(a.url || "") ? "📄" : /\.(png|jpe?g|gif|webp|heic)($|\?)/i.test(a.url || "") ? "🖼️" : "📎");
 function AttachChips({ items }) {
@@ -264,9 +264,10 @@ function LoanForm({ loan, onClose, onSaved, flash }) {
       </div>
       <div style={{ display: "grid", gap: 10 }}>
         <Row label="ชื่อสัญญา *"><input className="inp" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="เช่น SUZUKI 4ฒฌ2292 / สินเชื่อออฟฟิศ 93/97" /></Row>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
           <Row label="ประเภท"><select className="inp" value={f.kind} onChange={(e) => set("kind", e.target.value)}>{Object.entries(LOAN_KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Row>
           <Row label="วิธีคิดดอกเบี้ย"><select className="inp" value={f.method} onChange={(e) => set("method", e.target.value)}>{Object.entries(LOAN_METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Row>
+          <Row label="กิจการ (ลงกระแสเงินสด)"><select className="inp" value={f.entity || "company"} onChange={(e) => set("entity", e.target.value)}><option value="company">🏢 บริษัท</option><option value="personal">👤 บุคคล</option></select></Row>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <Row label="รายการย่อย (รถ/สถานที่)"><input className="inp" list="loan-assets" value={f.asset_tag || ""} onChange={(e) => set("asset_tag", e.target.value)} placeholder="ทะเบียนรถ / สถานที่" /><datalist id="loan-assets">{ASSET_OPTS.map((a) => <option key={a} value={a} />)}</datalist></Row>

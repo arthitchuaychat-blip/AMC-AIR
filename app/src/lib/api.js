@@ -4829,6 +4829,7 @@ export async function saveFinancing(loan) {
   const uid = await _uid();
   const row = {
     name: (loan.name || "").trim(), kind: loan.kind || "vehicle", method: loan.method || "flat",
+    entity: loan.entity === "personal" ? "personal" : "company",
     asset_tag: loan.asset_tag || null, lender: loan.lender || null, contract_no: loan.contract_no || null,
     principal: loan.principal != null && loan.principal !== "" ? Number(loan.principal) : null,
     rate: loan.rate != null && loan.rate !== "" ? Number(loan.rate) : null,
@@ -4842,8 +4843,8 @@ export async function saveFinancing(loan) {
   };
   const _save = (r) => loan.id ? supabase.from("loans").update(r).eq("id", loan.id) : supabase.from("loans").insert({ ...r, created_by: uid });
   let res = await _save(row);
-  if (res.error && /steps|balloon|column|PGRST204/i.test(res.error.message || "")) { const { steps, balloon, ...noStep } = row; res = await _save(noStep); }  // pre-stepped fallback
-  if (res.error && /attachments|column|PGRST204/i.test(res.error.message || "")) { const { attachments, steps, balloon, ...noAtt } = row; res = await _save(noAtt); }  // pre-column fallback
+  if (res.error && /entity|steps|balloon|column|PGRST204/i.test(res.error.message || "")) { const { entity, steps, balloon, ...noStep } = row; res = await _save(noStep); }  // pre-entity/stepped fallback
+  if (res.error && /attachments|column|PGRST204/i.test(res.error.message || "")) { const { attachments, entity, steps, balloon, ...noAtt } = row; res = await _save(noAtt); }  // pre-column fallback
   if (res.error) throw res.error;
   syncCashEntriesFromDocs().catch(() => {});   // อัปเดตประมาณการค่างวดในกระแสเงินสด
   return true;
@@ -6613,9 +6614,9 @@ export async function syncCashEntriesFromDocs() {
   // ค่างวดผ่อน (สินเชื่อ/เช่าซื้อ · mig 242) → ประมาณการจ่ายรายเดือน 12 เดือนข้างหน้า (rolling window เหมือนเงินเดือน)
   let loanRows = null;
   try {
-    const lr = await supabase.from("loans").select("id,name,method,installment,steps,balloon,term_months,start_date,due_day,paid_count,active").eq("active", true);
+    const lr = await supabase.from("loans").select("id,name,method,entity,installment,steps,balloon,term_months,start_date,due_day,paid_count,active").eq("active", true);
     if (!lr.error) loanRows = lr.data || [];
-    else if (/steps|balloon|method|column/i.test(lr.error.message || "")) { const lr2 = await supabase.from("loans").select("id,name,installment,term_months,start_date,due_day,paid_count,active").eq("active", true); if (!lr2.error) loanRows = lr2.data || []; }
+    else if (/entity|steps|balloon|method|column/i.test(lr.error.message || "")) { const lr2 = await supabase.from("loans").select("id,name,installment,term_months,start_date,due_day,paid_count,active").eq("active", true); if (!lr2.error) loanRows = lr2.data || []; }
   } catch { loanRows = null; }
   if (loanRows) {
     const now = new Date();
@@ -6633,7 +6634,7 @@ export async function syncCashEntriesFromDocs() {
         const yy = d.getFullYear(), mm = String(d.getMonth() + 1).padStart(2, "0");
         const lastD = new Date(yy, d.getMonth() + 1, 0).getDate();
         const dd = String(Math.min(dueDay, lastD)).padStart(2, "0");
-        desired.push({ source_type: "loan", source_ref: `loan-${ln.id}-${yy}-${mm}`, direction: "out", status: "projected", entity: "company", entry_date: `${yy}-${mm}-${dd}`, amount: amt, note: `ค่างวด ${ln.name} (งวด ${seq}/${term})` });
+        desired.push({ source_type: "loan", source_ref: `loan-${ln.id}-${yy}-${mm}`, direction: "out", status: "projected", entity: ln.entity === "personal" ? "personal" : "company", entry_date: `${yy}-${mm}-${dd}`, amount: amt, note: `ค่างวด ${ln.name} (งวด ${seq}/${term})` });
       }
     });
   }

@@ -5,7 +5,8 @@ create table if not exists loans (
   id          bigserial primary key,
   name        text not null,
   kind        text not null default 'vehicle',   -- vehicle(รถ) | office(สินเชื่อออฟฟิศ) | other
-  method      text not null default 'flat',       -- flat(เช่าซื้อ ดอกคงที่) | reducing(ลดต้นลดดอก)
+  method      text not null default 'flat',       -- flat(เช่าซื้อ ดอกคงที่) | reducing(ลดต้นลดดอก) | stepped(ขั้นบันได)
+  entity      text not null default 'company',    -- กิจการที่จ่าย: company(บริษัท) | personal(บุคคล)
   asset_tag   text,                               -- ผูกรายการย่อย (ทะเบียนรถ/สถานที่)
   lender      text,                               -- ไฟแนนซ์/ธนาคาร
   contract_no text,                               -- เลขสัญญา
@@ -29,6 +30,7 @@ create table if not exists loans (
 alter table loans add column if not exists attachments jsonb not null default '[]'::jsonb;  -- เผื่อรัน create ไปก่อนมีคอลัมน์นี้
 alter table loans add column if not exists steps jsonb not null default '[]'::jsonb;         -- ค่างวดขั้นบันได
 alter table loans add column if not exists balloon numeric;                                  -- งวดบอลลูน
+alter table loans add column if not exists entity text not null default 'company';           -- บริษัท/บุคคล
 alter table loans enable row level security;
 drop policy if exists loans_read on loans;
 create policy loans_read on loans for select using (true);
