@@ -87,11 +87,15 @@ export function loanStatus(loan) {
   const stepped = method === "stepped";
   const opening = Number(loan.principal) || (!stepped && sched[0] ? r2(sched[0].balance + sched[0].principal) : 0);
   const principalLeft = stepped ? null : (paid > 0 ? (sched[paid - 1]?.balance ?? 0) : opening);   // สินเชื่อขั้นบันไดพักดอกเบี้ย → ไม่แยกเงินต้น
-  // หนี้คงเหลือ: เช่าซื้อ (vehicle) = ผลรวมค่างวดที่เหลือ (ยอดปิดบัญชี HP) · สินเชื่อลดต้นลดดอก (บ้าน/ออฟฟิศ) = เงินต้นคงเหลือจริง
+  // หนี้คงเหลือ:
+  //  · เช่าซื้อรถ (vehicle) = ผลรวมค่างวดที่เหลือ (ยอดปิดบัญชี HP)
+  //  · สินเชื่อลดต้นลดดอก (reducing ไม่ใช่รถ) = เงินต้นคงเหลือจริง
+  //  · ขั้นบันได/บอลลูน (stepped) = เงินต้นตั้งต้น (ถ้ารู้) — เป็นยอดหนี้จริง ไม่ใช่ผลรวมค่างวดที่รวมดอกทั้งสัญญา
   const amortizing = method === "reducing" && loan.kind !== "vehicle";
-  const payoffLeft = amortizing && principalLeft != null
-    ? r2(principalLeft)
-    : r2(sched.slice(paid).reduce((s, x) => s + (Number(x.installment) || 0), 0));
+  const sumRemain = () => r2(sched.slice(paid).reduce((s, x) => s + (Number(x.installment) || 0), 0));
+  const payoffLeft = stepped ? (opening > 0 ? r2(opening) : sumRemain())
+    : amortizing && principalLeft != null ? r2(principalLeft)
+    : sumRemain();
   const totalInterest = stepped ? null : r2(sched.reduce((s, x) => s + (x.interest || 0), 0));
   const interestLeft = stepped ? null : r2(sched.slice(paid).reduce((s, x) => s + (x.interest || 0), 0));
   const next = sched[paid] || null;                                       // งวดถัดไปที่ต้องจ่าย

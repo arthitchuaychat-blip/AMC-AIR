@@ -181,8 +181,8 @@ function LoanDetail({ loan, onClose, onPay, onDelete, onEdit, onGoExpenses, busy
         </div>
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 12 }}>
           {st.principalLeft != null && <Fact l="เงินต้นคงเหลือ" n={fmtBaht(st.principalLeft)} />}
-          {st.stepped && st.opening > 0 && <Fact l="เงินต้นตั้งต้น" n={fmtBaht(st.opening)} />}
-          <Fact l="หนี้ที่ต้องจ่ายอีก" n={fmtBaht(st.payoffLeft) + (st.stepped && !(Number(loan.balloon) > 0) ? " +บอลลูน" : "")} />
+          <Fact l={st.stepped ? "หนี้คงเหลือ (เงินต้น)" : "หนี้ที่ต้องจ่ายอีก"} n={fmtBaht(st.payoffLeft)} />
+          {Number(loan.balloon) > 0 && <Fact l="งวดสุดท้าย (บอลลูน)" n={fmtBaht(loan.balloon)} />}
           {st.interestLeft != null && <Fact l="ดอกเบี้ยคงเหลือ" n={fmtBaht(st.interestLeft)} />}
           <Fact l="งวด" n={`${st.paid}/${st.term} · เหลือ ${st.remainInst}`} />
           <Fact l="ผ่อนหมด" n={st.last ? thFull(st.last.due) : "—"} />
