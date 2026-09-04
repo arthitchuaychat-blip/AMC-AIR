@@ -19,6 +19,7 @@ create table if not exists loans (
   due_day     int not null default 5,             -- วันครบกำหนดชำระแต่ละเดือน
   paid_count  int not null default 0,             -- จ่ายไปแล้วกี่งวด (จ่ายจริงแล้ว)
   submitted_seq int not null default 0,            -- งวดที่ตั้งจ่ายแล้ว (รอจ่ายจริง) กันตั้งซ้ำ
+  auto_debit  boolean not null default false,      -- หักบัญชีอัตโนมัติ (จ่ายปุ่มเดียว ไม่ต้องแนบสลิป)
   steps       jsonb not null default '[]'::jsonb,  -- ค่างวดขั้นบันได [{from,to,amount}] (method=stepped)
   balloon     numeric,                             -- งวดสุดท้ายจ่ายก้อนใหญ่ (balloon) ถ้ามี
   attachments jsonb not null default '[]'::jsonb,  -- ไฟล์สัญญา/เอกสาร [{url,name}]
@@ -33,6 +34,7 @@ alter table loans add column if not exists steps jsonb not null default '[]'::js
 alter table loans add column if not exists balloon numeric;                                  -- งวดบอลลูน
 alter table loans add column if not exists entity text not null default 'company';           -- บริษัท/บุคคล
 alter table loans add column if not exists submitted_seq int not null default 0;             -- งวดที่ตั้งจ่ายแล้ว
+alter table loans add column if not exists auto_debit boolean not null default false;         -- หักบัญชีอัตโนมัติ
 alter table loans enable row level security;
 drop policy if exists loans_read on loans;
 create policy loans_read on loans for select using (true);

@@ -1,5 +1,5 @@
 import React from "react";
-import { listFinancings, saveFinancing, deleteFinancing, payFinancingInstallment, confirmFinancingPaid, uploadLoanFile } from "../lib/api";
+import { listFinancings, saveFinancing, deleteFinancing, payFinancingInstallment, confirmFinancingPaid, autoDebitFinancing, uploadLoanFile } from "../lib/api";
 import { loanStatus, monthlyOutlook, LOAN_KINDS, LOAN_METHODS, r2 } from "../lib/loans";
 import { ASSET_GROUPS } from "../lib/expenseTaxonomy";
 import { confirmDialog } from "./ConfirmDialog";
@@ -51,6 +51,21 @@ export default function Loans({ role, onGoExpenses, onGoCashflow }) {
     if (!ok) return;
     setBusy(true);
     try { const r = await payFinancingInstallment(l.id); flash(`ตั้งเบิกค่างวด ${st.next.seq} แล้ว → ไปจ่ายในเมนูเบิกจ่าย ✓`); await load(true); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+
+  async function doAutoDebit(l) {
+    const st = loanStatus(l);
+    if (!st.next) return flash("ผ่อนครบทุกงวดแล้ว", true);
+    const ok = await confirmDialog({
+      title: `หักบัญชีอัตโนมัติ งวด ${st.next.seq}?`,
+      message: `${l.name}\nงวด ${st.next.seq}/${st.term} · ${fmtBaht(st.next.installment)} · ครบ ${thFull(st.next.due)}\nบันทึกเป็น "จ่ายแล้ว" (หักบัญชีอัตโนมัติ ไม่ต้องแนบสลิป)`,
+      confirmText: "🏦 หักบัญชีแล้ว",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try { await autoDebitFinancing(l.id); flash(`บันทึกหักบัญชี งวด ${st.next.seq} แล้ว ✓`); await load(true); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
@@ -113,12 +128,12 @@ export default function Loans({ role, onGoExpenses, onGoCashflow }) {
           ยังไม่มีสัญญาสินเชื่อ {canEdit && <>— กด <b>+ เพิ่มสินเชื่อ</b> เพื่อเริ่ม</>}
         </div>}
         <div style={{ display: "grid", gap: 10 }}>
-          {rows.map((l) => <LoanRow key={l.id} loan={l} onOpen={() => setDetail(l)} onPay={() => doPay(l)} onConfirm={() => doConfirm(l)} onEdit={() => setEdit({ ...l })} canEdit={canEdit} busy={busy} />)}
+          {rows.map((l) => <LoanRow key={l.id} loan={l} onOpen={() => setDetail(l)} onPay={() => doPay(l)} onConfirm={() => doConfirm(l)} onAutoDebit={() => doAutoDebit(l)} onEdit={() => setEdit({ ...l })} canEdit={canEdit} busy={busy} />)}
         </div>
       </>}
 
       {edit && <LoanForm loan={edit} onClose={() => setEdit(null)} onSaved={async () => { setEdit(null); await load(true); flash("บันทึกสัญญาแล้ว ✓"); }} flash={flash} />}
-      {detail && <LoanDetail loan={detail} onClose={() => setDetail(null)} onPay={() => doPay(detail)} onConfirm={() => doConfirm(detail)} onDelete={canEdit ? () => doDelete(detail) : null} onEdit={canEdit ? () => { setDetail(null); setEdit({ ...detail }); } : null} onGoExpenses={onGoExpenses} busy={busy} />}
+      {detail && <LoanDetail loan={detail} onClose={() => setDetail(null)} onPay={() => doPay(detail)} onConfirm={() => doConfirm(detail)} onAutoDebit={() => doAutoDebit(detail)} onDelete={canEdit ? () => doDelete(detail) : null} onEdit={canEdit ? () => { setDetail(null); setEdit({ ...detail }); } : null} onGoExpenses={onGoExpenses} busy={busy} />}
       {toast && <div style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", background: toast.bad ? "#b42318" : "#0f766e", color: "#fff", padding: "10px 18px", borderRadius: 10, zIndex: 60, fontSize: 14, boxShadow: "0 6px 20px #0004" }}>{toast.m}</div>}
     </div>
   );
@@ -132,11 +147,12 @@ function SumCard({ k, v, sub, accent, warn }) {
   </div>;
 }
 
-function LoanRow({ loan, onOpen, onPay, onConfirm, onEdit, canEdit, busy }) {
+function LoanRow({ loan, onOpen, onPay, onConfirm, onAutoDebit, onEdit, canEdit, busy }) {
   const st = loanStatus(loan);
   const pct = st.term ? Math.round((st.paid / st.term) * 100) : 0;
   const done = st.remainInst <= 0;
   const nm = nowM();
+  const auto = !!loan.auto_debit;
   const submitted = (Number(loan.submitted_seq) || 0) > st.paid;   // งวดปัจจุบันตั้งจ่ายแล้ว รอจ่ายจริง
   const dueNow = st.next && (st.next.due.getFullYear() * 12 + st.next.due.getMonth()) <= nm;
   return <div className="card" style={{ padding: "12px 14px", opacity: loan.active === false ? 0.55 : 1 }}>
@@ -145,7 +161,7 @@ function LoanRow({ loan, onOpen, onPay, onConfirm, onEdit, canEdit, busy }) {
         <div style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", background: "var(--teal-soft,#0f766e18)", fontSize: 17, flex: "none" }}>{kindIcon(loan.kind)}</div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{loan.name}{(loan.attachments || []).length > 0 && <span title="มีไฟล์สัญญาแนบ" style={{ marginLeft: 5, fontSize: 12 }}>📎</span>}</div>
-          <div style={{ fontSize: 11.5, color: "var(--muted,#889)" }}>{LOAN_METHODS[loan.method] || loan.method}{loan.lender ? " · " + loan.lender : ""}{loan.active === false ? " · ปิดแล้ว" : ""}</div>
+          <div style={{ fontSize: 11.5, color: "var(--muted,#889)" }}>{LOAN_METHODS[loan.method] || loan.method}{loan.lender ? " · " + loan.lender : ""}{auto ? " · 🏦 หักบัญชีอัตโนมัติ" : ""}{loan.active === false ? " · ปิดแล้ว" : ""}</div>
         </div>
       </div>
       <div style={{ textAlign: "right", flex: "0 0 auto", minWidth: 96 }}>
@@ -163,7 +179,9 @@ function LoanRow({ loan, onOpen, onPay, onConfirm, onEdit, canEdit, busy }) {
         {done ? <span style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 99, background: "var(--teal-soft,#0f766e18)", color: "var(--teal,#0f766e)" }}>ผ่อนครบ ✓</span>
           : submitted ? <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 10px", borderRadius: 99, background: "#137a5416", color: "var(--green,#137a54)", whiteSpace: "nowrap" }}>✓ ตั้งจ่ายแล้ว</span>
           : <span style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 99, background: dueNow ? "#b4530915" : "var(--line,#eef)", color: dueNow ? "#b45309" : "var(--muted,#667)", whiteSpace: "nowrap" }}>{st.next ? thFull(st.next.due) : "—"}</span>}
-        {canEdit && !done && (submitted
+        {canEdit && !done && (auto
+          ? <button className="btn sm" disabled={busy} onClick={onAutoDebit} title="หักบัญชีอัตโนมัติแล้ว → บันทึกจ่าย + เดินงวด" style={{ background: "var(--teal,#0f766e)", color: "#fff", borderColor: "transparent" }}>🏦 หักบัญชี</button>
+          : submitted
           ? <button className="btn sm" disabled={busy} onClick={onConfirm} title="จ่ายเงินจริงในเมนูเบิกจ่ายแล้ว → เดินงวด" style={{ background: "var(--green,#137a54)", color: "#fff", borderColor: "transparent" }}>จ่ายเสร็จ</button>
           : <button className="btn sm" disabled={busy} onClick={onPay} title="ตั้งเบิกค่างวดถัดไป">จ่ายงวด</button>)}
         {canEdit && <button className="btn-icon sm" onClick={onEdit} title="แก้ไข">✏️</button>}
@@ -172,9 +190,10 @@ function LoanRow({ loan, onOpen, onPay, onConfirm, onEdit, canEdit, busy }) {
   </div>;
 }
 
-function LoanDetail({ loan, onClose, onPay, onConfirm, onDelete, onEdit, onGoExpenses, busy }) {
+function LoanDetail({ loan, onClose, onPay, onConfirm, onAutoDebit, onDelete, onEdit, onGoExpenses, busy }) {
   const st = loanStatus(loan);
   const sched = st.sched;
+  const auto = !!loan.auto_debit;
   const submitted = (Number(loan.submitted_seq) || 0) > st.paid;   // งวดปัจจุบันตั้งจ่ายแล้ว
   // โฟกัสรอบ ๆ งวดปัจจุบัน
   const [showAll, setShowAll] = React.useState(false);
@@ -229,10 +248,13 @@ function LoanDetail({ loan, onClose, onPay, onConfirm, onDelete, onEdit, onGoExp
       </div>
 
       <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--line,#e3e8ee)", flexWrap: "wrap", alignItems: "center" }}>
-        {st.remainInst > 0 && (submitted
+        {st.remainInst > 0 && (auto
+          ? <button className="btn" disabled={busy} onClick={onAutoDebit} style={{ background: "var(--teal,#0f766e)", color: "#fff", borderColor: "transparent" }}>🏦 หักบัญชีแล้ว งวด {st.paid + 1} (บันทึกจ่าย)</button>
+          : submitted
           ? <button className="btn" disabled={busy} onClick={onConfirm} style={{ background: "var(--green,#137a54)", color: "#fff", borderColor: "transparent" }}>✓ จ่ายเสร็จแล้ว (เดินงวด {st.paid + 1})</button>
           : <button className="btn primary" disabled={busy} onClick={onPay}>💸 ตั้งเบิกจ่ายงวด {st.paid + 1}</button>)}
-        {submitted && <span style={{ fontSize: 12, color: "var(--green,#137a54)", fontWeight: 600, alignSelf: "center" }}>✓ ตั้งจ่ายงวด {st.paid + 1} แล้ว รอจ่ายจริง</span>}
+        {submitted && !auto && <span style={{ fontSize: 12, color: "var(--green,#137a54)", fontWeight: 600, alignSelf: "center" }}>✓ ตั้งจ่ายงวด {st.paid + 1} แล้ว รอจ่ายจริง</span>}
+        {auto && <span style={{ fontSize: 12, color: "var(--teal,#0f766e)", fontWeight: 600, alignSelf: "center" }}>🏦 หักบัญชีอัตโนมัติ (ไม่ต้องแนบสลิป)</span>}
         {onGoExpenses && <button className="btn" onClick={onGoExpenses}>ไปเมนูเบิกจ่าย →</button>}
         <div style={{ flex: 1 }} />
         {onEdit && <button className="btn sm" onClick={onEdit}>✏️ แก้ไข</button>}
@@ -243,7 +265,7 @@ function LoanDetail({ loan, onClose, onPay, onConfirm, onDelete, onEdit, onGoExp
 }
 function Fact({ l, n }) { return <div><div style={{ fontSize: 11, color: "var(--muted,#889)" }}>{l}</div><div style={{ fontSize: 14.5, fontWeight: 600, marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{n}</div></div>; }
 
-function blankLoan() { return { name: "", kind: "vehicle", method: "flat", entity: "company", asset_tag: "", lender: "", contract_no: "", principal: "", rate: "", installment: "", vat_per: "", term_months: "", start_date: "", due_day: 5, paid_count: 0, steps: [], balloon: "", note: "", attachments: [], active: true }; }
+function blankLoan() { return { name: "", kind: "vehicle", method: "flat", entity: "company", asset_tag: "", lender: "", contract_no: "", principal: "", rate: "", installment: "", vat_per: "", term_months: "", start_date: "", due_day: 5, paid_count: 0, steps: [], balloon: "", auto_debit: false, note: "", attachments: [], active: true }; }
 
 const fileIcon = (a) => (/\.pdf($|\?)/i.test(a.url || "") ? "📄" : /\.(png|jpe?g|gif|webp|heic)($|\?)/i.test(a.url || "") ? "🖼️" : "📎");
 function AttachChips({ items }) {
@@ -308,6 +330,10 @@ function LoanForm({ loan, onClose, onSaved, flash }) {
         </div>
         <Row label="วันครบกำหนดงวดแรก (งวด 1) *"><input className="inp" type="date" value={f.start_date} onChange={(e) => set("start_date", e.target.value)} /></Row>
         <Row label="หมายเหตุ"><input className="inp" value={f.note || ""} onChange={(e) => set("note", e.target.value)} /></Row>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", background: "var(--panel2,#f6f8fa)", borderRadius: 8, padding: "9px 11px" }}>
+          <input type="checkbox" checked={!!f.auto_debit} onChange={(e) => set("auto_debit", e.target.checked)} style={{ width: 16, height: 16 }} />
+          <span>🏦 <b>หักบัญชีอัตโนมัติ</b> — ตอนจ่ายกดปุ่มเดียว "หักบัญชีแล้ว" บันทึกจ่ายทันที (ไม่ต้องแนบสลิป/ตั้งเบิกทีละขั้น)</span>
+        </label>
         <div>
           <div style={{ fontSize: 12, color: "var(--muted,#778)", marginBottom: 4 }}>📎 ไฟล์สัญญา/เอกสาร (PDF หรือรูป)</div>
           {(f.attachments || []).length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 6 }}>

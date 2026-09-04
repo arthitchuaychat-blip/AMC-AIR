@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { deriveJobStatus } from "./schedule";
 import { ROLE_LABEL } from "./permissions";
-import { installmentAt } from "./loans";
+import { installmentAt, dueDateOf } from "./loans";
 
 // HR position = the role assigned in Settings (single source of truth), falling back to any legacy free-text department
 const posLabel = (p) => (p && (ROLE_LABEL[p.role] || p.department)) || "";
@@ -4840,11 +4840,13 @@ export async function saveFinancing(loan) {
     attachments: Array.isArray(loan.attachments) ? loan.attachments : [],
     steps: Array.isArray(loan.steps) ? loan.steps : [],
     balloon: loan.balloon != null && loan.balloon !== "" ? Number(loan.balloon) : null,
+    auto_debit: !!loan.auto_debit,
   };
   const _save = (r) => loan.id ? supabase.from("loans").update(r).eq("id", loan.id) : supabase.from("loans").insert({ ...r, created_by: uid });
   let res = await _save(row);
-  if (res.error && /entity|steps|balloon|column|PGRST204/i.test(res.error.message || "")) { const { entity, steps, balloon, ...noStep } = row; res = await _save(noStep); }  // pre-entity/stepped fallback
-  if (res.error && /attachments|column|PGRST204/i.test(res.error.message || "")) { const { attachments, entity, steps, balloon, ...noAtt } = row; res = await _save(noAtt); }  // pre-column fallback
+  if (res.error && /auto_debit|column|PGRST204/i.test(res.error.message || "")) { const { auto_debit, ...noAuto } = row; res = await _save(noAuto); }  // pre-auto_debit fallback
+  if (res.error && /entity|steps|balloon|column|PGRST204/i.test(res.error.message || "")) { const { entity, steps, balloon, auto_debit, ...noStep } = row; res = await _save(noStep); }  // pre-entity/stepped fallback
+  if (res.error && /attachments|column|PGRST204/i.test(res.error.message || "")) { const { attachments, entity, steps, balloon, auto_debit, ...noAtt } = row; res = await _save(noAtt); }  // pre-column fallback
   if (res.error) throw res.error;
   syncCashEntriesFromDocs().catch(() => {});   // อัปเดตประมาณการค่างวดในกระแสเงินสด
   return true;
@@ -4874,6 +4876,38 @@ export async function payFinancingInstallment(id) {
   let { error: e2 } = await supabase.from("loans").update({ submitted_seq: seq, updated_at: new Date().toISOString() }).eq("id", id);
   if (e2 && /submitted_seq|column|PGRST/i.test(e2.message || "")) ({ error: e2 } = await supabase.from("loans").update({ paid_count: seq, updated_at: new Date().toISOString() }).eq("id", id));
   if (e2) throw e2;
+  syncCashEntriesFromDocs().catch(() => {});
+  return { seq };
+}
+// หักบัญชีอัตโนมัติ → บันทึกงวดนี้ "จ่ายแล้ว" ทันที (ไม่ต้องแนบสลิป) + เดินงวด · ตั้งใบเบิกสถานะ paid เลย
+export async function autoDebitFinancing(id) {
+  const uid = await _uid();
+  const { data: ln, error } = await supabase.from("loans").select("*").eq("id", id).maybeSingle();
+  if (error || !ln) throw error || new Error("ไม่พบสัญญา");
+  const seq = (Number(ln.paid_count) || 0) + 1;
+  if (seq > (Number(ln.term_months) || 0)) throw new Error("ผ่อนครบทุกงวดแล้ว");
+  const amt = installmentAt(ln, seq) || Number(ln.installment) || 0;
+  const due = dueDateOf(ln.start_date, seq, ln.due_day).toISOString().slice(0, 10);
+  const row = {
+    requester: uid, created_by: uid,
+    category: ln.kind === "vehicle" ? "ค่าผ่อนรถ" : "ค่าผ่อนสินเชื่อ",
+    kind: "opex", pay_method: "direct", asset_tag: ln.asset_tag || null,
+    title: `ค่างวด ${ln.name} (งวด ${seq}/${ln.term_months})`,
+    amount: amt, vat_amt: (ln.method === "stepped" ? 0 : Number(ln.vat_per) || 0),
+    note: `#สินเชื่อ ${ln.name} งวด ${seq} · 🏦 หักบัญชีอัตโนมัติ`,
+    status: "paid", paid_amount: amt, last_paid_at: due, paid_at: `${due}T12:00:00.000Z`,
+    payment_proof: [{ name: "หักบัญชีอัตโนมัติ", auto: true }], attachments: [],
+  };
+  // insert แบบ tolerant — ตัดคอลัมน์ใหม่ที่ยังไม่มีออกทีละชั้น
+  const tryInsert = async (r) => (await supabase.from("expense_requests").insert(r)).error;
+  let e1 = await tryInsert(row);
+  if (e1 && /kind|pay_method|asset_tag|PGRST204/i.test(e1.message || "")) { delete row.kind; delete row.pay_method; delete row.asset_tag; e1 = await tryInsert(row); }
+  if (e1 && /paid_amount|last_paid_at|payment_proof|PGRST204/i.test(e1.message || "")) { delete row.paid_amount; delete row.last_paid_at; delete row.payment_proof; e1 = await tryInsert(row); }
+  if (e1 && /vat_amt/i.test(e1.message || "")) { delete row.vat_amt; e1 = await tryInsert(row); }
+  if (e1) throw e1;
+  const { error: e2 } = await supabase.from("loans").update({ paid_count: seq, submitted_seq: 0, updated_at: new Date().toISOString() }).eq("id", id);
+  if (e2 && /submitted_seq/i.test(e2.message || "")) await supabase.from("loans").update({ paid_count: seq }).eq("id", id);
+  else if (e2) throw e2;
   syncCashEntriesFromDocs().catch(() => {});
   return { seq };
 }
