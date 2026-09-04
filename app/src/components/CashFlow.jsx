@@ -39,6 +39,7 @@ export default function CashFlow() {
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
   const [edit, setEdit] = React.useState(null);
+  const [transfer, setTransfer] = React.useState(false);   // โอนระหว่างบัญชี (บริษัท ↔ บุคคล)
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); };
 
@@ -70,6 +71,21 @@ export default function CashFlow() {
     setBusy(true);
     try { const r = await syncCashEntriesFromDocs(); flash(`ซิงค์จากเอกสารแล้ว ✓ เพิ่ม ${r.added} · อัปเดต ${r.updated}${r.removed ? ` · ลบ ${r.removed}` : ""}`); await load(); }
     catch (e) { flash("ซิงค์ไม่สำเร็จ: " + (e.message || e), true); }
+    setBusy(false);
+  }
+  // โอนเงินระหว่างบัญชีตัวเอง (บริษัท ↔ บุคคล) — สร้าง 2 บรรทัด (ออก/เข้า) ไม่นับเป็นรายรับ/จ่าย
+  async function doTransfer({ from, amount, date, note }) {
+    const to = from === "company" ? "personal" : "company";
+    const L = { company: "บริษัท", personal: "บุคคล" };
+    const amt = Number(amount) || 0;
+    if (amt <= 0) return flash("ใส่จำนวนเงินมากกว่า 0", true);
+    setBusy(true);
+    try {
+      await addCashEntry({ direction: "out", status: "actual", entity: from, entry_date: date, amount: amt, note: `🔄 โอนไปบัญชี${L[to]}${note ? " · " + note : ""}` });
+      await addCashEntry({ direction: "in", status: "actual", entity: to, entry_date: date, amount: amt, note: `🔄 รับโอนจากบัญชี${L[from]}${note ? " · " + note : ""}` });
+      flash(`บันทึกโอน ${L[from]} → ${L[to]} ${fmtBaht(amt)} แล้ว ✓ (ไม่นับเป็นรายรับ/จ่าย)`);
+      setTransfer(false); await load();
+    } catch (e) { flash("โอนไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
   async function removeEntry(e) {
@@ -162,6 +178,7 @@ export default function CashFlow() {
           <div className="seg">{ENTS.map(([v, l]) => <button key={v} className={"seg-btn" + (ent === v ? " on" : "")} onClick={() => setEnt(v)}>{l}</button>)}</div>
           <button className="btn-ghost sm" onClick={exportCsv} title="ส่งออกรายการในช่วงที่ดู เป็นไฟล์ CSV (เปิดใน Excel)">⬇ CSV</button>
           <button className="btn-ghost sm" disabled={busy} onClick={sync}><UIcon name="withdraw" size={15} /> ซิงค์จากเอกสาร</button>
+          <button className="btn-ghost sm" onClick={() => setTransfer(true)} title="ย้ายเงินระหว่างบัญชีบริษัท ↔ บุคคล (ไม่นับเป็นรายรับ/จ่าย)">🔄 โอนระหว่างบัญชี</button>
           <button className="btn-primary sm" onClick={() => setEdit({ direction: "in", status: "actual", entry_date: todayYmd(), amount: "", note: "", entity: ent === "personal" ? "personal" : "company" })}><UIcon name="plus" size={15} color="#fff" /> เพิ่มรายการ</button>
         </div>
       </div>
@@ -238,6 +255,7 @@ export default function CashFlow() {
       )}
 
       {edit && <CashEntryModal entry={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
+      {transfer && <TransferModal defaultDate={todayYmd()} defaultFrom={ent === "personal" ? "personal" : "company"} busy={busy} onClose={() => setTransfer(false)} onConfirm={doTransfer} />}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
   );
@@ -403,6 +421,41 @@ function CashEntryModal({ entry, onClose, onSaved, flash }) {
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
           <button className="btn-primary" disabled={busy} onClick={save}>{isNew ? "เพิ่ม" : "บันทึก"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+// โอนเงินระหว่างบัญชีตัวเอง (บริษัท ↔ บุคคล) — สร้าง 2 บรรทัดอัตโนมัติ ไม่นับเป็นรายรับ/จ่าย
+function TransferModal({ defaultDate, defaultFrom, busy, onClose, onConfirm }) {
+  const [from, setFrom] = React.useState(defaultFrom === "personal" ? "personal" : "company");
+  const [amount, setAmount] = React.useState("");
+  const [date, setDate] = React.useState(defaultDate || todayYmd());
+  const [note, setNote] = React.useState("");
+  const to = from === "company" ? "personal" : "company";
+  const L = { company: "🏢 บริษัท (VAT)", personal: "👤 บุคคล (NOVAT)" };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
+        <div className="modal-head"><div className="modal-title">🔄 โอนเงินระหว่างบัญชี</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 12 }}>
+            <label className="fld" style={{ flex: 1, margin: 0 }}><span>จากบัญชี</span>
+              <select className="inp" value={from} onChange={(e) => setFrom(e.target.value)}>
+                <option value="company">🏢 บริษัท (VAT)</option><option value="personal">👤 บุคคล (NOVAT)</option>
+              </select></label>
+            <div style={{ paddingBottom: 8, fontSize: 20, color: "var(--ink-3)" }}>→</div>
+            <label className="fld" style={{ flex: 1, margin: 0 }}><span>ไปบัญชี</span>
+              <div className="inp" style={{ background: "var(--surface-2)", display: "flex", alignItems: "center", color: "var(--ink-2)" }}>{L[to]}</div></label>
+          </div>
+          <label className="fld"><span>จำนวนเงิน</span><span className="inp inp-unit"><span className="unit-pre">฿</span>
+            <input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus /></span></label>
+          <label className="fld"><span>วันที่</span><input type="date" className="inp" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          <label className="fld"><span>หมายเหตุ (ไม่บังคับ)</span><input className="inp" value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น เติมเงินซื้อของ" /></label>
+          <div className="jo-dim">ระบบจะบันทึก 2 บรรทัด: เงินออกฝั่ง {L[from]} + เงินเข้าฝั่ง {L[to]} · <b>ไม่นับเป็นรายรับ/รายจ่าย</b> (มุมมอง "รวม 2 กิจการ" จะหักล้างเป็นศูนย์)</div>
+        </div>
+        <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary" disabled={busy || !(Number(amount) > 0)} onClick={() => onConfirm({ from, amount, date, note })}>บันทึกการโอน</button></div>
       </div>
     </div>
   );
