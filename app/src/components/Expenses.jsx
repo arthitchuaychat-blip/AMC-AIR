@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound, generateRecurringExpenses } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { EXPENSE_CATS, CAT_BY_NAME, ASSET_GROUPS, PAY_METHODS, PAY_LABEL, kindOf, KIND_LABEL } from "../lib/expenseTaxonomy";
 import DocCardHead from "./DocCard";
@@ -331,6 +331,10 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
               <option value="">{L("— ไม่ผูกกับงาน (ค่าใช้จ่ายทั่วไป) —", "— အလုပ်နှင့် မချိတ် (ယေဘုယျ စရိတ်) —")}</option>
               {jobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.customerName || j.title || L("งาน", "အလုပ်")}</option>)}
             </select></label>
+          {curKind === "opex" && <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={!!form.recurring} onChange={(e) => set("recurring", e.target.checked)} style={{ width: 16, height: 16 }} />
+            <span style={{ margin: 0 }}>🔁 {L("บิลประจำทุกเดือน — จำไว้เป็นแม่แบบ (เช่น ค่าเช่า/ผ่อนรถ/น้ำ-ไฟ-เน็ต-มือถือ) เดือนหน้ากดสร้างซ้ำได้เลย", "လစဉ်ဘီလ် — ပုံစံအဖြစ်မှတ်")}</span>
+          </label>}
           <label className="fld"><span>{L("รายละเอียดเพิ่มเติม", "အသေးစိတ် ထပ်ဖြည့်")}</span><textarea className="inp" rows={2} style={{ resize: "vertical" }} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder={L("อธิบายรายละเอียดค่าใช้จ่าย (ไม่บังคับ)", "ကုန်ကျစရိတ် အသေးစိတ် ရှင်းပြပါ (မဖြစ်မနေ မဟုတ်)")} /></label>
           <div className="fld"><span>🧾 {L('แนบใบเสร็จ/บิล — ยังไม่มีก็ส่งขอเบิกได้เลย แล้วกลับมาแนบทีหลัง (รายการจะขึ้น "ค้างแนบใบเสร็จ" เตือนไว้)', 'ဘောက်ချာ/ဘီလ် တွဲ — မရှိသေးလည်း တောင်းခံ တင်နိုင် · နောက်မှ ပြန်တွဲ (စာရင်းတွင် "ဘောက်ချာ တွဲရန်ကျန်" ပြမည်)')}</span><AttachRow files={form.attachments} onChange={(a) => set("attachments", a)} flash={flash} label={L("แนบใบเสร็จ/บิล", "ဘောက်ချာ/ဘီလ် တွဲ")} /></div>
         </div>
@@ -1084,7 +1088,10 @@ function ExpenseSummaryTab({ flash }) {
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">📊 {L("สรุปค่าใช้จ่าย", "ကုန်ကျစရိတ် အနှစ်ချုပ်")} · {ym}</div>
         <div className="sec-sub">{L("แยกต้นทุนงาน / ค่าใช้จ่ายดำเนินงาน · คลิกหมวดที่มีลูกศรเพื่อดูรายการย่อย (รถ/สถานที่/เบอร์)", "အလုပ်ကုန်ကျ / လုပ်ငန်းစရိတ် ခွဲ · မြှားရှိ အမျိုးအစားကို နှိပ်၍ အသေးစိတ်ကြည့်")}</div></div>
-        <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} /></div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="btn-ghost sm" title={L("สร้างใบเบิกบิลประจำ (เช่า/ผ่อนรถ/น้ำ-ไฟ-เน็ต-มือถือ) ของเดือนนี้ 'รอกรอกยอด' ให้อัตโนมัติ", "လစဉ်ဘီလ်များ ဖန်တီး")}
+            onClick={async () => { try { const r = await generateRecurringExpenses(ym); if (r.needMigration) return flash(L("ยังใช้บิลประจำไม่ได้ — ต้องรัน migration 241 ก่อน", "migration 241 လိုသည်"), true); if (r.none) return flash(L("ยังไม่มีแม่แบบบิลประจำ — ติ๊ก 'บิลประจำทุกเดือน' ตอนขอเบิกก่อน", "ပုံစံမရှိသေး"), true); flash(r.created ? L(`สร้างบิลประจำเดือนนี้ ${r.created} ใบ (รอกรอกยอด) ✓`, `${r.created} ဖန်တီးပြီး`) : L("บิลประจำเดือนนี้ถูกสร้างไว้แล้ว", "ဒီလ ဖန်တီးပြီးသား")); setList(await listExpenses()); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်: ") + (e.message || e), true); } }}>🔁 {L("สร้างบิลประจำเดือนนี้", "လစဉ်ဘီလ် ဖန်တီး")}</button>
+          <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} /></div></div>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "4px 0 16px" }}>
         <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>🔧 {L("ต้นทุนงาน", "အလုပ်ကုန်ကျ")}</div><div style={{ fontWeight: 800, fontSize: 21, color: "#b45309" }}>{fmtBaht(totCost)}</div></div>
         <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>🏢 {L("ค่าใช้จ่ายดำเนินงาน", "လုပ်ငန်းစရိတ်")}</div><div style={{ fontWeight: 800, fontSize: 21, color: "#1d4ed8" }}>{fmtBaht(totOpex)}</div></div>

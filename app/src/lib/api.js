@@ -4904,6 +4904,28 @@ export async function decideExpense(id, status, note) {
   const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
   if (ex) notify([ex.requester], { category: "hr", title: `🧾 คำขอเบิก "${ex.title}" : ${lbl}`, body: note || "", url: "expenses", ref_type: "expense" });
 }
+// สร้างบิลประจำเดือน — จากแม่แบบ (recurring=true) → ใบเบิกฉบับร่าง "รอกรอกยอด" ของเดือนนั้น (idempotent)
+export async function generateRecurringExpenses(ym) {
+  const uid = await _uid();
+  const r = await supabase.from("expense_requests").select("category,asset_tag,kind,pay_method,job_no,created_at").eq("recurring", true).order("created_at", { ascending: false });
+  if (r.error) { if (/recurring|column|schema|PGRST/i.test(r.error.message || "")) return { created: 0, needMigration: true }; throw r.error; }
+  const seen = new Set(), uniq = [];
+  (r.data || []).forEach((t) => { const k = (t.category || "") + "|" + (t.asset_tag || ""); if (!seen.has(k)) { seen.add(k); uniq.push(t); } });
+  if (!uniq.length) return { created: 0, none: true };
+  const marker = `#ประจำ ${ym}`;
+  const { data: existing } = await supabase.from("expense_requests").select("category,asset_tag,note").ilike("note", `%${marker}%`);
+  const have = new Set((existing || []).map((e) => (e.category || "") + "|" + (e.asset_tag || "")));
+  const toMake = uniq.filter((t) => !have.has((t.category || "") + "|" + (t.asset_tag || "")));
+  let created = 0;
+  for (const t of toMake) {
+    const row = { requester: uid, category: t.category || null, asset_tag: t.asset_tag || null, kind: t.kind || null, pay_method: t.pay_method || null, job_no: t.job_no || null,
+      title: `${t.category || "บิลประจำ"}${t.asset_tag ? " · " + t.asset_tag : ""} (${ym})`, amount: 0, vat_amt: 0, recurring: false,
+      note: `${marker} · รอกรอกยอด`, attachments: [], created_by: uid };
+    const { error } = await supabase.from("expense_requests").insert(row);
+    if (!error) created++;
+  }
+  return { created };
+}
 // แนบใบเสร็จย้อนหลัง (เบิกเงินไปจ่ายก่อน ใบเสร็จตามมาทีหลัง) — ผ่าน RPC มิเกรชัน 133:
 // ผู้ขอเบิกเติมรูปใน attachments ของรายการตัวเองได้อย่างเดียว แก้ยอด/สถานะไม่ได้
 export async function attachExpenseReceipt(id, urls) {
