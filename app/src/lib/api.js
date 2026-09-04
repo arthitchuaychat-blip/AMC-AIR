@@ -4796,6 +4796,14 @@ export async function uploadExpenseFile(file) {
   if (error) throw error;
   return supabase.storage.from("photos").getPublicUrl(path).data.publicUrl;
 }
+// แนบไฟล์สัญญา/เอกสารสินเชื่อ (PDF/รูป) — ไม่ย่อ เก็บไฟล์ต้นฉบับครบ · คืน {url,name}
+export async function uploadLoanFile(file) {
+  const ext = (file.name?.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `loans/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type || "application/octet-stream" });
+  if (error) throw error;
+  return { url: supabase.storage.from("photos").getPublicUrl(path).data.publicUrl, name: file.name || `เอกสาร.${ext}` };
+}
 export async function submitExpense(e) {
   const uid = await _uid();
   const row = {
@@ -4827,10 +4835,11 @@ export async function saveFinancing(loan) {
     term_months: Number(loan.term_months) || 0, start_date: loan.start_date || null,
     due_day: Number(loan.due_day) || 5, paid_count: Number(loan.paid_count) || 0,
     note: loan.note || null, active: loan.active !== false, updated_at: new Date().toISOString(),
+    attachments: Array.isArray(loan.attachments) ? loan.attachments : [],
   };
-  let res;
-  if (loan.id) res = await supabase.from("loans").update(row).eq("id", loan.id);
-  else res = await supabase.from("loans").insert({ ...row, created_by: uid });
+  const _save = (r) => loan.id ? supabase.from("loans").update(r).eq("id", loan.id) : supabase.from("loans").insert({ ...r, created_by: uid });
+  let res = await _save(row);
+  if (res.error && /attachments|column|PGRST204/i.test(res.error.message || "")) { const { attachments, ...noAtt } = row; res = await _save(noAtt); }  // pre-column fallback
   if (res.error) throw res.error;
   syncCashEntriesFromDocs().catch(() => {});   // อัปเดตประมาณการค่างวดในกระแสเงินสด
   return true;

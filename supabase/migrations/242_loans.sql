@@ -17,12 +17,14 @@ create table if not exists loans (
   start_date  date,                               -- วันครบกำหนดงวดที่ 1
   due_day     int not null default 5,             -- วันครบกำหนดชำระแต่ละเดือน
   paid_count  int not null default 0,             -- จ่ายไปแล้วกี่งวด
+  attachments jsonb not null default '[]'::jsonb,  -- ไฟล์สัญญา/เอกสาร [{url,name}]
   note        text,
   active      boolean not null default true,
   created_by  uuid,
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
 );
+alter table loans add column if not exists attachments jsonb not null default '[]'::jsonb;  -- เผื่อรัน create ไปก่อนมีคอลัมน์นี้
 alter table loans enable row level security;
 drop policy if exists loans_read on loans;
 create policy loans_read on loans for select using (true);

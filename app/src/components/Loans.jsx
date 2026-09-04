@@ -1,5 +1,5 @@
 import React from "react";
-import { listFinancings, saveFinancing, deleteFinancing, payFinancingInstallment } from "../lib/api";
+import { listFinancings, saveFinancing, deleteFinancing, payFinancingInstallment, uploadLoanFile } from "../lib/api";
 import { loanStatus, monthlyOutlook, LOAN_KINDS, LOAN_METHODS, r2 } from "../lib/loans";
 import { ASSET_GROUPS } from "../lib/expenseTaxonomy";
 import { confirmDialog } from "./ConfirmDialog";
@@ -133,7 +133,7 @@ function LoanRow({ loan, onOpen, onPay, onEdit, canEdit, busy }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 220px", minWidth: 0, cursor: "pointer" }} onClick={onOpen}>
         <div style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", background: "var(--teal-soft,#0f766e18)", fontSize: 17, flex: "none" }}>{kindIcon(loan.kind)}</div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 14.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{loan.name}</div>
+          <div style={{ fontWeight: 600, fontSize: 14.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{loan.name}{(loan.attachments || []).length > 0 && <span title="มีไฟล์สัญญาแนบ" style={{ marginLeft: 5, fontSize: 12 }}>📎</span>}</div>
           <div style={{ fontSize: 11.5, color: "var(--muted,#889)" }}>{LOAN_METHODS[loan.method] || loan.method}{loan.lender ? " · " + loan.lender : ""}{loan.active === false ? " · ปิดแล้ว" : ""}</div>
         </div>
       </div>
@@ -186,6 +186,7 @@ function LoanDetail({ loan, onClose, onPay, onDelete, onEdit, onGoExpenses, busy
           <Fact l="งวด" n={`${st.paid}/${st.term} · เหลือ ${st.remainInst}`} />
           <Fact l="ผ่อนหมด" n={st.last ? thFull(st.last.due) : "—"} />
         </div>
+        <AttachChips items={loan.attachments} />
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px" }}>
@@ -223,11 +224,20 @@ function LoanDetail({ loan, onClose, onPay, onDelete, onEdit, onGoExpenses, busy
 }
 function Fact({ l, n }) { return <div><div style={{ fontSize: 11, color: "var(--muted,#889)" }}>{l}</div><div style={{ fontSize: 14.5, fontWeight: 600, marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{n}</div></div>; }
 
-function blankLoan() { return { name: "", kind: "vehicle", method: "flat", asset_tag: "", lender: "", contract_no: "", principal: "", rate: "", installment: "", vat_per: "", term_months: "", start_date: "", due_day: 5, paid_count: 0, note: "", active: true }; }
+function blankLoan() { return { name: "", kind: "vehicle", method: "flat", asset_tag: "", lender: "", contract_no: "", principal: "", rate: "", installment: "", vat_per: "", term_months: "", start_date: "", due_day: 5, paid_count: 0, note: "", attachments: [], active: true }; }
+
+const fileIcon = (a) => (/\.pdf($|\?)/i.test(a.url || "") ? "📄" : /\.(png|jpe?g|gif|webp|heic)($|\?)/i.test(a.url || "") ? "🖼️" : "📎");
+function AttachChips({ items }) {
+  if (!items || !items.length) return null;
+  return <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+    {items.map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, padding: "4px 9px", borderRadius: 8, background: "var(--panel2,#f2f5f8)", border: "1px solid var(--line,#e3e8ee)", textDecoration: "none", color: "inherit", maxWidth: 220, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fileIcon(a)} {a.name || "เอกสาร"}</a>)}
+  </div>;
+}
 
 function LoanForm({ loan, onClose, onSaved, flash }) {
   const [f, setF] = React.useState(loan);
   const [busy, setBusy] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   // พรีวิวสด
   const preview = React.useMemo(() => {
@@ -277,6 +287,25 @@ function LoanForm({ loan, onClose, onSaved, flash }) {
         </div>
         <Row label="วันครบกำหนดงวดแรก (งวด 1) *"><input className="inp" type="date" value={f.start_date} onChange={(e) => set("start_date", e.target.value)} /></Row>
         <Row label="หมายเหตุ"><input className="inp" value={f.note || ""} onChange={(e) => set("note", e.target.value)} /></Row>
+        <div>
+          <div style={{ fontSize: 12, color: "var(--muted,#778)", marginBottom: 4 }}>📎 ไฟล์สัญญา/เอกสาร (PDF หรือรูป)</div>
+          {(f.attachments || []).length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 6 }}>
+            {(f.attachments || []).map((a, i) => <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+              <a href={a.url} target="_blank" rel="noreferrer" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fileIcon(a)} {a.name || "เอกสาร"}</a>
+              <button className="btn-icon sm" title="ลบไฟล์นี้" onClick={() => set("attachments", (f.attachments || []).filter((_, j) => j !== i))}>✕</button>
+            </div>)}
+          </div>}
+          <label className="btn sm" style={{ cursor: uploading ? "wait" : "pointer", opacity: uploading ? 0.6 : 1 }}>
+            {uploading ? "กำลังอัปโหลด…" : "+ แนบไฟล์"}
+            <input type="file" accept="application/pdf,image/*" hidden disabled={uploading} onChange={async (e) => {
+              const file = e.target.files?.[0]; if (!file) return;
+              setUploading(true);
+              try { const a = await uploadLoanFile(file); set("attachments", [...(f.attachments || []), a]); }
+              catch (err) { flash("อัปโหลดไม่สำเร็จ: " + (err.message || err), true); }
+              setUploading(false); e.target.value = "";
+            }} />
+          </label>
+        </div>
         {loan.id && <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={f.active !== false} onChange={(e) => set("active", e.target.checked)} /> สัญญายังใช้งาน (ยังผ่อนอยู่)</label>}
 
         {preview && <div style={{ background: "var(--panel2,#f6f8fa)", borderRadius: 10, padding: "10px 12px", fontSize: 12.5 }}>
