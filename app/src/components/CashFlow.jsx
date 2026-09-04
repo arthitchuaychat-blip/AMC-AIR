@@ -15,6 +15,16 @@ const weekStartYmd = (s) => { const d = new Date(s + "T00:00:00"); const dow = (
 const weekEndYmd = (startYmd) => { const d = new Date(startYmd + "T00:00:00"); d.setDate(d.getDate() + 6); return ymd(d); };
 const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", labor_owed: "ค่าแรงช่างซัพ (รอเบิก)", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย", expense_paid: "เบิกจ่าย (จ่ายแล้ว)", expense_due: "เบิกจ่าย (ค้างจ่าย)", advance: "เบิกเงินล่วงหน้า" };
 const GRAINS = [["day", "รายวัน"], ["week", "สัปดาห์"], ["month", "เดือน"], ["year", "ปี"]];
+// จัดหมวดเงินออกจาก source_type — ใช้ทั้งสรุปแยกหมวด + ส่งออก CSV
+const CAT = (e) => {
+  const s = e.source_type;
+  if (s === "salary" || s === "advance") return "คน (เงินเดือน/เบิกล่วงหน้า)";
+  if (s === "po") return "วัสดุ/สั่งซื้อ (PO)";
+  if (s === "payout" || s === "labor_owed") return "ช่างซัพ";
+  if (s === "expense_paid" || s === "expense_due" || s === "expense") return "เบิกจ่าย";
+  if (s === "invoice" || s === "receipt") return "รายรับ";
+  return "อื่นๆ";
+};
 
 const ENTS = [["all", "รวม 2 กิจการ"], ["company", "🏢 บริษัท"], ["personal", "👤 บุคคล"]];
 
@@ -91,6 +101,49 @@ export default function CashFlow() {
     return arr;
   }, [ents, grain, openingVal]);
 
+  // ── สรุปเงินสด + จุดต่ำสุด (runway) ──
+  const cash = React.useMemo(() => {
+    const today = todayYmd();
+    const n = new Date(); const monthEnd = ymd(new Date(n.getFullYear(), n.getMonth() + 1, 0));
+    let actual = openingVal, projToMonthEnd = 0; const proj = [];
+    ents.forEach((e) => {
+      const v = sgn(e) * (Number(e.amount) || 0);
+      if (e.status === "actual") actual += v;
+      else { if (e.entry_date <= monthEnd) projToMonthEnd += v; proj.push({ d: e.entry_date < today ? today : e.entry_date, v }); }
+    });
+    proj.sort((a, b) => a.d.localeCompare(b.d));
+    let r = actual, minBal = actual, minDate = today;
+    proj.forEach((p) => { r += p.v; if (r < minBal) { minBal = r; minDate = p.d; } });
+    return { nowBal: actual, monthEndBal: actual + projToMonthEnd, minBal, minDate };
+  }, [ents, openingVal]);
+
+  // เงินสำรองขั้นต่ำ ต่อกิจการ (เก็บในเครื่อง) — ใช้เตือน runway
+  const [reserve, setReserve] = React.useState(0);
+  React.useEffect(() => { try { setReserve(Number(localStorage.getItem(`cf_reserve_${ent}`)) || 0); } catch { setReserve(0); } }, [ent]);
+  const saveReserve = (v) => { const nn = Math.max(0, Number(v) || 0); setReserve(nn); try { localStorage.setItem(`cf_reserve_${ent}`, String(nn)); } catch { /* ignore */ } };
+  const runwayAlert = cash.minBal < 0 || (reserve > 0 && cash.minBal < reserve);
+
+  // ช่วงที่กำลังดู (สำหรับแยกหมวด + ส่งออก)
+  const viewRange = grain === "day"
+    ? [ymd(new Date(anchor.getFullYear(), anchor.getMonth(), 1)), ymd(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0))]
+    : grain === "year" ? null : [`${year}-01-01`, `${year}-12-31`];
+  const viewEnts = React.useMemo(() => viewRange ? ents.filter((e) => e.entry_date >= viewRange[0] && e.entry_date <= viewRange[1]) : ents, [ents, grain, anchor, year]); // eslint-disable-line
+  const catRows = React.useMemo(() => {
+    const m = {}; viewEnts.filter((e) => e.direction === "out").forEach((e) => { const c = CAT(e); m[c] = (m[c] || 0) + (Number(e.amount) || 0); });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [viewEnts]);
+  const catMax = Math.max(...catRows.map(([, v]) => v), 1);
+  const catTotal = catRows.reduce((a, [, v]) => a + v, 0);
+
+  function exportCsv() {
+    const head = ["วันที่", "ทิศทาง", "สถานะ", "กิจการ", "หมวด", "จำนวน (+เข้า/−ออก)", "หมายเหตุ"];
+    const rows = viewEnts.slice().sort((a, b) => a.entry_date.localeCompare(b.entry_date)).map((e) => [
+      e.entry_date, e.direction === "in" ? "เข้า" : "ออก", e.status === "actual" ? "จริง" : "คาดการณ์",
+      entOf(e) === "personal" ? "บุคคล" : "บริษัท", CAT(e), sgn(e) * (Number(e.amount) || 0), (e.note || "").replace(/\n/g, " ")]);
+    const csv = "﻿" + [head, ...rows].map((a) => a.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = `cashflow-${ent}-${grain}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
   // สัปดาห์คร่อมปีใหม่ (เริ่ม 29 ธ.ค. จบ 4 ม.ค.) ต้องโผล่ทั้ง 2 ปี — เทียบทั้งวันเริ่มและวันจบสัปดาห์
   const viewBuckets = grain === "year" ? buckets : buckets.filter((b) => b.sort.slice(0, 4) === String(year)
     || (grain === "week" && weekEndYmd(b.key).slice(0, 4) === String(year)));
@@ -107,6 +160,7 @@ export default function CashFlow() {
             <button className={"seg-btn" + (withProj ? " on" : "")} onClick={() => setWithProj(true)}>+ คาดการณ์</button>
           </div>
           <div className="seg">{ENTS.map(([v, l]) => <button key={v} className={"seg-btn" + (ent === v ? " on" : "")} onClick={() => setEnt(v)}>{l}</button>)}</div>
+          <button className="btn-ghost sm" onClick={exportCsv} title="ส่งออกรายการในช่วงที่ดู เป็นไฟล์ CSV (เปิดใน Excel)">⬇ CSV</button>
           <button className="btn-ghost sm" disabled={busy} onClick={sync}><UIcon name="withdraw" size={15} /> ซิงค์จากเอกสาร</button>
           <button className="btn-primary sm" onClick={() => setEdit({ direction: "in", status: "actual", entry_date: todayYmd(), amount: "", note: "", entity: ent === "personal" ? "personal" : "company" })}><UIcon name="plus" size={15} color="#fff" /> เพิ่มรายการ</button>
         </div>
@@ -123,6 +177,8 @@ export default function CashFlow() {
         </div>
         <label className="cf-opening">เงินสดยกมา{ent === "company" ? " (บริษัท)" : ent === "personal" ? " (บุคคล)" : ""} <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span>
           <input type="number" value={ent === "all" ? (Number(opening.company) || 0) + (Number(opening.personal) || 0) : openingInput} disabled={ent === "all"} title={ent === "all" ? "เลือกกิจการ (บริษัท/บุคคล) ก่อนจึงจะแก้ยอดยกมาได้" : ""} onChange={(e) => setOpeningInput(e.target.value)} onBlur={saveOpening} /></span></label>
+        <label className="cf-opening" title="ถ้าเงินคาดการณ์จะต่ำกว่ายอดนี้ ระบบจะเตือนล่วงหน้า (เก็บในเครื่องนี้)">เงินสำรองขั้นต่ำ <span className="inp inp-unit" style={{ width: 130 }}><span className="unit-pre">฿</span>
+          <input type="number" min="0" value={reserve} onChange={(e) => saveReserve(e.target.value)} /></span></label>
       </div>
 
       {ent !== "all" && <div className="cf-carry" style={{ background: ent === "personal" ? "#f5f3ff" : "#eff6ff", borderColor: ent === "personal" ? "#ddd6fe" : "#bfdbfe" }}>
@@ -130,10 +186,55 @@ export default function CashFlow() {
           ? "👤 กิจการบุคคล — รายได้จากบิล 'ไม่เอา VAT' เข้าที่นี่ · ต้นทุน/เงินเดือน/ช่างซัพ ลงบริษัททั้งหมด (ปรับได้ด้วยการแก้รายการเอง)"
           : "🏢 กิจการบริษัท — รายได้จากบิล VAT + ต้นทุน/เงินเดือน/ช่างซัพทั้งหมดเข้าที่นี่"}
       </div>}
+
+      {!loading && <>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10, margin: "4px 0 12px" }}>
+          <div style={{ background: "var(--surface-2,#f3f7f8)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px" }}>
+            <div className="jo-dim" style={{ fontSize: 12 }}>💵 เงินสดตอนนี้ (จริง)</div>
+            <div style={{ fontWeight: 800, fontSize: 22, color: cash.nowBal < 0 ? "var(--down)" : "var(--ink)" }}>{fmtBaht(cash.nowBal)}</div>
+          </div>
+          <div style={{ background: "var(--surface-2,#f3f7f8)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px" }}>
+            <div className="jo-dim" style={{ fontSize: 12 }}>🔮 คาดการณ์สิ้นเดือนนี้</div>
+            <div style={{ fontWeight: 800, fontSize: 22, color: cash.monthEndBal < 0 ? "var(--down)" : "var(--up)" }}>{fmtBaht(cash.monthEndBal)}</div>
+            <div className="jo-dim" style={{ fontSize: 11 }}>รวมใบแจ้งหนี้/หนี้ที่คาดว่าจะเข้า-ออก</div>
+          </div>
+          <div style={{ background: "var(--surface-2,#f3f7f8)", border: `1px solid ${runwayAlert ? "#f59e0b" : "var(--line)"}`, borderRadius: 12, padding: "12px 14px" }}>
+            <div className="jo-dim" style={{ fontSize: 12 }}>📉 จุดต่ำสุดที่คาด</div>
+            <div style={{ fontWeight: 800, fontSize: 22, color: cash.minBal < 0 ? "var(--down)" : runwayAlert ? "#b45309" : "var(--ink)" }}>{fmtBaht(cash.minBal)}</div>
+            <div className="jo-dim" style={{ fontSize: 11 }}>~{thShort(cash.minDate)}</div>
+          </div>
+        </div>
+        {runwayAlert && <div style={{ border: `1.5px solid ${cash.minBal < 0 ? "#dc2626" : "#f59e0b"}`, background: cash.minBal < 0 ? "#fef2f2" : "#fffbeb", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+          <b style={{ color: cash.minBal < 0 ? "#b91c1c" : "#b45309" }}>{cash.minBal < 0 ? "🔴 เงินสดคาดว่าจะติดลบ" : "⚠️ เงินสดจะต่ำกว่าเงินสำรองที่ตั้งไว้"}</b>
+          {" "}— ประมาณ <b>{thDate(cash.minDate)}</b> เงินจะเหลือ <b>{fmtBaht(cash.minBal)}</b>{reserve > 0 ? ` (เงินสำรอง ${fmtBaht(reserve)})` : ""}
+          <div className="jo-dim" style={{ marginTop: 2 }}>ทางแก้: เร่งเก็บใบแจ้งหนี้ค้างรับ · เลื่อนรายจ่ายที่ยังไม่ถึงกำหนด · หรือเตรียมเงินสำรองเพิ่ม</div>
+        </div>}
+      </>}
       {loading ? <div className="empty">กำลังโหลด…</div> : (
         grain === "day"
           ? <DayView ents={ents} opening={openingVal} anchor={anchor} withProj={withProj} sgn={sgn} onEdit={setEdit} onDel={removeEntry} />
           : <SummaryTable buckets={viewBuckets} withProj={withProj} grain={grain} />
+      )}
+
+      {!loading && catRows.length > 0 && (
+        <div style={{ background: "var(--surface,#fff)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px", marginTop: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+            <b style={{ fontSize: 15 }}>💸 เงินออกแยกหมวด <span className="jo-dim" style={{ fontWeight: 400, fontSize: 12.5 }}>({grain === "day" ? thMonth(anchor) : grain === "year" ? "ทุกปี" : `ปี ${year + 543}`} · จริง+คาดการณ์)</span></b>
+            <span className="jo-dim" style={{ fontSize: 12.5 }}>รวมออก {fmtBaht(catTotal)}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            {catRows.map(([c, v]) => (
+              <div key={c} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 170, flex: "none", fontSize: 12.5 }}>{c}</div>
+                <div style={{ flex: 1, background: "var(--surface-2,#eef3f6)", borderRadius: 7, height: 20, position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", inset: 0, width: `${v / catMax * 100}%`, background: "linear-gradient(90deg,#f59e0b,#dc2626)", borderRadius: 7, minWidth: 2 }} />
+                </div>
+                <div style={{ width: 96, flex: "none", textAlign: "right", fontWeight: 700, fontSize: 12.5 }}>{fmtBaht(v)}</div>
+                <div style={{ width: 40, flex: "none", textAlign: "right", fontSize: 11.5, color: "var(--ink-3)" }}>{catTotal ? Math.round(v / catTotal * 100) : 0}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {edit && <CashEntryModal entry={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
