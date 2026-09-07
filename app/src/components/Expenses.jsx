@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound, generateRecurringExpenses } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound, generateRecurringExpenses, listSuppliers, quickAddSupplier, updateExpenseRequest } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { EXPENSE_CATS, CAT_BY_NAME, ASSET_GROUPS, PAY_METHODS, PAY_LABEL, kindOf, KIND_LABEL } from "../lib/expenseTaxonomy";
 import DocCardHead from "./DocCard";
@@ -125,7 +125,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
         </>}
         title={x.title} titleFallback={L("— ไม่ระบุรายการ —", "— အမည် မသတ်မှတ် —")}
-        sub={[x.category, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, x.kind === "cost" ? "🔧 ต้นทุนงาน" : x.kind === "opex" ? "🏢 ค่าใช้จ่าย" : null, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null].filter(Boolean).join(" · ") || null}
+        sub={[x.category, x.supplier ? "🏭 " + x.supplier : null, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, x.kind === "cost" ? "🔧 ต้นทุนงาน" : x.kind === "opex" ? "🏢 ค่าใช้จ่าย" : null, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null].filter(Boolean).join(" · ") || null}
         by={x.requesterName} date={x.created_at}
         amountNode={partial ? (
           <div className="rec-amt-bd">
@@ -235,6 +235,7 @@ function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
       {list && list.length > 0 && (list || []).filter((x) => expMatch(x, q, dateR)).length === 0 && <div className="empty">{L("ไม่พบรายการตามที่ค้นหา", "ရှာဖွေမှုနှင့် ကိုက်ညီသည် မတွေ့ပါ")}</div>}
       <div className="job-cards">{(list || []).filter((x) => expMatch(x, q, dateR)).map((x) => (
         <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc}>
+          {x.status === "pending" && <button className="btn-ghost sm" onClick={() => setForm(expenseToForm(x))}>✏️ {L("แก้ไข", "ပြင်")}</button>}
           {x.status !== "rejected" && (
             needReceipt(x)
               ? <button className="btn-primary sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จ", "ဘောက်ချာ တွဲ")}</button>
@@ -276,29 +277,49 @@ function ReceiptModal({ x, onClose, onSaved, flash }) {
   );
 }
 
+// แปลงรายการเบิกที่ยังไม่อนุมัติ → ออบเจกต์ฟอร์มสำหรับแก้ไข
+const expenseToForm = (x) => ({ id: x.id, title: x.title || "", amount: x.amount ?? "", category: x.category || "", job_no: x.job_no || "", note: x.note || "", attachments: x.attachments || [], has_vat: Number(x.vat_amt) > 0, pay_method: x.pay_method || "reimburse", asset_tag: x.asset_tag || "", supplier: x.supplier || "", recurring: !!x.recurring });
+
 function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const [customMode, setCustomMode] = React.useState(!!form.category && !CAT_BY_NAME[form.category]);
+  const [sups, setSups] = React.useState([]);
+  const [addingSup, setAddingSup] = React.useState(false);
   const cat = CAT_BY_NAME[form.category];
   const assetList = cat?.assets ? ASSET_GROUPS[cat.assets] : null;
   const curKind = kindOf(form.category, form.job_no);
+  const editing = !!form.id;   // แก้ไขคำขอที่ยังไม่อนุมัติ
+  React.useEffect(() => { listSuppliers().then((s) => setSups(s || [])).catch(() => {}); }, []);
+  const supKnown = !form.supplier?.trim() || sups.some((s) => (s.name || "").trim() === form.supplier.trim());
+  async function createSup() {
+    const name = form.supplier?.trim(); if (!name) return;
+    setAddingSup(true);
+    try { await quickAddSupplier(name); setSups(await listSuppliers()); flash(L(`สร้างผู้ขาย "${name}" แล้ว ✓`, `ရောင်းသူ ဖန်တီးပြီး ✓`)); }
+    catch (e) { flash(L("สร้างผู้ขายไม่สำเร็จ: ", "မအောင်: ") + (e.message || e), true); }
+    setAddingSup(false);
+  }
   async function save() {
     if (!form.title.trim()) return flash(L("ใส่ชื่อรายการ", "အမည် ဖြည့်ပါ"), true);
     if (!(Number(form.amount) > 0)) return flash(L("ใส่จำนวนเงิน", "ပမာဏ ဖြည့်ပါ"), true);
     setBusy(true);
     const vat_amt = form.has_vat ? Math.round((Number(form.amount) || 0) * 7 / 107 * 100) / 100 : 0;   // บิลราคารวม VAT → ถอดภาษีซื้อ 7/107
     const kind = kindOf(form.category, form.job_no);   // ต้นทุน(cost) ถ้าหมวด cost หรือผูกงาน · ไม่งั้น opex
-    try { await submitExpense({ ...form, vat_amt, kind, pay_method: form.pay_method || "reimburse", asset_tag: form.asset_tag || null }); flash(L("ส่งคำขอเบิกแล้ว รออนุมัติ ✓", "တောင်းခံစာ တင်ပြီး · အတည်ပြုရန် စောင့် ✓")); onSaved(); }
-    catch (e) { flash(L("ส่งไม่สำเร็จ: ", "တင်၍ မအောင်မြင်: ") + (e.message || e), true); }
+    const payload = { ...form, vat_amt, kind, pay_method: form.pay_method || "reimburse", asset_tag: form.asset_tag || null, supplier: form.supplier || null };
+    try {
+      if (editing) { await updateExpenseRequest(form.id, payload); flash(L("แก้ไขคำขอแล้ว ✓", "ပြင်ဆင်ပြီး ✓")); }
+      else { await submitExpense(payload); flash(L("ส่งคำขอเบิกแล้ว รออนุมัติ ✓", "တောင်းခံစာ တင်ပြီး · အတည်ပြုရန် စောင့် ✓")); }
+      onSaved();
+    }
+    catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); }
     setBusy(false);
   }
   return (
     <div className="modal-overlay" onClick={() => setForm(null)}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
-        <div className="modal-head"><div className="modal-title">{L("ขอเบิกค่าใช้จ่าย", "ကုန်ကျစရိတ် တောင်းခံ")}</div><button className="modal-x" onClick={() => setForm(null)}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-head"><div className="modal-title">{editing ? L("แก้ไขคำขอเบิก", "တောင်းခံစာ ပြင်ဆင်") : L("ขอเบิกค่าใช้จ่าย", "ကုန်ကျစရိတ် တောင်းခံ")}</div><button className="modal-x" onClick={() => setForm(null)}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
           <label className="fld"><span>{L("รายการ/เรื่องที่เบิก", "တောင်းခံသည့် အကြောင်းအရာ")}</span><input className="inp" value={form.title} autoFocus onChange={(e) => set("title", e.target.value)} placeholder={L("เช่น ค่าน้ำมัน / ค่าทางด่วน / ซื้อของหน้างาน", "ဥပမာ ဆီဖိုး / အမြန်လမ်းခ / လုပ်ငန်းခွင် ပစ္စည်းဝယ်")} /></label>
           <div className="fld-row">
@@ -321,6 +342,14 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
             <div style={{ display: "flex", gap: 6 }}>
               {PAY_METHODS.map(([k, l, d]) => <button type="button" key={k} title={d} onClick={() => set("pay_method", k)} className={"cat-chip" + ((form.pay_method || "reimburse") === k ? " on" : "")} style={(form.pay_method || "reimburse") === k ? { background: "#111", color: "#fff", borderColor: "#111", flex: 1 } : { flex: 1 }}>{l}</button>)}
             </div></label>
+          <label className="fld"><span>{L("ผู้ขาย / ร้านค้า (ไม่บังคับ)", "ရောင်းသူ / ဆိုင် (မဖြစ်မနေ မဟုတ်)")}</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input className="inp" list="exp-suppliers" value={form.supplier || ""} onChange={(e) => set("supplier", e.target.value)} placeholder={L("พิมพ์/เลือกชื่อผู้ขาย", "ရောင်းသူ အမည် ရိုက်/ရွေး")} style={{ flex: 1 }} />
+              <datalist id="exp-suppliers">{sups.map((s) => <option key={s.id} value={s.name} />)}</datalist>
+              {!supKnown && <button type="button" className="btn-primary sm" disabled={addingSup} onClick={createSup} title={L("สร้างผู้ขายใหม่นี้ในรายชื่อผู้ขาย", "ရောင်းသူအသစ် ဖန်တီး")} style={{ whiteSpace: "nowrap" }}>{addingSup ? "…" : L("＋ สร้างผู้ขาย", "＋ ဖန်တီး")}</button>}
+            </div>
+            {!supKnown && form.supplier?.trim() ? <span style={{ fontSize: 11.5, color: "#b45309", marginTop: 3 }}>{L("ยังไม่มีผู้ขายนี้ในระบบ — กด “สร้างผู้ขาย” เพื่อเพิ่มเข้ารายชื่อ", "စာရင်းတွင် မရှိသေး — “ဖန်တီး” နှိပ်")}</span> : null}
+          </label>
           <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <input type="checkbox" checked={!!form.has_vat} onChange={(e) => set("has_vat", e.target.checked)} style={{ width: 16, height: 16 }} />
             <span style={{ margin: 0 }}>🧾 {L("บิลนี้มีใบกำกับภาษีซื้อ VAT 7% (ยอดข้างบนรวม VAT แล้ว)", "ဤဘီလ်တွင် ဝယ်ခွန် VAT 7% ပါသည် (ပမာဏတွင် VAT ပါပြီး)")}
@@ -339,7 +368,7 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
           <div className="fld"><span>🧾 {L('แนบใบเสร็จ/บิล — ยังไม่มีก็ส่งขอเบิกได้เลย แล้วกลับมาแนบทีหลัง (รายการจะขึ้น "ค้างแนบใบเสร็จ" เตือนไว้)', 'ဘောက်ချာ/ဘီလ် တွဲ — မရှိသေးလည်း တောင်းခံ တင်နိုင် · နောက်မှ ပြန်တွဲ (စာရင်းတွင် "ဘောက်ချာ တွဲရန်ကျန်" ပြမည်)')}</span><AttachRow files={form.attachments} onChange={(a) => set("attachments", a)} flash={flash} label={L("แนบใบเสร็จ/บิล", "ဘောက်ချာ/ဘီလ် တွဲ")} /></div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={() => setForm(null)}>{L("ยกเลิก", "ပယ်ဖျက်")}</button>
-          <button className="btn-primary" disabled={busy} onClick={save}>{L("ส่งขออนุมัติ", "အတည်ပြုရန် တင်")}</button></div>
+          <button className="btn-primary" disabled={busy} onClick={save}>{editing ? L("บันทึกการแก้ไข", "ပြင်ဆင်မှု သိမ်း") : L("ส่งขออนุมัติ", "အတည်ပြုရန် တင်")}</button></div>
       </div>
     </div>
   );
@@ -353,6 +382,9 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
   const [payFor, setPayFor] = React.useState(null);
   const [vendorPay, setVendorPay] = React.useState(false);   // จ่ายเจ้าหนี้หลายใบในคราวเดียว
   const [rcptFor, setRcptFor] = React.useState(null);   // แนบใบเสร็จแทนพนักงาน (ออฟฟิศ)
+  const [editFor, setEditFor] = React.useState(null);   // แก้ไขคำขอที่ยังไม่อนุมัติ
+  const [jobs, setJobs] = React.useState([]);
+  React.useEffect(() => { listJobOrders({}).then((j) => setJobs((j || []).filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
   const [q, setQ] = React.useState("");
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   async function load() { try { setList(await listExpenses()); } catch (e) { flash(L("โหลดไม่สำเร็จ: ", "ဖွင့်မရ: ") + (e.message || e), true); setList([]); } }
@@ -427,6 +459,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
           <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} onSetExpected={async (id, d) => { try { await setExpenseExpectedDate(id, d); flash(L("ตั้งวันประมาณการจ่ายแล้ว ✓", "ခန့်မှန်း ငွေပေးရက် သတ်မှတ်ပြီး ✓")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); } }}
             onSetVat={async (id, v, ex) => { const nv = Math.max(0, Math.round((Number(v) || 0) * 100) / 100); if (Math.round((Number(ex.vat_amt) || 0) * 100) / 100 === nv) return; try { await setExpenseVat(id, nv); flash(L("บันทึกภาษีซื้อแล้ว ✓", "ဝယ်ခွန် သိမ်းပြီး ✓")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); } }}>
             {x.status === "pending" && <><button className="btn-primary sm ok" onClick={() => decide(x, "approved")}>✓ {L("อนุมัติ", "အတည်ပြု")}</button>
+              <button className="btn-ghost sm" onClick={() => setEditFor(expenseToForm(x))}>✏️ {L("แก้ไข", "ပြင်")}</button>
               <button className="btn-ghost sm" onClick={() => decide(x, "rejected")}>{L("ไม่อนุมัติ", "ပယ်ချ")}</button></>}
             {x.status === "approved" && <><button className="btn-primary sm" onClick={() => setPayFor(x)}><UIcon name="purchase" size={14} color="#fff" /> {Number(x.paid_amount) > 0 ? L("จ่ายงวดต่อไป", "နောက်အရစ် ပေးချေ") : L("จ่ายเงิน + แนบสลิปโอน", "ငွေပေး + လွှဲဆလစ် တွဲ")}</button>
               {!(Number(x.paid_amount) > 0) && (salaryPeriod(x)
@@ -442,6 +475,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
       {payFor && <PayModal x={payFor} onClose={() => setPayFor(null)} onPaid={() => { setPayFor(null); load(); }} flash={flash} />}
       {vendorPay && <PayVendorModal onClose={() => setVendorPay(false)} onDone={() => { setVendorPay(false); setStatusF("pending"); load(); }} flash={flash} />}
       {rcptFor && <ReceiptModal x={rcptFor} onClose={() => setRcptFor(null)} onSaved={() => { setRcptFor(null); load(); }} flash={flash} />}
+      {editFor && <ExpenseForm form={editFor} setForm={setEditFor} jobs={jobs} onSaved={() => { setEditFor(null); load(); }} flash={flash} />}
     </div>
   );
 }

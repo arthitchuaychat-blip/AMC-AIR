@@ -4810,9 +4810,11 @@ export async function submitExpense(e) {
   const row = {
     requester: uid, job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0, vat_amt: Number(e.vat_amt) || 0,
     kind: e.kind || null, pay_method: e.pay_method || null, asset_tag: e.asset_tag || null, recurring: !!e.recurring,   // โครงสร้างทำจ่าย (mig 241)
+    supplier: e.supplier?.trim() || null,   // ชื่อผู้ขาย (mig 243)
     note: e.note?.trim() || null, attachments: e.attachments || [], created_by: uid,
   };
   let { error } = await supabase.from("expense_requests").insert(row);
+  if (error && /supplier|PGRST204/i.test(error.message || "")) { delete row.supplier; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-243 fallback
   if (error && /kind|pay_method|asset_tag|recurring|PGRST204/i.test(error.message || "")) { delete row.kind; delete row.pay_method; delete row.asset_tag; delete row.recurring; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-241 fallback
   if (error && /vat_amt|PGRST204/i.test(error.message || "")) { delete row.vat_amt; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-232 fallback
   if (error) throw error;
@@ -4925,6 +4927,34 @@ export async function cancelFinancingSubmit(id) {
   const { error } = await supabase.from("loans").update({ submitted_seq: 0, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) throw error;
   return true;
+}
+
+// แก้ไขคำขอเบิกที่ยังไม่อนุมัติ (pending เท่านั้น) — ธุรการ/ผู้ขอแก้เนื้อหาก่อนอนุมัติได้
+export async function updateExpenseRequest(id, e) {
+  const { data: cur, error: e0 } = await supabase.from("expense_requests").select("status,paid_amount").eq("id", id).maybeSingle();
+  if (e0) throw e0;
+  if (!cur) throw new Error("ไม่พบรายการ");
+  if (cur.status !== "pending") throw new Error("แก้ได้เฉพาะรายการที่ยังไม่อนุมัติ");
+  const patch = {
+    job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0, vat_amt: Number(e.vat_amt) || 0,
+    kind: e.kind || null, pay_method: e.pay_method || null, asset_tag: e.asset_tag || null, recurring: !!e.recurring,
+    supplier: e.supplier?.trim() || null, note: e.note?.trim() || null, attachments: e.attachments || [],
+  };
+  let rows = null;
+  const _try = async (p) => { const r = await supabase.from("expense_requests").update(p).eq("id", id).eq("status", "pending").select("id"); rows = r.data; return r.error; };
+  let err = await _try(patch);
+  if (err && /supplier|PGRST204/i.test(err.message || "")) { const { supplier, ...p } = patch; err = await _try(p); }
+  if (err && /kind|pay_method|asset_tag|recurring|PGRST204/i.test(err.message || "")) { const { kind, pay_method, asset_tag, recurring, supplier, ...p } = patch; err = await _try(p); }
+  if (err && /vat_amt|PGRST204/i.test(err.message || "")) { const { vat_amt, ...p } = patch; err = await _try(p); }
+  if (err) throw err;
+  if (!rows || !rows.length) throw new Error("แก้ไขไม่ได้ — สิทธิ์ไม่พอ หรือรายการถูกอนุมัติ/จ่ายไปแล้ว");
+  syncCashEntriesFromDocs().catch(() => {});
+  return true;
+}
+// สร้างผู้ขายด่วนจากฟอร์มเบิก — คืน id (type=นิติบุคคล, มี VAT ค่าเริ่มต้น · แก้รายละเอียดเพิ่มในเมนูผู้ขายได้)
+export async function quickAddSupplier(name, { vat = true, type = "company" } = {}) {
+  if (!name?.trim()) throw new Error("ใส่ชื่อผู้ขาย");
+  return await saveSupplier({ type, name: name.trim(), vat }, [], []);
 }
 
 // เติม เลขงาน · ชื่องาน · ชื่อลูกค้า ให้ใบเบิกจ่าย
