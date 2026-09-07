@@ -280,6 +280,43 @@ function ReceiptModal({ x, onClose, onSaved, flash }) {
 // แปลงรายการเบิกที่ยังไม่อนุมัติ → ออบเจกต์ฟอร์มสำหรับแก้ไข
 const expenseToForm = (x) => ({ id: x.id, title: x.title || "", amount: x.amount ?? "", category: x.category || "", job_no: x.job_no || "", note: x.note || "", attachments: x.attachments || [], has_vat: Number(x.vat_amt) > 0, pay_method: x.pay_method || "reimburse", asset_tag: x.asset_tag || "", supplier: x.supplier || "", recurring: !!x.recurring });
 
+// ช่องเลือกใบงานแบบพิมพ์ค้นหาได้ (ชื่องาน/ลูกค้า/เลขงาน) — งานเยอะเลื่อนหายาก
+function JobPicker({ value, jobs, onChange, L }) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState("");
+  const boxRef = React.useRef(null);
+  const cur = jobs.find((j) => j.job_no === value);
+  const label = value ? `${value}${cur ? " · " + (cur.customerName || cur.title || "") : ""}` : "";
+  const filtered = React.useMemo(() => {
+    const s = q.trim();
+    return (!s ? jobs : jobs.filter((j) => matchText(s, j.job_no, j.customerName, j.title))).slice(0, 50);
+  }, [q, jobs]);
+  React.useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const pick = (jn) => { onChange(jn); setOpen(false); setQ(""); };
+  return (
+    <div ref={boxRef} style={{ position: "relative" }}>
+      <input className="inp" value={open ? q : label} readOnly={!open}
+        placeholder={L("— ไม่ผูกกับงาน · พิมพ์ค้นหา ชื่องาน/ลูกค้า/เลขงาน —", "— အလုပ်နှင့် မချိတ် · ရှာဖွေ —")}
+        onFocus={() => { setOpen(true); setQ(""); }}
+        onChange={(e) => { setOpen(true); setQ(e.target.value); }}
+        style={value && !open ? { paddingRight: 30 } : undefined} />
+      {value && !open && <button type="button" onMouseDown={(e) => { e.preventDefault(); onChange(""); }} title={L("ล้าง", "ဖျက်")} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", cursor: "pointer", color: "var(--muted,#889)", fontSize: 14 }}>✕</button>}
+      {open && <div style={{ position: "absolute", zIndex: 30, top: "calc(100% + 3px)", left: 0, right: 0, background: "var(--panel,#fff)", border: "1px solid var(--line,#e3e8ee)", borderRadius: 8, maxHeight: 260, overflowY: "auto", boxShadow: "0 8px 24px #0002" }}>
+        <div onMouseDown={(e) => { e.preventDefault(); pick(""); }} style={{ padding: "8px 12px", cursor: "pointer", color: "var(--muted,#667)", fontSize: 13 }}>{L("— ไม่ผูกกับงาน (ค่าใช้จ่ายทั่วไป) —", "— အလုပ်နှင့် မချိတ် —")}</div>
+        {filtered.map((j) => <div key={j.job_no} onMouseDown={(e) => { e.preventDefault(); pick(j.job_no); }} style={{ padding: "8px 12px", cursor: "pointer", borderTop: "1px solid var(--line,#eef)", fontSize: 13, background: j.job_no === value ? "var(--teal-soft,#0f766e14)" : "transparent" }}>
+          <b>{j.job_no}</b> · {j.customerName || j.title || L("งาน", "အလုပ်")}
+        </div>)}
+        {filtered.length === 0 && <div style={{ padding: "8px 12px", color: "var(--muted,#889)", fontSize: 13 }}>{L("ไม่พบงาน", "မတွေ့ပါ")}</div>}
+      </div>}
+    </div>
+  );
+}
+
 function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
@@ -356,10 +393,7 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
               {form.has_vat && Number(form.amount) > 0 ? <b style={{ color: "#0d9488" }}> · {L("ภาษีซื้อ", "ဝယ်ခွန်")} ฿{(Math.round(Number(form.amount) * 7 / 107 * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}</b> : ""}</span>
           </label>
           <label className="fld"><span>{L("เบิกจากใบงาน (ถ้ามี — จะรวมเป็นต้นทุนงาน)", "အလုပ်လွှာမှ တောင်းခံ (ရှိလျှင် — အလုပ်ကုန်ကျစရိတ်တွင် ပေါင်းမည်)")}</span>
-            <select className="inp" value={form.job_no} onChange={(e) => set("job_no", e.target.value)}>
-              <option value="">{L("— ไม่ผูกกับงาน (ค่าใช้จ่ายทั่วไป) —", "— အလုပ်နှင့် မချိတ် (ယေဘုယျ စရိတ်) —")}</option>
-              {jobs.map((j) => <option key={j.job_no} value={j.job_no}>{j.job_no} · {j.customerName || j.title || L("งาน", "အလုပ်")}</option>)}
-            </select></label>
+            <JobPicker value={form.job_no} jobs={jobs} onChange={(v) => set("job_no", v)} L={L} /></label>
           {curKind === "opex" && <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <input type="checkbox" checked={!!form.recurring} onChange={(e) => set("recurring", e.target.checked)} style={{ width: 16, height: 16 }} />
             <span style={{ margin: 0 }}>🔁 {L("บิลประจำทุกเดือน — จำไว้เป็นแม่แบบ (เช่น ค่าเช่า/ผ่อนรถ/น้ำ-ไฟ-เน็ต-มือถือ) เดือนหน้ากดสร้างซ้ำได้เลย", "လစဉ်ဘီလ် — ပုံစံအဖြစ်မှတ်")}</span>
