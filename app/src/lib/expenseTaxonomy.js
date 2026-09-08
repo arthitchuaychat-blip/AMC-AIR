@@ -24,6 +24,7 @@ export const EXPENSE_CATS = [
   { name: "ค่ามือถือ", kind: "opex", icon: "📱", assets: "phone" },
   { name: "ค่าผ่อนรถ", kind: "opex", icon: "🚗", assets: "vehicle" },
   { name: "ค่าน้ำมัน", kind: "opex", icon: "⛽", assets: "vehiclePlus" },
+  { name: "ค่าทางด่วน", kind: "opex", icon: "🛣️" },
   { name: "ค่าอาหาร", kind: "opex", icon: "🍚" },
   { name: "ค่าวัสดุสำนักงาน", kind: "opex", icon: "🗂" },
   { name: "ค่าจัดส่งเอกสาร", kind: "opex", icon: "✉️" },
