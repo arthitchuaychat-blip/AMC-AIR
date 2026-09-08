@@ -14,7 +14,7 @@ const thMonthKey = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("th-TH
 const weekStartYmd = (s) => { const d = new Date(s + "T00:00:00"); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return ymd(d); };
 const weekEndYmd = (startYmd) => { const d = new Date(startYmd + "T00:00:00"); d.setDate(d.getDate() + 6); return ymd(d); };
 const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", labor_owed: "ค่าแรงช่างซัพ (รอเบิก)", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย", expense_paid: "เบิกจ่าย (จ่ายแล้ว)", expense_due: "เบิกจ่าย (ค้างจ่าย)", advance: "เบิกเงินล่วงหน้า", loan: "ค่างวดผ่อน (สินเชื่อ)", recur: "รายจ่ายประจำ" };
-const GRAINS = [["day", "รายวัน"], ["week", "สัปดาห์"], ["month", "เดือน"], ["year", "ปี"]];
+const GRAINS = [["calendar", "📅 ปฏิทิน"], ["day", "รายวัน"], ["week", "สัปดาห์"], ["month", "เดือน"], ["year", "ปี"]];
 // จัดหมวดเงินออกจาก source_type — ใช้ทั้งสรุปแยกหมวด + ส่งออก CSV
 const CAT = (e) => {
   const s = e.source_type;
@@ -35,7 +35,7 @@ export default function CashFlow() {
   const [opening, setOpening] = React.useState({ company: 0, personal: 0 });
   const [openingInput, setOpeningInput] = React.useState("");
   const [ent, setEnt] = React.useState("all");   // กิจการ: all=รวม · company=บริษัท · personal=บุคคล
-  const [grain, setGrain] = React.useState("day");
+  const [grain, setGrain] = React.useState("calendar");
   const [anchor, setAnchor] = React.useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [withProj, setWithProj] = React.useState(true);
   const [loading, setLoading] = React.useState(true);
@@ -61,8 +61,9 @@ export default function CashFlow() {
   // เปลี่ยนกิจการ → เติมค่ายกมาของกิจการนั้นในช่องกรอก
   React.useEffect(() => { setOpeningInput(String((ent === "personal" ? opening.personal : opening.company) || 0)); }, [ent, opening]);
   const year = anchor.getFullYear();
-  const move = (n) => setAnchor((a) => grain === "day" ? new Date(a.getFullYear(), a.getMonth() + n, 1) : new Date(a.getFullYear() + n, a.getMonth(), 1));
-  const title = grain === "day" ? thMonth(anchor) : grain === "year" ? "ทุกปี" : `ปี ${year + 543}`;
+  const byMonth = grain === "day" || grain === "calendar";
+  const move = (n) => setAnchor((a) => byMonth ? new Date(a.getFullYear(), a.getMonth() + n, 1) : new Date(a.getFullYear() + n, a.getMonth(), 1));
+  const title = byMonth ? thMonth(anchor) : grain === "year" ? "ทุกปี" : `ปี ${year + 543}`;
 
   async function saveOpening() {
     if (ent === "all") return;   // โหมดรวม = อ่านอย่างเดียว (แก้ยกมาต้องเลือกกิจการก่อน)
@@ -189,7 +190,7 @@ export default function CashFlow() {
         <div className="sched-nav">
           {grain !== "year" && <>
             <button className="btn-ghost sm" onClick={() => move(-1)}><UIcon name="chevR" size={15} style={{ transform: "rotate(180deg)" }} /></button>
-            <button className="btn-ghost sm" onClick={() => setAnchor(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })}>{grain === "day" ? "เดือนนี้" : "ปีนี้"}</button>
+            <button className="btn-ghost sm" onClick={() => setAnchor(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })}>{byMonth ? "เดือนนี้" : "ปีนี้"}</button>
             <button className="btn-ghost sm" onClick={() => move(1)}><UIcon name="chevR" size={15} /></button>
           </>}
           <div className="sched-title">{title}</div>
@@ -230,7 +231,9 @@ export default function CashFlow() {
         </div>}
       </>}
       {loading ? <div className="empty">กำลังโหลด…</div> : (
-        grain === "day"
+        grain === "calendar"
+          ? <CalendarView ents={ents} opening={openingVal} anchor={anchor} withProj={withProj} sgn={sgn} reserve={reserve} onEdit={setEdit} />
+          : grain === "day"
           ? <DayView ents={ents} opening={openingVal} anchor={anchor} withProj={withProj} sgn={sgn} onEdit={setEdit} onDel={removeEntry} />
           : <SummaryTable buckets={viewBuckets} withProj={withProj} grain={grain} />
       )}
@@ -264,6 +267,71 @@ export default function CashFlow() {
 }
 
 // ---- summary table for week / month / year ----
+// 📅 ปฏิทินกระแสเงินสด — เห็นเงินเข้า/ออก + ยอดคงเหลือรายวัน ล่วงหน้าทั้งเดือน (พยากรณ์)
+function CalendarView({ ents, opening, anchor, withProj, sgn, reserve, onEdit }) {
+  const [sel, setSel] = React.useState(null);
+  const use = withProj ? ents : ents.filter((e) => e.status === "actual");
+  const y = anchor.getFullYear(), m = anchor.getMonth();
+  const monthStr = `${y}-${pad(m + 1)}`, firstYmd = monthStr + "-01";
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const B = (n) => (Number(n) || 0).toLocaleString("en-US", { maximumFractionDigits: 0 });
+  const todayStr = ymd(new Date());
+  // ยอดตั้งต้นก่อนเข้าเดือน + รายวัน
+  const byDay = {}; let balStart = Number(opening) || 0;
+  use.forEach((e) => { const v = sgn(e) * (Number(e.amount) || 0); if (e.entry_date < firstYmd) { balStart += v; return; } if (e.entry_date.slice(0, 7) !== monthStr) return; const g = byDay[e.entry_date] || (byDay[e.entry_date] = { in: 0, out: 0, net: 0, list: [] }); if (v >= 0) g.in += v; else g.out += -v; g.net += v; g.list.push(e); });
+  let run = balStart; const info = {};
+  for (let d = 1; d <= daysInMonth; d++) { const k = `${monthStr}-${pad(d)}`; const g = byDay[k] || { in: 0, out: 0, net: 0, list: [] }; run += g.net; info[k] = { ...g, bal: run }; }
+  const minBal = Math.min(balStart, ...Object.values(info).map((g) => g.bal));
+  const endBal = info[`${monthStr}-${pad(daysInMonth)}`]?.bal ?? balStart;
+  // เรียงเป็นสัปดาห์ (เริ่มจันทร์)
+  const firstDow = (new Date(y, m, 1).getDay() + 6) % 7;   // 0=จันทร์
+  const cells = []; for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7) cells.push(null);
+  const DOW = ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."];
+  const selInfo = sel ? info[sel] : null;
+
+  return <div>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+      <Mini k="ยอดต้นเดือน" v={fmtBaht(balStart)} />
+      <Mini k="สิ้นเดือน (คาดการณ์)" v={fmtBaht(endBal)} accent={endBal >= 0 ? "#137a54" : "#b42318"} />
+      <Mini k="จุดต่ำสุดในเดือน" v={fmtBaht(minBal)} accent={minBal < (reserve || 0) ? "#b42318" : undefined} />
+    </div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+      {DOW.map((d, i) => <div key={d} style={{ textAlign: "center", fontSize: 11.5, fontWeight: 600, color: i >= 5 ? "var(--ink-3,#889)" : "var(--ink-2,#556)", padding: "2px 0" }}>{d}</div>)}
+      {cells.map((d, i) => {
+        if (!d) return <div key={i} />;
+        const k = `${monthStr}-${pad(d)}`, g = info[k], isToday = k === todayStr, hasEnt = g.list.length > 0;
+        const low = g.bal < 0 ? "neg" : (reserve > 0 && g.bal < reserve) ? "warn" : null;
+        return <button key={i} onClick={() => setSel(hasEnt ? (sel === k ? null : k) : null)} style={{
+          textAlign: "left", padding: "5px 6px 6px", minHeight: 66, borderRadius: 8, cursor: hasEnt ? "pointer" : "default",
+          border: isToday ? "2px solid var(--teal,#0f766e)" : "1px solid var(--line,#e6ebf0)",
+          background: sel === k ? "var(--teal-soft,#0f766e14)" : low === "neg" ? "#fef2f2" : low === "warn" ? "#fff7ed" : "var(--panel,#fff)" }}>
+          <div style={{ fontSize: 11.5, fontWeight: isToday ? 800 : 600, color: isToday ? "var(--teal,#0f766e)" : "inherit" }}>{d}</div>
+          {hasEnt && <div style={{ fontSize: 10.5, lineHeight: 1.35, marginTop: 1 }}>
+            {g.in > 0 && <div style={{ color: "#137a54", fontWeight: 600 }}>+{B(g.in)}</div>}
+            {g.out > 0 && <div style={{ color: "#b42318", fontWeight: 600 }}>−{B(g.out)}</div>}
+          </div>}
+          <div style={{ fontSize: 10, color: low ? (low === "neg" ? "#b42318" : "#c2410c") : "var(--ink-3,#99a)", marginTop: hasEnt ? 2 : 8, fontWeight: low ? 700 : 400 }}>฿{B(g.bal)}</div>
+        </button>;
+      })}
+    </div>
+    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: "var(--ink-3,#889)", marginTop: 8 }}>
+      <span><b style={{ color: "#137a54" }}>+</b> เงินเข้า</span><span><b style={{ color: "#b42318" }}>−</b> เงินออก</span><span>฿ = ยอดคงเหลือสิ้นวัน</span><span style={{ color: "#b42318" }}>■ ติดลบ</span>{reserve > 0 && <span style={{ color: "#c2410c" }}>■ ต่ำกว่าเงินสำรอง</span>}
+    </div>
+    {selInfo && <div className="card" style={{ marginTop: 10, padding: "10px 12px" }}>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>{thDate(sel)} · <span style={{ color: "#137a54" }}>เข้า {fmtBaht(selInfo.in)}</span> · <span style={{ color: "#b42318" }}>ออก {fmtBaht(selInfo.out)}</span> · คงเหลือ {fmtBaht(selInfo.bal)}</div>
+      <div style={{ display: "grid", gap: 5 }}>
+        {selInfo.list.slice().sort((a, b) => sgn(b) - sgn(a)).map((e) => <div key={e.id} onClick={() => e.source_type === "manual" && onEdit && onEdit(e)} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12.5, padding: "4px 0", borderBottom: "1px solid var(--line,#eef)", cursor: e.source_type === "manual" ? "pointer" : "default" }}>
+          <span>{e.status === "projected" ? "🔮 " : ""}{SRC[e.source_type] || e.source_type}{e.note ? " · " + e.note : ""}</span>
+          <b style={{ color: sgn(e) > 0 ? "#137a54" : "#b42318", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{sgn(e) > 0 ? "+" : "−"}{fmtBaht(Math.abs(Number(e.amount) || 0))}</b>
+        </div>)}
+      </div>
+    </div>}
+  </div>;
+}
+function Mini({ k, v, accent }) { return <div style={{ flex: "1 1 130px", background: "var(--surface-2,#f6f8fa)", borderRadius: 10, padding: "9px 12px" }}><div style={{ fontSize: 11.5, color: "var(--ink-3,#889)" }}>{k}</div><div style={{ fontWeight: 800, fontSize: 18, color: accent || "inherit" }}>{v}</div></div>; }
+
 function SummaryTable({ buckets, withProj, grain }) {
   if (buckets.length === 0) return <div className="empty">ยังไม่มีรายการในช่วงนี้ — กด “ซิงค์จากเอกสาร” หรือ “เพิ่มรายการ”</div>;
   const tot = buckets.reduce((a, b) => ({ actIn: a.actIn + b.actIn, actOut: a.actOut + b.actOut, projIn: a.projIn + b.projIn, projOut: a.projOut + b.projOut }), { actIn: 0, actOut: 0, projIn: 0, projOut: 0 });
