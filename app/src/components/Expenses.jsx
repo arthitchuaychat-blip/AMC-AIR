@@ -347,7 +347,8 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
     const vat_amt = form.has_vat ? Math.round((Number(form.amount) || 0) * 7 / 107 * 100) / 100 : 0;   // บิลราคารวม VAT → ถอดภาษีซื้อ 7/107
     const kind = kindOf(form.category, form.job_no);   // ต้นทุน(cost) ถ้าหมวด cost หรือผูกงาน · ไม่งั้น opex
     const wht_pct = form.wht ? Number(form.wht_pct) || 0 : 0;
-    const wht_amt = wht_pct > 0 ? Math.round((Number(form.amount) || 0) * wht_pct / 100 * 100) / 100 : 0;   // หัก ณ ที่จ่าย = ยอดเต็ม × %
+    const base = Math.round(((Number(form.amount) || 0) - vat_amt) * 100) / 100;   // ยอดก่อน VAT = ฐานหัก ณ ที่จ่าย
+    const wht_amt = wht_pct > 0 ? Math.round(base * wht_pct / 100 * 100) / 100 : 0;   // หัก ณ ที่จ่าย = ยอดก่อนภาษี × %
     const payload = { ...form, vat_amt, kind, pay_method: form.pay_method || "reimburse", asset_tag: form.asset_tag || null, supplier: form.supplier || null, wht_pct, wht_amt };
     try {
       if (editing) { await updateExpenseRequest(form.id, payload); flash(L("แก้ไขคำขอแล้ว ✓", "ပြင်ဆင်ပြီး ✓")); }
@@ -394,22 +395,31 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
           <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <input type="checkbox" checked={!!form.has_vat} onChange={(e) => set("has_vat", e.target.checked)} style={{ width: 16, height: 16 }} />
             <span style={{ margin: 0 }}>🧾 {L("บิลนี้มีใบกำกับภาษีซื้อ VAT 7% (ยอดข้างบนรวม VAT แล้ว)", "ဤဘီလ်တွင် ဝယ်ခွန် VAT 7% ပါသည် (ပမာဏတွင် VAT ပါပြီး)")}
-              {form.has_vat && Number(form.amount) > 0 ? <b style={{ color: "#0d9488" }}> · {L("ภาษีซื้อ", "ဝယ်ခွန်")} ฿{(Math.round(Number(form.amount) * 7 / 107 * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}</b> : ""}</span>
+              </span>
           </label>
           <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <input type="checkbox" checked={!!form.wht} onChange={(e) => { set("wht", e.target.checked); if (e.target.checked && !(Number(form.wht_pct) > 0)) set("wht_pct", 3); }} style={{ width: 16, height: 16 }} />
-            <span style={{ margin: 0 }}>✂️ {L("หัก ณ ที่จ่าย (WHT) — หักจากยอดเต็ม แล้วจ่ายผู้ขายส่วนที่เหลือ", "အခွန်ဖြတ်")}</span>
+            <span style={{ margin: 0 }}>✂️ {L("หัก ณ ที่จ่าย (WHT) — หักจากยอดก่อน VAT จ่ายผู้ขายส่วนที่เหลือ", "အခွန်ဖြတ်")}</span>
           </label>
-          {form.wht && (() => {
-            const amt = Number(form.amount) || 0; const pct = Number(form.wht_pct) || 0;
-            const w = Math.round(amt * pct / 100 * 100) / 100; const net = Math.round((amt - w) * 100) / 100;
-            return <div style={{ background: "var(--panel2,#f6f8fa)", borderRadius: 10, padding: "10px 12px", display: "grid", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 12.5 }}>{L("อัตราหัก", "နှုန်း")}</span>
-                <span className="inp inp-unit" style={{ width: 92 }}><input type="number" min="0" step="0.5" value={form.wht_pct ?? ""} onChange={(e) => set("wht_pct", e.target.value)} /><span className="unit-pre" style={{ order: 2 }}>%</span></span>
-                {[1, 2, 3, 5].map((p) => <button type="button" key={p} className={"cat-chip" + (pct === p ? " on" : "")} onClick={() => set("wht_pct", p)} style={pct === p ? { background: "#111", color: "#fff", borderColor: "#111", padding: "3px 10px" } : { padding: "3px 10px" }}>{p}%</button>)}
-              </div>
-              <div style={{ fontSize: 12.5, color: "var(--muted,#556)" }}>{L("หัก ณ ที่จ่าย", "ဖြတ်ငွေ")} <b style={{ color: "#b45309" }}>฿{w.toLocaleString("en-US", { minimumFractionDigits: 2 })}</b> · {L("จ่ายผู้ขายจริง", "အမှန်ပေး")} <b style={{ color: "#0d9488" }}>฿{net.toLocaleString("en-US", { minimumFractionDigits: 2 })}</b></div>
+          {form.wht && <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "-2px 0 2px" }}>
+            <span style={{ fontSize: 12.5, color: "var(--muted,#667)" }}>{L("อัตราหัก", "နှုန်း")}</span>
+            <span className="inp inp-unit" style={{ width: 84 }}><input type="number" min="0" step="0.5" value={form.wht_pct ?? ""} onChange={(e) => set("wht_pct", e.target.value)} /><span className="unit-pre" style={{ order: 2 }}>%</span></span>
+            {[1, 2, 3, 5].map((p) => <button type="button" key={p} className={"cat-chip" + ((Number(form.wht_pct) || 0) === p ? " on" : "")} onClick={() => set("wht_pct", p)} style={(Number(form.wht_pct) || 0) === p ? { background: "#111", color: "#fff", borderColor: "#111", padding: "3px 10px" } : { padding: "3px 10px" }}>{p}%</button>)}
+          </div>}
+          {(form.has_vat || form.wht) && Number(form.amount) > 0 && (() => {
+            const amt = Math.round((Number(form.amount) || 0) * 100) / 100;
+            const vat = form.has_vat ? Math.round(amt * 7 / 107 * 100) / 100 : 0;
+            const base = Math.round((amt - vat) * 100) / 100;
+            const pct = form.wht ? Number(form.wht_pct) || 0 : 0;
+            const wht = pct > 0 ? Math.round(base * pct / 100 * 100) / 100 : 0;
+            const net = Math.round((amt - wht) * 100) / 100;
+            const B = (n) => "฿" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const line = (k, v, c, minus) => <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: c || "inherit" }}><span>{k}</span><span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{minus ? "− " : ""}{B(v)}</span></div>;
+            return <div style={{ background: "var(--panel2,#f6f8fa)", borderRadius: 10, padding: "11px 13px", display: "grid", gap: 6 }}>
+              {form.has_vat ? <>{line(L("ยอดก่อนภาษี", "အခွန်မတိုင်မီ"), base)}{line(L("ภาษีมูลค่าเพิ่ม 7%", "VAT 7%"), vat, "var(--muted,#667)")}<div style={{ borderTop: "1px dashed var(--line,#dde)", margin: "1px 0" }} />{line(L("รวมเป็นเงิน", "စုစုပေါင်း"), amt)}</> : line(L("ยอดเต็ม", "ပမာဏ"), amt)}
+              {wht > 0 && line(L(`หัก ณ ที่จ่าย ${pct}%`, `အခွန်ဖြတ် ${pct}%`), wht, "#b45309", true)}
+              <div style={{ borderTop: "1px solid var(--line,#dde)", margin: "1px 0" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 800 }}><span>{L("ยอดชำระ (จ่ายผู้ขายจริง)", "ပေးရမည့်ငွေ")}</span><span style={{ fontVariantNumeric: "tabular-nums", color: "#0d9488" }}>{B(net)}</span></div>
             </div>;
           })()}
           <label className="fld"><span>{L("เบิกจากใบงาน (ถ้ามี — จะรวมเป็นต้นทุนงาน)", "အလုပ်လွှာမှ တောင်းခံ (ရှိလျှင် — အလုပ်ကုန်ကျစရိတ်တွင် ပေါင်းမည်)")}</span>
