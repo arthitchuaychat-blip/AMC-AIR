@@ -4953,6 +4953,56 @@ export async function cancelFinancingSubmit(id) {
   return true;
 }
 
+// ── รายจ่ายประจำ (subscription/บิลรายเดือน-รายปี · mig 245) ──────────────────────
+export async function listRecurringBills() {
+  const { data, error } = await supabase.from("recurring_bills").select("*").order("active", { ascending: false }).order("category").order("name");
+  if (error) { if (/relation|does not exist|schema|PGRST/i.test(error.message || "")) return { rows: [], needMigration: true }; throw error; }
+  return { rows: data || [] };
+}
+export async function saveRecurringBill(b) {
+  const uid = await _uid();
+  const row = { name: (b.name || "").trim(), provider: b.provider || null, ref_no: b.ref_no || null,
+    period: b.period === "yearly" ? "yearly" : "monthly", due_day: Number(b.due_day) || 1,
+    due_month: b.due_month != null && b.due_month !== "" ? Number(b.due_month) : null,
+    amount: Number(b.amount) || 0, entity: b.entity === "personal" ? "personal" : "company",
+    location: b.location || null, pay_account: b.pay_account || null, category: b.category || null,
+    active: b.active !== false, note: b.note || null, updated_at: new Date().toISOString() };
+  const res = b.id ? await supabase.from("recurring_bills").update(row).eq("id", b.id)
+                   : await supabase.from("recurring_bills").insert({ ...row, created_by: uid });
+  if (res.error) throw res.error;
+  syncCashEntriesFromDocs().catch(() => {});
+  return true;
+}
+export async function deleteRecurringBill(id) {
+  const { error } = await supabase.from("recurring_bills").delete().eq("id", id);
+  if (error) throw error;
+  syncCashEntriesFromDocs().catch(() => {});
+  return true;
+}
+// จ่ายงวดนี้ → ตั้งใบเบิก (จ่ายแล้ว จากบัตร/บัญชีที่ผูก) + มาร์ค last_paid_ym งวดปัจจุบัน
+export async function payRecurringBill(id, cycleKey) {
+  const uid = await _uid();
+  const { data: b, error } = await supabase.from("recurring_bills").select("*").eq("id", id).maybeSingle();
+  if (error || !b) throw error || new Error("ไม่พบรายการ");
+  const day = new Date().toISOString().slice(0, 10);
+  const row = {
+    requester: uid, created_by: uid, category: b.category || "รายจ่ายประจำ", kind: "opex", pay_method: "direct",
+    title: `${b.name}${b.provider ? " · " + b.provider : ""} (${cycleKey})`, amount: Number(b.amount) || 0, vat_amt: 0,
+    note: `#รายจ่ายประจำ ${b.name}${b.ref_no ? " · " + b.ref_no : ""}${b.pay_account ? " · จ่ายผ่าน " + b.pay_account : ""}`,
+    status: "paid", paid_amount: Number(b.amount) || 0, last_paid_at: day, paid_at: `${day}T12:00:00.000Z`,
+    payment_proof: [{ name: b.pay_account || "จ่ายอัตโนมัติ", auto: true }], attachments: [],
+  };
+  const tryIns = async (r) => (await supabase.from("expense_requests").insert(r)).error;
+  let e1 = await tryIns(row);
+  if (e1 && /kind|pay_method|PGRST204/i.test(e1.message || "")) { delete row.kind; delete row.pay_method; e1 = await tryIns(row); }
+  if (e1 && /paid_amount|last_paid_at|payment_proof|PGRST204/i.test(e1.message || "")) { delete row.paid_amount; delete row.last_paid_at; delete row.payment_proof; e1 = await tryIns(row); }
+  if (e1) throw e1;
+  const { error: e2 } = await supabase.from("recurring_bills").update({ last_paid_ym: cycleKey, updated_at: new Date().toISOString() }).eq("id", id);
+  if (e2) throw e2;
+  syncCashEntriesFromDocs().catch(() => {});
+  return true;
+}
+
 // แก้ไขคำขอเบิกที่ยังไม่อนุมัติ (pending เท่านั้น) — ธุรการ/ผู้ขอแก้เนื้อหาก่อนอนุมัติได้
 export async function updateExpenseRequest(id, e) {
   const { data: cur, error: e0 } = await supabase.from("expense_requests").select("status,paid_amount").eq("id", id).maybeSingle();
@@ -6746,6 +6796,37 @@ export async function syncCashEntriesFromDocs() {
     });
   }
 
+  // รายจ่ายประจำ (subscription · mig 245) → ประมาณการจ่าย 12 เดือนข้างหน้า (ข้ามงวดที่จ่ายแล้ว last_paid_ym)
+  let recurRows = null;
+  try { const rr = await supabase.from("recurring_bills").select("id,name,provider,period,due_day,due_month,amount,entity,last_paid_ym,active").eq("active", true); if (!rr.error) recurRows = rr.data || []; } catch { recurRows = null; }
+  if (recurRows) {
+    const now = new Date();
+    recurRows.forEach((b) => {
+      const amt = Number(b.amount) || 0; if (!(amt > 0)) return;
+      const ent = b.entity === "personal" ? "personal" : "company";
+      const paidYm = b.last_paid_ym || "";
+      if ((b.period || "monthly") === "yearly") {
+        const dm = Number(b.due_month) || 1;
+        for (let y = 0; y <= 1; y++) {
+          const yr = now.getFullYear() + y;
+          const dd = new Date(yr, dm, 0).getDate();
+          const due = new Date(yr, dm - 1, Math.min(Number(b.due_day) || 1, dd));
+          if (due < new Date(now.getFullYear(), now.getMonth(), 1) || due > new Date(now.getFullYear(), now.getMonth() + 12, 0)) continue;
+          if (paidYm && paidYm >= String(yr)) continue;
+          desired.push({ source_type: "recur", source_ref: `recur-${b.id}-${yr}`, direction: "out", status: "projected", entity: ent, entry_date: due.toISOString().slice(0, 10), amount: amt, note: `รายจ่ายประจำ: ${b.name}${b.provider ? " · " + b.provider : ""}` });
+        }
+      } else {
+        for (let i = 0; i < 12; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+          const yy = d.getFullYear(), mm = String(d.getMonth() + 1).padStart(2, "0"), ym = `${yy}-${mm}`;
+          if (paidYm && paidYm >= ym) continue;
+          const dd = new Date(yy, d.getMonth() + 1, 0).getDate();
+          desired.push({ source_type: "recur", source_ref: `recur-${b.id}-${ym}`, direction: "out", status: "projected", entity: ent, entry_date: `${ym}-${String(Math.min(Number(b.due_day) || 1, dd)).padStart(2, "0")}`, amount: amt, note: `รายจ่ายประจำ: ${b.name}${b.provider ? " · " + b.provider : ""}` });
+        }
+      }
+    });
+  }
+
   const exMap = {}; (existing.data || []).forEach((e) => { exMap[`${e.source_type}:${e.source_ref}`] = e; });
   const uid = await _uid();
   const desiredKeys = new Set();
@@ -6775,7 +6856,7 @@ export async function syncCashEntriesFromDocs() {
   // แต่พอเอกสารต้นทางถูกยกเลิก/ลบ/จ่ายแล้ว เส้นเงินต้องถูกลบตามเสมอ (เคยเว้น edited ไว้ → ใบแจ้งหนี้ยกเลิกแล้วยอดค้างในประมาณการตลอดกาล)
   // ยกเว้น "salary": desired มีแค่ 12 เดือนข้างหน้า (ไม่ใช่ snapshot ครบชุด) — แถวเงินเดือนจ่ายจริงของเดือนเก่า (edited=true จาก upsertPayrollCashEntry)
   // อยู่นอกหน้าต่างโดยชอบธรรม ห้ามกวาดทิ้ง · ลบได้เฉพาะตัวประมาณการ (ไม่ edited) ที่หลุดหน้าต่าง
-  const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary", "labor_owed", "expense_paid", "expense_due", ...(advRows ? ["advance"] : []), ...(loanRows ? ["loan"] : [])]); // advance/loan จัดการเฉพาะรอบที่อ่านตารางต้นทางได้ครบ
+  const MANAGED = new Set(["invoice", "receipt", "payout", "po", "salary", "labor_owed", "expense_paid", "expense_due", ...(advRows ? ["advance"] : []), ...(loanRows ? ["loan"] : []), ...(recurRows ? ["recur"] : [])]); // advance/loan/recur จัดการเฉพาะรอบที่อ่านตารางต้นทางได้ครบ
   const staleIds = (existing.data || []).filter((e) => MANAGED.has(e.source_type) && !desiredKeys.has(`${e.source_type}:${e.source_ref}`)
     && (e.source_type !== "salary" || !e.edited)).map((e) => e.id);
   for (let i = 0; i < staleIds.length; i += 100) {

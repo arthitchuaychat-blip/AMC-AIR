@@ -5,6 +5,21 @@ import { ASSET_GROUPS } from "../lib/expenseTaxonomy";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 import { can } from "../lib/permissions";
+import RecurringBills from "./RecurringBills";
+
+// เมนูหนี้สิน มี 2 แท็บ: สินเชื่อ/ผ่อน (LoansView) + รายจ่ายประจำ (RecurringBills)
+export default function Loans(props) {
+  const [tab, setTab] = React.useState("loans");
+  const TABS = [["loans", "🏧 สินเชื่อ & หนี้สิน"], ["recur", "🔁 รายจ่ายประจำ"]];
+  return (
+    <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={"cat-chip" + (tab === k ? " on" : "")} style={tab === k ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
+      </div>
+      {tab === "loans" ? <LoansView {...props} /> : <RecurringBills {...props} />}
+    </div>
+  );
+}
 
 const thMonth = (d) => d.toLocaleDateString("th-TH", { month: "short", year: "2-digit" });
 const thFull = (d) => d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
@@ -12,7 +27,7 @@ const kindIcon = (k) => (k === "office" ? "🏢" : k === "other" ? "📄" : "�
 const ASSET_OPTS = [...(ASSET_GROUPS.vehiclePlus || []), ...(ASSET_GROUPS.rent || [])];
 const nowM = () => { const d = new Date(); return d.getFullYear() * 12 + d.getMonth(); };
 
-export default function Loans({ role, onGoExpenses, onGoCashflow }) {
+function LoansView({ role, onGoExpenses, onGoCashflow }) {
   const canEdit = can(role, "loans", "edit");
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
