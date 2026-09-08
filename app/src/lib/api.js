@@ -4959,6 +4959,32 @@ export async function cancelFinancingSubmit(id) {
   return true;
 }
 
+// ── สินทรัพย์/ครุภัณฑ์ (mig 247) — ทะเบียน + ค่าเสื่อมราคา ─────────────────────────
+export async function listAssets() {
+  const { data, error } = await supabase.from("fixed_assets").select("*").order("active", { ascending: false }).order("category").order("purchase_date", { ascending: false });
+  if (error) { if (/relation|does not exist|schema|PGRST/i.test(error.message || "")) return { rows: [], needMigration: true }; throw error; }
+  return { rows: data || [] };
+}
+export async function saveAsset(a) {
+  const uid = await _uid();
+  const row = { code: a.code || null, name: (a.name || "").trim(), category: a.category || null,
+    cost: Number(a.cost) || 0, salvage: Number(a.salvage) || 0, life_years: Number(a.life_years) || 5,
+    purchase_date: a.purchase_date || null, entity: a.entity === "personal" ? "personal" : "company",
+    location: a.location || null, holder: a.holder || null, supplier: a.supplier || null,
+    expense_id: a.expense_id || null, note: a.note || null,
+    disposed: !!a.disposed, disposed_date: a.disposed ? (a.disposed_date || new Date().toISOString().slice(0, 10)) : null,
+    active: a.active !== false, updated_at: new Date().toISOString() };
+  const res = a.id ? await supabase.from("fixed_assets").update(row).eq("id", a.id)
+                   : await supabase.from("fixed_assets").insert({ ...row, created_by: uid });
+  if (res.error) throw res.error;
+  return true;
+}
+export async function deleteAsset(id) {
+  const { error } = await supabase.from("fixed_assets").delete().eq("id", id);
+  if (error) throw error;
+  return true;
+}
+
 // ── รายจ่ายประจำ (subscription/บิลรายเดือน-รายปี · mig 245) ──────────────────────
 export async function listRecurringBills() {
   const { data, error } = await supabase.from("recurring_bills").select("*").order("active", { ascending: false }).order("category").order("name");

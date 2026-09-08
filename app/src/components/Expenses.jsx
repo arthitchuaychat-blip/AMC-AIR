@@ -77,7 +77,7 @@ function CategoryPicker({ value, onChange, flash }) {
   );
 }
 
-export default function Expenses({ role, me, onOpenDoc, focus, onFocusConsumed }) {
+export default function Expenses({ role, me, onOpenDoc, focus, onFocusConsumed, onRegisterAsset }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const office = OFFICE.includes(role);
@@ -97,8 +97,8 @@ export default function Expenses({ role, me, onOpenDoc, focus, onFocusConsumed }
         {TABS.map(([v, l]) => <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
           style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
       </div>
-      {tab === "mine" && <MineTab role={role} flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} />}
-      {tab === "approve" && office && <ApproveTab role={role} flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} />}
+      {tab === "mine" && <MineTab role={role} flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} onRegisterAsset={onRegisterAsset} />}
+      {tab === "approve" && office && <ApproveTab role={role} flash={flash} onOpenDoc={openPeek} initialSearch={pend} onConsumed={() => setPend(null)} onRegisterAsset={onRegisterAsset} />}
       {tab === "summary" && office && <ExpenseSummaryTab flash={flash} />}
       {tab === "accounts" && office && <AccountsTab flash={flash} />}
       {tab === "report" && office && <ReportTab flash={flash} />}
@@ -208,7 +208,7 @@ const expMatch = (x, q, dateR) =>
   matchText(q, x.title, x.poNo, ...(x.poNos || []), x.customerName, x.requesterName, x.jobNo || x.job_no, x.quoteNo, x.category, x.jobTitle, x.note)
   && inDateRange(x.created_at, dateR);
 
-function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
+function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegisterAsset }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const [list, setList] = React.useState(null);
@@ -239,6 +239,7 @@ function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
       <div className="job-cards">{(list || []).filter((x) => expMatch(x, q, dateR)).map((x) => (
         <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc}>
           {x.status === "pending" && <button className="btn-ghost sm" onClick={() => setForm(expenseToForm(x))}>✏️ {L("แก้ไข", "ပြင်")}</button>}
+          {isAssetExp(x) && onRegisterAsset && <button className="btn-ghost sm" style={{ color: "#137a54", borderColor: "#99e2c4" }} onClick={() => onRegisterAsset(assetPrefillOf(x))}>🏗️ {L("ขึ้นทะเบียนสินทรัพย์", "ပိုင်ဆိုင်မှု မှတ်ပုံတင်")}</button>}
           {x.status !== "rejected" && (
             needReceipt(x)
               ? <button className="btn-primary sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จ", "ဘောက်ချာ တွဲ")}</button>
@@ -281,6 +282,9 @@ function ReceiptModal({ x, onClose, onSaved, flash }) {
 }
 
 // แปลงรายการเบิกที่ยังไม่อนุมัติ → ออบเจกต์ฟอร์มสำหรับแก้ไข
+// เตรียมข้อมูลขึ้นทะเบียนสินทรัพย์จากใบเบิก
+const assetPrefillOf = (x) => ({ name: x.title || "", cost: Number(x.amount) || 0, supplier: x.supplier || "", purchase_date: (x.paid_at || x.created_at || "").slice(0, 10), entity: x.entity === "personal" ? "personal" : "company", expense_id: x.id, category: "เครื่องมือช่าง" });
+const isAssetExp = (x) => x.kind === "asset" || kindOf(x.category, x.job_no) === "asset";
 const expenseToForm = (x) => ({ id: x.id, title: x.title || "", amount: x.amount ?? "", category: x.category || "", job_no: x.job_no || "", note: x.note || "", attachments: x.attachments || [], has_vat: Number(x.vat_amt) > 0, pay_method: x.pay_method || "reimburse", asset_tag: x.asset_tag || "", supplier: x.supplier || "", recurring: !!x.recurring, wht: Number(x.wht_amt) > 0, wht_pct: x.wht_pct || "", expected_pay_date: x.expected_pay_date || "" });
 
 // ช่องเลือกใบงานแบบพิมพ์ค้นหาได้ (ชื่องาน/ลูกค้า/เลขงาน) — งานเยอะเลื่อนหายาก
@@ -441,7 +445,7 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
   );
 }
 
-function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
+function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegisterAsset }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const [list, setList] = React.useState(null);
@@ -577,6 +581,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
                 : <button className="btn-ghost sm danger" onClick={() => decide(x, "pending")}>{L("ยกเลิกอนุมัติ", "အတည်ပြုမှု ပယ်ဖျက်")}</button>)}</>}
             {x.status === "rejected" && !(Number(x.paid_amount) > 0) && <button className="btn-primary sm ok" title={L("นำรายการกลับมาจ่าย/อนุมัติใหม่", "ပြန်ယူ၍ ပေးချေ/အတည်ပြု")} onClick={() => restore(x)}>↩️ {L("นำกลับมา", "ပြန်ယူ")}{salaryPeriod(x) ? L(" (รอจ่าย)", "") : ""}</button>}
             {needReceipt(x) && <button className="btn-ghost sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จแทนพนักงาน", "ဝန်ထမ်းကိုယ်စား ဘောက်ချာ တွဲ")}</button>}
+            {isAssetExp(x) && onRegisterAsset && <button className="btn-ghost sm" style={{ color: "#137a54", borderColor: "#99e2c4" }} onClick={() => onRegisterAsset(assetPrefillOf(x))} title={L("นำไปสร้างทะเบียนสินทรัพย์ (คิดค่าเสื่อม)", "ပိုင်ဆိုင်မှု မှတ်ပုံတင်")}>🏗️ {L("ขึ้นทะเบียนสินทรัพย์", "ပိုင်ဆိုင်မှု မှတ်ပုံတင်")}</button>}
             {/* ยกเลิกการจ่าย — ผู้บริหารเท่านั้น (เจ้าของเคาะ) */}
             {(x.status === "paid" || Number(x.paid_amount) > 0) && role === "exec" && <button className="btn-ghost sm danger" onClick={() => unpay(x)}>↩️ {L("ยกเลิกการจ่าย", "ငွေပေးမှု ပယ်ဖျက်")}</button>}
           </ExpenseCard>
