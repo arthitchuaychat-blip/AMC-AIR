@@ -519,15 +519,16 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
   const dueTodayMatch = (x) => (x.status === "pending" || x.status === "approved") && x.expected_pay_date && x.expected_pay_date <= today;
   const statusPred = (v) => (x) => v === "needReceipt" ? needReceipt(x) : v === "dueToday" ? dueTodayMatch(x) : (v === "all" || x.status === v);
   const supMatch = (x) => supF === "all" || (supF === "__none__" ? !x.supplier : x.supplier === supF);
+  const catMatch = (x) => catF === "all" || (catF === "__none__" ? !x.category : x.category === catF);
   const shown = (list || []).filter((x) => statusPred(statusF)(x) && expMatch(x, q, dateR)
-    && (groupF === "all" || grpOf(x) === groupF) && (catF === "all" || x.category === catF) && supMatch(x) && (reqF === "all" || x.requesterName === reqF));
+    && (groupF === "all" || grpOf(x) === groupF) && catMatch(x) && supMatch(x) && (reqF === "all" || x.requesterName === reqF));
   const cnt = (s) => (list || []).filter((x) => x.status === s).length;
   const activeCount = (statusF !== "pending" ? 1 : 0) + (q ? 1 : 0) + (dateR.from || dateR.to ? 1 : 0) + (groupF !== "all" ? 1 : 0) + (catF !== "all" ? 1 : 0) + (supF !== "all" ? 1 : 0) + (reqF !== "all" ? 1 : 0);
   // นับแบบ faceted — แต่ละตัวเลือกนับตามตัวกรอง "อื่น" ที่เปิดอยู่ (ไม่รวมมิติของตัวเอง) ให้เห็นว่าเลือกแล้วเจอกี่รายการ
   const passExcept = (x, skip) => (skip === "status" || statusPred(statusF)(x))
     && expMatch(x, q, dateR)
     && (skip === "group" || groupF === "all" || grpOf(x) === groupF)
-    && (skip === "cat" || catF === "all" || x.category === catF)
+    && (skip === "cat" || catMatch(x))
     && (skip === "sup" || supMatch(x))
     && (skip === "req" || reqF === "all" || x.requesterName === reqF);
   const countBy = (skip, pred) => (list || []).filter((x) => passExcept(x, skip) && pred(x)).length;
@@ -562,6 +563,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
         <select className="inp" style={{ flex: "1 1 180px", maxWidth: 300 }} value={catF} onChange={(e) => setCatF(e.target.value)}>
           <option value="all">{L("ทุกหมวด", "အမျိုးအစားအားလုံး")} ({countBy("cat", () => true)})</option>
           {optWithCount(catOpts, "cat", (x) => x.category, catF).map(({ v, c }) => <option key={v} value={v}>{v} ({c})</option>)}
+          {(countBy("cat", (x) => !x.category) > 0 || catF === "__none__") && <option value="__none__">{L("— ไม่ระบุหมวด —", "— အမျိုးအစား မသတ်မှတ် —")} ({countBy("cat", (x) => !x.category)})</option>}
         </select>
         <select className="inp" style={{ flex: "1 1 220px", maxWidth: 340 }} value={supF} onChange={(e) => setSupF(e.target.value)}>
           <option value="all">🏭 {L("ผู้ขายทั้งหมด", "ရောင်းသူအားလုံး")} ({countBy("sup", () => true)})</option>
