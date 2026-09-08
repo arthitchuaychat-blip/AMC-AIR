@@ -27,6 +27,7 @@ export const EXPENSE_CATS = [
   { name: "ค่าอาหาร", kind: "opex", icon: "🍚" },
   { name: "ค่าวัสดุสำนักงาน", kind: "opex", icon: "🗂" },
   { name: "ค่าจัดส่งเอกสาร", kind: "opex", icon: "✉️" },
+  { name: "ค่าโฆษณา/การตลาด", kind: "opex", icon: "📣" },
 ];
 export const CAT_BY_NAME = Object.fromEntries(EXPENSE_CATS.map((c) => [c.name, c]));
 
