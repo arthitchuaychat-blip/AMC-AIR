@@ -559,11 +559,11 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
           <option value="opex">🏢 {L("ค่าใช้จ่ายดำเนินงาน", "လုပ်ငန်းစရိတ်")} ({countBy("group", (x) => grpOf(x) === "opex")})</option>
           <option value="asset">🏗️ {L("สินทรัพย์ (ครุภัณฑ์)", "ပိုင်ဆိုင်မှု")} ({countBy("group", (x) => grpOf(x) === "asset")})</option>
         </select>
-        <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={catF} onChange={(e) => setCatF(e.target.value)}>
+        <select className="inp" style={{ flex: "1 1 180px", maxWidth: 300 }} value={catF} onChange={(e) => setCatF(e.target.value)}>
           <option value="all">{L("ทุกหมวด", "အမျိုးအစားအားလုံး")} ({countBy("cat", () => true)})</option>
           {optWithCount(catOpts, "cat", (x) => x.category, catF).map(({ v, c }) => <option key={v} value={v}>{v} ({c})</option>)}
         </select>
-        <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={supF} onChange={(e) => setSupF(e.target.value)}>
+        <select className="inp" style={{ flex: "1 1 220px", maxWidth: 340 }} value={supF} onChange={(e) => setSupF(e.target.value)}>
           <option value="all">🏭 {L("ผู้ขายทั้งหมด", "ရောင်းသူအားလုံး")} ({countBy("sup", () => true)})</option>
           {optWithCount(supOpts, "sup", (x) => x.supplier, supF).map(({ v, c }) => <option key={v} value={v}>{v} ({c})</option>)}
           {(countBy("sup", (x) => !x.supplier) > 0 || supF === "__none__") && <option value="__none__">{L("— ไม่ระบุผู้ขาย —", "— ရောင်းသူ မသတ်မှတ် —")} ({countBy("sup", (x) => !x.supplier)})</option>}

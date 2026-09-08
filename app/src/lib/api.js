@@ -4829,6 +4829,28 @@ export async function uploadLoanFile(file) {
   if (error) throw error;
   return { url: supabase.storage.from("photos").getPublicUrl(path).data.publicUrl, name: file.name || `เอกสาร.${ext}` };
 }
+// ── ตัวช่วย: หาว่า error แจ้ง "คอลัมน์ไหนยังไม่มีในสคีมา" (มายเกรชันยังไม่รัน) ──
+// PostgREST คืน PGRST204 "Could not find the 'X' column ..." · Postgres คืน 'column "X" ... does not exist'
+function _missingCol(error) {
+  const msg = error?.message || "";
+  let m = /Could not find the '([^']+)' column/i.exec(msg); if (m) return m[1];
+  m = /column "?([a-zA-Z_][\w]*)"? of relation .* does not exist/i.exec(msg); if (m) return m[1];
+  m = /'([a-zA-Z_][\w]*)' column/i.exec(msg); if (m) return m[1];
+  return null;
+}
+// insert แล้วถ้าเจอคอลัมน์ที่ยังไม่มี → ตัด "เฉพาะคอลัมน์นั้น" ทิ้งแล้วลองใหม่ (ไม่ตัดพ่วงคอลัมน์อื่น)
+// เดิมจับ PGRST204 กว้าง ๆ แล้วตัดหลายคอลัมน์พร้อมกัน → supplier หลุดทั้งที่คอลัมน์มีจริง (บั๊กชื่อผู้ขายไม่ขึ้น)
+async function _insertDropMissing(table, row) {
+  const r = { ...row };
+  for (let i = 0; i < 12; i++) {
+    const { error } = await supabase.from(table).insert(r);
+    if (!error) return;
+    const col = _missingCol(error);
+    if (col && col in r) { delete r[col]; continue; }
+    throw error;
+  }
+  throw new Error("insert failed after dropping missing columns");
+}
 export async function submitExpense(e) {
   const uid = await _uid();
   const row = {
@@ -4839,13 +4861,7 @@ export async function submitExpense(e) {
     expected_pay_date: e.expected_pay_date || null,   // วันครบกำหนดจ่าย (ป้อนกระแสเงินสด)
     note: e.note?.trim() || null, attachments: e.attachments || [], created_by: uid,
   };
-  let { error } = await supabase.from("expense_requests").insert(row);
-  if (error && /expected_pay_date|PGRST204/i.test(error.message || "")) { delete row.expected_pay_date; ({ error } = await supabase.from("expense_requests").insert(row)); }
-  if (error && /wht_pct|wht_amt|PGRST204/i.test(error.message || "")) { delete row.wht_pct; delete row.wht_amt; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-246 fallback
-  if (error && /supplier|PGRST204/i.test(error.message || "")) { delete row.supplier; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-243 fallback
-  if (error && /kind|pay_method|asset_tag|recurring|PGRST204/i.test(error.message || "")) { delete row.kind; delete row.pay_method; delete row.asset_tag; delete row.recurring; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-241 fallback
-  if (error && /vat_amt|PGRST204/i.test(error.message || "")) { delete row.vat_amt; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-232 fallback
-  if (error) throw error;
+  await _insertDropMissing("expense_requests", row);   // ตัดเฉพาะคอลัมน์ที่มายเกรชันยังไม่รัน (supplier/wht/expected_pay_date/… คงไว้ถ้าคอลัมน์มี)
   const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🧾 ${me?.name || "พนักงาน"} ขอเบิกค่าใช้จ่าย ${Number(e.amount) || 0} บาท`, body: e.title || "", url: "expenses", ref_type: "expense" });
 }
@@ -5025,12 +5041,7 @@ export async function payRecurringBill(id, cycleKey) {
     status: "paid", paid_amount: Number(b.amount) || 0, last_paid_at: day, paid_at: `${day}T12:00:00.000Z`,
     payment_proof: [{ name: b.pay_account || "จ่ายอัตโนมัติ", auto: true }], attachments: [],
   };
-  const tryIns = async (r) => (await supabase.from("expense_requests").insert(r)).error;
-  let e1 = await tryIns(row);
-  if (e1 && /supplier|PGRST204/i.test(e1.message || "")) { delete row.supplier; e1 = await tryIns(row); }
-  if (e1 && /kind|pay_method|PGRST204/i.test(e1.message || "")) { delete row.kind; delete row.pay_method; e1 = await tryIns(row); }
-  if (e1 && /paid_amount|last_paid_at|payment_proof|PGRST204/i.test(e1.message || "")) { delete row.paid_amount; delete row.last_paid_at; delete row.payment_proof; e1 = await tryIns(row); }
-  if (e1) throw e1;
+  await _insertDropMissing("expense_requests", row);   // ตัดเฉพาะคอลัมน์ที่ยังไม่มี (supplier ฯลฯ คงไว้ถ้ามีคอลัมน์)
   const { error: e2 } = await supabase.from("recurring_bills").update({ last_paid_ym: cycleKey, updated_at: new Date().toISOString() }).eq("id", id);
   if (e2) throw e2;
   syncCashEntriesFromDocs().catch(() => {});
@@ -5050,15 +5061,15 @@ export async function updateExpenseRequest(id, e) {
     expected_pay_date: e.expected_pay_date || null,
     note: e.note?.trim() || null, attachments: e.attachments || [],
   };
-  let rows = null;
-  const _try = async (p) => { const r = await supabase.from("expense_requests").update(p).eq("id", id).eq("status", "pending").select("id"); rows = r.data; return r.error; };
-  let err = await _try(patch);
-  if (err && /expected_pay_date|PGRST204/i.test(err.message || "")) { const { expected_pay_date, ...p } = patch; err = await _try(p); }
-  if (err && /wht_pct|wht_amt|PGRST204/i.test(err.message || "")) { const { wht_pct, wht_amt, expected_pay_date, ...p } = patch; err = await _try(p); }
-  if (err && /supplier|PGRST204/i.test(err.message || "")) { const { supplier, wht_pct, wht_amt, ...p } = patch; err = await _try(p); }
-  if (err && /kind|pay_method|asset_tag|recurring|PGRST204/i.test(err.message || "")) { const { kind, pay_method, asset_tag, recurring, supplier, ...p } = patch; err = await _try(p); }
-  if (err && /vat_amt|PGRST204/i.test(err.message || "")) { const { vat_amt, ...p } = patch; err = await _try(p); }
-  if (err) throw err;
+  // ตัดเฉพาะคอลัมน์ที่ยังไม่มีในสคีมา (มายเกรชันยังไม่รัน) ทีละตัว — supplier/wht/expected_pay_date คงไว้ถ้าคอลัมน์มีจริง
+  const r = { ...patch }; let rows = null;
+  for (let i = 0; i < 12; i++) {
+    const res = await supabase.from("expense_requests").update(r).eq("id", id).eq("status", "pending").select("id");
+    if (!res.error) { rows = res.data; break; }
+    const col = _missingCol(res.error);
+    if (col && col in r) { delete r[col]; continue; }
+    throw res.error;
+  }
   if (!rows || !rows.length) throw new Error("แก้ไขไม่ได้ — สิทธิ์ไม่พอ หรือรายการถูกอนุมัติ/จ่ายไปแล้ว");
   syncCashEntriesFromDocs().catch(() => {});
   return true;
