@@ -4836,9 +4836,11 @@ export async function submitExpense(e) {
     kind: e.kind || null, pay_method: e.pay_method || null, asset_tag: e.asset_tag || null, recurring: !!e.recurring,   // โครงสร้างทำจ่าย (mig 241)
     supplier: e.supplier?.trim() || null,   // ชื่อผู้ขาย (mig 243)
     wht_pct: Number(e.wht_pct) || 0, wht_amt: Number(e.wht_amt) || 0,   // หัก ณ ที่จ่าย (mig 246)
+    expected_pay_date: e.expected_pay_date || null,   // วันครบกำหนดจ่าย (ป้อนกระแสเงินสด)
     note: e.note?.trim() || null, attachments: e.attachments || [], created_by: uid,
   };
   let { error } = await supabase.from("expense_requests").insert(row);
+  if (error && /expected_pay_date|PGRST204/i.test(error.message || "")) { delete row.expected_pay_date; ({ error } = await supabase.from("expense_requests").insert(row)); }
   if (error && /wht_pct|wht_amt|PGRST204/i.test(error.message || "")) { delete row.wht_pct; delete row.wht_amt; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-246 fallback
   if (error && /supplier|PGRST204/i.test(error.message || "")) { delete row.supplier; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-243 fallback
   if (error && /kind|pay_method|asset_tag|recurring|PGRST204/i.test(error.message || "")) { delete row.kind; delete row.pay_method; delete row.asset_tag; delete row.recurring; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-241 fallback
@@ -4893,11 +4895,13 @@ export async function payFinancingInstallment(id) {
   if (seq > (Number(ln.term_months) || 0)) throw new Error("ผ่อนครบทุกงวดแล้ว");
   if ((Number(ln.submitted_seq) || 0) >= seq) throw new Error("งวดนี้ตั้งจ่ายไปแล้ว");
   const amt = installmentAt(ln, seq) || Number(ln.installment) || 0;
+  const due = ln.start_date ? dueDateOf(ln.start_date, seq, ln.due_day).toISOString().slice(0, 10) : null;
   await submitExpense({
     category: ln.kind === "vehicle" ? "ค่าผ่อนรถ" : "ค่าผ่อนสินเชื่อ",
     kind: "opex", pay_method: "direct", asset_tag: ln.asset_tag || null,
     title: `ค่างวด ${ln.name} (งวด ${seq}/${ln.term_months})`,
     amount: amt, vat_amt: (ln.method === "stepped" ? 0 : Number(ln.vat_per) || 0),
+    supplier: ln.lender || null, expected_pay_date: due,
     note: `#สินเชื่อ ${ln.name} งวด ${seq}${ln.contract_no ? " · สัญญา " + ln.contract_no : ""}`,
   });
   // มาร์ค submitted_seq (ตั้งจ่ายแล้ว) — ถ้าคอลัมน์ยังไม่มี (pre-mig) fallback เดินงวดแบบเดิม
@@ -4989,6 +4993,7 @@ export async function payRecurringBill(id, cycleKey) {
   const day = new Date().toISOString().slice(0, 10);
   const row = {
     requester: uid, created_by: uid, category: b.category || "รายจ่ายประจำ", kind: "opex", pay_method: "direct",
+    supplier: b.provider || null,
     title: `${b.name}${b.provider ? " · " + b.provider : ""} (${cycleKey})`, amount: Number(b.amount) || 0, vat_amt: 0,
     note: `#รายจ่ายประจำ ${b.name}${b.ref_no ? " · " + b.ref_no : ""}${b.pay_account ? " · จ่ายผ่าน " + b.pay_account : ""}`,
     status: "paid", paid_amount: Number(b.amount) || 0, last_paid_at: day, paid_at: `${day}T12:00:00.000Z`,
@@ -4996,6 +5001,7 @@ export async function payRecurringBill(id, cycleKey) {
   };
   const tryIns = async (r) => (await supabase.from("expense_requests").insert(r)).error;
   let e1 = await tryIns(row);
+  if (e1 && /supplier|PGRST204/i.test(e1.message || "")) { delete row.supplier; e1 = await tryIns(row); }
   if (e1 && /kind|pay_method|PGRST204/i.test(e1.message || "")) { delete row.kind; delete row.pay_method; e1 = await tryIns(row); }
   if (e1 && /paid_amount|last_paid_at|payment_proof|PGRST204/i.test(e1.message || "")) { delete row.paid_amount; delete row.last_paid_at; delete row.payment_proof; e1 = await tryIns(row); }
   if (e1) throw e1;
@@ -5015,12 +5021,14 @@ export async function updateExpenseRequest(id, e) {
     job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0, vat_amt: Number(e.vat_amt) || 0,
     kind: e.kind || null, pay_method: e.pay_method || null, asset_tag: e.asset_tag || null, recurring: !!e.recurring,
     supplier: e.supplier?.trim() || null, wht_pct: Number(e.wht_pct) || 0, wht_amt: Number(e.wht_amt) || 0,
+    expected_pay_date: e.expected_pay_date || null,
     note: e.note?.trim() || null, attachments: e.attachments || [],
   };
   let rows = null;
   const _try = async (p) => { const r = await supabase.from("expense_requests").update(p).eq("id", id).eq("status", "pending").select("id"); rows = r.data; return r.error; };
   let err = await _try(patch);
-  if (err && /wht_pct|wht_amt|PGRST204/i.test(err.message || "")) { const { wht_pct, wht_amt, ...p } = patch; err = await _try(p); }
+  if (err && /expected_pay_date|PGRST204/i.test(err.message || "")) { const { expected_pay_date, ...p } = patch; err = await _try(p); }
+  if (err && /wht_pct|wht_amt|PGRST204/i.test(err.message || "")) { const { wht_pct, wht_amt, expected_pay_date, ...p } = patch; err = await _try(p); }
   if (err && /supplier|PGRST204/i.test(err.message || "")) { const { supplier, wht_pct, wht_amt, ...p } = patch; err = await _try(p); }
   if (err && /kind|pay_method|asset_tag|recurring|PGRST204/i.test(err.message || "")) { const { kind, pay_method, asset_tag, recurring, supplier, ...p } = patch; err = await _try(p); }
   if (err && /vat_amt|PGRST204/i.test(err.message || "")) { const { vat_amt, ...p } = patch; err = await _try(p); }

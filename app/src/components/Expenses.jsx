@@ -123,6 +123,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
         badges={<>
           <span className={"job-badge " + st.c}>{L(st.t, st.m)}</span>
           <span className="job-badge" style={x.entity === "personal" ? { background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe" } : { background: "#eff6ff", color: "#1d4ed8", borderColor: "#bfdbfe" }}>{x.entity === "personal" ? L("👤 บุคคล", "👤 ပုဂ္ဂိုလ်") : L("🏢 บริษัท", "🏢 ကုမ္ပဏီ")}</span>
+          {x.expected_pay_date && x.status !== "paid" && <span className="job-badge" style={{ background: "#fff7ed", color: "#c2410c", borderColor: "#fed7aa" }}>📅 {L("ครบกำหนด", "ကုန်ဆုံး")} {fmtD(x.expected_pay_date)}</span>}
           {partial && <span className="job-badge b-amber">{L("จ่ายบางส่วน", "တစ်စိတ်တစ်ပိုင်း ပေးပြီး")}</span>}
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
         </>}
@@ -280,7 +281,7 @@ function ReceiptModal({ x, onClose, onSaved, flash }) {
 }
 
 // แปลงรายการเบิกที่ยังไม่อนุมัติ → ออบเจกต์ฟอร์มสำหรับแก้ไข
-const expenseToForm = (x) => ({ id: x.id, title: x.title || "", amount: x.amount ?? "", category: x.category || "", job_no: x.job_no || "", note: x.note || "", attachments: x.attachments || [], has_vat: Number(x.vat_amt) > 0, pay_method: x.pay_method || "reimburse", asset_tag: x.asset_tag || "", supplier: x.supplier || "", recurring: !!x.recurring, wht: Number(x.wht_amt) > 0, wht_pct: x.wht_pct || "" });
+const expenseToForm = (x) => ({ id: x.id, title: x.title || "", amount: x.amount ?? "", category: x.category || "", job_no: x.job_no || "", note: x.note || "", attachments: x.attachments || [], has_vat: Number(x.vat_amt) > 0, pay_method: x.pay_method || "reimburse", asset_tag: x.asset_tag || "", supplier: x.supplier || "", recurring: !!x.recurring, wht: Number(x.wht_amt) > 0, wht_pct: x.wht_pct || "", expected_pay_date: x.expected_pay_date || "" });
 
 // ช่องเลือกใบงานแบบพิมพ์ค้นหาได้ (ชื่องาน/ลูกค้า/เลขงาน) — งานเยอะเลื่อนหายาก
 function JobPicker({ value, jobs, onChange, L }) {
@@ -422,6 +423,7 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 800 }}><span>{L("ยอดชำระ (จ่ายผู้ขายจริง)", "ပေးရမည့်ငွေ")}</span><span style={{ fontVariantNumeric: "tabular-nums", color: "#0d9488" }}>{B(net)}</span></div>
             </div>;
           })()}
+          <label className="fld"><span>📅 {L("วันครบกำหนดจ่าย (ป้อนเข้ากระแสเงินสด · เว้นว่าง = ไม่กำหนด)", "ငွေပေးရမည့်ရက် (ငွေစီးဆင်းမှုသို့)")}</span><input className="inp" type="date" value={form.expected_pay_date || ""} onChange={(e) => set("expected_pay_date", e.target.value)} /></label>
           <label className="fld"><span>{L("เบิกจากใบงาน (ถ้ามี — จะรวมเป็นต้นทุนงาน)", "အလုပ်လွှာမှ တောင်းခံ (ရှိလျှင် — အလုပ်ကုန်ကျစရိတ်တွင် ပေါင်းမည်)")}</span>
             <JobPicker value={form.job_no} jobs={jobs} onChange={(v) => set("job_no", v)} L={L} /></label>
           {curKind === "opex" && <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
