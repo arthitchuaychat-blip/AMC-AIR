@@ -453,6 +453,15 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
   React.useEffect(() => { listJobOrders({}).then((j) => setJobs((j || []).filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
   const [q, setQ] = React.useState("");
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
+  const [groupF, setGroupF] = React.useState("all");   // ประเภท: cost/opex
+  const [catF, setCatF] = React.useState("all");        // หมวด
+  const [supF, setSupF] = React.useState("all");        // ผู้ขาย
+  const [reqF, setReqF] = React.useState("all");        // ผู้เบิก
+  const grpOf = (x) => (x.kind === "cost" || (x.kind !== "opex" && x.job_no) ? "cost" : "opex");
+  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
+  const catOpts = React.useMemo(() => uniq((list || []).map((x) => x.category)), [list]);
+  const supOpts = React.useMemo(() => uniq((list || []).map((x) => x.supplier)), [list]);
+  const reqOpts = React.useMemo(() => uniq((list || []).map((x) => x.requesterName)), [list]);
   async function load() { try { setList(await listExpenses()); } catch (e) { flash(L("โหลดไม่สำเร็จ: ", "ဖွင့်မရ: ") + (e.message || e), true); setList([]); } }
   React.useEffect(() => { load(); }, []);
   // จากชิปในใบ PO → ใส่ค้นหาเลข PO + เปิดดูทุกสถานะ (ใบเบิกอาจจ่ายแล้ว จะได้ไม่หลุด)
@@ -496,9 +505,10 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
     try { const r = await nudgeExpenseReceipts(ids); flash(L(`ทวงแล้ว ✓ แจ้ง ${r.notified} คน`, `တောင်းပြီး ✓ ${r.notified} ဦး အသိပေးပြီး`)); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); }
   }
   const nRcpt = (list || []).filter(needReceipt).length;
-  const shown = (list || []).filter((x) => (statusF === "needReceipt" ? needReceipt(x) : (statusF === "all" || x.status === statusF)) && expMatch(x, q, dateR));
+  const shown = (list || []).filter((x) => (statusF === "needReceipt" ? needReceipt(x) : (statusF === "all" || x.status === statusF)) && expMatch(x, q, dateR)
+    && (groupF === "all" || grpOf(x) === groupF) && (catF === "all" || x.category === catF) && (supF === "all" || x.supplier === supF) && (reqF === "all" || x.requesterName === reqF));
   const cnt = (s) => (list || []).filter((x) => x.status === s).length;
-  const activeCount = (statusF !== "pending" ? 1 : 0) + (q ? 1 : 0) + (dateR.from || dateR.to ? 1 : 0);
+  const activeCount = (statusF !== "pending" ? 1 : 0) + (q ? 1 : 0) + (dateR.from || dateR.to ? 1 : 0) + (groupF !== "all" ? 1 : 0) + (catF !== "all" ? 1 : 0) + (supF !== "all" ? 1 : 0) + (reqF !== "all" ? 1 : 0);
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">{L("อนุมัติ / จ่ายเงินเบิก", "အတည်ပြု / တောင်းခံငွေ ပေးချေ")}</div>
@@ -516,6 +526,26 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
       <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
         <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("ค้นหา ลูกค้า / เลข PO / พนักงานผู้ขอ / หมายเหตุ…", "ရှာဖွေ ဖောက်သည် / PO နံပါတ် / တောင်းခံသူ / မှတ်ချက်…")} /></div>
         <DateRangeBar value={dateR} onChange={setDateR} />
+      </div>
+      <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={groupF} onChange={(e) => setGroupF(e.target.value)}>
+          <option value="all">{L("ทุกประเภท", "အမျိုးအစားအားလုံး")}</option>
+          <option value="cost">🔧 {L("ต้นทุนงาน (วัสดุ/สินค้า)", "အလုပ်ကုန်ကျ")}</option>
+          <option value="opex">🏢 {L("ค่าใช้จ่ายดำเนินงาน", "လုပ်ငန်းစရိတ်")}</option>
+        </select>
+        <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={catF} onChange={(e) => setCatF(e.target.value)}>
+          <option value="all">{L("ทุกหมวด", "အမျိုးအစားအားလုံး")}</option>
+          {catOpts.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={supF} onChange={(e) => setSupF(e.target.value)}>
+          <option value="all">🏭 {L("ผู้ขายทั้งหมด", "ရောင်းသူအားလုံး")}</option>
+          {supOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={reqF} onChange={(e) => setReqF(e.target.value)}>
+          <option value="all">👤 {L("ผู้เบิกทั้งหมด", "တောင်းခံသူအားလုံး")}</option>
+          {reqOpts.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        {(groupF !== "all" || catF !== "all" || supF !== "all" || reqF !== "all") && <button className="btn-ghost sm" onClick={() => { setGroupF("all"); setCatF("all"); setSupF("all"); setReqF("all"); }}>✕ {L("ล้างตัวกรอง", "ဖျက်")}</button>}
       </div>
       </FilterBar>
       {list === null && <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div>}
