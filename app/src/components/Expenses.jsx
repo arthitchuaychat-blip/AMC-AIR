@@ -123,7 +123,6 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
         badges={<>
           <span className={"job-badge " + st.c}>{L(st.t, st.m)}</span>
           <span className="job-badge" style={x.entity === "personal" ? { background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe" } : { background: "#eff6ff", color: "#1d4ed8", borderColor: "#bfdbfe" }}>{x.entity === "personal" ? L("👤 บุคคล", "👤 ပုဂ္ဂိုလ်") : L("🏢 บริษัท", "🏢 ကုမ္ပဏီ")}</span>
-          {x.expected_pay_date && x.status !== "paid" && <span className="job-badge" style={{ background: "#fff7ed", color: "#c2410c", borderColor: "#fed7aa" }}>📅 {L("ครบกำหนด", "ကုန်ဆုံး")} {fmtD(x.expected_pay_date)}</span>}
           {partial && <span className="job-badge b-amber">{L("จ่ายบางส่วน", "တစ်စိတ်တစ်ပိုင်း ပေးပြီး")}</span>}
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
         </>}
@@ -138,6 +137,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
           </div>
         ) : null}
         amountLabel={L("ยอดเบิก", "တောင်းခံ ပမာဏ")} amount={x.amount}
+        rightExtra={x.expected_pay_date && x.status !== "paid" ? (() => { const over = x.expected_pay_date < new Date().toISOString().slice(0, 10); return <span className="job-badge" style={over ? { background: "#fef2f2", color: "#b42318", borderColor: "#fecaca", fontWeight: 700 } : { background: "#fff7ed", color: "#c2410c", borderColor: "#fed7aa" }}>{over ? "⚠️ " : "📅 "}{L("ครบกำหนด", "ကုန်ဆုံး")} {fmtD(x.expected_pay_date)}{over ? L(" (เลยกำหนด)", "") : ""}</span>; })() : null}
         partyIcon="👤" customer={x.customerName ? { name: x.customerName } : null} />
       {/* วันรับ/ส่งสินค้า (ดึงจาก PO ที่ผูก — เหมือนในเมนูใบสั่งซื้อ) */}
       {pos.some((p) => p.delivery_date || p.delivery_method) && (
@@ -514,17 +514,21 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
     try { const r = await nudgeExpenseReceipts(ids); flash(L(`ทวงแล้ว ✓ แจ้ง ${r.notified} คน`, `တောင်းပြီး ✓ ${r.notified} ဦး အသိပေးပြီး`)); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); }
   }
   const nRcpt = (list || []).filter(needReceipt).length;
-  const shown = (list || []).filter((x) => (statusF === "needReceipt" ? needReceipt(x) : (statusF === "all" || x.status === statusF)) && expMatch(x, q, dateR)
-    && (groupF === "all" || grpOf(x) === groupF) && (catF === "all" || x.category === catF) && (supF === "all" || x.supplier === supF) && (reqF === "all" || x.requesterName === reqF));
+  const today = new Date().toISOString().slice(0, 10);
+  // ถึงกำหนดจ่ายวันนี้ = ยังไม่จ่าย + มีวันครบกำหนด <= วันนี้ (รวมเลยกำหนดด้วย)
+  const dueTodayMatch = (x) => (x.status === "pending" || x.status === "approved") && x.expected_pay_date && x.expected_pay_date <= today;
+  const statusPred = (v) => (x) => v === "needReceipt" ? needReceipt(x) : v === "dueToday" ? dueTodayMatch(x) : (v === "all" || x.status === v);
+  const supMatch = (x) => supF === "all" || (supF === "__none__" ? !x.supplier : x.supplier === supF);
+  const shown = (list || []).filter((x) => statusPred(statusF)(x) && expMatch(x, q, dateR)
+    && (groupF === "all" || grpOf(x) === groupF) && (catF === "all" || x.category === catF) && supMatch(x) && (reqF === "all" || x.requesterName === reqF));
   const cnt = (s) => (list || []).filter((x) => x.status === s).length;
   const activeCount = (statusF !== "pending" ? 1 : 0) + (q ? 1 : 0) + (dateR.from || dateR.to ? 1 : 0) + (groupF !== "all" ? 1 : 0) + (catF !== "all" ? 1 : 0) + (supF !== "all" ? 1 : 0) + (reqF !== "all" ? 1 : 0);
   // นับแบบ faceted — แต่ละตัวเลือกนับตามตัวกรอง "อื่น" ที่เปิดอยู่ (ไม่รวมมิติของตัวเอง) ให้เห็นว่าเลือกแล้วเจอกี่รายการ
-  const statusPred = (v) => (x) => v === "needReceipt" ? needReceipt(x) : (v === "all" || x.status === v);
-  const passExcept = (x, skip) => (skip === "status" || (statusF === "needReceipt" ? needReceipt(x) : (statusF === "all" || x.status === statusF)))
+  const passExcept = (x, skip) => (skip === "status" || statusPred(statusF)(x))
     && expMatch(x, q, dateR)
     && (skip === "group" || groupF === "all" || grpOf(x) === groupF)
     && (skip === "cat" || catF === "all" || x.category === catF)
-    && (skip === "sup" || supF === "all" || x.supplier === supF)
+    && (skip === "sup" || supMatch(x))
     && (skip === "req" || reqF === "all" || x.requesterName === reqF);
   const countBy = (skip, pred) => (list || []).filter((x) => passExcept(x, skip) && pred(x)).length;
   // ตัวเลือก + จำนวน — ซ่อนที่นับได้ 0 (เว้นตัวที่เลือกอยู่) + เรียงมาก→น้อย
@@ -539,7 +543,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
         </div></div>
       <FilterBar id="expenses-approve" count={activeCount}>
         <div className="cat-filter">
-        {[["pending", L("รออนุมัติ", "အတည်ပြုရန် စောင့်")], ["approved", L("รอจ่าย", "ငွေပေးရန် စောင့်")], ["paid", L("จ่ายแล้ว", "ပေးပြီး")], ["needReceipt", `📎 ${L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန်ကျန်")}`], ["rejected", L("ไม่อนุมัติ", "ပယ်ချ")], ["all", L("ทั้งหมด", "အားလုံး")]].map(([v, l]) => {
+        {[["dueToday", "⏰ " + L("ถึงกำหนดวันนี้", "ယနေ့ကုန်")], ["pending", L("รออนุมัติ", "အတည်ပြုရန် စောင့်")], ["approved", L("รอจ่าย", "ငွေပေးရန် စောင့်")], ["paid", L("จ่ายแล้ว", "ပေးပြီး")], ["needReceipt", `📎 ${L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန်ကျန်")}`], ["rejected", L("ไม่อนุมัติ", "ပယ်ချ")], ["all", L("ทั้งหมด", "အားလုံး")]].map(([v, l]) => {
           const c = countBy("status", statusPred(v));
           return <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)} style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} <b style={{ opacity: 0.75 }}>{c}</b></button>;
         })}
@@ -562,6 +566,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={supF} onChange={(e) => setSupF(e.target.value)}>
           <option value="all">🏭 {L("ผู้ขายทั้งหมด", "ရောင်းသူအားလုံး")} ({countBy("sup", () => true)})</option>
           {optWithCount(supOpts, "sup", (x) => x.supplier, supF).map(({ v, c }) => <option key={v} value={v}>{v} ({c})</option>)}
+          {(countBy("sup", (x) => !x.supplier) > 0 || supF === "__none__") && <option value="__none__">{L("— ไม่ระบุผู้ขาย —", "— ရောင်းသူ မသတ်မှတ် —")} ({countBy("sup", (x) => !x.supplier)})</option>}
         </select>
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={reqF} onChange={(e) => setReqF(e.target.value)}>
           <option value="all">👤 {L("ผู้เบิกทั้งหมด", "တောင်းခံသူအားလုံး")} ({countBy("req", () => true)})</option>
