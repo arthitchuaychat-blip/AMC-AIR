@@ -4612,6 +4612,30 @@ export async function setAccountOpening(accountId, amount) {
   const { error } = await supabase.from("accounts").update({ opening_balance: Number(amount) || 0 }).eq("id", accountId);
   if (error) throw error;
 }
+// เพิ่ม/แก้บัญชี-ช่องทางเงิน (ธนาคาร/เงินสด/บัตร/Barter) แยกบริษัท/บุคคล — office only (acc_rw RLS) · mig 244
+export async function saveAccount(a) {
+  const fields = { name: (a.name || "").trim(), kind: a.kind || "bank", entity: a.entity === "personal" ? "personal" : "company",
+    account_no: a.account_no?.trim() || null, active: a.active !== false, sort: Number(a.sort) || 0 };
+  if (!fields.name) throw new Error("ใส่ชื่อบัญชี/ช่องทาง");
+  if (a.id) {
+    let e = (await supabase.from("accounts").update(fields).eq("id", a.id)).error;
+    if (e && /entity|account_no|column|PGRST204/i.test(e.message || "")) { const { entity, account_no, ...f } = fields; e = (await supabase.from("accounts").update(f).eq("id", a.id)).error; }
+    if (e) throw e;
+    if (a.opening_balance != null && a.opening_balance !== "") await setAccountOpening(a.id, a.opening_balance);
+    return a.id;
+  }
+  const row = { ...fields, opening_balance: Number(a.opening_balance) || 0 };
+  let r = await supabase.from("accounts").insert(row).select("id").single();
+  if (r.error && /entity|account_no|column|PGRST204/i.test(r.error.message || "")) { const { entity, account_no, ...f } = row; r = await supabase.from("accounts").insert(f).select("id").single(); }
+  if (r.error) throw r.error;
+  return r.data.id;
+}
+export async function deleteAccount(id) {
+  const { data: ent } = await supabase.from("account_entries").select("id").eq("account_id", id).limit(1);
+  if (ent && ent.length) throw new Error("บัญชีนี้มีรายการเดินบัญชีแล้ว — ปิดใช้งานแทนการลบ");
+  const { error } = await supabase.from("accounts").delete().eq("id", id);
+  if (error) throw error;
+}
 export async function listAccountEntries({ accountId, from, to } = {}) {
   // .limit(2000) เดิมโดน Supabase ตัดที่ 1000/request อยู่ดี — แถวเก่าสุดหายก่อน ทำยอดยกมาต้นเดือน/กระทบแบงค์เพี้ยน
   return _fetchAll((f, t) => {

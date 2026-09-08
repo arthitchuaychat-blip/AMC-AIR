@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound, generateRecurringExpenses, listSuppliers, quickAddSupplier, updateExpenseRequest } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, saveAccount, deleteAccount, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound, generateRecurringExpenses, listSuppliers, quickAddSupplier, updateExpenseRequest } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { EXPENSE_CATS, CAT_BY_NAME, ASSET_GROUPS, PAY_METHODS, PAY_LABEL, kindOf, KIND_LABEL } from "../lib/expenseTaxonomy";
 import DocCardHead from "./DocCard";
@@ -15,6 +15,8 @@ const OFFICE = ["admin", "exec", "finance", "hr"]; // hr: อนุมัติ/
 const EST = { pending: { t: "รออนุมัติ", m: "အတည်ပြုရန် စောင့်", c: "b-amber" }, approved: { t: "อนุมัติ · รอจ่าย", m: "အတည်ပြုပြီး · ငွေပေးရန် စောင့်", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", m: "ပယ်ချ", c: "b-red" }, paid: { t: "จ่ายแล้ว", m: "ပေးပြီး", c: "b-green" } };
 // เบิกเงินไปแล้ว (จ่ายครบหรือบางส่วน) แต่ยังไม่มีรูปใบเสร็จ/บิลแนบ → ตามทวงใบเสร็จ
 const needReceipt = (x) => x.status !== "rejected" && (x.status === "paid" || Number(x.paid_amount) > 0) && !(x.attachments?.length);
+const ACC_ICON = { cash: "💵", card: "💳", barter: "🔄", bank: "🏦" };   // ไอคอนช่องทางเงิน
+const ACC_KINDS = [["bank", "🏦 ธนาคาร"], ["cash", "💵 เงินสด"], ["card", "💳 บัตรเครดิต"], ["barter", "🔄 Barter/Trade"]];
 const fmtD = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }) : "";
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -759,6 +761,7 @@ function AccountsTab({ flash }) {
   const [t, setT] = React.useState({ fromId: "", toId: "", amount: "", note: "", date: today() });
   const [transfers, setTransfers] = React.useState(null);
   const [edit, setEdit] = React.useState(null);
+  const [acctEdit, setAcctEdit] = React.useState(null);   // เพิ่ม/แก้บัญชี
   const [busy, setBusy] = React.useState(false);
   const accName = React.useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a.name])), [accounts]);
   async function load() {
@@ -783,19 +786,32 @@ function AccountsTab({ flash }) {
   }
   return (
     <>
-      <div className="exp-accounts">
-        {accounts.map((a) => (
-          <div className="exp-acc" key={a.id}>
-            <div className="exp-acc-name">{a.kind === "cash" ? "💵" : "🏦"} {a.name}</div>
-            <div className="exp-acc-bal">{fmtBaht(a.balance)}</div>
-          </div>
-        ))}
+      <div className="card">
+        <div className="sec-head"><div><div className="sec-title">{L("บัญชี & ช่องทางเงิน", "အကောင့် & ငွေလမ်းကြောင်း")}</div><div className="sec-sub">{L("ธนาคาร/เงินสด/บัตร/Barter — แยกบริษัท & บุคคล · เพิ่ม/แก้ได้", "ဘဏ်/ငွေသား/ကတ် — ကုမ္ပဏီ & ပုဂ္ဂိုလ် ခွဲ · ထည့်/ပြင်နိုင်")}</div></div>
+          <button className="btn-primary" onClick={() => setAcctEdit({ name: "", kind: "bank", entity: "company", account_no: "", opening_balance: "", active: true })}><UIcon name="plus" size={15} color="#fff" /> {L("เพิ่มบัญชี", "အကောင့် ထည့်")}</button></div>
+        {[["company", "🏢 " + L("บริษัท", "ကုမ္ပဏီ")], ["personal", "👤 " + L("บุคคล", "ပုဂ္ဂိုလ်")]].map(([ent, lbl]) => {
+          const rows = accounts.filter((a) => (a.entity === "personal" ? "personal" : "company") === ent);
+          if (!rows.length) return null;
+          return <div key={ent} style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink-3,#667)", margin: "4px 2px 6px" }}>{lbl}</div>
+            <div className="exp-accounts">
+              {rows.map((a) => (
+                <div className="exp-acc" key={a.id} style={{ cursor: "pointer", opacity: a.active === false ? 0.5 : 1, position: "relative" }}
+                  onClick={() => setAcctEdit({ id: a.id, name: a.name, kind: a.kind || "bank", entity: a.entity || "company", account_no: a.account_no || "", opening_balance: a.opening_balance ?? "", active: a.active !== false })}>
+                  <div className="exp-acc-name">{ACC_ICON[a.kind] || "🏦"} {a.name}{a.active === false ? L(" · ปิดใช้", " · ပိတ်") : ""}</div>
+                  <div className="exp-acc-bal">{fmtBaht(a.balance)}</div>
+                  {a.account_no && <div style={{ fontSize: 10.5, color: "var(--ink-3,#889)" }}>{a.kind === "card" ? "•••• " : L("เลขที่ ", "နံပါတ် ")}{a.account_no}</div>}
+                </div>
+              ))}
+            </div>
+          </div>;
+        })}
       </div>
       <div className="card">
         <div className="sec-head"><div><div className="sec-title">{L("โอนเงินระหว่างบัญชี", "အကောင့်ချင်း ငွေလွှဲ")}</div></div></div>
         <div className="fld-row">
-          <label className="fld"><span>{L("จากบัญชี", "မှ အကောင့်")}</span><select className="inp" value={t.fromId} onChange={(e) => setT({ ...t, fromId: e.target.value })}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
-          <label className="fld"><span>{L("ไปบัญชี", "သို့ အကောင့်")}</span><select className="inp" value={t.toId} onChange={(e) => setT({ ...t, toId: e.target.value })}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+          <label className="fld"><span>{L("จากบัญชี", "မှ အကောင့်")}</span><select className="inp" value={t.fromId} onChange={(e) => setT({ ...t, fromId: e.target.value })}>{accounts.filter((a) => a.active !== false).map((a) => <option key={a.id} value={a.id}>{(ACC_ICON[a.kind] || "🏦") + " " + a.name}</option>)}</select></label>
+          <label className="fld"><span>{L("ไปบัญชี", "သို့ အကောင့်")}</span><select className="inp" value={t.toId} onChange={(e) => setT({ ...t, toId: e.target.value })}>{accounts.filter((a) => a.active !== false).map((a) => <option key={a.id} value={a.id}>{(ACC_ICON[a.kind] || "🏦") + " " + a.name}</option>)}</select></label>
         </div>
         <div className="fld-row">
           <label className="fld"><span>{L("วันที่โอน", "ငွေလွှဲရက်")}</span><input type="date" className="inp" value={t.date} onChange={(e) => setT({ ...t, date: e.target.value })} /></label>
@@ -833,7 +849,55 @@ function AccountsTab({ flash }) {
       </div>
 
       {edit && <TransferEditModal tr={edit} accounts={accounts} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
+      {acctEdit && <AccountModal acc={acctEdit} onClose={() => setAcctEdit(null)} onSaved={() => { setAcctEdit(null); load(); }} flash={flash} />}
     </>
+  );
+}
+
+// เพิ่ม/แก้บัญชี-ช่องทางเงิน
+function AccountModal({ acc, onClose, onSaved, flash }) {
+  const lang = useLang();
+  const L = (th, my) => (lang === "my" ? my : th);
+  const [f, setF] = React.useState(acc);
+  const [busy, setBusy] = React.useState(false);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  async function save() {
+    if (!f.name?.trim()) return flash(L("ใส่ชื่อบัญชี/ช่องทาง", "အမည် ဖြည့်ပါ"), true);
+    setBusy(true);
+    try { await saveAccount(f); flash(L("บันทึกบัญชีแล้ว ✓", "သိမ်းပြီး ✓")); onSaved(); }
+    catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်: ") + (e.message || e), true); setBusy(false); }
+  }
+  async function del() {
+    if (!await confirmDialog(L(`ลบบัญชี "${f.name}" ?`, `"${f.name}" ဖျက်မလား?`))) return;
+    setBusy(true);
+    try { await deleteAccount(f.id); flash(L("ลบบัญชีแล้ว", "ဖျက်ပြီး")); onSaved(); }
+    catch (e) { flash(L("ลบไม่ได้: ", "မဖျက်နိုင်: ") + (e.message || e), true); setBusy(false); }
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
+        <div className="modal-head"><div className="modal-title">{f.id ? L("แก้ไขบัญชี", "အကောင့် ပြင်") : L("เพิ่มบัญชี/ช่องทางเงิน", "အကောင့် ထည့်")}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
+        <div className="modal-body">
+          <label className="fld"><span>{L("ชื่อบัญชี/ช่องทาง", "အမည်")}</span><input className="inp" value={f.name} autoFocus onChange={(e) => set("name", e.target.value)} placeholder={L("เช่น ธ.กสิกรไทย 1303863555 / บัตรเครดิตกสิกร-4824", "ဥပမာ ...")} /></label>
+          <div className="fld-row">
+            <label className="fld"><span>{L("ประเภท", "အမျိုးအစား")}</span><select className="inp" value={f.kind} onChange={(e) => set("kind", e.target.value)}>{ACC_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+            <label className="fld"><span>{L("กิจการ", "လုပ်ငန်း")}</span><select className="inp" value={f.entity} onChange={(e) => set("entity", e.target.value)}><option value="company">🏢 {L("บริษัท", "ကုမ္ပဏီ")}</option><option value="personal">👤 {L("บุคคล", "ပုဂ္ဂိုလ်")}</option></select></label>
+          </div>
+          <div className="fld-row">
+            <label className="fld"><span>{L("เลขบัญชี/เลขบัตร (4 ตัวท้าย)", "အကောင့်နံပါတ်")}</span><input className="inp" value={f.account_no || ""} onChange={(e) => set("account_no", e.target.value)} placeholder={L("ไม่บังคับ", "မဖြစ်မနေ မဟုတ်")} /></label>
+            <label className="fld"><span>{L("ยอดยกมาตั้งต้น", "လက်ကျန်ယူ")}</span><span className="inp inp-unit"><span className="unit-pre">฿</span><input type="number" step="0.01" value={f.opening_balance} onChange={(e) => set("opening_balance", e.target.value)} placeholder="0.00" /></span></label>
+          </div>
+          <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={f.active !== false} onChange={(e) => set("active", e.target.checked)} style={{ width: 16, height: 16 }} />
+            <span style={{ margin: 0 }}>{L("เปิดใช้งาน (เลือกใช้ตอนจ่าย/รับเงินได้)", "အသုံးပြု")}</span>
+          </label>
+        </div>
+        <div className="modal-foot">
+          {f.id && <button className="btn-ghost danger" disabled={busy} onClick={del} style={{ marginRight: "auto" }}>{L("ลบ", "ဖျက်")}</button>}
+          <button className="btn-ghost" onClick={onClose}>{L("ยกเลิก", "ပယ်ဖျက်")}</button>
+          <button className="btn-primary" disabled={busy} onClick={save}>{L("บันทึก", "သိမ်း")}</button></div>
+      </div>
+    </div>
   );
 }
 
