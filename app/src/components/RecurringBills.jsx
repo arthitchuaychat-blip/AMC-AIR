@@ -124,6 +124,8 @@ function BillRow({ b, onPay, onEdit, canEdit, busy }) {
 
 function blank() { return { name: "", provider: "", ref_no: "", period: "monthly", due_day: 1, due_month: "", amount: "", entity: "company", location: "", pay_account: "", category: "", active: true, note: "" }; }
 const CATS = ["ค่าโทรศัพท์", "อินเทอร์เน็ต", "AI", "พื้นที่เก็บข้อมูล", "Streaming", "อื่นๆ"];
+// ⚠️ ต้องอยู่นอก BillForm — ถ้าประกาศในฟังก์ชัน re-render จะสร้าง component ใหม่ทุกครั้ง → input เสียโฟกัส
+const Row = ({ label, children }) => <label style={{ display: "block" }}><div style={{ fontSize: 12, color: "var(--muted,#778)", marginBottom: 3 }}>{label}</div>{children}</label>;
 
 function BillForm({ bill, accounts, onClose, onSaved, onDelete, flash }) {
   const [f, setF] = React.useState(bill);
@@ -136,7 +138,6 @@ function BillForm({ bill, accounts, onClose, onSaved, onDelete, flash }) {
     try { await saveRecurringBill(f); onSaved(); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); setBusy(false); }
   }
-  const Row = ({ label, children }) => <label style={{ display: "block" }}><div style={{ fontSize: 12, color: "var(--muted,#778)", marginBottom: 3 }}>{label}</div>{children}</label>;
   return <div style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 75, display: "flex", alignItems: "flex-start", justifyContent: "center", overflow: "auto", padding: "24px 12px" }} onClick={onClose}>
     <div className="card" style={{ maxWidth: 500, width: "100%", padding: 20 }} onClick={(e) => e.stopPropagation()}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><h3 style={{ margin: 0 }}>{bill.id ? "แก้ไขรายจ่ายประจำ" : "เพิ่มรายจ่ายประจำ"}</h3><button className="btn-icon" onClick={onClose}>✕</button></div>
