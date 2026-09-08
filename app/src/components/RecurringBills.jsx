@@ -19,7 +19,7 @@ function billStatus(b) {
 }
 
 export default function RecurringBills({ role, onGoExpenses, onGoCashflow }) {
-  const canEdit = can(role, "loans", "edit");
+  const canEdit = can(role, "recurring", "edit");
   const [rows, setRows] = React.useState([]);
   const [accounts, setAccounts] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
