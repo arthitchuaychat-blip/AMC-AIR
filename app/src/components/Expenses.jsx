@@ -128,7 +128,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
         </>}
         title={x.title} titleFallback={L("— ไม่ระบุรายการ —", "— အမည် မသတ်မှတ် —")}
-        sub={[x.category, x.supplier ? "🏭 " + x.supplier : null, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, x.kind === "cost" ? "🔧 ต้นทุนงาน" : x.kind === "asset" ? "🏗️ สินทรัพย์" : x.kind === "opex" ? "🏢 ค่าใช้จ่าย" : null, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null, Number(x.wht_amt) > 0 ? `✂️ ${L("หัก ณ ที่จ่าย", "အခွန်ဖြတ်")} ${fmtBaht(x.wht_amt)}${x.wht_pct ? ` (${x.wht_pct}%)` : ""}` : null].filter(Boolean).join(" · ") || null}
+        sub={[x.category, x.supplier ? "🏭 " + x.supplier : null, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, GRP_LABEL[expenseGroup(x)], x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null, Number(x.wht_amt) > 0 ? `✂️ ${L("หัก ณ ที่จ่าย", "အခွန်ဖြတ်")} ${fmtBaht(x.wht_amt)}${x.wht_pct ? ` (${x.wht_pct}%)` : ""}` : null].filter(Boolean).join(" · ") || null}
         by={x.requesterName} date={x.created_at}
         amountNode={partial ? (
           <div className="rec-amt-bd">
@@ -285,6 +285,10 @@ function ReceiptModal({ x, onClose, onSaved, flash }) {
 // เตรียมข้อมูลขึ้นทะเบียนสินทรัพย์จากใบเบิก
 const assetPrefillOf = (x) => ({ name: x.title || "", cost: Number(x.amount) || 0, supplier: x.supplier || "", purchase_date: (x.paid_at || x.created_at || "").slice(0, 10), entity: x.entity === "personal" ? "personal" : "company", expense_id: x.id, category: "เครื่องมือช่าง" });
 const isAssetExp = (x) => x.kind === "asset" || kindOf(x.category, x.job_no) === "asset";
+// กลุ่มจริงของใบเบิก: ใช้ kind ที่บันทึกไว้ · ถ้าไม่มี → ผูก PO/ใบงาน = ต้นทุน(cost) ไม่งั้นค่าใช้จ่าย(opex)
+const expenseGroup = (x) => x.kind === "asset" ? "asset" : x.kind === "cost" ? "cost" : x.kind === "opex" ? "opex"
+  : (x.jobNo || x.job_no || x.poNo || (x.poNos && x.poNos.length)) ? "cost" : "opex";
+const GRP_LABEL = { cost: "🔧 ต้นทุนงาน", opex: "🏢 ค่าใช้จ่าย", asset: "🏗️ สินทรัพย์" };
 const expenseToForm = (x) => ({ id: x.id, title: x.title || "", amount: x.amount ?? "", category: x.category || "", job_no: x.job_no || "", note: x.note || "", attachments: x.attachments || [], has_vat: Number(x.vat_amt) > 0, pay_method: x.pay_method || "reimburse", asset_tag: x.asset_tag || "", supplier: x.supplier || "", recurring: !!x.recurring, wht: Number(x.wht_amt) > 0, wht_pct: x.wht_pct || "", expected_pay_date: x.expected_pay_date || "" });
 
 // ช่องเลือกใบงานแบบพิมพ์ค้นหาได้ (ชื่องาน/ลูกค้า/เลขงาน) — งานเยอะเลื่อนหายาก
@@ -462,7 +466,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
   const [catF, setCatF] = React.useState("all");        // หมวด
   const [supF, setSupF] = React.useState("all");        // ผู้ขาย
   const [reqF, setReqF] = React.useState("all");        // ผู้เบิก
-  const grpOf = (x) => (x.kind === "asset" ? "asset" : x.kind === "cost" || (x.kind !== "opex" && x.job_no) ? "cost" : "opex");
+  const grpOf = expenseGroup;
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
   const catOpts = React.useMemo(() => uniq((list || []).map((x) => x.category)), [list]);
   const supOpts = React.useMemo(() => uniq((list || []).map((x) => x.supplier)), [list]);
@@ -1256,7 +1260,7 @@ function ExpenseSummaryTab({ flash }) {
   React.useEffect(() => { listExpenses().then(setList).catch(() => { flash(L("โหลดไม่สำเร็จ", "ဖွင့်မရ"), true); setList([]); }); }, []);   // eslint-disable-line
   if (!list) return <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div>;
   const inMonth = list.filter((x) => x.status !== "rejected" && (x.created_at || "").slice(0, 7) === ym);
-  const kindOfX = (x) => x.kind || kindOf(x.category, x.job_no);
+  const kindOfX = expenseGroup;
   const groups = { cost: {}, opex: {}, asset: {} };
   inMonth.forEach((x) => {
     const k = kindOfX(x); const c = x.category || L("(ไม่ระบุหมวด)", "(အမျိုးအစား မသတ်မှတ်)");
