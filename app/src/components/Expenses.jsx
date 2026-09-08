@@ -518,6 +518,8 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
     && (skip === "sup" || supF === "all" || x.supplier === supF)
     && (skip === "req" || reqF === "all" || x.requesterName === reqF);
   const countBy = (skip, pred) => (list || []).filter((x) => passExcept(x, skip) && pred(x)).length;
+  // ตัวเลือก + จำนวน — ซ่อนที่นับได้ 0 (เว้นตัวที่เลือกอยู่) + เรียงมาก→น้อย
+  const optWithCount = (opts, skip, valOf, selected) => opts.map((v) => ({ v, c: countBy(skip, (x) => valOf(x) === v) })).filter((o) => o.c > 0 || o.v === selected).sort((a, b) => b.c - a.c);
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">{L("อนุมัติ / จ่ายเงินเบิก", "အတည်ပြု / တောင်းခံငွေ ပေးချေ")}</div>
@@ -545,15 +547,15 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
         </select>
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={catF} onChange={(e) => setCatF(e.target.value)}>
           <option value="all">{L("ทุกหมวด", "အမျိုးအစားအားလုံး")} ({countBy("cat", () => true)})</option>
-          {catOpts.map((c) => <option key={c} value={c}>{c} ({countBy("cat", (x) => x.category === c)})</option>)}
+          {optWithCount(catOpts, "cat", (x) => x.category, catF).map(({ v, c }) => <option key={v} value={v}>{v} ({c})</option>)}
         </select>
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={supF} onChange={(e) => setSupF(e.target.value)}>
           <option value="all">🏭 {L("ผู้ขายทั้งหมด", "ရောင်းသူအားလုံး")} ({countBy("sup", () => true)})</option>
-          {supOpts.map((s) => <option key={s} value={s}>{s} ({countBy("sup", (x) => x.supplier === s)})</option>)}
+          {optWithCount(supOpts, "sup", (x) => x.supplier, supF).map(({ v, c }) => <option key={v} value={v}>{v} ({c})</option>)}
         </select>
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={reqF} onChange={(e) => setReqF(e.target.value)}>
           <option value="all">👤 {L("ผู้เบิกทั้งหมด", "တောင်းခံသူအားလုံး")} ({countBy("req", () => true)})</option>
-          {reqOpts.map((r) => <option key={r} value={r}>{r} ({countBy("req", (x) => x.requesterName === r)})</option>)}
+          {optWithCount(reqOpts, "req", (x) => x.requesterName, reqF).map(({ v, c }) => <option key={v} value={v}>{v} ({c})</option>)}
         </select>
         {(groupF !== "all" || catF !== "all" || supF !== "all" || reqF !== "all") && <button className="btn-ghost sm" onClick={() => { setGroupF("all"); setCatF("all"); setSupF("all"); setReqF("all"); }}>✕ {L("ล้างตัวกรอง", "ဖျက်")}</button>}
       </div>
