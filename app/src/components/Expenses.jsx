@@ -509,19 +509,29 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
     && (groupF === "all" || grpOf(x) === groupF) && (catF === "all" || x.category === catF) && (supF === "all" || x.supplier === supF) && (reqF === "all" || x.requesterName === reqF));
   const cnt = (s) => (list || []).filter((x) => x.status === s).length;
   const activeCount = (statusF !== "pending" ? 1 : 0) + (q ? 1 : 0) + (dateR.from || dateR.to ? 1 : 0) + (groupF !== "all" ? 1 : 0) + (catF !== "all" ? 1 : 0) + (supF !== "all" ? 1 : 0) + (reqF !== "all" ? 1 : 0);
+  // นับแบบ faceted — แต่ละตัวเลือกนับตามตัวกรอง "อื่น" ที่เปิดอยู่ (ไม่รวมมิติของตัวเอง) ให้เห็นว่าเลือกแล้วเจอกี่รายการ
+  const statusPred = (v) => (x) => v === "needReceipt" ? needReceipt(x) : (v === "all" || x.status === v);
+  const passExcept = (x, skip) => (skip === "status" || (statusF === "needReceipt" ? needReceipt(x) : (statusF === "all" || x.status === statusF)))
+    && expMatch(x, q, dateR)
+    && (skip === "group" || groupF === "all" || grpOf(x) === groupF)
+    && (skip === "cat" || catF === "all" || x.category === catF)
+    && (skip === "sup" || supF === "all" || x.supplier === supF)
+    && (skip === "req" || reqF === "all" || x.requesterName === reqF);
+  const countBy = (skip, pred) => (list || []).filter((x) => passExcept(x, skip) && pred(x)).length;
   return (
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">{L("อนุมัติ / จ่ายเงินเบิก", "အတည်ပြု / တောင်းခံငွေ ပေးချေ")}</div>
-        <div className="sec-sub">{L(`รออนุมัติ ${cnt("pending")} · รอจ่าย ${cnt("approved")}`, `အတည်ပြုရန် စောင့် ${cnt("pending")} · ငွေပေးရန် စောင့် ${cnt("approved")}`)}{nRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 {L(`ค้างแนบใบเสร็จ ${nRcpt}`, `ဘောက်ချာ တွဲရန်ကျန် ${nRcpt}`)}</b>}</div></div>
+        <div className="sec-sub">{L(`รออนุมัติ ${cnt("pending")} · รอจ่าย ${cnt("approved")}`, `အတည်ပြုရန် စောင့် ${cnt("pending")} · ငွေပေးရန် စောင့် ${cnt("approved")}`)}{nRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 {L(`ค้างแนบใบเสร็จ ${nRcpt}`, `ဘောက်ချာ တွဲရန်ကျန် ${nRcpt}`)}</b>}{activeCount > 0 && <b style={{ color: "#0d9488" }}> · {L(`กรองเจอ ${shown.length} รายการ`, `တွေ့ ${shown.length}`)}</b>}</div></div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {nRcpt > 0 && <button className="btn-ghost" style={{ color: "#d97706", borderColor: "#fcd34d" }} onClick={nudge} title={L("แจ้งเตือนผู้ขอเบิกที่จ่ายเงินไปแล้วให้กลับมาแนบใบเสร็จ", "ငွေပေးပြီးသူများကို ဘောက်ချာ ပြန်တွဲရန် အသိပေး")}>🔔 {L("ทวงใบเสร็จ", "ဘောက်ချာ တောင်း")} ({nRcpt})</button>}
           <button className="btn-primary" onClick={() => setVendorPay(true)} title={L("เลือกใบสั่งซื้อค้างจ่ายของร้านเดียวกันหลายใบ ตั้งเบิกจ่ายครั้งเดียว (เหมือนใบวางบิลฝั่งซื้อ)", "တူညီသော ရောင်းသူ၏ ငွေပေးရန်ကျန် ဝယ်ယူလွှာ များစွာကို ရွေး၍ တစ်ကြိမ်တည်း တောင်းခံ (ဝယ်ဘက် ငွေတောင်းခံစာကဲ့သို့)")}>🏭 {L("จ่ายเจ้าหนี้หลายใบ", "မြီရှင် များစွာ ပေးချေ")}</button>
         </div></div>
       <FilterBar id="expenses-approve" count={activeCount}>
         <div className="cat-filter">
-        {[["pending", L("รออนุมัติ", "အတည်ပြုရန် စောင့်")], ["approved", L("รอจ่าย", "ငွေပေးရန် စောင့်")], ["paid", L("จ่ายแล้ว", "ပေးပြီး")], ["needReceipt", `📎 ${L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန်ကျန်")}${nRcpt ? ` (${nRcpt})` : ""}`], ["rejected", L("ไม่อนุมัติ", "ပယ်ချ")], ["all", L("ทั้งหมด", "အားလုံး")]].map(([v, l]) => (
-          <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)} style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
-        ))}
+        {[["pending", L("รออนุมัติ", "အတည်ပြုရန် စောင့်")], ["approved", L("รอจ่าย", "ငွေပေးရန် စောင့်")], ["paid", L("จ่ายแล้ว", "ပေးပြီး")], ["needReceipt", `📎 ${L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန်ကျန်")}`], ["rejected", L("ไม่อนุมัติ", "ပယ်ချ")], ["all", L("ทั้งหมด", "အားလုံး")]].map(([v, l]) => {
+          const c = countBy("status", statusPred(v));
+          return <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)} style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} <b style={{ opacity: 0.75 }}>{c}</b></button>;
+        })}
       </div>
       <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
         <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("ค้นหา ลูกค้า / เลข PO / พนักงานผู้ขอ / หมายเหตุ…", "ရှာဖွေ ဖောက်သည် / PO နံပါတ် / တောင်းခံသူ / မှတ်ချက်…")} /></div>
@@ -529,21 +539,21 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
       </div>
       <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={groupF} onChange={(e) => setGroupF(e.target.value)}>
-          <option value="all">{L("ทุกประเภท", "အမျိုးအစားအားလုံး")}</option>
-          <option value="cost">🔧 {L("ต้นทุนงาน (วัสดุ/สินค้า)", "အလုပ်ကုန်ကျ")}</option>
-          <option value="opex">🏢 {L("ค่าใช้จ่ายดำเนินงาน", "လုပ်ငန်းစရိတ်")}</option>
+          <option value="all">{L("ทุกประเภท", "အမျိုးအစားအားလုံး")} ({countBy("group", () => true)})</option>
+          <option value="cost">🔧 {L("ต้นทุนงาน (วัสดุ/สินค้า)", "အလုပ်ကုန်ကျ")} ({countBy("group", (x) => grpOf(x) === "cost")})</option>
+          <option value="opex">🏢 {L("ค่าใช้จ่ายดำเนินงาน", "လုပ်ငန်းစရိတ်")} ({countBy("group", (x) => grpOf(x) === "opex")})</option>
         </select>
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={catF} onChange={(e) => setCatF(e.target.value)}>
-          <option value="all">{L("ทุกหมวด", "အမျိုးအစားအားလုံး")}</option>
-          {catOpts.map((c) => <option key={c} value={c}>{c}</option>)}
+          <option value="all">{L("ทุกหมวด", "အမျိုးအစားအားလုံး")} ({countBy("cat", () => true)})</option>
+          {catOpts.map((c) => <option key={c} value={c}>{c} ({countBy("cat", (x) => x.category === c)})</option>)}
         </select>
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={supF} onChange={(e) => setSupF(e.target.value)}>
-          <option value="all">🏭 {L("ผู้ขายทั้งหมด", "ရောင်းသူအားလုံး")}</option>
-          {supOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="all">🏭 {L("ผู้ขายทั้งหมด", "ရောင်းသူအားလုံး")} ({countBy("sup", () => true)})</option>
+          {supOpts.map((s) => <option key={s} value={s}>{s} ({countBy("sup", (x) => x.supplier === s)})</option>)}
         </select>
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={reqF} onChange={(e) => setReqF(e.target.value)}>
-          <option value="all">👤 {L("ผู้เบิกทั้งหมด", "တောင်းခံသူအားလုံး")}</option>
-          {reqOpts.map((r) => <option key={r} value={r}>{r}</option>)}
+          <option value="all">👤 {L("ผู้เบิกทั้งหมด", "တောင်းခံသူအားလုံး")} ({countBy("req", () => true)})</option>
+          {reqOpts.map((r) => <option key={r} value={r}>{r} ({countBy("req", (x) => x.requesterName === r)})</option>)}
         </select>
         {(groupF !== "all" || catF !== "all" || supF !== "all" || reqF !== "all") && <button className="btn-ghost sm" onClick={() => { setGroupF("all"); setCatF("all"); setSupF("all"); setReqF("all"); }}>✕ {L("ล้างตัวกรอง", "ဖျက်")}</button>}
       </div>
