@@ -128,7 +128,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
         </>}
         title={x.title} titleFallback={L("— ไม่ระบุรายการ —", "— အမည် မသတ်မှတ် —")}
-        sub={[x.category, x.supplier ? "🏭 " + x.supplier : null, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, x.kind === "cost" ? "🔧 ต้นทุนงาน" : x.kind === "opex" ? "🏢 ค่าใช้จ่าย" : null, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null, Number(x.wht_amt) > 0 ? `✂️ ${L("หัก ณ ที่จ่าย", "အခွန်ဖြတ်")} ${fmtBaht(x.wht_amt)}${x.wht_pct ? ` (${x.wht_pct}%)` : ""}` : null].filter(Boolean).join(" · ") || null}
+        sub={[x.category, x.supplier ? "🏭 " + x.supplier : null, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, x.kind === "cost" ? "🔧 ต้นทุนงาน" : x.kind === "asset" ? "🏗️ สินทรัพย์" : x.kind === "opex" ? "🏢 ค่าใช้จ่าย" : null, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null, Number(x.wht_amt) > 0 ? `✂️ ${L("หัก ณ ที่จ่าย", "အခွန်ဖြတ်")} ${fmtBaht(x.wht_amt)}${x.wht_pct ? ` (${x.wht_pct}%)` : ""}` : null].filter(Boolean).join(" · ") || null}
         by={x.requesterName} date={x.created_at}
         amountNode={partial ? (
           <div className="rec-amt-bd">
@@ -372,6 +372,7 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
                 <option value="">{L("— เลือกหมวด —", "— အမျိုးအစား ရွေး —")}</option>
                 <optgroup label="🔧 ต้นทุนงาน">{EXPENSE_CATS.filter((c) => c.kind === "cost").map((c) => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}</optgroup>
                 <optgroup label="🏢 ค่าใช้จ่ายดำเนินงาน">{EXPENSE_CATS.filter((c) => c.kind === "opex").map((c) => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}</optgroup>
+                <optgroup label="🏗️ สินทรัพย์ (ครุภัณฑ์)">{EXPENSE_CATS.filter((c) => c.kind === "asset").map((c) => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}</optgroup>
                 <option value="__custom__">✏️ {L("อื่นๆ (ระบุเอง)", "အခြား")}</option>
               </select></label>
           </div>
@@ -457,7 +458,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
   const [catF, setCatF] = React.useState("all");        // หมวด
   const [supF, setSupF] = React.useState("all");        // ผู้ขาย
   const [reqF, setReqF] = React.useState("all");        // ผู้เบิก
-  const grpOf = (x) => (x.kind === "cost" || (x.kind !== "opex" && x.job_no) ? "cost" : "opex");
+  const grpOf = (x) => (x.kind === "asset" ? "asset" : x.kind === "cost" || (x.kind !== "opex" && x.job_no) ? "cost" : "opex");
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
   const catOpts = React.useMemo(() => uniq((list || []).map((x) => x.category)), [list]);
   const supOpts = React.useMemo(() => uniq((list || []).map((x) => x.supplier)), [list]);
@@ -544,6 +545,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed }) {
           <option value="all">{L("ทุกประเภท", "အမျိုးအစားအားလုံး")} ({countBy("group", () => true)})</option>
           <option value="cost">🔧 {L("ต้นทุนงาน (วัสดุ/สินค้า)", "အလုပ်ကုန်ကျ")} ({countBy("group", (x) => grpOf(x) === "cost")})</option>
           <option value="opex">🏢 {L("ค่าใช้จ่ายดำเนินงาน", "လုပ်ငန်းစရိတ်")} ({countBy("group", (x) => grpOf(x) === "opex")})</option>
+          <option value="asset">🏗️ {L("สินทรัพย์ (ครุภัณฑ์)", "ပိုင်ဆိုင်မှု")} ({countBy("group", (x) => grpOf(x) === "asset")})</option>
         </select>
         <select className="inp" style={{ flex: "1 1 150px", maxWidth: 220 }} value={catF} onChange={(e) => setCatF(e.target.value)}>
           <option value="all">{L("ทุกหมวด", "အမျိုးအစားအားလုံး")} ({countBy("cat", () => true)})</option>
@@ -1250,15 +1252,17 @@ function ExpenseSummaryTab({ flash }) {
   if (!list) return <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div>;
   const inMonth = list.filter((x) => x.status !== "rejected" && (x.created_at || "").slice(0, 7) === ym);
   const kindOfX = (x) => x.kind || kindOf(x.category, x.job_no);
-  const groups = { cost: {}, opex: {} };
+  const groups = { cost: {}, opex: {}, asset: {} };
   inMonth.forEach((x) => {
     const k = kindOfX(x); const c = x.category || L("(ไม่ระบุหมวด)", "(အမျိုးအစား မသတ်မှတ်)");
+    if (!groups[k]) groups[k] = {};
     const g = groups[k][c] || (groups[k][c] = { sum: 0, n: 0, assets: {} });
     const amt = Number(x.amount) || 0; g.sum += amt; g.n++;
     if (x.asset_tag) { const a = g.assets[x.asset_tag] || (g.assets[x.asset_tag] = { sum: 0, n: 0 }); a.sum += amt; a.n++; }
   });
   const totCost = Object.values(groups.cost).reduce((a, g) => a + g.sum, 0);
   const totOpex = Object.values(groups.opex).reduce((a, g) => a + g.sum, 0);
+  const totAsset = Object.values(groups.asset).reduce((a, g) => a + g.sum, 0);
   const Section = ({ title, color, data }) => {
     const rows = Object.entries(data).sort((a, b) => b[1].sum - a[1].sum);
     const max = Math.max(...rows.map(([, g]) => g.sum), 1);
@@ -1299,10 +1303,12 @@ function ExpenseSummaryTab({ flash }) {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "4px 0 16px" }}>
         <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>🔧 {L("ต้นทุนงาน", "အလုပ်ကုန်ကျ")}</div><div style={{ fontWeight: 800, fontSize: 21, color: "#b45309" }}>{fmtBaht(totCost)}</div></div>
         <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>🏢 {L("ค่าใช้จ่ายดำเนินงาน", "လုပ်ငန်းစရိတ်")}</div><div style={{ fontWeight: 800, fontSize: 21, color: "#1d4ed8" }}>{fmtBaht(totOpex)}</div></div>
-        <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>{L("รวมเดือนนี้", "ဒီလ စုစုပေါင်း")}</div><div style={{ fontWeight: 800, fontSize: 21 }}>{fmtBaht(totCost + totOpex)}</div></div>
+        {totAsset > 0 && <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>🏗️ {L("สินทรัพย์ (ครุภัณฑ์)", "ပိုင်ဆိုင်မှု")}</div><div style={{ fontWeight: 800, fontSize: 21, color: "#137a54" }}>{fmtBaht(totAsset)}</div></div>}
+        <div style={{ flex: "1 1 150px", background: "var(--surface-2)", borderRadius: 12, padding: "11px 14px" }}><div className="jo-dim" style={{ fontSize: 12 }}>{L("รวมเดือนนี้", "ဒီလ စုစုပေါင်း")}</div><div style={{ fontWeight: 800, fontSize: 21 }}>{fmtBaht(totCost + totOpex + totAsset)}</div></div>
       </div>
       <Section title="🔧 ต้นทุนงาน" color="#b45309" data={groups.cost} />
       <Section title="🏢 ค่าใช้จ่ายดำเนินงาน" color="#1d4ed8" data={groups.opex} />
+      {totAsset > 0 && <Section title="🏗️ สินทรัพย์ (ครุภัณฑ์)" color="#137a54" data={groups.asset} />}
       <p className="page-sub" style={{ marginTop: 6 }}>{L("* นับใบเบิกที่ยังไม่ถูกปฏิเสธ (รออนุมัติ/รอจ่าย/จ่ายแล้ว) ตามเดือนที่สร้างรายการ · รายการย่อยโชว์เมื่อระบุไว้", "* ပယ်ချမခံရသေးသော တောင်းခံစာများ")}</p>
     </div>
   );

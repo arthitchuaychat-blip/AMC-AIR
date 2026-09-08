@@ -29,6 +29,9 @@ export const EXPENSE_CATS = [
   { name: "ค่าวัสดุสำนักงาน", kind: "opex", icon: "🗂" },
   { name: "ค่าจัดส่งเอกสาร", kind: "opex", icon: "✉️" },
   { name: "ค่าโฆษณา/การตลาด", kind: "opex", icon: "📣" },
+  { name: "ค่าเครื่องมือ/อุปกรณ์สิ้นเปลือง", kind: "opex", icon: "🔩" },   // เครื่องมือมูลค่าต่ำ (≤ เกณฑ์) ตัดเป็นค่าใช้จ่ายทันที
+  // สินทรัพย์/ครุภัณฑ์ (> เกณฑ์) — ขึ้นทะเบียนสินทรัพย์ + คิดค่าเสื่อม (เมนูสินทรัพย์)
+  { name: "ครุภัณฑ์/เครื่องมือช่าง (สินทรัพย์)", kind: "asset", icon: "🔨" },
 ];
 export const CAT_BY_NAME = Object.fromEntries(EXPENSE_CATS.map((c) => [c.name, c]));
 
@@ -38,7 +41,11 @@ export const PAY_METHODS = [
   ["direct", "🏦 จ่ายผู้ขายตรง", "โอนจากบัญชีบริษัทตรงไปผู้ขาย"],
 ];
 export const PAY_LABEL = Object.fromEntries(PAY_METHODS.map(([k, l]) => [k, l]));
-export const KIND_LABEL = { cost: "🔧 ต้นทุนงาน", opex: "🏢 ค่าใช้จ่าย" };
+export const KIND_LABEL = { cost: "🔧 ต้นทุนงาน", opex: "🏢 ค่าใช้จ่าย", asset: "🏗️ สินทรัพย์" };
 
-// ประเภทจริง: เป็นต้นทุนงานถ้าหมวดเป็น cost หรือผูกใบงาน · ไม่งั้นเป็นค่าใช้จ่ายดำเนินงาน
-export const kindOf = (catName, jobNo) => (CAT_BY_NAME[catName]?.kind === "cost" || jobNo ? "cost" : "opex");
+// ประเภทจริง: สินทรัพย์(asset) ตามหมวด · ต้นทุนงาน(cost) ถ้าหมวด cost หรือผูกใบงาน · ไม่งั้นค่าใช้จ่าย(opex)
+export const kindOf = (catName, jobNo) => {
+  const k = CAT_BY_NAME[catName]?.kind;
+  if (k === "asset") return "asset";
+  return k === "cost" || jobNo ? "cost" : "opex";
+};
