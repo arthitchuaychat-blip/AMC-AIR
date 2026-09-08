@@ -5056,7 +5056,7 @@ async function _enrichExpenseJobs(rows) {
     // ผลคือหน้าเบิกจ่ายดูปกติแต่ลิงก์ PO/ชื่อลูกค้าหายไปทั้งหน้า (พังเงียบ)
     const data = [];
     for (let i = 0; i < ids.length; i += 200) {
-      const { data: chunk, error } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id,vat,delivery_date,delivery_method").in("expense_id", ids.slice(i, i + 200));
+      const { data: chunk, error } = await supabase.from("purchase_orders").select("po_no,quote_no,expense_id,vat,delivery_date,delivery_method,supplier").in("expense_id", ids.slice(i, i + 200));
       if (error) throw error;
       data.push(...(chunk || []));
     }
@@ -5097,7 +5097,9 @@ async function _enrichExpenseJobs(rows) {
     }));
     // กิจการที่รับต้นทุน: ผูกใบเสนอที่ "ไม่เอา VAT" → บุคคล · ไม่ผูก/ผูกใบ VAT → บริษัท (ตรงกับกติกาลงบัญชี)
     const entity = qi && qi.vat === false ? "personal" : "company";
-    return { ...x, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null, entity,
+    // ผู้ขาย: ช่อง supplier ที่กรอกเอง · ไม่มีก็ดึงจาก PO ที่ผูก (จ่ายค่าสินค้า PO)
+    const vendor = x.supplier || poList.map((p) => p.supplier).find(Boolean) || null;
+    return { ...x, supplier: vendor, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null, entity,
       customerName: custId != null ? custName[custId] || null : null, poNo: po?.po_no || null, poNos: poList.map((p) => p.po_no), poDetails, quoteNo };
   });
 }
