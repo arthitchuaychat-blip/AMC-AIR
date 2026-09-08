@@ -4835,9 +4835,11 @@ export async function submitExpense(e) {
     requester: uid, job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0, vat_amt: Number(e.vat_amt) || 0,
     kind: e.kind || null, pay_method: e.pay_method || null, asset_tag: e.asset_tag || null, recurring: !!e.recurring,   // โครงสร้างทำจ่าย (mig 241)
     supplier: e.supplier?.trim() || null,   // ชื่อผู้ขาย (mig 243)
+    wht_pct: Number(e.wht_pct) || 0, wht_amt: Number(e.wht_amt) || 0,   // หัก ณ ที่จ่าย (mig 246)
     note: e.note?.trim() || null, attachments: e.attachments || [], created_by: uid,
   };
   let { error } = await supabase.from("expense_requests").insert(row);
+  if (error && /wht_pct|wht_amt|PGRST204/i.test(error.message || "")) { delete row.wht_pct; delete row.wht_amt; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-246 fallback
   if (error && /supplier|PGRST204/i.test(error.message || "")) { delete row.supplier; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-243 fallback
   if (error && /kind|pay_method|asset_tag|recurring|PGRST204/i.test(error.message || "")) { delete row.kind; delete row.pay_method; delete row.asset_tag; delete row.recurring; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-241 fallback
   if (error && /vat_amt|PGRST204/i.test(error.message || "")) { delete row.vat_amt; ({ error } = await supabase.from("expense_requests").insert(row)); }   // pre-232 fallback
@@ -5012,12 +5014,14 @@ export async function updateExpenseRequest(id, e) {
   const patch = {
     job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0, vat_amt: Number(e.vat_amt) || 0,
     kind: e.kind || null, pay_method: e.pay_method || null, asset_tag: e.asset_tag || null, recurring: !!e.recurring,
-    supplier: e.supplier?.trim() || null, note: e.note?.trim() || null, attachments: e.attachments || [],
+    supplier: e.supplier?.trim() || null, wht_pct: Number(e.wht_pct) || 0, wht_amt: Number(e.wht_amt) || 0,
+    note: e.note?.trim() || null, attachments: e.attachments || [],
   };
   let rows = null;
   const _try = async (p) => { const r = await supabase.from("expense_requests").update(p).eq("id", id).eq("status", "pending").select("id"); rows = r.data; return r.error; };
   let err = await _try(patch);
-  if (err && /supplier|PGRST204/i.test(err.message || "")) { const { supplier, ...p } = patch; err = await _try(p); }
+  if (err && /wht_pct|wht_amt|PGRST204/i.test(err.message || "")) { const { wht_pct, wht_amt, ...p } = patch; err = await _try(p); }
+  if (err && /supplier|PGRST204/i.test(err.message || "")) { const { supplier, wht_pct, wht_amt, ...p } = patch; err = await _try(p); }
   if (err && /kind|pay_method|asset_tag|recurring|PGRST204/i.test(err.message || "")) { const { kind, pay_method, asset_tag, recurring, supplier, ...p } = patch; err = await _try(p); }
   if (err && /vat_amt|PGRST204/i.test(err.message || "")) { const { vat_amt, ...p } = patch; err = await _try(p); }
   if (err) throw err;
@@ -5167,7 +5171,8 @@ export async function payExpense(id, { accountId, proof, payDate, amount, expect
   if (ex.status === "paid") throw new Error("จ่ายเงินครบแล้ว");
   // จ่ายได้เฉพาะใบที่ผ่านการอนุมัติ — ใบ pending/rejected จ่ายแล้วเงินออกจากบัญชีแต่กระแสเงินสดมองไม่เห็น (sync ข้าม)
   if (ex.status !== "approved") throw new Error(ex.status === "rejected" ? "ใบนี้ถูกปฏิเสธแล้ว — จ่ายไม่ได้" : "ใบนี้ยังไม่ผ่านการอนุมัติ — อนุมัติก่อนจ่าย");
-  const total = Math.round((Number(ex.amount) || 0) * 100) / 100;
+  // ยอดจ่ายจริง = ยอดเต็ม − หัก ณ ที่จ่าย (ผู้ขายรับสุทธิ · WHT นำส่งกรมสรรพากรแยก)
+  const total = Math.round(((Number(ex.amount) || 0) - (Number(ex.wht_amt) || 0)) * 100) / 100;
   const already = Math.round((Number(ex.paid_amount) || 0) * 100) / 100;
   const remaining = Math.round((total - already) * 100) / 100;
   let payAmt = amount != null && amount !== "" ? Math.round((Number(amount) || 0) * 100) / 100 : remaining;

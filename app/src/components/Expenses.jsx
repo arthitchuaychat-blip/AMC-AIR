@@ -127,7 +127,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
         </>}
         title={x.title} titleFallback={L("— ไม่ระบุรายการ —", "— အမည် မသတ်မှတ် —")}
-        sub={[x.category, x.supplier ? "🏭 " + x.supplier : null, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, x.kind === "cost" ? "🔧 ต้นทุนงาน" : x.kind === "opex" ? "🏢 ค่าใช้จ่าย" : null, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null].filter(Boolean).join(" · ") || null}
+        sub={[x.category, x.supplier ? "🏭 " + x.supplier : null, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, x.kind === "cost" ? "🔧 ต้นทุนงาน" : x.kind === "opex" ? "🏢 ค่าใช้จ่าย" : null, x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null, Number(x.wht_amt) > 0 ? `✂️ ${L("หัก ณ ที่จ่าย", "အခွန်ဖြတ်")} ${fmtBaht(x.wht_amt)}${x.wht_pct ? ` (${x.wht_pct}%)` : ""}` : null].filter(Boolean).join(" · ") || null}
         by={x.requesterName} date={x.created_at}
         amountNode={partial ? (
           <div className="rec-amt-bd">
@@ -280,7 +280,7 @@ function ReceiptModal({ x, onClose, onSaved, flash }) {
 }
 
 // แปลงรายการเบิกที่ยังไม่อนุมัติ → ออบเจกต์ฟอร์มสำหรับแก้ไข
-const expenseToForm = (x) => ({ id: x.id, title: x.title || "", amount: x.amount ?? "", category: x.category || "", job_no: x.job_no || "", note: x.note || "", attachments: x.attachments || [], has_vat: Number(x.vat_amt) > 0, pay_method: x.pay_method || "reimburse", asset_tag: x.asset_tag || "", supplier: x.supplier || "", recurring: !!x.recurring });
+const expenseToForm = (x) => ({ id: x.id, title: x.title || "", amount: x.amount ?? "", category: x.category || "", job_no: x.job_no || "", note: x.note || "", attachments: x.attachments || [], has_vat: Number(x.vat_amt) > 0, pay_method: x.pay_method || "reimburse", asset_tag: x.asset_tag || "", supplier: x.supplier || "", recurring: !!x.recurring, wht: Number(x.wht_amt) > 0, wht_pct: x.wht_pct || "" });
 
 // ช่องเลือกใบงานแบบพิมพ์ค้นหาได้ (ชื่องาน/ลูกค้า/เลขงาน) — งานเยอะเลื่อนหายาก
 function JobPicker({ value, jobs, onChange, L }) {
@@ -346,7 +346,9 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
     setBusy(true);
     const vat_amt = form.has_vat ? Math.round((Number(form.amount) || 0) * 7 / 107 * 100) / 100 : 0;   // บิลราคารวม VAT → ถอดภาษีซื้อ 7/107
     const kind = kindOf(form.category, form.job_no);   // ต้นทุน(cost) ถ้าหมวด cost หรือผูกงาน · ไม่งั้น opex
-    const payload = { ...form, vat_amt, kind, pay_method: form.pay_method || "reimburse", asset_tag: form.asset_tag || null, supplier: form.supplier || null };
+    const wht_pct = form.wht ? Number(form.wht_pct) || 0 : 0;
+    const wht_amt = wht_pct > 0 ? Math.round((Number(form.amount) || 0) * wht_pct / 100 * 100) / 100 : 0;   // หัก ณ ที่จ่าย = ยอดเต็ม × %
+    const payload = { ...form, vat_amt, kind, pay_method: form.pay_method || "reimburse", asset_tag: form.asset_tag || null, supplier: form.supplier || null, wht_pct, wht_amt };
     try {
       if (editing) { await updateExpenseRequest(form.id, payload); flash(L("แก้ไขคำขอแล้ว ✓", "ပြင်ဆင်ပြီး ✓")); }
       else { await submitExpense(payload); flash(L("ส่งคำขอเบิกแล้ว รออนุมัติ ✓", "တောင်းခံစာ တင်ပြီး · အတည်ပြုရန် စောင့် ✓")); }
@@ -394,6 +396,22 @@ function ExpenseForm({ form, setForm, jobs, onSaved, flash }) {
             <span style={{ margin: 0 }}>🧾 {L("บิลนี้มีใบกำกับภาษีซื้อ VAT 7% (ยอดข้างบนรวม VAT แล้ว)", "ဤဘီလ်တွင် ဝယ်ခွန် VAT 7% ပါသည် (ပမာဏတွင် VAT ပါပြီး)")}
               {form.has_vat && Number(form.amount) > 0 ? <b style={{ color: "#0d9488" }}> · {L("ภาษีซื้อ", "ဝယ်ခွန်")} ฿{(Math.round(Number(form.amount) * 7 / 107 * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}</b> : ""}</span>
           </label>
+          <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={!!form.wht} onChange={(e) => { set("wht", e.target.checked); if (e.target.checked && !(Number(form.wht_pct) > 0)) set("wht_pct", 3); }} style={{ width: 16, height: 16 }} />
+            <span style={{ margin: 0 }}>✂️ {L("หัก ณ ที่จ่าย (WHT) — หักจากยอดเต็ม แล้วจ่ายผู้ขายส่วนที่เหลือ", "အခွန်ဖြတ်")}</span>
+          </label>
+          {form.wht && (() => {
+            const amt = Number(form.amount) || 0; const pct = Number(form.wht_pct) || 0;
+            const w = Math.round(amt * pct / 100 * 100) / 100; const net = Math.round((amt - w) * 100) / 100;
+            return <div style={{ background: "var(--panel2,#f6f8fa)", borderRadius: 10, padding: "10px 12px", display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12.5 }}>{L("อัตราหัก", "နှုန်း")}</span>
+                <span className="inp inp-unit" style={{ width: 92 }}><input type="number" min="0" step="0.5" value={form.wht_pct ?? ""} onChange={(e) => set("wht_pct", e.target.value)} /><span className="unit-pre" style={{ order: 2 }}>%</span></span>
+                {[1, 2, 3, 5].map((p) => <button type="button" key={p} className={"cat-chip" + (pct === p ? " on" : "")} onClick={() => set("wht_pct", p)} style={pct === p ? { background: "#111", color: "#fff", borderColor: "#111", padding: "3px 10px" } : { padding: "3px 10px" }}>{p}%</button>)}
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--muted,#556)" }}>{L("หัก ณ ที่จ่าย", "ဖြတ်ငွေ")} <b style={{ color: "#b45309" }}>฿{w.toLocaleString("en-US", { minimumFractionDigits: 2 })}</b> · {L("จ่ายผู้ขายจริง", "အမှန်ပေး")} <b style={{ color: "#0d9488" }}>฿{net.toLocaleString("en-US", { minimumFractionDigits: 2 })}</b></div>
+            </div>;
+          })()}
           <label className="fld"><span>{L("เบิกจากใบงาน (ถ้ามี — จะรวมเป็นต้นทุนงาน)", "အလုပ်လွှာမှ တောင်းခံ (ရှိလျှင် — အလုပ်ကုန်ကျစရိတ်တွင် ပေါင်းမည်)")}</span>
             <JobPicker value={form.job_no} jobs={jobs} onChange={(v) => set("job_no", v)} L={L} /></label>
           {curKind === "opex" && <label className="fld" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}>
