@@ -154,7 +154,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-11·หน้าจ่ายเงิน: รายการมีหัก ณ ที่จ่าย → โชว์ยอดเบิก/หัก/ยอดโอนจริง + จ่ายยอดสุทธิ (ตรงกับที่โอนจริง) v817";
+const BUILD = "2026-09-11·แก้บั๊ก: เปิดลิงก์/แท็บใหม่ไปเมนูที่ยุบรวม (BOQ/ส่งมอบ/ใบเสร็จ ฯลฯ) ไม่เด้งไปแดชบอร์ดแล้ว v818";
 
 function SetupNotice() {
   return (
@@ -310,7 +310,10 @@ export default function App() {
     if (!profile) return;
     const allowed = navIds(profile.role);
     const safe = allowed.length ? allowed : ["teamchat"];
-    setView((v) => (v && safe.includes(v) ? v : safe[0]));
+    // เมนูที่ "ยุบรวม" แล้วแต่ยังมีหน้า render (deep-link/เปิดแท็บใหม่ #boq ฯลฯ ยังใช้ได้) — อย่ารีเซ็ตไปแดชบอร์ด
+    const HIDDEN = ["boq", "reviews", "promo", "website", "payables", "loans", "recurring", "expenses", "receivables", "billing", "receipt", "customers", "pipeline", "followup", "handover", "schedule", "jobs", "prep"];
+    const ok = new Set([...safe, ...HIDDEN.filter((v) => can(profile.role, v))]);
+    setView((v) => (v && ok.has(v) ? v : safe[0]));
   }, [profile, permsV, mySub]);
 
   // sidebar badges: unread notifications grouped by category → number on each menu (like the LINE chat badge)
