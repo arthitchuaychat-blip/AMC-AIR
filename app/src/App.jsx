@@ -62,6 +62,7 @@ const MaterialPrep = React.lazy(() => import("./components/MaterialPrep"));
 const Tools = React.lazy(() => import("./components/Tools"));
 const TaxReport = React.lazy(() => import("./components/TaxReport"));
 const CustomerFollowup = React.lazy(() => import("./components/CustomerFollowup"));
+const SalesHub = React.lazy(() => import("./components/SalesHub"));
 const WebOrders = React.lazy(() => import("./components/WebOrders"));
 const Handbook = React.lazy(() => import("./components/Handbook"));
 const KpiScorecard = React.lazy(() => import("./components/KpiScorecard"));
@@ -76,6 +77,7 @@ const NAV = {
   customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
   pipeline: { th: "ท่อขาย", en: "Sales Pipeline", icon: "trend" },
   followup: { th: "ติดตามลูกค้า", en: "Follow-up", icon: "user" },
+  saleshub: { th: "ลูกค้าและงานขาย", en: "Customers & Sales", icon: "building" },
   reviews: { th: "รีวิวลูกค้า", en: "Reviews", icon: "trend" },
   promo: { th: "คูปอง/โปรโมชั่น", en: "Coupons", icon: "trend" },
   weborders: { th: "คำสั่งซื้อจากเว็บ", en: "Web Orders", icon: "purchase" },
@@ -125,7 +127,7 @@ const NAV = {
 //    เลี่ยง Emoji 11+ (🧱🧰🧮🧾🧼) และแบบ ZWJ (🧑‍🔧🧑‍💼) ที่ font เก่าขึ้นเป็นกล่องว่าง
 const NAV_EMOJI = {
   myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
-  pipeline: "🎯", reviews: "🌟", promo: "🎟️", marketing: "📣", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
+  pipeline: "🎯", saleshub: "👥", reviews: "🌟", promo: "🎟️", marketing: "📣", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
   subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", adjnote: "📃", billing: "📑",
   receivables: "💰", recvcenter: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", loans: "🏧", recurring: "🔁", paycenter: "💳", assets: "🏗️", expenses: "💳", accounting: "📚",
   joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
@@ -136,7 +138,7 @@ const NAV_EMOJI = {
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
 const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
-  { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "customers", "pipeline", "followup", "weborders", "marketing"] },
+  { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "saleshub", "weborders", "marketing"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "adjnote"] },
   { key: "finance", label: "การเงิน", ids: ["recvcenter", "paycenter", "tax", "profit", "cashflow", "assets", "accounting"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
@@ -149,7 +151,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-10·A3 ยุบเมนู: ศูนย์รับเงิน (ค้างรับ+วางบิล+ใบเสร็จ รวมแท็บเดียว คุมสิทธิ์รายแท็บ) v808";
+const BUILD = "2026-09-10·A4 ยุบเมนู: ลูกค้าและงานขาย (ลูกค้า+ท่อขาย+ติดตาม รวมแท็บเดียว คุมสิทธิ์รายแท็บ) v809";
 
 function SetupNotice() {
   return (
@@ -614,6 +616,12 @@ export default function App() {
         {view === "dashboard" && <Dashboard role={role} onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} onOpenDoc={openDoc} />}
         {view === "kpi" && <KpiScorecard />}
+        {/* A4: ลูกค้าและงานขาย (แท็บ ลูกค้า/ท่อขาย/ติดตาม) — คงหน้าเดิมไว้เผื่อ deep-link/ลิงก์เก่า */}
+        {view === "saleshub" && <SalesHub role={role} me={profile?.id}
+          custFocus={custFocus} onCustFocusConsumed={() => setCustFocus(null)}
+          onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }}
+          onCreateJob={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }} />}
         {view === "pipeline" && <Pipeline role={role} me={profile?.id} onOpenCustomer={(id) => { setCustFocus(String(id)); go("customers"); }} />}
         {/* A1: ยุบเป็นเมนูเดียว "การตลาดและเว็บไซต์" (แท็บ คูปอง/รีวิว/เว็บ) — คงหน้าเดิมไว้เผื่อลิงก์ #reviews/#promo/#website เก่า */}
         {view === "marketing" && <MarketingHub role={role} />}
@@ -623,10 +631,10 @@ export default function App() {
         {view === "suppliers" && <Suppliers role={role} />}
         {view === "followup" && <CustomerFollowup role={role}
           onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
-          onOpenCustomer={(cid) => { setCustFocus(String(cid)); go("customers"); }}
+          onOpenCustomer={(cid) => { setCustFocus(String(cid)); go("saleshub"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }}
           onCreateJob={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }} />}
-        {view === "chat" && <Chat role={role} onOpenDoc={openDoc} onGoCustomers={(name) => { setCustFocus(name); go("customers"); }}
+        {view === "chat" && <Chat role={role} onOpenDoc={openDoc} onGoCustomers={(name) => { setCustFocus(name); go("saleshub"); }}
           focus={chatFocus} onFocusConsumed={() => setChatFocus(null)}
           onCreateBoq={(cid) => { setBoqNewCust(String(cid)); go("boq"); }}
           onCreateSurvey={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }}
@@ -669,7 +677,7 @@ export default function App() {
         {view === "payables" && <Payables role={role} onOpenPo={(no) => { setPoFocus(no); go("po"); }} onGoExpenses={(ref) => { setExpenseFocus(ref || null); go("expenses"); }} onGoSub={() => go("subcontract")} />}
         {view === "tax" && <TaxReport role={role} />}
         {view === "weborders" && <WebOrders role={role}
-          onOpenCustomer={(cid) => { setCustFocus(String(cid)); go("customers"); }}
+          onOpenCustomer={(cid) => { setCustFocus(String(cid)); go("saleshub"); }}
           onCreateBoq={(d) => { setBoqDraft(d); go("boq"); }} />}
         {view === "website" && <WebManage role={role} />}
         {view === "profit" && <Profit onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
