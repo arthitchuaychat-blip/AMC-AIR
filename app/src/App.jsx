@@ -65,6 +65,7 @@ const Handbook = React.lazy(() => import("./components/Handbook"));
 const KpiScorecard = React.lazy(() => import("./components/KpiScorecard"));
 const Pipeline = React.lazy(() => import("./components/Pipeline"));
 const Reviews = React.lazy(() => import("./components/Reviews"));
+const MarketingHub = React.lazy(() => import("./components/MarketingHub"));
 
 const NAV = {
   myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
@@ -77,6 +78,7 @@ const NAV = {
   promo: { th: "คูปอง/โปรโมชั่น", en: "Coupons", icon: "trend" },
   weborders: { th: "คำสั่งซื้อจากเว็บ", en: "Web Orders", icon: "purchase" },
   website: { th: "จัดการเว็บไซต์", en: "Website", icon: "catalog" },
+  marketing: { th: "การตลาดและเว็บไซต์", en: "Marketing & Web", icon: "trend" },
   chat: { th: "แชตลูกค้า", en: "Customer Chat", icon: "chat" },
   email: { th: "อีเมล", en: "Email", icon: "chat" },
   teamchat: { th: "แชตทีม", en: "Team Chat", icon: "chat" },
@@ -119,7 +121,7 @@ const NAV = {
 //    เลี่ยง Emoji 11+ (🧱🧰🧮🧾🧼) และแบบ ZWJ (🧑‍🔧🧑‍💼) ที่ font เก่าขึ้นเป็นกล่องว่าง
 const NAV_EMOJI = {
   myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
-  pipeline: "🎯", reviews: "🌟", promo: "🎟️", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
+  pipeline: "🎯", reviews: "🌟", promo: "🎟️", marketing: "📣", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
   subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", adjnote: "📃", billing: "📑",
   receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", loans: "🏧", recurring: "🔁", assets: "🏗️", expenses: "💳", accounting: "📚",
   joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
@@ -130,7 +132,7 @@ const NAV_EMOJI = {
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
 const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
-  { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "customers", "pipeline", "followup", "reviews", "promo", "weborders", "website"] },
+  { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "customers", "pipeline", "followup", "weborders", "marketing"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt", "adjnote"] },
   { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "loans", "recurring", "assets", "expenses", "accounting"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
@@ -143,7 +145,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-08·เบิกจ่าย: เพิ่มตัวกรอง “ไม่ระบุหมวด” (เอกสารที่ไม่มีหมวดจะครบจำนวน) v802";
+const BUILD = "2026-09-10·A1 ยุบเมนู: การตลาดและเว็บไซต์ (คูปอง+รีวิว+จัดการเว็บ รวมเป็นแท็บเดียว คุมสิทธิ์รายแท็บ) v803";
 
 function SetupNotice() {
   return (
@@ -609,6 +611,8 @@ export default function App() {
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} onOpenDoc={openDoc} />}
         {view === "kpi" && <KpiScorecard />}
         {view === "pipeline" && <Pipeline role={role} me={profile?.id} onOpenCustomer={(id) => { setCustFocus(String(id)); go("customers"); }} />}
+        {/* A1: ยุบเป็นเมนูเดียว "การตลาดและเว็บไซต์" (แท็บ คูปอง/รีวิว/เว็บ) — คงหน้าเดิมไว้เผื่อลิงก์ #reviews/#promo/#website เก่า */}
+        {view === "marketing" && <MarketingHub role={role} />}
         {view === "reviews" && <Reviews role={role} />}
         {view === "promo" && <Coupons />}
         {view === "customers" && <Customers role={role} focus={custFocus} onFocusConsumed={() => setCustFocus(null)} onOpenDoc={openDoc} />}
