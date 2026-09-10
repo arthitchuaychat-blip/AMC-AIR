@@ -122,7 +122,7 @@ function BillRow({ b, onPay, onEdit, canEdit, busy }) {
   </div>;
 }
 
-function blank() { return { name: "", provider: "", ref_no: "", period: "monthly", due_day: 1, due_month: "", amount: "", entity: "company", location: "", pay_account: "", category: "", active: true, note: "" }; }
+function blank() { return { name: "", provider: "", ref_no: "", period: "monthly", due_day: 1, due_month: "", amount: "", entity: "company", location: "", pay_account: "", category: "", active: true, note: "", has_vat: false }; }
 const CATS = ["ค่าโทรศัพท์", "อินเทอร์เน็ต", "AI", "พื้นที่เก็บข้อมูล", "Streaming", "อื่นๆ"];
 // ⚠️ ต้องอยู่นอก BillForm — ถ้าประกาศในฟังก์ชัน re-render จะสร้าง component ใหม่ทุกครั้ง → input เสียโฟกัส
 const Row = ({ label, children }) => <label style={{ display: "block" }}><div style={{ fontSize: 12, color: "var(--muted,#778)", marginBottom: 3 }}>{label}</div>{children}</label>;
@@ -163,6 +163,7 @@ function BillForm({ bill, accounts, onClose, onSaved, onDelete, flash }) {
           <Row label="สถานที่ (ถ้ามี)"><input className="inp" value={f.location || ""} onChange={(e) => set("location", e.target.value)} placeholder="Office / Studio" /></Row>
         </div>
         <Row label="วิธีจ่าย / บัตร-บัญชี"><input className="inp" list="rb-accts" value={f.pay_account || ""} onChange={(e) => set("pay_account", e.target.value)} placeholder="เช่น บัตรเครดิตกสิกร-4824" /><datalist id="rb-accts">{accounts.map((a) => <option key={a.id} value={a.name} />)}</datalist></Row>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={!!f.has_vat} onChange={(e) => set("has_vat", e.target.checked)} /> บิลนี้มี VAT (ยอดรวม VAT แล้ว → ถอดภาษีซื้อ 7% เคลมได้ เช่น เน็ต/มือถือ)</label>
         {bill.id && <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={f.active !== false} onChange={(e) => set("active", e.target.checked)} /> ใช้งานอยู่ (ยังจ่ายประจำ)</label>}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>

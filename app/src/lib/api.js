@@ -5023,9 +5023,11 @@ export async function saveRecurringBill(b) {
     due_month: b.due_month != null && b.due_month !== "" ? Number(b.due_month) : null,
     amount: Number(b.amount) || 0, entity: b.entity === "personal" ? "personal" : "company",
     location: b.location || null, pay_account: b.pay_account || null, category: b.category || null,
-    active: b.active !== false, note: b.note || null, updated_at: new Date().toISOString() };
-  const res = b.id ? await supabase.from("recurring_bills").update(row).eq("id", b.id)
-                   : await supabase.from("recurring_bills").insert({ ...row, created_by: uid });
+    active: b.active !== false, note: b.note || null, has_vat: !!b.has_vat, updated_at: new Date().toISOString() };
+  const _saveRb = (r) => b.id ? supabase.from("recurring_bills").update(r).eq("id", b.id)
+                              : supabase.from("recurring_bills").insert({ ...r, created_by: uid });
+  let res = await _saveRb(row);
+  if (res.error && /has_vat|PGRST204/i.test(res.error.message || "")) { const { has_vat, ...r } = row; res = await _saveRb(r); }   // pre-mig249 fallback
   if (res.error) throw res.error;
   syncCashEntriesFromDocs().catch(() => {});
   return true;
@@ -5046,7 +5048,8 @@ export async function payRecurringBill(id, cycleKey) {
   const row = {
     requester: uid, created_by: uid, category: b.category || "รายจ่ายประจำ", kind: "opex", pay_method: "direct",
     supplier: b.provider || null,
-    title: `${b.name}${b.provider ? " · " + b.provider : ""} (${cycleKey})`, amount: Number(b.amount) || 0, vat_amt: 0,
+    title: `${b.name}${b.provider ? " · " + b.provider : ""} (${cycleKey})`, amount: Number(b.amount) || 0,
+    vat_amt: b.has_vat ? Math.round((Number(b.amount) || 0) * 7 / 107 * 100) / 100 : 0,   // บิลรวม VAT → ถอดภาษีซื้อ 7/107 เคลมได้
     note: `#รายจ่ายประจำ ${b.name}${b.ref_no ? " · " + b.ref_no : ""}${b.pay_account ? " · จ่ายผ่าน " + b.pay_account : ""}`,
     status: "paid", paid_amount: Number(b.amount) || 0, last_paid_at: day, paid_at: `${day}T12:00:00.000Z`,
     payment_proof: [{ name: b.pay_account || "จ่ายอัตโนมัติ", auto: true }], attachments: [],
