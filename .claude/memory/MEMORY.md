@@ -12,6 +12,8 @@
 - [Stale-cache deploys](stale-cache-deploys.md) — "broken" filters/search are usually a cached old bundle; how to verify the live bundle; cache headers in app/vercel.json.
 - [Print pagination](print-pagination.md) — printed docs repeat the letterhead via JS pagination in printDoc.js (NOT thead/fixed — both fail in Chrome); verify print changes in a browser harness.
 - [Permissions system](permissions-system.md) — role access via lib/permissions.js (can()/navForRole + editable matrix in Settings, app_config + migration 039); ธุรการ on top.
+- [Menu consolidation](menu-consolidation.md) — โปรเจกต์ยุบเมนู (รวมทางเข้า เก็บเอกสาร/สถานะเดิม): รูปแบบ hub component + คุมสิทธิ์รายแท็บ + แผน 4 เฟส + ความคืบหน้า (เฟส 1 เสร็จ v807)
+- [Ensure-columns trap](menu-consolidation.md) — บั๊ก "ฟีเจอร์ที่ใช้คอลัมน์ใหม่ไม่บันทึก" (supplier/submitted_seq หาย) มักเพราะ ALTER ADD COLUMN ไม่ได้รันจริงบน DB จริง แม้ migration ใน repo มีแล้ว → ให้ SQL `add column if not exists` ครบชุด (mig 248) ให้เจ้าของรัน
 - [i18n ไทย↔พม่า](i18n-burmese.md) — สลับภาษาพม่าให้แรงงาน (tech/assistant/lead_tech/maid) ผ่าน lib/i18n.js + useLang + L(th,my); v532 เปิดให้แม่บ้าน + แปล TaskBoard/Expenses/TeamChat/คู่มือ; ออฟฟิศเป็นไทยเสมอ
 - [Team chat push](team-chat-push.md) — team-chat unread badges + Web Push/PWA (sw.js, push-send.js, migration 040); needs VAPID env on Vercel + Add-to-Home-Screen.
 - [HR system](hr-system.md) — attendance (selfie+GPS check-in/out), leave, holidays, monthly stats; lib/hr.js schedules, migration 041; set staff work_pattern in HR settings.
