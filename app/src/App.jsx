@@ -154,7 +154,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-11·เร็วขึ้น: sync กระแสเงินสดข้าม update ที่ค่าไม่เปลี่ยน → ไม่ล้างแคชลิสต์ทั้งแอปทุกครั้ง (สลับเมนูไม่โหลดใหม่ซ้ำ) v822";
+const BUILD = "2026-09-11·[TRIAL] ดีไซน์ใหม่หน้ากระแสเงินสด (การ์ดสรุป/กราฟ SVG/ต้องติดตาม/ตารางล่าสุด · CSS เฉพาะ .cfx-root) v823-trial";
 
 function SetupNotice() {
   return (
