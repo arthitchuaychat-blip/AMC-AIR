@@ -349,7 +349,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
           </div>}
           <div className="kpi-grid">
             <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={dv(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setDocList("q_all")} />
-            <StatCard icon="trend" color="#1f74e0" label="ยอดขายอนุมัติ · รับ VAT" value={dv(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("q_vat")} />
+            <StatCard icon="trend" color="#2563EB" label="ยอดขายอนุมัติ · รับ VAT" value={dv(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("q_vat")} />
             <StatCard icon="trend" color="#64748b" label="ยอดขายอนุมัติ · ไม่ VAT" value={dv(ovStat.novatSale)} sub={fmtNum(ovStat.novatCount) + " ใบ"} onClick={() => setDocList("q_novat")} />
             <StatCard icon="check" color="#0a6b3d" label={"รับเงินแล้ว (ใบเสร็จ) · " + periodLabel} value={dv(rcStat.sale)} sub={`${fmtNum(rcStat.count)} ใบเสร็จ · ก่อน VAT · รับสุทธิ ${fmtCompact(rcStat.net)}`} onClick={() => setDocList("rc_all")} />
             <StatCard icon="check" color="#15803d" label="รับเงินแล้ว · รับ VAT" value={dv(rcStat.vatSale)} sub={`${fmtNum(rcStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("rc_vat")} />

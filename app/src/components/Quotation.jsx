@@ -478,7 +478,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       <div className="cat-filter" style={{ marginTop: -4 }}>
         {[["all", "VAT / ไม่ VAT"], ["vat", "รับ VAT"], ["novat", "ไม่ VAT"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (vatF === v ? " on" : "")} onClick={() => setVatF(v)}
-            style={vatF === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l} ({nVat(v)})</button>
+            style={vatF === v ? { background: "#2563EB", color: "#fff", borderColor: "#2563EB" } : {}}>{l} ({nVat(v)})</button>
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
         {creatorOpts.length > 0 && (

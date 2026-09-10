@@ -31,7 +31,7 @@ function buildBuckets(g, from, to) {
 // vertical grouped bar chart (sales / cost / profit per time bucket)
 function GroupedBars({ buckets }) {
   const W = 660, H = 210, padB = 26, padT = 8;
-  const series = [{ k: "sale", name: "ยอดขาย", c: "#1f74e0" }, { k: "cost", name: "ต้นทุน", c: "#f59e0b" }, { k: "profit", name: "กำไร", c: "#16a34a" }];
+  const series = [{ k: "sale", name: "ยอดขาย", c: "#2563EB" }, { k: "cost", name: "ต้นทุน", c: "#f59e0b" }, { k: "profit", name: "กำไร", c: "#16a34a" }];
   const max = Math.max(1, ...buckets.flatMap((b) => series.map((s) => b[s.k] || 0)));
   const n = buckets.length || 1; const gW = W / n; const bW = Math.min(16, (gW - 10) / 3);
   const chartH = H - padB - padT;
@@ -139,7 +139,7 @@ export default function TrendCharts({ from, to }) {
             <GroupedBars buckets={computed.buckets} />
           </div>
           <div className="sr-tables">
-            <div className="card"><div className="sec-head"><div><div className="sec-title">กำไร · รายพนักงานขาย</div><div className="sec-sub">ในช่วงที่เลือก</div></div></div><HBars rows={computed.salesRows} color="#1f74e0" /></div>
+            <div className="card"><div className="sec-head"><div><div className="sec-title">กำไร · รายพนักงานขาย</div><div className="sec-sub">ในช่วงที่เลือก</div></div></div><HBars rows={computed.salesRows} color="#2563EB" /></div>
             <div className="card"><div className="sec-head"><div><div className="sec-title">กำไร · รายทีมช่าง</div><div className="sec-sub">ในช่วงที่เลือก</div></div></div><HBars rows={computed.teamRows} color="#0ea5a3" /></div>
           </div>
         </>

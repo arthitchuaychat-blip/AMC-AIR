@@ -56,7 +56,7 @@ const fmtDay = (d) => {
 // CRM stages (sales phase) for a LINE contact
 const STAGES = [
   { id: "new", label: "ใหม่", color: "#64748b" },
-  { id: "talking", label: "กำลังคุย", color: "#1f74e0" },
+  { id: "talking", label: "กำลังคุย", color: "#2563EB" },
   { id: "interested", label: "สนใจ/จะซื้อ", color: "#d97706" },
   { id: "followup", label: "ต้องติดตาม", color: "#7c3aed" },
   { id: "won", label: "ปิดการขาย", color: "#16a34a" },
@@ -1446,7 +1446,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", marginBottom: 6 }}>ประทับเอกสาร</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
                 {[["none", "ไม่ประทับ"], ["orig", "ต้นฉบับ"], ["copy", "สำเนา"], ["both", "ทั้งคู่"]].map(([v, l]) => (
-                  <button key={v} className={"cat-chip" + (copyMode === v ? " on" : "")} style={copyMode === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}} onClick={() => setCopyMode(v)}>{l}</button>
+                  <button key={v} className={"cat-chip" + (copyMode === v ? " on" : "")} style={copyMode === v ? { background: "#2563EB", color: "#fff", borderColor: "#2563EB" } : {}} onClick={() => setCopyMode(v)}>{l}</button>
                 ))}
               </div>
               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", marginBottom: 6 }}>💬 ส่งเข้าแชต ({isFb ? "Facebook" : "LINE"})</div>

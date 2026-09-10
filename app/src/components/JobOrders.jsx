@@ -940,7 +940,7 @@ const PANEL_DAYS = 21;
 
 function TeamSchedulePanel({ teamId, team, jobs, edVisits, excludeJobNo, onPick }) {
   if (!teamId) return <div className="jo-sched-panel"><div className="jo-sched-empty">เลือกทีมช่างก่อน เพื่อดูช่องว่างของทีม</div></div>;
-  const col = team?.color || "#1f74e0";
+  const col = team?.color || "#2563EB";
 
   // occupancy by date → which slot is taken (full/custom block the whole day)
   const occ = {};

@@ -6,7 +6,7 @@ import { UIcon } from "../icons";
 // กดแต่ละแถวเปิดเอกสารจริง (แท็บใหม่) · ปุ่ม Export ออกเป็น CSV (เปิดใน Excel/Google Sheets ได้ ภาษาไทยไม่เพี้ยน)
 const META = {
   q_all:    { th: "ยอดขายอนุมัติ", en: "Approved sales", color: "#2563eb", icon: "trend", src: "quote" },
-  q_vat:    { th: "ยอดขายอนุมัติ · รับ VAT", en: "Approved sales · VAT", color: "#1f74e0", icon: "trend", src: "quote", vat: true },
+  q_vat:    { th: "ยอดขายอนุมัติ · รับ VAT", en: "Approved sales · VAT", color: "#2563EB", icon: "trend", src: "quote", vat: true },
   q_novat:  { th: "ยอดขายอนุมัติ · ไม่ VAT", en: "Approved sales · No VAT", color: "#64748b", icon: "trend", src: "quote", vat: false },
   rc_all:   { th: "รับเงินแล้ว (ใบเสร็จ)", en: "Paid receipts", color: "#0a6b3d", icon: "check", src: "receipt" },
   rc_vat:   { th: "รับเงินแล้ว · รับ VAT", en: "Paid receipts · VAT", color: "#15803d", icon: "check", src: "receipt", vat: true },

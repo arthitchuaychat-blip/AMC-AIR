@@ -672,7 +672,7 @@ function PayTeam({ team, list, allJobs = [], quoteBy, flash, onCreated }) {
           <div className="sub-split-modes">
             {[["full", "เต็มจำนวน"], ["percent", "ตาม %"], ["amount", "ตามยอดเงิน"]].map(([v, l]) => (
               <button key={v} className={"cat-chip" + (mode === v ? " on" : "")} onClick={() => setMode(v)}
-                style={mode === v ? { background: "#1f74e0", color: "#fff", borderColor: "#1f74e0" } : {}}>{l}</button>
+                style={mode === v ? { background: "#2563EB", color: "#fff", borderColor: "#2563EB" } : {}}>{l}</button>
             ))}
             {mode === "percent" && <span className="inp inp-unit" style={{ width: 110 }}><input type="number" min="0" max="100" value={pct} onChange={(e) => setPct(e.target.value)} /><span className="unit-suf">%</span></span>}
             {mode === "amount" && <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span><input type="number" min="0" max={sumRem} value={amt} placeholder={`สูงสุด ${fmtBaht(sumRem)}`} onChange={(e) => setAmt(e.target.value)} /></span>}

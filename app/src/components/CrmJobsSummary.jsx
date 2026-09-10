@@ -4,7 +4,7 @@ import { jobTypeDef } from "../lib/schedule";
 
 // CRM funnel (leads by stage) + open-job overview for the dashboard
 const STAGES = [
-  ["new", "ใหม่", "#64748b"], ["talking", "กำลังคุย", "#1f74e0"], ["interested", "สนใจ/จะซื้อ", "#d97706"],
+  ["new", "ใหม่", "#64748b"], ["talking", "กำลังคุย", "#2563EB"], ["interested", "สนใจ/จะซื้อ", "#d97706"],
   ["followup", "ต้องติดตาม", "#7c3aed"], ["won", "ปิดการขาย", "#16a34a"], ["closed", "จบแล้ว", "#0891b2"], ["lost", "ไม่สนใจ", "#dc2626"],
 ];
 const JOB_STATUS = [["pending", "รอจ่ายงาน", "#64748b"], ["scheduled", "นัดแล้ว", "#2563eb"], ["in_progress", "กำลังทำ", "#d97706"]];
