@@ -43,6 +43,7 @@ const Coupons = React.lazy(() => import("./components/Coupons"));
 const Expenses = React.lazy(() => import("./components/Expenses"));
 const BillingNotes = React.lazy(() => import("./components/BillingNotes"));
 const JobOrders = React.lazy(() => import("./components/JobOrders"));
+const JobHub = React.lazy(() => import("./components/JobHub"));
 const Handover = React.lazy(() => import("./components/Handover"));
 const WebManage = React.lazy(() => import("./components/WebManage"));
 const Schedule = React.lazy(() => import("./components/Schedule"));
@@ -110,7 +111,7 @@ const NAV = {
   assets: { th: "สินทรัพย์", en: "Assets", icon: "box" },
   accounting: { th: "บัญชี", en: "Accounting", icon: "clipboard" },
   expenses: { th: "เบิกจ่าย", en: "Expenses", icon: "withdraw" },
-  joborders: { th: "ใบงาน", en: "Job Orders", icon: "clipboard" },
+  joborders: { th: "งานบริการและติดตั้ง", en: "Service & Install Jobs", icon: "clipboard" },
   handover: { th: "ใบส่งมอบงาน", en: "Handover", icon: "catalog" },
   schedule: { th: "ปฏิทินงาน", en: "Schedule", icon: "calendar" },
   movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "withdraw" },
@@ -141,7 +142,7 @@ const NAV_GROUPS = [
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "saleshub", "weborders", "marketing"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "adjnote"] },
   { key: "finance", label: "การเงิน", ids: ["recvcenter", "paycenter", "tax", "profit", "cashflow", "assets", "accounting"] },
-  { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
+  { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po", "tools"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard", "kpi"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
@@ -151,7 +152,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-10·D1 รวมสถานะลูกค้า: เปลี่ยนสถานะแชต↔ท่อขาย ซิงค์กันอัตโนมัติเมื่อผูกลูกค้าแล้ว (customers.stage เป็นหลัก) v810";
+const BUILD = "2026-09-10·A6 ยุบเมนู: งานบริการและติดตั้ง (ใบงาน+ปฏิทิน+วัสดุ/ต้นทุน+ส่งมอบ รวมแท็บเดียว · ช่างไม่เห็นแท็บต้นทุน) v811";
 
 function SetupNotice() {
   return (
@@ -698,8 +699,12 @@ export default function App() {
           else if (t === "job") { setJobFocus(no); go("joborders"); }
           else if (t === "quote") { setQuoteFocus(no); go("quote"); }
         }} focus={expenseFocus} onFocusConsumed={() => setExpenseFocus(null)} onRegisterAsset={(pre) => { setAssetPrefill(pre); go("assets"); }} />}
-        {view === "joborders" && <JobOrders role={role} me={profile?.name || profile?.email} myTeam={profile?.team} focus={jobFocus} onFocusConsumed={() => setJobFocus(null)} prefill={joPrefill} onPrefillConsumed={() => setJoPrefill(null)} schedule={joSchedule} onScheduleConsumed={() => setJoSchedule(null)}
-          surveyFor={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)} onHandover={(jo) => { setHoStartJob(jo); go("handover"); }}
+        {/* A6: งานบริการและติดตั้ง — หน้า joborders เดิม = hub (แท็บ ใบงาน/ปฏิทิน/วัสดุ&ต้นทุน/ส่งมอบ) · deep-link go("joborders") ยังลงแท็บใบงานปกติ */}
+        {view === "joborders" && <JobHub role={role} me={profile?.name || profile?.email} myTeam={profile?.team}
+          jobFocus={jobFocus} onJobFocusConsumed={() => setJobFocus(null)}
+          joPrefill={joPrefill} onJoPrefillConsumed={() => setJoPrefill(null)}
+          joSchedule={joSchedule} onJoScheduleConsumed={() => setJoSchedule(null)}
+          jobSurveyCust={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)}
           onCreatePrep={(jo) => { setPrepPrefill({ quoteNo: jo.quote_no || "", jobNo: jo.job_no || "", title: `งาน ${jo.job_no}${jo.title ? " · " + jo.title : ""}` }); go("prep"); }}
           onMovement={(jo, type) => { setWithdrawCtx({ type, jobNo: jo.job_no, team: jo.assigned_team }); go("movements"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
