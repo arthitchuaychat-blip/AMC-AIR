@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import { deriveJobStatus } from "./schedule";
 import { ROLE_LABEL } from "./permissions";
 import { installmentAt, dueDateOf } from "./loans";
+import { requireFinancingState, requireSubmittedInstallment } from "./financingGuards";
 
 // HR position = the role assigned in Settings (single source of truth), falling back to any legacy free-text department
 const posLabel = (p) => (p && (ROLE_LABEL[p.role] || p.department)) || "";
@@ -4907,6 +4908,7 @@ export async function deleteFinancing(id) {
 export async function payFinancingInstallment(id) {
   const { data: ln, error } = await supabase.from("loans").select("*").eq("id", id).maybeSingle();
   if (error || !ln) throw error || new Error("ไม่พบสัญญา");
+  requireFinancingState(ln);
   const seq = (Number(ln.paid_count) || 0) + 1;
   if (seq > (Number(ln.term_months) || 0)) throw new Error("ผ่อนครบทุกงวดแล้ว");
   if ((Number(ln.submitted_seq) || 0) >= seq) throw new Error("งวดนี้ตั้งจ่ายไปแล้ว");
@@ -4920,9 +4922,8 @@ export async function payFinancingInstallment(id) {
     supplier: ln.lender || null, expected_pay_date: due,
     note: `#สินเชื่อ ${ln.name} งวด ${seq}${ln.contract_no ? " · สัญญา " + ln.contract_no : ""}`,
   });
-  // มาร์ค submitted_seq (ตั้งจ่ายแล้ว) — ถ้าคอลัมน์ยังไม่มี (pre-mig) fallback เดินงวดแบบเดิม
-  let { error: e2 } = await supabase.from("loans").update({ submitted_seq: seq, updated_at: new Date().toISOString() }).eq("id", id);
-  if (e2 && /submitted_seq|column|PGRST/i.test(e2.message || "")) ({ error: e2 } = await supabase.from("loans").update({ paid_count: seq, updated_at: new Date().toISOString() }).eq("id", id));
+  // ตั้งเบิกไม่ใช่จ่ายเงินจริง — ห้าม fallback ไปเพิ่ม paid_count
+  const { error: e2 } = await supabase.from("loans").update({ submitted_seq: seq, updated_at: new Date().toISOString() }).eq("id", id);
   if (e2) throw e2;
   syncCashEntriesFromDocs().catch(() => {});
   return { seq };
@@ -4932,8 +4933,10 @@ export async function autoDebitFinancing(id) {
   const uid = await _uid();
   const { data: ln, error } = await supabase.from("loans").select("*").eq("id", id).maybeSingle();
   if (error || !ln) throw error || new Error("ไม่พบสัญญา");
+  requireFinancingState(ln);
   const seq = (Number(ln.paid_count) || 0) + 1;
   if (seq > (Number(ln.term_months) || 0)) throw new Error("ผ่อนครบทุกงวดแล้ว");
+  if (Number(ln.submitted_seq) > Number(ln.paid_count)) throw new Error("งวดนี้ตั้งเบิกไว้แล้ว — ตรวจใบเบิกเดิมก่อนบันทึกหักบัญชีอัตโนมัติ");
   const amt = installmentAt(ln, seq) || Number(ln.installment) || 0;
   const due = dueDateOf(ln.start_date, seq, ln.due_day).toISOString().slice(0, 10);
   const row = {
@@ -4954,16 +4957,16 @@ export async function autoDebitFinancing(id) {
   if (e1 && /vat_amt/i.test(e1.message || "")) { delete row.vat_amt; e1 = await tryInsert(row); }
   if (e1) throw e1;
   const { error: e2 } = await supabase.from("loans").update({ paid_count: seq, submitted_seq: 0, updated_at: new Date().toISOString() }).eq("id", id);
-  if (e2 && /submitted_seq/i.test(e2.message || "")) await supabase.from("loans").update({ paid_count: seq }).eq("id", id);
-  else if (e2) throw e2;
+  if (e2) throw e2;
   syncCashEntriesFromDocs().catch(() => {});
   return { seq };
 }
 // จ่ายจริงเสร็จแล้ว (จ่ายในเมนูเบิกจ่ายแล้ว) → เดินงวด +1 แล้วเคลียร์สถานะตั้งจ่าย
 export async function confirmFinancingPaid(id) {
-  const { data: ln, error } = await supabase.from("loans").select("paid_count,submitted_seq").eq("id", id).maybeSingle();
+  const { data: ln, error } = await supabase.from("loans").select("paid_count,submitted_seq,term_months").eq("id", id).maybeSingle();
   if (error || !ln) throw error || new Error("ไม่พบสัญญา");
-  const target = Math.max(Number(ln.submitted_seq) || 0, (Number(ln.paid_count) || 0) + 1);
+  requireFinancingState(ln);
+  const target = requireSubmittedInstallment(ln);
   const { error: e2 } = await supabase.from("loans").update({ paid_count: target, submitted_seq: 0, updated_at: new Date().toISOString() }).eq("id", id);
   if (e2) throw e2;
   return { paid: target };
