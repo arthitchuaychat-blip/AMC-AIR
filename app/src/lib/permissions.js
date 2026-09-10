@@ -86,6 +86,9 @@ const RANK = { none: 0, view: 1, edit: 2 };
 let _perms = DEFAULT_PERMS;
 
 // deep-merge a saved override over the defaults so unknown/missing keys fall back safely
+// ⚠️ ต้อง merge "ทุกคีย์สิทธิ์ที่มีจริง" (Object.keys ของ DEFAULT_PERMS) ไม่ใช่แค่ MODULES ที่โชว์ในแถบข้าง —
+//    เมนูที่ยุบรวมแล้ว (expenses/boq/loans ฯลฯ) ยังคุมสิทธิ์รายแท็บด้วย can() อยู่ · ถ้าเมิน override ที่เจ้าของ
+//    ตั้งไว้ พนักงานที่เคยถูกปิดสิทธิ์งานย่อยจะกลับมาใช้ได้ตาม default (ช่องโหว่สิทธิ์)
 export function mergePerms(override) {
   if (!override || typeof override !== "object") return DEFAULT_PERMS;
   const out = {};
@@ -93,8 +96,8 @@ export function mergePerms(override) {
     out[role] = { ...DEFAULT_PERMS[role] };
     const o = override[role];
     if (o && typeof o === "object") {
-      for (const m of MODULES) {
-        if (o[m.id] === N || o[m.id] === V || o[m.id] === E) out[role][m.id] = o[m.id];
+      for (const key of Object.keys(DEFAULT_PERMS[role])) {
+        if (o[key] === N || o[key] === V || o[key] === E) out[role][key] = o[key];
       }
     }
   }

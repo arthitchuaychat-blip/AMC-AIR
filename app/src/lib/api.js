@@ -2281,6 +2281,20 @@ export async function setAppConfig(key, value) {
   const { error } = await supabase.from("app_config").upsert({ key, value }, { onConflict: "key" });
   if (error) throw error;
 }
+// team_kv (mig 250) — ค่าที่ทั้งทีมต้องเห็นตรงกัน + สิทธิ์เขียนเหมาะสม (admin/exec/finance/hr) · แยกแถวต่อ sub กันเขียนทับ
+// คืนเป็น map { [sub]: value } — "มีคีย์ = มีค่ากลาง" (รวมค่า 0/ว่าง ที่ถูกต้อง) · ไม่มีคีย์ = ยังไม่เคยตั้ง
+export async function getTeamKV(k) {
+  const { data, error } = await supabase.from("team_kv").select("sub,value").eq("k", k);
+  if (error) throw error;
+  const out = {};
+  (data || []).forEach((r) => { out[r.sub || ""] = r.value; });
+  return out;
+}
+export async function setTeamKV(k, sub, value) {
+  const uid = await _uid();
+  const { error } = await supabase.from("team_kv").upsert({ k, sub: String(sub || ""), value, updated_by: uid, updated_at: new Date().toISOString() }, { onConflict: "k,sub" });
+  if (error) throw error;
+}
 
 // build the 3 end-of-document term columns from an editor object (BOQ/quote/invoice/receipt all share these)
 const _termCols = (d) => ({
@@ -5484,8 +5498,8 @@ export async function searchLineMessages(term, { limit = 300 } = {}) {
 export async function linkLineContact(uid, customerId) {
   const { error } = await supabase.from("line_contacts").update({ customer_id: customerId || null }).eq("line_user_id", uid);
   if (error) throw error;
-  // D1: พอผูกลูกค้าแล้ว ดันสถานะแชตปัจจุบัน → ลูกค้า (ให้ท่อขายตรงกับบทสนทนา)
-  if (customerId) { try { const { data } = await supabase.from("line_contacts").select("stage").eq("line_user_id", uid).maybeSingle(); await _syncContactStageToCustomer("line_contacts", "line_user_id", uid, data?.stage); } catch (_) {} }
+  // D1 (แก้): ผูกแชต "ไม่" ทับสถานะลูกค้าเดิม — กันลูกค้าที่ปิดการขายแล้วถูกดึงกลับเป็นผู้สนใจใหม่
+  // (การซิงค์สถานะทำเฉพาะตอนสั่งเปลี่ยนสถานะจริงในแชต/ท่อขาย ไม่ใช่ตอนผูก)
 }
 
 export async function markLineRead(uid) {
@@ -5520,7 +5534,7 @@ export async function listFbMessages(psid, { limit = CHAT_TAIL, before } = {}) {
 export async function linkFbContact(psid, customerId) {
   const { error } = await supabase.from("fb_contacts").update({ customer_id: customerId || null }).eq("psid", psid);
   if (error) throw error;
-  if (customerId) { try { const { data } = await supabase.from("fb_contacts").select("stage").eq("psid", psid).maybeSingle(); await _syncContactStageToCustomer("fb_contacts", "psid", psid, data?.stage); } catch (_) {} }
+  // D1 (แก้): ผูกแชตไม่ทับสถานะลูกค้าเดิม (เหมือน LINE)
 }
 export async function markFbRead(psid) {
   await supabase.from("fb_contacts").update({ unread: 0 }).eq("psid", psid);
@@ -5642,7 +5656,12 @@ async function _syncContactStageToCustomer(table, keyCol, keyVal, chatStage) {
   try {
     const { data } = await supabase.from(table).select("customer_id").eq(keyCol, keyVal).maybeSingle();
     const cid = data?.customer_id, pipe = chatStageToPipe(chatStage);
-    if (cid && pipe) { await supabase.from("customers").update({ stage: pipe }).eq("id", cid); bustCache("listCustomers"); bustCache("listCustomersLite"); }
+    if (!cid || !pipe) return;
+    // กันรื้อดีลที่ปิดแล้ว: ถ้าลูกค้าอยู่ที่ "ปิดการขาย/ไม่ปิด" (won/lost) แล้ว อย่าดึงกลับเป็นขั้นเปิด (new/contact/...)
+    const { data: c } = await supabase.from("customers").select("stage").eq("id", cid).maybeSingle();
+    const cur = c?.stage;
+    if ((cur === "won" || cur === "lost") && pipe !== "won" && pipe !== "lost") return;
+    await supabase.from("customers").update({ stage: pipe }).eq("id", cid); bustCache("listCustomers"); bustCache("listCustomersLite");
   } catch (_) { /* ไม่มีคอลัมน์/ไม่ผูกลูกค้า = ข้าม (ไม่กระทบการเปลี่ยนสถานะแชต) */ }
 }
 export async function setLineStage(uid, stage) {

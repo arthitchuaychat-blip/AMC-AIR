@@ -1,5 +1,5 @@
 import React from "react";
-import { listInvoices, listReceipts, setInvoiceBadDebt, dashboardActionLite, getAppConfig, setAppConfig } from "../lib/api";
+import { listInvoices, listReceipts, setInvoiceBadDebt, dashboardActionLite, getTeamKV, setTeamKV } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
@@ -45,15 +45,17 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
   const today = todayYmd();
 
-  // ── ติดตามการทวง (เก็บใน app_config → ทั้งทีมเห็นตรงกัน · localStorage เป็น fallback) ──
+  // ── ติดตามการทวง (เก็บใน team_kv แยกรายลูกค้า → ทั้งทีมเห็นตรงกัน ไม่เขียนทับกัน · localStorage เป็น fallback) ──
   React.useEffect(() => {
-    getAppConfig("ar_dunning", null).then((m) => {
-      if (m && typeof m === "object") setDun(m);
-      else { try { setDun(JSON.parse(localStorage.getItem("ar_dunning") || "{}") || {}); } catch { setDun({}); } }
-    }).catch(() => { try { setDun(JSON.parse(localStorage.getItem("ar_dunning") || "{}") || {}); } catch { setDun({}); } });
+    getTeamKV("ar_dunning").then((m) => setDun(m || {}))
+      .catch(() => { try { setDun(JSON.parse(localStorage.getItem("ar_dunning") || "{}") || {}); } catch { setDun({}); } });
   }, []);
   const daysSinceDun = (cid) => { const d = dun[cid]; return d ? daysOverdue(d, today) : null; };
-  function markDunned(cid) { setDun((m) => { const n = { ...m, [cid]: today }; setAppConfig("ar_dunning", n).catch(() => {}); try { localStorage.setItem("ar_dunning", JSON.stringify(n)); } catch { /* ignore */ } return n; }); flash("บันทึกว่าทวงแล้ววันนี้ ✓ (ทีมเห็นตรงกัน)"); }
+  async function markDunned(cid) {
+    setDun((m) => ({ ...m, [cid]: today }));   // แสดงทันที (optimistic)
+    try { await setTeamKV("ar_dunning", cid, today); flash("บันทึกว่าทวงแล้ววันนี้ ✓ (ทั้งทีมเห็นตรงกัน)"); }
+    catch { try { const n = { ...(JSON.parse(localStorage.getItem("ar_dunning") || "{}")), [cid]: today }; localStorage.setItem("ar_dunning", JSON.stringify(n)); } catch { /* ignore */ } flash("บันทึกทวงเฉพาะเครื่องนี้ — สิทธิ์ไม่พอบันทึกส่วนกลาง", true); }
+  }
 
   async function load() {
     try {

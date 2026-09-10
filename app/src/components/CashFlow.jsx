@@ -1,5 +1,5 @@
 import React from "react";
-import { listCashEntries, addCashEntry, updateCashEntry, deleteCashEntry, getOpeningBalance, setOpeningBalance, syncCashEntriesFromDocs, getAppConfig, setAppConfig } from "../lib/api";
+import { listCashEntries, addCashEntry, updateCashEntry, deleteCashEntry, getOpeningBalance, setOpeningBalance, syncCashEntriesFromDocs, getTeamKV, setTeamKV } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -139,18 +139,17 @@ export default function CashFlow() {
   // เงินสำรองขั้นต่ำ ต่อกิจการ (เก็บในเครื่อง) — ใช้เตือน runway
   // เงินสำรองขั้นต่ำ — เก็บใน app_config (ทั้งทีมเห็นตรงกัน) · localStorage เป็นตัวสำรองตอนโหลด/เขียน DB ไม่ได้
   const [reserve, setReserve] = React.useState(0);
-  const [reserveMap, setReserveMap] = React.useState(null);
-  React.useEffect(() => { getAppConfig("cashflow_reserve", {}).then((m) => setReserveMap(m || {})).catch(() => setReserveMap({})); }, []);
+  const [reserveMap, setReserveMap] = React.useState(null);   // { [entity]: amount } จากส่วนกลาง (team_kv) · null=ยังไม่โหลด
+  React.useEffect(() => { getTeamKV("cashflow_reserve").then(setReserveMap).catch(() => setReserveMap({})); }, []);
   React.useEffect(() => {
     if (reserveMap == null) return;
-    let v = Number(reserveMap[ent]);
-    if (!(v > 0)) { try { v = Number(localStorage.getItem(`cf_reserve_${ent}`)) || 0; } catch { v = 0; } }   // fallback ค่าเดิมในเครื่อง
-    setReserve(v || 0);
+    if (Object.prototype.hasOwnProperty.call(reserveMap, ent)) setReserve(Number(reserveMap[ent]) || 0);   // มีค่ากลาง (รวม 0 ที่ตั้งใจตั้ง) → ใช้เลย
+    else { try { setReserve(Number(localStorage.getItem(`cf_reserve_${ent}`)) || 0); } catch { setReserve(0); } }   // ยังไม่เคยตั้งส่วนกลาง → fallback เครื่อง
   }, [ent, reserveMap]);
   const saveReserve = (v) => {
     const nn = Math.max(0, Number(v) || 0); setReserve(nn);
-    const next = { ...(reserveMap || {}), [ent]: nn }; setReserveMap(next);
-    setAppConfig("cashflow_reserve", next).catch(() => {});   // ทั้งทีมเห็นตรงกัน
+    setReserveMap((m) => ({ ...(m || {}), [ent]: nn }));   // 0 ก็ถือว่าตั้งค่าแล้ว
+    setTeamKV("cashflow_reserve", ent, nn).catch(() => {});   // ทั้งทีมเห็นตรงกัน (สิทธิ์ไม่พอ = เก็บเครื่องนี้ไว้)
     try { localStorage.setItem(`cf_reserve_${ent}`, String(nn)); } catch { /* ignore */ }
   };
   const runwayAlert = cash.minBal < 0 || (reserve > 0 && cash.minBal < reserve);
