@@ -6808,7 +6808,9 @@ export async function syncCashEntriesFromDocs() {
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     supabase.from("teams").select("id,name"),
-    _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows })), // ถ้าอ่านไม่ครบ sync จะสร้างซ้ำ
+    // ดึงฟิลด์ที่ใช้เทียบด้วย (direction/status/entry_date/amount/note/entity) → sync ข้าม update ที่ค่าไม่เปลี่ยน (ลดเขียน DB/ล้างแคช)
+    _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited,direction,status,entry_date,amount,note,entity", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows }))
+      .catch(() => _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited,direction,status,entry_date,amount,note", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows }))), // pre-entity fallback
     // ฐานเงินเดือนพนักงานประจำ (ประมาณการเงินออก) — อยู่ที่ hr_pay ตั้งแต่ mig 154 · fallback ไป profiles ถ้ายังไม่รัน
     supabase.from("hr_pay").select("user_id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0)
       .then((r) => (r.error ? supabase.from("profiles").select("id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0) : { data: (r.data || []).map((x) => ({ id: x.user_id, base_pay: x.base_pay })) })),
@@ -6966,7 +6968,13 @@ export async function syncCashEntriesFromDocs() {
     const { entity: _dEnt, ...dRest } = d;
     const entity = _dEnt || "company";
     if (!ex) toInsert.push({ ...dRest, ...(hasEntity ? { entity } : {}), created_by: uid });
-    else if (!ex.edited) { await supabase.from("cash_entries").update({ direction: d.direction, status: d.status, entry_date: d.entry_date, amount: d.amount, note: d.note, ...(hasEntity ? { entity } : {}), updated_at: new Date().toISOString() }).eq("id", ex.id); updated++; }
+    else if (!ex.edited) {
+      // ⚡ อัปเดตเฉพาะเมื่อค่าจริงเปลี่ยน — เดิมเขียนทับทุกแถวทุกครั้งที่ sync → เขียน DB เพียบ → ล้างแคชลิสต์ทั้งแอป → ทุกเมนูโหลดใหม่ (อืด)
+      const same = ex.direction === d.direction && ex.status === d.status && String(ex.entry_date) === String(d.entry_date)
+        && Math.round((Number(ex.amount) || 0) * 100) === Math.round((Number(d.amount) || 0) * 100)
+        && (ex.note || "") === (d.note || "") && (!hasEntity || (ex.entity || "company") === entity);
+      if (!same) { await supabase.from("cash_entries").update({ direction: d.direction, status: d.status, entry_date: d.entry_date, amount: d.amount, note: d.note, ...(hasEntity ? { entity } : {}), updated_at: new Date().toISOString() }).eq("id", ex.id); updated++; }
+    }
   }
   if (toInsert.length) {
     // ถอด key ที่ไม่ใช่คอลัมน์จริง (entity ถูกจัดการแล้วผ่าน hasEntity) — กัน insert พังถ้ามี field แปลกปลอม
