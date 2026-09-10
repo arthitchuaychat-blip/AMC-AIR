@@ -5035,6 +5035,7 @@ export async function payRecurringBill(id, cycleKey) {
   const uid = await _uid();
   const { data: b, error } = await supabase.from("recurring_bills").select("*").eq("id", id).maybeSingle();
   if (error || !b) throw error || new Error("ไม่พบรายการ");
+  if (cycleKey && b.last_paid_ym && String(b.last_paid_ym) >= String(cycleKey)) throw new Error("งวดนี้จ่ายไปแล้ว — รีเฟรชแล้วตรวจใบเบิกเดิมก่อน");   // กันจ่ายซ้ำงวดเดียวกัน
   const day = new Date().toISOString().slice(0, 10);
   const row = {
     requester: uid, created_by: uid, category: b.category || "รายจ่ายประจำ", kind: "opex", pay_method: "direct",
@@ -6822,6 +6823,23 @@ export async function syncCashEntriesFromDocs() {
   } catch (_) { advRows = null; }
   if (advRows) advRows.forEach((x) => desired.push({ source_type: "advance", source_ref: String(x.id), direction: "out", status: "actual", entry_date: _d(x.paid_out_at), amount: Number(x.amount) || 0, note: `เบิกเงินล่วงหน้า${pnAdv[x.user_id] ? " · " + pnAdv[x.user_id] : ""}` }));
 
+  // B1 กันนับซ้ำ: หา"ใบเบิกจริง"ที่อ้างถึงงวดสินเชื่อ/รายจ่ายประจำ (โน้ต #สินเชื่อ/#รายจ่ายประจำ)
+  // เผื่อกรณีจ่ายตรงในเมนูเบิกจ่ายโดยไม่ผ่านปุ่ม "จ่ายงวด" (ตัวนับ submitted_seq/last_paid_ym ไม่ขยับ)
+  // → ใบเบิกนั้นมีเส้น expense_due/expense_paid คุมกระแสเงินสดอยู่แล้ว จึงต้องข้ามการ project ซ้ำ
+  const loanExpSet = new Set(), recurExpSet = new Set(), recurExpYear = new Set();
+  try {
+    const mk = await supabase.from("expense_requests").select("note,expected_pay_date,paid_at,created_at")
+      .or("note.ilike.%#สินเชื่อ%,note.ilike.%#รายจ่ายประจำ%").in("status", ["pending", "approved", "paid"]);
+    (mk.data || []).forEach((e) => {
+      const note = e.note || "";
+      const ym = (e.expected_pay_date || e.paid_at || e.created_at || "").slice(0, 7);
+      let m = note.match(/#สินเชื่อ\s+(.+?)\s+งวด\s+(\d+)/);
+      if (m) loanExpSet.add(`${m[1].trim()}|${Number(m[2])}`);
+      m = note.match(/#รายจ่ายประจำ\s+(.+?)(?:\s+·|$)/);
+      if (m) { const nm = m[1].trim(); if (ym) recurExpSet.add(`${nm}|${ym}`); if (ym) recurExpYear.add(`${nm}|${ym.slice(0, 4)}`); }
+    });
+  } catch (_) { /* ค้นไม่ได้ = ไม่ suppress (พฤติกรรมเดิม) ปลอดภัย */ }
+
   // ค่างวดผ่อน (สินเชื่อ/เช่าซื้อ · mig 242) → ประมาณการจ่ายรายเดือน 12 เดือนข้างหน้า (rolling window เหมือนเงินเดือน)
   let loanRows = null;
   try {
@@ -6841,6 +6859,7 @@ export async function syncCashEntriesFromDocs() {
         const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
         const seq = (d.getFullYear() - start.getFullYear()) * 12 + (d.getMonth() - start.getMonth()) + 1;
         if (seq <= covered || seq > term) continue;   // จ่าย/ตั้งจ่ายแล้ว หรือเกินงวดสุดท้าย
+        if (loanExpSet.has(`${ln.name}|${seq}`)) continue;   // B1: มีใบเบิกจริงของงวดนี้แล้ว (จ่ายตรงในเบิกจ่าย) → ไม่ project ซ้ำ
         const amt = installmentAt(ln, seq);
         if (!(amt > 0)) continue;                    // งวดบอลลูนที่ยังไม่รู้ยอด (0) → ข้าม
         const yy = d.getFullYear(), mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -6868,6 +6887,7 @@ export async function syncCashEntriesFromDocs() {
           const due = new Date(yr, dm - 1, Math.min(Number(b.due_day) || 1, dd));
           if (due < new Date(now.getFullYear(), now.getMonth(), 1) || due > new Date(now.getFullYear(), now.getMonth() + 12, 0)) continue;
           if (paidYm && paidYm >= String(yr)) continue;
+          if (recurExpYear.has(`${b.name}|${yr}`)) continue;   // B1: มีใบเบิกจริงของปีนี้แล้ว → ไม่ project ซ้ำ
           desired.push({ source_type: "recur", source_ref: `recur-${b.id}-${yr}`, direction: "out", status: "projected", entity: ent, entry_date: due.toISOString().slice(0, 10), amount: amt, note: `รายจ่ายประจำ: ${b.name}${b.provider ? " · " + b.provider : ""}` });
         }
       } else {
@@ -6875,6 +6895,7 @@ export async function syncCashEntriesFromDocs() {
           const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
           const yy = d.getFullYear(), mm = String(d.getMonth() + 1).padStart(2, "0"), ym = `${yy}-${mm}`;
           if (paidYm && paidYm >= ym) continue;
+          if (recurExpSet.has(`${b.name}|${ym}`)) continue;   // B1: มีใบเบิกจริงของเดือนนี้แล้ว → ไม่ project ซ้ำ
           const dd = new Date(yy, d.getMonth() + 1, 0).getDate();
           desired.push({ source_type: "recur", source_ref: `recur-${b.id}-${ym}`, direction: "out", status: "projected", entity: ent, entry_date: `${ym}-${String(Math.min(Number(b.due_day) || 1, dd)).padStart(2, "0")}`, amount: amt, note: `รายจ่ายประจำ: ${b.name}${b.provider ? " · " + b.provider : ""}` });
         }
