@@ -53,8 +53,7 @@ export const MODULES = [
   { id: "stockcount", label: "นับสต๊อก", editable: true },
   { id: "subcontract", label: "ช่างซัพ (เหมา/จ่าย)", editable: true },
   { id: "suppliers", label: "ผู้ขาย (Suppliers)", editable: true },
-  { id: "prep", label: "เตรียมวัสดุ (ก่อนสั่งซื้อ/เบิก)", editable: true },
-  { id: "po", label: "ใบสั่งซื้อ (PO)", editable: true },
+  { id: "po", label: "จัดซื้อและเตรียมงาน (ใบสั่งซื้อ/เตรียมวัสดุ)", editable: true },
   { id: "tools", label: "เครื่องมือช่าง", editable: true },
   { id: "settings", label: "ตั้งค่า + จัดการผู้ใช้", editable: true },
 ];

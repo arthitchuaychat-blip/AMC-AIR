@@ -29,6 +29,7 @@ const Dashboard = React.lazy(() => import("./components/Dashboard"));
 const Settings = React.lazy(() => import("./components/Settings"));
 const Jobs = React.lazy(() => import("./components/Jobs"));
 const PurchaseOrders = React.lazy(() => import("./components/PurchaseOrders"));
+const BuyHub = React.lazy(() => import("./components/BuyHub"));
 const Customers = React.lazy(() => import("./components/Customers"));
 const Suppliers = React.lazy(() => import("./components/Suppliers"));
 const BOQ = React.lazy(() => import("./components/BOQ"));
@@ -119,7 +120,7 @@ const NAV = {
   jobs: { th: "วัสดุที่ใช้ในงาน", en: "Jobs & Cost", icon: "box" },
   suppliers: { th: "ผู้ขาย", en: "Suppliers", icon: "building" },
   prep: { th: "เตรียมวัสดุ", en: "Material Prep", icon: "box" },
-  po: { th: "ใบสั่งซื้อ", en: "Purchase Orders", icon: "purchase" },
+  po: { th: "จัดซื้อและเตรียมงาน", en: "Purchasing", icon: "purchase" },
   tools: { th: "เครื่องมือช่าง", en: "Tools", icon: "box" },
   settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
 };
@@ -143,7 +144,7 @@ const NAV_GROUPS = [
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "adjnote"] },
   { key: "finance", label: "การเงิน", ids: ["recvcenter", "paycenter", "tax", "profit", "cashflow", "assets", "accounting"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "subcontract"] },
-  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po", "tools"] },
+  { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "suppliers", "po", "tools"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard", "kpi"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
 ];
@@ -152,7 +153,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-10·A6 ยุบเมนู: งานบริการและติดตั้ง (ใบงาน+ปฏิทิน+วัสดุ/ต้นทุน+ส่งมอบ รวมแท็บเดียว · ช่างไม่เห็นแท็บต้นทุน) v811";
+const BUILD = "2026-09-10·A5 ยุบเมนู: จัดซื้อและเตรียมงาน (ใบสั่งซื้อ+เตรียมวัสดุ รวมแท็บเดียว) v812";
 
 function SetupNotice() {
   return (
@@ -705,7 +706,7 @@ export default function App() {
           joPrefill={joPrefill} onJoPrefillConsumed={() => setJoPrefill(null)}
           joSchedule={joSchedule} onJoScheduleConsumed={() => setJoSchedule(null)}
           jobSurveyCust={jobSurveyCust} onSurveyConsumed={() => setJobSurveyCust(null)}
-          onCreatePrep={(jo) => { setPrepPrefill({ quoteNo: jo.quote_no || "", jobNo: jo.job_no || "", title: `งาน ${jo.job_no}${jo.title ? " · " + jo.title : ""}` }); go("prep"); }}
+          onCreatePrep={(jo) => { setPrepPrefill({ quoteNo: jo.quote_no || "", jobNo: jo.job_no || "", title: `งาน ${jo.job_no}${jo.title ? " · " + jo.title : ""}` }); go("po"); }}
           onMovement={(jo, type) => { setWithdrawCtx({ type, jobNo: jo.job_no, team: jo.assigned_team }); go("movements"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "handover" && <Handover role={role} me={profile?.name || profile?.email} startJob={hoStartJob} onStartConsumed={() => setHoStartJob(null)} focusJob={hoFocusJob} onFocusConsumed={() => setHoFocusJob(null)} onOpenDoc={openDoc} />}
@@ -717,10 +718,13 @@ export default function App() {
           onCreatePo={(items, quoteNo, prepNo) => { setPoPrefill({ quoteNo: quoteNo || null, prepNo: prepNo || null, items }); go("po"); }}
           onWithdraw={(items, jobNo, team, prepNo) => { setWithdrawCtx({ jobNo: jobNo || null, team: team || null, prepNo: prepNo || null, items }); go("movements"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} />}
-        {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
-          focus={poFocus} onFocusConsumed={() => setPoFocus(null)}
+        {/* A5: จัดซื้อและเตรียมงาน — หน้า po เดิม = hub (แท็บ ใบสั่งซื้อ/เตรียมวัสดุ) · deep-link go("po") ยังลงแท็บใบสั่งซื้อปกติ */}
+        {view === "po" && <BuyHub role={role} poPrefill={poPrefill} onPoPrefillConsumed={() => setPoPrefill(null)}
+          poFocus={poFocus} onPoFocusConsumed={() => setPoFocus(null)}
+          prepPrefill={prepPrefill} onPrepPrefillConsumed={() => setPrepPrefill(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }}
           onGoExpenses={(poNo) => { setExpenseFocus(poNo || null); go("paycenter"); }}
+          onWithdraw={(items, jobNo, team, prepNo) => { setWithdrawCtx({ jobNo: jobNo || null, team: team || null, prepNo: prepNo || null, items }); go("movements"); }}
           onReceive={async (po) => {
             // ⚠️ ห้ามหักยอดที่รับแล้วตรงนี้ — it.qty เป็นหน่วยของบรรทัด (สินค้า 2 หน่วย = ม้วน)
             //    ส่วน got มาจาก transactions ซึ่งเป็นหน่วยหลักเสมอ (เมตร) ลบกันตรง ๆ = 3 − 100 → 0
