@@ -33,6 +33,7 @@ const BuyHub = React.lazy(() => import("./components/BuyHub"));
 const Customers = React.lazy(() => import("./components/Customers"));
 const Suppliers = React.lazy(() => import("./components/Suppliers"));
 const BOQ = React.lazy(() => import("./components/BOQ"));
+const CostQuoteHub = React.lazy(() => import("./components/CostQuoteHub"));
 const Quotation = React.lazy(() => import("./components/Quotation"));
 const Profit = React.lazy(() => import("./components/Profit"));
 const CashFlow = React.lazy(() => import("./components/CashFlow"));
@@ -95,7 +96,7 @@ const NAV = {
   subcontract: { th: "ช่างซัพ", en: "Subcontractors", icon: "purchase" },
   catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
   boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
-  quote: { th: "ใบเสนอราคา", en: "Quotations", icon: "clipboard" },
+  quote: { th: "ต้นทุนและเสนอราคา", en: "Cost & Quotation", icon: "clipboard" },
   invoice: { th: "ใบส่งของ/ใบแจ้งหนี้", en: "Delivery / Invoice", icon: "clipboard" },
   receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
   adjnote: { th: "ใบเพิ่ม/ลดหนี้", en: "Credit / Debit Note", icon: "clipboard" },
@@ -141,7 +142,7 @@ const NAV_EMOJI = {
 const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "saleshub", "weborders", "marketing"] },
-  { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "adjnote"] },
+  { key: "salesdocs", label: "เอกสารขาย", ids: ["quote", "invoice", "adjnote"] },
   { key: "finance", label: "การเงิน", ids: ["recvcenter", "paycenter", "tax", "profit", "cashflow", "assets", "accounting"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "suppliers", "po", "tools"] },
@@ -153,7 +154,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-10·A5 ยุบเมนู: จัดซื้อและเตรียมงาน (ใบสั่งซื้อ+เตรียมวัสดุ รวมแท็บเดียว) v812";
+const BUILD = "2026-09-10·A7 ยุบเมนู: ต้นทุนและเสนอราคา (BOQ+ใบเสนอ 2 แท็บ) — จบเฟส 3 v813";
 
 function SetupNotice() {
   return (
@@ -644,16 +645,17 @@ export default function App() {
         {view === "email" && <Email role={role} me={profile} />}
         {view === "teamchat" && <TeamChat focus={teamFocus} onFocusConsumed={() => setTeamFocus(null)} onJobClick={(jn) => openInNewTab("joborders", jn)} />}
         {view === "tasks" && <TaskBoard role={role} me={profile} prefill={taskPrefill} onPrefillConsumed={() => setTaskPrefill(null)} focus={taskFocus} onFocusConsumed={() => setTaskFocus(null)} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
-        {view === "boq" && <BOQ role={role} focus={boqFocus} onFocusConsumed={() => setBoqFocus(null)} onCreateQuote={(boqNo) => { setQuoteFromBoq(boqNo); go("quote"); }}
-          newForCustomer={boqNewCust} onNewConsumed={() => setBoqNewCust(null)}
-          draft={boqDraft} onDraftConsumed={() => setBoqDraft(null)}
-          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
-        {view === "quote" && <Quotation role={role} focus={quoteFocus} onFocusConsumed={() => setQuoteFocus(null)}
-          fromBoq={quoteFromBoq} onFromBoqConsumed={() => setQuoteFromBoq(null)}
+        {/* A7: ต้นทุนและเสนอราคา — hub เดียว render ทั้ง view boq/quote (initialTab บอกแท็บ) · deep-link go("boq")/go("quote") ลงแท็บถูกเอง */}
+        {(view === "boq" || view === "quote") && <CostQuoteHub initialTab={view} role={role}
+          boqFocus={boqFocus} onBoqFocusConsumed={() => setBoqFocus(null)}
+          boqNewCust={boqNewCust} onBoqNewConsumed={() => setBoqNewCust(null)}
+          boqDraft={boqDraft} onBoqDraftConsumed={() => setBoqDraft(null)}
+          quoteFocus={quoteFocus} onQuoteFocusConsumed={() => setQuoteFocus(null)}
+          quoteFromBoq={quoteFromBoq} onQuoteFromBoqConsumed={() => setQuoteFromBoq(null)}
           onCreateInvoice={(quoteNo) => { setInvoiceFromQuote(quoteNo); go("invoice"); }}
           onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }}
           onCreatePo={(q) => { setPoPrefill({ quoteNo: q.quote_no, poType: "ac", items: (q.items || []).filter((it) => it.item_code && it.kind === "ac").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })) }); go("po"); }}
-          onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
+          onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "invoice" && <Invoices role={role} focus={invoiceFocus} onFocusConsumed={() => setInvoiceFocus(null)} fromQuote={invoiceFromQuote} onFromQuoteConsumed={() => setInvoiceFromQuote(null)}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("recvcenter"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
