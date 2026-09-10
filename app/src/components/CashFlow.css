@@ -1,0 +1,96 @@
+/* ดีไซน์ใหม่หน้ากระแสเงินสด — ทุก selector อยู่ใต้ .cfx-root เท่านั้น จึงไม่กระทบหน้าอื่น (ห้ามถอด prefix) */
+.cfx-root{
+  --cfx-ink:#1c2b3a; --cfx-ink2:#54677b; --cfx-ink3:#8a9aac; --cfx-line:#e5edf4; --cfx-line2:#d6e2ee;
+  --cfx-primary:#2f6fdb; --cfx-primary-d:#245fc0; --cfx-navy:#1c3c63; --cfx-cyan:#38b6f0;
+  --cfx-good:#17a34a; --cfx-good-ink:#0f7a37; --cfx-good-bg:#e7f6ec;
+  --cfx-warn:#e2790f; --cfx-warn-ink:#b45c07; --cfx-warn-bg:#fdeede;
+  --cfx-bad:#d64545; --cfx-bad-ink:#a83232; --cfx-bad-bg:#fbebeb; --cfx-panel:#fff; --cfx-accent-bg:#e8f1fd;
+  font-family:"Sarabun",system-ui,sans-serif; color:var(--cfx-ink);
+}
+.cfx-root *{box-sizing:border-box}
+.cfx-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.cfx-head h1{margin:0;font-size:26px;font-weight:700;letter-spacing:-.01em}
+.cfx-head .cfx-sub{color:var(--cfx-ink2);font-size:14.5px;margin-top:3px}
+.cfx-head-btns{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap}
+.cfx-btn{border-radius:10px;padding:9px 15px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--cfx-line2);background:#fff;color:var(--cfx-ink2)}
+.cfx-btn:hover{border-color:var(--cfx-primary);color:var(--cfx-primary)}
+.cfx-btn:disabled{opacity:.55;cursor:default}
+.cfx-btn.primary{background:var(--cfx-primary);color:#fff;border-color:var(--cfx-primary)}
+.cfx-btn.primary:hover{background:var(--cfx-primary-d)}
+.cfx-btn.sm{padding:7px 12px;font-size:13px}
+.cfx-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.cfx-seg{display:flex;background:#eef3f8;border-radius:10px;padding:3px}
+.cfx-seg button{border:0;background:transparent;font-family:inherit;font-size:13px;font-weight:600;color:var(--cfx-ink2);padding:7px 13px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.cfx-seg button.on{background:var(--cfx-primary);color:#fff}
+.cfx-monthnav{display:flex;align-items:center;gap:6px}
+.cfx-monthnav .cfx-mtitle{font-weight:700;font-size:15px;min-width:120px;text-align:center}
+.cfx-iconbtn{width:34px;height:34px;border-radius:9px;border:1px solid var(--cfx-line2);background:#fff;display:flex;align-items:center;justify-content:center;color:var(--cfx-ink2);cursor:pointer}
+.cfx-iconbtn:hover{border-color:var(--cfx-primary);color:var(--cfx-primary)}
+.cfx-tgl-w{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--cfx-ink2);cursor:pointer;user-select:none}
+.cfx-tgl{width:40px;height:23px;border-radius:20px;background:#c6d3e0;position:relative;flex:none;transition:background .15s}
+.cfx-tgl.on{background:var(--cfx-primary)}
+.cfx-tgl::after{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#fff;transition:left .15s}
+.cfx-tgl.on::after{left:20px}
+.cfx-subbar{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.cfx-field{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--cfx-ink2);font-weight:500}
+.cfx-inp{display:inline-flex;align-items:center;border:1px solid var(--cfx-line2);border-radius:9px;background:#fff;padding:0 10px;height:36px}
+.cfx-inp .pre{color:var(--cfx-ink3);font-size:13px}
+.cfx-inp input{border:0;outline:0;font-family:inherit;font-size:14px;width:110px;text-align:right;background:transparent;color:var(--cfx-ink);font-variant-numeric:tabular-nums}
+.cfx-inp input:disabled{color:var(--cfx-ink3)}
+.cfx-note{border-radius:10px;padding:9px 13px;font-size:13px;margin-bottom:14px}
+/* summary cards */
+.cfx-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.cfx-scard{background:#fff;border:1px solid var(--cfx-line);border-radius:16px;padding:16px 18px;min-width:0;position:relative}
+.cfx-scard .ct{color:var(--cfx-ink2);font-size:13px}
+.cfx-scard .cv{font-size:25px;font-weight:700;margin-top:10px;letter-spacing:-.01em;font-variant-numeric:tabular-nums;line-height:1.15}
+.cfx-scard .cd{font-size:12px;margin-top:7px;color:var(--cfx-ink3);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.cfx-ci{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;position:absolute;top:16px;right:16px}
+.cfx-ci svg{width:20px;height:20px;stroke-width:1.8;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+.cfx-ci.green{background:var(--cfx-good-bg);color:var(--cfx-good-ink)}
+.cfx-ci.orange{background:var(--cfx-warn-bg);color:var(--cfx-warn-ink)}
+.cfx-ci.blue{background:var(--cfx-accent-bg);color:var(--cfx-primary)}
+.cfx-scard.navy{background:linear-gradient(155deg,#1c3c63,#274d7d);border:0;color:#fff}
+.cfx-scard.navy .ct{color:#b9cde6}.cfx-scard.navy .cd{color:#9fbfe0}
+.cfx-scard.navy .cfx-ci{background:rgba(255,255,255,.14);color:#cfe2f7}
+.cfx-up{color:var(--cfx-good-ink);font-weight:600}.cfx-dn{color:var(--cfx-warn-ink);font-weight:600}
+/* main grid + panels */
+.cfx-grid{display:grid;grid-template-columns:1fr 350px;gap:14px;margin-bottom:16px}
+.cfx-panel{background:#fff;border:1px solid var(--cfx-line);border-radius:16px;padding:16px 18px;min-width:0}
+.cfx-panel-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.cfx-panel-h h3{margin:0;font-size:16.5px;font-weight:700}
+.cfx-panel-h .link{margin-left:auto;color:var(--cfx-primary);font-size:13px;font-weight:600;cursor:pointer;background:none;border:0;font-family:inherit}
+.cfx-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--cfx-ink2);margin:2px 0 8px}
+.cfx-legend span{display:flex;align-items:center;gap:6px}
+.cfx-lg{width:18px;height:0;border-top:3px solid}
+/* follow-up */
+.cfx-fu{display:flex;align-items:center;gap:11px;border:1px solid var(--cfx-line);border-radius:13px;padding:12px 14px;margin-bottom:10px}
+.cfx-fu .fic{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none}
+.cfx-fu .ft{font-weight:600;font-size:13.5px}.cfx-fu .fs{font-size:12px;color:var(--cfx-ink3);margin-top:1px}
+.cfx-fu.warn{background:#fef6ec;border-color:#f6dcb4}.cfx-fu.warn .fic{background:#fbe4c2;color:var(--cfx-warn-ink)}
+.cfx-fu.good{background:#eef8f1;border-color:#c7e7d1}.cfx-fu.good .fic{background:#d3edda;color:var(--cfx-good-ink)}
+.cfx-fu.bad{background:#fdecec;border-color:#f3caca}.cfx-fu.bad .fic{background:#f7d3d3;color:var(--cfx-bad-ink)}
+.cfx-payrow{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--cfx-line);font-size:13px}
+.cfx-payrow:last-child{border-bottom:0}
+.cfx-payrow .pd{color:var(--cfx-ink3);font-size:12px;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.cfx-payrow .pn{color:var(--cfx-ink2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cfx-payrow .pa{font-weight:700;color:var(--cfx-warn-ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.cfx-subh{font-size:13.5px;font-weight:700;margin:14px 0 4px}
+.cfx-empty{color:var(--cfx-ink3);font-size:13px;padding:14px 2px}
+/* table */
+.cfx-tblwrap{overflow-x:auto}
+.cfx-tbl{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
+.cfx-tbl th{text-align:left;color:var(--cfx-ink3);font-weight:600;font-size:12px;padding:9px 12px;border-bottom:1px solid var(--cfx-line2)}
+.cfx-tbl td{padding:12px;border-bottom:1px solid var(--cfx-line)}
+.cfx-tbl tr:last-child td{border-bottom:0}
+.cfx-tbl .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.cfx-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 9px;border-radius:8px}
+.cfx-b-in{background:var(--cfx-good-bg);color:var(--cfx-good-ink)}
+.cfx-b-out{background:var(--cfx-warn-bg);color:var(--cfx-warn-ink)}
+.cfx-b-proj{background:#eef3f8;color:var(--cfx-ink2)}
+.cfx-pos{color:var(--cfx-good-ink)}.cfx-neg{color:var(--cfx-bad-ink)}
+.cfx-rowbtn{color:var(--cfx-ink3);border:0;background:none;cursor:pointer;padding:4px}
+.cfx-rowbtn:hover{color:var(--cfx-primary)}.cfx-rowbtn.danger:hover{color:var(--cfx-bad)}
+/* chart */
+.cfx-chart{width:100%;height:auto;display:block}
+@media(max-width:1080px){.cfx-cards{grid-template-columns:repeat(2,1fr)}.cfx-grid{grid-template-columns:1fr}}
+@media(max-width:560px){.cfx-cards{grid-template-columns:1fr}.cfx-head h1{font-size:22px}}

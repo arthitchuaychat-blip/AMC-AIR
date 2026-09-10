@@ -3,6 +3,7 @@ import { listCashEntries, addCashEntry, updateCashEntry, deleteCashEntry, getOpe
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
+import "./CashFlow.css";   // ดีไซน์ใหม่ — ทุก selector อยู่ใต้ .cfx-root (ไม่กระทบหน้าอื่น)
 
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -14,7 +15,7 @@ const thMonthKey = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("th-TH
 const weekStartYmd = (s) => { const d = new Date(s + "T00:00:00"); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return ymd(d); };
 const weekEndYmd = (startYmd) => { const d = new Date(startYmd + "T00:00:00"); d.setDate(d.getDate() + 6); return ymd(d); };
 const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", labor_owed: "ค่าแรงช่างซัพ (รอเบิก)", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย", expense_paid: "เบิกจ่าย (จ่ายแล้ว)", expense_due: "เบิกจ่าย (ค้างจ่าย)", advance: "เบิกเงินล่วงหน้า", loan: "ค่างวดผ่อน (สินเชื่อ)", recur: "รายจ่ายประจำ" };
-const GRAINS = [["calendar", "📅 ปฏิทิน"], ["day", "รายวัน"], ["week", "สัปดาห์"], ["month", "เดือน"], ["year", "ปี"]];
+const GRAINS = [["chart", "กราฟ"], ["calendar", "ปฏิทิน"], ["day", "รายวัน"], ["week", "สัปดาห์"], ["month", "เดือน"], ["year", "ปี"]];
 // จัดหมวดเงินออกจาก source_type — ใช้ทั้งสรุปแยกหมวด + ส่งออก CSV
 const CAT = (e) => {
   const s = e.source_type;
@@ -35,7 +36,7 @@ export default function CashFlow() {
   const [opening, setOpening] = React.useState({ company: 0, personal: 0 });
   const [openingInput, setOpeningInput] = React.useState("");
   const [ent, setEnt] = React.useState("all");   // กิจการ: all=รวม · company=บริษัท · personal=บุคคล
-  const [grain, setGrain] = React.useState("calendar");
+  const [grain, setGrain] = React.useState("chart");
   const [anchor, setAnchor] = React.useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [withProj, setWithProj] = React.useState(true);
   const [loading, setLoading] = React.useState(true);
@@ -61,7 +62,7 @@ export default function CashFlow() {
   // เปลี่ยนกิจการ → เติมค่ายกมาของกิจการนั้นในช่องกรอก
   React.useEffect(() => { setOpeningInput(String((ent === "personal" ? opening.personal : opening.company) || 0)); }, [ent, opening]);
   const year = anchor.getFullYear();
-  const byMonth = grain === "day" || grain === "calendar";
+  const byMonth = grain === "day" || grain === "calendar" || grain === "chart";
   const move = (n) => setAnchor((a) => byMonth ? new Date(a.getFullYear(), a.getMonth() + n, 1) : new Date(a.getFullYear() + n, a.getMonth(), 1));
   const title = byMonth ? thMonth(anchor) : grain === "year" ? "ทุกปี" : `ปี ${year + 543}`;
 
@@ -136,6 +137,32 @@ export default function CashFlow() {
     return { nowBal: actual, monthEndBal: actual + projToMonthEnd, minBal, minDate };
   }, [ents, openingVal]);
 
+  // การ์ดสรุป: รับ/จ่ายจริง "เดือนปัจจุบัน" + %เทียบเดือนก่อน (แสดง %เฉพาะเมื่อมีฐานให้เทียบจริง)
+  const monthAgg = React.useMemo(() => {
+    const now = new Date();
+    const mk = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+    const pm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const pmk = `${pm.getFullYear()}-${pad(pm.getMonth() + 1)}`;
+    let inNow = 0, outNow = 0, inPrev = 0, outPrev = 0;
+    ents.forEach((e) => {
+      if (e.status !== "actual") return; const amt = Number(e.amount) || 0; const k = e.entry_date.slice(0, 7);
+      if (k === mk) { if (e.direction === "in") inNow += amt; else outNow += amt; }
+      else if (k === pmk) { if (e.direction === "in") inPrev += amt; else outPrev += amt; }
+    });
+    const pct = (a, b) => (b > 0 ? Math.round((a - b) / b * 100) : null);
+    return { inNow, outNow, inPct: pct(inNow, inPrev), outPct: pct(outNow, outPrev) };
+  }, [ents]);
+  // รายการจ่ายที่กำลังจะถึง (ประมาณการ เงินออก วันนี้เป็นต้นไป) — ใช้ในแผง "ต้องติดตาม"
+  const upcoming = React.useMemo(() => {
+    const t = todayYmd();
+    return ents.filter((e) => e.status !== "actual" && e.direction === "out" && e.entry_date >= t)
+      .sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+  }, [ents]);
+  const dueSum = upcoming.reduce((a, e) => a + (Number(e.amount) || 0), 0);
+  // รายการล่าสุด (จริง) — เรียงใหม่ล่าสุดก่อน
+  const recent = React.useMemo(() => ents.filter((e) => e.status === "actual")
+    .slice().sort((a, b) => b.entry_date.localeCompare(a.entry_date) || (String(b.id) > String(a.id) ? 1 : -1)).slice(0, 10), [ents]);
+
   // เงินสำรองขั้นต่ำ ต่อกิจการ (เก็บในเครื่อง) — ใช้เตือน runway
   // เงินสำรองขั้นต่ำ — เก็บใน app_config (ทั้งทีมเห็นตรงกัน) · localStorage เป็นตัวสำรองตอนโหลด/เขียน DB ไม่ได้
   const [reserve, setReserve] = React.useState(0);          // ค่าที่บันทึกแล้ว (ใช้เตือน runway)
@@ -169,7 +196,7 @@ export default function CashFlow() {
   const runwayAlert = cash.minBal < 0 || (reserve > 0 && cash.minBal < reserve);
 
   // ช่วงที่กำลังดู (สำหรับแยกหมวด + ส่งออก)
-  const viewRange = grain === "day"
+  const viewRange = (grain === "day" || grain === "chart")
     ? [ymd(new Date(anchor.getFullYear(), anchor.getMonth(), 1)), ymd(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0))]
     : grain === "year" ? null : [`${year}-01-01`, `${year}-12-31`];
   const viewEnts = React.useMemo(() => viewRange ? ents.filter((e) => e.entry_date >= viewRange[0] && e.entry_date <= viewRange[1]) : ents, [ents, grain, anchor, year]); // eslint-disable-line
@@ -193,80 +220,117 @@ export default function CashFlow() {
   const viewBuckets = grain === "year" ? buckets : buckets.filter((b) => b.sort.slice(0, 4) === String(year)
     || (grain === "week" && weekEndYmd(b.key).slice(0, 4) === String(year)));
 
+  const ENTS2 = [["all", "รวม 2 กิจการ"], ["company", "บริษัท"], ["personal", "บุคคล"]];
+  const svgDL = <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>;
   return (
-    <div className="adm">
-      <div className="adm-head">
-        <div><h1 className="page-title">กระแสเงินสด <span className="page-title-en">Cash Flow</span></h1>
-          <p className="page-sub">เงินเข้า-ออก · ประมาณการ (ใบแจ้งหนี้/ค้างจ่าย) เทียบกับจริง (ใบเสร็จ/จ่ายแล้ว) · ดูราย วัน/สัปดาห์/เดือน/ปี</p></div>
-        <div className="cat-head-actions" style={{ gap: 8, flexWrap: "wrap" }}>
-          <div className="seg">{GRAINS.map(([v, l]) => <button key={v} className={"seg-btn" + (grain === v ? " on" : "")} onClick={() => setGrain(v)}>{l}</button>)}</div>
-          <div className="seg">
-            <button className={"seg-btn" + (!withProj ? " on" : "")} onClick={() => setWithProj(false)}>จริง</button>
-            <button className={"seg-btn" + (withProj ? " on" : "")} onClick={() => setWithProj(true)}>+ คาดการณ์</button>
-          </div>
-          <div className="seg">{ENTS.map(([v, l]) => <button key={v} className={"seg-btn" + (ent === v ? " on" : "")} onClick={() => setEnt(v)}>{l}</button>)}</div>
-          <button className="btn-ghost sm" onClick={exportCsv} title="ส่งออกรายการในช่วงที่ดู เป็นไฟล์ CSV (เปิดใน Excel)">⬇ CSV</button>
-          <button className="btn-ghost sm" disabled={busy} onClick={sync}><UIcon name="withdraw" size={15} /> ซิงค์จากเอกสาร</button>
-          <button className="btn-ghost sm" onClick={() => setTransfer(true)} title="ย้ายเงินระหว่างบัญชีบริษัท ↔ บุคคล (ไม่นับเป็นรายรับ/จ่าย)">🔄 โอนระหว่างบัญชี</button>
-          <button className="btn-primary sm" onClick={() => setEdit({ direction: "in", status: "actual", entry_date: todayYmd(), amount: "", note: "", entity: ent === "personal" ? "personal" : "company" })}><UIcon name="plus" size={15} color="#fff" /> เพิ่มรายการ</button>
+    <div className="cfx-root">
+      <div className="cfx-head">
+        <div><h1>กระแสเงินสด</h1><div className="cfx-sub">เห็นเงินวันนี้ วางแผนวันข้างหน้า</div></div>
+        <div className="cfx-head-btns">
+          <button className="cfx-btn primary" onClick={() => setEdit({ direction: "in", status: "actual", entry_date: todayYmd(), amount: "", note: "", entity: ent === "personal" ? "personal" : "company" })}><UIcon name="plus" size={16} color="#fff" /> เพิ่มรายการ</button>
+          <button className="cfx-btn" onClick={exportCsv} title="ส่งออกรายการในช่วงที่ดู เป็นไฟล์ CSV (เปิดใน Excel)">{svgDL} ส่งออกข้อมูล</button>
         </div>
       </div>
 
-      <div className="cf-bar">
-        <div className="sched-nav">
-          {grain !== "year" && <>
-            <button className="btn-ghost sm" onClick={() => move(-1)}><UIcon name="chevR" size={15} style={{ transform: "rotate(180deg)" }} /></button>
-            <button className="btn-ghost sm" onClick={() => setAnchor(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })}>{byMonth ? "เดือนนี้" : "ปีนี้"}</button>
-            <button className="btn-ghost sm" onClick={() => move(1)}><UIcon name="chevR" size={15} /></button>
-          </>}
-          <div className="sched-title">{title}</div>
+      <div className="cfx-filters">
+        <div className="cfx-monthnav">
+          {grain !== "year" && <button className="cfx-iconbtn" onClick={() => move(-1)} aria-label="ก่อนหน้า"><UIcon name="chevR" size={16} style={{ transform: "rotate(180deg)" }} /></button>}
+          <div className="cfx-mtitle">{title}</div>
+          {grain !== "year" && <button className="cfx-iconbtn" onClick={() => move(1)} aria-label="ถัดไป"><UIcon name="chevR" size={16} /></button>}
+          {grain !== "year" && <button className="cfx-btn sm" onClick={() => setAnchor(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })}>{byMonth ? "เดือนนี้" : "ปีนี้"}</button>}
         </div>
-        <label className="cf-opening">เงินสดยกมา{ent === "company" ? " (บริษัท)" : ent === "personal" ? " (บุคคล)" : ""} <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span>
-          <input type="number" value={ent === "all" ? (Number(opening.company) || 0) + (Number(opening.personal) || 0) : openingInput} disabled={ent === "all"} title={ent === "all" ? "เลือกกิจการ (บริษัท/บุคคล) ก่อนจึงจะแก้ยอดยกมาได้" : ""} onChange={(e) => setOpeningInput(e.target.value)} onBlur={saveOpening} /></span></label>
-        <label className="cf-opening" title="ถ้าเงินคาดการณ์จะต่ำกว่ายอดนี้ ระบบจะเตือนล่วงหน้า (บันทึกส่วนกลาง — ทั้งทีมเห็นตรงกัน)">เงินสำรองขั้นต่ำ <span className="inp inp-unit" style={{ width: 130 }}><span className="unit-pre">฿</span>
-          <input type="number" min="0" value={reserveInput} onChange={(e) => setReserveInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && reserveDirty) saveReserve(); }} /></span>
-          {reserveDirty && <button className="btn-ghost sm" disabled={savingReserve} onClick={saveReserve} style={{ marginLeft: 6 }}>{savingReserve ? "…" : "บันทึก"}</button>}</label>
+        <div className="cfx-seg">{GRAINS.map(([v, l]) => <button key={v} className={grain === v ? "on" : ""} onClick={() => setGrain(v)}>{l}</button>)}</div>
+        <div className="cfx-tgl-w" onClick={() => setWithProj(!withProj)} role="switch" aria-checked={withProj}><span className={"cfx-tgl" + (withProj ? " on" : "")} />รวมคาดการณ์</div>
+        <div className="cfx-seg">{ENTS2.map(([v, l]) => <button key={v} className={ent === v ? "on" : ""} onClick={() => setEnt(v)}>{l}</button>)}</div>
+        <button className="cfx-btn sm" disabled={busy} onClick={sync} title="ดึงยอดจากเอกสารล่าสุด (ใบแจ้งหนี้/ใบเสร็จ/ค้างจ่าย ฯลฯ)"><UIcon name="withdraw" size={15} /> ซิงค์</button>
+        <button className="cfx-btn sm" onClick={() => setTransfer(true)} title="ย้ายเงินระหว่างบัญชีบริษัท ↔ บุคคล (ไม่นับเป็นรายรับ/จ่าย)"><UIcon name="ret" size={15} /> โอนระหว่างบัญชี</button>
       </div>
 
-      {ent !== "all" && <div className="cf-carry" style={{ background: ent === "personal" ? "#f5f3ff" : "#eff6ff", borderColor: ent === "personal" ? "#ddd6fe" : "#bfdbfe" }}>
+      <div className="cfx-subbar">
+        <label className="cfx-field">เงินสดยกมา{ent === "company" ? " (บริษัท)" : ent === "personal" ? " (บุคคล)" : ""}
+          <span className="cfx-inp"><span className="pre">฿</span><input type="number" value={ent === "all" ? (Number(opening.company) || 0) + (Number(opening.personal) || 0) : openingInput} disabled={ent === "all"} title={ent === "all" ? "เลือกกิจการ (บริษัท/บุคคล) ก่อนจึงจะแก้ยอดยกมาได้" : ""} onChange={(e) => setOpeningInput(e.target.value)} onBlur={saveOpening} /></span></label>
+        <label className="cfx-field" title="ถ้าเงินคาดการณ์จะต่ำกว่ายอดนี้ ระบบจะเตือนล่วงหน้า (บันทึกส่วนกลาง — ทั้งทีมเห็นตรงกัน)">เงินสำรองขั้นต่ำ
+          <span className="cfx-inp"><span className="pre">฿</span><input type="number" min="0" value={reserveInput} onChange={(e) => setReserveInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && reserveDirty) saveReserve(); }} /></span>
+          {reserveDirty && <button className="cfx-btn sm" disabled={savingReserve} onClick={saveReserve}>{savingReserve ? "…" : "บันทึกเงินสำรอง"}</button>}</label>
+      </div>
+
+      {ent !== "all" && <div className="cfx-note" style={{ background: ent === "personal" ? "#f5f3ff" : "#eff6ff", border: `1px solid ${ent === "personal" ? "#ddd6fe" : "#bfdbfe"}`, color: "var(--cfx-ink2)" }}>
         {ent === "personal"
-          ? "👤 กิจการบุคคล — รายได้จากบิล 'ไม่เอา VAT' เข้าที่นี่ · ต้นทุน/เงินเดือน/ช่างซัพ ลงบริษัททั้งหมด (ปรับได้ด้วยการแก้รายการเอง)"
-          : "🏢 กิจการบริษัท — รายได้จากบิล VAT + ต้นทุน/เงินเดือน/ช่างซัพทั้งหมดเข้าที่นี่"}
+          ? "กิจการบุคคล — รายได้จากบิล 'ไม่เอา VAT' เข้าที่นี่ · ต้นทุน/เงินเดือน/ช่างซัพ ลงบริษัททั้งหมด (ปรับได้ด้วยการแก้รายการเอง)"
+          : "กิจการบริษัท — รายได้จากบิล VAT + ต้นทุน/เงินเดือน/ช่างซัพทั้งหมดเข้าที่นี่"}
       </div>}
 
-      {!loading && <>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10, margin: "4px 0 12px" }}>
-          <div style={{ background: "var(--surface-2,#f3f7f8)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px" }}>
-            <div className="jo-dim" style={{ fontSize: 12 }}>💵 เงินสดตอนนี้ (จริง)</div>
-            <div style={{ fontWeight: 800, fontSize: 22, color: cash.nowBal < 0 ? "var(--down)" : "var(--ink)" }}>{fmtBaht(cash.nowBal)}</div>
-          </div>
-          <div style={{ background: "var(--surface-2,#f3f7f8)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px" }}>
-            <div className="jo-dim" style={{ fontSize: 12 }}>🔮 คาดการณ์สิ้นเดือนนี้</div>
-            <div style={{ fontWeight: 800, fontSize: 22, color: cash.monthEndBal < 0 ? "var(--down)" : "var(--up)" }}>{fmtBaht(cash.monthEndBal)}</div>
-            <div className="jo-dim" style={{ fontSize: 11 }}>รวมใบแจ้งหนี้/หนี้ที่คาดว่าจะเข้า-ออก</div>
-          </div>
-          <div style={{ background: "var(--surface-2,#f3f7f8)", border: `1px solid ${runwayAlert ? "#f59e0b" : "var(--line)"}`, borderRadius: 12, padding: "12px 14px" }}>
-            <div className="jo-dim" style={{ fontSize: 12 }}>📉 จุดต่ำสุดที่คาด</div>
-            <div style={{ fontWeight: 800, fontSize: 22, color: cash.minBal < 0 ? "var(--down)" : runwayAlert ? "#b45309" : "var(--ink)" }}>{fmtBaht(cash.minBal)}</div>
-            <div className="jo-dim" style={{ fontSize: 11 }}>~{thShort(cash.minDate)}</div>
-          </div>
+      {!loading && <div className="cfx-cards">
+        <div className="cfx-scard navy">
+          <div className="cfx-ci"><svg viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4M4 6v12a2 2 0 0 0 2 2h14v-4M18 12a2 2 0 0 0 0 4h4v-4z" /></svg></div>
+          <div className="ct">เงินพร้อมใช้</div><div className="cv">{fmtBaht(cash.nowBal)}</div><div className="cd">เงินสดจริง ณ ตอนนี้</div>
         </div>
-        {runwayAlert && <div style={{ border: `1.5px solid ${cash.minBal < 0 ? "#dc2626" : "#f59e0b"}`, background: cash.minBal < 0 ? "#fef2f2" : "#fffbeb", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
-          <b style={{ color: cash.minBal < 0 ? "#b91c1c" : "#b45309" }}>{cash.minBal < 0 ? "🔴 เงินสดคาดว่าจะติดลบ" : "⚠️ เงินสดจะต่ำกว่าเงินสำรองที่ตั้งไว้"}</b>
-          {" "}— ประมาณ <b>{thDate(cash.minDate)}</b> เงินจะเหลือ <b>{fmtBaht(cash.minBal)}</b>{reserve > 0 ? ` (เงินสำรอง ${fmtBaht(reserve)})` : ""}
-          <div className="jo-dim" style={{ marginTop: 2 }}>ทางแก้: เร่งเก็บใบแจ้งหนี้ค้างรับ · เลื่อนรายจ่ายที่ยังไม่ถึงกำหนด · หรือเตรียมเงินสำรองเพิ่ม</div>
-        </div>}
-      </>}
-      {loading ? <div className="empty">กำลังโหลด…</div> : (
-        grain === "calendar"
-          ? <CalendarView ents={ents} opening={openingVal} anchor={anchor} withProj={withProj} sgn={sgn} reserve={reserve} onEdit={setEdit} />
-          : grain === "day"
-          ? <DayView ents={ents} opening={openingVal} anchor={anchor} withProj={withProj} sgn={sgn} onEdit={setEdit} onDel={removeEntry} />
-          : <SummaryTable buckets={viewBuckets} withProj={withProj} grain={grain} />
-      )}
+        <div className="cfx-scard">
+          <div className="cfx-ci green"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7" /></svg></div>
+          <div className="ct">เงินรับเดือนนี้</div><div className="cv cfx-pos">{fmtBaht(monthAgg.inNow)}</div>
+          <div className="cd">{monthAgg.inPct != null ? <><span className="cfx-up">▲ {monthAgg.inPct}%</span> จากเดือนก่อน</> : "รับจริงเดือนนี้"}</div>
+        </div>
+        <div className="cfx-scard">
+          <div className="cfx-ci orange"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" /></svg></div>
+          <div className="ct">เงินจ่ายเดือนนี้</div><div className="cv" style={{ color: "var(--cfx-warn-ink)" }}>{fmtBaht(monthAgg.outNow)}</div>
+          <div className="cd">{monthAgg.outPct != null ? <><span className="cfx-dn">▲ {monthAgg.outPct}%</span> จากเดือนก่อน</> : "จ่ายจริงเดือนนี้"}</div>
+        </div>
+        <div className="cfx-scard">
+          <div className="cfx-ci blue"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 16v-5M12 16V8M17 16v-8" /></svg></div>
+          <div className="ct">เงินคงเหลือคาดการณ์</div><div className="cv" style={{ color: cash.monthEndBal < 0 ? "var(--cfx-bad-ink)" : "var(--cfx-primary)" }}>{fmtBaht(cash.monthEndBal)}</div>
+          <div className="cd">ณ สิ้นเดือนนี้</div>
+        </div>
+      </div>}
+
+      {loading ? <div className="cfx-empty">กำลังโหลด…</div> : <div className="cfx-grid">
+        <div className="cfx-panel">
+          <div className="cfx-panel-h"><h3>แนวโน้มเงินคงเหลือ</h3>
+            <div className="cfx-seg" style={{ marginLeft: "auto" }}>
+              <button className={grain === "chart" ? "on" : ""} onClick={() => setGrain("chart")}>กราฟ</button>
+              <button className={grain === "calendar" ? "on" : ""} onClick={() => setGrain("calendar")}>ปฏิทิน</button>
+            </div>
+          </div>
+          {grain === "chart" ? <ChartView ents={ents} opening={openingVal} anchor={anchor} withProj={withProj} sgn={sgn} reserve={reserve} />
+            : grain === "calendar" ? <CalendarView ents={ents} opening={openingVal} anchor={anchor} withProj={withProj} sgn={sgn} reserve={reserve} onEdit={setEdit} />
+            : grain === "day" ? <DayView ents={ents} opening={openingVal} anchor={anchor} withProj={withProj} sgn={sgn} onEdit={setEdit} onDel={removeEntry} />
+            : <SummaryTable buckets={viewBuckets} withProj={withProj} grain={grain} />}
+        </div>
+        <div className="cfx-panel">
+          <div className="cfx-panel-h"><h3>ต้องติดตาม</h3></div>
+          {upcoming.length > 0 && <div className="cfx-fu warn"><div className="fic"><UIcon name="alert" size={17} /></div>
+            <div><div className="ft">รายการจ่ายที่กำลังจะถึง {upcoming.length} รายการ</div><div className="fs">รวมจำนวน {fmtBaht(dueSum)}</div></div></div>}
+          <div className={"cfx-fu " + (cash.minBal < 0 ? "bad" : runwayAlert ? "warn" : "good")}>
+            <div className="fic"><UIcon name={runwayAlert ? "alert" : "check"} size={17} /></div>
+            <div><div className="ft">{cash.minBal < 0 ? "เงินสดคาดว่าจะติดลบ" : runwayAlert ? "เงินสดจะต่ำกว่าเงินสำรอง" : "เงินสำรองอยู่ในเกณฑ์"}</div>
+              <div className="fs">จุดต่ำสุด {fmtBaht(cash.minBal)} · ~{thShort(cash.minDate)}{reserve > 0 ? ` · สำรอง ${fmtBaht(reserve)}` : ""}</div></div>
+          </div>
+          <div className="cfx-subh">รายการจ่ายที่กำลังจะถึง</div>
+          {upcoming.length === 0 ? <div className="cfx-empty">— ไม่มีรายการจ่ายที่คาดการณ์ —</div>
+            : upcoming.slice(0, 6).map((e, i) => <div className="cfx-payrow" key={(e.source_type || "") + (e.source_ref || "") + (e.id || i)}>
+              <span className="pd"><UIcon name="calendar" size={14} />{thShort(e.entry_date)}</span>
+              <span className="pn">{SRC[e.source_type] || "จ่าย"}{e.note ? " · " + e.note : ""}</span>
+              <span className="pa">{fmtBaht(Number(e.amount) || 0)}</span></div>)}
+        </div>
+      </div>}
+
+      {!loading && recent.length > 0 && <div className="cfx-panel" style={{ marginBottom: 16 }}>
+        <div className="cfx-panel-h"><h3>รายการล่าสุด</h3></div>
+        <div className="cfx-tblwrap"><table className="cfx-tbl">
+          <thead><tr><th>วันที่</th><th>รายการ</th><th>ประเภท</th><th className="num">จำนวนเงิน</th><th>สถานะ</th><th /></tr></thead>
+          <tbody>{recent.map((e) => { const inn = e.direction === "in"; return (
+            <tr key={e.id}>
+              <td style={{ whiteSpace: "nowrap" }}>{thShort(e.entry_date)}</td>
+              <td>{SRC[e.source_type] || e.source_type}{e.note ? " · " + e.note : ""}</td>
+              <td><span className={"cfx-badge " + (inn ? "cfx-b-in" : "cfx-b-out")}>{inn ? "รับเงิน" : "จ่ายเงิน"}</span></td>
+              <td className={"num " + (inn ? "cfx-pos" : "cfx-neg")}>{inn ? "+" : "−"}{fmtBaht(Number(e.amount) || 0)}</td>
+              <td><span className={"cfx-badge " + (inn ? "cfx-b-in" : "cfx-b-out")}>{inn ? "รับแล้ว" : "จ่ายแล้ว"}</span></td>
+              <td style={{ whiteSpace: "nowrap" }}>{e.source_type === "manual" ? <><button className="cfx-rowbtn" title="แก้ไข" onClick={() => setEdit({ ...e })}><UIcon name="edit" size={15} /></button><button className="cfx-rowbtn danger" title="ลบ" onClick={() => removeEntry(e)}><UIcon name="trash" size={15} /></button></> : null}</td>
+            </tr>); })}</tbody>
+        </table></div>
+      </div>}
 
       {!loading && catRows.length > 0 && (
-        <div style={{ background: "var(--surface,#fff)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px", marginTop: 14 }}>
+        <div className="cfx-panel" style={{ marginTop: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
             <b style={{ fontSize: 15 }}>💸 เงินออกแยกหมวด <span className="jo-dim" style={{ fontWeight: 400, fontSize: 12.5 }}>({grain === "day" ? thMonth(anchor) : grain === "year" ? "ทุกปี" : `ปี ${year + 543}`} · จริง+คาดการณ์)</span></b>
             <span className="jo-dim" style={{ fontSize: 12.5 }}>รวมออก {fmtBaht(catTotal)}</span>
@@ -289,6 +353,51 @@ export default function CashFlow() {
       {edit && <CashEntryModal entry={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} flash={flash} />}
       {transfer && <TransferModal defaultDate={todayYmd()} defaultFrom={ent === "personal" ? "personal" : "company"} busy={busy} onClose={() => setTransfer(false)} onConfirm={doTransfer} />}
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
+    </div>
+  );
+}
+
+// ---- กราฟแนวโน้มเงินคงเหลือรายวัน (SVG ล้วน · ไม่มีไลบรารี) — ยอดจริงถึงวันนี้ + คาดการณ์ (เส้นประ) + เงินสำรอง ----
+function ChartView({ ents, opening, anchor, withProj, sgn, reserve }) {
+  const y = anchor.getFullYear(), m = anchor.getMonth();
+  const monthStr = `${y}-${pad(m + 1)}`, firstYmd = monthStr + "-01";
+  const days = new Date(y, m + 1, 0).getDate();
+  const use = withProj ? ents : ents.filter((e) => e.status === "actual");
+  const byDay = {}; let balStart = Number(opening) || 0;
+  use.forEach((e) => { const v = sgn(e) * (Number(e.amount) || 0); if (e.entry_date < firstYmd) { balStart += v; return; } if (e.entry_date.slice(0, 7) !== monthStr) return; byDay[e.entry_date] = (byDay[e.entry_date] || 0) + v; });
+  const todayStr = ymd(new Date());
+  const pts = []; let run = balStart;
+  for (let d = 1; d <= days; d++) { const k = `${monthStr}-${pad(d)}`; run += byDay[k] || 0; pts.push({ d, k, bal: run }); }
+  if (!pts.length) return <div className="cfx-empty">ยังไม่มีข้อมูลในเดือนนี้</div>;
+  // แบ่งช่วง จริง (ถึงวันนี้) / คาดการณ์ (วันนี้เป็นต้นไป)
+  let cut; if (todayStr > pts[pts.length - 1].k) cut = pts.length - 1; else if (todayStr < pts[0].k) cut = -1; else cut = pts.findIndex((p) => p.k >= todayStr);
+  const W = 720, H = 280, padL = 62, padR = 14, padT = 22, padB = 32;
+  const vals = [balStart, ...pts.map((p) => p.bal)]; if (reserve > 0) vals.push(reserve); vals.push(0);
+  let lo = Math.min(...vals), hi = Math.max(...vals); if (hi === lo) hi = lo + 1000; const rng = hi - lo;
+  const X = (i) => padL + (days <= 1 ? 0 : (i / (days - 1)) * (W - padL - padR));
+  const Y = (v) => padT + (1 - (v - lo) / rng) * (H - padT - padB);
+  const seg = (a, b) => pts.slice(a, b + 1).map((p, i) => `${X(a + i)},${Y(p.bal)}`).join(" ");
+  const nfmt = (v) => Math.round(v).toLocaleString("en-US");
+  const gy = [lo, lo + rng / 2, hi];
+  const xticks = [0, Math.floor((days - 1) / 3), Math.floor(2 * (days - 1) / 3), days - 1].filter((v, i, a) => a.indexOf(v) === i);
+  const areaSolidEnd = cut >= 0 ? cut : -1;
+  return (
+    <div>
+      <div className="cfx-legend">
+        <span><span className="cfx-lg" style={{ borderColor: "#2f6fdb" }} />ยอดจริง</span>
+        <span><span className="cfx-lg" style={{ borderColor: "#38b6f0", borderTopStyle: "dashed" }} />คาดการณ์</span>
+        {reserve > 0 && <span><span className="cfx-lg" style={{ borderColor: "#e2790f", borderTopStyle: "dashed" }} />เงินสำรองขั้นต่ำ ({fmtBaht(reserve)})</span>}
+      </div>
+      <svg className="cfx-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="กราฟแนวโน้มเงินคงเหลือรายวัน">
+        {gy.map((v, i) => <line key={i} x1={padL} y1={Y(v)} x2={W - padR} y2={Y(v)} stroke="#eef3f8" strokeWidth="1" />)}
+        {gy.map((v, i) => <text key={"t" + i} x={padL - 8} y={Y(v) + 4} textAnchor="end" fill="#8a9aac" fontSize="11" fontFamily="Sarabun">{nfmt(v)}</text>)}
+        {reserve > 0 && <line x1={padL} y1={Y(reserve)} x2={W - padR} y2={Y(reserve)} stroke="#e2790f" strokeWidth="2" strokeDasharray="6 5" />}
+        {areaSolidEnd >= 0 && <polygon points={`${X(0)},${Y(lo)} ${seg(0, areaSolidEnd)} ${X(areaSolidEnd)},${Y(lo)}`} fill="#2f6fdb" opacity="0.08" />}
+        {areaSolidEnd >= 0 && <polyline points={seg(0, areaSolidEnd)} fill="none" stroke="#2f6fdb" strokeWidth="3" strokeLinejoin="round" />}
+        {cut < pts.length - 1 && <polyline points={seg(Math.max(cut, 0), pts.length - 1)} fill="none" stroke="#38b6f0" strokeWidth="3" strokeDasharray="7 6" strokeLinejoin="round" />}
+        {cut >= 0 && cut < pts.length && <><line x1={X(cut)} y1={padT - 6} x2={X(cut)} y2={H - padB} stroke="#b7c6d6" strokeWidth="1.5" strokeDasharray="4 4" /><text x={X(cut)} y={padT - 10} textAnchor="middle" fill="#54677b" fontSize="11.5" fontFamily="Sarabun" fontWeight="600">วันนี้ · {pts[cut].d} {thShort(pts[cut].k).replace(/^\d+\s/, "")}</text><circle cx={X(cut)} cy={Y(pts[cut].bal)} r="5" fill="#2f6fdb" /></>}
+        {xticks.map((i) => <text key={"x" + i} x={X(i)} y={H - padB + 18} textAnchor="middle" fill="#8a9aac" fontSize="11" fontFamily="Sarabun">{pts[i].d} {thShort(pts[i].k).replace(/^\d+\s/, "")}</text>)}
+      </svg>
     </div>
   );
 }
