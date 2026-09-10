@@ -47,18 +47,18 @@ const PRESETS = [
   { id: "all", label: "ทั้งหมด", range: () => ({ from: "", to: "" }) },
 ];
 
-function StatCard({ icon, color, label, value, sub, accent, onClick }) {
+function StatCard({ icon, color, label, value, sub, accent, onClick, highlight = false }) {
   return (
-    <div className={"stat-card" + (onClick ? " clickable" : "")} onClick={onClick}
+    <div className={"stat-card dash-stat" + (highlight ? " dash-stat--hero" : "") + (onClick ? " clickable" : "")} onClick={onClick}
       role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && onClick() : undefined}>
       <div className="stat-top">
-        <span className="stat-ico" style={{ background: `color-mix(in srgb, ${color} 13%, white)`, color }}>
+        <div className="stat-label">{label}</div>
+        <span className="stat-ico" style={{ background: highlight ? "rgba(255,255,255,.14)" : `color-mix(in srgb, ${color} 13%, white)`, color: highlight ? "#fff" : color }}>
           <UIcon name={icon} size={18} strokeWidth={1.9} />
         </span>
       </div>
       <div className="stat-val" style={accent ? { color: accent } : {}}>{value}</div>
-      <div className="stat-label">{label}</div>
       {sub && <div className="stat-sub">{sub}</div>}
       {onClick && <div className="stat-more">ดูรายละเอียด <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>}
     </div>
@@ -348,7 +348,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
             <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 4 }}>{ovErr}</div>
           </div>}
           <div className="kpi-grid">
-            <StatCard icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={dv(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setDocList("q_all")} />
+            <StatCard highlight icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={dv(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setDocList("q_all")} />
             <StatCard icon="trend" color="#2563EB" label="ยอดขายอนุมัติ · รับ VAT" value={dv(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("q_vat")} />
             <StatCard icon="trend" color="#64748b" label="ยอดขายอนุมัติ · ไม่ VAT" value={dv(ovStat.novatSale)} sub={fmtNum(ovStat.novatCount) + " ใบ"} onClick={() => setDocList("q_novat")} />
             <StatCard icon="check" color="#0a6b3d" label={"รับเงินแล้ว (ใบเสร็จ) · " + periodLabel} value={dv(rcStat.sale)} sub={`${fmtNum(rcStat.count)} ใบเสร็จ · ก่อน VAT · รับสุทธิ ${fmtCompact(rcStat.net)}`} onClick={() => setDocList("rc_all")} />

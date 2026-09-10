@@ -28,6 +28,22 @@ export function MatIcon({ name, size = 24, color = "currentColor", strokeWidth =
 }
 
 const UI_PATHS = {
+  users: "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-6 9v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v2",
+  wrench: "M14 6a5 5 0 0 0-6 6L3 17a2.8 2.8 0 0 0 4 4l5-5a5 5 0 0 0 6-6l-3 3-4-4 3-3Z",
+  wallet: "M4 5h15v4M4 5a2 2 0 0 0 0 4h17v11H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm17 8h-6v4h6m-3-2h.01",
+  mail: "M3 5h18v14H3V5Zm0 1 9 7 9-7",
+  target: "M12 4a8 8 0 1 0 8 8M12 8a4 4 0 1 0 4 4m-4 0 8-8m-5 0h5v5",
+  globe: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z",
+  star: "m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z",
+  ticket: "M4 5h16v5a2 2 0 0 0 0 4v5H4v-5a2 2 0 0 0 0-4V5Zm10 0v3m0 3v2m0 3v3",
+  megaphone: "M3 10v5h5l11 5V5L8 10H3Zm5 5 2 6H6l-2-6m4-5v5m14-5v5",
+  document: "M14 3H5v18h14V8l-5-5Zm0 0v5h5M8 12h8m-8 4h5",
+  receipt: "M5 3l2 1 2-1 3 1 3-1 2 1 2-1v18l-2-1-2 1-3-1-3 1-2-1-2 1V3Zm3 5h8m-8 4h8m-8 4h4",
+  book: "M12 5C8 3 5 3 2 4v15c3-1 6-1 10 1 4-2 7-2 10-1V4c-3-1-6-1-10 1Zm0 0v15",
+  repeat: "M4 8h14l-3-3m3 3-3 3M20 16H6l3-3m-3 3 3 3",
+  filter: "M4 6h16M7 12h10m-7 6h4",
+  settings: "M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1 1-3Zm3 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z",
+  phone: "M5 3H3v4a14 14 0 0 0 14 14h4v-5l-5-2-2 3a10 10 0 0 1-7-7l3-2-2-5H5Z",
   dashboard: "M4 13h7V4H4v9Zm0 7h7v-5H4v5Zm9 0h7v-9h-7v9Zm0-16v5h7V4h-7Z",
   withdraw: "M12 3v12m0 0 4-4m-4 4-4-4M5 21h14",
   ret: "M12 21V9m0 0 4 4m-4-4-4 4M5 3h14",

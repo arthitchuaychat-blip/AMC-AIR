@@ -1,4 +1,5 @@
 import React from "react";
+import { UIcon } from "../icons";
 import { can } from "../lib/permissions";
 
 // A3 — ศูนย์รับเงิน: ยุบทางเข้า เงินค้างรับ + ใบวางบิล + ใบเสร็จ/ใบกำกับ เป็นเมนูเดียว
@@ -9,9 +10,9 @@ const BillingNotes = React.lazy(() => import("./BillingNotes"));
 const Receipts = React.lazy(() => import("./Receipts"));
 
 const TABS = [
-  { key: "receivables", emoji: "💰", label: "เงินค้างรับ" },
-  { key: "billing", emoji: "📑", label: "ใบวางบิล" },
-  { key: "receipt", emoji: "💵", label: "ใบเสร็จ/ใบกำกับ" },
+  { key: "receivables", icon: "ret", label: "เงินค้างรับ" },
+  { key: "billing", icon: "document", label: "ใบวางบิล" },
+  { key: "receipt", icon: "receipt", label: "ใบเสร็จ/ใบกำกับ" },
 ];
 
 export default function RecvCenter({ role, onOpenInvoice, onOpenDoc, onGoChat, onOpenQuote, onOpenBoq, onOpenJob, receiptFocus, onReceiptFocusConsumed, receiptFromInvoice, onReceiptFromInvoiceConsumed }) {
@@ -27,10 +28,10 @@ export default function RecvCenter({ role, onOpenInvoice, onOpenDoc, onGoChat, o
   return (
     <div>
       {tabs.length > 1 && (
-        <div className="view-seg" style={{ marginBottom: 14, maxWidth: 540, flexWrap: "wrap" }}>
+        <div className="view-seg hub-tabs" style={{ marginBottom: 14, maxWidth: 540, flexWrap: "wrap" }}>
           {tabs.map((t) => (
-            <button key={t.key} className={"seg-btn" + (cur.key === t.key ? " on" : "")} onClick={() => setTab(t.key)}>
-              {t.emoji} {t.label}
+            <button key={t.key} className={"seg-btn hub-tab" + (cur.key === t.key ? " on" : "")} aria-pressed={cur.key === t.key} onClick={() => setTab(t.key)}>
+              <UIcon name={t.icon} size={18} /> {t.label}
             </button>
           ))}
         </div>

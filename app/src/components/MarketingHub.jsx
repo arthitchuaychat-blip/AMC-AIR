@@ -1,4 +1,5 @@
 import React from "react";
+import { UIcon } from "../icons";
 import { can } from "../lib/permissions";
 
 // A1 — ยุบทางเข้า "คูปอง + รีวิวลูกค้า + จัดการเว็บไซต์" เป็นเมนูเดียว "การตลาดและเว็บไซต์"
@@ -9,9 +10,9 @@ const Reviews = React.lazy(() => import("./Reviews"));
 const WebManage = React.lazy(() => import("./WebManage"));
 
 const TABS = [
-  { key: "promo", emoji: "🎟️", label: "คูปอง / โปรโมชั่น" },
-  { key: "reviews", emoji: "🌟", label: "รีวิวลูกค้า" },
-  { key: "website", emoji: "🌐", label: "จัดการเว็บไซต์" },
+  { key: "promo", icon: "ticket", label: "คูปอง / โปรโมชั่น" },
+  { key: "reviews", icon: "star", label: "รีวิวลูกค้า" },
+  { key: "website", icon: "globe", label: "จัดการเว็บไซต์" },
 ];
 
 export default function MarketingHub({ role, initial }) {
@@ -23,10 +24,10 @@ export default function MarketingHub({ role, initial }) {
   if (!cur) return <div className="empty">ไม่มีสิทธิ์เข้าถึงเมนูนี้</div>;
   return (
     <div>
-      <div className="view-seg" style={{ marginBottom: 14, maxWidth: 560, flexWrap: "wrap" }}>
+      <div className="view-seg hub-tabs" style={{ marginBottom: 14, maxWidth: 560, flexWrap: "wrap" }}>
         {tabs.map((t) => (
-          <button key={t.key} className={"seg-btn" + (cur.key === t.key ? " on" : "")} onClick={() => setTab(t.key)}>
-            {t.emoji} {t.label}
+          <button key={t.key} className={"seg-btn hub-tab" + (cur.key === t.key ? " on" : "")} aria-pressed={cur.key === t.key} onClick={() => setTab(t.key)}>
+            <UIcon name={t.icon} size={18} /> {t.label}
           </button>
         ))}
       </div>

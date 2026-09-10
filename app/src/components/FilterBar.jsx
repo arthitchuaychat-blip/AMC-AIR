@@ -1,4 +1,5 @@
 import React from "react";
+import { UIcon } from "../icons";
 
 // แถบตัวกรองยุบได้ — ครอบชิป/ดรอปดาวน์ตัวกรองของแต่ละเมนู เพื่อประหยัดพื้นที่ด้านบน (เห็นการ์ดมากขึ้น)
 // ยุบไว้เป็นค่าเริ่มต้น · จำสถานะเปิด/ปิดต่อเมนูใน localStorage (key = id) · โชว์ตัวเลขตัวกรองที่ใช้อยู่
@@ -13,10 +14,10 @@ export default function FilterBar({ id, count = 0, resultCount, resultLabel = "�
   return (
     <div className="filterbar">
       <div className="filterbar-head">
-        <button type="button" className={"filterbar-toggle" + (open ? " open" : "") + (count > 0 ? " active" : "")} onClick={() => setOpen((o) => !o)}>
-          <span className="fb-ic">⚙️</span> ตัวกรอง
+        <button type="button" aria-expanded={open} className={"filterbar-toggle" + (open ? " open" : "") + (count > 0 ? " active" : "")} onClick={() => setOpen((o) => !o)}>
+          <UIcon name="filter" size={18} /> ตัวกรอง
           {count > 0 && <span className="filterbar-badge">{count}</span>}
-          <span className="fb-chev">{open ? "▲" : "▼"}</span>
+          <UIcon name="chevD" size={14} style={{ transform: open ? "rotate(180deg)" : undefined }} />
         </button>
         {typeof resultCount === "number" && (
           <span className={"filterbar-result" + (count > 0 ? " filtered" : "")}>

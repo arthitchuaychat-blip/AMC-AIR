@@ -38,4 +38,4 @@
 - [Income/cost categories](income-cost-categories.md) — เสร็จครบ 3 เฟส v511: ประเภทงาน + รายได้แยกหมวด + P&L ต้นทุน/ค่าใช้จ่าย (แท็บ กำไร-ขาดทุน); ต้องรัน SQL 176+177; แหล่งข้อมูล+เกณฑ์+กับดักครบ
 - [App performance](app-performance.md) — เร่งแอป: code-split (บันเดิลแรก 2.3MB→0.65MB) + แคชลิสต์เอกสาร 45 วิ (ตัวดัก supabase.from/rpc ล้างแคชอัตโนมัติ = เซฟแล้วสด) ทำแล้ว v507; เหลือแค่ index ตอนตารางโต
 - [Loans / financing menu](loans-financing.md) — เมนูหนี้สิน (รถเช่าซื้อ 6 คัน + สินเชื่อออฟฟิศ): ตาราง loans mig 242, คำนวณ flat/reducing, ปุ่มจ่ายงวด→เบิกจ่าย, SUZUKI ป้อนแล้ว
-- [UI design system](ui-design.md) — โทเคนพาเลตต์กลาง (น้ำเงิน-ฟ้า) คุมทั้งแอปที่ :root เดียว + เอกสารพิมพ์แช่แข็ง + FilterBar/การ์ดกลอส · เฟส 1-3 เสร็จ v827
+- [UI design system](ui-design.md) — พาเลตต์กลาง + เอกสารพิมพ์แช่แข็ง · v828 screen design: เมนู/แท็บไอคอนเส้น การ์ดขาวเงาบาง ฟอนต์อ่านง่าย; เจ้าของอนุญาตขึ้นจริง

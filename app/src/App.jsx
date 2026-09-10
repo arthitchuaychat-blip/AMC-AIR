@@ -74,69 +74,57 @@ const Reviews = React.lazy(() => import("./components/Reviews"));
 const MarketingHub = React.lazy(() => import("./components/MarketingHub"));
 
 const NAV = {
-  myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "clipboard" },
+  myjobs: { th: "งานของฉัน", en: "My Jobs", icon: "wrench" },
   dashboard: { th: "แดชบอร์ด", en: "Dashboard", icon: "dashboard" },
-  kpi: { th: "สกอร์การ์ดผลงาน", en: "KPI Scorecard", icon: "trend" },
-  customers: { th: "ลูกค้า", en: "Customers", icon: "building" },
-  pipeline: { th: "ท่อขาย", en: "Sales Pipeline", icon: "trend" },
-  followup: { th: "ติดตามลูกค้า", en: "Follow-up", icon: "user" },
-  saleshub: { th: "ลูกค้าและงานขาย", en: "Customers & Sales", icon: "building" },
-  reviews: { th: "รีวิวลูกค้า", en: "Reviews", icon: "trend" },
-  promo: { th: "คูปอง/โปรโมชั่น", en: "Coupons", icon: "trend" },
+  kpi: { th: "สกอร์การ์ดผลงาน", en: "KPI Scorecard", icon: "target" },
+  customers: { th: "ลูกค้า", en: "Customers", icon: "users" },
+  pipeline: { th: "ท่อขาย", en: "Sales Pipeline", icon: "target" },
+  followup: { th: "ติดตามลูกค้า", en: "Follow-up", icon: "phone" },
+  saleshub: { th: "ลูกค้าและงานขาย", en: "Customers & Sales", icon: "users" },
+  reviews: { th: "รีวิวลูกค้า", en: "Reviews", icon: "star" },
+  promo: { th: "คูปอง/โปรโมชั่น", en: "Coupons", icon: "ticket" },
   weborders: { th: "คำสั่งซื้อจากเว็บ", en: "Web Orders", icon: "purchase" },
-  website: { th: "จัดการเว็บไซต์", en: "Website", icon: "catalog" },
-  marketing: { th: "การตลาดและเว็บไซต์", en: "Marketing & Web", icon: "trend" },
+  website: { th: "จัดการเว็บไซต์", en: "Website", icon: "globe" },
+  marketing: { th: "การตลาดและเว็บไซต์", en: "Marketing & Web", icon: "megaphone" },
   chat: { th: "แชตลูกค้า", en: "Customer Chat", icon: "chat" },
-  email: { th: "อีเมล", en: "Email", icon: "chat" },
+  email: { th: "อีเมล", en: "Email", icon: "mail" },
   teamchat: { th: "แชตทีม", en: "Team Chat", icon: "chat" },
   tasks: { th: "กระดานสั่งงาน", en: "Task Board", icon: "clipboard" },
   attendance: { th: "เข้างาน/ลา", en: "Attendance", icon: "calendar" },
-  handbook: { th: "คู่มือตำแหน่งงาน", en: "Job Handbook", icon: "clipboard" },
-  hr: { th: "บุคคล (HR)", en: "HR", icon: "user" },
-  subcontract: { th: "ช่างซัพ", en: "Subcontractors", icon: "purchase" },
-  catalog: { th: "คลังสินค้า", en: "Catalog", icon: "catalog" },
+  handbook: { th: "คู่มือตำแหน่งงาน", en: "Job Handbook", icon: "book" },
+  hr: { th: "บุคคล (HR)", en: "HR", icon: "users" },
+  subcontract: { th: "ช่างซัพ", en: "Subcontractors", icon: "wrench" },
+  catalog: { th: "คลังสินค้า", en: "Catalog", icon: "box" },
   boq: { th: "BOQ", en: "Bill of Quantities", icon: "clipboard" },
-  quote: { th: "ต้นทุนและเสนอราคา", en: "Cost & Quotation", icon: "clipboard" },
-  invoice: { th: "ใบส่งของ/ใบแจ้งหนี้", en: "Delivery / Invoice", icon: "clipboard" },
-  receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "clipboard" },
-  adjnote: { th: "ใบเพิ่ม/ลดหนี้", en: "Credit / Debit Note", icon: "clipboard" },
-  billing: { th: "ใบวางบิล", en: "Billing Notes", icon: "clipboard" },
+  quote: { th: "ต้นทุนและเสนอราคา", en: "Cost & Quotation", icon: "document" },
+  invoice: { th: "ใบส่งของ/ใบแจ้งหนี้", en: "Delivery / Invoice", icon: "document" },
+  receipt: { th: "ใบเสร็จ/ใบกำกับ", en: "Receipts", icon: "receipt" },
+  adjnote: { th: "ใบเพิ่ม/ลดหนี้", en: "Credit / Debit Note", icon: "document" },
+  billing: { th: "ใบวางบิล", en: "Billing Notes", icon: "receipt" },
   receivables: { th: "เงินค้างรับ", en: "Receivables", icon: "trend" },
-  recvcenter: { th: "ศูนย์รับเงิน", en: "Receiving Center", icon: "trend" },
+  recvcenter: { th: "ศูนย์รับเงิน", en: "Receiving Center", icon: "wallet" },
   payables: { th: "ค้างจ่าย", en: "Payables", icon: "trend" },
   tax: { th: "รายงานภาษี", en: "Tax Report", icon: "clipboard" },
   profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
-  cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "trend" },
-  loans: { th: "หนี้สิน", en: "Loans", icon: "trend" },
-  recurring: { th: "รายจ่ายประจำ", en: "Recurring", icon: "trend" },
-  paycenter: { th: "ศูนย์จ่ายเงิน", en: "Payment Center", icon: "withdraw" },
+  cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "wallet" },
+  loans: { th: "หนี้สิน", en: "Loans", icon: "building" },
+  recurring: { th: "รายจ่ายประจำ", en: "Recurring", icon: "repeat" },
+  paycenter: { th: "ศูนย์จ่ายเงิน", en: "Payment Center", icon: "wallet" },
   assets: { th: "สินทรัพย์", en: "Assets", icon: "box" },
-  accounting: { th: "บัญชี", en: "Accounting", icon: "clipboard" },
+  accounting: { th: "บัญชี", en: "Accounting", icon: "book" },
   expenses: { th: "เบิกจ่าย", en: "Expenses", icon: "withdraw" },
-  joborders: { th: "งานบริการและติดตั้ง", en: "Service & Install Jobs", icon: "clipboard" },
+  joborders: { th: "งานบริการและติดตั้ง", en: "Service & Install Jobs", icon: "wrench" },
   handover: { th: "ใบส่งมอบงาน", en: "Handover", icon: "catalog" },
   schedule: { th: "ปฏิทินงาน", en: "Schedule", icon: "calendar" },
-  movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "withdraw" },
+  movements: { th: "เคลื่อนไหวสินค้า", en: "Movements", icon: "repeat" },
   stockcount: { th: "นับสต๊อก", en: "Stock Count", icon: "catalog" },
   jobs: { th: "วัสดุที่ใช้ในงาน", en: "Jobs & Cost", icon: "box" },
   suppliers: { th: "ผู้ขาย", en: "Suppliers", icon: "building" },
   prep: { th: "เตรียมวัสดุ", en: "Material Prep", icon: "box" },
   po: { th: "จัดซื้อและเตรียมงาน", en: "Purchasing", icon: "purchase" },
-  tools: { th: "เครื่องมือช่าง", en: "Tools", icon: "box" },
-  settings: { th: "ตั้งค่า", en: "Settings", icon: "user" },
+  tools: { th: "เครื่องมือช่าง", en: "Tools", icon: "wrench" },
+  settings: { th: "ตั้งค่า", en: "Settings", icon: "settings" },
 };
-// ไอคอน emoji ของแต่ละเมนู (สีสดในตัว · แทนไอคอนเส้นเดิม) — v545 เลือกชุดนี้
-// ⚠️ v546: ใช้เฉพาะ emoji รุ่นเก่า (Emoji 1.0 ปี 2015) ที่รองรับทุกเครื่อง/มือถือ —
-//    เลี่ยง Emoji 11+ (🧱🧰🧮🧾🧼) และแบบ ZWJ (🧑‍🔧🧑‍💼) ที่ font เก่าขึ้นเป็นกล่องว่าง
-const NAV_EMOJI = {
-  myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
-  pipeline: "🎯", saleshub: "👥", reviews: "🌟", promo: "🎟️", marketing: "📣", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
-  subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", adjnote: "📃", billing: "📑",
-  receivables: "💰", recvcenter: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", loans: "🏧", recurring: "🔁", paycenter: "💳", assets: "🏗️", expenses: "💳", accounting: "📚",
-  joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
-  suppliers: "🏭", prep: "📥", po: "🛍️", tools: "🔨", settings: "⚙️",
-};
-
 // sidebar sections — group the (long) menu into collapsible categories so it's not overwhelming.
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
 const NAV_GROUPS = [
@@ -154,7 +142,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-11·ดีไซน์ระบบเฟส3(จบทุกเมนู): กวาดสีเก่าตกค้างทั้งแอป (ink3 จาง, กล่องเตือน HR/บิล warn ใหม่) · เมนูการเงินคงสีสถานะ semantic · หน้าพิมพ์ไม่แตะ [trial] v827";
+const BUILD = "v828 · ดีไซน์ใหม่: เมนู ไอคอน การ์ด และฟอนต์";
 
 function SetupNotice() {
   return (
@@ -514,7 +502,7 @@ export default function App() {
 
   return (
     <LangContext.Provider value={effLang}>
-    <div className="app">
+    <div className="app amc-design">
       {newVersion && (
         <button className="ver-banner" onClick={() => window.location.reload()} title="โหลดเวอร์ชันล่าสุด">
           ✨ มีอัปเดตใหม่ — แตะเพื่อโหลดเวอร์ชันล่าสุด
@@ -524,7 +512,7 @@ export default function App() {
       <div className="topbar">
         <button className="topbar-burger" onClick={() => setMenuOpen(true)} aria-label="เมนู"><UIcon name="menu" size={22} /></button>
         <Logo size={30} radius={8} />
-        <div className="brand-name" style={{ fontSize: 17 }}>AMC <span>Management</span></div>
+        <div className="brand-name" style={{ fontSize: 17 }}>AMC <span>AIR</span></div>
         <div style={{ marginLeft: "auto" }}><NotificationBell onOpen={(n) => { openNotif(n); setMenuOpen(false); }} /></div>
       </div>
       {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
@@ -532,8 +520,8 @@ export default function App() {
         <div className="brand">
           <Logo size={40} radius={11} />
           <div className="brand-text">
-            <div className="brand-name">AMC <span>Management</span></div>
-            <div className="brand-sub">Management System</div>
+            <div className="brand-name">AMC <span>AIR</span></div>
+            <div className="brand-sub">ระบบบริหารงาน</div>
           </div>
           <div className="brand-bell"><NotificationBell onOpen={(n) => { openNotif(n); setMenuOpen(false); }} /></div>
         </div>
@@ -555,9 +543,9 @@ export default function App() {
               const secondary = effLang === "my" ? n.th : n.en;
               return (
                 // real link → can Ctrl/กลางคลิก/คลิกขวา "เปิดในแท็บใหม่" ได้ · คลิกปกติยังเป็น SPA แท็บเดิม
-                <a key={id} href={"#" + id} style={{ textDecoration: "none" }} className={"nav-item" + (view === id ? " on" : "")}
+                <a key={id} href={"#" + id} aria-current={view === id ? "page" : undefined} title={primary} style={{ textDecoration: "none" }} className={"nav-item" + (view === id ? " on" : "")}
                   onClick={(e) => { if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); go(id); }}>
-                  <span className="nav-emoji" aria-hidden="true">{NAV_EMOJI[id] || "•"}</span>
+                  <UIcon name={n.icon} size={20} />
                   <span className="nav-th">{primary}</span>
                   <span className="nav-en">{secondary}</span>
                   {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
@@ -583,7 +571,7 @@ export default function App() {
               const groupBadge = g.items.reduce((a, id) => a + badgeFor(id), 0);
               return (
                 <div className="nav-group" key={g.key}>
-                  <button className="nav-grouphead" onClick={() => toggleNavGroup(g.key)}>
+                  <button className="nav-grouphead" aria-expanded={!isCollapsed} onClick={() => toggleNavGroup(g.key)}>
                     <span>{g.label}</span>
                     <span className="nav-grouphead-sp" />
                     {isCollapsed && groupBadge > 0 && <span className="nav-badge sm">{groupBadge > 99 ? "99+" : groupBadge}</span>}

@@ -1,4 +1,5 @@
 import React from "react";
+import { UIcon } from "../icons";
 import { can } from "../lib/permissions";
 
 // A2 — ศูนย์จ่ายเงิน: ยุบทางเข้า เบิกจ่าย + ค้างจ่าย + หนี้สิน + รายจ่ายประจำ เป็นเมนูเดียว
@@ -10,10 +11,10 @@ const Loans = React.lazy(() => import("./Loans"));
 const Recurring = React.lazy(() => import("./RecurringBills"));
 
 const TABS = [
-  { key: "expenses", emoji: "💳", label: "เบิกจ่าย" },
-  { key: "payables", emoji: "💸", label: "ค้างจ่าย" },
-  { key: "loans", emoji: "🏧", label: "หนี้สิน" },
-  { key: "recurring", emoji: "🔁", label: "รายจ่ายประจำ" },
+  { key: "expenses", icon: "wallet", label: "เบิกจ่าย" },
+  { key: "payables", icon: "withdraw", label: "ค้างจ่าย" },
+  { key: "loans", icon: "building", label: "หนี้สิน" },
+  { key: "recurring", icon: "repeat", label: "รายจ่ายประจำ" },
 ];
 
 export default function PayCenter({ role, me, onOpenDoc, expenseFocus, onExpenseFocusConsumed, onRegisterAsset, onOpenPo, onGoSub, onGoCashflow }) {
@@ -28,10 +29,10 @@ export default function PayCenter({ role, me, onOpenDoc, expenseFocus, onExpense
   return (
     <div>
       {tabs.length > 1 && (
-        <div className="view-seg" style={{ marginBottom: 14, maxWidth: 640, flexWrap: "wrap" }}>
+        <div className="view-seg hub-tabs" style={{ marginBottom: 14, maxWidth: 640, flexWrap: "wrap" }}>
           {tabs.map((t) => (
-            <button key={t.key} className={"seg-btn" + (cur.key === t.key ? " on" : "")} onClick={() => setTab(t.key)}>
-              {t.emoji} {t.label}
+            <button key={t.key} className={"seg-btn hub-tab" + (cur.key === t.key ? " on" : "")} aria-pressed={cur.key === t.key} onClick={() => setTab(t.key)}>
+              <UIcon name={t.icon} size={18} /> {t.label}
             </button>
           ))}
         </div>

@@ -1,4 +1,5 @@
 import React from "react";
+import { UIcon } from "../icons";
 import { can } from "../lib/permissions";
 
 // A6 — งานบริการและติดตั้ง: ยุบทางเข้า ใบงาน + ปฏิทินงาน + วัสดุ/ต้นทุน + ส่งมอบงาน เป็นเมนูเดียว
@@ -11,10 +12,10 @@ const Jobs = React.lazy(() => import("./Jobs"));
 const Handover = React.lazy(() => import("./Handover"));
 
 const TABS = [
-  { key: "joborders", emoji: "🔧", label: "ใบงาน" },
-  { key: "schedule", emoji: "📅", label: "ปฏิทินงาน" },
-  { key: "jobs", emoji: "🔩", label: "วัสดุ & ต้นทุน" },
-  { key: "handover", emoji: "📤", label: "ส่งมอบงาน" },
+  { key: "joborders", icon: "wrench", label: "ใบงาน" },
+  { key: "schedule", icon: "calendar", label: "ปฏิทินงาน" },
+  { key: "jobs", icon: "box", label: "วัสดุ & ต้นทุน" },
+  { key: "handover", icon: "check", label: "ส่งมอบงาน" },
 ];
 
 export default function JobHub({ role, me, myTeam, jobFocus, onJobFocusConsumed, joPrefill, onJoPrefillConsumed,
@@ -33,10 +34,10 @@ export default function JobHub({ role, me, myTeam, jobFocus, onJobFocusConsumed,
   return (
     <div>
       {tabs.length > 1 && (
-        <div className="view-seg" style={{ marginBottom: 14, maxWidth: 620, flexWrap: "wrap" }}>
+        <div className="view-seg hub-tabs" style={{ marginBottom: 14, maxWidth: 620, flexWrap: "wrap" }}>
           {tabs.map((t) => (
-            <button key={t.key} className={"seg-btn" + (cur.key === t.key ? " on" : "")} onClick={() => setTab(t.key)}>
-              {t.emoji} {t.label}
+            <button key={t.key} className={"seg-btn hub-tab" + (cur.key === t.key ? " on" : "")} aria-pressed={cur.key === t.key} onClick={() => setTab(t.key)}>
+              <UIcon name={t.icon} size={18} /> {t.label}
             </button>
           ))}
         </div>

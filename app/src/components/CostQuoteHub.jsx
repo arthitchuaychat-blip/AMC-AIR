@@ -1,4 +1,5 @@
 import React from "react";
+import { UIcon } from "../icons";
 import { can } from "../lib/permissions";
 
 // A7 — ต้นทุนและเสนอราคา: ยุบทางเข้า BOQ (ต้นทุน) + ใบเสนอราคา เป็นเมนูเดียว 2 แท็บ
@@ -9,8 +10,8 @@ const BOQ = React.lazy(() => import("./BOQ"));
 const Quotation = React.lazy(() => import("./Quotation"));
 
 const TABS = [
-  { key: "boq", emoji: "📐", label: "ต้นทุน (BOQ)" },
-  { key: "quote", emoji: "📝", label: "ใบเสนอราคา" },
+  { key: "boq", icon: "clipboard", label: "ต้นทุน (BOQ)" },
+  { key: "quote", icon: "document", label: "ใบเสนอราคา" },
 ];
 
 export default function CostQuoteHub({ initialTab, role,
@@ -31,10 +32,10 @@ export default function CostQuoteHub({ initialTab, role,
   return (
     <div>
       {tabs.length > 1 && (
-        <div className="view-seg" style={{ marginBottom: 14, maxWidth: 420, flexWrap: "wrap" }}>
+        <div className="view-seg hub-tabs" style={{ marginBottom: 14, maxWidth: 420, flexWrap: "wrap" }}>
           {tabs.map((t) => (
-            <button key={t.key} className={"seg-btn" + (cur.key === t.key ? " on" : "")} onClick={() => setTab(t.key)}>
-              {t.emoji} {t.label}
+            <button key={t.key} className={"seg-btn hub-tab" + (cur.key === t.key ? " on" : "")} aria-pressed={cur.key === t.key} onClick={() => setTab(t.key)}>
+              <UIcon name={t.icon} size={18} /> {t.label}
             </button>
           ))}
         </div>

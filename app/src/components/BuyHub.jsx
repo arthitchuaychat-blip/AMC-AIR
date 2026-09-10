@@ -1,4 +1,5 @@
 import React from "react";
+import { UIcon } from "../icons";
 import { can } from "../lib/permissions";
 
 // A5 — จัดซื้อและเตรียมงาน: ยุบทางเข้า ใบสั่งซื้อ + เตรียมวัสดุ เป็นเมนูเดียว
@@ -9,8 +10,8 @@ const PurchaseOrders = React.lazy(() => import("./PurchaseOrders"));
 const MaterialPrep = React.lazy(() => import("./MaterialPrep"));
 
 const TABS = [
-  { key: "po", emoji: "🛍️", label: "ใบสั่งซื้อ" },
-  { key: "prep", emoji: "📥", label: "เตรียมวัสดุ" },
+  { key: "po", icon: "purchase", label: "ใบสั่งซื้อ" },
+  { key: "prep", icon: "box", label: "เตรียมวัสดุ" },
 ];
 
 export default function BuyHub({ role, poPrefill, onPoPrefillConsumed, poFocus, onPoFocusConsumed,
@@ -26,10 +27,10 @@ export default function BuyHub({ role, poPrefill, onPoPrefillConsumed, poFocus, 
   return (
     <div>
       {tabs.length > 1 && (
-        <div className="view-seg" style={{ marginBottom: 14, maxWidth: 420, flexWrap: "wrap" }}>
+        <div className="view-seg hub-tabs" style={{ marginBottom: 14, maxWidth: 420, flexWrap: "wrap" }}>
           {tabs.map((t) => (
-            <button key={t.key} className={"seg-btn" + (cur.key === t.key ? " on" : "")} onClick={() => setTab(t.key)}>
-              {t.emoji} {t.label}
+            <button key={t.key} className={"seg-btn hub-tab" + (cur.key === t.key ? " on" : "")} aria-pressed={cur.key === t.key} onClick={() => setTab(t.key)}>
+              <UIcon name={t.icon} size={18} /> {t.label}
             </button>
           ))}
         </div>

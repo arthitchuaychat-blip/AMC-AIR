@@ -1,4 +1,5 @@
 import React from "react";
+import { UIcon } from "../icons";
 import { can } from "../lib/permissions";
 
 // A4 — ลูกค้าและงานขาย: ยุบทางเข้า ลูกค้า + ท่อขาย + ติดตามลูกค้า เป็นเมนูเดียว
@@ -10,9 +11,9 @@ const Pipeline = React.lazy(() => import("./Pipeline"));
 const CustomerFollowup = React.lazy(() => import("./CustomerFollowup"));
 
 const TABS = [
-  { key: "customers", emoji: "👥", label: "ลูกค้า" },
-  { key: "pipeline", emoji: "🎯", label: "ท่อขาย" },
-  { key: "followup", emoji: "📞", label: "ติดตามลูกค้า" },
+  { key: "customers", icon: "users", label: "ลูกค้า" },
+  { key: "pipeline", icon: "target", label: "ท่อขาย" },
+  { key: "followup", icon: "phone", label: "ติดตามลูกค้า" },
 ];
 
 export default function SalesHub({ role, me, custFocus, onCustFocusConsumed, onOpenDoc, onGoChat, onOpenQuote, onCreateJob }) {
@@ -26,10 +27,10 @@ export default function SalesHub({ role, me, custFocus, onCustFocusConsumed, onO
   return (
     <div>
       {tabs.length > 1 && (
-        <div className="view-seg" style={{ marginBottom: 14, maxWidth: 520, flexWrap: "wrap" }}>
+        <div className="view-seg hub-tabs" style={{ marginBottom: 14, maxWidth: 520, flexWrap: "wrap" }}>
           {tabs.map((t) => (
-            <button key={t.key} className={"seg-btn" + (cur.key === t.key ? " on" : "")} onClick={() => setTab(t.key)}>
-              {t.emoji} {t.label}
+            <button key={t.key} className={"seg-btn hub-tab" + (cur.key === t.key ? " on" : "")} aria-pressed={cur.key === t.key} onClick={() => setTab(t.key)}>
+              <UIcon name={t.icon} size={18} /> {t.label}
             </button>
           ))}
         </div>

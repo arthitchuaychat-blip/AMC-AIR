@@ -1,0 +1,142 @@
+/* AMC AIR v828 — shared screen design.
+ * Keep business/status classes, density/font preferences, mobile navigation,
+ * and document templates intact. No :root overrides or print rules here.
+ * Scoped selectors also leave detached printDoc/PDF captures unchanged.
+ */
+@media screen {
+  .app.amc-design { height:100vh; height:100dvh; font-family:var(--appfont); font-size:15px }
+  .amc-design .main { min-width:0; padding:calc(28px * var(--dunit)) calc(30px * var(--dunit)); background:var(--bg) }
+  .amc-design .sidebar { width:252px; padding:18px 12px 12px; gap:16px; border-color:var(--line); box-shadow:none }
+  .amc-design .brand { gap:10px; padding:4px 6px 12px; border-bottom:1px solid var(--line) }
+  .amc-design .brand-text { flex:1; min-width:0 }
+  .amc-design .brand-name { font-size:19px; color:var(--navy); letter-spacing:0; white-space:nowrap }
+  .amc-design .brand-name span { color:var(--navy); font-weight:700 }
+  .amc-design .brand-sub { margin-top:3px; color:#607086; font-size:11.5px; letter-spacing:0 }
+  .amc-design .nav { gap:8px; scrollbar-width:thin; scrollbar-gutter:stable }
+  .amc-design .nav-label { color:#607086; font-size:11.5px; padding:4px 10px }
+  .amc-design .nav-group { gap:3px }
+  .amc-design .nav-grouphead { padding:9px 10px 5px; color:#607086; font-weight:600; font-size:12px; letter-spacing:0 }
+  .amc-design .nav-grouphead:hover { color:var(--navy) }
+  .amc-design .nav-item { grid-template-columns:20px minmax(0,1fr); gap:3px 11px; padding:10px 12px; min-height:48px; border-radius:10px; color:var(--ink-2); transition:background .15s,color .15s }
+  .amc-design .nav-item:has(.nav-badge) { padding-right:34px }
+  .amc-design .nav-item > svg { color:#607086; flex:none }
+  .amc-design .nav-th { font-size:14px; font-weight:600; line-height:1.45; white-space:normal; overflow:visible; overflow-wrap:anywhere }
+  .amc-design .nav-en { color:#607086; font-size:10.5px; line-height:1.3 }
+  .amc-design .nav-item:hover { transform:none; box-shadow:none; background:#edf3ff }
+  .amc-design .nav-item.on,
+  .amc-design .nav-item.on:hover { background:var(--primary); color:#fff; transform:none; box-shadow:none }
+  .amc-design .nav-item.on > svg { color:#fff }
+  .amc-design .nav-item.on .nav-en { color:#e0eaff }
+  .amc-design .side-foot { padding-top:12px; border-top:1px solid var(--line) }
+  .amc-design .user-chip { border-radius:10px; background:var(--surface-2) }
+  .amc-design .user-role { color:#607086 }
+  .amc-design .logout-btn { min-height:36px; border-radius:9px }
+  .amc-design .page-title { color:var(--navy); font-size:26px; line-height:1.45; flex-wrap:wrap; row-gap:2px; letter-spacing:-.25px; white-space:normal; overflow-wrap:anywhere }
+  .amc-design .page-title-en { font-size:13px; font-weight:400; color:#607086; letter-spacing:0 }
+  .amc-design .page-sub { font-size:14px; color:#607086; line-height:1.65; margin-top:5px }
+  .amc-design :is(.dash-head,.adm-head) { align-items:center; margin-bottom:22px; gap:14px }
+  .amc-design .sec-title { color:var(--navy); font-size:16px; line-height:1.5 }
+  .amc-design .sec-sub { color:#607086; font-size:12.5px; line-height:1.6 }
+
+  /* Quiet surfaces: retain warning borders and inline semantic backgrounds. */
+  .amc-design .card { background:var(--surface); border-radius:14px; padding:calc(18px * var(--dunit)); box-shadow:0 1px 3px rgba(23,43,77,.04) }
+  .amc-design :is(.job-card,.cat-card,.stat-card,.acc-card,.ho-card) { border-radius:14px; box-shadow:0 1px 3px rgba(23,43,77,.04) }
+  .amc-design :is(.job-card,.cat-card,.stat-card,.clickable-card):hover { transform:none; box-shadow:0 2px 8px rgba(23,43,77,.07) }
+  .amc-design .job-cards { gap:12px }
+  .amc-design .job-card-head { padding:11px 15px }
+  .amc-design .dch { padding:10px 15px; gap:7px 16px }
+  .amc-design .dch-cust { padding:7px 15px; gap:4px }
+  .amc-design .dch-cust-row { line-height:1.5 }
+  .amc-design .job-lines { padding:0 15px 12px }
+  .amc-design .job-actions { gap:8px; margin-top:10px }
+  .amc-design .cat-card-name { font-size:15px; line-height:1.5; letter-spacing:0 }
+  .amc-design :is(.cat-card-en,.cat-card-desc,.cat-lrow-sub,.cat-lrow-col>span,.cat-card-move) { color:#607086; line-height:1.5 }
+  .amc-design .cat-list { gap:0; border:1px solid var(--line); border-radius:14px; background:#fff }
+  .amc-design .cat-lrow { min-height:66px; padding:12px 16px; border:0; border-bottom:1px solid var(--line); border-radius:0; box-shadow:none }
+  .amc-design .cat-lrow:last-child { border-bottom:0 }
+  .amc-design .cat-lrow:hover { background:#f7faff; transform:none; box-shadow:none }
+  .amc-design .cat-lrow-name { font-size:14px; line-height:1.5 }
+  .amc-design .job-badge { border-radius:7px; padding:4px 9px; font-size:12px; line-height:1.45 }
+
+  /* Buttons retain success/danger states; hover no longer moves the target. */
+  .amc-design :is(.btn-primary,.btn-ghost,.btn-danger,.filterbar-toggle) { min-height:40px; border-radius:10px; font-size:14px; line-height:1.5; transition:background .15s,border-color .15s,box-shadow .15s }
+  .amc-design .btn-primary { padding:10px 17px; box-shadow:none }
+  .amc-design .btn-ghost { padding:9px 14px; box-shadow:none }
+  .amc-design .btn-ghost.sm { min-height:32px; padding:6px 10px; font-size:12.5px }
+  .amc-design :is(.btn-primary,.btn-ghost,.btn-danger-sm,.cat-chip,.seg-btn,.filterbar-toggle):hover { transform:none; box-shadow:none; filter:none }
+  .amc-design .btn-primary:hover:not(:disabled) { filter:brightness(.94) }
+  .amc-design .btn-primary:disabled { cursor:not-allowed }
+  .amc-design :is(button,a,input,select,textarea,[role="button"]):focus-visible { outline:2px solid var(--primary); outline-offset:3px }
+  .amc-design .nav-item.on:focus-visible { outline-offset:2px; outline-color:var(--navy) }
+  .amc-design :is(.btn-primary,.btn-ghost,.seg-btn,.filterbar-toggle) svg { flex:none; vertical-align:middle }
+
+  /* Hubs share the same underline tabs, without changing their keys/permissions. */
+  .amc-design .hub-tabs { display:flex; gap:8px; padding:0 0 2px; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; box-shadow:none }
+  .amc-design .hub-tabs .hub-tab { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 14px; border-radius:8px 8px 0 0; border-bottom:2px solid transparent; font-size:14px; font-weight:600 }
+  .amc-design .hub-tabs .hub-tab:hover { background:#eaf1ff; color:var(--primary) }
+  .amc-design .hub-tabs .hub-tab.on { color:var(--primary); background:transparent; border-bottom-color:var(--primary); box-shadow:none }
+  .amc-design .seg-btn { min-height:34px; line-height:1.45 }
+  .amc-design .seg-btn.on { box-shadow:none }
+  .amc-design .cat-filter { gap:8px; margin-bottom:14px }
+  .amc-design .cat-chip { min-height:34px; border-radius:9px; font-size:13px; padding:6px 12px }
+  .amc-design .cat-search { min-height:42px; border-radius:10px; padding:9px 12px; background:#fff }
+  .amc-design .cat-search input { font-size:14px; line-height:1.5 }
+  .amc-design .inp { border-radius:9px; font-size:14px; line-height:1.5 }
+  .amc-design :is(.inp,.cat-search input)::placeholder { color:#687a90; opacity:1 }
+  .amc-design .filterbar { margin-bottom:16px }
+  .amc-design .filterbar-toggle { background:var(--surface); box-shadow:none; padding:9px 13px }
+  .amc-design .filterbar-result { color:#607086; font-weight:500 }
+  .amc-design .filterbar-result.filtered { color:var(--primary) }
+  .amc-design .filterbar-body { background:var(--surface); border:1px solid var(--line); padding:14px; border-radius:12px }
+  .amc-design .dash-filter { box-shadow:none; border-radius:12px; gap:12px }
+
+  /* Existing executive metrics, with their original labels and data sources. */
+  .amc-design .dash-stat { padding:18px; min-width:0 }
+  .amc-design .dash-stat .stat-top { gap:12px; align-items:flex-start; margin-bottom:14px; min-height:38px }
+  .amc-design .dash-stat .stat-label { font-size:13px; line-height:1.55; margin-top:0; font-weight:500 }
+  .amc-design .dash-stat .stat-ico { flex:none; width:38px; height:38px; border-radius:11px }
+  .amc-design .dash-stat .stat-val { font-size:clamp(22px,2.1vw,28px); line-height:1.3; letter-spacing:-.4px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere }
+  .amc-design .dash-stat .stat-sub { font-size:12px; line-height:1.55; margin-top:7px; color:#607086 }
+  .amc-design .dash-stat .stat-more { color:#607086; font-size:12px; margin-top:12px }
+  .amc-design .dash-stat--hero { background:var(--navy); border-color:var(--navy); color:#fff }
+  .amc-design .dash-stat--hero .stat-label { color:#dbeafe }
+  .amc-design .dash-stat--hero .stat-sub { color:#dbeafe }
+  .amc-design .dash-stat--hero .stat-more,
+  .amc-design .dash-stat--hero:hover .stat-more { color:#bae6fd }
+  .amc-design :is(.acc-table,.kpi-table) th { color:#52647c; background:#f7faff; line-height:1.5 }
+  .amc-design :is(.acc-table,.kpi-table) td { line-height:1.55 }
+  .amc-design .cfx-root { --cfx-ink3:#607086 }
+  .amc-design :is(.cfx-scard,.cfx-panel) { box-shadow:0 1px 3px rgba(23,43,77,.04) }
+  .amc-design :is(.modal,.drawer) { border-radius:16px; box-shadow:0 18px 60px rgba(18,54,91,.18) }
+}
+
+@media screen and (min-width:761px) and (max-width:1180px) {
+  .amc-design .sidebar { width:232px; padding-inline:10px }
+  .amc-design .main { padding:22px }
+  .amc-design .page-title { font-size:24px }
+}
+@media screen and (max-width:760px) {
+  .amc-design .main { padding:18px 14px }
+  .amc-design .sidebar { width:284px; padding:16px 12px; box-shadow:var(--shadow-lg) }
+  .amc-design .nav-item { min-height:48px }
+  .amc-design .topbar { padding:8px 12px; gap:10px }
+  .amc-design .topbar .brand-name { font-size:17px }
+  .amc-design .page-title { font-size:23px }
+  .amc-design .page-title-en { display:block; margin-left:0 }
+  .amc-design .page-sub { font-size:13px }
+  .amc-design :is(.dash-head,.adm-head) { gap:12px; margin-bottom:18px }
+  .amc-design .card { padding:calc(14px * var(--dunit)) }
+  .amc-design .hub-tabs { gap:4px }
+  .amc-design .hub-tabs .hub-tab { padding:10px; font-size:13px; gap:6px }
+  .amc-design .cat-filter { gap:7px }
+  .amc-design .cat-chip { min-height:40px }
+  .amc-design .filterbar-body { padding:12px }
+  .amc-design .cat-lrow { padding:12px; gap:10px }
+  .amc-design .dash-stat { padding:16px }
+  .amc-design .dash-stat .stat-val { font-size:27px }
+  .amc-design :is(.btn-primary,.btn-ghost,.filterbar-toggle) { min-height:44px }
+}
+@media screen and (prefers-reduced-motion:reduce) {
+  .amc-design :is(.sidebar,.nav-item,.btn-primary,.btn-ghost,.cat-chip,.seg-btn,.job-card,.cat-card,.stat-card) { transition:none }
+  .amc-design .filterbar-body { animation:none }
+}
