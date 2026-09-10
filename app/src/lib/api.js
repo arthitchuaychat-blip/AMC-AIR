@@ -4,6 +4,7 @@ import { deriveJobStatus } from "./schedule";
 import { ROLE_LABEL } from "./permissions";
 import { installmentAt, dueDateOf } from "./loans";
 import { requireFinancingState, requireSubmittedInstallment } from "./financingGuards";
+import { chatStageToPipe, pipeStageToChat } from "./pipeline";
 
 // HR position = the role assigned in Settings (single source of truth), falling back to any legacy free-text department
 const posLabel = (p) => (p && (ROLE_LABEL[p.role] || p.department)) || "";
@@ -1418,6 +1419,11 @@ export async function setCustomerPipeline(id, patch) {
   const { error } = await supabase.from("customers").update(row).eq("id", id);
   if (error) throw error;
   bustCache("listCustomers"); bustCache("listCustomersLite");   // ล้างแคชให้บอร์ด/ลิสต์เห็นค่าล่าสุด
+  // D1: เปลี่ยนสถานะท่อขาย → ซิงค์ลงคอนแทคแชต (LINE/FB) ที่ผูกกับลูกค้านี้ (ตามตารางแปลง)
+  if (patch.stage !== undefined) {
+    const chatStage = pipeStageToChat(row.stage);
+    if (chatStage) { try { await supabase.from("line_contacts").update({ stage: chatStage }).eq("customer_id", id); await supabase.from("fb_contacts").update({ stage: chatStage }).eq("customer_id", id); } catch (_) { /* ไม่มีคอนแทคผูก/คอลัมน์ = ข้าม */ } }
+  }
 }
 
 // ---------- ติดตามลูกค้า: ประวัติ + คิววันนี้ (customer_followups, mig 237) ----------
@@ -5465,6 +5471,8 @@ export async function searchLineMessages(term, { limit = 300 } = {}) {
 export async function linkLineContact(uid, customerId) {
   const { error } = await supabase.from("line_contacts").update({ customer_id: customerId || null }).eq("line_user_id", uid);
   if (error) throw error;
+  // D1: พอผูกลูกค้าแล้ว ดันสถานะแชตปัจจุบัน → ลูกค้า (ให้ท่อขายตรงกับบทสนทนา)
+  if (customerId) { try { const { data } = await supabase.from("line_contacts").select("stage").eq("line_user_id", uid).maybeSingle(); await _syncContactStageToCustomer("line_contacts", "line_user_id", uid, data?.stage); } catch (_) {} }
 }
 
 export async function markLineRead(uid) {
@@ -5499,6 +5507,7 @@ export async function listFbMessages(psid, { limit = CHAT_TAIL, before } = {}) {
 export async function linkFbContact(psid, customerId) {
   const { error } = await supabase.from("fb_contacts").update({ customer_id: customerId || null }).eq("psid", psid);
   if (error) throw error;
+  if (customerId) { try { const { data } = await supabase.from("fb_contacts").select("stage").eq("psid", psid).maybeSingle(); await _syncContactStageToCustomer("fb_contacts", "psid", psid, data?.stage); } catch (_) {} }
 }
 export async function markFbRead(psid) {
   await supabase.from("fb_contacts").update({ unread: 0 }).eq("psid", psid);
@@ -5615,9 +5624,18 @@ export async function deleteCalendarEvent(id) {
 }
 
 // CRM: set a contact's stage / responsible staff
+// D1: คอนแทคแชตที่ผูกลูกค้าแล้ว เปลี่ยนสถานะ → ซิงค์ขึ้น customers.stage (ตัวหลัก) ตามตารางแปลง
+async function _syncContactStageToCustomer(table, keyCol, keyVal, chatStage) {
+  try {
+    const { data } = await supabase.from(table).select("customer_id").eq(keyCol, keyVal).maybeSingle();
+    const cid = data?.customer_id, pipe = chatStageToPipe(chatStage);
+    if (cid && pipe) { await supabase.from("customers").update({ stage: pipe }).eq("id", cid); bustCache("listCustomers"); bustCache("listCustomersLite"); }
+  } catch (_) { /* ไม่มีคอลัมน์/ไม่ผูกลูกค้า = ข้าม (ไม่กระทบการเปลี่ยนสถานะแชต) */ }
+}
 export async function setLineStage(uid, stage) {
   const { error } = await supabase.from("line_contacts").update({ stage }).eq("line_user_id", uid);
   if (error) throw error;
+  await _syncContactStageToCustomer("line_contacts", "line_user_id", uid, stage);
 }
 // ปิด/เปิดบอท AI เฉพาะห้องนั้น (mig 164) — ใช้ตอนพนักงานคุยปิดการขายเอง ไม่อยากให้บอทแทรก
 export async function setLineAiOff(uid, off) {
@@ -5633,7 +5651,7 @@ const _noteErr = (e) => new Error(/note|tags|PGRST204/i.test(e?.message || "") ?
 export async function setLineNote(uid, note) { const { error } = await supabase.from("line_contacts").update({ note: note || null }).eq("line_user_id", uid); if (error) throw _noteErr(error); }
 export async function setLineTags(uid, tags) { const { error } = await supabase.from("line_contacts").update({ tags: (tags && tags.length) ? tags : null }).eq("line_user_id", uid); if (error) throw _noteErr(error); }
 // FB: stage/owner/note/tags (fb_contacts มีคอลัมน์ครบตั้งแต่ mig 043 + note/tags ที่ 189)
-export async function setFbStage(psid, stage) { const { error } = await supabase.from("fb_contacts").update({ stage }).eq("psid", psid); if (error) throw error; }
+export async function setFbStage(psid, stage) { const { error } = await supabase.from("fb_contacts").update({ stage }).eq("psid", psid); if (error) throw error; await _syncContactStageToCustomer("fb_contacts", "psid", psid, stage); }
 export async function setFbOwner(psid, userId) { const { error } = await supabase.from("fb_contacts").update({ assigned_to: userId || null }).eq("psid", psid); if (error) throw error; }
 export async function setFbNote(psid, note) { const { error } = await supabase.from("fb_contacts").update({ note: note || null }).eq("psid", psid); if (error) throw _noteErr(error); }
 export async function setFbTags(psid, tags) { const { error } = await supabase.from("fb_contacts").update({ tags: (tags && tags.length) ? tags : null }).eq("psid", psid); if (error) throw _noteErr(error); }
