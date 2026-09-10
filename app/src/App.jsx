@@ -55,6 +55,7 @@ const Invoices = React.lazy(() => import("./components/Invoices"));
 const Receipts = React.lazy(() => import("./components/Receipts"));
 const AdjustmentNotes = React.lazy(() => import("./components/AdjustmentNotes"));
 const Receivables = React.lazy(() => import("./components/Receivables"));
+const RecvCenter = React.lazy(() => import("./components/RecvCenter"));
 const Payables = React.lazy(() => import("./components/Payables"));
 const PayCenter = React.lazy(() => import("./components/PayCenter"));
 const MaterialPrep = React.lazy(() => import("./components/MaterialPrep"));
@@ -96,6 +97,7 @@ const NAV = {
   adjnote: { th: "ใบเพิ่ม/ลดหนี้", en: "Credit / Debit Note", icon: "clipboard" },
   billing: { th: "ใบวางบิล", en: "Billing Notes", icon: "clipboard" },
   receivables: { th: "เงินค้างรับ", en: "Receivables", icon: "trend" },
+  recvcenter: { th: "ศูนย์รับเงิน", en: "Receiving Center", icon: "trend" },
   payables: { th: "ค้างจ่าย", en: "Payables", icon: "trend" },
   tax: { th: "รายงานภาษี", en: "Tax Report", icon: "clipboard" },
   profit: { th: "กำไร/งาน", en: "Profit", icon: "trend" },
@@ -125,7 +127,7 @@ const NAV_EMOJI = {
   myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
   pipeline: "🎯", reviews: "🌟", promo: "🎟️", marketing: "📣", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
   subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", adjnote: "📃", billing: "📑",
-  receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", loans: "🏧", recurring: "🔁", paycenter: "💳", assets: "🏗️", expenses: "💳", accounting: "📚",
+  receivables: "💰", recvcenter: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", loans: "🏧", recurring: "🔁", paycenter: "💳", assets: "🏗️", expenses: "💳", accounting: "📚",
   joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
   suppliers: "🏭", prep: "📥", po: "🛍️", tools: "🔨", settings: "⚙️",
 };
@@ -135,8 +137,8 @@ const NAV_EMOJI = {
 const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "customers", "pipeline", "followup", "weborders", "marketing"] },
-  { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt", "adjnote"] },
-  { key: "finance", label: "การเงิน", ids: ["receivables", "paycenter", "tax", "profit", "cashflow", "assets", "accounting"] },
+  { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "adjnote"] },
+  { key: "finance", label: "การเงิน", ids: ["recvcenter", "paycenter", "tax", "profit", "cashflow", "assets", "accounting"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po", "tools"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard", "kpi"] },
@@ -147,7 +149,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-10·C1 ใบเสนอเร็ว: กรอกลูกค้า+รายการ+ราคา → สร้าง BOQ อัตโนมัติ (บริการ=ต้นทุน0 · สินค้า=ต้นทุนจากคลัง) v807";
+const BUILD = "2026-09-10·A3 ยุบเมนู: ศูนย์รับเงิน (ค้างรับ+วางบิล+ใบเสร็จ รวมแท็บเดียว คุมสิทธิ์รายแท็บ) v808";
 
 function SetupNotice() {
   return (
@@ -643,13 +645,20 @@ export default function App() {
           onCreatePo={(q) => { setPoPrefill({ quoteNo: q.quote_no, poType: "ac", items: (q.items || []).filter((it) => it.item_code && it.kind === "ac").map((it) => ({ code: it.item_code, qty: Number(it.qty) || 1 })) }); go("po"); }}
           onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "invoice" && <Invoices role={role} focus={invoiceFocus} onFocusConsumed={() => setInvoiceFocus(null)} fromQuote={invoiceFromQuote} onFromQuoteConsumed={() => setInvoiceFromQuote(null)}
-          onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }}
+          onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("recvcenter"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "receipt" && <Receipts role={role} focus={receiptFocus} onFocusConsumed={() => setReceiptFocus(null)} fromInvoice={receiptFromInvoice} onFromInvoiceConsumed={() => setReceiptFromInvoice(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "adjnote" && <AdjustmentNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {view === "billing" && <BillingNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
-          onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
+          onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("recvcenter"); }} />}
+        {/* A3: ศูนย์รับเงิน (แท็บ ค้างรับ/วางบิล/ใบเสร็จ) — คงหน้าเดิมไว้เผื่อ deep-link/ลิงก์เก่า */}
+        {view === "recvcenter" && <RecvCenter role={role}
+          onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }}
+          onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
+          onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenBoq={(bn) => { setBoqFocus(bn); go("boq"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }}
+          receiptFocus={receiptFocus} onReceiptFocusConsumed={() => setReceiptFocus(null)}
+          receiptFromInvoice={receiptFromInvoice} onReceiptFromInvoiceConsumed={() => setReceiptFromInvoice(null)} />}
         {view === "receivables" && <Receivables role={role} onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
         {/* A2: ศูนย์จ่ายเงิน (แท็บ เบิกจ่าย/ค้างจ่าย/หนี้สิน/รายจ่ายประจำ) — คงหน้าเดิมไว้เผื่อ deep-link/ลิงก์เก่า */}
         {view === "paycenter" && <PayCenter role={role} me={profile}
