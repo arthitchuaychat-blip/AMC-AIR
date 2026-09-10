@@ -1,7 +1,8 @@
 /* ดีไซน์ใหม่หน้ากระแสเงินสด — ทุก selector อยู่ใต้ .cfx-root เท่านั้น จึงไม่กระทบหน้าอื่น (ห้ามถอด prefix) */
 .cfx-root{
-  --cfx-ink:#1c2b3a; --cfx-ink2:#54677b; --cfx-ink3:#8a9aac; --cfx-line:#e5edf4; --cfx-line2:#d6e2ee;
-  --cfx-primary:#2f6fdb; --cfx-primary-d:#245fc0; --cfx-navy:#1c3c63; --cfx-cyan:#38b6f0;
+  /* aligned to global design tokens (styles.css :root) so palette is one source of truth */
+  --cfx-ink:var(--ink); --cfx-ink2:var(--ink-2); --cfx-ink3:var(--ink-3); --cfx-line:var(--line); --cfx-line2:#d6e2ee;
+  --cfx-primary:var(--primary); --cfx-primary-d:#1749a8; --cfx-navy:var(--navy); --cfx-cyan:var(--accent);
   --cfx-good:#17a34a; --cfx-good-ink:#0f7a37; --cfx-good-bg:#e7f6ec;
   --cfx-warn:#e2790f; --cfx-warn-ink:#b45c07; --cfx-warn-bg:#fdeede;
   --cfx-bad:#d64545; --cfx-bad-ink:#a83232; --cfx-bad-bg:#fbebeb; --cfx-panel:#fff; --cfx-accent-bg:#e8f1fd;
