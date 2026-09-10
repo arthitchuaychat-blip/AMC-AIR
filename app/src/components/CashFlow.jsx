@@ -137,21 +137,23 @@ export default function CashFlow() {
     return { nowBal: actual, monthEndBal: actual + projToMonthEnd, minBal, minDate };
   }, [ents, openingVal]);
 
-  // การ์ดสรุป: รับ/จ่ายจริง "เดือนปัจจุบัน" + %เทียบเดือนก่อน (แสดง %เฉพาะเมื่อมีฐานให้เทียบจริง)
-  const monthAgg = React.useMemo(() => {
-    const now = new Date();
-    const mk = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-    const pm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  // การ์ดสรุป: รับ/จ่ายจริง + คงเหลือคาดการณ์ "ของเดือนที่เลือก" (ตามตัวเลือกเดือน) + %เทียบเดือนก่อนหน้า
+  // (แสดง %เฉพาะเมื่อมีฐานให้เทียบจริง · เงินพร้อมใช้ = ยอดจริง ณ ตอนนี้ ไม่อิงเดือน)
+  const anchorAgg = React.useMemo(() => {
+    const mk = `${anchor.getFullYear()}-${pad(anchor.getMonth() + 1)}`;
+    const lastY = ymd(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0));
+    const pm = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
     const pmk = `${pm.getFullYear()}-${pad(pm.getMonth() + 1)}`;
-    let inNow = 0, outNow = 0, inPrev = 0, outPrev = 0;
+    let inNow = 0, outNow = 0, inPrev = 0, outPrev = 0, endBal = openingVal;
     ents.forEach((e) => {
-      if (e.status !== "actual") return; const amt = Number(e.amount) || 0; const k = e.entry_date.slice(0, 7);
-      if (k === mk) { if (e.direction === "in") inNow += amt; else outNow += amt; }
-      else if (k === pmk) { if (e.direction === "in") inPrev += amt; else outPrev += amt; }
+      const amt = Number(e.amount) || 0, k = e.entry_date.slice(0, 7), v = sgn(e) * amt;
+      if (e.status === "actual" && k === mk) { if (e.direction === "in") inNow += amt; else outNow += amt; }
+      if (e.status === "actual" && k === pmk) { if (e.direction === "in") inPrev += amt; else outPrev += amt; }
+      if (e.entry_date <= lastY) endBal += v;   // คาดการณ์ (จริง+ประมาณการ) ถึงสิ้นเดือนที่เลือก
     });
     const pct = (a, b) => (b > 0 ? Math.round((a - b) / b * 100) : null);
-    return { inNow, outNow, inPct: pct(inNow, inPrev), outPct: pct(outNow, outPrev) };
-  }, [ents]);
+    return { inNow, outNow, endBal, inPct: pct(inNow, inPrev), outPct: pct(outNow, outPrev) };
+  }, [ents, anchor, openingVal]);
   // รายการจ่ายที่กำลังจะถึง (ประมาณการ เงินออก วันนี้เป็นต้นไป) — ใช้ในแผง "ต้องติดตาม"
   const upcoming = React.useMemo(() => {
     const t = todayYmd();
@@ -196,7 +198,7 @@ export default function CashFlow() {
   const runwayAlert = cash.minBal < 0 || (reserve > 0 && cash.minBal < reserve);
 
   // ช่วงที่กำลังดู (สำหรับแยกหมวด + ส่งออก)
-  const viewRange = (grain === "day" || grain === "chart")
+  const viewRange = (grain === "day" || grain === "chart" || grain === "calendar")
     ? [ymd(new Date(anchor.getFullYear(), anchor.getMonth(), 1)), ymd(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0))]
     : grain === "year" ? null : [`${year}-01-01`, `${year}-12-31`];
   const viewEnts = React.useMemo(() => viewRange ? ents.filter((e) => e.entry_date >= viewRange[0] && e.entry_date <= viewRange[1]) : ents, [ents, grain, anchor, year]); // eslint-disable-line
@@ -222,6 +224,16 @@ export default function CashFlow() {
 
   const ENTS2 = [["all", "รวม 2 กิจการ"], ["company", "บริษัท"], ["personal", "บุคคล"]];
   const svgDL = <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>;
+  // ป้าย %เทียบเดือนก่อน — ลูกศรตามเครื่องหมายจริง + สีตามความหมาย (goodUp: รับ→ขึ้นดี · จ่าย→ขึ้นแย่)
+  const pctBadge = (pct, goodUp) => {
+    if (pct == null) return null;
+    const arrow = pct > 0 ? "▲" : pct < 0 ? "▼" : "—";
+    const good = pct === 0 ? null : ((pct > 0) === goodUp);
+    const color = good == null ? "var(--cfx-ink3)" : good ? "var(--cfx-good-ink)" : "var(--cfx-warn-ink)";
+    return <span style={{ color, fontWeight: 600 }}>{arrow} {Math.abs(pct)}%</span>;
+  };
+  const anchorIsThisMonth = `${anchor.getFullYear()}-${pad(anchor.getMonth() + 1)}` === `${new Date().getFullYear()}-${pad(new Date().getMonth() + 1)}`;
+  const monLabel = anchorIsThisMonth ? "เดือนนี้" : thMonth(anchor);
   return (
     <div className="cfx-root">
       <div className="cfx-head">
@@ -267,18 +279,18 @@ export default function CashFlow() {
         </div>
         <div className="cfx-scard">
           <div className="cfx-ci green"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7" /></svg></div>
-          <div className="ct">เงินรับเดือนนี้</div><div className="cv cfx-pos">{fmtBaht(monthAgg.inNow)}</div>
-          <div className="cd">{monthAgg.inPct != null ? <><span className="cfx-up">▲ {monthAgg.inPct}%</span> จากเดือนก่อน</> : "รับจริงเดือนนี้"}</div>
+          <div className="ct">เงินรับ · {monLabel}</div><div className="cv cfx-pos">{fmtBaht(anchorAgg.inNow)}</div>
+          <div className="cd">{anchorAgg.inPct != null ? <>{pctBadge(anchorAgg.inPct, true)} จากเดือนก่อน</> : "รับจริงในเดือนนี้"}</div>
         </div>
         <div className="cfx-scard">
           <div className="cfx-ci orange"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" /></svg></div>
-          <div className="ct">เงินจ่ายเดือนนี้</div><div className="cv" style={{ color: "var(--cfx-warn-ink)" }}>{fmtBaht(monthAgg.outNow)}</div>
-          <div className="cd">{monthAgg.outPct != null ? <><span className="cfx-dn">▲ {monthAgg.outPct}%</span> จากเดือนก่อน</> : "จ่ายจริงเดือนนี้"}</div>
+          <div className="ct">เงินจ่าย · {monLabel}</div><div className="cv" style={{ color: "var(--cfx-warn-ink)" }}>{fmtBaht(anchorAgg.outNow)}</div>
+          <div className="cd">{anchorAgg.outPct != null ? <>{pctBadge(anchorAgg.outPct, false)} จากเดือนก่อน</> : "จ่ายจริงในเดือนนี้"}</div>
         </div>
         <div className="cfx-scard">
           <div className="cfx-ci blue"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 16v-5M12 16V8M17 16v-8" /></svg></div>
-          <div className="ct">เงินคงเหลือคาดการณ์</div><div className="cv" style={{ color: cash.monthEndBal < 0 ? "var(--cfx-bad-ink)" : "var(--cfx-primary)" }}>{fmtBaht(cash.monthEndBal)}</div>
-          <div className="cd">ณ สิ้นเดือนนี้</div>
+          <div className="ct">เงินคงเหลือคาดการณ์</div><div className="cv" style={{ color: anchorAgg.endBal < 0 ? "var(--cfx-bad-ink)" : "var(--cfx-primary)" }}>{fmtBaht(anchorAgg.endBal)}</div>
+          <div className="cd">ณ สิ้น{anchorIsThisMonth ? "เดือนนี้" : monLabel}</div>
         </div>
       </div>}
 
@@ -332,7 +344,7 @@ export default function CashFlow() {
       {!loading && catRows.length > 0 && (
         <div className="cfx-panel" style={{ marginTop: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-            <b style={{ fontSize: 15 }}>💸 เงินออกแยกหมวด <span className="jo-dim" style={{ fontWeight: 400, fontSize: 12.5 }}>({grain === "day" ? thMonth(anchor) : grain === "year" ? "ทุกปี" : `ปี ${year + 543}`} · จริง+คาดการณ์)</span></b>
+            <b style={{ fontSize: 15 }}>💸 เงินออกแยกหมวด <span className="jo-dim" style={{ fontWeight: 400, fontSize: 12.5 }}>({(grain === "day" || grain === "chart" || grain === "calendar") ? thMonth(anchor) : grain === "year" ? "ทุกปี" : `ปี ${year + 543}`} · จริง+คาดการณ์)</span></b>
             <span className="jo-dim" style={{ fontSize: 12.5 }}>รวมออก {fmtBaht(catTotal)}</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -362,41 +374,53 @@ function ChartView({ ents, opening, anchor, withProj, sgn, reserve }) {
   const y = anchor.getFullYear(), m = anchor.getMonth();
   const monthStr = `${y}-${pad(m + 1)}`, firstYmd = monthStr + "-01";
   const days = new Date(y, m + 1, 0).getDate();
-  const use = withProj ? ents : ents.filter((e) => e.status === "actual");
-  const byDay = {}; let balStart = Number(opening) || 0;
-  use.forEach((e) => { const v = sgn(e) * (Number(e.amount) || 0); if (e.entry_date < firstYmd) { balStart += v; return; } if (e.entry_date.slice(0, 7) !== monthStr) return; byDay[e.entry_date] = (byDay[e.entry_date] || 0) + v; });
   const todayStr = ymd(new Date());
-  const pts = []; let run = balStart;
-  for (let d = 1; d <= days; d++) { const k = `${monthStr}-${pad(d)}`; run += byDay[k] || 0; pts.push({ d, k, bal: run }); }
-  if (!pts.length) return <div className="cfx-empty">ยังไม่มีข้อมูลในเดือนนี้</div>;
-  // แบ่งช่วง จริง (ถึงวันนี้) / คาดการณ์ (วันนี้เป็นต้นไป)
-  let cut; if (todayStr > pts[pts.length - 1].k) cut = pts.length - 1; else if (todayStr < pts[0].k) cut = -1; else cut = pts.findIndex((p) => p.k >= todayStr);
+  const cmp = monthStr.localeCompare(todayStr.slice(0, 7));   // <0 อดีต · 0 เดือนนี้ · >0 อนาคต
+  const todayInMonth = cmp === 0;
+  // แยกเดลต้ารายวัน: "จริงเท่านั้น" (เส้นทึบ) ออกจาก "คาดการณ์" (เส้นประ) — กันเส้นยอดจริงบวกยอดคาดการณ์เข้าไป
+  const actByDay = {}, projByDay = {};
+  let startA = Number(opening) || 0, startF = Number(opening) || 0;
+  ents.forEach((e) => {
+    const v = sgn(e) * (Number(e.amount) || 0), isAct = e.status === "actual";
+    if (e.entry_date < firstYmd) { startF += v; if (isAct) startA += v; return; }
+    if (e.entry_date.slice(0, 7) !== monthStr) return;
+    if (isAct) actByDay[e.entry_date] = (actByDay[e.entry_date] || 0) + v;
+    else { let d = e.entry_date; if (todayInMonth && d < todayStr) d = todayStr; projByDay[d] = (projByDay[d] || 0) + v; }   // ค้าง=รวมที่วันนี้
+  });
+  let runA = startA; const actBal = [];
+  for (let d = 1; d <= days; d++) { runA += actByDay[`${monthStr}-${pad(d)}`] || 0; actBal.push(runA); }
+  const cut = cmp < 0 ? days - 1 : cmp > 0 ? -1 : (new Date().getDate() - 1);   // เส้นจริงวาดถึง index นี้ (อดีต=ทั้งเดือน · อนาคต=ไม่มี)
+  // เส้นคาดการณ์: เริ่มจากยอดจริงวันนี้ แล้วบวกรายการคาดการณ์วันต่อวัน
+  const fcPts = [];
+  if (withProj) { let fc = cut >= 0 ? actBal[cut] : startF; for (let i = Math.max(cut, 0); i <= days - 1; i++) { fc += projByDay[`${monthStr}-${pad(i + 1)}`] || 0; fcPts.push({ i, bal: fc }); } }
   const W = 720, H = 280, padL = 62, padR = 14, padT = 22, padB = 32;
-  const vals = [balStart, ...pts.map((p) => p.bal)]; if (reserve > 0) vals.push(reserve); vals.push(0);
+  const vals = [reserve > 0 ? reserve : 0, 0];
+  if (cut >= 0) for (let i = 0; i <= cut; i++) vals.push(actBal[i]);
+  fcPts.forEach((p) => vals.push(p.bal));
   let lo = Math.min(...vals), hi = Math.max(...vals); if (hi === lo) hi = lo + 1000; const rng = hi - lo;
   const X = (i) => padL + (days <= 1 ? 0 : (i / (days - 1)) * (W - padL - padR));
   const Y = (v) => padT + (1 - (v - lo) / rng) * (H - padT - padB);
-  const seg = (a, b) => pts.slice(a, b + 1).map((p, i) => `${X(a + i)},${Y(p.bal)}`).join(" ");
+  const actLine = () => { const p = []; for (let i = 0; i <= cut; i++) p.push(`${X(i)},${Y(actBal[i])}`); return p.join(" "); };
+  const fcLine = () => { const p = []; if (cut >= 0) p.push(`${X(cut)},${Y(actBal[cut])}`); fcPts.forEach((q) => p.push(`${X(q.i)},${Y(q.bal)}`)); return p.join(" "); };
   const nfmt = (v) => Math.round(v).toLocaleString("en-US");
   const gy = [lo, lo + rng / 2, hi];
-  const xticks = [0, Math.floor((days - 1) / 3), Math.floor(2 * (days - 1) / 3), days - 1].filter((v, i, a) => a.indexOf(v) === i);
-  const areaSolidEnd = cut >= 0 ? cut : -1;
+  const xt = [0, Math.floor((days - 1) / 3), Math.floor(2 * (days - 1) / 3), days - 1].filter((v, i, a) => a.indexOf(v) === i);
   return (
     <div>
       <div className="cfx-legend">
         <span><span className="cfx-lg" style={{ borderColor: "#2f6fdb" }} />ยอดจริง</span>
-        <span><span className="cfx-lg" style={{ borderColor: "#38b6f0", borderTopStyle: "dashed" }} />คาดการณ์</span>
+        {withProj && <span><span className="cfx-lg" style={{ borderColor: "#38b6f0", borderTopStyle: "dashed" }} />คาดการณ์</span>}
         {reserve > 0 && <span><span className="cfx-lg" style={{ borderColor: "#e2790f", borderTopStyle: "dashed" }} />เงินสำรองขั้นต่ำ ({fmtBaht(reserve)})</span>}
       </div>
       <svg className="cfx-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="กราฟแนวโน้มเงินคงเหลือรายวัน">
         {gy.map((v, i) => <line key={i} x1={padL} y1={Y(v)} x2={W - padR} y2={Y(v)} stroke="#eef3f8" strokeWidth="1" />)}
         {gy.map((v, i) => <text key={"t" + i} x={padL - 8} y={Y(v) + 4} textAnchor="end" fill="#8a9aac" fontSize="11" fontFamily="Sarabun">{nfmt(v)}</text>)}
         {reserve > 0 && <line x1={padL} y1={Y(reserve)} x2={W - padR} y2={Y(reserve)} stroke="#e2790f" strokeWidth="2" strokeDasharray="6 5" />}
-        {areaSolidEnd >= 0 && <polygon points={`${X(0)},${Y(lo)} ${seg(0, areaSolidEnd)} ${X(areaSolidEnd)},${Y(lo)}`} fill="#2f6fdb" opacity="0.08" />}
-        {areaSolidEnd >= 0 && <polyline points={seg(0, areaSolidEnd)} fill="none" stroke="#2f6fdb" strokeWidth="3" strokeLinejoin="round" />}
-        {cut < pts.length - 1 && <polyline points={seg(Math.max(cut, 0), pts.length - 1)} fill="none" stroke="#38b6f0" strokeWidth="3" strokeDasharray="7 6" strokeLinejoin="round" />}
-        {cut >= 0 && cut < pts.length && <><line x1={X(cut)} y1={padT - 6} x2={X(cut)} y2={H - padB} stroke="#b7c6d6" strokeWidth="1.5" strokeDasharray="4 4" /><text x={X(cut)} y={padT - 10} textAnchor="middle" fill="#54677b" fontSize="11.5" fontFamily="Sarabun" fontWeight="600">วันนี้ · {pts[cut].d} {thShort(pts[cut].k).replace(/^\d+\s/, "")}</text><circle cx={X(cut)} cy={Y(pts[cut].bal)} r="5" fill="#2f6fdb" /></>}
-        {xticks.map((i) => <text key={"x" + i} x={X(i)} y={H - padB + 18} textAnchor="middle" fill="#8a9aac" fontSize="11" fontFamily="Sarabun">{pts[i].d} {thShort(pts[i].k).replace(/^\d+\s/, "")}</text>)}
+        {cut >= 0 && <polygon points={`${X(0)},${Y(lo)} ${actLine()} ${X(cut)},${Y(lo)}`} fill="#2f6fdb" opacity="0.08" />}
+        {cut >= 0 && <polyline points={actLine()} fill="none" stroke="#2f6fdb" strokeWidth="3" strokeLinejoin="round" />}
+        {withProj && fcPts.length > 0 && <polyline points={fcLine()} fill="none" stroke="#38b6f0" strokeWidth="3" strokeDasharray="7 6" strokeLinejoin="round" />}
+        {todayInMonth && cut >= 0 && <><line x1={X(cut)} y1={padT - 6} x2={X(cut)} y2={H - padB} stroke="#b7c6d6" strokeWidth="1.5" strokeDasharray="4 4" /><text x={X(cut)} y={padT - 10} textAnchor="middle" fill="#54677b" fontSize="11.5" fontFamily="Sarabun" fontWeight="600">วันนี้ · {thShort(todayStr)}</text><circle cx={X(cut)} cy={Y(actBal[cut])} r="5" fill="#2f6fdb" /></>}
+        {xt.map((i) => <text key={"x" + i} x={X(i)} y={H - padB + 18} textAnchor="middle" fill="#8a9aac" fontSize="11" fontFamily="Sarabun">{thShort(`${monthStr}-${pad(i + 1)}`)}</text>)}
       </svg>
     </div>
   );
