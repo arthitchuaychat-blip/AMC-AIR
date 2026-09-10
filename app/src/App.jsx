@@ -154,7 +154,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-10·C2 ติดตามลูกค้า: จัดกลุ่มแท็บชัดขึ้น (💼 งานขาย / 💰 ตามเก็บเงิน) ลดความรก v816";
+const BUILD = "2026-09-11·หน้าจ่ายเงิน: รายการมีหัก ณ ที่จ่าย → โชว์ยอดเบิก/หัก/ยอดโอนจริง + จ่ายยอดสุทธิ (ตรงกับที่โอนจริง) v817";
 
 function SetupNotice() {
   return (

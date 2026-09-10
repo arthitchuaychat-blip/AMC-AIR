@@ -787,7 +787,9 @@ function PayVendorModal({ onClose, onDone, flash }) {
 function PayModal({ x, onClose, onPaid, flash }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
-  const total = Math.round((Number(x.amount) || 0) * 100) / 100;
+  const gross = Math.round((Number(x.amount) || 0) * 100) / 100;
+  const wht = Math.round((Number(x.wht_amt) || 0) * 100) / 100;
+  const total = Math.round((gross - wht) * 100) / 100;   // ยอดโอนจริง = ยอดเบิก − หัก ณ ที่จ่าย (ผู้ขายรับสุทธิ · WHT นำส่งสรรพากรแยก)
   const already = Math.round((Number(x.paid_amount) || 0) * 100) / 100;
   const remaining = Math.round((total - already) * 100) / 100;
   const [accounts, setAccounts] = React.useState([]);
@@ -817,7 +819,12 @@ function PayModal({ x, onClose, onPaid, flash }) {
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
         <div className="modal-head"><div className="modal-title">{L("จ่ายเงินเบิก · ยอดคงเหลือ ", "တောင်းခံငွေ ပေးချေ · ကျန်ငွေ ")}{fmtBaht(remaining)}</div><button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
-          <div className="jo-dim" style={{ marginBottom: 10 }}>{x.title}{(x.jobNo || x.job_no) ? L(` · งาน ${x.jobNo || x.job_no}`, ` · အလုပ် ${x.jobNo || x.job_no}`) : ""}{x.customerName ? L(` · ลูกค้า ${x.customerName}`, ` · ဖောက်သည် ${x.customerName}`) : ""} · {L(`ยอดเบิกรวม ${fmtBaht(total)}`, `တောင်းခံ စုစုပေါင်း ${fmtBaht(total)}`)}{already > 0 ? L(` · จ่ายแล้ว ${fmtBaht(already)}`, ` · ပေးပြီး ${fmtBaht(already)}`) : ""}</div>
+          <div className="jo-dim" style={{ marginBottom: 10 }}>{x.title}{(x.jobNo || x.job_no) ? L(` · งาน ${x.jobNo || x.job_no}`, ` · အလုပ် ${x.jobNo || x.job_no}`) : ""}{x.customerName ? L(` · ลูกค้า ${x.customerName}`, ` · ဖောက်သည် ${x.customerName}`) : ""} · {L(`ยอดเบิกรวม ${fmtBaht(gross)}`, `တောင်းခံ စုစုပေါင်း ${fmtBaht(gross)}`)}{already > 0 ? L(` · จ่ายแล้ว ${fmtBaht(already)}`, ` · ပေးပြီး ${fmtBaht(already)}`) : ""}</div>
+          {wht > 0 && <div className="rec-amt-bd" style={{ marginBottom: 10 }}>
+            <div className="rab-row"><span>{L("ยอดเบิก", "တောင်းခံ")}</span><b>{fmtBaht(gross)}</b></div>
+            <div className="rab-row rab-wht"><span>✂️ {L("หัก ณ ที่จ่าย", "အခွန်ဖြတ်")}{x.wht_pct ? ` (${x.wht_pct}%)` : ""}</span><b>− {fmtBaht(wht)}</b></div>
+            <div className="rab-row rab-net"><span>{L("ยอดโอนจริง (ผู้ขายรับ)", "လွှဲရမည့်ငွေ")}</span><b>{fmtBaht(total)}</b></div>
+          </div>}
           <div className="fld"><span>{L("จำนวนที่จ่ายงวดนี้", "ဤအရစ် ပေးမည့် ပမာဏ")}</span>
             <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
               <button type="button" className={"cat-chip" + (mode === "full" ? " on" : "")} style={mode === "full" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}} onClick={() => setMode("full")}>{L(`จ่ายทั้งหมด (${fmtBaht(remaining)})`, `အားလုံး ပေး (${fmtBaht(remaining)})`)}</button>
