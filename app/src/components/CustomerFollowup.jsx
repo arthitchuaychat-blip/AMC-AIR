@@ -312,14 +312,14 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
           style={tab === "today" ? { background: "#059669", color: "#fff", borderColor: "#059669" } : {}}>📅 ติดตามวันนี้ ({todayList.length})</button>
         <button className={"cat-chip" + (tab === "calendar" ? " on" : "")} onClick={() => setTab("calendar")}
           style={tab === "calendar" ? { background: "#2563eb", color: "#fff", borderColor: "#2563eb" } : {}}>🗓️ ปฏิทิน</button>
-        <span style={{ alignSelf: "center", color: "var(--line)" }}>|</span>
+        <span style={{ alignSelf: "center", fontSize: 11.5, fontWeight: 700, color: "#0e7490", background: "#ecfeff", border: "1px solid #a5f0f5", borderRadius: 6, padding: "3px 8px" }}>💼 งานขาย</span>
         <button className={"cat-chip" + (tab === "service" ? " on" : "")} onClick={() => setTab("service")}
           style={tab === "service" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>🔁 รอบบริการ ({customers.length})</button>
         <button className={"cat-chip" + (tab === "quotes" ? " on" : "")} onClick={() => setTab("quotes")}
           style={tab === "quotes" ? { background: "#dc2626", color: "#fff", borderColor: "#dc2626" } : {}}>📝 ใบเสนอค้างตอบ ({pendingQuotes.length})</button>
         <button className={"cat-chip" + (tab === "expired" ? " on" : "")} onClick={() => setTab("expired")}
           style={tab === "expired" ? { background: "#7c3aed", color: "#fff", borderColor: "#7c3aed" } : {}}>⌛ ใบเสนอหมดอายุ ({expiredQuotes.filter((q) => !suppress.has(q.customer_id)).length})</button>
-        <span style={{ alignSelf: "center", color: "var(--line)" }}>|</span>
+        <span style={{ alignSelf: "center", fontSize: 11.5, fontWeight: 700, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "3px 8px" }}>💰 ตามเก็บเงิน</span>
         <button className={"cat-chip" + (tab === "approved" ? " on" : "")} onClick={() => setTab("approved")}
           style={tab === "approved" ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>✅ อนุมัติแล้วยังไม่แจ้งหนี้ ({approvedNoInvoice.length})</button>
         <button className={"cat-chip" + (tab === "unpaid" ? " on" : "")} onClick={() => setTab("unpaid")}
