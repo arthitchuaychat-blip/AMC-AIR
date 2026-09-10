@@ -5657,10 +5657,12 @@ async function _syncContactStageToCustomer(table, keyCol, keyVal, chatStage) {
     const { data } = await supabase.from(table).select("customer_id").eq(keyCol, keyVal).maybeSingle();
     const cid = data?.customer_id, pipe = chatStageToPipe(chatStage);
     if (!cid || !pipe) return;
-    // กันรื้อดีลที่ปิดแล้ว: ถ้าลูกค้าอยู่ที่ "ปิดการขาย/ไม่ปิด" (won/lost) แล้ว อย่าดึงกลับเป็นขั้นเปิด (new/contact/...)
+    // การเปลี่ยนสถานะแชต "ไม่ลดขั้นท่อขายอัตโนมัติ" — ดันไปข้างหน้า/ปิดดีลได้ แต่ถอยขั้นให้สั่งในท่อขายเอง
+    // (กัน "เสนอราคาแล้ว" ถูกดึงกลับเป็น "กำลังติดต่อ" · และดีลที่ปิดแล้ว won/lost ไม่ถูกรื้อ)
+    const RANK = { new: 0, contact: 1, survey: 2, quote: 3, won: 4, lost: 4 };
     const { data: c } = await supabase.from("customers").select("stage").eq("id", cid).maybeSingle();
     const cur = c?.stage;
-    if ((cur === "won" || cur === "lost") && pipe !== "won" && pipe !== "lost") return;
+    if (cur && (RANK[pipe] ?? 0) < (RANK[cur] ?? 0)) return;   // ห้ามถอยขั้น
     await supabase.from("customers").update({ stage: pipe }).eq("id", cid); bustCache("listCustomers"); bustCache("listCustomersLite");
   } catch (_) { /* ไม่มีคอลัมน์/ไม่ผูกลูกค้า = ข้าม (ไม่กระทบการเปลี่ยนสถานะแชต) */ }
 }

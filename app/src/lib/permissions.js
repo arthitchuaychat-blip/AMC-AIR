@@ -22,40 +22,72 @@ export const ROLE_LABEL = {
 };
 
 // master sidebar order + which modules support an "edit" level (vs view-only)
+// ทะเบียนสิทธิ์ "ครบทุกเมนูจริง" (รวมสิทธิ์ย่อยของเมนูที่ยุบรวม) — ใช้กับตารางสิทธิ์ในตั้งค่า + mergePerms
+// การมองเห็น "เมนูรวม" (hub) ในแถบข้าง คำนวณจากสิทธิ์ย่อย (ดู HUB_SUBS/hubVisible) ไม่ใช่สิทธิ์แยกของ hub เอง
+// group = ใช้จัดกลุ่มหัวข้อในตารางสิทธิ์ให้อ่านง่าย (ไม่กระทบตรรกะ)
 export const MODULES = [
-  { id: "dashboard", label: "แดชบอร์ด", editable: false },
-  { id: "kpi", label: "สกอร์การ์ดผลงาน (KPI)", editable: false },
-  { id: "saleshub", label: "ลูกค้าและงานขาย (ลูกค้า/ท่อขาย/ติดตาม)", editable: true },
-  { id: "weborders", label: "คำสั่งซื้อจากเว็บ", editable: false },
-  { id: "marketing", label: "การตลาดและเว็บไซต์ (คูปอง/รีวิว/เว็บ)", editable: true },
-  { id: "chat", label: "แชตลูกค้า (LINE/FB)", editable: true },
-  { id: "email", label: "อีเมล (info@amcair.net)", editable: true },
-  { id: "teamchat", label: "แชตทีม (ภายใน)", editable: false },
-  { id: "tasks", label: "กระดานสั่งงาน", editable: true },
-  { id: "attendance", label: "เข้างาน/ลา (ของฉัน)", editable: true },
-  { id: "handbook", label: "คู่มือตำแหน่งงาน", editable: false },
-  { id: "hr", label: "HR (จัดการพนักงาน)", editable: true },
-  { id: "quote", label: "ต้นทุนและเสนอราคา (BOQ/ใบเสนอ)", editable: true },
-  { id: "invoice", label: "ใบส่งของ/ใบแจ้งหนี้", editable: true },
-  { id: "adjnote", label: "ใบเพิ่ม/ลดหนี้", editable: true },
-  { id: "recvcenter", label: "ศูนย์รับเงิน (ค้างรับ/วางบิล/ใบเสร็จ)", editable: true },
-  { id: "paycenter", label: "ศูนย์จ่ายเงิน (เบิกจ่าย/ค้างจ่าย/หนี้สิน/รายจ่ายประจำ)", editable: true },
-  { id: "tax", label: "รายงานภาษี VAT/WHT", editable: false },
-  { id: "profit", label: "กำไร/งาน", editable: false },
-  { id: "accounting", label: "บัญชี (Double-entry)", editable: true },
-  { id: "cashflow", label: "กระแสเงินสด", editable: true },
-  { id: "assets", label: "สินทรัพย์/ครุภัณฑ์", editable: true },
-  { id: "myjobs", label: "งานของฉัน (หน้างาน)", editable: true },
-  { id: "joborders", label: "งานบริการและติดตั้ง (ใบงาน/ปฏิทิน/วัสดุ/ส่งมอบ)", editable: true },
-  { id: "catalog", label: "คลังสินค้า", editable: true },
-  { id: "movements", label: "เบิก/คืน/ซื้อ/ตัดเสีย", editable: true },
-  { id: "stockcount", label: "นับสต๊อก", editable: true },
-  { id: "subcontract", label: "ช่างซัพ (เหมา/จ่าย)", editable: true },
-  { id: "suppliers", label: "ผู้ขาย (Suppliers)", editable: true },
-  { id: "po", label: "จัดซื้อและเตรียมงาน (ใบสั่งซื้อ/เตรียมวัสดุ)", editable: true },
-  { id: "tools", label: "เครื่องมือช่าง", editable: true },
-  { id: "settings", label: "ตั้งค่า + จัดการผู้ใช้", editable: true },
+  { id: "dashboard", label: "แดชบอร์ด", editable: false, group: "ภาพรวม" },
+  { id: "kpi", label: "สกอร์การ์ดผลงาน (KPI)", editable: false, group: "ภาพรวม" },
+  { id: "customers", label: "ลูกค้า", editable: true, group: "ลูกค้าและงานขาย" },
+  { id: "pipeline", label: "ท่อขาย (Pipeline)", editable: true, group: "ลูกค้าและงานขาย" },
+  { id: "followup", label: "ติดตามลูกค้า (ขายซ้ำ)", editable: false, group: "ลูกค้าและงานขาย" },
+  { id: "reviews", label: "รีวิวลูกค้า", editable: true, group: "การตลาดและเว็บไซต์" },
+  { id: "promo", label: "คูปอง / โปรโมชั่น", editable: true, group: "การตลาดและเว็บไซต์" },
+  { id: "website", label: "จัดการเว็บไซต์ (กราฟิก)", editable: true, group: "การตลาดและเว็บไซต์" },
+  { id: "weborders", label: "คำสั่งซื้อจากเว็บ", editable: false, group: "ลูกค้าและงานขาย" },
+  { id: "chat", label: "แชตลูกค้า (LINE/FB)", editable: true, group: "ลูกค้าและงานขาย" },
+  { id: "email", label: "อีเมล (info@amcair.net)", editable: true, group: "ลูกค้าและงานขาย" },
+  { id: "teamchat", label: "แชตทีม (ภายใน)", editable: false, group: "ทีม" },
+  { id: "tasks", label: "กระดานสั่งงาน", editable: true, group: "ทีม" },
+  { id: "attendance", label: "เข้างาน/ลา (ของฉัน)", editable: true, group: "ทีม" },
+  { id: "handbook", label: "คู่มือตำแหน่งงาน", editable: false, group: "ทีม" },
+  { id: "hr", label: "HR (จัดการพนักงาน)", editable: true, group: "ทีม" },
+  { id: "boq", label: "BOQ (ต้นทุน)", editable: true, group: "เอกสารขาย" },
+  { id: "quote", label: "ใบเสนอราคา", editable: true, group: "เอกสารขาย" },
+  { id: "invoice", label: "ใบส่งของ/ใบแจ้งหนี้", editable: true, group: "เอกสารขาย" },
+  { id: "billing", label: "ใบวางบิล", editable: true, group: "เอกสารขาย" },
+  { id: "receipt", label: "ใบเสร็จ/ใบกำกับ", editable: true, group: "เอกสารขาย" },
+  { id: "adjnote", label: "ใบเพิ่ม/ลดหนี้", editable: true, group: "เอกสารขาย" },
+  { id: "receivables", label: "เงินค้างรับ", editable: false, group: "การเงิน" },
+  { id: "payables", label: "ค้างจ่าย", editable: false, group: "การเงิน" },
+  { id: "tax", label: "รายงานภาษี VAT/WHT", editable: false, group: "การเงิน" },
+  { id: "profit", label: "กำไร/งาน", editable: false, group: "การเงิน" },
+  { id: "accounting", label: "บัญชี (Double-entry)", editable: true, group: "การเงิน" },
+  { id: "cashflow", label: "กระแสเงินสด", editable: true, group: "การเงิน" },
+  { id: "loans", label: "หนี้สิน (สินเชื่อ/ผ่อน)", editable: true, group: "การเงิน" },
+  { id: "recurring", label: "รายจ่ายประจำ (subscription)", editable: true, group: "การเงิน" },
+  { id: "assets", label: "สินทรัพย์/ครุภัณฑ์", editable: true, group: "การเงิน" },
+  { id: "expenses", label: "เบิกจ่าย", editable: true, group: "การเงิน" },
+  { id: "myjobs", label: "งานของฉัน (หน้างาน)", editable: true, group: "งานช่าง" },
+  { id: "joborders", label: "ใบงาน", editable: true, group: "งานช่าง" },
+  { id: "handover", label: "ใบส่งมอบงาน", editable: true, group: "งานช่าง" },
+  { id: "schedule", label: "ปฏิทินงาน", editable: true, group: "งานช่าง" },
+  { id: "jobs", label: "วัสดุที่ใช้/ปิดงาน", editable: true, group: "งานช่าง" },
+  { id: "subcontract", label: "ช่างซัพ (เหมา/จ่าย)", editable: true, group: "งานช่าง" },
+  { id: "catalog", label: "คลังสินค้า", editable: true, group: "คลัง & จัดซื้อ" },
+  { id: "movements", label: "เบิก/คืน/ซื้อ/ตัดเสีย", editable: true, group: "คลัง & จัดซื้อ" },
+  { id: "stockcount", label: "นับสต๊อก", editable: true, group: "คลัง & จัดซื้อ" },
+  { id: "suppliers", label: "ผู้ขาย (Suppliers)", editable: true, group: "คลัง & จัดซื้อ" },
+  { id: "prep", label: "เตรียมวัสดุ (ก่อนสั่งซื้อ/เบิก)", editable: true, group: "คลัง & จัดซื้อ" },
+  { id: "po", label: "ใบสั่งซื้อ (PO)", editable: true, group: "คลัง & จัดซื้อ" },
+  { id: "tools", label: "เครื่องมือช่าง", editable: true, group: "คลัง & จัดซื้อ" },
+  { id: "settings", label: "ตั้งค่า + จัดการผู้ใช้", editable: true, group: "ระบบ" },
 ];
+
+// เมนูรวม (hub) ในแถบข้าง → สิทธิ์ย่อยที่ประกอบกัน · โชว์ hub ถ้ามีสิทธิ์ดูอย่างน้อย 1 แท็บ
+export const HUB_SUBS = {
+  marketing: ["promo", "reviews", "website"],
+  saleshub: ["customers", "pipeline", "followup"],
+  paycenter: ["expenses", "payables", "loans", "recurring"],
+  recvcenter: ["receivables", "billing", "receipt"],
+  quote: ["quote", "boq"],                          // host = view "quote"
+  joborders: ["joborders", "schedule", "jobs", "handover"],  // host = view "joborders"
+  po: ["po", "prep"],                               // host = view "po"
+};
+export function hubVisible(role, hubId) {
+  const subs = HUB_SUBS[hubId];
+  return subs ? subs.some((s) => can(role, s, "view")) : can(role, hubId, "view");
+}
 
 const E = "edit", V = "view", N = "none";
 
@@ -96,7 +128,7 @@ export function mergePerms(override) {
     out[role] = { ...DEFAULT_PERMS[role] };
     const o = override[role];
     if (o && typeof o === "object") {
-      for (const key of Object.keys(DEFAULT_PERMS[role])) {
+      for (const key of Object.keys(o)) {   // ทุกคีย์ที่เจ้าของตั้งไว้ (รวมสิทธิ์ที่ "เพิ่ม" ให้เมนูที่ default ไม่มี)
         if (o[key] === N || o[key] === V || o[key] === E) out[role][key] = o[key];
       }
     }

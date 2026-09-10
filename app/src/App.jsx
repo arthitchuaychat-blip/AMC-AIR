@@ -1,7 +1,7 @@
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
 import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams, unreadByModule, markModuleRead, poReceivedQty, getQuoteItems, countEmailUnread, syncEmails } from "./lib/api";
-import { navForRole, setPerms, mergePerms, can } from "./lib/permissions";
+import { navForRole, setPerms, mergePerms, can, HUB_SUBS, hubVisible } from "./lib/permissions";
 import { NAV_MY, LangContext } from "./lib/i18n";
 import { registerSW, autoResubscribe } from "./lib/push";
 import { hasUnsaved } from "./lib/formDraft";
@@ -154,7 +154,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-11·แก้ 4 จุดจากรีวิว GPT: สิทธิ์เมนูยุบไม่หาย · ค่าทีม→team_kv (สิทธิ์ถูก/แยกแถว/รับค่า 0) · ผูกแชตไม่ทับสถานะลูกค้า v820";
+const BUILD = "2026-09-11·แก้ 3 จุดรอบ 2 (GPT): ตารางสิทธิ์คืนทุกเมนูย่อย(hub คำนวณจากสิทธิ์ย่อย) · ปุ่มบันทึกเงินสำรอง(รอผลจริง) · สถานะแชตไม่ลดขั้นท่อขาย v821";
 
 function SetupNotice() {
   return (
@@ -310,9 +310,10 @@ export default function App() {
     if (!profile) return;
     const allowed = navIds(profile.role);
     const safe = allowed.length ? allowed : ["teamchat"];
-    // เมนูที่ "ยุบรวม" แล้วแต่ยังมีหน้า render (deep-link/เปิดแท็บใหม่ #boq ฯลฯ ยังใช้ได้) — อย่ารีเซ็ตไปแดชบอร์ด
-    const HIDDEN = ["boq", "reviews", "promo", "website", "payables", "loans", "recurring", "expenses", "receivables", "billing", "receipt", "customers", "pipeline", "followup", "handover", "schedule", "jobs", "prep"];
-    const ok = new Set([...safe, ...HIDDEN.filter((v) => can(profile.role, v))]);
+    // อนุญาต view ของ "เมนูรวม" (hub) ที่มองเห็นได้ด้วย (paycenter/saleshub ฯลฯ) — deep-link/#hash/แท็บใหม่ ไม่เด้งไปแดชบอร์ด
+    // (id ย่อยอย่าง boq/handover อยู่ใน navForRole อยู่แล้ว)
+    const hubs = Object.keys(HUB_SUBS).filter((h) => hubVisible(profile.role, h));
+    const ok = new Set([...safe, ...hubs]);
     setView((v) => (v && ok.has(v) ? v : safe[0]));
   }, [profile, permsV, mySub]);
 
@@ -568,9 +569,13 @@ export default function App() {
             };
             const allowed = navIds(role);
             const allowedSet = new Set(allowed);
-            const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.ids.filter((id) => allowedSet.has(id)) }));
+            // เมนูรวม (hub) โชว์ถ้ามีสิทธิ์ดูอย่างน้อย 1 แท็บย่อย · เมนูปกติใช้สิทธิ์ของตัวเอง
+            const canSeeNav = (id) => (HUB_SUBS[id] ? hubVisible(role, id) : allowedSet.has(id));
+            const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.ids.filter(canSeeNav) }));
             const used = new Set(groups.flatMap((g) => g.items));
-            const leftover = allowed.filter((id) => !used.has(id));
+            // id ย่อยที่ถูกยุบเข้า hub แล้ว ไม่ต้องโผล่ซ้ำใน "อื่นๆ"
+            const subIds = new Set(Object.values(HUB_SUBS).flat());
+            const leftover = allowed.filter((id) => !used.has(id) && !subIds.has(id));
             if (leftover.length) groups.push({ key: "other", label: "อื่นๆ", items: leftover });
             return groups.filter((g) => g.items.length).map((g) => {
               const activeHere = g.items.includes(view);

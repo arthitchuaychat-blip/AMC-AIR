@@ -138,20 +138,34 @@ export default function CashFlow() {
 
   // เงินสำรองขั้นต่ำ ต่อกิจการ (เก็บในเครื่อง) — ใช้เตือน runway
   // เงินสำรองขั้นต่ำ — เก็บใน app_config (ทั้งทีมเห็นตรงกัน) · localStorage เป็นตัวสำรองตอนโหลด/เขียน DB ไม่ได้
-  const [reserve, setReserve] = React.useState(0);
+  const [reserve, setReserve] = React.useState(0);          // ค่าที่บันทึกแล้ว (ใช้เตือน runway)
+  const [reserveInput, setReserveInput] = React.useState("0");   // ค่าที่กำลังพิมพ์ (ยังไม่บันทึกจนกดปุ่ม)
   const [reserveMap, setReserveMap] = React.useState(null);   // { [entity]: amount } จากส่วนกลาง (team_kv) · null=ยังไม่โหลด
+  const [savingReserve, setSavingReserve] = React.useState(false);
   React.useEffect(() => { getTeamKV("cashflow_reserve").then(setReserveMap).catch(() => setReserveMap({})); }, []);
   React.useEffect(() => {
     if (reserveMap == null) return;
-    if (Object.prototype.hasOwnProperty.call(reserveMap, ent)) setReserve(Number(reserveMap[ent]) || 0);   // มีค่ากลาง (รวม 0 ที่ตั้งใจตั้ง) → ใช้เลย
-    else { try { setReserve(Number(localStorage.getItem(`cf_reserve_${ent}`)) || 0); } catch { setReserve(0); } }   // ยังไม่เคยตั้งส่วนกลาง → fallback เครื่อง
+    let v;
+    if (Object.prototype.hasOwnProperty.call(reserveMap, ent)) v = Number(reserveMap[ent]) || 0;   // มีค่ากลาง (รวม 0 ที่ตั้งใจตั้ง) → ใช้เลย
+    else { try { v = Number(localStorage.getItem(`cf_reserve_${ent}`)) || 0; } catch { v = 0; } }   // ยังไม่เคยตั้งส่วนกลาง → fallback เครื่อง
+    setReserve(v); setReserveInput(String(v));
   }, [ent, reserveMap]);
-  const saveReserve = (v) => {
-    const nn = Math.max(0, Number(v) || 0); setReserve(nn);
-    setReserveMap((m) => ({ ...(m || {}), [ent]: nn }));   // 0 ก็ถือว่าตั้งค่าแล้ว
-    setTeamKV("cashflow_reserve", ent, nn).catch(() => {});   // ทั้งทีมเห็นตรงกัน (สิทธิ์ไม่พอ = เก็บเครื่องนี้ไว้)
-    try { localStorage.setItem(`cf_reserve_${ent}`, String(nn)); } catch { /* ignore */ }
-  };
+  const reserveDirty = String(Math.max(0, Number(reserveInput) || 0)) !== String(reserve);
+  // บันทึกเมื่อกดปุ่มเท่านั้น (ไม่ส่งทุกครั้งที่พิมพ์) · รอผลจริงก่อนแจ้งสำเร็จ · สิทธิ์ไม่พอ = แจ้งตรง ๆ
+  async function saveReserve() {
+    const nn = Math.max(0, Number(reserveInput) || 0);
+    setSavingReserve(true);
+    try {
+      await setTeamKV("cashflow_reserve", ent, nn);
+      setReserve(nn); setReserveMap((m) => ({ ...(m || {}), [ent]: nn }));
+      try { localStorage.setItem(`cf_reserve_${ent}`, String(nn)); } catch { /* ignore */ }
+      flash(`บันทึกเงินสำรอง ${fmtBaht(nn)} แล้ว ✓ (ทั้งทีมเห็นตรงกัน)`);
+    } catch {
+      setReserve(nn); try { localStorage.setItem(`cf_reserve_${ent}`, String(nn)); } catch { /* ignore */ }
+      flash("บันทึกเงินสำรองส่วนกลางไม่ได้ (สิทธิ์ไม่พอ/เน็ตมีปัญหา) — ใช้เฉพาะเครื่องนี้", true);
+    }
+    setSavingReserve(false);
+  }
   const runwayAlert = cash.minBal < 0 || (reserve > 0 && cash.minBal < reserve);
 
   // ช่วงที่กำลังดู (สำหรับแยกหมวด + ส่งออก)
@@ -209,8 +223,9 @@ export default function CashFlow() {
         </div>
         <label className="cf-opening">เงินสดยกมา{ent === "company" ? " (บริษัท)" : ent === "personal" ? " (บุคคล)" : ""} <span className="inp inp-unit" style={{ width: 150 }}><span className="unit-pre">฿</span>
           <input type="number" value={ent === "all" ? (Number(opening.company) || 0) + (Number(opening.personal) || 0) : openingInput} disabled={ent === "all"} title={ent === "all" ? "เลือกกิจการ (บริษัท/บุคคล) ก่อนจึงจะแก้ยอดยกมาได้" : ""} onChange={(e) => setOpeningInput(e.target.value)} onBlur={saveOpening} /></span></label>
-        <label className="cf-opening" title="ถ้าเงินคาดการณ์จะต่ำกว่ายอดนี้ ระบบจะเตือนล่วงหน้า (เก็บในเครื่องนี้)">เงินสำรองขั้นต่ำ <span className="inp inp-unit" style={{ width: 130 }}><span className="unit-pre">฿</span>
-          <input type="number" min="0" value={reserve} onChange={(e) => saveReserve(e.target.value)} /></span></label>
+        <label className="cf-opening" title="ถ้าเงินคาดการณ์จะต่ำกว่ายอดนี้ ระบบจะเตือนล่วงหน้า (บันทึกส่วนกลาง — ทั้งทีมเห็นตรงกัน)">เงินสำรองขั้นต่ำ <span className="inp inp-unit" style={{ width: 130 }}><span className="unit-pre">฿</span>
+          <input type="number" min="0" value={reserveInput} onChange={(e) => setReserveInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && reserveDirty) saveReserve(); }} /></span>
+          {reserveDirty && <button className="btn-ghost sm" disabled={savingReserve} onClick={saveReserve} style={{ marginLeft: 6 }}>{savingReserve ? "…" : "บันทึก"}</button>}</label>
       </div>
 
       {ent !== "all" && <div className="cf-carry" style={{ background: ent === "personal" ? "#f5f3ff" : "#eff6ff", borderColor: ent === "personal" ? "#ddd6fe" : "#bfdbfe" }}>
