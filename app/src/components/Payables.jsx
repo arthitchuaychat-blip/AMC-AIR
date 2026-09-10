@@ -161,11 +161,11 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
         <span className="jo-dim" style={{ fontSize: 12 }}>{(totals.receivable - totals.payable) >= 0 ? "· เก็บได้มากกว่าต้องจ่าย" : "· ต้องจ่ายมากกว่าจะเก็บได้ — ระวังเงินตึง"}</span>
       </div>}
 
-      <FilterBar id="payables" count={(q ? 1 : 0) + (recvF !== "all" ? 1 : 0)} resultCount={shown.length} resultLabel="รายการ">
         <div className="cat-search" style={{ maxWidth: 380, marginBottom: 12 }}>
           <UIcon name="search" size={16} color="var(--ink-3)" />
           <input placeholder="ค้นหา ผู้ขาย / เลขเอกสาร / ทีม" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+      <FilterBar id="payables" count={(q ? 1 : 0) + (recvF !== "all" ? 1 : 0)} resultCount={shown.length} resultLabel="รายการ">
         <div className="cat-filter">
           <span style={{ fontSize: 12.5, color: "var(--ink-3)", alignSelf: "center", marginRight: 4 }}>รับสินค้า:</span>
           {[["all", "ทั้งหมด"], ["received", "รับของแล้ว"], ["pending", "ยังไม่รับของ"]].map(([v, l]) => (

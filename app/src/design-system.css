@@ -140,3 +140,91 @@
   .amc-design :is(.sidebar,.nav-item,.btn-primary,.btn-ghost,.cat-chip,.seg-btn,.job-card,.cat-card,.stat-card) { transition:none }
   .amc-design .filterbar-body { animation:none }
 }
+
+/* v829 — shared layouts; screen only so document print templates stay independent. */
+@media screen {
+  .amc-design .grouped-tabs { margin-bottom:12px; flex-wrap:wrap }
+  .amc-design .report-tabs { gap:8px; margin:12px 0 18px }
+  .amc-design .report-tabs .cat-chip.on { background:var(--primary); border-color:var(--primary); color:#fff }
+  .amc-design .report-note { padding:11px 14px; margin:12px 0; border-radius:10px; background:#edf4ff; color:#345477; font-size:13px; line-height:1.65 }
+  .amc-design .report-warning { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:13px 16px; margin:12px 0; border:1px solid #efbcc1; border-radius:10px; background:#fff4f4; color:#9a2835; line-height:1.6 }
+  .amc-design .report-details { border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:12px 16px; margin:12px 0 18px }
+  .amc-design .report-details > summary { cursor:pointer; color:var(--navy); font-size:14px; font-weight:600; min-height:28px; line-height:1.6 }
+  .amc-design .report-details[open] > summary { margin-bottom:16px }
+  .amc-design .report-chart { width:100%; min-width:0 }
+  .amc-design .report-chart-scroll { width:100%; overflow-x:auto; overscroll-behavior-x:contain }
+  .amc-design .report-chart-scroll > svg { display:block; max-width:none; font-family:var(--appfont) }
+  .amc-design .report-chart .tc-legend { flex-wrap:wrap; gap:8px 16px; font-size:12px; color:var(--ink-2) }
+  .amc-design .report-chart .report-details { margin-bottom:0; padding:8px 12px }
+  .amc-design .executive-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin:16px 0 20px }
+  .amc-design .executive-metric { display:flex; flex-direction:column; gap:6px; padding:18px; min-width:0 }
+  .amc-design .executive-metric > .stat-label { margin:0; min-height:24px }
+  .amc-design .executive-metric .stat-val { margin:5px 0; overflow-wrap:anywhere }
+  .amc-design .executive-metric .stat-sub { margin:0; line-height:1.65 }
+  .amc-design .executive-link { display:inline-flex; align-items:center; gap:5px; width:fit-content; padding:7px 0; margin-top:auto; border:0; background:transparent; color:var(--primary); font-family:inherit; font-size:13px; line-height:1.5; cursor:pointer; text-align:left }
+  .amc-design .dash-stat--hero .executive-link { color:#c5e6ff }
+  .amc-design .executive-account-filter { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; font-size:12px; color:var(--ink-2); margin-top:6px }
+  .amc-design .executive-account-filter .inp { width:100%; min-width:0; padding:6px 9px; min-height:36px; font-size:13px }
+  .amc-design .executive-actions { margin-bottom:20px }
+  .amc-design .executive-action-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin-top:10px }
+  .amc-design .executive-action { display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:10px 16px; border:0; border-left:1px solid var(--line); background:transparent; text-align:left; color:var(--ink); font-family:inherit; cursor:pointer; min-width:0 }
+  .amc-design .executive-action:first-child { padding-left:0; border-left:0 }
+  .amc-design .executive-action > span { font-size:12px; line-height:1.6; color:var(--ink-2) }
+  .amc-design .executive-action strong { font-size:23px; font-variant-numeric:tabular-nums; color:var(--navy) }
+  .amc-design .executive-action.urgent strong { color:#b42332 }
+  .amc-design .executive-action-title { display:flex; align-items:center; gap:7px; font-weight:600 }
+  .amc-design .executive-action-title svg { flex:none }
+  .amc-design .executive-action:hover { background:#f5f8fd; border-radius:8px }
+  .amc-design .executive-panels { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(0,1fr); gap:18px; margin-bottom:20px }
+  .amc-design .executive-panels > .card { min-width:0 }
+  .amc-design .executive-panels .sec-head { align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px }
+  .amc-design .executive-model { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--ink); font-family:inherit; text-align:left; cursor:pointer }
+  .amc-design .executive-model > span { min-width:0; overflow-wrap:anywhere }
+  .amc-design .executive-model small { display:block; font-size:12px; font-weight:400; color:var(--ink-2); margin-top:3px }
+  .amc-design .executive-model b { flex:none; text-align:right; font-size:17px; font-variant-numeric:tabular-nums }
+  .amc-design .executive-cash-link { display:flex; align-items:flex-start; gap:10px; padding:16px 0 0; margin-top:16px; border-top:1px solid var(--line) }
+  .amc-design .executive-cash-link > svg { flex:none; color:var(--primary) }
+  .amc-design .executive-revenue-row { display:grid !important; grid-template-columns:minmax(130px,1fr) minmax(80px,2fr) 116px 40px 14px; gap:10px }
+  .amc-design .executive-revenue-row > span { width:auto !important; min-width:0 !important; overflow-wrap:anywhere }
+  .amc-design .executive-secondary { margin-top:20px }
+  .amc-design .executive-secondary .kpi-grid { margin-top:12px }
+  .amc-design :is(.hr-table,.acc-table,.kpi-table) { font-variant-numeric:tabular-nums }
+  .amc-design :is(.hr-table,.acc-table,.kpi-table) th { color:#52647c; background:#f7faff; padding:12px 10px; font-size:12.5px; line-height:1.55 }
+  .amc-design :is(.hr-table,.acc-table,.kpi-table) td { padding:12px 10px; font-size:13.5px; line-height:1.6; vertical-align:middle }
+  .amc-design :is(.cat-lrow,.pf-row,.pjob-row) { line-height:1.6; min-width:0 }
+  .amc-design .cat-lrow { min-height:64px; border-color:var(--line) }
+  .amc-design .cat-lrow-main { min-width:0 }
+  .amc-design .cat-lrow-name { color:var(--navy); overflow-wrap:anywhere }
+  .amc-design .cat-lrow-sub { color:var(--ink-2); line-height:1.6 }
+  .amc-design .cat-lrow-col { font-variant-numeric:tabular-nums }
+  .amc-design :is(.job-no,.jo-title,.sec-title) { overflow-wrap:anywhere }
+  .amc-design .job-card { padding:16px 18px }
+  .amc-design .filterbar-head { gap:10px; flex-wrap:wrap }
+  .amc-design .filterbar-toggle { min-height:40px }
+}
+@media screen and (max-width:1180px) {
+  .amc-design .executive-kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }
+  .amc-design .executive-action-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 0 }
+  .amc-design .executive-action:nth-child(odd) { border-left:0; padding-left:0 }
+  .amc-design .executive-panels { grid-template-columns:minmax(0,1fr) }
+}
+@media screen and (max-width:760px) {
+  .amc-design .executive-kpis { gap:10px }
+  .amc-design .executive-metric { padding:14px }
+  .amc-design .executive-metric .stat-val { font-size:23px }
+  .amc-design .executive-action { padding:10px }
+  .amc-design .executive-action strong { font-size:21px }
+  .amc-design .executive-revenue-row { grid-template-columns:minmax(0,1fr) 96px 36px 12px }
+  .amc-design .executive-revenue-row > div { grid-column:1/-1; grid-row:2; width:100% }
+  .amc-design .report-details { padding:12px }
+  .amc-design .grouped-tabs .hub-tab { flex:1 1 auto }
+  .amc-design .executive-link { min-height:44px }
+  .amc-design :is(input.inp,select.inp,textarea.inp,.cat-search input) { font-size:16px }
+  .amc-design .executive-account-filter .inp { font-size:16px; min-height:44px }
+}
+@media screen and (max-width:380px) {
+  .amc-design .executive-kpis { grid-template-columns:minmax(0,1fr) }
+  .amc-design .executive-action-grid { grid-template-columns:minmax(0,1fr) }
+  .amc-design .executive-action { border-left:0; border-top:1px solid var(--line); padding:12px 0 }
+  .amc-design .executive-action:first-child { border-top:0 }
+}

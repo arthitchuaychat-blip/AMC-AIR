@@ -307,25 +307,14 @@ export default function CustomerFollowup({ role, onGoChat, onOpenCustomer, onOpe
         </div>
       </div>
 
-      <div className="cat-filter" style={{ marginBottom: 10 }}>
-        <button className={"cat-chip" + (tab === "today" ? " on" : "")} onClick={() => setTab("today")}
-          style={tab === "today" ? { background: "#059669", color: "#fff", borderColor: "#059669" } : {}}>📅 ติดตามวันนี้ ({todayList.length})</button>
-        <button className={"cat-chip" + (tab === "calendar" ? " on" : "")} onClick={() => setTab("calendar")}
-          style={tab === "calendar" ? { background: "#2563eb", color: "#fff", borderColor: "#2563eb" } : {}}>🗓️ ปฏิทิน</button>
-        <span style={{ alignSelf: "center", fontSize: 11.5, fontWeight: 700, color: "#0e7490", background: "#ecfeff", border: "1px solid #a5f0f5", borderRadius: 6, padding: "3px 8px" }}>💼 งานขาย</span>
-        <button className={"cat-chip" + (tab === "service" ? " on" : "")} onClick={() => setTab("service")}
-          style={tab === "service" ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>🔁 รอบบริการ ({customers.length})</button>
-        <button className={"cat-chip" + (tab === "quotes" ? " on" : "")} onClick={() => setTab("quotes")}
-          style={tab === "quotes" ? { background: "#dc2626", color: "#fff", borderColor: "#dc2626" } : {}}>📝 ใบเสนอค้างตอบ ({pendingQuotes.length})</button>
-        <button className={"cat-chip" + (tab === "expired" ? " on" : "")} onClick={() => setTab("expired")}
-          style={tab === "expired" ? { background: "#7c3aed", color: "#fff", borderColor: "#7c3aed" } : {}}>⌛ ใบเสนอหมดอายุ ({expiredQuotes.filter((q) => !suppress.has(q.customer_id)).length})</button>
-        <span style={{ alignSelf: "center", fontSize: 11.5, fontWeight: 700, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "3px 8px" }}>💰 ตามเก็บเงิน</span>
-        <button className={"cat-chip" + (tab === "approved" ? " on" : "")} onClick={() => setTab("approved")}
-          style={tab === "approved" ? { background: "#0891b2", color: "#fff", borderColor: "#0891b2" } : {}}>✅ อนุมัติแล้วยังไม่แจ้งหนี้ ({approvedNoInvoice.length})</button>
-        <button className={"cat-chip" + (tab === "unpaid" ? " on" : "")} onClick={() => setTab("unpaid")}
-          style={tab === "unpaid" ? { background: "#d97706", color: "#fff", borderColor: "#d97706" } : {}}>💸 แจ้งหนี้รอชำระ ({unpaidInvoices.length})</button>
-        <button className={"cat-chip" + (tab === "donepay" ? " on" : "")} onClick={() => setTab("donepay")}
-          style={tab === "donepay" ? { background: "#b91c1c", color: "#fff", borderColor: "#b91c1c" } : {}}>🏁 งานเสร็จยังไม่ได้เงิน ({doneNotPaid.length})</button>
+      <div className="hub-tabs grouped-tabs">
+        {[["วันนี้และปฏิทิน", ["today", "calendar"]], ["ติดตามขาย", ["service", "quotes", "expired"]], ["ติดตามรับเงิน", ["approved", "unpaid", "donepay"]]].map(([label, ids]) =>
+          <button type="button" key={label} className={"seg-btn hub-tab" + (ids.includes(tab) ? " on" : "")} aria-pressed={ids.includes(tab)} onClick={() => setTab(ids[0])}>{label}</button>)}
+      </div>
+      <div className="cat-filter report-tabs">
+        {[["today", `ติดตามวันนี้ (${todayList.length})`, "today"], ["calendar", "ปฏิทิน", "today"], ["service", `รอบบริการ (${customers.length})`, "sales"], ["quotes", `ใบเสนอค้างตอบ (${pendingQuotes.length})`, "sales"], ["expired", `ใบเสนอหมดอายุ (${expiredQuotes.filter((q) => !suppress.has(q.customer_id)).length})`, "sales"], ["approved", `อนุมัติแล้วยังไม่แจ้งหนี้ (${approvedNoInvoice.length})`, "money"], ["unpaid", `แจ้งหนี้รอชำระ (${unpaidInvoices.length})`, "money"], ["donepay", `งานเสร็จยังไม่ได้เงิน (${doneNotPaid.length})`, "money"]]
+          .filter(([, , group]) => group === (["today", "calendar"].includes(tab) ? "today" : ["service", "quotes", "expired"].includes(tab) ? "sales" : "money"))
+          .map(([id, label]) => <button type="button" key={id} className={"cat-chip" + (tab === id ? " on" : "")} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}
       </div>
 
       {tab === "calendar" ? (

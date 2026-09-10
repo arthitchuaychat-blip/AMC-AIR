@@ -1,6 +1,7 @@
 import React from "react";
 import { listInvoices, listPurchaseOrders, listQuotations, listBoqs, listReceipts } from "../lib/api";
 import { fmtBaht, fmtNum, fmtCompact, downloadCsv, inRange } from "../lib/format";
+import { cashAccounts, cashAccountTotal, knownBoqCost } from "../lib/reportMetrics";
 import { jobTypeDef } from "../lib/schedule";
 
 // รายงานผู้บริหาร 6 ตัว (แท็บในแดชบอร์ด) — โหลดเอกสารทั้งประวัติเองตอนเปิดแท็บ (หลายรายงานคิดจากประวัติทั้งหมดโดยตั้งใจ)
@@ -25,7 +26,9 @@ const T = ({ head, rows }) => (
   </div>
 );
 
-export default function ExecReports({ act, accounts, from, to, periodLabel }) {
+export default function ExecReports({ act, accounts, from, to, periodLabel, snapshotError }) {
+  const [error, setError] = React.useState(null);
+  const [retry, setRetry] = React.useState(0);
   const [invs, setInvs] = React.useState(null);
   const [pos, setPos] = React.useState(null);
   // ⚠️ ต้องโหลดเอกสาร "ทั้งประวัติ" เอง ห้ามรับต่อจากแดชบอร์ด — ตั้งแต่ v460 แดชบอร์ดดึงเฉพาะช่วงที่เลือก
@@ -35,11 +38,12 @@ export default function ExecReports({ act, accounts, from, to, periodLabel }) {
   // หน้านี้เปิดเฉพาะตอนกดแท็บ "รายงานผู้บริหาร" จึงยอมให้โหลดหนักได้
   const [ov, setOv] = React.useState(null);
   React.useEffect(() => {
-    listInvoices().then(setInvs).catch(() => setInvs([]));
-    listPurchaseOrders().then(setPos).catch(() => setPos([]));
-    Promise.all([listQuotations(), listBoqs(), listReceipts().catch(() => [])])
-      .then(([qs, bs, rcs]) => setOv({ qs, bs, rcs })).catch(() => setOv({ qs: [], bs: [], rcs: [] }));
-  }, []);
+    let alive = true; setError(null); setOv(null); setInvs(null); setPos(null);
+    Promise.all([listInvoices(), listPurchaseOrders(), listQuotations(), listBoqs(), listReceipts()])
+      .then(([inv, po, qs, bs, rcs]) => { if (alive) { setInvs(inv); setPos(po); setOv({ qs, bs, rcs }); } })
+      .catch((e) => { if (alive) setError(e.message || String(e)); });
+    return () => { alive = false; };
+  }, [retry]);
   const qs = ov?.qs || [], bs = ov?.bs || [], rcs = ov?.rcs || [];
   const inR = (q) => inRange(q.issue_date || q.created_at, from, to);
 
@@ -90,17 +94,18 @@ export default function ExecReports({ act, accounts, from, to, periodLabel }) {
     return { avg: n ? sum / n : 0, n, rows };
   }, [invs, rcs]);
 
-  // 4) กำไรแยกประเภทงาน — ใบเสนออนุมัติในช่วง: ยอดขาย + กำไรประมาณการ (BOQ)
+  // 4) กำไรประมาณการแยกประเภทงาน — ใบเสนออนุมัติในช่วง: ยอดขาย + กำไรประมาณการ (BOQ)
   const byType = React.useMemo(() => {
     const boqCost = Object.fromEntries(bs.map((b) => [b.boq_no, b.total]));
     const by = {};
     qs.filter((q) => q.status === "approved" && inRange(q.approved_at || q.issue_date, from, to)).forEach((q) => {
       const k = q.job_type || "other";
-      const b = by[k] || (by[k] = { sale: 0, count: 0, est: 0, estN: 0 });
+      const b = by[k] || (by[k] = { sale: 0, count: 0, est: 0, estN: 0, matchedSale: 0 });
       b.count++; b.sale += q.afterDisc || 0;
-      if (q.boq_no && boqCost[q.boq_no] != null) { b.est += (q.afterDisc || 0) - boqCost[q.boq_no]; b.estN++; }
+      const cost = knownBoqCost(q, boqCost);
+      if (cost != null) { b.est += (Number(q.afterDisc) || 0) - cost; b.estN++; b.matchedSale += Number(q.afterDisc) || 0; }
     });
-    return Object.entries(by).map(([t, b]) => ({ type: jobTypeDef(t)[1], ...b, margin: b.sale ? b.est / b.sale * 100 : 0 })).sort((a, x) => x.sale - a.sale);
+    return Object.entries(by).map(([t, b]) => ({ type: jobTypeDef(t)[1], ...b, margin: b.matchedSale ? b.est / b.matchedSale * 100 : 0 })).sort((a, x) => x.sale - a.sale);
   }, [qs, bs, from, to]);
 
   // 5) สรุปผู้ขาย — PO ไม่ยกเลิกทั้งประวัติ: ยอดซื้อสะสม/จำนวนใบ/ซื้อล่าสุด
@@ -117,11 +122,14 @@ export default function ExecReports({ act, accounts, from, to, periodLabel }) {
     return Object.entries(by).map(([name, b]) => ({ name, ...b, avg: b.total / b.count })).sort((a, x) => x.total - a.total).slice(0, 10);
   }, [pos]);
 
-  // 6) เงินสุทธิพร้อมใช้ (cash position) — เงินทุกบัญชี + ค้างรับ − ค้างจ่าย
-  const accTotal = (accounts || []).reduce((s, a) => s + (Number(a.balance) || 0), 0);
+  // 6) ยอดสุทธิหลังรวมค้างรับ–ค้างจ่าย (cash position) — เงินทุกบัญชี + ค้างรับ − ค้างจ่าย
+  const liquidAccounts = cashAccounts(accounts);
+  const accTotal = cashAccountTotal(accounts);
   // ค้างรับที่บวกเข้ามา = เฉพาะหนี้ที่ยังตามเก็บอยู่ (ใบที่ตัดหนี้สูญแล้วไม่ถูกนับ — dashboardActionLite กรอง unpaid)
   const net = accTotal + (act?.receivable || 0) - (act?.payable || 0);
 
+  if (error) return <div className="report-warning" role="alert">โหลดรายงานไม่ครบ: {error} <button className="btn-ghost sm" onClick={() => setRetry((v) => v + 1)}>ลองใหม่</button></div>;
+  if (!ov || !invs || !pos) return <div className="empty">กำลังโหลดรายงานผู้บริหาร…</div>;
   const pct = (v) => v.toFixed(0) + "%";
   return (
     <div>
@@ -142,16 +150,16 @@ export default function ExecReports({ act, accounts, from, to, periodLabel }) {
         </>}
       </Card>
 
-      <Card title="3) อายุหนี้เฉลี่ย (DSO)" sub={dso ? `เฉลี่ยทั้งร้าน ${dso.avg.toFixed(0)} วัน (จาก ${fmtNum(dso.n)} ใบ: ออกใบแจ้งหนี้ → รับเงินจริง) · ตารางเรียงจากเก็บช้าสุด` : "กำลังโหลด…"}
+      <Card title="3) ระยะเวลาเก็บเงินของใบที่ชำระแล้ว" sub={dso ? `เฉลี่ย ${dso.avg.toFixed(0)} วัน (จาก ${fmtNum(dso.n)} ใบ: ออกใบแจ้งหนี้ → รับเงินจริง) · ตารางเรียงจากเก็บช้าสุด` : "กำลังโหลด…"}
         onExport={dso ? () => downloadCsv(`อายุหนี้-${today()}`, ["ลูกค้า", "เฉลี่ย (วัน)", "จำนวนใบ"], dso.rows.map((r) => [r.name, R2(r.avg), r.n])) : null}>
         {dso && (dso.n ? <T head={["ลูกค้า (ช้าสุด 10 อันดับ)", "เฉลี่ย (วัน)", "ใบ"]} rows={dso.rows.map((r) => [r.name, r.avg.toFixed(0), fmtNum(r.n)])} />
           : <div className="empty sm">ยังไม่มีใบเสร็จที่ผูกใบแจ้งหนี้พอให้คำนวณ</div>)}
       </Card>
 
-      <Card title="4) กำไรแยกประเภทงาน" sub={`ใบเสนออนุมัติในช่วง ${periodLabel} · กำไร = ประมาณการจาก BOQ (กำไรจริงรายงานอยู่หน้า กำไร/งาน)`}
-        onExport={() => downloadCsv(`กำไรตามประเภทงาน-${today()}`, ["ประเภทงาน", "จำนวนงาน", "ยอดขาย", "กำไรประมาณการ", "มาร์จิน %"], byType.map((r) => [r.type, r.count, R2(r.sale), R2(r.est), R2(r.margin)]))}>
+      <Card title="4) กำไรประมาณการแยกประเภทงาน" sub={`ใบเสนออนุมัติในช่วง ${periodLabel} · กำไร = ประมาณการจาก BOQ (กำไรจริงรายงานอยู่หน้า กำไร/งาน) · กำไรเฉพาะใบที่มีต้นทุน`}
+        onExport={() => downloadCsv(`กำไรตามประเภทงาน-${today()}`, ["ประเภทงาน", "จำนวนงาน", "ยอดขาย", "กำไรประมาณการ", "มาร์จิน %"], byType.map((r) => [`${r.type} (ต้นทุน ${r.estN}/${r.count} ใบ)`, r.count, R2(r.sale), r.estN ? R2(r.est) : "ไม่มีต้นทุน", r.estN ? R2(r.margin) : ""]))}>
         <T head={["ประเภทงาน", "งาน", "ยอดขาย", "กำไรประมาณการ", "มาร์จิน"]}
-          rows={byType.map((r) => [r.type, fmtNum(r.count), fmtBaht(r.sale), fmtBaht(r.est), pct(r.margin)])} />
+          rows={byType.map((r) => [`${r.type} (ต้นทุน ${r.estN}/${r.count} ใบ)`, fmtNum(r.count), fmtBaht(r.sale), r.estN ? fmtBaht(r.est) : "ไม่มีต้นทุน", r.estN ? pct(r.margin) : "—"])} />
       </Card>
 
       <Card title="5) สรุปผู้ขาย (Top 10)" sub="ยอดซื้อสะสมทั้งประวัติจากใบสั่งซื้อ (ไม่รวมใบยกเลิก) · ใช้ต่อรองราคา/เครดิตเทอม"
@@ -159,16 +167,16 @@ export default function ExecReports({ act, accounts, from, to, periodLabel }) {
         {sup ? <T head={["ผู้ขาย", "ยอดสะสม", "ใบ", "เฉลี่ย/ใบ", "ล่าสุด"]} rows={sup.map((s) => [s.name, fmtBaht(s.total), fmtNum(s.count), fmtBaht(s.avg), s.last])} /> : <div className="empty sm">กำลังโหลด…</div>}
       </Card>
 
-      <Card title="6) เงินสุทธิพร้อมใช้ (Cash Position)" sub="เงินทุกบัญชี + เงินค้างรับ − ยอดค้างจ่าย · ประมาณการล่วงหน้าดูเมนูกระแสเงินสด"
+      {snapshotError ? <div className="report-warning">โหลดสถานะเงินปัจจุบันไม่สำเร็จ: {snapshotError}</div> : accounts && act ? <Card title="6) เงินสดและธนาคาร / ยอดสุทธิรวมค้างรับ–ค้างจ่าย" sub="สถานะปัจจุบันทุกกิจการ · เฉพาะเงินสด/ธนาคาร ไม่รวมบัตรเครดิตหรือ Barter · ยอดหลังรวมค้างรับไม่ใช่เงินพร้อมใช้วันนี้"
         onExport={() => downloadCsv(`เงินสุทธิ-${today()}`, ["รายการ", "จำนวนเงิน"],
-          [...(accounts || []).map((a) => [`บัญชี ${a.name}`, R2(a.balance)]), ["เงินค้างรับ", R2(act?.receivable || 0)], ["ยอดค้างจ่าย", -R2(act?.payable || 0)], ["เงินสุทธิพร้อมใช้", R2(net)]])}>
+          [...liquidAccounts.map((a) => [`บัญชี ${a.name}`, R2(a.balance)]), ["เงินค้างรับ", R2(act?.receivable || 0)], ["ยอดค้างจ่าย", -R2(act?.payable || 0)], ["ยอดสุทธิหลังรวมค้างรับ–ค้างจ่าย", R2(net)]])}>
         <div className="kpi-grid">
-          <div className="stat-card"><div className="stat-val">{fmtBaht(accTotal)}</div><div className="stat-label">เงินในบัญชีรวม ({(accounts || []).length} บัญชี)</div></div>
+          <div className="stat-card"><div className="stat-val">{fmtBaht(accTotal)}</div><div className="stat-label">เงินสดและธนาคาร ({liquidAccounts.length} บัญชี)</div></div>
           <div className="stat-card"><div className="stat-val" style={{ color: "#1d4ed8" }}>{fmtBaht(act?.receivable || 0)}</div><div className="stat-label">+ เงินค้างรับ</div></div>
           <div className="stat-card"><div className="stat-val" style={{ color: "#dc2626" }}>−{fmtBaht(act?.payable || 0)}</div><div className="stat-label">− ยอดค้างจ่าย</div></div>
-          <div className="stat-card"><div className="stat-val" style={{ color: net >= 0 ? "var(--up)" : "#dc2626" }}>{fmtBaht(net)}</div><div className="stat-label">เงินสุทธิพร้อมใช้</div><div className="stat-sub">ยังไม่หักเงินเดือนรอบถัดไป</div></div>
+          <div className="stat-card"><div className="stat-val" style={{ color: net >= 0 ? "var(--up)" : "#dc2626" }}>{fmtBaht(net)}</div><div className="stat-label">ยอดสุทธิหลังรวมค้างรับ–ค้างจ่าย</div><div className="stat-sub">ยังไม่หักเงินเดือนรอบถัดไป</div></div>
         </div>
-      </Card>
+      </Card> : <div className="empty">กำลังโหลดสถานะเงินปัจจุบัน…</div>}
     </div>
   );
 }

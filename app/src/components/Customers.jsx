@@ -29,7 +29,7 @@ export default function Customers({ role, onOpenDoc, focus, onFocusConsumed }) {
   const [docF, setDocF] = React.useState("all");
   const [siteF, setSiteF] = React.useState("all"); // filter doc history by site
   const [importing, setImporting] = React.useState(false);
-  const [viewMode, setViewMode] = React.useState("grid"); // grid | list
+  const [viewMode, setViewMode] = React.useState("list"); // grid | list
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
   const [staff, setStaff] = React.useState([]);   // เซลส์ผู้ดูแล (dropdown ท่อขาย)
   React.useEffect(() => { listStaff().then(setStaff).catch(() => {}); }, []);

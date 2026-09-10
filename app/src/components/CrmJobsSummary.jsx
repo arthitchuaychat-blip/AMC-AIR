@@ -1,21 +1,22 @@
 import React from "react";
 import { listLineContacts, listJobOrders } from "../lib/api";
-import { jobTypeDef } from "../lib/schedule";
+import { jobTypeDef, JOB_STATUSES } from "../lib/schedule";
 
 // CRM funnel (leads by stage) + open-job overview for the dashboard
 const STAGES = [
   ["new", "ใหม่", "#64748b"], ["talking", "กำลังคุย", "#2563EB"], ["interested", "สนใจ/จะซื้อ", "#d97706"],
   ["followup", "ต้องติดตาม", "#7c3aed"], ["won", "ปิดการขาย", "#16a34a"], ["closed", "จบแล้ว", "#0891b2"], ["lost", "ไม่สนใจ", "#dc2626"],
 ];
-const JOB_STATUS = [["pending", "รอจ่ายงาน", "#64748b"], ["scheduled", "นัดแล้ว", "#2563eb"], ["in_progress", "กำลังทำ", "#d97706"]];
+const JOB_STATUS = JOB_STATUSES.filter(([id]) => !["done", "cancelled"].includes(id)).map(([id, label, , color]) => [id, label, color]);
 const dot = (c) => ({ width: 10, height: 10, borderRadius: 99, background: c, display: "inline-block", marginRight: 6 });
 
 export default function CrmJobsSummary({ onGo }) {
+  const [error, setError] = React.useState(null);
   const [contacts, setContacts] = React.useState(null);
   const [jobs, setJobs] = React.useState(null);
   React.useEffect(() => {
-    listLineContacts().then(setContacts).catch(() => setContacts([]));
-    listJobOrders().then(setJobs).catch(() => setJobs([]));
+    listLineContacts().then(setContacts).catch((e) => setError(e.message || String(e)));
+    listJobOrders().then(setJobs).catch((e) => setError(e.message || String(e)));
   }, []);
 
   const stageCount = React.useMemo(() => { const m = {}; (contacts || []).forEach((c) => { const s = c.stage || "new"; m[s] = (m[s] || 0) + 1; }); return m; }, [contacts]);
@@ -24,12 +25,14 @@ export default function CrmJobsSummary({ onGo }) {
   const openJobs = (jobs || []).filter((j) => j.status !== "done" && j.status !== "cancelled");
   const surveyOpen = openJobs.filter((j) => (j.job_type || "install") === "survey").length;
 
+  if (error) return <div className="report-warning">โหลดข้อมูลแชต/งานไม่ครบ: {error}</div>;
+  if (!contacts || !jobs) return <div className="empty">กำลังโหลดสถานะแชตและงานปัจจุบัน…</div>;
   return (
     <>
-      <div className="sec-head" style={{ margin: "22px 0 10px" }}><div><div className="sec-title">CRM & งานช่าง</div><div className="sec-sub">ลูกค้าตามสถานะ · งานค้าง</div></div></div>
+      <div className="sec-head" style={{ margin: "22px 0 10px" }}><div><div className="sec-title">CRM & งานช่าง</div><div className="sec-sub">ผู้ติดต่อแชต LINE · สถานะงานปัจจุบันทั้งประวัติ</div></div></div>
       <div className="dash-grid">
         <div className="card span-2 clickable-card" onClick={() => onGo && onGo("chat")}>
-          <div className="sec-head"><div><div className="sec-title">ลูกค้าตามสถานะ (CRM)</div><div className="sec-sub">{(contacts || []).length} รายชื่อแชต</div></div></div>
+          <div className="sec-head"><div><div className="sec-title">ผู้ติดต่อแชตตามสถานะ</div><div className="sec-sub">{(contacts || []).length} รายชื่อแชต</div></div></div>
           <div className="tbars">
             {STAGES.map(([id, label, color]) => {
               const v = stageCount[id] || 0;
@@ -47,7 +50,7 @@ export default function CrmJobsSummary({ onGo }) {
         <div className="card clickable-card" onClick={() => onGo && onGo("joborders")}>
           <div className="sec-head"><div><div className="sec-title">งานค้าง</div><div className="sec-sub">ยังไม่เสร็จ</div></div><span className="badge-warn">{openJobs.length}</span></div>
           <div className="ret-stat">
-            {JOB_STATUS.map(([id, label, color]) => (
+            {[...JOB_STATUS, ...Object.keys(statusCount).filter((id) => !["done", "cancelled"].includes(id) && !JOB_STATUS.some(([key]) => key === id)).map((id) => [id, id, "#64748b"])].map(([id, label, color]) => (
               <div className="ret-row" key={id}><span><span style={dot(color)} />{label}</span><b>{statusCount[id] || 0}</b></div>
             ))}
             <div className="ret-divider" />

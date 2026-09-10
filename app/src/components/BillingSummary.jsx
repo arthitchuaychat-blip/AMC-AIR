@@ -26,12 +26,12 @@ export default function BillingSummary({ onGo, from, to }) {
     const quoteTotal = quotes.reduce((a, q) => a + (Number(q.grand) || 0), 0);
     const invoiceTotal = liveInv.reduce((a, i) => a + (Number(i.total) || 0), 0);
     const collected = paidRc.reduce((a, r) => a + (Number(r.total) || 0), 0);
-    const approved = quotes.filter((q) => q.status === "approved");
+    const approved = raw.quotes.filter((q) => q.status === "approved" && inRange(q.approved_at || q.issue_date, from, to));
     const vatA = approved.filter((q) => q.vat), noVatA = approved.filter((q) => !q.vat);
     return {
       boqTotal, boqCount: boqs.length,
       quoteTotal, quoteCount: quotes.length,
-      invoiceTotal, invoiceCount: liveInv.length, outstanding: invoiceTotal - collected,
+      invoiceTotal, invoiceCount: liveInv.length,
       collected, collectedCount: paidRc.length,
       vatSales: vatA.reduce((a, q) => a + (Number(q.afterDisc) || 0), 0), vatCount: vatA.length,
       noVatSales: noVatA.reduce((a, q) => a + (Number(q.afterDisc) || 0), 0), noVatCount: noVatA.length,
@@ -58,8 +58,8 @@ export default function BillingSummary({ onGo, from, to }) {
       <div className="kpi-grid">
         <Card icon="clipboard" color="#0d9488" label="ยอด BOQ (ต้นทุนประเมิน)" value={d.boqTotal} sub={`${d.boqCount} ใบ`} go="boq" />
         <Card icon="clipboard" color="#2563eb" label="ยอดใบเสนอราคา" value={d.quoteTotal} sub={`${d.quoteCount} ใบ`} go="quote" />
-        <Card icon="clipboard" color="#e67912" label="ยอดแจ้งหนี้ (ลูกหนี้)" value={d.invoiceTotal} sub={`${d.invoiceCount} ใบ · ค้างเก็บ ${fmtBaht(d.outstanding)}`} go="invoice" />
-        <Card icon="check" color="#16a34a" label="เก็บเงินแล้ว" value={d.collected} sub={`${d.collectedCount} ใบ`} go="receipt" accent="var(--up)" />
+        <Card icon="clipboard" color="#e67912" label="ยอดออกใบแจ้งหนี้ในงวด" value={d.invoiceTotal} sub={`${d.invoiceCount} ใบ · ยอดรวมภาษี · ดูยอดเหลือต่อใบในศูนย์รับเงิน`} go="invoice" />
+        <Card icon="check" color="#16a34a" label="ใบเสร็จชำระแล้วในงวด" value={d.collected} sub={`${d.collectedCount} ใบ · รวมภาษี · อาจรับชำระหนี้ต่างงวด`} go="receipt" accent="var(--up)" />
       </div>
 
       <div className="sec-head" style={{ margin: "16px 0 10px" }}><div><div className="sec-title">ยอดขายแยกตามภาษี</div><div className="sec-sub">จากใบเสนอราคาที่อนุมัติ · ยอดสุทธิก่อน VAT</div></div></div>

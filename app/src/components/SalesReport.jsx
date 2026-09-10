@@ -1,6 +1,7 @@
 import React from "react";
 import { listQuotations, listBoqs, listJobOrders, listProfiles, listTeams, jobMaterialCost, jobExpenseCost, listPurchaseOrders } from "../lib/api";
 import { fmtBaht, inRange } from "../lib/format";
+import { knownBoqCost, estimateSummary } from "../lib/reportMetrics";
 import { UIcon } from "../icons";
 
 // Sales & profit report from APPROVED quotations within the selected date range:
@@ -15,7 +16,7 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
 
   React.useEffect(() => {
     let alive = true;
-    Promise.all([listQuotations(), listBoqs(), listJobOrders(), listProfiles(), listTeams(), jobMaterialCost(), jobExpenseCost(), listPurchaseOrders().catch(() => [])])
+    Promise.all([listQuotations(), listBoqs(), listJobOrders(), listProfiles(), listTeams(), jobMaterialCost(), jobExpenseCost(), listPurchaseOrders()])
       .then(([qs, bs, jos, profs, teams, mat, exp, pos]) => { if (alive) setRaw({ qs, bs, jos, profs, teams, mat, exp, pos }); })
       .catch((e) => { if (alive) setErr(e.message || String(e)); });
     return () => { alive = false; };
@@ -36,22 +37,22 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
     const jobsByQuote = {}; jos.forEach((j) => { if (j.quote_no && j.status !== "cancelled") (jobsByQuote[j.quote_no] = jobsByQuote[j.quote_no] || []).push(j); });
 
     const approved = qs.filter((q) => q.status === "approved" && inRange(q.approved_at || q.issue_date, from, to));
-    const z = () => ({ sale: 0, cost: 0, hasCost: false, count: 0 });
+    const z = () => ({ sale: 0, cost: 0, matchedSale: 0, covered: 0, hasCost: false, count: 0 });
     const bySales = {}, byTeam = {};
     let totalSale = 0, totalCost = 0;
     const quotes = approved.map((q) => {
       const sale = q.afterDisc || 0;
-      const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : null;
+      const cost = knownBoqCost(q, boqCost);
       totalSale += sale; if (cost != null) totalCost += cost;
       const sid = q.created_by || "__unknown__";
       const job = jobByQuote[q.quote_no];
       const tid = job?.assigned_team || "__none__";
       (bySales[sid] = bySales[sid] || z());
       bySales[sid].sale += sale; bySales[sid].count++;
-      if (cost != null) { bySales[sid].cost += cost; bySales[sid].hasCost = true; }
+      if (cost != null) { bySales[sid].cost += cost; bySales[sid].hasCost = true; bySales[sid].matchedSale += sale; bySales[sid].covered++; }
       (byTeam[tid] = byTeam[tid] || z());
       byTeam[tid].sale += sale; byTeam[tid].count++;
-      if (cost != null) { byTeam[tid].cost += cost; byTeam[tid].hasCost = true; }
+      if (cost != null) { byTeam[tid].cost += cost; byTeam[tid].hasCost = true; byTeam[tid].matchedSale += sale; byTeam[tid].covered++; }
       // actual spend beyond the BOQ estimate — summed over every job order under this quote
       const qJobs = jobsByQuote[q.quote_no] || [];
       let matNet = 0, labor = 0, expenseReim = 0;
@@ -76,7 +77,7 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
         vat: q.vatAmt || 0, wht: q.whtAmt || 0, grand: q.grand || sale };
     });
     const mk = (entries, label) => Object.entries(entries)
-      .map(([id, v]) => ({ id, name: label(id), ...v, profit: v.hasCost ? v.sale - v.cost : null }))
+      .map(([id, v]) => ({ id, name: label(id), ...v, profit: v.hasCost ? v.matchedSale - v.cost : null }))
       .sort((a, b) => b.sale - a.sale);
     const salesRows = mk(bySales, (id) => id === "__unknown__" ? "ไม่ทราบผู้ทำ" : (profName[id] || "ไม่ทราบผู้ทำ"));
     const teamRows = mk(byTeam, (id) => id === "__none__" ? "ยังไม่มอบช่าง" : (teamName[id] || id));
@@ -86,13 +87,14 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
       if (a.net == null) return 1; if (b.net == null) return -1;
       return b.net - a.net;
     });
-    return { totalSale, totalCost, totalProfit: totalSale - totalCost, count: approved.length, salesRows, teamRows, quotes, jobRows };
+    const estimate = estimateSummary(approved, boqCost);
+    return { totalSale, totalCost, totalProfit: estimate.profit, estimate, count: approved.length, salesRows, teamRows, quotes, jobRows };
   }, [raw, from, to]);
 
   if (err) return <div className="empty" style={{ color: "var(--down)" }}>โหลดรายงานยอดขายไม่สำเร็จ: {err}</div>;
   if (!data) return <div className="empty">กำลังโหลดรายงานยอดขาย…</div>;
 
-  const margin = data.totalSale > 0 ? (data.totalProfit / data.totalSale) * 100 : 0;
+  const margin = data.estimate.margin;
   const openAll = () => setDetail({ title: "ใบเสนอราคาที่อนุมัติทั้งหมด", quotes: data.quotes });
   const openSales = (r) => setDetail({ title: `ยอดขาย · ${r.name}`, quotes: data.quotes.filter((q) => q.salesId === r.id) });
   const openTeam = (r) => setDetail({ title: `งานทีม · ${r.name}`, quotes: data.quotes.filter((q) => q.teamId === r.id) });
@@ -106,7 +108,7 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
           <div className="pf-row pf-head"><span>{nameHead}</span><span className="r">ยอดขาย</span><span className="r">ต้นทุน (BOQ)</span><span className="r">กำไร (ประมาณ)</span></div>
           {rows.map((r) => (
             <div className="pf-row pf-click" key={r.id} onClick={() => onRow(r)}>
-              <span className="pf-name"><b>{r.name}</b><br /><span className="pf-cust">{r.count} ใบ · ดูรายการ ›</span></span>
+              <span className="pf-name"><b>{r.name}</b><br /><span className="pf-cust">{r.count} ใบ · มีต้นทุน {r.covered}/{r.count} ใบ · ดูรายการ ›</span></span>
               <span className="r">{fmtBaht(r.sale)}</span>
               <span className="r">{r.hasCost ? fmtBaht(r.cost) : "—"}</span>
               <span className="r" style={{ color: r.profit == null ? "var(--ink-3)" : r.profit >= 0 ? "var(--up)" : "var(--down)", fontWeight: 700 }}>{r.profit == null ? "—" : fmtBaht(r.profit)}</span>
@@ -120,6 +122,7 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
   return (
     <div className="sales-report">
       <div className="sec-head" style={{ marginBottom: 12 }}><div><div className="sec-title">รายงานยอดขาย & กำไร</div><div className="sec-sub">จากใบเสนอราคาที่อนุมัติแล้ว · ยอดสุทธิก่อน VAT − ต้นทุน BOQ · กดดูรายการได้</div></div></div>
+      <div className="report-note">มีต้นทุน BOQ {data.estimate.covered}/{data.count} ใบ · กำไรและมาร์จินประมาณการคิดเฉพาะใบที่มีต้นทุน · ขาดต้นทุน {data.estimate.missing} ใบ</div>
       <div className="kpi-grid" style={{ marginBottom: 16 }}>
         <div className="stat-card clickable" onClick={openAll} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openAll()}>
           <div className="stat-val">{fmtBaht(data.totalSale)}</div><div className="stat-label">ยอดขายทั้งหมด (อนุมัติ)</div><div className="stat-sub">{data.count} ใบ</div>
@@ -130,14 +133,14 @@ export default function SalesReport({ onOpenQuote, onOpenJob, from, to }) {
           <div className="stat-more">ดูรายการ <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>
         </div>
         <div className="stat-card clickable" onClick={openAll} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openAll()}>
-          <div className="stat-val" style={{ color: data.totalProfit >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(data.totalProfit)}</div><div className="stat-label">กำไรรวม (ประมาณการ)</div>
+          <div className="stat-val" style={{ color: data.totalProfit >= 0 ? "var(--up)" : "var(--down)" }}>{data.totalProfit == null ? "ต้นทุนยังไม่ครบ" : fmtBaht(data.totalProfit)}</div><div className="stat-label">กำไรรวม (ประมาณการ)</div>
           <div className="stat-more">ดูรายการ <UIcon name="chevR" size={13} strokeWidth={2.2} color="currentColor" /></div>
         </div>
-        <div className="stat-card"><div className="stat-val" style={{ color: "var(--up)" }}>{margin.toFixed(1)}%</div><div className="stat-label">มาร์จินเฉลี่ย</div></div>
+        <div className="stat-card"><div className="stat-val" style={{ color: margin < 0 ? "var(--down)" : "var(--up)" }}>{margin == null ? "—" : margin.toFixed(1) + "%"}</div><div className="stat-label">มาร์จินเฉลี่ย</div></div>
       </div>
 
       <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 16 }}>
-        <div className="sec-head" style={{ padding: "16px 18px 0" }}><div><div className="sec-title">กำไรต่องาน</div><div className="sec-sub">กำไรสุทธิ = ยอดขาย − <b>ต้นทุนจริง</b> (วัสดุ/แอร์เบิกจริง + ค่าแรงซัพ + เบิกจ่าย) · BOQ แสดงเป็นประมาณการไว้เทียบ · กดที่งานเพื่อดูรายละเอียด</div></div></div>
+        <div className="sec-head" style={{ padding: "16px 18px 0" }}><div><div className="sec-title">กำไรต่องาน</div><div className="sec-sub">กำไรหลังรวมต้นทุนผูกพัน = ยอดขาย − วัสดุเบิกหักคืน − ค่าแรงซัพ − เบิกจ่าย − PO รอรับของ · BOQ แสดงเป็นประมาณการไว้เทียบ · กดที่งานเพื่อดูรายละเอียด</div></div></div>
         {data.jobRows.length === 0 && <div className="empty sm" style={{ padding: 18 }}>ยังไม่มีงานที่อนุมัติในช่วงนี้</div>}
         {data.jobRows.length > 0 && (
           <div style={{ padding: "10px 0 4px", maxHeight: 460, overflowY: "auto" }}>

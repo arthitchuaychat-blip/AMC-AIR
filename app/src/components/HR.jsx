@@ -13,6 +13,13 @@ import { UIcon } from "../icons";
 import PayDetailModal from "./PayDetail";
 
 const TABS = [["today", "วันนี้"], ["calendar", "ปฏิทิน"], ["leaves", "อนุมัติลา"], ["ot", "อนุมัติ OT"], ["advances", "เบิกล่วงหน้า"], ["loans", "เงินยืม"], ["employees", "ประวัติพนักงาน"], ["overview", "ภาพรวม/ค้าง"], ["report", "รายงาน/สถิติ"], ["payroll", "เงินเดือน"], ["perf", "ประสิทธิผล"], ["staff", "กะ & ตั้งค่า"]];
+const HR_GROUPS = [
+  ["daily", "วันนี้และตาราง", ["today", "calendar"]],
+  ["requests", "คำขอและอนุมัติ", ["leaves", "ot", "advances", "loans"]],
+  ["people", "พนักงาน", ["employees"]],
+  ["reports", "เงินเดือนและรายงาน", ["overview", "report", "payroll", "perf"]],
+  ["settings", "ตั้งค่า", ["staff"]],
+];
 const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
@@ -39,9 +46,11 @@ export default function HR({ role }) {
     <div className="adm">
       <div className="adm-head"><div><h1 className="page-title">บุคคล (HR) <span className="page-title-en">Human Resources</span></h1>
         <p className="page-sub">เข้างาน · ลา · สถิติพนักงาน · เวลาทำงาน {settings.start}–{settings.end} น.</p></div></div>
-      <div className="cat-filter">
-        {TABS.map(([v, l]) => <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
-          style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
+      <div className="hub-tabs grouped-tabs">
+        {HR_GROUPS.map(([id, label, ids]) => <button type="button" className={"seg-btn hub-tab" + (ids.includes(tab) ? " on" : "")} aria-pressed={ids.includes(tab)} key={id} onClick={() => setTab(ids[0])}>{label}</button>)}
+      </div>
+      <div className="cat-filter report-tabs">
+        {TABS.filter(([id]) => HR_GROUPS.find(([, , ids]) => ids.includes(tab))?.[2].includes(id)).map(([v, l]) => <button key={v} type="button" className={"cat-chip" + (tab === v ? " on" : "")} aria-pressed={tab === v} onClick={() => setTab(v)}>{l}</button>)}
       </div>
 
       {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}

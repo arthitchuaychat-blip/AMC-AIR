@@ -30,7 +30,7 @@ export default function Suppliers({ role }) {
   const [toast, setToast] = React.useState(null);
   const [editing, setEditing] = React.useState(null); // {sup, contacts[], sites[]}
   const [viewing, setViewing] = React.useState(null);
-  const [viewMode, setViewMode] = React.useState("grid"); // grid | list
+  const [viewMode, setViewMode] = React.useState("list"); // grid | list
   const [vatF, setVatF] = React.useState("all"); // all | vat | novat
 
   async function load() {

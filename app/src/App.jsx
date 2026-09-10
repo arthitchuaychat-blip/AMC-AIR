@@ -128,13 +128,13 @@ const NAV = {
 // sidebar sections — group the (long) menu into collapsible categories so it's not overwhelming.
 // any module not listed here falls into a trailing "อื่นๆ" group so nothing ever disappears.
 const NAV_GROUPS = [
+  { key: "overview", label: "ภาพรวม", ids: ["dashboard", "kpi"] },
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "saleshub", "weborders", "marketing"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["quote", "invoice", "adjnote"] },
   { key: "finance", label: "การเงิน", ids: ["recvcenter", "paycenter", "tax", "profit", "cashflow", "assets", "accounting"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "suppliers", "po", "tools"] },
-  { key: "overview", label: "ภาพรวม", ids: ["dashboard", "kpi"] },
   { key: "system", label: "ระบบ", ids: ["settings"] },
 ];
 
@@ -142,7 +142,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "v828 · ดีไซน์ใหม่: เมนู ไอคอน การ์ด และฟอนต์";
+const BUILD = "v829 · ภาพรวมใหม่ รายงานชัดเจน และเลย์เอาต์ร่วม";
 
 function SetupNotice() {
   return (

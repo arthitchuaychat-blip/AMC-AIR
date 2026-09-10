@@ -1,6 +1,9 @@
 import React from "react";
 import { listQuotations, listBoqs, listJobOrders, listProfiles, listTeams } from "../lib/api";
-import { fmtBaht, fmtCompact } from "../lib/format";
+import { fmtBaht, fmtCompact, inRange } from "../lib/format";
+
+import ReportChart from "./ReportChart";
+import { knownBoqCost } from "../lib/reportMetrics";
 
 const TH_MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const pad = (n) => String(n).padStart(2, "0");
@@ -30,44 +33,18 @@ function buildBuckets(g, from, to) {
 
 // vertical grouped bar chart (sales / cost / profit per time bucket)
 function GroupedBars({ buckets }) {
-  const W = 660, H = 210, padB = 26, padT = 8;
-  const series = [{ k: "sale", name: "ยอดขาย", c: "#2563EB" }, { k: "cost", name: "ต้นทุน", c: "#f59e0b" }, { k: "profit", name: "กำไร", c: "#16a34a" }];
-  const max = Math.max(1, ...buckets.flatMap((b) => series.map((s) => b[s.k] || 0)));
-  const n = buckets.length || 1; const gW = W / n; const bW = Math.min(16, (gW - 10) / 3);
-  const chartH = H - padB - padT;
-  return (
-    <div className="tc-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} className="tc-svg" preserveAspectRatio="xMidYMid meet">
-        <line x1="0" y1={H - padB} x2={W} y2={H - padB} stroke="#dbe3ef" strokeWidth="1" />
-        {buckets.map((b, i) => {
-          const gx = i * gW + gW / 2;
-          return (
-            <g key={i}>
-              {series.map((s, j) => {
-                const v = Math.max(0, b[s.k] || 0);
-                const h = (v / max) * chartH;
-                const x = gx - bW * 1.5 - 2 + j * (bW + 2);
-                return <rect key={j} x={x} y={H - padB - h} width={bW} height={h} rx="2" fill={s.c} />;
-              })}
-              <text x={gx} y={H - padB + 16} textAnchor="middle" fontSize="10" fill="#64748b">{b.label}</text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="tc-legend">{series.map((s) => <span key={s.k}><i style={{ background: s.c }} />{s.name}</span>)}</div>
-    </div>
-  );
+  return <ReportChart buckets={buckets} series={[{ k: "sale", name: "ยอดขาย", c: "var(--primary)" }, { k: "cost", name: "ต้นทุน BOQ ที่มีข้อมูล", c: "#b77916" }, { k: "profit", name: "กำไรประมาณการเฉพาะใบที่มีต้นทุน", c: "#15803d" }]} label="ยอดขาย ต้นทุน BOQ และกำไรประมาณการ" />;
 }
 
 function HBars({ rows, color }) {
-  const max = Math.max(1, ...rows.map((r) => r.v));
+  const max = Math.max(1, ...rows.map((r) => Math.abs(r.v)));
   if (!rows.length) return <div className="empty sm">ยังไม่มีข้อมูลในช่วงนี้</div>;
   return (
     <div className="tbars">
       {rows.map((r) => (
         <div className="tbar-row" key={r.name}>
           <div className="tbar-label">{r.name}</div>
-          <div className="tbar-track"><div className="tbar-fill" style={{ width: (r.v / max * 100) + "%", background: color }} /></div>
+          <div className="tbar-track"><div className="tbar-fill" style={{ width: (Math.abs(r.v) / max * 100) + "%", background: r.v < 0 ? "var(--down)" : color }} /></div>
           <div className="tbar-val">{fmtCompact(r.v)}</div>
         </div>
       ))}
@@ -94,18 +71,20 @@ export default function TrendCharts({ from, to }) {
     const profName = Object.fromEntries((data.profs || []).map((p) => [p.id, p.name || p.email]));
     const teamName = Object.fromEntries(data.teams.map((t) => [t.id, t.name]));
     const teamByQuote = {}; data.jos.forEach((j) => { if (j.quote_no && !teamByQuote[j.quote_no]) teamByQuote[j.quote_no] = j.assigned_team; });
-    const approved = data.qs.filter((q) => q.status === "approved");
+    const approved = data.qs.filter((q) => q.status === "approved" && inRange(q.approved_at || q.issue_date, from, to));
     const buckets = buildBuckets(g, from, to);
     const idx = Object.fromEntries(buckets.map((b, i) => [b.key, i]));
-    buckets.forEach((b) => { b.sale = 0; b.cost = 0; b.profit = 0; });
+    buckets.forEach((b) => { b.sale = 0; b.cost = null; b.profit = null; b.covered = 0; b.missing = 0; });
     const bySales = {}, byTeam = {};
     approved.forEach((q) => {
       const ds = q.approved_at || q.issue_date; if (!ds) return;
       const d = new Date(ds); const k = keyOf(d, g);
       const sale = q.afterDisc || 0;
-      const cost = q.boq_no && boqCost[q.boq_no] != null ? boqCost[q.boq_no] : 0;
-      const profit = sale - cost;
-      if (k in idx) { const b = buckets[idx[k]]; b.sale += sale; b.cost += cost; b.profit += profit;
+      const cost = knownBoqCost(q, boqCost);
+      const profit = cost == null ? null : sale - cost;
+      if (k in idx) { const b = buckets[idx[k]]; b.sale += sale;
+        if (cost == null) { b.missing++; return; }
+        b.covered++; b.cost = (b.cost || 0) + cost; b.profit = (b.profit || 0) + profit;
         const sn = q.created_by ? (profName[q.created_by] || "ไม่ทราบ") : "ไม่ทราบ";
         bySales[sn] = (bySales[sn] || 0) + profit;
         const tn = teamByQuote[q.quote_no] ? (teamName[teamByQuote[q.quote_no]] || teamByQuote[q.quote_no]) : "ยังไม่มอบช่าง";
@@ -115,7 +94,7 @@ export default function TrendCharts({ from, to }) {
     const tot = buckets.reduce((a, b) => ({ sale: a.sale + b.sale, cost: a.cost + b.cost, profit: a.profit + b.profit }), { sale: 0, cost: 0, profit: 0 });
     const salesRows = Object.entries(bySales).map(([name, v]) => ({ name, v })).sort((a, b) => b.v - a.v);
     const teamRows = Object.entries(byTeam).map(([name, v]) => ({ name, v })).sort((a, b) => b.v - a.v);
-    return { buckets, tot, salesRows, teamRows };
+    return { buckets, tot, covered: buckets.reduce((s, b) => s + b.covered, 0), missing: buckets.reduce((s, b) => s + b.missing, 0), salesRows, teamRows };
   }, [data, g, from, to]);
 
   if (err) return <div className="empty" style={{ color: "var(--down)" }}>โหลดกราฟไม่สำเร็จ: {err}</div>;
@@ -134,13 +113,14 @@ export default function TrendCharts({ from, to }) {
       {!computed && <div className="empty">กำลังโหลดกราฟ…</div>}
       {computed && (
         <>
+          <div className="report-note">ช่วงกราฟ {computed.buckets[0]?.label || "—"} – {computed.buckets[computed.buckets.length - 1]?.label || "—"} · ต้นทุน BOQ มีข้อมูล {computed.covered} ใบ · ขาดต้นทุน {computed.missing} ใบ · กำไรคิดเฉพาะใบที่มีต้นทุน ไม่แทนต้นทุนที่ขาดด้วยศูนย์</div>
           <div className="card" style={{ marginBottom: 14 }}>
-            <div className="sec-head"><div><div className="sec-title">ยอดขาย / ต้นทุน / กำไร</div><div className="sec-sub">รวมช่วงนี้: ขาย {fmtBaht(computed.tot.sale)} · ต้นทุน {fmtBaht(computed.tot.cost)} · กำไร {fmtBaht(computed.tot.profit)}</div></div></div>
+            <div className="sec-head"><div><div className="sec-title">ยอดขาย / ต้นทุน / กำไร</div><div className="sec-sub">รวมช่วงกราฟ: ขาย {fmtBaht(computed.tot.sale)} · ต้นทุน {computed.covered ? fmtBaht(computed.tot.cost) : "ยังไม่มีข้อมูล"} · กำไรประมาณการ {computed.covered ? fmtBaht(computed.tot.profit) : "ยังไม่มีข้อมูล"}</div></div></div>
             <GroupedBars buckets={computed.buckets} />
           </div>
           <div className="sr-tables">
-            <div className="card"><div className="sec-head"><div><div className="sec-title">กำไร · รายพนักงานขาย</div><div className="sec-sub">ในช่วงที่เลือก</div></div></div><HBars rows={computed.salesRows} color="#2563EB" /></div>
-            <div className="card"><div className="sec-head"><div><div className="sec-title">กำไร · รายทีมช่าง</div><div className="sec-sub">ในช่วงที่เลือก</div></div></div><HBars rows={computed.teamRows} color="#0ea5a3" /></div>
+            <div className="card"><div className="sec-head"><div><div className="sec-title">กำไรประมาณการ · รายพนักงานขาย</div><div className="sec-sub">ในช่วงที่เลือก</div></div></div><HBars rows={computed.salesRows} color="#2563EB" /></div>
+            <div className="card"><div className="sec-head"><div><div className="sec-title">กำไรประมาณการ · รายทีมช่าง</div><div className="sec-sub">ในช่วงที่เลือก</div></div></div><HBars rows={computed.teamRows} color="#0ea5a3" /></div>
           </div>
         </>
       )}

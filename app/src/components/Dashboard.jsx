@@ -15,6 +15,8 @@ import ExecReports from "./ExecReports";
 import PnLReport from "./PnLReport";
 import StockAsOf from "./StockAsOf";
 import RevItemsDrawer from "./RevItemsDrawer";
+import ExecutiveOverview from "./ExecutiveOverview";
+import { estimateSummary } from "../lib/reportMetrics";
 
 // รายได้แยกหมวด (เฟส 2) — 8 หมวด · เครื่อง=kind ac · บริการ=kind service + หมวด sv-* · วัสดุ/อะไหล่=หมวดวัสดุ+mat_group
 const REV_CATS = [
@@ -41,9 +43,9 @@ const pad2 = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const PRESETS = [
   { id: "today", label: "วันนี้", range: () => { const t = ymd(new Date()); return { from: t, to: t }; } },
-  { id: "month", label: "เดือนนี้", range: () => { const n = new Date(); return { from: `${n.getFullYear()}-${pad2(n.getMonth() + 1)}-01`, to: "" }; } },
-  { id: "year", label: "ปีนี้", range: () => { const n = new Date(); return { from: `${n.getFullYear()}-01-01`, to: "" }; } },
-  { id: "7d", label: "7 วัน", range: () => { const n = new Date(); const s = new Date(n); s.setDate(n.getDate() - 6); return { from: ymd(s), to: "" }; } },
+  { id: "month", label: "เดือนนี้", range: () => { const n = new Date(); return { from: `${n.getFullYear()}-${pad2(n.getMonth() + 1)}-01`, to: ymd(n) }; } },
+  { id: "year", label: "ปีนี้", range: () => { const n = new Date(); return { from: `${n.getFullYear()}-01-01`, to: ymd(n) }; } },
+  { id: "7d", label: "7 วัน", range: () => { const n = new Date(); const s = new Date(n); s.setDate(n.getDate() - 6); return { from: ymd(s), to: ymd(n) }; } },
   { id: "all", label: "ทั้งหมด", range: () => ({ from: "", to: "" }) },
 ];
 
@@ -75,7 +77,10 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
   }, [role]);
   const [preset, setPreset] = React.useState("month");
   const [from, setFrom] = React.useState(PRESETS.find((p) => p.id === "month").range().from);
-  const [to, setTo] = React.useState("");
+  const [to, setTo] = React.useState(() => ymd(new Date()));
+  const [refresh, setRefresh] = React.useState(0);
+  const [actionError, setActionError] = React.useState(null);
+  const [accountError, setAccountError] = React.useState(null);
   const [detail, setDetail] = React.useState(null);
   const [docList, setDocList] = React.useState(null); // การ์ดขาย/รับเงิน/กำไร → แผงรายการเอกสาร + Export
   const [revDrill, setRevDrill] = React.useState(null); // หมวดรายได้ที่กดดูรายการสินค้า/บริการรายตัว
@@ -95,12 +100,15 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
   const [staffNames, setStaffNames] = React.useState([]);   // ทะเบียนพนักงาน — ตัวเลือก "พนักงานขาย" ต้องไม่ผูกกับช่วงวันที่
   const [ovErr, setOvErr] = React.useState(null);           // โหลดเอกสารไม่สำเร็จ — ต้องบอก ไม่ใช่โชว์ตัวเลขเก่าค้างไว้
   React.useEffect(() => {
-    dashboardActionLite().then(setAct).catch(() => {});   // ตัวเลขค้างรับ/ค้างจ่าย = ทั้งบริษัทเสมอ ไม่ผูกช่วงวันที่
-    if (can(role, "cashflow")) listAccounts().then(setAccounts).catch(() => {});
+    setAct(null); setAccounts(null); setActionError(null); setAccountError(null);
+    let alive = true;
+    dashboardActionLite().then((a) => { if (alive) setAct(a); }).catch((e) => { if (alive) setActionError(e.message || String(e)); });   // ตัวเลขค้างรับ/ค้างจ่าย = ทั้งบริษัทเสมอ ไม่ผูกช่วงวันที่
+    if (can(role, "cashflow")) listAccounts().then((a) => { if (alive) setAccounts(a); }).catch((e) => { if (alive) setAccountError(e.message || String(e)); });
     // รายชื่อพนักงานขายในตัวกรอง ต้องมาจากทะเบียนพนักงาน ไม่ใช่จากใบเสนอในช่วงที่เลือก
     // ไม่งั้นเปลี่ยนช่วงวันที่แล้วชื่อที่เลือกอยู่หายจากลิสต์ ทั้งที่ค่ายังค้างใน state → การ์ดขึ้น 0 บาทโดยไม่มีสาเหตุให้เห็น
     listProfiles().then((ps) => setStaffNames([...new Set((ps || []).map((p) => p.name).filter(Boolean))].sort())).catch(() => {});
-  }, [role]);
+    return () => { alive = false; };
+  }, [role, refresh]);
   // เอกสารฝั่งขาย: ดึงเฉพาะช่วงที่เลือก ("ทั้งหมด" = from ว่าง → ไม่ส่ง since = โหลดเต็มเหมือนเดิม)
   // ⚠️ BOQ ดึงด้วย "เลขใบที่ใบเสนออ้างถึง" ไม่ใช่ด้วยวันที่ — BOQ ถูกทำก่อนใบเสนอเป็นวัน/สัปดาห์
   //    ถ้ากรอง BOQ ด้วยวันที่ ใบแม่ของใบเสนอในช่วงจะหลุด แล้วการ์ด "กำไรประมาณการ" จะน้อยลงเงียบ ๆ
@@ -112,19 +120,19 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     const opt = from ? { since: from } : {};
     (async () => {
       try {
-        const [qs, rcs, cats, ans] = await Promise.all([listQuotations(opt), listReceipts(opt).catch(() => []), listCategories().catch(() => []), listAdjustmentNotes().catch(() => [])]);
+        const [qs, rcs, cats, ans] = await Promise.all([listQuotations(opt), listReceipts(opt), listCategories(), listAdjustmentNotes()]);
         const boqNos = [...new Set(qs.map((q) => q.boq_no).filter(Boolean))];
-        const bs = await listBoqs(from && boqNos.length ? { nos: boqNos } : {});
+        const bs = boqNos.length ? await listBoqs({ nos: boqNos }) : [];
         // ใบเสร็จที่ผูกใบเสนอนอกช่วง → ขอแค่ "ใครขาย/ทีมไหน" ของใบเสนอพวกนั้นมาเพิ่ม (ตารางบาง 2 คอลัมน์)
         // ไม่งั้นพอผู้ใช้เลือกตัวกรองพนักงานขาย ใบเสร็จเหล่านั้นจะถูกทิ้งทั้งที่เป็นเงินที่เก็บได้จริง
         const inWin = new Set(qs.map((q) => q.quote_no));
         const missing = [...new Set(rcs.map((r) => r.quote_no).filter((n) => n && !inWin.has(n)))];
-        const extra = missing.length ? await quoteAttribution(missing).catch(() => ({})) : {};
+        const extra = missing.length ? await quoteAttribution(missing) : {};
         if (alive) setOv({ qs, bs, rcs, ans, attrExtra: extra, cats });
       } catch (e) { if (alive) setOvErr(e.message || String(e)); }
     })();
     return () => { alive = false; };
-  }, [from]);
+  }, [from, refresh]);
   // ใบเสนอหลังผ่านตัวกรองคน/ทีม — เป็นฐานของทุกการ์ดฝั่งขาย (ใบเสร็จกรองผ่านใบเสนอที่มันผูก)
   const fq = React.useMemo(() => {
     let qs = ov?.qs || [];
@@ -156,7 +164,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
     () => [...new Set([...staffNames, ...(ov?.qs || []).map((q) => q.createdByName)].filter(Boolean))].sort(),
     [staffNames, ov]);
   const ovStat = React.useMemo(() => {
-    if (!ov) return { sale: 0, count: 0, est: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0 };
+    if (!ov) return { sale: 0, count: 0, est: 0, vatSale: 0, vatCount: 0, novatSale: 0, novatCount: 0, covered: 0 };
     const boqCost = Object.fromEntries(ov.bs.map((b) => [b.boq_no, b.total]));
     let sale = 0, count = 0, est = 0, vatSale = 0, vatCount = 0, novatSale = 0, novatCount = 0;
     fq.forEach((qo) => {
@@ -166,7 +174,8 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       if (qo.vat) { vatSale += qo.afterDisc || 0; vatCount += 1; } else { novatSale += qo.afterDisc || 0; novatCount += 1; }
       if (qo.boq_no && boqCost[qo.boq_no] != null) est += (qo.afterDisc || 0) - boqCost[qo.boq_no];
     });
-    return { sale, count, est, vatSale, vatCount, novatSale, novatCount };
+    const estimate = estimateSummary(fq.filter((q) => q.status === "approved" && inRange(q.approved_at || q.issue_date, from, to)), boqCost);
+    return { sale, count, est: estimate.profit, covered: estimate.covered, vatSale, vatCount, novatSale, novatCount };
   }, [ov, fq, from, to]);
   // รายได้แยก 8 หมวด — ฐานเดียวกับการ์ด "ยอดขายอนุมัติ" (ผลรวมทุกหมวด = ovStat.sale)
   // เฉลี่ยส่วนลดรวมท้ายบิลลงแต่ละบรรทัดตามสัดส่วน (afterDisc/subtotal) → ผลรวมตรงกับยอดก่อน VAT ต่อใบ
@@ -198,8 +207,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       const items = qo.items || [];
       const lineNet = items.map((x) => Number(x.qty) * (x.price_show ?? x.unit_price ?? 0) - (Number(x.discount) || 0));
       const subtotal = lineNet.reduce((a, n) => a + n, 0);
-      if (subtotal <= 0) return;
-      const ratio = (qo.afterDisc || 0) / subtotal;
+      const ratio = subtotal > 0 ? (qo.afterDisc || 0) / subtotal : 0;
       items.forEach((x, i) => {
         const bag = out[revBucketOf(x, matBy, catGroup)];
         const key = x.item_code || ("~" + (x.name || "-"));   // รวมสินค้ารหัสเดียวกัน · รายการพิมพ์เองรวมตามชื่อ
@@ -249,7 +257,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
   }, [ov, fRcs, fAns, from, to]);
 
   // การ์ดที่คำนวณจากเอกสารในช่วง: ระหว่างโหลดต้องขึ้น "…" ไม่ใช่ตัวเลขของช่วงก่อนหน้าใต้ป้ายช่วงใหม่
-  const dv = (v) => (ov ? fmtBaht(v) : "…");
+  const dv = (v) => (ov ? v == null ? "ต้นทุนยังไม่ครบ" : fmtBaht(v) : ovErr ? "โหลดไม่สำเร็จ" : "…");
   function applyPreset(p) { const r = PRESETS.find((x) => x.id === p).range(); setPreset(p); setFrom(r.from); setTo(r.to); }
   const setCustom = (k, v) => { setPreset("custom"); k === "from" ? setFrom(v) : setTo(v); };
   const rangeLabel = preset !== "custom" ? (PRESETS.find((p) => p.id === preset)?.label || "") : `${from || "เริ่มต้น"} – ${to || "วันนี้"}`;
@@ -261,7 +269,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       .then(([m, t, x]) => { if (alive) { setMats(m); setTeams(t); setTxns(x); setLoading(false); } })
       .catch((e) => { if (alive) { setErr(e.message || String(e)); setLoading(false); } });
     return () => { alive = false; };
-  }, [from]);
+  }, [from, refresh]);
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
   const periodLabel = rangeLabel;
@@ -305,7 +313,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       <div className="dash-head">
         <div>
           <h1 className="page-title">ภาพรวมผู้บริหาร <span className="page-title-en">Executive Overview</span></h1>
-          <p className="page-sub">ข้อมูลสด · ทุกรายงานในช่วง {rangeLabel}</p>
+          <p className="page-sub">ผลประกอบการในช่วง {rangeLabel} · เงินและงานค้างเป็นสถานะปัจจุบันทั้งระบบ</p>
         </div>
       </div>
 
@@ -321,10 +329,10 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
         </div>
       </div>
 
-      <div className="cat-filter" style={{ marginTop: 2 }}>
-        {[["overview", "🏠 ภาพรวม"], ["sales", "ขาย & กำไร"], ["fin", "การเงิน & เอกสาร"], ...(can(role, "profit") ? [["pnl", "📉 กำไร-ขาดทุน"], ["exec", "📊 รายงานผู้บริหาร"]] : []), ["trend", "กราฟแนวโน้ม"], ["inv", "คลังวัสดุ & เบิกใช้"]].map(([v, l]) => (
+      <div className="cat-filter report-tabs" style={{ marginTop: 2 }}>
+        {[["overview", "ภาพรวม"], ["sales", "ขาย & กำไร"], ["fin", "การเงิน & เอกสาร"], ...(can(role, "profit") ? [["pnl", "กำไร-ขาดทุน"], ["exec", "รายงานผู้บริหาร"]] : []), ["trend", "กราฟแนวโน้ม"], ["inv", "คลังวัสดุ & เบิกใช้"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
-            style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>
+            aria-pressed={tab === v}>{l}</button>
         ))}
       </div>
 
@@ -345,8 +353,14 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
           </div>
           {ovErr && <div className="card" style={{ borderLeft: "4px solid #dc2626", marginBottom: 10 }}>
             ⚠️ โหลดเอกสารในช่วงนี้ไม่สำเร็จ — ตัวเลขการ์ดขาย/รับเงิน/กำไร <b>ยังไม่ใช่ของจริง</b>
-            <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 4 }}>{ovErr}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 4 }}>{ovErr}</div><button className="btn-ghost sm" onClick={() => setRefresh((v) => v + 1)}>ลองใหม่</button>
           </div>}
+          <ExecutiveOverview role={role} ov={ov} quotes={fq} stats={ovStat} act={act} accounts={accounts}
+            accountError={accountError} actionError={actionError} stockError={err} stockLoading={loading} stockReady={!loading && !err}
+            low={low} from={from} to={to} periodLabel={periodLabel} airRows={revItemsByCat.ac}
+            onDocs={setDocList} onGo={onGo} onTab={setTab} onAir={() => setRevDrill("ac")} onRetry={() => setRefresh((v) => v + 1)} />
+          <details className="report-details executive-secondary">
+            <summary>ยอดรับเงิน ภาษี สต๊อก และรายละเอียดเพิ่มเติม</summary>
           <div className="kpi-grid">
             <StatCard highlight icon="trend" color="#2563eb" label={"ยอดขายอนุมัติ · " + periodLabel} value={dv(ovStat.sale)} sub={`${fmtNum(ovStat.count)} ใบ · ยอดก่อน VAT`} onClick={() => setDocList("q_all")} />
             <StatCard icon="trend" color="#2563EB" label="ยอดขายอนุมัติ · รับ VAT" value={dv(ovStat.vatSale)} sub={`${fmtNum(ovStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("q_vat")} />
@@ -354,12 +368,12 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
             <StatCard icon="check" color="#0a6b3d" label={"รับเงินแล้ว (ใบเสร็จ) · " + periodLabel} value={dv(rcStat.sale)} sub={`${fmtNum(rcStat.count)} ใบเสร็จ · ก่อน VAT · รับสุทธิ ${fmtCompact(rcStat.net)}`} onClick={() => setDocList("rc_all")} />
             <StatCard icon="check" color="#15803d" label="รับเงินแล้ว · รับ VAT" value={dv(rcStat.vatSale)} sub={`${fmtNum(rcStat.vatCount)} ใบ · ก่อน VAT`} onClick={() => setDocList("rc_vat")} />
             <StatCard icon="check" color="#4d7c0f" label="รับเงินแล้ว · ไม่ VAT" value={dv(rcStat.novatSale)} sub={fmtNum(rcStat.novatCount) + " ใบ"} onClick={() => setDocList("rc_novat")} />
-            <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={dv(ovStat.est)} sub="กำไรจริงดูในแท็บ ขาย & กำไร" onClick={() => setDocList("est")} />
-            <StatCard icon="clipboard" color="#d97706" label="เงินค้างรับ" value={fmtBaht(act?.receivable || 0)} sub={`${fmtNum(act?.unpaidCount || 0)} ใบ · เกินกำหนด ${fmtNum(act?.overdueCount || 0)} ใบ`} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
-            <StatCard icon="withdraw" color="#dc2626" label="ยอดค้างจ่าย" value={fmtBaht(act?.payable || 0)} accent={act?.payable ? "#dc2626" : undefined}
+            {can(role, "profit") && <StatCard icon="trend" color="#16a34a" label="กำไรประมาณการ (BOQ)" value={dv(ovStat.est)} sub={`มีต้นทุน ${ovStat.covered}/${ovStat.count} ใบ · กำไรจริงดู ขาย & กำไร`} onClick={() => setDocList("est")} />}
+            <StatCard icon="clipboard" color="#d97706" label="เงินค้างรับ" value={act ? fmtBaht(act.receivable) : "โหลดข้อมูลไม่ครบ"} sub={`${fmtNum(act?.unpaidCount || 0)} ใบ · เกินกำหนด ${fmtNum(act?.overdueCount || 0)} ใบ`} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
+            <StatCard icon="withdraw" color="#dc2626" label="ยอดค้างจ่าย" value={act ? fmtBaht(act.payable) : "โหลดข้อมูลไม่ครบ"} accent={act?.payable ? "#dc2626" : undefined}
               sub={`PO ${fmtCompact(act?.poPayable || 0)} · ค่าแรงซัพ ${fmtCompact((act?.payoutUnpaid || 0) + (act?.laborOwed || 0))} · เบิกรอจ่าย ${fmtCompact(act?.approvedExpenseSum || 0)}`}
               onClick={() => onGo && onGo("cashflow")} />
-            <StatCard icon="box" color="#0d9488" label="มูลค่าวัสดุคงเหลือ" value={fmtBaht(invValue)} sub={`${fmtNum(mats.length)} ชนิด · ${fmtNum(low.length)} ต่ำกว่าขั้นต่ำ`} onClick={() => setTab("inv")} />
+            <StatCard icon="box" color="#0d9488" label="มูลค่าวัสดุคงเหลือ" value={loading || err ? "โหลดข้อมูลไม่ครบ" : fmtBaht(invValue)} sub={`${fmtNum(mats.length)} ชนิด · ${fmtNum(low.length)} ต่ำกว่าขั้นต่ำ`} onClick={() => setTab("inv")} />
             {can(role, "tax") && vat && (
               <StatCard icon="clipboard" color="#0891b2" label={(vat.net >= 0 ? "VAT นำส่ง" : "VAT ขอคืน") + " · เดือนนี้"}
                 value={fmtBaht(Math.abs(vat.net))} accent={vat.net > 0 ? "#dc2626" : "#16a34a"}
@@ -391,7 +405,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
                     <div key={k} onClick={() => clickable && setRevDrill(k)} role={clickable ? "button" : undefined} tabIndex={clickable ? 0 : undefined}
                       onKeyDown={(e) => { if (clickable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setRevDrill(k); } }}
                       style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 6px", borderRadius: 8, cursor: clickable ? "pointer" : "default" }}
-                      className={clickable ? "rev-row-click" : undefined}>
+                      className={"executive-revenue-row" + (clickable ? " rev-row-click" : "")}>
                       <span style={{ width: 150, minWidth: 150, fontSize: 13.5, fontWeight: 600 }}>{l}</span>
                       <div style={{ flex: 1, height: 14, background: "var(--line)", borderRadius: 7, overflow: "hidden" }}>
                         <div style={{ width: `${Math.max(pct, 0)}%`, height: "100%", background: c, borderRadius: 7 }} />
@@ -409,26 +423,20 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
           {/* เงินคงเหลือแต่ละบัญชี (เฉพาะ role การเงิน) — ตัวเลขเดียวกับเมนูเบิกจ่าย → เดินบัญชี */}
           {accounts && accounts.length > 0 && (
             <>
-              <div className="sec-head" style={{ margin: "20px 0 10px" }}><div><div className="sec-title">เงินในบัญชี</div><div className="sec-sub">ยอดคงเหลือปัจจุบันรายบัญชี · กดเพื่อดูเดินบัญชี</div></div>
+              <div className="sec-head" style={{ margin: "20px 0 10px" }}><div><div className="sec-title">ยอดคงเหลือทุกช่องทาง</div><div className="sec-sub">ยอดคงเหลือปัจจุบันรายบัญชี · กดเพื่อดูเดินบัญชี</div></div>
                 <button className="btn-ghost sm" onClick={() => downloadCsv(`เงินในบัญชี-${new Date().toISOString().slice(0, 10)}`,
-                  ["บัญชี", "ประเภท", "ยอดคงเหลือ"], accounts.map((a) => [a.name, a.kind === "cash" ? "เงินสด" : "ธนาคาร", Math.round((Number(a.balance) || 0) * 100) / 100]))}>⬇ Export</button></div>
+                  ["บัญชี", "ประเภท", "ยอดคงเหลือ"], accounts.map((a) => [a.name, ({ cash: "เงินสด", bank: "ธนาคาร", card: "บัตรเครดิต", barter: "Barter" }[a.kind] || a.kind), Math.round((Number(a.balance) || 0) * 100) / 100]))}>⬇ Export</button></div>
               <div className="kpi-grid">
                 {accounts.map((a) => (
                   <StatCard key={a.id} icon="trend" color={a.kind === "cash" ? "#d97706" : "#0d9488"} label={(a.kind === "cash" ? "💵 " : "🏦 ") + a.name}
                     value={fmtBaht(a.balance)} accent={Number(a.balance) < 0 ? "#dc2626" : undefined} onClick={() => onGo && onGo("expenses")} />
                 ))}
-                <StatCard icon="trend" color="#111" label="รวมทุกบัญชี" value={fmtBaht(accounts.reduce((s, a) => s + (Number(a.balance) || 0), 0))} onClick={() => onGo && onGo("expenses")} />
+                <StatCard icon="trend" color="#111" label="รวมทุกช่องทาง (รวมบัตร/Barter)" value={fmtBaht(accounts.reduce((s, a) => s + (Number(a.balance) || 0), 0))} onClick={() => onGo && onGo("expenses")} />
               </div>
             </>
           )}
 
-          <div className="sec-head" style={{ margin: "20px 0 10px" }}><div><div className="sec-title">สิ่งที่ต้องทำ</div><div className="sec-sub">งานค้างที่รอจัดการ · กดการ์ดเพื่อไปหน้านั้น</div></div></div>
-          <div className="kpi-grid">
-            <StatCard icon="alert" color="#dc2626" label="ของใกล้หมด ต้องสั่งซื้อ" value={fmtNum(low.length) + " รายการ"} sub={low.length ? "มูลค่าที่ต้องสั่ง ~" + fmtBaht(reorderTotal) : "สต๊อกเพียงพอทุกรายการ 🎉"} accent={low.length ? "#dc2626" : "#16a34a"} onClick={() => setTab("inv")} />
-            <StatCard icon="withdraw" color="#7c3aed" label="เบิกจ่ายรออนุมัติ" value={fmtNum(act?.pendingExpenseCount || 0) + " คำขอ"} sub={act?.pendingExpenseSum ? "รวม " + fmtBaht(act.pendingExpenseSum) : "ไม่มีค้างอนุมัติ"} onClick={() => onGo && onGo("expenses")} />
-            <StatCard icon="purchase" color="#d97706" label="ใบสั่งซื้อรอรับของ" value={fmtNum(act?.poOpenCount || 0) + " ใบ"} sub={"รออนุมัติจ่าย " + fmtNum(act?.poAwaitPayCount || 0) + " ใบ"} onClick={() => onGo && onGo("po")} />
-            <StatCard icon="clipboard" color="#2563eb" label="ใบแจ้งหนี้ค้างรับ" value={fmtNum(act?.unpaidCount || 0) + " ใบ"} sub={"เกินกำหนด " + fmtNum(act?.overdueCount || 0) + " ใบ"} accent={act?.overdueCount ? "#dc2626" : undefined} onClick={() => onGo && onGo("receivables")} />
-          </div>
+          </details>
         </>
       )}
 
@@ -442,7 +450,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       )}
 
       {tab === "pnl" && <PnLReport from={from} to={to} periodLabel={periodLabel} />}
-      {tab === "exec" && <ExecReports act={act} accounts={accounts} from={from} to={to} periodLabel={periodLabel} />}
+      {tab === "exec" && <ExecReports act={act} accounts={accounts} from={from} to={to} periodLabel={periodLabel} snapshotError={actionError || accountError} />}
 
       {tab === "trend" && <TrendCharts from={from} to={to} />}
 

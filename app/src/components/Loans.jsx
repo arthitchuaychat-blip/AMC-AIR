@@ -93,10 +93,10 @@ export default function Loans({ role, onGoExpenses, onGoCashflow }) {
     <div style={{ maxWidth: 1080, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <div>
-          <h2 style={{ margin: 0 }}>🏧 หนี้สิน — สินเชื่อ &amp; ค่างวดผ่อน</h2>
+          <h2 className="page-title" style={{ margin: 0 }}>🏧 หนี้สิน — สินเชื่อ &amp; ค่างวดผ่อน</h2>
           <div className="muted" style={{ fontSize: 13 }}>รวมรถเช่าซื้อ + สินเชื่อ · ตารางผ่อน เงินต้น/หนี้คงเหลือ + ประมาณการจ่ายล่วงหน้าจนหมดงวด</div>
         </div>
-        {canEdit && <button className="btn primary" onClick={() => setEdit(blankLoan())}>+ เพิ่มสินเชื่อ</button>}
+        {canEdit && <button className="btn-primary" onClick={() => setEdit(blankLoan())}>+ เพิ่มสินเชื่อ</button>}
       </div>
 
       {needMig && <div className="card" style={{ padding: 14, borderColor: "#b4530955", background: "#b4530912", marginTop: 12 }}>
@@ -114,17 +114,17 @@ export default function Loans({ role, onGoExpenses, onGoCashflow }) {
 
         {/* กราฟประมาณการ 12 เดือน */}
         {active.length > 0 && <div className="card" style={{ padding: "14px 16px", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>ประมาณการค่างวดล่วงหน้า 12 เดือน {onGoCashflow && <button className="btn-link" style={{ fontWeight: 400, fontSize: 12 }} onClick={onGoCashflow}>· ดูในกระแสเงินสด →</button>}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>ประมาณการค่างวดล่วงหน้า 12 เดือน {onGoCashflow && <button className="btn-ghost sm" style={{ fontWeight: 400, fontSize: 12 }} onClick={onGoCashflow}>· ดูในกระแสเงินสด →</button>}</div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 96 }}>
             {outlook.map((o) => <div key={o.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }} title={`${thMonth(o.date)} · ${fmtBaht(o.amount)}`}>
-              <div style={{ width: "100%", maxWidth: 30, height: `${Math.round((o.amount / outMax) * 74)}%`, minHeight: o.amount ? 3 : 0, background: "var(--teal,#0f766e)", borderRadius: "5px 5px 0 0", opacity: 0.88 }} />
-              <span style={{ fontSize: 9.5, color: "var(--muted,#889)" }}>{thMonth(o.date)}</span>
+              <div style={{ width: "100%", maxWidth: 30, height: `${Math.round((o.amount / outMax) * 74)}%`, minHeight: o.amount ? 3 : 0, background: "var(--primary)", borderRadius: "5px 5px 0 0", opacity: 0.88 }} />
+              <span style={{ fontSize: 9.5, color: "var(--ink-2)" }}>{thMonth(o.date)}</span>
             </div>)}
           </div>
         </div>}
 
         {/* รายการสัญญา */}
-        {active.length === 0 && !needMig && <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--muted,#889)" }}>
+        {active.length === 0 && !needMig && <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--ink-2)" }}>
           ยังไม่มีสัญญาสินเชื่อ {canEdit && <>— กด <b>+ เพิ่มสินเชื่อ</b> เพื่อเริ่ม</>}
         </div>}
         <div style={{ display: "grid", gap: 10 }}>
@@ -140,10 +140,10 @@ export default function Loans({ role, onGoExpenses, onGoCashflow }) {
 }
 
 function SumCard({ k, v, sub, accent, warn }) {
-  return <div className="card" style={{ padding: "14px 16px", ...(accent ? { borderColor: "var(--teal,#0f766e)" } : warn ? { borderColor: "#b45309" } : {}) }}>
+  return <div className="card" style={{ padding: "14px 16px", ...(accent ? { borderColor: "var(--primary)" } : warn ? { borderColor: "#b45309" } : {}) }}>
     <div style={{ fontSize: 12.5, color: "var(--muted,#667)" }}>{k}</div>
     <div style={{ fontSize: 22, fontWeight: 700, marginTop: 5, letterSpacing: "-.02em", color: warn ? "#b45309" : "inherit" }}>{v}</div>
-    {sub && <div style={{ fontSize: 12, color: "var(--muted,#889)", marginTop: 2 }}>{sub}</div>}
+    {sub && <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2 }}>{sub}</div>}
   </div>;
 }
 
@@ -161,30 +161,30 @@ function LoanRow({ loan, onOpen, onPay, onConfirm, onAutoDebit, onEdit, canEdit,
         <div style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", background: "var(--teal-soft,#0f766e18)", fontSize: 17, flex: "none" }}>{kindIcon(loan.kind)}</div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{loan.name}{(loan.attachments || []).length > 0 && <span title="มีไฟล์สัญญาแนบ" style={{ marginLeft: 5, fontSize: 12 }}>📎</span>}</div>
-          <div style={{ fontSize: 11.5, color: "var(--muted,#889)" }}>{LOAN_METHODS[loan.method] || loan.method}{loan.lender ? " · " + loan.lender : ""}{auto ? " · 🏦 หักบัญชีอัตโนมัติ" : ""}{loan.active === false ? " · ปิดแล้ว" : ""}</div>
+          <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{LOAN_METHODS[loan.method] || loan.method}{loan.lender ? " · " + loan.lender : ""}{auto ? " · 🏦 หักบัญชีอัตโนมัติ" : ""}{loan.active === false ? " · ปิดแล้ว" : ""}</div>
         </div>
       </div>
       <div style={{ textAlign: "right", flex: "0 0 auto", minWidth: 96 }}>
-        <div style={{ fontSize: 11, color: "var(--muted,#889)" }}>ค่างวด/เดือน</div>
-        <div style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(st.next ? st.next.installment : loan.installment)}{st.stepped && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--muted,#889)" }}> ขั้นบันได</span>}</div>
+        <div style={{ fontSize: 11, color: "var(--ink-2)" }}>ค่างวด/เดือน</div>
+        <div style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(st.next ? st.next.installment : loan.installment)}{st.stepped && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--ink-2)" }}> ขั้นบันได</span>}</div>
       </div>
       <div style={{ flex: "0 0 auto", minWidth: 150 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--muted,#889)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--ink-2)" }}>
           <span>งวด {st.paid}/{st.term}</span><span>เหลือ {st.remainInst}</span>
         </div>
-        <div style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums", fontSize: 13.5 }}>{fmtBaht(st.payoffLeft)} <span style={{ fontSize: 11, fontWeight: 400, color: "var(--muted,#889)" }}>คงเหลือ</span></div>
-        <div style={{ height: 6, borderRadius: 99, background: "var(--line,#e3e8ee)", overflow: "hidden", marginTop: 4 }}><div style={{ height: "100%", width: `${pct}%`, background: "var(--teal,#0f766e)", borderRadius: 99 }} /></div>
+        <div style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums", fontSize: 13.5 }}>{fmtBaht(st.payoffLeft)} <span style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-2)" }}>คงเหลือ</span></div>
+        <div style={{ height: 6, borderRadius: 99, background: "var(--line,#e3e8ee)", overflow: "hidden", marginTop: 4 }}><div style={{ height: "100%", width: `${pct}%`, background: "var(--primary)", borderRadius: 99 }} /></div>
       </div>
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 6 }}>
-        {done ? <span style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 99, background: "var(--teal-soft,#0f766e18)", color: "var(--teal,#0f766e)" }}>ผ่อนครบ ✓</span>
+        {done ? <span style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 99, background: "var(--teal-soft,#0f766e18)", color: "var(--primary)" }}>ผ่อนครบ ✓</span>
           : submitted ? <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 10px", borderRadius: 99, background: "#137a5416", color: "var(--green,#137a54)", whiteSpace: "nowrap" }}>✓ ตั้งจ่ายแล้ว</span>
           : <span style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 99, background: dueNow ? "#b4530915" : "var(--line,#eef)", color: dueNow ? "#b45309" : "var(--muted,#667)", whiteSpace: "nowrap" }}>{st.next ? thFull(st.next.due) : "—"}</span>}
         {canEdit && !done && (auto
-          ? <button className="btn sm" disabled={busy} onClick={onAutoDebit} title="หักบัญชีอัตโนมัติแล้ว → บันทึกจ่าย + เดินงวด" style={{ background: "var(--teal,#0f766e)", color: "#fff", borderColor: "transparent" }}>🏦 หักบัญชี</button>
+          ? <button className="btn-ghost sm" disabled={busy} onClick={onAutoDebit} title="หักบัญชีอัตโนมัติแล้ว → บันทึกจ่าย + เดินงวด" style={{ background: "var(--primary)", color: "#fff", borderColor: "transparent" }}>🏦 หักบัญชี</button>
           : submitted
-          ? <button className="btn sm" disabled={busy} onClick={onConfirm} title="จ่ายเงินจริงในเมนูเบิกจ่ายแล้ว → เดินงวด" style={{ background: "var(--green,#137a54)", color: "#fff", borderColor: "transparent" }}>จ่ายเสร็จ</button>
-          : <button className="btn sm" disabled={busy} onClick={onPay} title="ตั้งเบิกค่างวดถัดไป">จ่ายงวด</button>)}
-        {canEdit && <button className="btn-icon sm" onClick={onEdit} title="แก้ไข">✏️</button>}
+          ? <button className="btn-ghost sm" disabled={busy} onClick={onConfirm} title="จ่ายเงินจริงในเมนูเบิกจ่ายแล้ว → เดินงวด" style={{ background: "var(--green,#137a54)", color: "#fff", borderColor: "transparent" }}>จ่ายเสร็จ</button>
+          : <button className="btn-ghost sm" disabled={busy} onClick={onPay} title="ตั้งเบิกค่างวดถัดไป">จ่ายงวด</button>)}
+        {canEdit && <button className="btn-ghost sm" onClick={onEdit} title="แก้ไข">✏️</button>}
       </div>
     </div>
   </div>;
@@ -211,7 +211,7 @@ function LoanDetail({ loan, onClose, onPay, onConfirm, onAutoDebit, onDelete, on
               {loan.principal ? ` · ยอดจัด ${fmtBaht(loan.principal)}` : ""}{loan.method === "reducing" && loan.rate ? ` · ${loan.rate}%/ปี` : ""}
             </div>
           </div>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <button className="btn-ghost sm" onClick={onClose}>✕</button>
         </div>
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 12 }}>
           {st.principalLeft != null && <Fact l="เงินต้นคงเหลือ" n={fmtBaht(st.principalLeft)} />}
@@ -226,7 +226,7 @@ function LoanDetail({ loan, onClose, onPay, onConfirm, onAutoDebit, onDelete, on
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px" }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>ตารางผ่อน {showAll ? "(ทั้งสัญญา)" : "(รอบงวดปัจจุบัน)"}</div>
-        <button className="btn-link" style={{ fontSize: 12 }} onClick={() => setShowAll((v) => !v)}>{showAll ? "ย่อ" : `ดูทั้งหมด ${sched.length} งวด`}</button>
+        <button className="btn-ghost sm" style={{ fontSize: 12 }} onClick={() => setShowAll((v) => !v)}>{showAll ? "ย่อ" : `ดูทั้งหมด ${sched.length} งวด`}</button>
       </div>
       <div style={{ overflowX: "auto", maxHeight: 360, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 520 }}>
@@ -236,12 +236,12 @@ function LoanDetail({ loan, onClose, onPay, onConfirm, onAutoDebit, onDelete, on
           <tbody>
             {view.map((r) => { const paid = r.seq <= st.paid; const isNext = r.seq === st.paid + 1; return <tr key={r.seq} style={{ background: isNext ? "var(--teal-soft,#0f766e14)" : "transparent" }}>
               <td style={{ textAlign: "center", padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", color: paid ? "var(--muted,#99a)" : "inherit" }}>{r.seq}</td>
-              <td style={{ padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", fontWeight: isNext ? 700 : 400, color: isNext ? "var(--teal,#0f766e)" : paid ? "var(--muted,#99a)" : "inherit", whiteSpace: "nowrap" }}>{thFull(r.due)}</td>
+              <td style={{ padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", fontWeight: isNext ? 700 : 400, color: isNext ? "var(--primary)" : paid ? "var(--muted,#99a)" : "inherit", whiteSpace: "nowrap" }}>{thFull(r.due)}</td>
               <td style={{ textAlign: "right", padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(r.installment)}</td>
               <td style={{ textAlign: "right", padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", fontVariantNumeric: "tabular-nums", color: "var(--muted,#99a)" }}>{r.interest == null ? "—" : fmtBaht(r.interest)}</td>
               <td style={{ textAlign: "right", padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", fontVariantNumeric: "tabular-nums" }}>{r.principal == null ? "—" : fmtBaht(r.principal)}</td>
               <td style={{ textAlign: "right", padding: "6px 12px", borderBottom: "1px solid var(--line,#eef)", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmtBaht(r.balance)}</td>
-              <td style={{ textAlign: "center", padding: "6px 8px", borderBottom: "1px solid var(--line,#eef)", fontSize: 10.5 }}>{r.balloon ? <span style={{ color: "#b45309", fontWeight: 700 }}>🎈 บอลลูน</span> : paid ? <span style={{ color: "var(--teal,#0f766e)" }}>จ่ายแล้ว</span> : isNext && submitted ? <span style={{ color: "var(--green,#137a54)", fontWeight: 700 }}>✓ ตั้งจ่ายแล้ว</span> : isNext ? <span style={{ color: "#b45309", fontWeight: 600 }}>งวดถัดไป</span> : <span style={{ color: "var(--muted,#aab)" }}>ประมาณการ</span>}</td>
+              <td style={{ textAlign: "center", padding: "6px 8px", borderBottom: "1px solid var(--line,#eef)", fontSize: 10.5 }}>{r.balloon ? <span style={{ color: "#b45309", fontWeight: 700 }}>🎈 บอลลูน</span> : paid ? <span style={{ color: "var(--primary)" }}>จ่ายแล้ว</span> : isNext && submitted ? <span style={{ color: "var(--green,#137a54)", fontWeight: 700 }}>✓ ตั้งจ่ายแล้ว</span> : isNext ? <span style={{ color: "#b45309", fontWeight: 600 }}>งวดถัดไป</span> : <span style={{ color: "var(--muted,#aab)" }}>ประมาณการ</span>}</td>
             </tr>; })}
           </tbody>
         </table>
@@ -249,21 +249,21 @@ function LoanDetail({ loan, onClose, onPay, onConfirm, onAutoDebit, onDelete, on
 
       <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--line,#e3e8ee)", flexWrap: "wrap", alignItems: "center" }}>
         {st.remainInst > 0 && (auto
-          ? <button className="btn" disabled={busy} onClick={onAutoDebit} style={{ background: "var(--teal,#0f766e)", color: "#fff", borderColor: "transparent" }}>🏦 หักบัญชีแล้ว งวด {st.paid + 1} (บันทึกจ่าย)</button>
+          ? <button className="btn-ghost" disabled={busy} onClick={onAutoDebit} style={{ background: "var(--primary)", color: "#fff", borderColor: "transparent" }}>🏦 หักบัญชีแล้ว งวด {st.paid + 1} (บันทึกจ่าย)</button>
           : submitted
-          ? <button className="btn" disabled={busy} onClick={onConfirm} style={{ background: "var(--green,#137a54)", color: "#fff", borderColor: "transparent" }}>✓ จ่ายเสร็จแล้ว (เดินงวด {st.paid + 1})</button>
-          : <button className="btn primary" disabled={busy} onClick={onPay}>💸 ตั้งเบิกจ่ายงวด {st.paid + 1}</button>)}
+          ? <button className="btn-ghost" disabled={busy} onClick={onConfirm} style={{ background: "var(--green,#137a54)", color: "#fff", borderColor: "transparent" }}>✓ จ่ายเสร็จแล้ว (เดินงวด {st.paid + 1})</button>
+          : <button className="btn-primary" disabled={busy} onClick={onPay}>💸 ตั้งเบิกจ่ายงวด {st.paid + 1}</button>)}
         {submitted && !auto && <span style={{ fontSize: 12, color: "var(--green,#137a54)", fontWeight: 600, alignSelf: "center" }}>✓ ตั้งจ่ายงวด {st.paid + 1} แล้ว รอจ่ายจริง</span>}
-        {auto && <span style={{ fontSize: 12, color: "var(--teal,#0f766e)", fontWeight: 600, alignSelf: "center" }}>🏦 หักบัญชีอัตโนมัติ (ไม่ต้องแนบสลิป)</span>}
-        {onGoExpenses && <button className="btn" onClick={onGoExpenses}>ไปเมนูเบิกจ่าย →</button>}
+        {auto && <span style={{ fontSize: 12, color: "var(--primary)", fontWeight: 600, alignSelf: "center" }}>🏦 หักบัญชีอัตโนมัติ (ไม่ต้องแนบสลิป)</span>}
+        {onGoExpenses && <button className="btn-ghost" onClick={onGoExpenses}>ไปเมนูเบิกจ่าย →</button>}
         <div style={{ flex: 1 }} />
-        {onEdit && <button className="btn sm" onClick={onEdit}>✏️ แก้ไข</button>}
-        {onDelete && <button className="btn sm danger" onClick={onDelete}>ลบ</button>}
+        {onEdit && <button className="btn-ghost sm" onClick={onEdit}>✏️ แก้ไข</button>}
+        {onDelete && <button className="btn-ghost sm danger" onClick={onDelete}>ลบ</button>}
       </div>
     </div>
   </div>;
 }
-function Fact({ l, n }) { return <div><div style={{ fontSize: 11, color: "var(--muted,#889)" }}>{l}</div><div style={{ fontSize: 14.5, fontWeight: 600, marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{n}</div></div>; }
+function Fact({ l, n }) { return <div><div style={{ fontSize: 11, color: "var(--ink-2)" }}>{l}</div><div style={{ fontSize: 14.5, fontWeight: 600, marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{n}</div></div>; }
 
 function blankLoan() { return { name: "", kind: "vehicle", method: "flat", entity: "company", asset_tag: "", lender: "", contract_no: "", principal: "", rate: "", installment: "", vat_per: "", term_months: "", start_date: "", due_day: 5, paid_count: 0, steps: [], balloon: "", auto_debit: false, note: "", attachments: [], active: true }; }
 
@@ -300,7 +300,7 @@ function LoanForm({ loan, onClose, onSaved, flash }) {
     <div className="card" style={{ maxWidth: 560, width: "100%", padding: 20 }} onClick={(e) => e.stopPropagation()}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h3 style={{ margin: 0 }}>{loan.id ? "แก้ไขสัญญา" : "เพิ่มสินเชื่อ"}</h3>
-        <button className="btn-icon" onClick={onClose}>✕</button>
+        <button className="btn-ghost sm" onClick={onClose}>✕</button>
       </div>
       <div style={{ display: "grid", gap: 10 }}>
         <Row label="ชื่อสัญญา *"><input className="inp" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="เช่น SUZUKI 4ฒฌ2292 / สินเชื่อออฟฟิศ 93/97" /></Row>
@@ -339,10 +339,10 @@ function LoanForm({ loan, onClose, onSaved, flash }) {
           {(f.attachments || []).length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 6 }}>
             {(f.attachments || []).map((a, i) => <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
               <a href={a.url} target="_blank" rel="noreferrer" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fileIcon(a)} {a.name || "เอกสาร"}</a>
-              <button className="btn-icon sm" title="ลบไฟล์นี้" onClick={() => set("attachments", (f.attachments || []).filter((_, j) => j !== i))}>✕</button>
+              <button className="btn-ghost sm" title="ลบไฟล์นี้" onClick={() => set("attachments", (f.attachments || []).filter((_, j) => j !== i))}>✕</button>
             </div>)}
           </div>}
-          <label className="btn sm" style={{ cursor: uploading ? "wait" : "pointer", opacity: uploading ? 0.6 : 1 }}>
+          <label className="btn-ghost sm" style={{ cursor: uploading ? "wait" : "pointer", opacity: uploading ? 0.6 : 1 }}>
             {uploading ? "กำลังอัปโหลด…" : "+ แนบไฟล์"}
             <input type="file" accept="application/pdf,image/*" hidden disabled={uploading} onChange={async (e) => {
               const file = e.target.files?.[0]; if (!file) return;
@@ -357,12 +357,12 @@ function LoanForm({ loan, onClose, onSaved, flash }) {
 
         {preview && <div style={{ background: "var(--panel2,#f6f8fa)", borderRadius: 10, padding: "10px 12px", fontSize: 12.5 }}>
           <b>พรีวิว:</b> เงินต้นคงเหลือ {fmtBaht(preview.principalLeft)} · หนี้คงเหลือ {fmtBaht(preview.payoffLeft)} · งวดถัดไป {preview.next ? `${preview.next.seq}/${preview.term} (${thFull(preview.next.due)})` : "—"}
-          {f.method === "reducing" && f.principal && f.rate ? <div style={{ marginTop: 3, color: "var(--muted,#889)" }}>ดอกงวดถัดไป ~{fmtBaht(preview.next?.interest || 0)} · เงินต้น ~{fmtBaht(preview.next?.principal || 0)}</div> : null}
+          {f.method === "reducing" && f.principal && f.rate ? <div style={{ marginTop: 3, color: "var(--ink-2)" }}>ดอกงวดถัดไป ~{fmtBaht(preview.next?.interest || 0)} · เงินต้น ~{fmtBaht(preview.next?.principal || 0)}</div> : null}
         </div>}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-        <button className="btn" onClick={onClose}>ยกเลิก</button>
-        <button className="btn primary" disabled={busy} onClick={save}>{busy ? "กำลังบันทึก…" : "บันทึก"}</button>
+        <button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn-primary" disabled={busy} onClick={save}>{busy ? "กำลังบันทึก…" : "บันทึก"}</button>
       </div>
     </div>
   </div>;
@@ -382,10 +382,10 @@ function StepsEditor({ f, set }) {
         <input className="inp" type="number" style={{ width: 62 }} value={s.from} onChange={(e) => upd(i, "from", e.target.value)} placeholder="งวด" title="งวดเริ่ม" />
         <input className="inp" type="number" style={{ width: 62 }} value={s.to} onChange={(e) => upd(i, "to", e.target.value)} placeholder="ถึง" title="งวดสุดท้ายของช่วง" />
         <input className="inp" type="number" value={s.amount} onChange={(e) => upd(i, "amount", e.target.value)} placeholder="ค่างวด/เดือน" />
-        <button className="btn-icon sm" onClick={() => del(i)} title="ลบช่วง">✕</button>
+        <button className="btn-ghost sm" onClick={() => del(i)} title="ลบช่วง">✕</button>
       </div>)}
     </div>
-    <button className="btn sm" style={{ marginTop: 6 }} onClick={add}>+ เพิ่มช่วง</button>
+    <button className="btn-ghost sm" style={{ marginTop: 6 }} onClick={add}>+ เพิ่มช่วง</button>
     <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, marginTop: 10 }}>
       <Row label="งวดสุดท้ายจ่ายก้อนใหญ่ (บอลลูน) — ถ้ายังไม่รู้ยอดเว้นได้"><input className="inp" type="number" value={f.balloon} onChange={(e) => set("balloon", e.target.value)} placeholder="ยอดบอลลูนงวดสุดท้าย" /></Row>
     </div>

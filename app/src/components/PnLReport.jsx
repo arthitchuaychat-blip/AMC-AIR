@@ -24,9 +24,9 @@ export default function PnLReport({ from, to, periodLabel }) {
         const [qs, cog, payouts, slips, expenses] = await Promise.all([
           listQuotations(opt),
           costOfGoodsByGroup(from || null, to || null),
-          listSubPayouts().catch(() => []),
-          listPayslipsRange(fromYM, toYM).catch(() => []),
-          listExpenses().catch(() => []),
+          listSubPayouts(),
+          listPayslipsRange(fromYM, toYM),
+          listExpenses(),
         ]);
         // รายได้ = ยอดขายอนุมัติในช่วง (ก่อน VAT) — ฐานเดียวกับการ์ด "ยอดขายอนุมัติ" บนแดชบอร์ด
         const revenue = qs.reduce((a, q) => a + (q.status === "approved" && inRange(q.approved_at || q.issue_date, from, to) ? (q.afterDisc || 0) : 0), 0);
@@ -87,8 +87,8 @@ export default function PnLReport({ from, to, periodLabel }) {
   return (
     <div className="card">
       <div className="sec-head" style={{ marginBottom: 6 }}>
-        <div><div className="sec-title">กำไร-ขาดทุน (P&amp;L) · {periodLabel}</div>
-          <div className="sec-sub">ต้นทุน/ค่าใช้จ่ายที่เกิดจริงในช่วง เทียบยอดขายอนุมัติ · ใช้ดูภาพรวม ไม่ใช่บัญชีแม่นรายบิล</div></div>
+        <div><div className="sec-title">กำไร-ขาดทุนเพื่อบริหาร (ประมาณการ) · {periodLabel}</div>
+          <div className="sec-sub">ต้นทุน/ค่าใช้จ่ายที่เกิดจริงในช่วง เทียบยอดขายอนุมัติ · ประมาณการเพื่อบริหาร · วันที่รับรู้รายได้/ค่าใช้จ่ายแต่ละประเภทต่างกัน</div></div>
         <button className="btn-ghost sm" onClick={() => downloadCsv(`กำไรขาดทุน-${new Date().toISOString().slice(0, 10)}`,
           ["รายการ", "จำนวนเงิน"], rows.filter((r) => r[1] != null).map((r) => [r[0].trim(), Math.round(r[1] * 100) / 100]))}>⬇ Export</button>
       </div>

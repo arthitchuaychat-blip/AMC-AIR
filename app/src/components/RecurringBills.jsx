@@ -66,7 +66,7 @@ export default function RecurringBills({ role, onGoExpenses, onGoCashflow }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <div><div className="muted" style={{ fontSize: 13 }}>บิลสมัครสมาชิก/บริการรายเดือน-รายปี · ประมาณการล่วงหน้าเข้ากระแสเงินสด + เตือนจ่าย</div></div>
-        {canEdit && <button className="btn primary" onClick={() => setEdit(blank())}>+ เพิ่มรายจ่ายประจำ</button>}
+        {canEdit && <button className="btn-primary" onClick={() => setEdit(blank())}>+ เพิ่มรายจ่ายประจำ</button>}
       </div>
 
       {needMig && <div className="card" style={{ padding: 14, borderColor: "#b4530955", background: "#b4530912", marginTop: 12 }}>⚠️ ต้องรัน <b>migration 245</b> ก่อน (สร้างตาราง recurring_bills)</div>}
@@ -79,10 +79,10 @@ export default function RecurringBills({ role, onGoExpenses, onGoCashflow }) {
           <Card k="⏰ ครบกำหนดเดือนนี้" v={`${dueNow.length} รายการ`} sub={dueNow.length ? fmtBaht(dueNow.reduce((s, b) => s + Number(b.amount || 0), 0)) : "—"} warn={dueNow.length > 0} />
         </div>
 
-        {active.length === 0 && !needMig && <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--muted,#889)" }}>ยังไม่มีรายจ่ายประจำ {canEdit && <>— กด <b>+ เพิ่มรายจ่ายประจำ</b></>}</div>}
+        {active.length === 0 && !needMig && <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--ink-2)" }}>ยังไม่มีรายจ่ายประจำ {canEdit && <>— กด <b>+ เพิ่มรายจ่ายประจำ</b></>}</div>}
 
         {Object.entries(byCat).map(([cat, bills]) => <div key={cat} style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, margin: "6px 2px", color: "var(--ink,#0e1b24)" }}>{CAT_ICON[cat] || "•"} {cat} <span style={{ fontWeight: 400, color: "var(--muted,#889)" }}>· {fmtBaht(r2(bills.reduce((s, b) => s + (b.period === "yearly" ? 0 : Number(b.amount) || 0), 0)))}/เดือน</span></div>
+          <div style={{ fontSize: 13, fontWeight: 700, margin: "6px 2px", color: "var(--ink,#0e1b24)" }}>{CAT_ICON[cat] || "•"} {cat} <span style={{ fontWeight: 400, color: "var(--ink-2)" }}>· {fmtBaht(r2(bills.reduce((s, b) => s + (b.period === "yearly" ? 0 : Number(b.amount) || 0), 0)))}/เดือน</span></div>
           <div style={{ display: "grid", gap: 8 }}>
             {bills.map((b) => <BillRow key={b.id} b={b} onPay={() => doPay(b)} onEdit={() => setEdit({ ...b })} canEdit={canEdit} busy={busy} />)}
           </div>
@@ -96,10 +96,10 @@ export default function RecurringBills({ role, onGoExpenses, onGoCashflow }) {
 }
 
 function Card({ k, v, sub, accent, warn }) {
-  return <div className="card" style={{ padding: "14px 16px", ...(accent ? { borderColor: "var(--teal,#0f766e)" } : warn ? { borderColor: "#b45309" } : {}) }}>
+  return <div className="card" style={{ padding: "14px 16px", ...(accent ? { borderColor: "var(--primary)" } : warn ? { borderColor: "#b45309" } : {}) }}>
     <div style={{ fontSize: 12.5, color: "var(--muted,#667)" }}>{k}</div>
     <div style={{ fontSize: 21, fontWeight: 700, marginTop: 5, letterSpacing: "-.02em", color: warn ? "#b45309" : "inherit" }}>{v}</div>
-    {sub && <div style={{ fontSize: 12, color: "var(--muted,#889)", marginTop: 2 }}>{sub}</div>}
+    {sub && <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2 }}>{sub}</div>}
   </div>;
 }
 
@@ -109,15 +109,15 @@ function BillRow({ b, onPay, onEdit, canEdit, busy }) {
   return <div className="card" style={{ padding: "11px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", opacity: b.active === false ? 0.55 : 1 }}>
     <div style={{ flex: "1 1 200px", minWidth: 0, cursor: canEdit ? "pointer" : "default" }} onClick={canEdit ? onEdit : undefined}>
       <div style={{ fontWeight: 600, fontSize: 14 }}>{b.name}{b.provider ? " · " + b.provider : ""} <span style={{ fontSize: 11, fontWeight: 400, color: b.entity === "personal" ? "#6d28d9" : "#1d4ed8" }}>{b.entity === "personal" ? "👤 บุคคล" : "🏢 บริษัท"}</span></div>
-      <div style={{ fontSize: 11.5, color: "var(--muted,#889)" }}>{[b.ref_no, per, b.location, b.pay_account ? "💳 " + b.pay_account : null].filter(Boolean).join(" · ")}</div>
+      <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{[b.ref_no, per, b.location, b.pay_account ? "💳 " + b.pay_account : null].filter(Boolean).join(" · ")}</div>
     </div>
-    <div style={{ textAlign: "right", minWidth: 90 }}><div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(b.amount)}</div><div style={{ fontSize: 10.5, color: "var(--muted,#889)" }}>{b.period === "yearly" ? "/ปี" : "/เดือน"}</div></div>
+    <div style={{ textAlign: "right", minWidth: 90 }}><div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(b.amount)}</div><div style={{ fontSize: 10.5, color: "var(--ink-2)" }}>{b.period === "yearly" ? "/ปี" : "/เดือน"}</div></div>
     <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 6 }}>
       {s.paid ? <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 10px", borderRadius: 99, background: "#137a5416", color: "var(--green,#137a54)" }}>✓ จ่ายแล้ว ({s.cycleKey})</span>
         : s.dueThisMonth ? <span style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 99, background: "#b4530915", color: "#b45309" }}>ครบกำหนด</span>
         : <span style={{ fontSize: 11.5, padding: "4px 10px", borderRadius: 99, background: "var(--line,#eef)", color: "var(--muted,#667)" }}>{THMON[(Number(b.due_month) || 1) - 1]}</span>}
-      {canEdit && !s.paid && <button className="btn sm" disabled={busy} onClick={onPay} title="บันทึกจ่ายงวดนี้">จ่าย</button>}
-      {canEdit && <button className="btn-icon sm" onClick={onEdit} title="แก้ไข">✏️</button>}
+      {canEdit && !s.paid && <button className="btn-ghost sm" disabled={busy} onClick={onPay} title="บันทึกจ่ายงวดนี้">จ่าย</button>}
+      {canEdit && <button className="btn-ghost sm" onClick={onEdit} title="แก้ไข">✏️</button>}
     </div>
   </div>;
 }
@@ -140,7 +140,7 @@ function BillForm({ bill, accounts, onClose, onSaved, onDelete, flash }) {
   }
   return <div style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 75, display: "flex", alignItems: "flex-start", justifyContent: "center", overflow: "auto", padding: "24px 12px" }} onClick={onClose}>
     <div className="card" style={{ maxWidth: 500, width: "100%", padding: 20 }} onClick={(e) => e.stopPropagation()}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><h3 style={{ margin: 0 }}>{bill.id ? "แก้ไขรายจ่ายประจำ" : "เพิ่มรายจ่ายประจำ"}</h3><button className="btn-icon" onClick={onClose}>✕</button></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><h3 style={{ margin: 0 }}>{bill.id ? "แก้ไขรายจ่ายประจำ" : "เพิ่มรายจ่ายประจำ"}</h3><button className="btn-ghost sm" onClick={onClose}>✕</button></div>
       <div style={{ display: "grid", gap: 10 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <Row label="รายการ *"><input className="inp" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="เช่น ค่าโทรศัพท์" /></Row>
@@ -167,9 +167,9 @@ function BillForm({ bill, accounts, onClose, onSaved, onDelete, flash }) {
         {bill.id && <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={f.active !== false} onChange={(e) => set("active", e.target.checked)} /> ใช้งานอยู่ (ยังจ่ายประจำ)</label>}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-        {onDelete && <button className="btn sm danger" onClick={onDelete} style={{ marginRight: "auto" }}>ลบ</button>}
-        <button className="btn" onClick={onClose}>ยกเลิก</button>
-        <button className="btn primary" disabled={busy} onClick={save}>{busy ? "กำลังบันทึก…" : "บันทึก"}</button>
+        {onDelete && <button className="btn-ghost sm danger" onClick={onDelete} style={{ marginRight: "auto" }}>ลบ</button>}
+        <button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn-primary" disabled={busy} onClick={save}>{busy ? "กำลังบันทึก…" : "บันทึก"}</button>
       </div>
     </div>
   </div>;

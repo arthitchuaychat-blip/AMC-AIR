@@ -47,8 +47,8 @@ export default function Assets({ role, prefill, onConsumed }) {
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-        <div><h2 style={{ margin: 0 }}>🏗️ สินทรัพย์ / ครุภัณฑ์</h2><div className="muted" style={{ fontSize: 13 }}>ทะเบียนของมูลค่าสูง (เครื่องมือ/อุปกรณ์) + คิดค่าเสื่อมราคา + ผู้ถือครอง</div></div>
-        {canEdit && <button className="btn primary" onClick={() => setEdit(blank())}>+ เพิ่มสินทรัพย์</button>}
+        <div><h2 className="page-title" style={{ margin: 0 }}>🏗️ สินทรัพย์ / ครุภัณฑ์</h2><div className="muted" style={{ fontSize: 13 }}>ทะเบียนของมูลค่าสูง (เครื่องมือ/อุปกรณ์) + คิดค่าเสื่อมราคา + ผู้ถือครอง</div></div>
+        {canEdit && <button className="btn-primary" onClick={() => setEdit(blank())}>+ เพิ่มสินทรัพย์</button>}
       </div>
 
       {needMig && <div className="card" style={{ padding: 14, borderColor: "#b4530955", background: "#b4530912", marginTop: 12 }}>⚠️ ต้องรัน <b>migration 247</b> ก่อน (สร้างตาราง fixed_assets)</div>}
@@ -61,10 +61,10 @@ export default function Assets({ role, prefill, onConsumed }) {
           <Card k="🗓 ค่าเสื่อม/เดือน" v={fmtBaht(perMonth)} sub="รวมทุกชิ้น" />
         </div>
 
-        {active.length === 0 && !needMig && <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--muted,#889)" }}>ยังไม่มีสินทรัพย์ {canEdit && <>— กด <b>+ เพิ่มสินทรัพย์</b></>}</div>}
+        {active.length === 0 && !needMig && <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--ink-2)" }}>ยังไม่มีสินทรัพย์ {canEdit && <>— กด <b>+ เพิ่มสินทรัพย์</b></>}</div>}
 
         {Object.entries(byCat).map(([cat, items]) => <div key={cat} style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, margin: "6px 2px" }}>{CAT_ICON[cat] || "📦"} {cat} <span style={{ fontWeight: 400, color: "var(--muted,#889)" }}>· คงเหลือ {fmtBaht(r2(items.reduce((s, a) => s + depreciation(a).book, 0)))}</span></div>
+          <div style={{ fontSize: 13, fontWeight: 700, margin: "6px 2px" }}>{CAT_ICON[cat] || "📦"} {cat} <span style={{ fontWeight: 400, color: "var(--ink-2)" }}>· คงเหลือ {fmtBaht(r2(items.reduce((s, a) => s + depreciation(a).book, 0)))}</span></div>
           <div style={{ display: "grid", gap: 8 }}>
             {items.map((a) => <AssetRow key={a.id} a={a} onOpen={() => setDetail(a)} onEdit={() => setEdit({ ...a })} canEdit={canEdit} />)}
           </div>
@@ -79,10 +79,10 @@ export default function Assets({ role, prefill, onConsumed }) {
 }
 
 function Card({ k, v, sub, accent }) {
-  return <div className="card" style={{ padding: "14px 16px", ...(accent ? { borderColor: "var(--teal,#0f766e)" } : {}) }}>
+  return <div className="card" style={{ padding: "14px 16px", ...(accent ? { borderColor: "var(--primary)" } : {}) }}>
     <div style={{ fontSize: 12.5, color: "var(--muted,#667)" }}>{k}</div>
     <div style={{ fontSize: 21, fontWeight: 700, marginTop: 5, letterSpacing: "-.02em" }}>{v}</div>
-    {sub && <div style={{ fontSize: 12, color: "var(--muted,#889)", marginTop: 2 }}>{sub}</div>}
+    {sub && <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2 }}>{sub}</div>}
   </div>;
 }
 
@@ -92,14 +92,14 @@ function AssetRow({ a, onOpen, onEdit, canEdit }) {
   return <div className="card" style={{ padding: "11px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
     <div style={{ flex: "1 1 200px", minWidth: 0, cursor: "pointer" }} onClick={onOpen}>
       <div style={{ fontWeight: 600, fontSize: 14 }}>{a.name} <span style={{ fontSize: 11, fontWeight: 400, color: a.entity === "personal" ? "#6d28d9" : "#1d4ed8" }}>{a.entity === "personal" ? "👤 บุคคล" : "🏢 บริษัท"}</span></div>
-      <div style={{ fontSize: 11.5, color: "var(--muted,#889)" }}>{[a.holder ? "👤 " + a.holder : null, a.location, a.supplier, a.purchase_date ? "ซื้อ " + new Date(a.purchase_date + "T00:00:00").toLocaleDateString("th-TH", { month: "short", year: "2-digit" }) : null, `อายุ ${a.life_years} ปี`].filter(Boolean).join(" · ")}</div>
+      <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{[a.holder ? "👤 " + a.holder : null, a.location, a.supplier, a.purchase_date ? "ซื้อ " + new Date(a.purchase_date + "T00:00:00").toLocaleDateString("th-TH", { month: "short", year: "2-digit" }) : null, `อายุ ${a.life_years} ปี`].filter(Boolean).join(" · ")}</div>
     </div>
     <div style={{ minWidth: 150 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--muted,#889)" }}><span>ทุน {fmtBaht(a.cost)}</span><span>{d.done ? "ครบ" : pct + "%"}</span></div>
-      <div style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums", fontSize: 13.5 }}>{fmtBaht(d.book)} <span style={{ fontSize: 11, fontWeight: 400, color: "var(--muted,#889)" }}>คงเหลือ</span></div>
-      <div style={{ height: 6, borderRadius: 99, background: "var(--line,#e3e8ee)", overflow: "hidden", marginTop: 4 }}><div style={{ height: "100%", width: `${pct}%`, background: d.done ? "#b45309" : "var(--teal,#0f766e)", borderRadius: 99 }} /></div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--ink-2)" }}><span>ทุน {fmtBaht(a.cost)}</span><span>{d.done ? "ครบ" : pct + "%"}</span></div>
+      <div style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums", fontSize: 13.5 }}>{fmtBaht(d.book)} <span style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-2)" }}>คงเหลือ</span></div>
+      <div style={{ height: 6, borderRadius: 99, background: "var(--line,#e3e8ee)", overflow: "hidden", marginTop: 4 }}><div style={{ height: "100%", width: `${pct}%`, background: d.done ? "#b45309" : "var(--primary)", borderRadius: 99 }} /></div>
     </div>
-    {canEdit && <button className="btn-icon sm" onClick={onEdit} title="แก้ไข">✏️</button>}
+    {canEdit && <button className="btn-ghost sm" onClick={onEdit} title="แก้ไข">✏️</button>}
   </div>;
 }
 
@@ -112,7 +112,7 @@ function AssetDetail({ a, onClose, onEdit }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div><div style={{ fontWeight: 700, fontSize: 16 }}>{CAT_ICON[a.category] || "📦"} {a.name}</div>
             <div style={{ fontSize: 12, color: "var(--muted,#778)", marginTop: 2 }}>{[a.category, a.holder ? "ผู้ถือ " + a.holder : null, a.supplier, a.code].filter(Boolean).join(" · ")}</div></div>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <button className="btn-ghost sm" onClick={onClose}>✕</button>
         </div>
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 12 }}>
           <Fact l="ราคาซื้อ" n={fmtBaht(d.cost)} />
@@ -134,12 +134,12 @@ function AssetDetail({ a, onClose, onEdit }) {
           </table>
         </div>
         {a.note && <div style={{ fontSize: 12.5, color: "var(--muted,#667)", marginTop: 8 }}>📝 {a.note}</div>}
-        {onEdit && <div style={{ marginTop: 12 }}><button className="btn sm" onClick={onEdit}>✏️ แก้ไข</button></div>}
+        {onEdit && <div style={{ marginTop: 12 }}><button className="btn-ghost sm" onClick={onEdit}>✏️ แก้ไข</button></div>}
       </div>
     </div>
   </div>;
 }
-function Fact({ l, n }) { return <div><div style={{ fontSize: 11, color: "var(--muted,#889)" }}>{l}</div><div style={{ fontSize: 14.5, fontWeight: 600, marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{n}</div></div>; }
+function Fact({ l, n }) { return <div><div style={{ fontSize: 11, color: "var(--ink-2)" }}>{l}</div><div style={{ fontSize: 14.5, fontWeight: 600, marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{n}</div></div>; }
 
 function blank() { return { name: "", category: "เครื่องมือช่าง", cost: "", salvage: "", life_years: 5, purchase_date: "", entity: "company", location: "", holder: "", supplier: "", code: "", note: "", disposed: false, active: true }; }
 
@@ -157,7 +157,7 @@ function AssetForm({ asset, onClose, onSaved, onDelete, flash }) {
   }
   return <div style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 75, display: "flex", alignItems: "flex-start", justifyContent: "center", overflow: "auto", padding: "24px 12px" }} onClick={onClose}>
     <div className="card" style={{ maxWidth: 520, width: "100%", padding: 20 }} onClick={(e) => e.stopPropagation()}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><h3 style={{ margin: 0 }}>{asset.id ? "แก้ไขสินทรัพย์" : "เพิ่มสินทรัพย์"}</h3><button className="btn-icon" onClick={onClose}>✕</button></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><h3 style={{ margin: 0 }}>{asset.id ? "แก้ไขสินทรัพย์" : "เพิ่มสินทรัพย์"}</h3><button className="btn-ghost sm" onClick={onClose}>✕</button></div>
       <div style={{ display: "grid", gap: 10 }}>
         <Row label="ชื่อสินทรัพย์ *"><input className="inp" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="เช่น สว่านโรตารี่ Bosch / เครื่องเชื่อม" /></Row>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -189,9 +189,9 @@ function AssetForm({ asset, onClose, onSaved, onDelete, flash }) {
         </div>}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-        {onDelete && <button className="btn sm danger" onClick={onDelete} style={{ marginRight: "auto" }}>ลบ</button>}
-        <button className="btn" onClick={onClose}>ยกเลิก</button>
-        <button className="btn primary" disabled={busy} onClick={save}>{busy ? "กำลังบันทึก…" : "บันทึก"}</button>
+        {onDelete && <button className="btn-ghost sm danger" onClick={onDelete} style={{ marginRight: "auto" }}>ลบ</button>}
+        <button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn-primary" disabled={busy} onClick={save}>{busy ? "กำลังบันทึก…" : "บันทึก"}</button>
       </div>
     </div>
   </div>;
