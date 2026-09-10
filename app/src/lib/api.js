@@ -5,6 +5,7 @@ import { ROLE_LABEL } from "./permissions";
 import { installmentAt, dueDateOf } from "./loans";
 import { requireFinancingState, requireSubmittedInstallment } from "./financingGuards";
 import { chatStageToPipe, pipeStageToChat } from "./pipeline";
+import { cashEntryNeedsUpdate, createCashSyncRunner } from "./cashSync";
 
 // HR position = the role assigned in Settings (single source of truth), falling back to any legacy free-text department
 const posLabel = (p) => (p && (ROLE_LABEL[p.role] || p.department)) || "";
@@ -6787,7 +6788,12 @@ export async function setOpeningBalance(entity, amount) {
   }
 }
 // seed/refresh ledger lines from documents (idempotent; never overwrites user-edited rows)
+const runCashSync = createCashSyncRunner(syncCashEntriesPass);
 export async function syncCashEntriesFromDocs() {
+  return runCashSync();
+}
+
+async function syncCashEntriesPass() {
   // งานนี้อ่าน 8 ตารางทั้งบริษัท และถูกเรียกท้ายทุกการบันทึกเอกสาร (รวมปุ่มที่ช่างกดบนมือถือ)
   // ⇒ ยิงเฉพาะคนที่ดูแลกระแสเงินสดจริง คนอื่นข้ามไป (ข้อมูลจะถูก sync ตอนบัญชี/ธุรการเปิดหน้าอยู่แล้ว)
   // + RLS ของ cash_entries เขียนได้เฉพาะกลุ่มนี้อยู่แล้ว คนอื่นยิงไปก็ได้แค่โหลดเปล่า ๆ
@@ -6808,7 +6814,7 @@ export async function syncCashEntriesFromDocs() {
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     supabase.from("teams").select("id,name"),
-    _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows })), // ถ้าอ่านไม่ครบ sync จะสร้างซ้ำ
+    _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited,direction,status,entry_date,amount,note" + (hasEntity ? ",entity" : ""), { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows })), // อ่านค่าปัจจุบันด้วย เพื่อข้ามการเขียนซ้ำ · ต้องอ่านครบทุกหน้า
     // ฐานเงินเดือนพนักงานประจำ (ประมาณการเงินออก) — อยู่ที่ hr_pay ตั้งแต่ mig 154 · fallback ไป profiles ถ้ายังไม่รัน
     supabase.from("hr_pay").select("user_id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0)
       .then((r) => (r.error ? supabase.from("profiles").select("id,base_pay").eq("pay_type", "monthly").gt("base_pay", 0) : { data: (r.data || []).map((x) => ({ id: x.user_id, base_pay: x.base_pay })) })),
@@ -6966,7 +6972,11 @@ export async function syncCashEntriesFromDocs() {
     const { entity: _dEnt, ...dRest } = d;
     const entity = _dEnt || "company";
     if (!ex) toInsert.push({ ...dRest, ...(hasEntity ? { entity } : {}), created_by: uid });
-    else if (!ex.edited) { await supabase.from("cash_entries").update({ direction: d.direction, status: d.status, entry_date: d.entry_date, amount: d.amount, note: d.note, ...(hasEntity ? { entity } : {}), updated_at: new Date().toISOString() }).eq("id", ex.id); updated++; }
+    else if (!ex.edited && cashEntryNeedsUpdate(ex, d, hasEntity)) {
+      const { error } = await supabase.from("cash_entries").update({ direction: d.direction, status: d.status, entry_date: d.entry_date, amount: d.amount, note: d.note, ...(hasEntity ? { entity } : {}), updated_at: new Date().toISOString() }).eq("id", ex.id);
+      if (error) throw error;
+      updated++;
+    }
   }
   if (toInsert.length) {
     // ถอด key ที่ไม่ใช่คอลัมน์จริง (entity ถูกจัดการแล้วผ่าน hasEntity) — กัน insert พังถ้ามี field แปลกปลอม
