@@ -199,7 +199,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
   // รายการสินค้า/บริการรายตัวต่อหมวด (สำหรับกดดูรายละเอียด) — รวมยอดต่อสินค้า (จำนวน+ยอดขาย+จำนวนครั้ง)
   const revItemsByCat = React.useMemo(() => {
     const out = Object.fromEntries(REV_CATS.map(([k]) => [k, {}]));
-    if (!ov) return out;
+    if (!ov) return Object.fromEntries(REV_CATS.map(([k]) => [k, []]));
     const matBy = Object.fromEntries(mats.map((m) => [m.code, m]));
     const catGroup = Object.fromEntries((ov.cats || []).map((c) => [c.id, c.mat_group]));
     fq.forEach((qo) => {

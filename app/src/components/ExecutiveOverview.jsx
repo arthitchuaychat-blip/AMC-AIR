@@ -25,7 +25,7 @@ export default function ExecutiveOverview({ role, ov, quotes, stats, act, accoun
     });
     return Object.values(by).sort((a, b) => a.key.localeCompare(b.key));
   }, [quotes, from, to]);
-  const airSorted = [...(airRows || [])].sort((a, b) => b.qty - a.qty);
+  const airSorted = [...(Array.isArray(airRows) ? airRows : [])].sort((a, b) => b.qty - a.qty);
   const airCount = airSorted.reduce((sum, r) => sum + r.qty, 0);
   const financial = can(role, "cashflow");
   const errors = [accountError && "ยอดบัญชี", actionError && "งานค้าง", stockError && "คลังสินค้า"].filter(Boolean);
