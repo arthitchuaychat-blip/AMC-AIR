@@ -2271,6 +2271,16 @@ export async function saveRolePermissions(perms) {
   const { error } = await supabase.from("app_config").upsert({ key: "role_permissions", value: perms }, { onConflict: "key" });
   if (error) throw error;
 }
+// ค่าตั้งค่าที่ "ทั้งทีมต้องเห็นตรงกัน" — เก็บใน app_config (key/value) แทน localStorage รายเครื่อง
+export async function getAppConfig(key, fallback = null) {
+  const { data, error } = await supabase.from("app_config").select("value").eq("key", key).maybeSingle();
+  if (error) throw error;
+  return data ? data.value : fallback;
+}
+export async function setAppConfig(key, value) {
+  const { error } = await supabase.from("app_config").upsert({ key, value }, { onConflict: "key" });
+  if (error) throw error;
+}
 
 // build the 3 end-of-document term columns from an editor object (BOQ/quote/invoice/receipt all share these)
 const _termCols = (d) => ({

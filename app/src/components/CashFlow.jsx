@@ -1,5 +1,5 @@
 import React from "react";
-import { listCashEntries, addCashEntry, updateCashEntry, deleteCashEntry, getOpeningBalance, setOpeningBalance, syncCashEntriesFromDocs } from "../lib/api";
+import { listCashEntries, addCashEntry, updateCashEntry, deleteCashEntry, getOpeningBalance, setOpeningBalance, syncCashEntriesFromDocs, getAppConfig, setAppConfig } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
@@ -137,9 +137,22 @@ export default function CashFlow() {
   }, [ents, openingVal]);
 
   // เงินสำรองขั้นต่ำ ต่อกิจการ (เก็บในเครื่อง) — ใช้เตือน runway
+  // เงินสำรองขั้นต่ำ — เก็บใน app_config (ทั้งทีมเห็นตรงกัน) · localStorage เป็นตัวสำรองตอนโหลด/เขียน DB ไม่ได้
   const [reserve, setReserve] = React.useState(0);
-  React.useEffect(() => { try { setReserve(Number(localStorage.getItem(`cf_reserve_${ent}`)) || 0); } catch { setReserve(0); } }, [ent]);
-  const saveReserve = (v) => { const nn = Math.max(0, Number(v) || 0); setReserve(nn); try { localStorage.setItem(`cf_reserve_${ent}`, String(nn)); } catch { /* ignore */ } };
+  const [reserveMap, setReserveMap] = React.useState(null);
+  React.useEffect(() => { getAppConfig("cashflow_reserve", {}).then((m) => setReserveMap(m || {})).catch(() => setReserveMap({})); }, []);
+  React.useEffect(() => {
+    if (reserveMap == null) return;
+    let v = Number(reserveMap[ent]);
+    if (!(v > 0)) { try { v = Number(localStorage.getItem(`cf_reserve_${ent}`)) || 0; } catch { v = 0; } }   // fallback ค่าเดิมในเครื่อง
+    setReserve(v || 0);
+  }, [ent, reserveMap]);
+  const saveReserve = (v) => {
+    const nn = Math.max(0, Number(v) || 0); setReserve(nn);
+    const next = { ...(reserveMap || {}), [ent]: nn }; setReserveMap(next);
+    setAppConfig("cashflow_reserve", next).catch(() => {});   // ทั้งทีมเห็นตรงกัน
+    try { localStorage.setItem(`cf_reserve_${ent}`, String(nn)); } catch { /* ignore */ }
+  };
   const runwayAlert = cash.minBal < 0 || (reserve > 0 && cash.minBal < reserve);
 
   // ช่วงที่กำลังดู (สำหรับแยกหมวด + ส่งออก)
