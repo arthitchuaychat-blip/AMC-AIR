@@ -1,5 +1,5 @@
 import React from "react";
-import { listInvoices, listReceipts, setInvoiceBadDebt, dashboardActionLite } from "../lib/api";
+import { listInvoices, listReceipts, setInvoiceBadDebt, dashboardActionLite, getAppConfig, setAppConfig } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
@@ -45,10 +45,15 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
   const today = todayYmd();
 
-  // ── ติดตามการทวง (เก็บในเครื่องนี้จนกว่าจะปลดล็อก DB ให้ใช้ร่วมทีม) ──
-  React.useEffect(() => { try { setDun(JSON.parse(localStorage.getItem("ar_dunning") || "{}") || {}); } catch { setDun({}); } }, []);
+  // ── ติดตามการทวง (เก็บใน app_config → ทั้งทีมเห็นตรงกัน · localStorage เป็น fallback) ──
+  React.useEffect(() => {
+    getAppConfig("ar_dunning", null).then((m) => {
+      if (m && typeof m === "object") setDun(m);
+      else { try { setDun(JSON.parse(localStorage.getItem("ar_dunning") || "{}") || {}); } catch { setDun({}); } }
+    }).catch(() => { try { setDun(JSON.parse(localStorage.getItem("ar_dunning") || "{}") || {}); } catch { setDun({}); } });
+  }, []);
   const daysSinceDun = (cid) => { const d = dun[cid]; return d ? daysOverdue(d, today) : null; };
-  function markDunned(cid) { setDun((m) => { const n = { ...m, [cid]: today }; try { localStorage.setItem("ar_dunning", JSON.stringify(n)); } catch { /* ignore */ } return n; }); flash("บันทึกว่าทวงแล้ววันนี้ ✓"); }
+  function markDunned(cid) { setDun((m) => { const n = { ...m, [cid]: today }; setAppConfig("ar_dunning", n).catch(() => {}); try { localStorage.setItem("ar_dunning", JSON.stringify(n)); } catch { /* ignore */ } return n; }); flash("บันทึกว่าทวงแล้ววันนี้ ✓ (ทีมเห็นตรงกัน)"); }
 
   async function load() {
     try {
@@ -253,7 +258,7 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
                   <div className="ar-cust-actions">
                     {c.phone && <a className="btn-ghost sm" href={`tel:${c.phone}`}><UIcon name="user" size={13} /> โทร {c.phone}</a>}
                     <ChatCustomerLink role={role} customerId={c.customer_id} onGoChat={onGoChat} />
-                    {overdue && <button className="btn-ghost sm" style={{ color: shouldDun ? "#b91c1c" : "var(--ink-3)" }} title="บันทึกว่าทวงลูกค้ารายนี้แล้ววันนี้ (เก็บในเครื่องนี้)" onClick={() => markDunned(c.customer_id)}>✅ ทวงแล้ววันนี้</button>}
+                    {overdue && <button className="btn-ghost sm" style={{ color: shouldDun ? "#b91c1c" : "var(--ink-3)" }} title="บันทึกว่าทวงลูกค้ารายนี้แล้ววันนี้ (ทั้งทีมเห็นตรงกัน)" onClick={() => markDunned(c.customer_id)}>✅ ทวงแล้ววันนี้</button>}
                   </div>
                   {open && <div className="ar-cust-invs">{c.invoices.map((r) => <InvoiceRow key={r.invoice_no} r={r} showBucket />)}</div>}
                 </div>
