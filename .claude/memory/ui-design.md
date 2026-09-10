@@ -1,9 +1,14 @@
 ---
 name: ui-design
-description: ดีไซน์การ์ด (กลอส/กระชับ) + FilterBar ตัวกรองยุบได้ — วิธีเพิ่มในเมนูใหม่
+description: ระบบดีไซน์กลาง (โทเคนพาเลตต์น้ำเงิน-ฟ้า) + การ์ดกลอส + FilterBar — วิธีเพิ่ม/ปรับสีทั้งแอป
 metadata:
   type: project
 ---
+
+**ดีไซน์ระบบ — โทเคนกลาง (เฟส 1-3 เสร็จ, 2026-09-11, v825-827, ขึ้น production แล้ว).** พาเลตต์ทั้งแอปคุมจาก `:root` ใน `app/src/styles.css` ตัวเดียว: `--primary:#2563EB` `--navy:#12365B` `--accent:#38BDF8` `--bg:#F3F7FC` `--ink:#172B4D` `--ink-2:#475569` `--ink-3:#7C8CA1` `--line:#E3EAF3` `--warn:#e67912`. **ทุกอย่างที่ใช้ `var(--*)` รับสีใหม่อัตโนมัติ** — ปรับสีทั้งแอปแก้ที่ `:root` ที่เดียว. `sidebar active` = `linear-gradient(var(--accent),var(--primary))`. CashFlow (ต้นแบบ) ผูก `--cfx-*` เข้ากับโทเคนกลางแล้ว (แหล่งสีเดียว).
+- **🔒 เอกสารพิมพ์/PDF แช่แข็ง — ห้ามให้รับพาเลตต์ใหม่:** letterhead/หัวตาราง/ยอดรวมใน `.doc-*` (styles.css ~1607-1666) ใช้ `#1f74e0` hardcoded อยู่แล้ว · กฎ `.docterms*`/`.doc-project*` ตรึงค่าเดิม (`#e7e9f0`/`#f5f8fd`/`#0f1729`/`#1f74e0`) มีคอมเมนต์ `frozen: customer doc` · `lib/printDoc.js` (ตราสำเนา/ปุ่มต้นฉบับ) ใช้ `#1f74e0` · payslip(HR export), ใบเตรียมของ(MaterialPrep), ลายเซ็น(SignaturePad) ใช้ `#0f1729`. **แก้พาเลตต์กลางแล้วอย่าลืมว่าพวกนี้ต้องเหมือนเดิม** — ถ้าเจ้าของไม่อนุมัติห้ามแตะเอกสารลูกค้า.
+- **กวาดสีเก่าตกค้าง inline:** ถ้าเปลี่ยนค่าโทเคน ต้องหา hardcode เก่าใน component ด้วย (`grep -rn '#1f74e0' components/`) — เฟส 2-3 แทน `#1f74e0`→`#2563EB` (11 ไฟล์: กราฟ/การ์ด/ปุ่มกรอง VAT/แชต), `#9aa3b2`→`#7C8CA1`, warn-UI `#f59e0b`→`#e67912`. **คงไว้:** ดาว rating(ทอง), สี avatar/แชต(TeamChat), สี series กราฟ, และ**ชุดสีสถานะ semantic เมนูการเงิน** (เขียว/แดง/ส้ม = จ่าย/ค้าง/เกิน — กฎ "semantic ต้องมีป้ายกำกับ"). SVG/canvas ใช้ hex ตรง (CSS var ไม่ทำงาน).
+- **วิธีทำ:** สาขาทดลอง `trial/design-*` → build (ชี้ TEMP ไป D: ถ้า C: เต็ม) → Vercel preview ให้เจ้าของตรวจ → merge ทีละเฟสเมื่ออนุมัติ. เจ้าของชอบรีวิวผ่าน preview ก่อน merge เสมอ. ดู [[build-passes-page-dead]] (npm test ก่อน commit).
 
 **การ์ดกลอสกระชับ (v539, 2026-08-02).** override block ท้าย `app/src/styles.css` (คอมเมนต์ `v538 — การ์ดกระชับ + กลอสลอยเด่น`) คุมทั้งแอป: `.card` พื้นไล่เฉดกลอส + เงาสีฟ้าลอยเด่น + padding 20→15 · `.job-card` hover ยกตัว -3px + เงาเข้ม · `.dch`/`.job-card-head` padding ลด · `.job-cards` gap 12→9 · `.cat-chip` เล็กลง (5/11px,12.5px) + margin ลด. **ปรับ/ย้อนที่บล็อกเดียวท้ายไฟล์** (ถ้าเจ้าของว่าจัด/สีจ้าไป ลดที่นี่).
 
