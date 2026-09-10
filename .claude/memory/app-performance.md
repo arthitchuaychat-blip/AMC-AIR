@@ -21,3 +21,10 @@ quotation_items 1705 · boq_items 1675 · materials 1326 · transactions 763 · 
 4. **ยังไม่ทำ ถ้ายังรู้สึกอืด**: (ก) `select` เฉพาะคอลัมน์ที่ใช้ (ตอนนี้ listQuotations select("*") หลายตาราง) · (ข) material_stock view คิดสดจาก transactions ทุกครั้ง → ตารางยอดคงเหลือสะสมเมื่อ transactions โต · (ค) เพิ่ม TTL แคชถ้า 45 วิ ยังรู้สึกยิงบ่อย. **ก่อนทำเพิ่ม: ให้เจ้าของวัด Network/Performance จริงว่ายังช้าตรงไหน — โหลดครั้งแรกเร็วแล้ว (1 chunk 181KB gzip) สลับเมนูซ้ำก็แคชแล้ว.**
 
 ⚠️ วิธีตรวจว่าช้าตรงไหนจริง: ก่อนแก้ ให้ดู Network/Performance tab ในเบราว์เซอร์ (แอปล็อกอิน — เจ้าของเปิดเอง) ว่าเสียเวลาที่ "โหลดบันเดิล" หรือ "รอ query". ดู [[supabase-1000-row-cap]] (_fetchAll เพจทั้งตาราง) + [[stale-cache-deploys]] (bump BUILD ทุกครั้งที่แก้ app/).
+
+
+## ทดลอง cashflow-perf-1 (2026-09-10)
+
+Branch trial/cashflow-sync-performance: cash_entries sync อ่านค่าปัจจุบันแล้วข้าม UPDATE ถ้าทุก business field เท่าเดิม (รวม entity เมื่อมีคอลัมน์) จึงไม่ล้าง short cache/ยิง realtime เพราะการเขียนซ้ำ. รักษา edited/manual/กติกาลบเดิม. รวมคำขอซิงค์ใน browser module เดียวเป็น serial runner และทำ trailing pass เมื่อมีคำขอระหว่างรอบ (ไม่ทิ้งการเซฟเอกสารใหม่). ไม่กันข้ามเครื่อง/แท็บ และไม่เปลี่ยนสูตรยอดเงิน.
+
+ทดสอบ node test-cash-sync-performance.mjs; เติม --benchmark เพื่อเทียบ sync จริงจาก commit b785684 (ต้องมี git history). Fixture 1,000 รายการเงินเหมือนเดิม: UPDATE 1000→0, business data เท่าเดิม. ไม่ใช่การวัด latency production. ไม่มี migration; ยังไม่ merge/deploy production.
