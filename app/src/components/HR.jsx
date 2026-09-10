@@ -304,12 +304,12 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
   return (
     <div className="card">
       {canManage && missing.length > 0 && (
-        <div style={{ border: "1.5px solid #f59e0b", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
+        <div style={{ border: "1.5px solid #e67912", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
           <div style={{ fontWeight: 800, color: "#b45309", marginBottom: 4 }}>⏰ ลืมเช็คเอาท์ {missing.length} รายการ (7 วันหลัง) — แก้เวลาให้เรียบร้อยก่อนคิดเงินเดือน</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {missing.map((x) => { const p = staff.find((s) => s.id === x.user_id) || { id: x.user_id, name: x.name };
               return (
-                <button key={x.id} className="btn-ghost sm" style={{ borderColor: "#f59e0b" }} title="กดเพื่อแก้เวลาเข้า-ออกของวันนั้น"
+                <button key={x.id} className="btn-ghost sm" style={{ borderColor: "#e67912" }} title="กดเพื่อแก้เวลาเข้า-ออกของวันนั้น"
                   onClick={() => setEdit({ p, a: x, day: x.work_date })}>
                   {x.name} · {thDate(x.work_date)} (เข้า {fmtTime(x.check_in_at)})
                 </button>
@@ -1733,7 +1733,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         </div>
       </div>
       {!loading && priorWarn?.needsClose && paidStatus !== "paid" && (
-        <div style={{ border: "1.5px solid #f59e0b", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
+        <div style={{ border: "1.5px solid #e67912", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
           <div style={{ fontWeight: 800, color: "#b45309" }}>⚠️ รอบ {priorWarn.prevYm} ยังไม่ได้ปิด — ควรปิดรอบก่อนหน้าก่อน</div>
           <div className="jo-dim" style={{ marginTop: 2 }}>ปิดรอบเรียงตามเดือนเสมอ (เก่า → ใหม่) ไม่งั้นยอดเบิกล่วงหน้า/เงินยืมอาจตัดผิดรอบหรือยกยอดพลาด · <button className="btn-ghost sm" style={{ padding: "1px 8px" }} onClick={() => setYm(priorWarn.prevYm)}>ไปรอบ {priorWarn.prevYm}</button></div>
         </div>
@@ -1760,7 +1760,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       {attEdit && <AttEditModal day={attEdit.day} row={{ p: attEdit.p, a: attEdit.a }} flash={flash}
         onClose={() => setAttEdit(null)} onSaved={() => { setAttEdit(null); load(); }} />}
       {!loading && pendingHol.length > 0 && paidStatus !== "paid" && (
-        <div style={{ border: "1.5px solid #f59e0b", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
+        <div style={{ border: "1.5px solid #e67912", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
             <span style={{ fontWeight: 800, color: "#b45309" }}>🏖️ งานวันหยุดรอรับรอง {pendingHol.length} วัน — วันที่ยังไม่รับรอง ค่าวันหยุดจะยังไม่ถูกคิดเงินในรอบนี้</span>
             <button className="btn-primary sm ok" disabled={busy} onClick={async () => {
@@ -1774,7 +1774,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           <div className="jo-dim" style={{ marginBottom: 6 }}>ตรวจก่อนรับรองว่ามาทำงานจริงในวันหยุด (ไม่ใช่แค่แวะเข้ามา) — รับรองแยกรายวันได้ที่ปุ่มด้านล่าง หรือในแท็บ “วันนี้” (เลือกวันที่)</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {pendingHol.map((x) => (
-              <button key={x.a.id} className="btn-ghost sm" style={{ borderColor: "#f59e0b" }} disabled={busy} title="กดเพื่อรับรองงานวันหยุดวันนี้วันเดียว"
+              <button key={x.a.id} className="btn-ghost sm" style={{ borderColor: "#e67912" }} disabled={busy} title="กดเพื่อรับรองงานวันหยุดวันนี้วันเดียว"
                 onClick={async () => { try { await setAttendanceHolOk(x.a.user_id, x.a.work_date, true); flash(`รับรองวันหยุด ${x.name} ✓`); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }}>
                 {x.name} · {thDate(x.a.work_date)} · {x.hours} ชม.
               </button>

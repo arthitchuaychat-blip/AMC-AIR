@@ -29,7 +29,7 @@ function PermissionsCard({ flash }) {
   React.useEffect(() => { getRolePermissions().then((o) => setP(mergePerms(o))).catch(() => setP(mergePerms(null))); }, []);
   const NEXT = { none: "view", view: "edit", edit: "none" };          // editable modules cycle 3 states
   const NEXT2 = { none: "view", view: "none" };                       // view-only modules cycle 2 states
-  const CELL = { none: { t: "—", c: "#9aa3b2", bg: "var(--surface-2)" }, view: { t: "ดู", c: "#1d4ed8", bg: "#e6efff" }, edit: { t: "แก้ไข", c: "#0a6b3d", bg: "#dcf5e8" } };
+  const CELL = { none: { t: "—", c: "#7C8CA1", bg: "var(--surface-2)" }, view: { t: "ดู", c: "#1d4ed8", bg: "#e6efff" }, edit: { t: "แก้ไข", c: "#0a6b3d", bg: "#dcf5e8" } };
   const cycle = (role, mod, editable) => setP((p) => {
     const cur = p[role][mod] || "none";
     const nxt = (editable ? NEXT : NEXT2)[cur] ?? "none";
@@ -107,7 +107,7 @@ function NotifyCard({ flash }) {
               <tr key={c.id}>
                 <td style={{ textAlign: "left" }}>{c.label}</td>
                 {PERM_ROLES.map((r) => { const on = isOn(r, c.id); return (
-                  <td key={r}><button type="button" className="perm-cell" style={on ? { color: "#0a6b3d", background: "#dcf5e8" } : { color: "#9aa3b2", background: "var(--surface-2)" }} onClick={() => toggle(r, c.id)}>{on ? "เปิด" : "ปิด"}</button></td>
+                  <td key={r}><button type="button" className="perm-cell" style={on ? { color: "#0a6b3d", background: "#dcf5e8" } : { color: "#7C8CA1", background: "var(--surface-2)" }} onClick={() => toggle(r, c.id)}>{on ? "เปิด" : "ปิด"}</button></td>
                 ); })}
               </tr>
             ))}

@@ -90,8 +90,8 @@ export default function DashDrawer({ kind, periodLabel, txns, teams, mats, onClo
                 })}
                 {teamData["ส่วนกลาง"] != null && (
                   <div className="tbar-row">
-                    <div className="tbar-label"><span style={{ width: 10, height: 10, borderRadius: 99, background: "#9aa3b2", display: "inline-block" }} /> ส่วนกลาง</div>
-                    <div className="tbar-track"><div className="tbar-fill" style={{ width: Math.max(0, teamData["ส่วนกลาง"]) / teamMax * 100 + "%", background: "#9aa3b2" }} /></div>
+                    <div className="tbar-label"><span style={{ width: 10, height: 10, borderRadius: 99, background: "#7C8CA1", display: "inline-block" }} /> ส่วนกลาง</div>
+                    <div className="tbar-track"><div className="tbar-fill" style={{ width: Math.max(0, teamData["ส่วนกลาง"]) / teamMax * 100 + "%", background: "#7C8CA1" }} /></div>
                     <div className="tbar-val">{fmtBaht(teamData["ส่วนกลาง"])}</div>
                   </div>
                 )}

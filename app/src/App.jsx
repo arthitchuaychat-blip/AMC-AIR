@@ -154,7 +154,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-11·ดีไซน์ระบบเฟส2(เอกสารขาย): เก็บสีน้ำเงินเก่าตกค้าง #1f74e0→#2563EB ทั้งแอป(11 ไฟล์) · หน้าจอเอกสารขายสีเนียนกับพาเลตต์ใหม่ · หน้าพิมพ์ไม่แตะ [trial] v826";
+const BUILD = "2026-09-11·ดีไซน์ระบบเฟส3(จบทุกเมนู): กวาดสีเก่าตกค้างทั้งแอป (ink3 จาง, กล่องเตือน HR/บิล warn ใหม่) · เมนูการเงินคงสีสถานะ semantic · หน้าพิมพ์ไม่แตะ [trial] v827";
 
 function SetupNotice() {
   return (

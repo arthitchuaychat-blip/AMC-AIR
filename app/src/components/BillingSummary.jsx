@@ -58,7 +58,7 @@ export default function BillingSummary({ onGo, from, to }) {
       <div className="kpi-grid">
         <Card icon="clipboard" color="#0d9488" label="ยอด BOQ (ต้นทุนประเมิน)" value={d.boqTotal} sub={`${d.boqCount} ใบ`} go="boq" />
         <Card icon="clipboard" color="#2563eb" label="ยอดใบเสนอราคา" value={d.quoteTotal} sub={`${d.quoteCount} ใบ`} go="quote" />
-        <Card icon="clipboard" color="#f59e0b" label="ยอดแจ้งหนี้ (ลูกหนี้)" value={d.invoiceTotal} sub={`${d.invoiceCount} ใบ · ค้างเก็บ ${fmtBaht(d.outstanding)}`} go="invoice" />
+        <Card icon="clipboard" color="#e67912" label="ยอดแจ้งหนี้ (ลูกหนี้)" value={d.invoiceTotal} sub={`${d.invoiceCount} ใบ · ค้างเก็บ ${fmtBaht(d.outstanding)}`} go="invoice" />
         <Card icon="check" color="#16a34a" label="เก็บเงินแล้ว" value={d.collected} sub={`${d.collectedCount} ใบ`} go="receipt" accent="var(--up)" />
       </div>
 

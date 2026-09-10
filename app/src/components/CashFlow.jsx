@@ -352,7 +352,7 @@ export default function CashFlow() {
               <div key={c} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 170, flex: "none", fontSize: 12.5 }}>{c}</div>
                 <div style={{ flex: 1, background: "var(--surface-2,#eef3f6)", borderRadius: 7, height: 20, position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", inset: 0, width: `${v / catMax * 100}%`, background: "linear-gradient(90deg,#f59e0b,#dc2626)", borderRadius: 7, minWidth: 2 }} />
+                  <div style={{ position: "absolute", inset: 0, width: `${v / catMax * 100}%`, background: "linear-gradient(90deg,#e67912,#dc2626)", borderRadius: 7, minWidth: 2 }} />
                 </div>
                 <div style={{ width: 96, flex: "none", textAlign: "right", fontWeight: 700, fontSize: 12.5 }}>{fmtBaht(v)}</div>
                 <div style={{ width: 40, flex: "none", textAlign: "right", fontSize: 11.5, color: "var(--ink-3)" }}>{catTotal ? Math.round(v / catTotal * 100) : 0}%</div>
