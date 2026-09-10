@@ -10,9 +10,10 @@ metadata:
 **รูปแบบที่ใช้ (ทำซ้ำได้ทุกเฟส):** สร้าง hub component (เช่น `MarketingHub.jsx`, `PayCenter.jsx`) = หน้าเปลือกมี `view-seg`/`seg-btn` สลับแท็บ · แต่ละแท็บ lazy-render component เดิม · **คุมสิทธิ์รายแท็บด้วย `can(role, <moduleเดิม>)`** (ซ่อน seg bar ถ้าเหลือแท็บเดียว) · ใน `permissions.js` เพิ่มโมดูลรวมตัวใหม่ + **ถอด id ย่อยออกจาก MODULES แต่คงคีย์ใน DEFAULT_PERMS** (ให้ can รายแท็บทำงาน) · ใน App.jsx เพิ่ม NAV/NAV_EMOJI/NAV_GROUPS + render branch + **คงหน้า/branch เดิมไว้เผื่อ deep-link/#hash เก่า** · redirect deep-link ภายนอกให้ชี้ hub
 
 **ความคืบหน้า (บน main):**
-hub ที่สร้างแล้ว = MarketingHub / PayCenter / RecvCenter / SalesHub (รูปแบบเดียวกันหมด)
+hub ที่สร้างแล้ว = MarketingHub/PayCenter/RecvCenter/SalesHub (โมดูลใหม่) · JobHub/BuyHub/CostQuoteHub (reuse view id เดิมเป็น host เพราะ deep-link เยอะ)
 - เฟส 1 ✅: A1 การตลาดและเว็บไซต์ v803 · A2 ศูนย์จ่ายเงิน v806 · C1 ใบเสนอเร็ว(auto-BOQ บริการ=0/สินค้า=cost คลัง) v807 · +guard ค่างวด v804 +mig248 +B1 กันเงินนับซ้ำ v805
 - เฟส 2 ✅: A3 ศูนย์รับเงิน v808 · A4 ลูกค้าและงานขาย v809 · D1 ซิงค์สถานะแชต↔ท่อขาย (แนวทาง B, customers.stage เป็นหลัก, ตารางแปลง CHAT_TO_PIPE/PIPE_TO_CHAT ใน pipeline.js, ไม่ต้อง migration) v810
-- ยังไม่ทำ: เฟส 3 = A6 ใบงานรวม (ใบงาน+ปฏิทิน+วัสดุ/ปิดงาน+ส่งมอบ — **ระวังสิทธิ์รายแท็บ ช่างไม่เห็นเงิน**) · A5 จัดซื้อรวม · A7 ต้นทุน+เสนอราคา(BOQ+quote 2 แท็บ) · เฟส 4 เก็บกวาด (C2 แยก AR tabs, B2 VAT รายจ่ายประจำ, B3 รวมโอนเงิน, D2 tools↔assets, D3 supplier FK, D4 localStorage→DB) · ก่อน 2027: E1 ค่างวดเงินต้น=หนี้สิน, E2 ค่าเสื่อมลงบัญชี, E3 VAT แหล่งเดียว
+- เฟส 3 ✅: A6 งานบริการและติดตั้ง (host=joborders, JobHub, ช่างไม่เห็นแท็บ jobs/ต้นทุน) v811 · A5 จัดซื้อและเตรียมงาน (host=po, BuyHub) v812 · A7 ต้นทุนและเสนอราคา (CostQuoteHub render ทั้ง view boq+quote, initialTab) v813
+- ยังไม่ทำ: เฟส 4 เก็บกวาด (C2 แยก AR tabs จากติดตาม→recvcenter, B2 VAT รายจ่ายประจำ, B3 รวมโอนเงิน, D2 tools↔assets, D3 supplier FK, D4 localStorage→DB) · ก่อน 2027: E1 ค่างวดเงินต้น=หนี้สิน, E2 ค่าเสื่อมลงบัญชี, E3 VAT แหล่งเดียว
 
 ดูรีวิวเต็ม + เหตุผลใน [[app-review-2026]] · เรื่องเงินค่างวด/กันซ้ำใน [[loans-financing]]
