@@ -11,6 +11,7 @@ metadata:
 
 **ความคืบหน้า (บน main):**
 hub ที่สร้างแล้ว = MarketingHub/PayCenter/RecvCenter/SalesHub (โมดูลใหม่) · JobHub/BuyHub/CostQuoteHub (reuse view id เดิมเป็น host เพราะ deep-link เยอะ)
+⚠️ กับดัก (แก้ v818): พอถอด view id ออกจาก MODULES → ตัวยามหน้าเริ่มต้นใน App.jsx (useEffect เช็ก safe.includes(view)) รีเซ็ต deep-link/#hash/แท็บใหม่ ไปแดชบอร์ด → ต้องใส่ view ที่ยุบแล้วแต่ยัง render ได้ ไว้ใน list HIDDEN (กรอง can รายบทบาท) ในตัวยามด้วย
 - เฟส 1 ✅: A1 การตลาดและเว็บไซต์ v803 · A2 ศูนย์จ่ายเงิน v806 · C1 ใบเสนอเร็ว(auto-BOQ บริการ=0/สินค้า=cost คลัง) v807 · +guard ค่างวด v804 +mig248 +B1 กันเงินนับซ้ำ v805
 - เฟส 2 ✅: A3 ศูนย์รับเงิน v808 · A4 ลูกค้าและงานขาย v809 · D1 ซิงค์สถานะแชต↔ท่อขาย (แนวทาง B, customers.stage เป็นหลัก, ตารางแปลง CHAT_TO_PIPE/PIPE_TO_CHAT ใน pipeline.js, ไม่ต้อง migration) v810
 - เฟส 3 ✅: A6 งานบริการและติดตั้ง (host=joborders, JobHub, ช่างไม่เห็นแท็บ jobs/ต้นทุน) v811 · A5 จัดซื้อและเตรียมงาน (host=po, BuyHub) v812 · A7 ต้นทุนและเสนอราคา (CostQuoteHub render ทั้ง view boq+quote, initialTab) v813
