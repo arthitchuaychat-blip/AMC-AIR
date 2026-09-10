@@ -56,6 +56,7 @@ const Receipts = React.lazy(() => import("./components/Receipts"));
 const AdjustmentNotes = React.lazy(() => import("./components/AdjustmentNotes"));
 const Receivables = React.lazy(() => import("./components/Receivables"));
 const Payables = React.lazy(() => import("./components/Payables"));
+const PayCenter = React.lazy(() => import("./components/PayCenter"));
 const MaterialPrep = React.lazy(() => import("./components/MaterialPrep"));
 const Tools = React.lazy(() => import("./components/Tools"));
 const TaxReport = React.lazy(() => import("./components/TaxReport"));
@@ -101,6 +102,7 @@ const NAV = {
   cashflow: { th: "กระแสเงินสด", en: "Cash Flow", icon: "trend" },
   loans: { th: "หนี้สิน", en: "Loans", icon: "trend" },
   recurring: { th: "รายจ่ายประจำ", en: "Recurring", icon: "trend" },
+  paycenter: { th: "ศูนย์จ่ายเงิน", en: "Payment Center", icon: "withdraw" },
   assets: { th: "สินทรัพย์", en: "Assets", icon: "box" },
   accounting: { th: "บัญชี", en: "Accounting", icon: "clipboard" },
   expenses: { th: "เบิกจ่าย", en: "Expenses", icon: "withdraw" },
@@ -123,7 +125,7 @@ const NAV_EMOJI = {
   myjobs: "👷", dashboard: "📊", kpi: "🏆", customers: "👥", followup: "📞", weborders: "🛒", website: "🌐",
   pipeline: "🎯", reviews: "🌟", promo: "🎟️", marketing: "📣", chat: "💚", email: "✉️", teamchat: "💬", tasks: "📋", attendance: "⏰", handbook: "📖", hr: "💼",
   subcontract: "🚧", catalog: "📦", boq: "📐", quote: "📝", invoice: "📄", receipt: "💵", adjnote: "📃", billing: "📑",
-  receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", loans: "🏧", recurring: "🔁", assets: "🏗️", expenses: "💳", accounting: "📚",
+  receivables: "💰", payables: "💸", tax: "🏦", profit: "📈", cashflow: "💹", loans: "🏧", recurring: "🔁", paycenter: "💳", assets: "🏗️", expenses: "💳", accounting: "📚",
   joborders: "🔧", handover: "📤", schedule: "📅", movements: "🔄", stockcount: "🔢", jobs: "🔩",
   suppliers: "🏭", prep: "📥", po: "🛍️", tools: "🔨", settings: "⚙️",
 };
@@ -134,7 +136,7 @@ const NAV_GROUPS = [
   { key: "team", label: "ทีม & บุคคล", ids: ["teamchat", "tasks", "attendance", "handbook", "hr"] },
   { key: "crm", label: "ลูกค้า & ขาย", ids: ["chat", "email", "customers", "pipeline", "followup", "weborders", "marketing"] },
   { key: "salesdocs", label: "เอกสารขาย", ids: ["boq", "quote", "invoice", "billing", "receipt", "adjnote"] },
-  { key: "finance", label: "การเงิน", ids: ["receivables", "payables", "tax", "profit", "cashflow", "loans", "recurring", "assets", "expenses", "accounting"] },
+  { key: "finance", label: "การเงิน", ids: ["receivables", "paycenter", "tax", "profit", "cashflow", "assets", "accounting"] },
   { key: "field", label: "งานช่าง / หน้างาน", ids: ["myjobs", "joborders", "handover", "schedule", "subcontract"] },
   { key: "inventory", label: "คลังสินค้า & จัดซื้อ", ids: ["catalog", "movements", "stockcount", "jobs", "suppliers", "prep", "po", "tools"] },
   { key: "overview", label: "ภาพรวม", ids: ["dashboard", "kpi"] },
@@ -145,7 +147,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "2026-09-10·B1 กระแสเงินสด: กันนับซ้ำ (จ่ายค่างวด/รายจ่ายประจำตรงในเบิกจ่าย → ตัดเส้นพยากรณ์ซ้ำ) + กันจ่ายซ้ำงวด v805";
+const BUILD = "2026-09-10·A2 ยุบเมนู: ศูนย์จ่ายเงิน (เบิกจ่าย+ค้างจ่าย+หนี้สิน+รายจ่ายประจำ รวมแท็บเดียว คุมสิทธิ์รายแท็บ) v806";
 
 function SetupNotice() {
   return (
@@ -649,6 +651,12 @@ export default function App() {
         {view === "billing" && <BillingNotes role={role} onOpenDoc={openDoc} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }}
           onCreateReceipt={(invNo) => { setReceiptFromInvoice(invNo); go("receipt"); }} />}
         {view === "receivables" && <Receivables role={role} onOpenInvoice={(no) => { setInvoiceFocus(no); go("invoice"); }} onGoChat={(cid) => { setChatFocus(String(cid)); go("chat"); }} />}
+        {/* A2: ศูนย์จ่ายเงิน (แท็บ เบิกจ่าย/ค้างจ่าย/หนี้สิน/รายจ่ายประจำ) — คงหน้าเดิมไว้เผื่อ deep-link/ลิงก์เก่า */}
+        {view === "paycenter" && <PayCenter role={role} me={profile}
+          onOpenDoc={(t, no) => { if (t === "po") { setPoFocus(no); go("po"); } else if (t === "job") { setJobFocus(no); go("joborders"); } else if (t === "quote") { setQuoteFocus(no); go("quote"); } }}
+          expenseFocus={expenseFocus} onExpenseFocusConsumed={() => setExpenseFocus(null)}
+          onRegisterAsset={(pre) => { setAssetPrefill(pre); go("assets"); }}
+          onOpenPo={(no) => { setPoFocus(no); go("po"); }} onGoSub={() => go("subcontract")} onGoCashflow={() => go("cashflow")} />}
         {view === "payables" && <Payables role={role} onOpenPo={(no) => { setPoFocus(no); go("po"); }} onGoExpenses={(ref) => { setExpenseFocus(ref || null); go("expenses"); }} onGoSub={() => go("subcontract")} />}
         {view === "tax" && <TaxReport role={role} />}
         {view === "weborders" && <WebOrders role={role}
@@ -664,7 +672,7 @@ export default function App() {
           if (!no) return;
           if (t === "invoice" || t === "receipt") openDoc(t, no);
           else if (t === "po" || t === "po_pay") openDoc("po", no);
-          else if (t === "expense") { setExpenseFocus(no); go("expenses"); }
+          else if (t === "expense") { setExpenseFocus(no); go("paycenter"); }
           else if (t === "payout") go("subcontract");
           else if (t === "payroll") go("hr");
         }} />}
@@ -690,7 +698,7 @@ export default function App() {
         {view === "po" && <PurchaseOrders role={role} prefill={poPrefill} onPrefillConsumed={() => setPoPrefill(null)}
           focus={poFocus} onFocusConsumed={() => setPoFocus(null)}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }}
-          onGoExpenses={(poNo) => { setExpenseFocus(poNo || null); go("expenses"); }}
+          onGoExpenses={(poNo) => { setExpenseFocus(poNo || null); go("paycenter"); }}
           onReceive={async (po) => {
             // ⚠️ ห้ามหักยอดที่รับแล้วตรงนี้ — it.qty เป็นหน่วยของบรรทัด (สินค้า 2 หน่วย = ม้วน)
             //    ส่วน got มาจาก transactions ซึ่งเป็นหน่วยหลักเสมอ (เมตร) ลบกันตรง ๆ = 3 − 100 → 0
