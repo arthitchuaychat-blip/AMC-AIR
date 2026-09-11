@@ -3398,6 +3398,7 @@ export async function saveJobOrder(jo, author) {
     address: jo.address?.trim() || null, map_url: jo.map_url?.trim() || null, details: jo.details?.trim() || null,
     sales_note: jo.sales_note?.trim() || null, sales_photos: jo.sales_photos || [], internal_note: jo.internal_note?.trim() || null,
     survey_job_no: jo.survey_job_no || null,   // mig 220 — ผูกใบสำรวจต้นทาง
+    ...(jo.labor_mode !== undefined ? { labor_mode: jo.labor_mode } : {}),
     assigned_team: jo.assigned_team || null, scheduled_at: jo.scheduled_at || null,
     end_date: jo.end_date || null, slot: jo.slot || null, issue_date: jo.issue_date || null,
     status: headStatus, created_by: user?.id || null,
@@ -4079,10 +4080,19 @@ export async function saveTeam(t) {
 
 // ===================== SUBCONTRACTOR (labor + payout) =====================
 // save the per-line labor for a job order
-export async function saveJobLabor(jobNo, lines, total) {
-  const { error } = await supabase.from("job_orders").update({ labor_lines: lines, labor_total: Number(total) || 0 }).eq("job_no", jobNo);
+export async function saveJobLabor(jobNo, lines, total, { manual = true } = {}) {
+  const { error } = await supabase.from("job_orders").update({ labor_lines: lines, labor_total: Number(total) || 0, labor_manual: manual, labor_review_required: false }).eq("job_no", jobNo);
   if (error) throw error;
   syncCashEntriesFromDocs().catch(() => {}); // แก้ยอดค่าแรง → อัปเดต "ค่าแรงรอจ่าย" ในกระแสเงินสด
+}
+export async function resetJobLaborDefaults(jobNo) {
+ const {data: job,error:e0}=await supabase.from("job_orders").select("labor_mode,labor_confirmed,labor_paid_amt").eq("job_no",jobNo).single();
+ if(e0) throw e0;
+ if(!job.labor_mode) throw new Error("เลือกวิธีจ้างในใบงานก่อน");
+ if(job.labor_confirmed || Number(job.labor_paid_amt)>0) throw new Error("ยอดนี้ยืนยันหรือจัดจ่ายแล้ว ไม่สามารถคำนวณทับได้");
+ const {error}=await supabase.from("job_orders").update({labor_manual:false,labor_rate_config:null}).eq("job_no",jobNo).not("labor_confirmed","is",true).or("labor_paid_amt.is.null,labor_paid_amt.eq.0").select("job_no").single();
+ if(error) throw error;
+ bustShort();
 }
 // office review of a sub job (rating 1-5 + claim flag)
 export async function saveJobReview(jobNo, rating, isClaim) {

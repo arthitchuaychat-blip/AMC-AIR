@@ -1,7 +1,7 @@
 import React from "react";
 import SubcontractRateSettings from "./SubcontractRateSettings";
-import {DEFAULT_SUB_RATES,validateSubRates,calculateSubLines} from "../lib/subcontractRates";
-import {getAppConfig} from "../lib/api";
+import {DEFAULT_SUB_RATES,validateSubRates} from "../lib/subcontractRates";
+import {getAppConfig,resetJobLaborDefaults} from "../lib/api";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listAccounts, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage, uploadExpenseFile, listMySubPending } from "../lib/api";
@@ -263,13 +263,14 @@ function LaborTab({ rates, jobs, quoteBy, teamById, subTeams, canLabor, onReload
         {shown.map((j) => {
           const q = quoteBy[j.quote_no]; const st = STATUS[j.status] || STATUS.pending; const ls = state(j);
           const locked = (Number(j.labor_paid_amt) || 0) > 0;        // already in a payout → can't edit/unconfirm
-          const canConfirm = canLabor && j.status === "done" && j.labor_total > 0 && !j.labor_confirmed;
+          const canConfirm = canLabor && j.status === "done" && j.labor_total > 0 && !j.labor_confirmed && !j.labor_review_required;
           return (
             <div className="sub-job-row" key={j.job_no}>
               <div className="sub-job-main">
                 <div>{j.scheduled_at && <span className="jo-dim" style={{ fontSize: 11, marginRight: 5 }}>{fmtDate(j.scheduled_at)}</span>}<button type="button" className="sub-job-link" onClick={() => setJobPreview(j)} title="ดูรายละเอียดงาน">{j.job_no}</button> <span className={"job-badge " + st.c}>{st.t}</span>
                   {q?.vat ? <span className="vat-badge vat-on">VAT</span> : <span className="vat-badge vat-off">NO VAT</span>}
-                  {j.is_claim && <span className="vat-badge vat-off">เคลม</span>}</div>
+                  {j.is_claim && <span className="vat-badge vat-off">เคลม</span>}
+                  {j.labor_review_required && <span className="job-badge b-amber">ต้องตรวจค่าแรง · แผน/ข้อมูลเปลี่ยน</span>}</div>
                 <div className="jo-dim">{j.customerName || "-"} · ทีม {teamById[j.assigned_team]?.name || j.assigned_team} · {j.title || "งาน"}</div>
                 <DocChips quoteNo={j.quote_no} jobNos={[j.job_no]} jobStatusBy={{ [j.job_no]: j.status }} onOpen={openPeek} />
               </div>
@@ -347,24 +348,26 @@ function LaborTab({ rates, jobs, quoteBy, teamById, subTeams, canLabor, onReload
 
 function LaborEditor({ rates, job, quote, onClose, onSaved, flash }) {
   const saved = job.labor_lines || [];
-  const [mode,setMode]=React.useState(saved[0]?.contract_mode || rates?.mode || 'labor');
-  const [days,setDays]=React.useState(saved[0]?.contract_mode==='daily' ? saved[0].qty : 1);
-  const [groups,setGroups]=React.useState((quote?.items||[]).map((it,i)=>saved[i]?.labor_group || (it.kind==='service'?'service':'unknown')));
+  const mode=job.labor_mode;
+  const [edited,setEdited]=React.useState(!!job.labor_manual);
   const [lines, setLines] = React.useState(saved.length ? saved.map(l=>({...l})) : []);
   const [rating, setRating] = React.useState(job.rating || 0);
   const [claim, setClaim] = React.useState(!!job.is_claim);
   const [busy, setBusy] = React.useState(false);
   const total = sumLabor(lines);
-  const setLabor = (i, v) => setLines((ls) => ls.map((l, j) => j === i ? { ...l, labor: Number(v) || 0 } : l));
+  const setLabor = (i, v) => { setEdited(true); setLines((ls) => ls.map((l, j) => j === i ? { ...l, labor: Number(v) || 0, adjusted:true } : l)); };
   const setName = (i, v) => setLines((ls) => ls.map((l, j) => j === i ? { ...l, name: v } : l));
-  const addLine = () => setLines((ls) => [...ls, { code: null, name: "", qty: "", unit: "", price: 0, sale: 0, labor: 0, manual: true }]);
-  const delLine = (i) => setLines((ls) => ls.filter((_, j) => j !== i));
-  const resetDefault = () => { try { if(!rates) throw new Error('ยังโหลดค่าเริ่มต้นไม่สำเร็จ'); setLines(calculateSubLines(quote?.items,groups,rates,mode,days,quote?.discount)); } catch(e) { flash(e.message,true); } };
+  const addLine = () => {setEdited(true);setLines((ls) => [...ls, { code: null, name: "", qty: "", unit: "", price: 0, sale: 0, labor: 0, manual: true }]);};
+  const delLine = (i) => {setEdited(true);setLines((ls) => ls.filter((_, j) => j !== i));};
+  const resetDefault = async () => {
+   if(!await confirmDialog({title:"คำนวณค่าแรงใหม่จากใบงาน?",message:"จะบันทึกยอดใหม่แทนยอดที่ปรับเอง โดยใช้ค่าเริ่มต้นปัจจุบันและวันในปฏิทิน",confirmText:"คำนวณและบันทึก"})) return;
+   setBusy(true);try{await resetJobLaborDefaults(job.job_no);onSaved();}catch(e){flash(e.message,true);}finally{setBusy(false);}
+  };
 
   async function save(confirmAfter) {
     setBusy(true);
     try {
-      await saveJobLabor(job.job_no, lines, total); await saveJobReview(job.job_no, rating || null, claim);
+      await saveJobLabor(job.job_no, lines, total, {manual:edited}); await saveJobReview(job.job_no, rating || null, claim);
       if (confirmAfter) { await confirmJobLabor(job.job_no, true); flash("บันทึก + ยืนยันค่าแรงแล้ว ✓"); }
       else flash("บันทึกค่าแรงแล้ว ✓");
       onSaved();
@@ -372,7 +375,7 @@ function LaborEditor({ rates, job, quote, onClose, onSaved, flash }) {
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
   }
-  const canConfirmNow = job.status === "done" && total > 0;
+  const canConfirmNow = job.status === "done" && total > 0 && (!job.labor_review_required || edited);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 620 }}>
@@ -380,13 +383,11 @@ function LaborEditor({ rates, job, quote, onClose, onSaved, flash }) {
           <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
           <div className="card" style={{marginBottom:12}}>
-            <label className="fld"><span>ประเภทการจ้าง</span><select className="inp" value={mode} onChange={e=>setMode(e.target.value)}><option value="labor">เหมาเฉพาะค่าแรง + วัสดุ</option><option value="inclusive">เหมาทั้งแรงและวัสดุ</option><option value="daily">รายวันต่อทีม</option></select></label>
-            {mode==='daily' ? <label className="fld"><span>จำนวนวันของทีม (ครึ่งวัน = 0.5)</span><input className="inp" type="number" min="0.5" step="0.5" value={days} onChange={e=>setDays(e.target.value)}/><small>อัตราเริ่มต้น {rates?.daily ?? '—'} บาท/ทีม/วัน</small></label> : <>
-            <p>ตรวจประเภททุกรายการก่อนคำนวณ เลือกเครื่องแอร์เพื่อไม่นำมาคิดค่าแรง งานล้างเลือกประเภทงานล้าง</p>
-            {(quote?.items||[]).map((it,i)=><label className="fld" key={i}><span>{it.name}</span><select className="inp" value={groups[i]} onChange={e=>setGroups(gs=>gs.map((g,j)=>j===i?e.target.value:g))}><option value="unknown">เลือกประเภท…</option><option value="air">เครื่องแอร์ — ไม่คิดค่าแรง</option><option value="material">วัสดุ / อะไหล่ / อุปกรณ์เสริม</option><option value="service">บริการติดตั้ง / ซ่อม / ย้าย</option><option value="cleaning">บริการล้าง</option></select></label>)}
-            </>}
-            <button type="button" className="btn-primary" disabled={!rates} onClick={resetDefault}>ใช้ค่าเริ่มต้นคำนวณใหม่</button>
-            <p className="page-sub">ปุ่มนี้แทนที่รายการค่าแรงในแบบฟอร์ม ยอดเดิมในระบบจะเปลี่ยนเมื่อกดบันทึกเท่านั้น</p>
+            <b>วิธีจ้างจากใบงาน: {{labor:'เหมาเฉพาะค่าแรง',inclusive:'เหมาทั้งแรงและวัสดุ',daily:'รายวันต่อทีม'}[mode] || 'ยังไม่ระบุ — เลือกในใบงาน'}</b>
+            {mode==='daily' && <p>วันตามปฏิทินของทีม: {job.labor_calendar_days || 0} วัน</p>}
+            {job.labor_review_required && <p role="alert">แผนงานหรือข้อมูลเปลี่ยน โปรดตรวจยอดค่าแรงก่อนยืนยัน รายการที่ไม่พบหมวดสินค้าอาจยังไม่ได้คิดค่าแรง</p>}
+            <p>แก้ยอดรายรายการได้ด้านล่าง ยอดที่ปรับเองจะไม่เปลี่ยนตามปฏิทินอัตโนมัติ</p>
+            <button type="button" className="btn-ghost" disabled={busy || !mode} onClick={resetDefault}>คำนวณใหม่จากใบงานและบันทึก</button>
           </div>
           <div className="sub-lab-head"><span>รายการ</span><span>จำนวน</span><span>ราคา/หน่วย</span><span>ราคาขาย</span><span>ค่าแรง</span></div>
           {lines.map((l, i) => (
@@ -396,7 +397,7 @@ function LaborEditor({ rates, job, quote, onClose, onSaved, flash }) {
                     <input className="inp" style={{ flex: 1, padding: "4px 8px" }} placeholder="ชื่อรายการค่าแรง เช่น ล้างแอร์ 2 เครื่อง" value={l.name} onChange={(e) => setName(i, e.target.value)} />
                     <button className="line-x" title="ลบบรรทัด" onClick={() => delLine(i)}><UIcon name="x" size={13} /></button>
                   </span>
-                : <span className="sub-lab-name">{l.name}</span>}
+                : <span className="sub-lab-name">{l.name}{l.adjusted && <small> · ปรับเอง</small>}</span>}
               <span className="sub-lab-qty">{l.manual ? "" : `${l.qty} ${l.unit}`}</span>
               <span className="sub-lab-unit">{l.manual ? "" : fmtBaht(l.price)}</span>
               <span className="sub-lab-sale">{l.manual ? "" : <>{fmtBaht(l.sale)}{Number(l.disc) > 0 && <small style={{ display: "block", color: "var(--down)", fontSize: 10.5 }} title="หักส่วนลดรายบรรทัดแล้ว">ลด {fmtBaht(l.disc)}</small>}</>}</span>

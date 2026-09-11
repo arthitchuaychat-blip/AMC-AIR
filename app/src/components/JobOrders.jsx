@@ -1,4 +1,6 @@
 import React from "react";
+import {getAppConfig} from "../lib/api";
+import {DEFAULT_SUB_RATES} from "../lib/subcontractRates";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listJobOrders, saveJobOrder, deleteJobOrder, setJobStatus, listCustomers, listTeams, listQuotations, uploadMaterialPhoto, listDocLinks, updateVisitStatus, updateJobStatus, lockJob, unlockJob, createLinkedJob, createReworkJob, backfillQuoteForJob, listProfiles, listJobTemplates, saveJobTemplate, deleteJobTemplate, listHandoverFlags, saveJobReview } from "../lib/api";
@@ -36,6 +38,8 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
+  const [laborDefaults,setLaborDefaults]=React.useState(null);
+  React.useEffect(()=>{getAppConfig("subcontractor_rates",DEFAULT_SUB_RATES).then(setLaborDefaults).catch(e=>flash("โหลดค่าแรงเริ่มต้นไม่สำเร็จ: "+e.message,true));},[]);
   const [staff, setStaff] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -205,7 +209,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       const p = (n) => String(n).padStart(2, "0");
       visits = [{ assigned_team: jo.assigned_team || "", date: dt ? `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` : "", end_date: jo.end_date || "", slot: jo.slot || "morning", time: dt ? `${p(dt.getHours())}:${p(dt.getMinutes())}` : "", status: jo.status || "scheduled" }];
     }
-    setEd({ ...jo, _edit: true, _visitIdsLoaded: (jo.visits || []).map((v) => v.id).filter(Boolean), job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "",
+    setEd({ ...jo, labor_mode: jo.labor_mode || jo.labor_lines?.[0]?.contract_mode || null, _edit: true, _visitIdsLoaded: (jo.visits || []).map((v) => v.id).filter(Boolean), job_type: jo.job_type || "install", customer_id: jo.customer_id || "", site_id: jo.site_id || "",
       issue_date: jo.issue_date || (jo.created_at || "").slice(0, 10),
       assigned_team: jo.assigned_team || jo.visits?.[0]?.assigned_team || "",
       contact_name: jo.contact_name || "", contact_phone: jo.contact_phone || "", address: jo.address || "", map_url: jo.map_url || "", details: jo.details || "", title: jo.title || "",
@@ -297,7 +301,9 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
     const status = visitRows.length ? deriveJobStatus(visitRows) : (KEEP_HEAD_ST.includes(ed.status) ? ed.status : "pending");
     try {
       setSaving(true);
-      await saveJobOrder({ ...ed, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows, visitIdsLoaded: ed._visitIdsLoaded || null }, me);
+      const isSub=teams.find(t=>t.id===ed.assigned_team)?.type==="sub";
+      if(isSub && !laborDefaults) throw new Error("ยังโหลดค่าเริ่มต้นค่าแรงไม่สำเร็จ กรุณาลองใหม่");
+      await saveJobOrder({ ...ed, labor_mode:isSub?(ed.labor_mode || laborDefaults.mode):null, assigned_team: ed.assigned_team || null, scheduled_at, end_date, slot, status, visits: visitRows, visitIdsLoaded: ed._visitIdsLoaded || null }, me);
       flash(visitRows.length > 1 ? `บันทึก · ${visitRows.length} รอบเข้างาน ✓` : (ed.assigned_team ? `บันทึก · ส่งงานให้ทีม ${tn} แล้ว ✓` : "บันทึกใบงานแล้ว"));
       setEd(null); await load();
     }
@@ -511,6 +517,13 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
               </Combo>
             </label>
           </div>
+          {teams.find(t=>t.id===ed.assigned_team)?.type==='sub' && <div className="card" style={{marginBottom:12}}>
+            <label className="fld"><span>วิธีจ้าง / การคิดค่าแรงของใบงานนี้</span><select className="inp" value={ed.labor_mode || laborDefaults?.mode || 'labor'} onChange={e=>setF('labor_mode',e.target.value)}>
+              <option value="labor">เหมาเฉพาะค่าแรง</option><option value="inclusive">เหมาทั้งแรงและวัสดุ</option><option value="daily">รายวันต่อทีม</option></select></label>
+            {(ed.labor_mode || laborDefaults?.mode)==='daily' ? <p>อัตราเริ่มต้น {laborDefaults?.daily ?? '—'} บาท/ทีม/วัน นับวันจากรอบเข้างานในปฏิทิน ไม่รวมวันยกเลิก และวันซ้ำของทีมเดียวกันนับครั้งเดียว</p> : <p>ใช้ราคาขายหลังส่วนลด ไม่รวม VAT เครื่องแอร์ อะไหล่ และอุปกรณ์เสริมจะไม่คิดค่าแรงเพิ่ม</p>}
+            <small>บันทึกแล้วระบบตั้งค่าแรงให้ทั้งใบงาน ปรับยอดแต่ละรายการภายหลังได้ที่เมนูช่างซัพ</small>
+            {ed.labor_review_required && <p role="alert">แผนงานเปลี่ยน โปรดตรวจยอดค่าแรงที่เคยปรับหรือยืนยันไว้</p>}
+          </div>}
           <div className="fld"><span>รอบเข้างาน <small style={{ color: "var(--ink-3)", fontWeight: 400 }}>(เพิ่มได้หลายรอบ · หลายวัน/หลายช่วงเวลาของทีมนี้)</small></span>
             {ed.visits.map((v, i) => {
               const col = teams.find((t) => t.id === ed.assigned_team)?.color || "#94a3b8";
