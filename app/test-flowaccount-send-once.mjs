@@ -12,7 +12,8 @@ const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((l) =
 const rc = strip(fs.readFileSync("src/components/Receipts.jsx", "utf8"));
 const api = fs.readFileSync("src/lib/api.js", "utf8");
 const srv = fs.readFileSync("api/flowaccount-doc.js", "utf8");
-const mig = fs.readFileSync("../supabase/migrations/175_flowaccount_send_once.sql", "utf8");
+const migration = fs.readdirSync("../supabase/migrations").find(f => /_sales_wht_v832\.sql$/.test(f));
+const mig = fs.readFileSync(migration ? `../supabase/migrations/${migration}` : "../supabase/pending/sales_wht_v832.sql", "utf8");
 
 console.log("\nส่งใบกำกับเข้า FlowAccount — VAT เท่านั้น + กันส่งซ้ำ:");
 
@@ -30,7 +31,7 @@ check("เซิร์ฟเวอร์ปฏิเสธ tax-invoice ที่
 
 // ---------- (2) กันส่งซ้ำ ----------
 check("ปุ่ม: ส่งแล้วเป็นป้ายเฉย ๆ ไม่มี onClick ส่งซ้ำ",
-  /x\.flowaccount_no\s*\n?\s*\? <span className="fa-sent-badge/.test(rc) && !/flowaccount_no[^]{0,120}onClick=\{\(\) => sendToFlow/.test(rc),
+  /x\.flowaccount_no\s*\? \(x\.flowaccount_id\s*\? <span className="fa-sent-badge/.test(rc) && !/flowaccount_no[^]{0,120}onClick=\{\(\) => sendToFlow/.test(rc),
   "ยังมีปุ่มให้กดส่งซ้ำ = สร้างเอกสารซ้ำใน FlowAccount");
 check("sendToFlow: บล็อกทันทีถ้ามีเลข FlowAccount แล้ว",
   /if \(x\.flowaccount_no\) return flash\([^]*?ส่งซ้ำไม่ได้/.test(send),
@@ -46,10 +47,8 @@ check("claim ผ่าน RPC atomic เท่านั้น — ไม่ degr
   && !/select\("flowaccount_id"\)[^]*?\? "taken" : "claimed"/.test(claim),
   "degrade เป็น SELECT แล้วถือว่า claimed = สองแท็บอ่าน null พร้อมกัน จองทั้งคู่ = ส่งซ้ำ");
 const stamp = api.slice(api.indexOf("export async function saveReceiptFlowAccount"), api.indexOf("export async function deleteReceipt"));
-check("ประทับเลข: fallback เขียนตรงแบบเขียนครั้งเดียว (.is flowaccount_id null)",
-  /\.eq\("receipt_no", receipt_no\)\.is\("flowaccount_id", null\)/.test(stamp), "ไม่กันทับ = ส่งซ้ำเขียนทับเลขจริง");
-check("ประทับเลข: ไม่กลืน error (โยนต่อให้ผู้เรียกรู้)", /if \(e2\) throw e2;/.test(stamp) && !/catch \(_\) \{\}/.test(stamp),
-  "กลืน error = FA สร้างแล้วแต่เลขว่าง กดใหม่ = ซ้ำ");
+check("ประทับเลขผ่าน RPC เท่านั้น ไม่มี direct-write fallback", /rpc\("set_receipt_flowaccount"/.test(stamp) && !/\.from\(/.test(stamp));
+check("ประทับเลข: ไม่กลืน error หรือ false", /if \(error\) throw error/.test(stamp) && /data !== true/.test(stamp));
 
 // ---------- FA สำเร็จแต่ประทับเลขพลาด: ห้ามปล่อยจอง + เตือนดัง ----------
 const seBlock = send.slice(send.indexOf("catch (se)"), send.indexOf("ส่งเข้า FlowAccount แล้ว ✓"));
@@ -69,28 +68,17 @@ check("ปุ่มค้างส่งเรียก resolvePending (ไม�
   /onClick=\{\(\) => resolvePending\(x\)\}/.test(paBtn) && !/sendToFlow/.test(paBtn),
   "ปุ่มค้างส่งยิง sendToFlow = ส่งซ้ำ ทั้งที่ FA อาจมีเอกสารแล้ว");
 const rp = rc.slice(rc.indexOf("async function resolvePending"), rc.indexOf("async function resolvePending") + 1100);
-check("resolvePending: กรอกเลข → บันทึกเลข (ถือว่าส่งแล้ว) · เว้นว่าง → ปลดล็อกส่งใหม่",
-  /if \(no && String\(no\)\.trim\(\)\) \{ await saveReceiptFlowAccount\(x\.receipt_no, null, String\(no\)\.trim\(\)\)/.test(rp)
-  && /else \{ await releaseReceiptFlowAccount\(x\.receipt_no\)/.test(rp),
-  "ต้องให้คนเช็ก FlowAccount แล้วเลือกเอง ไม่ใช่ปล่อยให้ระบบส่งซ้ำ");
+check("resolvePending ตรวจเลขก่อนบันทึก และปลดเฉพาะหลังคนตรวจ", rp.includes('saveReceiptFlowAccount(x.receipt_no, null, val)') && rp.includes('releaseReceiptFlowAccount(x.receipt_no)'));
 
-// ---------- migration 175 ----------
-// ผูกกับตัวฟังก์ชัน claim เท่านั้น — flowaccount_id is null มีในหลายฟังก์ชันของไฟล์นี้ ถ้าเช็กทั้งไฟล์จะหลวม
-const claimFn = mig.slice(mig.indexOf("function claim_receipt_flowaccount"), mig.indexOf("drop function"));
-check("claim: จองเฉพาะใบที่ยังไม่ส่งและยังไม่ถูกจอง (ไม่มี auto-reopen ตามเวลา)",
-  /flowaccount_id is null/.test(claimFn) && /flowaccount_at is null/.test(claimFn) && !/interval '10 minutes'/.test(claimFn),
-  "auto-reopen 10 นาที = ใบที่ FA สร้างแล้วแต่ประทับเลขพลาด (id null, at เก่า) จะจองได้อีก → ส่งซ้ำ");
-check("set_receipt_flowaccount: เขียนครั้งเดียว (where flowaccount_id is null)",
-  /update receipts[^;]*flowaccount_id = nullif[^;]*where receipt_no = p_receipt_no\s*\n\s*and flowaccount_id is null/s.test(mig),
-  "ไม่มี guard = ส่งซ้ำเขียนทับเลข FlowAccount เดิม");
-check("release: ปล่อยเฉพาะใบที่ยังไม่มีเลขจริง", /update receipts set flowaccount_at = null\s*\n\s*where receipt_no = p_receipt_no and flowaccount_id is null/.test(mig));
-check("ทุก RPC gate ด้วย role ที่ส่ง FlowAccount ได้", (mig.match(/my_role\(\) not in \('admin','exec','finance','sales','hr'\)/g) || []).length >= 3,
-  "role ต้องตรงกับ UI (canSendFlow) และเซิร์ฟเวอร์ (OFFICE)");
-check("drop function ก่อน create (เปลี่ยน return void → boolean)", /drop function if exists set_receipt_flowaccount/.test(mig));
-
-// ---------- เลข migration ต้องไม่ชน ----------
-const others = fs.readdirSync("../supabase/migrations").filter((f) => /^175_/.test(f));
-check("เลข migration 175 ไม่ชนไฟล์อื่น", others.length === 1, `ชน: ${others.join(", ")}`);
+// Current v832 RPC contracts, complemented by transaction-only database tests.
+const claimFn = mig.slice(mig.indexOf('function public.claim_receipt_flowaccount'),mig.indexOf('function public.release_receipt_flowaccount'));
+check("claim atomic with no timeout reopen", ['flowaccount_id is null','flowaccount_no is null','flowaccount_at is null'].every(x=>claimFn.includes(x)) && !claimFn.includes('interval'));
+check("sales gate is receipt edit, not accounting edit", claimFn.includes("app_can('receipt',true)") && !claimFn.includes("app_can('accounting'"));
+check("field sales allowed, HR excluded", claimFn.includes("'field_sales'") && !claimFn.includes("'hr'"));
+const stampFn = mig.slice(mig.indexOf('function public.set_receipt_flowaccount'),mig.indexOf('revoke all on function public.claim_receipt_flowaccount'));
+check("stamp requires claim and preserves an existing export", ['flowaccount_id is null','flowaccount_no is null','flowaccount_at is not null'].every(x=>stampFn.includes(x)));
+const releaseFn = mig.slice(mig.indexOf('function public.release_receipt_flowaccount'),mig.indexOf('function public.set_receipt_flowaccount'));
+check("release keeps exported IDs and numbers", ['flowaccount_id is null','flowaccount_no is null'].every(x=>releaseFn.includes(x)));
 
 console.log(`\nสรุป: ผ่าน ${pass} · ตก ${fail}`);
 process.exit(fail ? 1 : 0);

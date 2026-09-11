@@ -8,6 +8,7 @@
 // ⚠️ ห้ามเขียนทับฟิลด์ wht ในแถวที่ listQuotations คืนออกไป — ฟอร์มแก้ใบอ่านค่านั้นเข้าไปแล้วบันทึกกลับ
 //    จะกลายเป็นแก้ค่าในฐานข้อมูลเงียบ ๆ ตอนคนแค่เปิดใบเก่ามาบันทึก จึงต้องเพิ่มฟิลด์ใหม่ whtOn แทน
 import fs from "node:fs";
+import { calculateSalesWht } from "./src/lib/salesWht.js";
 
 let pass = 0, fail = 0;
 const check = (name, ok, why) => { if (ok) { console.log("  ✓ " + name); pass++; } else { console.log("  ✗ " + name + (why ? "\n      " + why : "")); fail++; } };
@@ -17,26 +18,10 @@ console.log("\nหัก ณ ที่จ่ายบนใบเสนอรา
 
 // รันสูตรจริงจาก listQuotations
 const line = api.split("\n").find((l) => l.includes("const whtOn = "));
-const amt = api.split("\n").find((l) => l.includes("const whtAmt = whtOn"));
-check("มีการตรวจประเภทลูกค้าก่อนหัก", !!line && /custType\[qo\.customer_id\] === "company"/.test(line),
-  "ยังเชื่อธง wht ที่บันทึกไว้อย่างเดียว");
-
-if (line && amt) {
-  const calc = (wht, type) => {
-    const custType = { 1: type };
-    const qo = { wht, customer_id: 1, wht_rate: 3 };
-    const [afterDisc, svcSum, subtotal] = [10000, 10000, 10000];
-    return new Function("qo", "custType", "afterDisc", "svcSum", "subtotal",
-      line + "\n" + amt + "\n return { whtOn, whtAmt };")(qo, custType, afterDisc, svcSum, subtotal);
-  };
-  const co = calc(true, "company");
-  check("นิติบุคคล + ติ๊กหัก → หัก 3% ตามเดิม", co.whtOn === true && Math.abs(co.whtAmt - 300) < 0.005, JSON.stringify(co));
-  const pe = calc(true, "person");
-  check("บุคคลธรรมดา แม้ใบเก่าติ๊กหักไว้ → ไม่หัก", pe.whtOn === false && pe.whtAmt === 0, JSON.stringify(pe));
-  const off = calc(false, "company");
-  check("นิติบุคคลแต่ไม่ติ๊กหัก → ไม่หัก", off.whtOn === false && off.whtAmt === 0, JSON.stringify(off));
-  const gone = calc(true, undefined);
-  check("อ่านแถวลูกค้าไม่ได้ → ไม่หัก (เหมือนใบแจ้งหนี้)", gone.whtOn === false, JSON.stringify(gone));
+check("ใช้สูตรกลางเดียวกับใบแจ้งหนี้/ใบเสร็จ", api.includes("calculateSalesWht({"));
+for (const [type, enabled, expected] of [['company',true,300],['person',true,0],['company',false,0],[undefined,true,0]]) {
+  const result = calculateSalesWht({items:[{kind:'service',amount:10000}],base:10000,total:10700,customerType:type,enabled,rate:3});
+  check(`ประเภท ${type}, เปิด ${enabled}`, result.amount === expected);
 }
 
 check("ส่ง whtOn ออกไปให้หน้าพิมพ์ใช้", /grand, whtOn, whtAmt/.test(api),

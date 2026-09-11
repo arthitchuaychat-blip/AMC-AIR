@@ -1,4 +1,5 @@
 import React from "react";
+import SalesWhtRegister from "./SalesWhtRegister";
 import { listReceipts, listPurchaseOrders, listSubPayouts, listTeams, listAdjustmentNotes, listExpenses } from "../lib/api";
 import { fmtBaht, round2, downloadCsv } from "../lib/format";
 import { UIcon } from "../icons";
@@ -70,14 +71,20 @@ export default function TaxReport({ role }) {
       const mi = Number((r.issue_date || "").slice(5, 7)) - 1;
       if (mi < 0 || mi > 11) return;
       const b = m[mi];
-      b.count++; b.base += Number(r.base) || 0; b.vat += Number(r.vat_amt) || 0; b.wht += Number(r.wht_amt) || 0; b.net += netOf(r); b.rows.push(r);
+      b.count++; b.base += Number(r.base) || 0; b.vat += Number(r.vat_amt) || 0; b.wht += 0; b.net += netOf(r); b.rows.push(r);
     });
     // ใบลด/เพิ่มหนี้ (ยอดติดเครื่องหมายแล้ว) — ปรับภาษีขาย/ยอดขายเดือนที่ออกเอกสาร
     ofYearNotes.forEach((r) => {
       const mi = Number((r.issue_date || "").slice(5, 7)) - 1;
       if (mi < 0 || mi > 11) return;
       const b = m[mi];
-      b.base += r.base; b.vat += r.vat_amt; b.wht += r.wht_amt; b.net += r.net; b.rows.push(r);
+      b.base += r.base; b.vat += r.vat_amt; b.wht += 0; b.net += r.net; b.rows.push(r);
+    });
+    (receipts || []).filter(r => r.status === "paid" && keepEnt(entOfDoc(r))).forEach(r => {
+      const day = r.paid_on || r.issue_date;
+      if ((day || "").slice(0,4) !== String(year)) return;
+      const mi = Number(day.slice(5,7))-1;
+      if (mi >= 0 && mi < 12) m[mi].wht += Number(r.wht_amt) || 0;
     });
     // ภาษีซื้อ = เครดิตของ "บริษัท" เท่านั้น (ใบกำกับภาษีซื้อออกในนามบริษัทที่จด VAT) — มุมมองบุคคลไม่มีภาษีซื้อ
     if (ent !== "personal") pos.forEach((x) => {
@@ -99,7 +106,7 @@ export default function TaxReport({ role }) {
     });
     m.forEach((b) => { b.base = round2(b.base); b.vat = round2(b.vat); b.buyVat = round2(b.buyVat); b.wht = round2(b.wht); b.net = round2(b.net); b.vatDue = round2(b.vat - b.buyVat); b.rows.sort((a, c) => (a.issue_date < c.issue_date ? -1 : 1)); });
     return m;
-  }, [ofYear, ofYearNotes, pos, expVat, year, ent]);
+  }, [ofYear, ofYearNotes, pos, expVat, receipts, year, ent]);
 
   const tot = months.reduce((a, b) => ({ count: a.count + b.count, base: round2(a.base + b.base), vat: round2(a.vat + b.vat), buyVat: round2(a.buyVat + b.buyVat), buyCount: a.buyCount + b.buyCount, wht: round2(a.wht + b.wht), net: round2(a.net + b.net) }), { count: 0, base: 0, vat: 0, buyVat: 0, buyCount: 0, wht: 0, net: 0 });
   tot.vatDue = round2(tot.vat - tot.buyVat);
@@ -151,7 +158,7 @@ export default function TaxReport({ role }) {
   function exportDetail() {
     const headers = ["วันที่", "เลขใบเสร็จ", "ลูกค้า", "เลขผู้เสียภาษี", "ยอดก่อน VAT", "VAT 7%", "หัก ณ ที่จ่าย", "รับสุทธิ"];
     const rows = ofYear.slice().sort((a, b) => (a.issue_date < b.issue_date ? -1 : 1))
-      .map((r) => [r.issue_date, r.receipt_no, r.customerName || "", r.customerTaxId || "", round2(r.base), round2(r.vat_amt), round2(r.wht_amt), round2(netOf(r))]);
+      .map((r) => [r.issue_date, r.receipt_no, r.customerName || "", r.customerTaxId || "", round2(r.base), round2(r.vat_amt), r.status === "paid" ? round2(r.wht_amt) : 0, round2(netOf(r))]);
     if (!rows.length) return flash("ไม่มีข้อมูลในปีนี้", true);
     downloadCsv(`รายงานภาษี-รายใบ-${entTag}-${year + 543}`, headers, rows);
   }
@@ -165,12 +172,13 @@ export default function TaxReport({ role }) {
           {tab === "vat" ? (<>
             <button className="btn-ghost sm" onClick={exportMonthly}>⬇ Export สรุปรายเดือน</button>
             <button className="btn-ghost sm" onClick={exportDetail}>⬇ Export รายใบ (ทั้งปี)</button>
-          </>) : <button className="btn-ghost sm" onClick={exportWht}>⬇ Export ภ.ง.ด.53 (ทั้งปี)</button>}
+          </>) : tab === "wht" ? <button className="btn-ghost sm" onClick={exportWht}>⬇ Export ภ.ง.ด.53 (ทั้งปี)</button> : null}
         </div>
       </div>
 
       <div className="cat-chips" style={{ marginBottom: 10 }}>
         <button className={"cat-chip" + (tab === "vat" ? " on" : "")} onClick={() => setTab("vat")}>ภาษีขาย/ซื้อ (ภ.พ.30)</button>
+        <button className={"cat-chip" + (tab === "customerWht" ? " on" : "")} onClick={() => setTab("customerWht")}>ลูกค้าหักภาษี / ทะเบียนหลักฐาน</button>
         <button className={"cat-chip" + (tab === "wht" ? " on" : "")} onClick={() => setTab("wht")}>ภาษีหัก ณ ที่จ่าย ที่เราหักไว้ (ภ.ง.ด.53){whtTot.count ? ` · ${whtTot.count}` : ""}</button>
       </div>
 
@@ -207,7 +215,7 @@ export default function TaxReport({ role }) {
         <div className="stat-card"><div className="stat-val" style={{ color: "#1d4ed8" }}>{fmtBaht(tot.vat)}</div><div className="stat-label">ภาษีขาย (จากใบกำกับ)</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#0d9488" }}>{fmtBaht(tot.buyVat)}</div><div className="stat-label">ภาษีซื้อ (PO + บิลหน้างาน · {tot.buyCount} ใบ)</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: tot.vatDue > 0 ? "#dc2626" : "#16a34a" }}>{fmtBaht(Math.abs(tot.vatDue))}</div><div className="stat-label">{tot.vatDue >= 0 ? "VAT นำส่งสุทธิ (ขาย − ซื้อ)" : "VAT ขอคืน (ซื้อ > ขาย)"}</div></div>
-        <div className="stat-card"><div className="stat-val" style={{ color: "#d97706" }}>{fmtBaht(tot.wht)}</div><div className="stat-label">ภาษีหัก ณ ที่จ่าย (เครดิตคืน)</div></div>
+        <div className="stat-card"><div className="stat-val" style={{ color: "#d97706" }}>{fmtBaht(tot.wht)}</div><div className="stat-label">ถูกหักตามใบเสร็จชำระแล้ว</div></div>
       </div>
 
       {receipts === null ? <div className="empty">กำลังโหลด…</div>
@@ -243,7 +251,7 @@ export default function TaxReport({ role }) {
                         <td>{fmtBaht(r.base)}</td>
                         <td style={{ color: "#1d4ed8" }}>{fmtBaht(r.vat_amt)}</td>
                         <td></td><td></td>
-                        <td style={{ color: "#d97706" }}>{r.wht_amt ? fmtBaht(r.wht_amt) : "—"}</td>
+                        <td style={{ color: "#d97706" }}>{r.status === "paid" && r.wht_amt ? fmtBaht(r.wht_amt) : "—"}</td>
                         <td>{fmtBaht(netOf(r))}</td>
                         <td></td>
                       </tr>
@@ -267,10 +275,10 @@ export default function TaxReport({ role }) {
         )}
 
       <p className="page-sub" style={{ marginTop: 12, fontSize: 12 }}>
-        💡 <b>กิจการ:</b> ภ.พ.30 ยื่นในนาม<b>บริษัท (จด VAT) เท่านั้น</b> — ยอดฝั่งบุคคลแยกไว้ดูต่างหาก · <b>ภาษีขาย</b>คิดจากใบเสร็จ/ใบกำกับภาษีที่ยังไม่ถูกยกเลิก ตามวันที่ในใบเสร็จ · <b>ภาษีซื้อ</b>ประมาณการจากใบสั่งซื้อที่ติ๊ก VAT <b>เฉพาะใบที่รับของ/จ่ายแล้ว</b> (ลงเดือนตามวันรับของ) <b>+ บิลหน้างาน</b>ที่ติ๊ก "มีใบกำกับภาษีซื้อ VAT" ในเมนูเบิกจ่าย (ลงเดือนตามวันจ่าย) · ตอนยื่น ภพ.30 ให้ใช้ยอดจากใบกำกับภาษีซื้อจริงของผู้ขาย · หัก ณ ที่จ่าย = ภาษีที่ลูกค้าหักไว้ (เครดิตคืน)
+        💡 <b>กิจการ:</b> ภ.พ.30 ยื่นในนาม<b>บริษัท (จด VAT) เท่านั้น</b> — ยอดฝั่งบุคคลแยกไว้ดูต่างหาก · <b>ภาษีขาย</b>คิดจากใบเสร็จ/ใบกำกับภาษีที่ยังไม่ถูกยกเลิก ตามวันที่ในใบเสร็จ · <b>ภาษีซื้อ</b>ประมาณการจากใบสั่งซื้อที่ติ๊ก VAT <b>เฉพาะใบที่รับของ/จ่ายแล้ว</b> (ลงเดือนตามวันรับของ) <b>+ บิลหน้างาน</b>ที่ติ๊ก "มีใบกำกับภาษีซื้อ VAT" ในเมนูเบิกจ่าย (ลงเดือนตามวันจ่าย) · ตอนยื่น ภพ.30 ให้ใช้ยอดจากใบกำกับภาษีซื้อจริงของผู้ขาย · หัก ณ ที่จ่าย = ยอดถูกหักจากใบเสร็จชำระแล้ว แยกวันรับเงินจากวันเอกสาร VAT · ตรวจหลักฐานในทะเบียนลูกค้าหักภาษี
         <br />⚠️ <b>ภ.พ.30 ยื่นแยกรายเดือน</b> — เดือนที่ภาษีซื้อ &gt; ภาษีขายจะ<b>ยกเครดิตไปหักเดือนถัดไป</b> (ไม่ได้เอามาสุทธิกับทั้งปี) ให้ดูยอดนำส่ง <b>ราย</b>เดือนในตารางเป็นหลัก · การ์ด "รวมทั้งปี" ไว้ดูภาพรวมเท่านั้น
       </p>
-      </>) : (<>
+      </>) : tab === "customerWht" ? <SalesWhtRegister receipts={receipts} role={role} year={year} /> : (<>
       <div className="kpi-grid">
         <div className="stat-card"><div className="stat-val">{fmtBaht(whtTot.gross)}</div><div className="stat-label">ยอดจ่ายช่างซัพก่อนหัก (ปีนี้) · {whtTot.count} ใบ</div></div>
         <div className="stat-card"><div className="stat-val" style={{ color: "#dc2626" }}>{fmtBaht(whtTot.wht)}</div><div className="stat-label">ภาษีที่หักไว้ ต้องนำส่งสรรพากร</div></div>

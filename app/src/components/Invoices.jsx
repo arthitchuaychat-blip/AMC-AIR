@@ -1,7 +1,9 @@
 import React from "react";
+import { calculateSalesWht, salesItems, enrichSalesItems, whtEnabled, whtRate } from "../lib/salesWht.js";
+import SalesWhtControl from "./SalesWhtControl";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks, listCustomers, docNoTaken } from "../lib/api";
+import { salesWhtLocks, listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks, listCustomers, docNoTaken } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText, matchPhone, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -22,8 +24,6 @@ import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
 
 // snapshot a quote's line items with default หัก ณ ที่จ่าย flag (services only · เฉพาะลูกค้านิติบุคคล)
 // ราคา/ยอด = ราคาแสดงจริง (price_show รวมค่าบัตรแล้ว) − ส่วนลดรายบรรทัด → ฐานหัก ณ ที่จ่าย ตรงกับใบเสนอราคาเป๊ะ · เก็บ discount ไว้ให้ DocPeek/โมดัลโชว์ถูก
-const snapshotItems = (q) => { const canW = q?.customerType === "company"; return (q?.items || []).map((it) => { const p = Number(it.price_show ?? it.unit_price) || 0; return { code: it.item_code || null, name: it.name, desc: it.description || "", unit: it.unit, qty: Number(it.qty), price: p, discount: Number(it.discount) || 0, amount: round2(Number(it.qty) * p - (Number(it.discount) || 0)), wht: canW && it.kind === "service" }; }); };
-const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 
 const fmtBaht = fmtBaht2; // invoices show 2 decimals to avoid rounding leftovers
 const STATUS = { unpaid: { th: "ค้างชำระ", cls: "b-amber" }, paid: { th: "ชำระแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิก", cls: "b-red" }, bad_debt: { th: "ตัดหนี้สูญ", cls: "b-red" } };
@@ -43,6 +43,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [ed, setEd] = React.useState(null);
   const [printI, setPrintI] = React.useState(null);
   const [view, setView] = React.useState(null);
+  const [whtLocks, setWhtLocks] = React.useState(new Set());
   const [search, setSearch] = React.useState("");
   const [notesEd, setNotesEd] = React.useState(null);   // แก้หมายเหตุใบที่ออกไปแล้ว (ไม่แตะยอดเงิน)
   const [statusF, setStatusF] = React.useState("all");
@@ -60,7 +61,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   async function load() {
     setLoading(true);
-    try { const [iv, q, co, dl, cu] = await Promise.all([listInvoices(), listQuotations(), getCompanies(), listDocLinks(), listCustomers()]); setList(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); setCusts(cu); }
+    try { setWhtLocks(await salesWhtLocks()); const [iv, q, co, dl, cu] = await Promise.all([listInvoices(), listQuotations(), getCompanies(), listDocLinks(), listCustomers()]); setList(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); setCusts(cu); }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -80,7 +81,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   function startNew(quoteNo = "") {
     const q = quoteNo ? quoteByNo[quoteNo] : null;
     setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: q ? dueFromTerms(today(), q.customer_id) : "", basis: "percent", basis_value: 100, note: q?.note || "", internal_note: q?.internal_note || "", sign_on: defaultSignOn(),
-      wht_rate: Number(q?.wht_rate) || 3,
+      wht: !!q?.wht, wht_rate: whtRate(q?.wht_rate),
       terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" });
   }
   // วันครบกำหนดชำระ = วันที่บิล + เครดิตเทอมของลูกค้า (mig 159) — ปล่อยว่างแล้วใบนี้จะไม่ถูกนับใน
@@ -95,7 +96,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   // picking a quote pulls its end-of-document terms forward (หัก ณ ที่จ่าย คำนวณอัตโนมัติสำหรับนิติบุคคล)
   function pickQuote(qno) {
     const q = quoteByNo[qno];
-    setEd((e) => ({ ...e, quote_no: qno, due_date: e.due_date || dueFromTerms(e.issue_date, q?.customer_id), wht_rate: Number(q?.wht_rate) || 3, note: e.note || q?.note || "", internal_note: e.internal_note || q?.internal_note || "", terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
+    setEd((e) => ({ ...e, quote_no: qno, due_date: e.due_date || dueFromTerms(e.issue_date, q?.customer_id), wht: !!q?.wht, wht_rate: whtRate(q?.wht_rate), note: e.note || q?.note || "", internal_note: e.internal_note || q?.internal_note || "", terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" }));
   }
   // งานฟรี/ไม่เก็บเงิน = ใบเสนอราคายอดรวม 0 (เช่น งานรับประกัน/อภินันทนาการ) → ออกใบแจ้งหนี้ ฿0 ได้ 1 ใบเพื่อปิดงาน
   const isFreeQuote = (q) => round2(q?.grand || 0) < 0.01;
@@ -127,16 +128,16 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;       // สัดส่วนงวดนี้เทียบยอดทั้งใบ
     const baseInst = round2((selQ.afterDisc || 0) * f);          // ฐานก่อน VAT ของงวดนี้
     const vatInst = round2((selQ.vatAmt || 0) * f);             // VAT 7% ของงวดนี้
-    const items = snapshotItems(selQ);
+    const items = salesItems(selQ, ed.wht);
     const allAmt = items.reduce((a, i) => a + (Number(i.amount) || 0), 0);
     const svcAmt = items.filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0);
     const svcRatio = allAmt > 0 ? svcAmt / allAmt : 0;          // สัดส่วนค่าบริการ (ฐานที่ถูกหัก ณ ที่จ่าย)
-    const whtOn = canWhtInv && svcAmt > 0;          // นิติบุคคล + มีรายการค่าบริการ → หักอัตโนมัติ
-    const whtRate = Number(ed.wht_rate) || 3;
+    const whtOn = canWhtInv && !!ed.wht && svcAmt > 0;          // นิติบุคคล + มีรายการค่าบริการ → หักอัตโนมัติ
+    const appliedRate = whtRate(ed.wht_rate);
     const whtBase = round2(baseInst * svcRatio);                // ฐานหัก ณ ที่จ่าย งวดนี้ (ค่าบริการ)
-    const whtAmt = whtOn ? lineWhtAmt(items, baseInst, whtRate) : 0;
+    const whtAmt = calculateSalesWht({ items, base: baseInst, total: newTotal, customerType: custType, enabled: ed.wht, rate: ed.wht_rate }).amount;
     const svcNames = items.filter((i) => i.wht).map((i) => i.name);   // รายการค่าบริการที่เป็นฐานหัก
-    return { f, baseInst, vatInst, svcRatio, svcAmt, allAmt, whtOn, whtRate, whtBase, whtAmt, svcNames, net: round2(newTotal - whtAmt) };
+    return { f, baseInst, vatInst, svcRatio, svcAmt, allAmt, whtOn, whtRate: appliedRate, whtBase, whtAmt, svcNames, net: round2(newTotal - whtAmt) };
   })();
 
   async function save() {
@@ -157,16 +158,16 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     const installment = list.filter((x) => x.quote_no === selQ.quote_no && x.status !== "cancelled").length + 1;
     const base = round2((selQ.afterDisc || 0) * f);
     // หัก ณ ที่จ่าย — คำนวณอัตโนมัติสำหรับลูกค้านิติบุคคลที่มีรายการค่าบริการ
-    const snap = snapshotItems(selQ);
+    const snap = salesItems(selQ, ed.wht);
     const hasSvc = snap.some((it) => it.wht);
-    const useWht = canWhtInv && hasSvc;
+    const useWht = canWhtInv && !!ed.wht && hasSvc;
     const items = snap.map((it) => ({ ...it, wht: useWht && it.wht }));
-    const wht_rate = useWht ? (Number(ed.wht_rate) || 3) : 0;
+    const wht_rate = whtRate(ed.wht_rate);
     const inv = {
       invoice_no: ed.invoice_no, quote_no: selQ.quote_no, boq_no: selQ.boq_no || null,
       customer_id: selQ.customer_id || null, site_id: selQ.site_id || null,
       issue_date: ed.issue_date || null, due_date: ed.due_date || null, installment, pct: round2(f * 100),
-      base, vat_amt: round2(newTotal - base), total: newTotal, wht_rate, items, wht_amt: useWht ? lineWhtAmt(items, base, wht_rate) : 0, // vat = total − base เสมอ กันเศษ 1 สตางค์จากการปัดแยกก้อน
+      base, vat_amt: round2(newTotal - base), total: newTotal, wht_enabled: canWhtInv && !!ed.wht, wht_rate, items, wht_amt: calculateSalesWht({ items, base, total: newTotal, customerType: custType, enabled: useWht, rate: wht_rate }).amount, // vat = total − base เสมอ กันเศษ 1 สตางค์จากการปัดแยกก้อน
       note: ed.note, internal_note: ed.internal_note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty, status: "unpaid",
       ...(() => { const sig = ed.sign_on ? mySignature() : null; return { sign_url: sig?.url || null, sign_name: sig?.name || null }; })(),
     };
@@ -220,7 +221,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           {selQ && (
             <div className="inv-items">
               <div className="inv-items-head">รายการจากใบเสนอราคา · <span className="ii-svc">บริการ</span> = ฐานหัก ณ ที่จ่าย</div>
-              {snapshotItems(selQ).map((it, i) => (
+              {salesItems(selQ, ed.wht).map((it, i) => (
                 <div className="inv-item-row" key={i}>
                   <span className="ii-name">{it.name}{it.wht && <span className="ii-svc">บริการ</span>}</span>
                   <span className="ii-qty">{Number(it.qty)} {it.unit || ""} × {fmtBaht(it.price)}</span>
@@ -248,26 +249,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             <div className="fld"><span>ยอดงวดนี้ (รวม VAT)</span><div className="inv-total">{fmtBaht(newTotal)}</div></div>
           </div>
 
-          {canWhtInv && calc && (
-            <div className="fld-row">
-              <label className="fld"><span>หัก ณ ที่จ่าย <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(นิติบุคคล · คำนวณอัตโนมัติจากค่าบริการ)</span></span>
-                <div className="line-add">
-                  <div className="inp" style={{ flex: 1, display: "flex", alignItems: "center", color: calc.whtOn ? "var(--ink)" : "var(--ink-3)" }}>
-                    {calc.whtOn ? `หัก ${calc.whtRate}% จากค่าบริการ ${fmtBaht(calc.whtBase)} = ${fmtBaht(calc.whtAmt)}` : "ไม่มีรายการค่าบริการให้หัก"}
-                  </div>
-                  <div className="inp inp-unit" style={{ width: 110, flex: "none", opacity: calc.whtOn ? 1 : .5 }}>
-                    <NumIn className="" min="0" step="0.1" value={ed.wht_rate} disabled={!calc.whtOn} onChange={(n) => setF("wht_rate", n)} /><span className="unit-suf">%</span>
-                  </div>
-                </div>
-              </label>
-              <div className="fld" />
-            </div>
-          )}
-
-          {/* ลูกค้าบุคคลธรรมดา + มีค่าบริการ — บอกให้ชัดว่าไม่หัก ณ ที่จ่าย (ไม่ใช่หายไปเฉยๆ) */}
-          {selQ && !canWhtInv && calc && calc.svcAmt > 0 && (
-            <div className="inv-wht-note">หัก ณ ที่จ่าย: ลูกค้าเป็น <b>บุคคลธรรมดา</b> จึงไม่หัก ณ ที่จ่าย — ถ้าลูกค้าเป็นนิติบุคคล ให้แก้ประเภทลูกค้าในเมนูลูกค้าก่อน ระบบจะคำนวณให้อัตโนมัติ</div>
-          )}
+          <SalesWhtControl customerType={custType} enabled={ed.wht} rate={ed.wht_rate} onChange={setF} />
 
           {selQ && calc && newTotal > 0 && (
             <div className="inv-breakdown">
@@ -396,7 +378,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 {/* ลูกค้าส่วนใหญ่ไม่ต้องวางบิล → กดรับเงิน/ออกใบเสร็จจากใบส่งของได้เลย */}
                 {canEdit && x.status === "unpaid" && !x.hasReceipt && onCreateReceipt && <button className="btn-primary sm" onClick={() => onCreateReceipt(x.invoice_no)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงิน / ออกใบเสร็จ</button>}
                 {canEdit && x.status !== "cancelled" && x.quote_no && round2(grand - bl) > 0.01 && <button className="btn-ghost sm" onClick={() => startNew(x.quote_no)}><UIcon name="plus" size={14} /> วางบิลงวดถัดไป</button>}
-                <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> รายการ / หัก ณ ที่จ่าย</button>
+                <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> {x.customerType === "company" ? "รายการ / หัก ณ ที่จ่าย" : "รายการเอกสาร"}</button>
                 {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => setNotesEd({ kind: "invoice", docNo: x.invoice_no, title: x.title, note: x.note, internalNote: x.internal_note })}><UIcon name="edit" size={14} /> หมายเหตุ</button>}
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintI(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" disabled={x.hasReceipt} title={lockMsg(x) || ""} onClick={() => cancel(x)}>ยกเลิก</button>}
@@ -431,13 +413,13 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             {Number(printI.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtBaht(printI.vat_amt)}</b></div>}
             <div className="doc-grand"><span>ยอดชำระงวดนี้</span><b>{fmtBaht(printI.total)}</b></div>
             {printI.wht_amt > 0 && <div className="doc-wht-note"><span>ฐานค่าบริการที่ถูกหัก ณ ที่จ่าย</span><b>{fmtBaht(whtBaseP)}</b></div>}
-            {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {Number(printI.wht_rate) || 3}% (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
+            {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {whtRate(printI.wht_rate)}% (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
             {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtBaht(printI.total - printI.wht_amt)}</b></div>}
           </div>}>
           {/* ราคาบรรทัดพิมพ์ = price_show (รวมค่าบัตรแล้ว) ให้บวกลงตัวกับยอดรวมที่คิดจาก price_show — เหมือนใบเสนอราคา */}
           {(() => {
             const its = q?.items || []; const hasD = its.some((x) => Number(x.discount) > 0);
-            const snap = printI.items || []; const rate = Number(printI.wht_rate) || 3;
+            const snap = printI.items || []; const rate = whtRate(printI.wht_rate);
             // หัก ณ ที่จ่ายต่อบรรทัด (เฉพาะรายการค่าบริการที่ติ๊ก) — รวมทุกบรรทัด = ยอดหักรวมพอดี (บรรทัดสุดท้ายรับเศษ)
             const perLineBase = {}, perLineWht = {};
             if (printI.wht_amt > 0 && allAmtP > 0) {
@@ -470,10 +452,11 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         <LineWhtModal
           title={`ใบส่งของ/ใบแจ้งหนี้ ${view.invoice_no}`}
           subtitle={`งวด ${view.installment} (${Math.round(view.pct)}%) · ${view.customerName || "-"}`}
-          items={view.items?.length ? view.items : snapshotItems(quoteByNo[view.quote_no])}
-          rate={view.wht_rate || 3} docBase={view.base} docTotal={view.total} canEdit={canEdit && !view.hasReceipt && view.status !== "cancelled"}
+          items={enrichSalesItems(view.items?.length ? view.items : salesItems(quoteByNo[view.quote_no]), quoteByNo[view.quote_no])}
+          customerType={view.customerType} enabled={whtEnabled(view, view.customerType)}
+          rate={whtRate(view.wht_rate)} savedAmount={view.wht_amt} docBase={view.base} docTotal={view.total} canEdit={canEdit && !whtLocks.has("invoice:" + view.invoice_no) && !view.hasReceipt && view.status !== "cancelled"}
           onClose={() => setView(null)}
-          onSave={async ({ items, rate, whtAmt }) => { await setInvoiceWht(view.invoice_no, items, rate, whtAmt); flash("บันทึกหัก ณ ที่จ่ายแล้ว ✓"); setView(null); await load(); }}
+          onSave={async ({ enabled, rate, reason }) => { await setInvoiceWht(view.invoice_no, enabled, rate, reason); flash("บันทึกหัก ณ ที่จ่ายแล้ว ✓"); setView(null); await load(); }}
         />
       )}
       {notesEd && <NotesEditModal {...notesEd} onClose={() => setNotesEd(null)} onSaved={load} flash={flash} />}

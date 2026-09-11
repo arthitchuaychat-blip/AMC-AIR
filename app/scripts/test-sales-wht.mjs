@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { calculateSalesWht as calc, salesItems, whtRate, whtEnabled, enrichSalesItems, receiptWhtSummary } from '../src/lib/salesWht.js';
+const quote={customerType:'company',wht:true,wht_rate:3,items:[{item_code:'AC',name:'เครื่องแอร์',kind:'ac',qty:1,unit_price:20000},{item_code:'S',name:'ติดตั้ง',kind:'service',qty:1,unit_price:5000}]};
+const items=salesItems(quote);
+const input={items,base:25000,total:26750,customerType:'company',enabled:true,rate:3};
+assert.equal(calc(input).amount,150);assert.equal(calc(input).net,26600);
+assert.equal(calc({...input,rate:1}).amount,50);
+assert.equal(calc({...input,rate:0}).amount,0);assert.equal(whtRate(0),0);
+assert.equal(calc({...input,enabled:false}).amount,0);
+assert.equal(calc({...input,customerType:'person'}).amount,0);
+assert.equal(calc({...input,items:[{kind:'ac',amount:25000,wht:true}]}).amount,0);
+assert.equal(calc({...input,base:22500,total:24075}).amount,135); // proportional whole-document discount
+const inv=calc({...input,base:7500,total:8025});
+assert.equal(inv.amount,45);assert.equal(calc({...input,items:inv.items,base:7500,total:8025}).amount,45);
+assert.equal(whtEnabled({wht_enabled:false,wht_amt:150},'company'),false);
+assert.equal(salesItems({...quote,wht:false}).some(x=>x.wht),false);
+assert.equal(enrichSalesItems([{code:'S',name:'ติดตั้ง',amount:5000}],quote)[0].kind,'service');
+assert.equal(calc({...input,base:1000.17,total:1070.18,items:[{kind:'service',amount:98},{kind:'ac',amount:2}]}).amount,29.41);
+for(const rate of [-1,101,NaN,Infinity,'wrong'])assert.throws(()=>whtRate(rate));
+const report=receiptWhtSummary([{receipt_no:'P',status:'pending',wht_amt:300,issue_date:'2026-08-01'},{receipt_no:'R',status:'paid',wht_amt:150,paid_on:'2026-09-01',issue_date:'2026-08-01'},{receipt_no:'X',status:'cancelled',wht_amt:100}],[{receipt_no:'R',status:'verified'}]);
+assert.equal(report.length,2);assert.equal(report[0].evidenceState,'expected');assert.equal(report[1].taxDate,'2026-09-01');assert.equal(report[1].evidenceState,'verified');
+const api=fs.readFileSync(new URL('../src/lib/api.js',import.meta.url),'utf8');
+assert(!api.includes('clearApiCache'));
+assert(api.includes('rpc("update_sales_wht"'));
+console.log('PASS: corporate/personal, service/product, 0/1/3%, discounts, installment-to-receipt, off inheritance, old item kind, rounding, validation, actual versus expected report');

@@ -1,4 +1,6 @@
 import React from "react";
+import { calculateSalesWht, whtRate as parseWhtRate } from "../lib/salesWht.js";
+import SalesWhtControl from "./SalesWhtControl";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listAdjustmentNotes, saveAdjustmentNote, setAdjustmentNoteStatus, deleteAdjustmentNote, listReceipts, listQuotations, listDocLinks, getCompanies, docNoTaken } from "../lib/api";
@@ -22,7 +24,6 @@ const KINDS = {
 };
 const NSTATUS = { issued: { th: "ออกแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิกแล้ว", cls: "b-red" } };
 // หัก ณ ที่จ่ายรายบรรทัด (เฉพาะบรรทัดค่าบริการที่ติ๊ก) — สัดส่วนของยอดก่อน VAT
-const lineWhtAmt = (items, base, rate) => { const all = (items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0); const fl = (items || []).filter((i) => i.wht).reduce((a, i) => a + (Number(i.amount) || 0), 0); const ratio = all > 0 ? fl / all : 0; return round2((Number(base) || 0) * ratio * (Number(rate) || 0) / 100); };
 const blankItem = () => ({ name: "", desc: "", unit: "", qty: 1, price: 0, kind: "service", wht: false });
 const today = () => new Date().toISOString().slice(0, 10);
 function genNo(kind) { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${KINDS[kind].prefix}-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
@@ -66,7 +67,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
   }
   function startEdit(x) {
     setEd({ note_no: x.note_no, kind: x.kind, receipt_no: x.receipt_no || "", issue_date: x.issue_date || today(), reason: x.reason || "",
-      wht_rate: Number(x.wht_rate) || 3, items: (x.items || []).length ? x.items.map((i) => ({ ...i })) : [blankItem()],
+      wht: x.wht_enabled ?? (Number(x.wht_amt) > 0), wht_rate: parseWhtRate(x.wht_rate), items: (x.items || []).length ? x.items.map((i) => ({ ...i })) : [blankItem()],
       note: x.note || "", internal_note: x.internal_note || "", sign_on: !!x.sign_url,
       terms_payment: x.terms_payment || "", terms_freebies: x.terms_freebies || "", terms_warranty: x.terms_warranty || "",
       _src: rcByNo[x.receipt_no] || { customer_id: x.customer_id, is_vat: x.is_vat, customerName: x.customerName, quote_no: x.quote_no, invoice_no: x.invoice_no, boq_no: x.boq_no, job_no: x.job_no, site_id: x.site_id, customerType: x.customerType, customerAddr: x.customerAddr } });
@@ -78,7 +79,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
 
   function onPickReceipt(receipt_no) {
     const r = rcByNo[receipt_no];
-    setEd((e) => ({ ...e, receipt_no, _src: r || null,
+    setEd((e) => ({ ...e, receipt_no, _src: r || null, wht_rate: parseWhtRate(r?.wht_rate), wht: !!r?.wht,
       // ตั้งค่าเริ่มต้นธงหัก ณ ที่จ่าย: นิติบุคคล + ค่าบริการ
       items: e.items.map((it) => ({ ...it, wht: (r?.customerType === "company") && it.kind === "service" })) }));
   }
@@ -96,12 +97,12 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
   // ---- ยอดคำนวณ ----
   const src = ed?._src;
   const isVat = !!(src && Number(src.vat_amt) > 0) || !!(src && src.is_vat);
-  const items = (ed?.items || []).map((it) => ({ ...it, wht: !!it.wht && it.kind === "service", amount: round2((Number(it.qty) || 0) * (Number(it.price) || 0)) }));
+  const items = (ed?.items || []).map((it) => ({ ...it, wht: !!ed?.wht && src?.customerType === "company" && it.kind === "service", amount: round2((Number(it.qty) || 0) * (Number(it.price) || 0)) }));
   const base = round2(items.reduce((a, i) => a + i.amount, 0));
   const vatAmt = isVat ? round2(base * 0.07) : 0;
   const total = round2(base + vatAmt);
-  const whtRate = Number(ed?.wht_rate) || 3;
-  const whtAmt = lineWhtAmt(items, base, whtRate);
+  const whtRate = parseWhtRate(ed?.wht_rate);
+  const whtAmt = calculateSalesWht({ items, base, total, customerType: src?.customerType, enabled: ed?.wht, rate: whtRate }).amount;
   const net = round2(total - whtAmt);
 
   async function save() {
@@ -113,7 +114,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
       quote_no: src.quote_no || null, boq_no: src.boq_no || null, job_no: src.job_no || null,
       customer_id: src.customer_id || src.customerCode || null, site_id: src.site_id || null, issue_date: ed.issue_date || null,
       reason: ed.reason, is_vat: isVat, items: items.filter((i) => i.name.trim()),
-      base, vat_amt: vatAmt, total, wht_rate: whtRate, wht_amt: whtAmt, net,
+      base, vat_amt: vatAmt, total, wht_enabled: src?.customerType === "company" && !!ed.wht, wht_rate: whtRate, wht_amt: whtAmt, net,
       note: ed.note, internal_note: ed.internal_note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty,
       ...(() => { const sig = ed.sign_on ? mySignature() : null; return { sign_url: sig?.url || null, sign_name: sig?.name || null }; })(),
     };
@@ -162,11 +163,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
 
           <div className="fld-row">
             <label className="fld"><span>วันที่</span><input className="inp" type="date" value={ed.issue_date} onChange={(e) => setF("issue_date", e.target.value)} /></label>
-            <label className="fld"><span>อัตราหัก ณ ที่จ่าย</span>
-              <div className="inp inp-unit" style={{ width: 120 }}>
-                <input type="number" min="0" step="0.1" value={ed.wht_rate} onChange={(e) => setF("wht_rate", Number(e.target.value) || 0)} /><span className="unit-suf">%</span>
-              </div>
-            </label>
+            <SalesWhtControl customerType={src?.customerType} enabled={ed.wht} rate={ed.wht_rate} onChange={setF} />
           </div>
           <label className="fld"><span>เหตุผลการ{K.verb} * <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>(แสดงในเอกสาร ให้ลูกค้าทราบ)</span></span>
             <input className="inp" value={ed.reason} onChange={(e) => setF("reason", e.target.value)} placeholder={ed.kind === "credit" ? "เช่น ยกเลิกงานติดตั้งชั้น 2 ตามที่ตกลง" : "เช่น เพิ่มงานเดินท่อน้ำทิ้งเพิ่มเติม"} /></label>
@@ -216,7 +213,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
                       <span style={{ marginLeft: "auto", fontWeight: 700 }}>{fmtBaht(amt)}</span>
                       {it.kind === "service" && (
                         <label style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 8, fontSize: 13, color: "var(--ink-2)" }}>
-                          <input type="checkbox" checked={!!it.wht} onChange={(e) => setItem(i, "wht", e.target.checked)} /> หัก ณ ที่จ่าย
+                          {src?.customerType === "company" && ed.wht ? "หัก ณ ที่จ่ายอัตโนมัติ" : ""}
                         </label>
                       )}
                     </div>
@@ -323,7 +320,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
         const co = printA.is_vat ? companies.vat : companies.novat;
         const its = printA.items || [];
         const allAmt = its.reduce((a, i) => a + (Number(i.amount) || 0), 0);
-        const rate = Number(printA.wht_rate) || 3;
+        const rate = parseWhtRate(printA.wht_rate);
         // หัก ณ ที่จ่ายต่อบรรทัด (บรรทัดสุดท้ายรับเศษ)
         const perLineBase = {}, perLineWht = {};
         if (printA.wht_amt > 0 && allAmt > 0) {
