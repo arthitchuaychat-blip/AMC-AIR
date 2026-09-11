@@ -170,7 +170,7 @@ function quoteSlip(q, companies) {
         {q.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(q.discount)}</b></div>}
         {q.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(q.vatAmt)}</b></div> : null}
         <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(q.grand)}</b></div>
-        {q.whtOn ? <div><span>หัก ณ ที่จ่าย {Number(q.wht_rate) || 3}%</span><b>− {fmtBaht(q.whtAmt)}</b></div> : null}
+        {q.whtOn ? <div><span>หัก ณ ที่จ่าย {Number(q.wht_rate ?? 3)}%</span><b>− {fmtBaht(q.whtAmt)}</b></div> : null}
         {q.whtOn ? <div className="doc-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(q.netPay)}</b></div> : null}
       </div>}>
       {/* ราคา = price_show (รวมค่าบัตร) − ส่วนลดบรรทัด — สูตรเดียวกับหน้าพิมพ์ ให้บรรทัดบวกลงตัวกับยอดรวม */}

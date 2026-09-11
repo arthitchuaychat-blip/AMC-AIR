@@ -1,3 +1,4 @@
+import { calculateSalesWht, whtRate } from "./salesWht.js";
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { deriveJobStatus } from "./schedule";
@@ -2500,6 +2501,12 @@ export async function setJobStatus(job_no, status, reason) {
   syncCashEntriesFromDocs().catch(() => {}); // job's linked PO/labor projections → refresh cash flow
 }
 
+export function salesWhtLocks() { return _cached("salesWhtLocks", async () => {
+ const { data, error } = await supabase.rpc("sales_wht_locks");
+ if (error) throw error;
+ return new Set((data || []).map(r => r.kind + ":" + r.document_no));
+}, _SHORT_TTL); }
+
 // ---------- QUOTATIONS (ใบเสนอราคา) ----------
 export function listQuotations(opts = {}) { return _cached("listQuotations:" + JSON.stringify(opts || {}), () => _loadQuotations(opts), _SHORT_TTL); }
 async function _loadQuotations(opts = {}) {
@@ -2557,7 +2564,7 @@ async function _loadQuotations(opts = {}) {
     // (มาตรฐานเดียวกับใบแจ้งหนี้/ใบเสร็จที่อ่านประเภทลูกค้าสดอยู่แล้ว — ไม่งั้นยอดที่เสนอกับที่เรียกเก็บไม่ตรงกัน)
     // ⚠️ ห้ามเขียนทับฟิลด์ wht ในแถวที่คืนออกไป — ฟอร์มแก้ใบอ่านค่านั้นเข้าไปแล้วบันทึกกลับ จะกลายเป็นแก้ DB เงียบ ๆ
     const whtOn = !!qo.wht && custType[qo.customer_id] === "company";
-    const whtAmt = whtOn && subtotal > 0 ? afterDisc * (svcSum / subtotal) * (Number(qo.wht_rate) || 3) / 100 : 0;
+    const whtAmt = calculateSalesWht({ items: itemsX.map(x => ({ ...x, amount: Number(x.qty) * x.price_show - lineDisc(x) })), base: afterDisc, total: grand, customerType: custType[qo.customer_id], enabled: whtOn, rate: qo.wht_rate }).amount;
     const s = qo.site_id ? sm[qo.site_id] : null;
     const siteAddress = (s && s.address) || null;
     const address = siteAddress || custAddr[qo.customer_id] || null;
@@ -2590,7 +2597,7 @@ export async function saveQuotation(q, items) {
     title: q.title?.trim() || null, status: q.status || "draft", job_type: q.job_type || null,
     issue_date: q.issue_date || null, valid_until: q.valid_until || null,
     discount_type: q.discount_type || "amount", discount_value: Number(q.discount_value) || 0,
-    vat: !!q.vat, wht: !!q.wht, wht_rate: Number(q.wht_rate) || 3, note: q.note?.trim() || null, internal_note: q.internal_note?.trim() || null, ..._termCols(q), ..._signCols(q),
+    vat: !!q.vat, wht: !!q.wht, wht_rate: whtRate(q.wht_rate), note: q.note?.trim() || null, internal_note: q.internal_note?.trim() || null, ..._termCols(q), ..._signCols(q),
     pay_method: q.pay_method && q.pay_method !== "cash" ? q.pay_method : null,   // เงินสด = ค่าเริ่มต้น (เก็บ null)
     variation_of: q.variation_of || null,   // ใบเสนอเพิ่มเติม (mig 188) → ผูกใบแม่ · กำไรรวมงานเดียว
     approved_at: q.status === "approved" ? (q.approved_at || new Date().toISOString()) : null,
@@ -2717,6 +2724,7 @@ async function _loadInvoices(opts = {}) {
   if (ivR.error) throw ivR.error;
   if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
+  const ctype = Object.fromEntries((cu.data || []).map(c => [c.id, c.type]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const cx = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
   const cxb = Object.fromEntries((cu.data || []).map((c) => [c.id, c.branch]));
@@ -2733,7 +2741,7 @@ async function _loadInvoices(opts = {}) {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
       title: x.quote_no ? (titleByQuote[x.quote_no] || null) : null,
-      customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null, customerBranch: cxb[x.customer_id] || null,
+      customerType: ctype[x.customer_id] || null, customerName: cn[x.customer_id] || null, customerCode: x.customer_id || null, customerTaxId: cx[x.customer_id] || null, customerBranch: cxb[x.customer_id] || null,
       customerAddr: ca[x.customer_id] || null, siteName: s?.site_name || null, siteAddress: s?.address || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || ca[x.customer_id]),
       createdByName: cb[x.created_by] || null,
@@ -2787,7 +2795,7 @@ export async function saveInvoice(inv) {
     issue_date: inv.issue_date || null, due_date: inv.due_date || null,
     installment: Number(inv.installment) || 1, pct: Number(inv.pct) || 0,
     base: Number(inv.base) || 0, vat_amt: Number(inv.vat_amt) || 0, total: Number(inv.total) || 0,
-    wht_amt: Number(inv.wht_amt) || 0, wht_rate: Number(inv.wht_rate) || 3, items: inv.items || [],
+    wht_enabled: !!inv.wht_enabled, wht_amt: Number(inv.wht_amt) || 0, wht_rate: whtRate(inv.wht_rate), items: inv.items || [],
     note: inv.note?.trim() || null, internal_note: inv.internal_note?.trim() || null, ..._termCols(inv), ..._signCols(inv), status: inv.status || "unpaid", created_by: user?.id || null,
   }, { onConflict: "invoice_no" });
   if (error) throw error;
@@ -2795,15 +2803,14 @@ export async function saveInvoice(inv) {
   syncInternalNote({ quoteNo: inv.quote_no }, inv.internal_note).catch(() => {});
 }
 // update per-line WHT selection (items) + rate + recomputed amount on an invoice
-export async function setInvoiceWht(invoice_no, items, wht_rate, wht_amt) {
-  const { data: old } = await supabase.from("invoices").select("wht_amt").eq("invoice_no", invoice_no).single();
-  const { error } = await supabase.from("invoices").update({ items: items || [], wht_rate: Number(wht_rate) || 3, wht_amt: Number(wht_amt) || 0 }).eq("invoice_no", invoice_no);
+export async function setInvoiceWht(documentNo, enabled, rate, reason) {
+  const { error } = await supabase.rpc("update_sales_wht", { p_kind: "invoice", p_no: documentNo, p_enabled: !!enabled, p_rate: whtRate(rate), p_reason: reason });
   if (error) throw error;
-  // เส้นเงินเข้าที่คาดการณ์จากใบแจ้งหนี้ = total − wht_amt → แก้ยอดหักแล้วต้องคำนวณใหม่
-  await logAudit({ action: "edit", target_type: "invoice", target_no: invoice_no,
-    reason: `แก้หัก ณ ที่จ่าย: ${Number(old?.wht_amt) || 0} → ${Number(wht_amt) || 0} บาท` });
+  bustCache();
   syncCashEntriesFromDocs().catch(() => {});
+
 }
+
 export async function setInvoiceStatus(invoice_no, status, reason) {
   // chain safety: cannot cancel an invoice that has a LIVE receipt or sits in a LIVE billing note — ใบยกเลิกแล้วไม่บล็อก
   if (status === "cancelled") {
@@ -2928,7 +2935,7 @@ export async function saveReceipt(r) {
     receipt_no: r.receipt_no, invoice_no: r.invoice_no || null, quote_no: r.quote_no || null, boq_no: r.boq_no || null, job_no: r.job_no || null,
     customer_id: r.customer_id || null, site_id: r.site_id || null, issue_date: r.issue_date || null, payment_method: r.payment_method || null,
     base: Number(r.base) || 0, vat_amt: Number(r.vat_amt) || 0, total: Number(r.total) || 0, wht_amt: Number(r.wht_amt) || 0, net: Number(r.net) || 0,
-    wht: !!r.wht, wht_rate: Number(r.wht_rate) || 3, items: r.items || [],
+    wht: !!r.wht, wht_rate: whtRate(r.wht_rate), items: r.items || [],
     status, note: r.note?.trim() || null, internal_note: r.internal_note?.trim() || null, ..._termCols(r), ..._signCols(r), created_by: user?.id || null,
   }, { onConflict: "receipt_no" });
   if (error) throw error;
@@ -2938,14 +2945,10 @@ export async function saveReceipt(r) {
   syncInternalNote({ invoiceNo: r.invoice_no }, r.internal_note).catch(() => {});
 }
 // update per-line WHT selection + rate + recomputed amounts on a receipt
-export async function setReceiptWht(receipt_no, items, wht, wht_rate, wht_amt, net) {
-  const { data: old } = await supabase.from("receipts").select("wht_amt,net").eq("receipt_no", receipt_no).single();
-  const { error } = await supabase.from("receipts").update({ items: items || [], wht: !!wht, wht_rate: Number(wht_rate) || 3, wht_amt: Number(wht_amt) || 0, net: Number(net) || 0 }).eq("receipt_no", receipt_no);
+export async function setReceiptWht(documentNo, enabled, rate, reason) {
+  const { error } = await supabase.rpc("update_sales_wht", { p_kind: "receipt", p_no: documentNo, p_enabled: !!enabled, p_rate: whtRate(rate), p_reason: reason });
   if (error) throw error;
-  // แก้หัก ณ ที่จ่ายหลังออกใบ = ยอดรับสุทธิเปลี่ยน → เงินฝากในสมุดบัญชีและเส้นกระแสเงินสดต้องขยับตาม
-  // เดิมไม่ sync เลย ยอดในระบบจึงเพี้ยนจากเงินที่เข้าธนาคารจริง จนกว่าจะมีคนบังเอิญไปกดออก/ยกเลิกใบอื่น
-  await logAudit({ action: "edit", target_type: "receipt", target_no: receipt_no,
-    reason: `แก้หัก ณ ที่จ่าย: ${Number(old?.wht_amt) || 0} → ${Number(wht_amt) || 0} บาท (รับสุทธิ ${Number(old?.net) || 0} → ${Number(net) || 0})` });
+  bustCache();
   syncCashEntriesFromDocs().catch(() => {});
   syncBankReceipts().catch(() => {});
 }
@@ -2992,7 +2995,7 @@ export async function saveAdjustmentNote(a) {
     boq_no: a.boq_no || null, job_no: a.job_no || null, customer_id: a.customer_id || null, site_id: a.site_id || null,
     issue_date: a.issue_date || null, reason: a.reason?.trim() || null, is_vat: !!a.is_vat, items: a.items || [],
     base: Number(a.base) || 0, vat_amt: Number(a.vat_amt) || 0, total: Number(a.total) || 0,
-    wht_rate: Number(a.wht_rate) || 3, wht_amt: Number(a.wht_amt) || 0, net: Number(a.net) || 0,
+    wht_enabled: !!a.wht_enabled, wht_rate: whtRate(a.wht_rate), wht_amt: Number(a.wht_amt) || 0, net: Number(a.net) || 0,
     note: a.note?.trim() || null, internal_note: a.internal_note?.trim() || null, ..._termCols(a), ..._signCols(a),
     status: a.status === "cancelled" ? "cancelled" : "issued", created_by: user?.id || null,
   }, { onConflict: "note_no" });
@@ -3001,7 +3004,7 @@ export async function saveAdjustmentNote(a) {
   syncInternalNote({ invoiceNo: a.invoice_no }, a.internal_note).catch(() => {});
 }
 export async function setAdjustmentNoteWht(note_no, items, wht_rate, wht_amt, net) {
-  const { error } = await supabase.from("adjustment_notes").update({ items: items || [], wht_rate: Number(wht_rate) || 3, wht_amt: Number(wht_amt) || 0, net: Number(net) || 0 }).eq("note_no", note_no);
+  const { error } = await supabase.from("adjustment_notes").update({ items: items || [], wht_rate: whtRate(wht_rate), wht_amt: Number(wht_amt) || 0, net: Number(net) || 0 }).eq("note_no", note_no);
   if (error) throw error;
   bustCache("listAdjustmentNotes");
   await logAudit({ action: "edit", target_type: "adjustment_note", target_no: note_no, reason: `แก้หัก ณ ที่จ่าย → ${Number(wht_amt) || 0} บาท` });
@@ -3123,26 +3126,22 @@ export async function claimReceiptFlowAccount(receipt_no) {
 // ปล่อยการจอง เมื่อส่งไม่สำเร็จ (ยังไม่ได้เลขจริงจาก FlowAccount) — ให้แก้แล้วส่งใหม่ได้
 export async function releaseReceiptFlowAccount(receipt_no) {
   // ⚠️ supabase.rpc() builder ไม่มี .catch — ต้องใช้ try/catch (เดิม .catch(() => {}) โยน "catch is not a function" บดบัง error จริงของการส่ง)
-  try { await supabase.rpc("release_receipt_flowaccount", { p_receipt_no: receipt_no }); } catch (_) { /* ปล่อยจองไม่สำเร็จก็ไม่บล็อกการแจ้ง error จริง */ }
+  const { error } = await supabase.rpc("release_receipt_flowaccount", { p_receipt_no: receipt_no });
+  if (error) throw error;
+  bustCache();
 }
 // ปลดล็อกใบที่ "มาร์คว่าส่งแล้ว" แต่ไม่มีเอกสารจริงใน FlowAccount (flowaccount_id ยัง null — เช่น เผลอกรอกเลขผิด)
 // → ล้างเลขทิ้ง ให้ส่งใหม่ได้ · ใบที่มีเลขจริง (id) จะปลดไม่ได้ (กันส่งซ้ำเอกสารจริง)
 export async function clearReceiptFlowAccount(receipt_no) {
-  const { data, error } = await supabase.from("receipts").update({ flowaccount_no: null, flowaccount_id: null, flowaccount_at: null })
-    .eq("receipt_no", receipt_no).is("flowaccount_id", null).select("receipt_no");
-  if (error) throw error;
-  return (data || []).length > 0;   // true = ปลดล็อกแล้ว · false = มีเลขจริงในระบบ ปลดไม่ได้
+ const { data, error } = await supabase.rpc("clear_sales_flowaccount_placeholder", { p_receipt_no: receipt_no });
+ if (error) throw error;
+ bustCache(); return data === true;
 }
 export async function saveReceiptFlowAccount(receipt_no, faId, faNo) {
-  // RPC ประทับเลขแบบ "เขียนครั้งเดียว" (mig 175 — มีเลขแล้วไม่ทับ) · gate เฉพาะ role ที่ส่ง FlowAccount ได้
-  // ⚠️ ห้ามกลืน error — ถ้า FA สร้างเอกสารแล้วแต่บันทึกเลขกลับไม่ได้ ผู้เรียกต้องรู้ เพื่อเตือนไม่ให้กดส่งซ้ำ
-  const { error } = await supabase.rpc("set_receipt_flowaccount", { p_receipt_no: receipt_no, p_fa_id: faId ? String(faId) : null, p_fa_no: faNo || null });
-  if (!error) return;   // data true = ประทับแล้ว · data false = มีเลขอยู่แล้ว — ทั้งคู่ถือว่าเลขถูกบันทึกไว้แล้ว
-  // fallback (pre-084/085 หรือ RPC หาย): เขียนตรงแบบเขียนครั้งเดียว (ไม่ทับใบที่มีเลขแล้ว)
-  const { error: e2 } = await supabase.from("receipts")
-    .update({ flowaccount_id: faId ? String(faId) : null, flowaccount_no: faNo || null, flowaccount_at: new Date().toISOString() })
-    .eq("receipt_no", receipt_no).is("flowaccount_id", null);
-  if (e2) throw e2;
+  const { data, error } = await supabase.rpc("set_receipt_flowaccount", { p_receipt_no: receipt_no, p_fa_id: faId ? String(faId) : null, p_fa_no: faNo || null });
+  if (error) throw error;
+  if (data !== true) throw new Error("ไม่สามารถบันทึกเลข FlowAccount ได้ — ตรวจเลขที่มีอยู่ก่อน อย่าส่งซ้ำ");
+  bustCache();
 }
 export async function deleteReceipt(receipt_no, invoice_no, reason) {
   const { data: snap } = await supabase.from("receipts").select("*").eq("receipt_no", receipt_no).maybeSingle();

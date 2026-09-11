@@ -1,4 +1,5 @@
 import React from "react";
+import { calculateSalesWht, whtRate } from "../lib/salesWht.js";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listQuotations, saveQuotation, deleteQuotation, setQuotationStatus, expireOverdueQuotes, listCustomers, listMaterialsLite, listBoqs, getCompanies, listDocLinks, syncBoqItems, docNoTaken, couponsForCustomer, redeemCoupon, saveBoq } from "../lib/api";
@@ -86,16 +87,16 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   function startQuick() { setEd({ quote_no: genNo(), _quick: true, customer_id: "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
   function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
   // ใบเสนอราคาเพิ่มเติม (mig 188): งานเสริมหน้างาน — ผูกใบแม่ (variation_of) · กำไรรวมงานเดียว · ไม่ต้องมี BOQ ของตัวเอง
-  function startVariation(q) { setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", job_type: q.job_type || "", title: `งานเพิ่มเติม (จาก ${q.quote_no})`, status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: !!q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.payMethod || "cash", note: "", internal_note: `งานเสริมหน้างานของ ${q.quote_no}`, sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", variation_of: q.quote_no, items: [] }); }
+  function startVariation(q) { setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", job_type: q.job_type || "", title: `งานเพิ่มเติม (จาก ${q.quote_no})`, status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: !!q.vat, wht: !!q.wht, wht_rate: whtRate(q.wht_rate), pay_method: q.payMethod || "cash", note: "", internal_note: `งานเสริมหน้างานของ ${q.quote_no}`, sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", variation_of: q.quote_no, items: [] }); }
   // create a new quotation prefilled from a BOQ (customer/site + pulled items)
   function startFromBoq(boqNo) {
     const b = boqs.find((x) => x.boq_no === boqNo); if (!b) return;
     const c = custs.find((x) => String(x.id) === String(b.customer_id));
     const items = b.items.filter((x) => ["ac", "charged", "service"].includes(x.section)).map((x) => {
       const m = matMap[x.item_code];
-      return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
+      return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: x.section === "service" ? "service" : m?.kind, description: x.description || m?.description || "" };
     });
-    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, job_type: b.job_type || "", title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: false, wht_rate: 3, pay_method: "cash", note: b.note || "", internal_note: b.internal_note || "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
+    setEd({ quote_no: genNo(), customer_id: b.customer_id || "", site_id: b.site_id || "", boq_no: boqNo, job_type: b.job_type || "", title: b.title || "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: c?.type === "company", wht_rate: 3, pay_method: "cash", note: b.note || "", internal_note: b.internal_note || "", sign_on: defaultSignOn(), terms_payment: b.terms_payment || "", terms_freebies: b.terms_freebies || "", terms_warranty: b.terms_warranty || "", items });
   }
   React.useEffect(() => { if (!fromBoq || !boqs.length) return; startFromBoq(fromBoq); onFromBoqConsumed && onFromBoqConsumed(); }, [fromBoq, boqs]);
   // chain lock: can't edit/delete a quotation that already has an invoice or job order downstream
@@ -107,7 +108,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     if (q.hasInvoice) return alert(`ใบเสนอราคา ${q.quote_no} มีใบแจ้งหนี้แล้ว — แก้ไขไม่ได้\nต้องยกเลิกใบแจ้งหนี้/ใบเสร็จก่อน`);
     // มีใบงานแล้วแต่ยังไม่แจ้งหนี้ → แก้ได้ แต่เตือนให้ตรวจใบงานให้ตรงกัน
     if (q.hasJob && !(await confirmDialog({ title: "แก้ไขใบเสนอราคาที่มีใบงานแล้ว?", message: `ใบนี้เปิดใบงาน ${q.jobNo || ""} แล้ว (ยังไม่แจ้งหนี้) — แก้ไขได้\nถ้าแก้ราคา/รายการ ควรตรวจใบงานให้ตรงกันด้วย`, confirmText: "แก้ไขต่อ", danger: false }))) return;
-    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", job_type: q.job_type || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: q.wht_rate || 3, pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at, variation_of: q.variation_of || null,
+    setEd({ _edit: true, quote_no: q.quote_no, customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: q.boq_no || "", job_type: q.job_type || "", title: q.title || "", status: q.status, issue_date: q.issue_date || today(), valid_until: q.valid_until || "", discount_type: q.discount_type || "amount", discount_value: q.discount_value || 0, vat: q.vat, wht: !!q.wht, wht_rate: whtRate(q.wht_rate), pay_method: q.pay_method || "cash", note: q.note || "", internal_note: q.internal_note || "", sign_on: !!q.sign_url, terms_payment: q.terms_payment || "", terms_freebies: q.terms_freebies || "", terms_warranty: q.terms_warranty || "", approved_at: q.approved_at, variation_of: q.variation_of || null,
       items: q.items.map((x) => ({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price), discount: Number(x.discount) || 0, kind: x.kind, description: x.description || "" })) });
   }
   // ไม่มี "สร้างซ้ำ" ในใบเสนอราคา — กติกาบริษัท: เอกสารขายเริ่มจาก BOQ เสมอ (อยากได้ใบคล้ายกัน → สร้างซ้ำที่ BOQ แล้วออกใบเสนอจากตรงนั้น)
@@ -121,7 +122,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   function onCustomer(id) {
     const c = custs.find((c) => String(c.id) === String(id));
     const isCompany = c?.type === "company";
-    setEd((e) => ({ ...e, customer_id: id, site_id: "", vat: c?.vat ?? true, wht: isCompany ? e.wht : false }));
+    setEd((e) => ({ ...e, customer_id: id, site_id: "", vat: c?.vat ?? true, wht: isCompany, wht_rate: isCompany && e.wht_rate === 0 ? 3 : e.wht_rate }));
   }
   const addLine = (m, _target, qty = 1) => setEd((e) => {
     const add = Number(qty) || 1;
@@ -144,7 +145,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
     const existing = new Set((ed.items || []).map((it) => it.code || it.name));
     const pulled = b.items.filter((x) => ["ac", "charged", "service"].includes(x.section)).map((x) => {
       const m = matMap[x.item_code];
-      return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: m?.kind, description: x.description || m?.description || "" };
+      return { code: x.item_code, name: x.name || m?.th, unit: x.unit || m?.unit, qty: Number(x.qty), unit_price: m?.salePrice || 0, kind: x.section === "service" ? "service" : m?.kind, description: x.description || m?.description || "" };
     }).filter((it) => !existing.has(it.code || it.name)); // add only items not already in the quote (keeps your edited prices)
     if (!pulled.length) return flash("ไม่มีรายการใหม่จาก BOQ (มีครบแล้ว)");
     setEd((e) => ({ ...e, items: [...(e.items || []), ...pulled] }));
@@ -179,7 +180,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   }
   const canWht = selCust?.type === "company";
   const svcSum = ed ? ed.items.reduce((a, x) => a + ((x.kind || matMap[x.code]?.kind) === "service" ? Number(x.qty) * adjUnit(x.unit_price) - lineDisc(x) : 0), 0) : 0;
-  const whtAmt = ed && ed.wht && canWht && subtotal > 0 ? afterDisc * (svcSum / subtotal) * (Number(ed.wht_rate) || 3) / 100 : 0;
+  const whtAmt = calculateSalesWht({ items: (ed?.items || []).map(x => ({ ...x, amount: Number(x.qty) * adjUnit(x.unit_price) - lineDisc(x) })), base: afterDisc, total: grand, customerType: selCust?.type, enabled: !!ed?.wht, rate: ed?.wht_rate }).amount;
   const netPay = grand - whtAmt;
 
   async function save() {
@@ -397,7 +398,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
               <div className="line-add">
                 <button type="button" className={"vat-toggle" + (ed.wht ? " on" : "")} style={{ flex: 1 }} onClick={() => setQ("wht", !ed.wht)}>{ed.wht ? "หัก ณ ที่จ่าย" : "ไม่หัก ณ ที่จ่าย"}</button>
                 <div className="inp inp-unit" style={{ width: 110, flex: "none", opacity: ed.wht ? 1 : .5 }}>
-                  <NumIn className="" min="0" step="0.1" value={ed.wht_rate} disabled={!ed.wht} onChange={(n) => setQ("wht_rate", n)} /><span className="unit-suf">%</span>
+                  <NumIn className="" min="0" max="100" step="0.01" value={ed.wht_rate} disabled={!ed.wht} onChange={(n) => { if (Number.isFinite(n) && n >= 0 && n <= 100) setQ("wht_rate", n); }} /><span className="unit-suf">%</span>
                 </div>
               </div>
             </label>
@@ -413,7 +414,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             {ed.vat && <div><span>VAT 7%</span><b>{fmtBaht(vatAmt)}</b></div>}
             <div className="qt-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(grand)}</b></div>
             {ed.pay_method === "card_inst10" && <div><span>≈ ผ่อนเดือนละ</span><b>{fmtBaht(grand / 10)} × 10 เดือน</b></div>}
-            {ed.wht && canWht && <div><span>หัก ณ ที่จ่าย {Number(ed.wht_rate) || 3}%</span><b style={{ color: "var(--down)" }}>− {fmtBaht(whtAmt)}</b></div>}
+            {ed.wht && canWht && <div><span>หัก ณ ที่จ่าย {whtRate(ed.wht_rate)}%</span><b style={{ color: "var(--down)" }}>− {fmtBaht(whtAmt)}</b></div>}
             {ed.wht && canWht && <div className="qt-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(netPay)}</b></div>}
           </div>
 
@@ -562,7 +563,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             {printQ.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printQ.vatAmt)}</b></div> : null}
             <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(printQ.grand)}</b></div>
             {printQ.payMethod === "card_inst10" ? <div><span>≈ ผ่อนเดือนละ</span><b>{fmtBaht(printQ.grand / 10)} × 10 เดือน</b></div> : null}
-            {printQ.whtOn ? <div><span>หัก ณ ที่จ่าย {Number(printQ.wht_rate) || 3}%</span><b>− {fmtBaht(printQ.whtAmt)}</b></div> : null}
+            {printQ.whtOn ? <div><span>หัก ณ ที่จ่าย {whtRate(printQ.wht_rate)}%</span><b>− {fmtBaht(printQ.whtAmt)}</b></div> : null}
             {printQ.whtOn ? <div className="doc-grand"><span>ยอดชำระสุทธิ</span><b>{fmtBaht(printQ.netPay)}</b></div> : null}
           </div>}>
           {(() => { const hasD = printQ.items.some((x) => Number(x.discount) > 0); return printQ.items.map((it, i) => (
