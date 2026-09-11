@@ -1,4 +1,7 @@
 import React from "react";
+import SubcontractRateSettings from "./SubcontractRateSettings";
+import {DEFAULT_SUB_RATES,validateSubRates,calculateSubLines} from "../lib/subcontractRates";
+import {getAppConfig} from "../lib/api";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { listJobOrders, listTeams, listQuotations, listSubPayouts, jobMaterialCost, saveJobLabor, saveJobReview, confirmJobLabor, createSubPayout, paySubPayout, cancelSubPayout, updateSubPayout, deleteSubPayout, listAccounts, listChatRooms, uploadChatImage, sendChatImage, sendChatMessage, uploadExpenseFile, listMySubPending } from "../lib/api";
@@ -10,7 +13,7 @@ import { JOB_STATUSES } from "../lib/schedule";
 import DocChips from "./DocChips";
 import { useDocPeek } from "./DocPeek";
 
-const TABS = [["labor", "ค่าแรง/งาน"], ["pay", "ค่าแรงรอจ่าย"], ["score", "สกอร์การ์ดทีม"]];
+const TABS = [["settings", "ตั้งค่าแรง"], ["labor", "ค่าแรง/งาน"], ["pay", "ค่าแรงรอจ่าย"], ["score", "สกอร์การ์ดทีม"]];
 // ป้ายสถานะใบงาน — ดึงจากชุดกลาง (lib/schedule.js) ให้ชื่อตรงกับเมนูใบงานเสมอ
 const JOB_ST = Object.fromEntries(JOB_STATUSES.map(([v, t, c]) => [v, { t, c }]));
 const WHT_RATE = 3;
@@ -18,16 +21,6 @@ const PAY_ROLES = ["admin", "exec", "finance"];        // who can create/confirm
 const LABOR_ROLES = ["admin", "exec", "finance", "sales"]; // who can fill + confirm labor
 const EDIT_PAYOUT_ROLES = ["admin", "finance"];        // ธุรการ + บัญชี: แก้ไขใบจ่าย (รวมที่จ่ายแล้ว)
 
-// labor lines default to rate% of each line's sale amount (accounting can edit)
-// กติกาเจ้าของข้อ 5: ส่วนลดรายบรรทัด (quotation_items.discount, mig 142) ต้องหักก่อนเสมอ
-// ⇒ ฐานคิดค่าแรง = ยอดขายจริงหลังหักส่วนลด (เดิมคิดจากราคาก่อนลด ทำให้ตั้งค่าแรงเกินทุกงานที่ให้ส่วนลด)
-function buildLines(items, rate) {
-  return (items || []).map((it) => {
-    const qty = Number(it.qty) || 0, price = Number(it.unit_price) || 0, disc = Number(it.discount) || 0;
-    const sale = round2(qty * price - disc);
-    return { code: it.item_code || null, name: it.name, qty, unit: it.unit || "", price, disc, sale, labor: round2(sale * (Number(rate) || 0) / 100) };
-  });
-}
 const sumLabor = (lines) => round2((lines || []).reduce((a, l) => a + (Number(l.labor) || 0), 0));
 const remaining = (j) => round2((Number(j.labor_total) || 0) - (Number(j.labor_paid_amt) || 0));
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }) : "";
@@ -146,6 +139,9 @@ function OfficeSubcontractor({ role, onOpenDoc }) {
   const canLabor = LABOR_ROLES.includes(role);
   const tabs = TABS.filter(([v]) => v !== "pay" || canPay);
   const [tab, setTab] = React.useState("labor");
+  const [rates,setRates]=React.useState(null);
+  const [ratesError,setRatesError]=React.useState("");
+  React.useEffect(()=>{getAppConfig("subcontractor_rates",DEFAULT_SUB_RATES).then(v=>setRates(validateSubRates(v))).catch(e=>setRatesError(e.message));},[]);
   const [jobs, setJobs] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [quoteBy, setQuoteBy] = React.useState({});
@@ -179,13 +175,15 @@ function OfficeSubcontractor({ role, onOpenDoc }) {
 
       {subTeams.length === 0 && <div className="card"><div className="empty">ยังไม่มีทีมช่างซัพ — ไปตั้งค่าได้ที่ ตั้งค่า → ทีมช่าง แล้วเลือกประเภท "ช่างซัพ"</div></div>}
 
-      {subTeams.length > 0 && <>
+      {<>
         <div className="cat-filter">
           {tabs.map(([v, l]) => <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
             style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
         </div>
 
-        {tab === "labor" && <LaborTab jobs={subJobs} quoteBy={quoteBy} teamById={teamById} subTeams={subTeams} canLabor={canLabor} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
+        {ratesError && <p role="alert">โหลดค่าเริ่มต้นไม่สำเร็จ: {ratesError}</p>}
+        {tab === "settings" && (rates ? <SubcontractRateSettings value={rates} canEdit={["exec","admin"].includes(role)} onSaved={setRates}/> : <p>กำลังโหลดค่าเริ่มต้น…</p>)}
+        {tab === "labor" && <LaborTab rates={rates} jobs={subJobs} quoteBy={quoteBy} teamById={teamById} subTeams={subTeams} canLabor={canLabor} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
         {tab === "pay" && canPay && <PayTab role={role} jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} teamById={teamById} payouts={payouts} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
         {tab === "score" && <ScoreTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} matCost={matCost} payouts={payouts} />}
       </>}
@@ -196,7 +194,7 @@ function OfficeSubcontractor({ role, onOpenDoc }) {
 }
 
 // ---------- LABOR per job (fill → confirm) ----------
-function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash, onOpenDoc }) {
+function LaborTab({ rates, jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash, onOpenDoc }) {
   const [edit, setEdit] = React.useState(null);
   const [busy, setBusy] = React.useState(null);
   const [teamF, setTeamF] = React.useState("all");
@@ -289,7 +287,7 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
           );
         })}
       </div>
-      {edit && <LaborEditor job={edit} quote={quoteBy[edit.quote_no]} rate={teamById[edit.assigned_team]?.payout_rate ?? 80} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onReload(); }} flash={flash} />}
+      {edit && <LaborEditor rates={rates} job={edit} quote={quoteBy[edit.quote_no]} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onReload(); }} flash={flash} />}
       {peekEl}
       {jobPreview && (() => {
         const jp = jobPreview; const st2 = JOB_ST;
@@ -347,13 +345,12 @@ function LaborTab({ jobs, quoteBy, teamById, subTeams, canLabor, onReload, flash
   );
 }
 
-function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
-  const fresh = buildLines(quote?.items, rate);
+function LaborEditor({ rates, job, quote, onClose, onSaved, flash }) {
   const saved = job.labor_lines || [];
-  const init = fresh.map((l, i) => (saved[i] && saved[i].labor != null ? { ...l, labor: Number(saved[i].labor) || 0 } : l));
-  // restore any manually-added lines saved beyond the quote items (jobs with no ใบเสนอราคา rely on these)
-  const extra = saved.slice(fresh.length).map((s) => ({ code: s.code || null, name: s.name || "", qty: s.qty ?? "", unit: s.unit || "", price: Number(s.price) || 0, sale: Number(s.sale) || 0, labor: Number(s.labor) || 0, manual: true }));
-  const [lines, setLines] = React.useState([...init, ...extra]);
+  const [mode,setMode]=React.useState(saved[0]?.contract_mode || rates?.mode || 'labor');
+  const [days,setDays]=React.useState(saved[0]?.contract_mode==='daily' ? saved[0].qty : 1);
+  const [groups,setGroups]=React.useState((quote?.items||[]).map((it,i)=>saved[i]?.labor_group || (it.kind==='service'?'service':'unknown')));
+  const [lines, setLines] = React.useState(saved.length ? saved.map(l=>({...l})) : []);
   const [rating, setRating] = React.useState(job.rating || 0);
   const [claim, setClaim] = React.useState(!!job.is_claim);
   const [busy, setBusy] = React.useState(false);
@@ -362,7 +359,8 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
   const setName = (i, v) => setLines((ls) => ls.map((l, j) => j === i ? { ...l, name: v } : l));
   const addLine = () => setLines((ls) => [...ls, { code: null, name: "", qty: "", unit: "", price: 0, sale: 0, labor: 0, manual: true }]);
   const delLine = (i) => setLines((ls) => ls.filter((_, j) => j !== i));
-  const resetDefault = () => setLines((ls) => [...buildLines(quote?.items, rate), ...ls.filter((l) => l.manual)]); // keep manual lines
+  const resetDefault = () => { try { if(!rates) throw new Error('ยังโหลดค่าเริ่มต้นไม่สำเร็จ'); setLines(calculateSubLines(quote?.items,groups,rates,mode,days,quote?.discount)); } catch(e) { flash(e.message,true); } };
+
   async function save(confirmAfter) {
     setBusy(true);
     try {
@@ -381,6 +379,15 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
         <div className="modal-head"><div className="modal-title">ค่าแรงเหมา · {job.job_no}<span>{job.customerName || ""}</span></div>
           <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
+          <div className="card" style={{marginBottom:12}}>
+            <label className="fld"><span>ประเภทการจ้าง</span><select className="inp" value={mode} onChange={e=>setMode(e.target.value)}><option value="labor">เหมาเฉพาะค่าแรง + วัสดุ</option><option value="inclusive">เหมาทั้งแรงและวัสดุ</option><option value="daily">รายวันต่อทีม</option></select></label>
+            {mode==='daily' ? <label className="fld"><span>จำนวนวันของทีม (ครึ่งวัน = 0.5)</span><input className="inp" type="number" min="0.5" step="0.5" value={days} onChange={e=>setDays(e.target.value)}/><small>อัตราเริ่มต้น {rates?.daily ?? '—'} บาท/ทีม/วัน</small></label> : <>
+            <p>ตรวจประเภททุกรายการก่อนคำนวณ เลือกเครื่องแอร์เพื่อไม่นำมาคิดค่าแรง งานล้างเลือกประเภทงานล้าง</p>
+            {(quote?.items||[]).map((it,i)=><label className="fld" key={i}><span>{it.name}</span><select className="inp" value={groups[i]} onChange={e=>setGroups(gs=>gs.map((g,j)=>j===i?e.target.value:g))}><option value="unknown">เลือกประเภท…</option><option value="air">เครื่องแอร์ — ไม่คิดค่าแรง</option><option value="material">วัสดุ / อะไหล่ / อุปกรณ์เสริม</option><option value="service">บริการติดตั้ง / ซ่อม / ย้าย</option><option value="cleaning">บริการล้าง</option></select></label>)}
+            </>}
+            <button type="button" className="btn-primary" disabled={!rates} onClick={resetDefault}>ใช้ค่าเริ่มต้นคำนวณใหม่</button>
+            <p className="page-sub">ปุ่มนี้แทนที่รายการค่าแรงในแบบฟอร์ม ยอดเดิมในระบบจะเปลี่ยนเมื่อกดบันทึกเท่านั้น</p>
+          </div>
           <div className="sub-lab-head"><span>รายการ</span><span>จำนวน</span><span>ราคา/หน่วย</span><span>ราคาขาย</span><span>ค่าแรง</span></div>
           {lines.map((l, i) => (
             <div className="sub-lab-row" key={i}>
@@ -400,7 +407,7 @@ function LaborEditor({ job, quote, rate, onClose, onSaved, flash }) {
           <div className="sub-lab-total"><span>รวมค่าแรงเหมา</span><b>{fmtBaht(total)}</b></div>
           <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
             <button className="btn-ghost sm" onClick={addLine}><UIcon name="plus" size={13} /> เพิ่มบรรทัดค่าแรง</button>
-            {quote?.items?.length > 0 && <button className="btn-ghost sm" onClick={resetDefault}>รีเซ็ตเป็น {rate}% ของราคาขาย</button>}
+
           </div>
           <div className="sub-review">
             <div className="fld"><span>คะแนนงาน (1–5)</span>

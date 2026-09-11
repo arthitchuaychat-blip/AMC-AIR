@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {DEFAULT_SUB_RATES as c,calculateSubLines as calc,validateSubRates} from '../src/lib/subcontractRates.js';
+const items=[{name:'แอร์',qty:1,unit_price:20000},{name:'ติดตั้ง',qty:1,unit_price:4000},{name:'วัสดุ',qty:2,unit_price:1000},{name:'ล้าง',qty:1,unit_price:1000}];
+const groups=['air','service','material','cleaning'];
+assert.deepEqual(calc(items,groups,c,'labor').map(x=>x.labor),[0,1800,200,700]);
+assert.deepEqual(calc(items,groups,c,'inclusive').map(x=>x.labor),[0,2600,1300,650]);
+assert.equal(calc([],[],c,'daily',1)[0].labor,2000);
+assert.equal(calc([],[],c,'daily',0.5)[0].labor,1000);
+assert.equal(calc([],[],{...c,daily:2500},'daily',2)[0].labor,5000);
+assert.equal(calc([{qty:1,unit_price:1000,discount:100}],['service'],c,'labor',1,90)[0].labor,364.5);
+assert.equal(calc([{qty:1,unit_price:1000,price_show:1100}],['service'],c,'labor')[0].labor,495);
+assert.equal(calc(items,groups,{...c,labor:0},'labor')[1].labor,0);
+assert.throws(()=>calc(items,['unknown',...groups.slice(1)],c,'labor'));
+assert.throws(()=>calc([],[],c,'daily',0));
+assert.throws(()=>validateSubRates({...c,labor:101}));
+assert.throws(()=>validateSubRates({...c,daily:''}));
+console.log('PASS: contract modes, all materials, AC excluded, cleaning, daily/half day, discounts, overrides, invalid inputs');
