@@ -113,7 +113,9 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
   const L = (th, my) => (lang === "my" ? my : th);
   const st = EST[x.status] || EST.pending;
   const paid = Math.round((Number(x.paid_amount) || 0) * 100) / 100;
-  const total = Math.round((Number(x.amount) || 0) * 100) / 100;
+  const gross = Math.round((Number(x.amount) || 0) * 100) / 100;
+  const wht = Math.round((Number(x.wht_amt) || 0) * 100) / 100;
+  const total = Math.round((gross - wht) * 100) / 100;
   const partial = x.status !== "paid" && paid > 0 && paid < total;   // จ่ายแล้วบางส่วน
   const [poOpen, setPoOpen] = React.useState(false);
   const pos = x.poDetails?.length ? x.poDetails : (x.poNos?.length ? x.poNos : x.poNo ? [x.poNo] : []).map((n) => ({ po_no: n }));
@@ -129,14 +131,18 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
         title={x.title} titleFallback={L("— ไม่ระบุรายการ —", "— အမည် မသတ်မှတ် —")}
         sub={[x.category, x.supplier ? "🏭 " + x.supplier : null, x.asset_tag ? "📍 " + x.asset_tag : null, x.pay_method ? PAY_LABEL[x.pay_method] : null, GRP_LABEL[expenseGroup(x)], x.jobTitle ? "📋 " + x.jobTitle : null, pos.length > 1 ? L(`รวม ${pos.length} ใบสั่งซื้อ`, `စုစုပေါင်း ဝယ်ယူလွှာ ${pos.length} စောင်`) : null, Number(x.vat_amt) > 0 ? `🧾 ${L("ภาษีซื้อ", "ဝယ်ခွန်")} ${fmtBaht(x.vat_amt)}` : null, Number(x.wht_amt) > 0 ? `✂️ ${L("หัก ณ ที่จ่าย", "အခွန်ဖြတ်")} ${fmtBaht(x.wht_amt)}${x.wht_pct ? ` (${x.wht_pct}%)` : ""}` : null].filter(Boolean).join(" · ") || null}
         by={x.requesterName} date={x.created_at}
-        amountNode={partial ? (
+        amountNode={partial || wht > 0 ? (
           <div className="rec-amt-bd">
-            <div className="rab-row"><span>{L("ยอดเบิก", "တောင်းခံ ပမာဏ")}</span><b>{fmtBaht(total)}</b></div>
-            <div className="rab-row rab-wht"><span>{L("จ่ายแล้ว", "ပေးပြီး")}</span><b>− {fmtBaht(paid)}</b></div>
-            <div className="rab-row rab-net"><span>{L("คงเหลือ", "ကျန်ငွေ")}</span><b>{fmtBaht(total - paid)}</b></div>
+            <div className="rab-row"><span>{L("ยอดเบิก", "တောင်းခံ ပမာဏ")}</span><b>{fmtBaht(gross)}</b></div>
+            {wht > 0 && <div className="rab-row rab-wht"><span>หัก ณ ที่จ่าย</span><b>− {fmtBaht(wht)}</b></div>}
+            <div className="rab-row rab-net"><span>ยอดจ่ายสุทธิผู้ขาย</span><b>{fmtBaht(total)}</b></div>
+            {(paid > 0 || x.status === "paid") && <>
+              <div className="rab-row"><span>{L("จ่ายแล้ว", "ပေးပြီး")}</span><b>{fmtBaht(paid)}</b></div>
+              <div className="rab-row rab-net"><span>คงเหลือจ่ายผู้ขาย</span><b>{fmtBaht(Math.max(0, Math.round((total - paid) * 100) / 100))}</b></div>
+            </>}
           </div>
         ) : null}
-        amountLabel={L("ยอดเบิก", "တောင်းခံ ပမာဏ")} amount={x.amount}
+        amountLabel={L("ยอดจ่ายสุทธิ", "ပေးရမည့် အသားတင်") } amount={total}
         rightExtra={x.expected_pay_date && x.status !== "paid" ? (() => { const over = x.expected_pay_date < new Date().toISOString().slice(0, 10); return <span className="job-badge" style={over ? { background: "#fef2f2", color: "#b42318", borderColor: "#fecaca", fontWeight: 700 } : { background: "#fff7ed", color: "#c2410c", borderColor: "#fed7aa" }}>{over ? "⚠️ " : "📅 "}{L("ครบกำหนด", "ကုန်ဆုံး")} {fmtD(x.expected_pay_date)}{over ? L(" (เลยกำหนด)", "") : ""}</span>; })() : null}
         partyIcon="👤" customer={x.customerName ? { name: x.customerName } : null} />
       {/* วันรับ/ส่งสินค้า (ดึงจาก PO ที่ผูก — เหมือนในเมนูใบสั่งซื้อ) */}
@@ -620,7 +626,7 @@ function PayVendorModal({ onClose, onDone, flash }) {
   const [exps, setExps] = React.useState(null);   // เบิกทั่วไป (อนุมัติ · รอจ่าย · ไม่ใช่ PO)
   const [expReq, setExpReq] = React.useState("");   // ผู้เบิกที่เลือก (โหมดเบิกทั่วไป)
   const [accounts, setAccounts] = React.useState([]); const [payAcct, setPayAcct] = React.useState(""); const [proof, setProof] = React.useState([]);
-  const expRem = (e) => Math.round(((Number(e.amount) || 0) - (Number(e.paid_amount) || 0)) * 100) / 100;
+  const expRem = (e) => Math.round(((Number(e.amount) || 0) - (Number(e.wht_amt) || 0) - (Number(e.paid_amount) || 0)) * 100) / 100;
   const switchMode = (m) => { setMode(m); setSel({}); setSup(""); setExpReq(""); setTopQ(""); };
   const [busy, setBusy] = React.useState(false);
   React.useEffect(() => {
@@ -638,7 +644,7 @@ function PayVendorModal({ onClose, onDone, flash }) {
         setAccounts(acc || []); setPayAcct((acc || [])[0]?.id || "");
         // เบิกทั่วไป = อนุมัติแล้ว · ยังจ่ายไม่ครบ · ไม่ใช่ใบที่ผูก PO (PO มีโหมดของตัวเอง)
         const poExpIds = new Set(p.filter((x) => x.expense_id).map((x) => x.expense_id));
-        setExps((ex || []).filter((e) => e.status === "approved" && !poExpIds.has(e.id) && ((Number(e.amount) || 0) - (Number(e.paid_amount) || 0)) > 0.005));
+        setExps((ex || []).filter((e) => e.status === "approved" && !poExpIds.has(e.id) && ((Number(e.amount) || 0) - (Number(e.wht_amt) || 0) - (Number(e.paid_amount) || 0)) > 0.005));
       })
       .catch((e) => { flash(L("โหลดใบสั่งซื้อไม่สำเร็จ: ", "ဝယ်ယူလွှာ ဖွင့်မရ: ") + (e.message || e), true); setPos([]); });
   }, []);

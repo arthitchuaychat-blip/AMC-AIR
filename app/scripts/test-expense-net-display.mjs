@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync(new URL('../src/components/Expenses.jsx',import.meta.url),'utf8');
+const a=source.indexOf('  const paid =',source.indexOf('function ExpenseCard('));
+const b=source.indexOf('  const [poOpen',a);
+const calculate=new Function('x',source.slice(a,b)+'return {gross,wht,total,paid,partial};');
+assert.equal(calculate({amount:33705,wht_amt:945}).total,32760);
+assert.equal(calculate({amount:37450,wht_amt:700}).total,36750);
+assert.equal(calculate({amount:33705,wht_amt:945,paid_amount:10000,status:'approved'}).partial,true);
+assert.equal(calculate({amount:33705,wht_amt:945,paid_amount:32760,status:'approved'}).partial,false);
+assert.equal(calculate({amount:33705,wht_amt:0}).total,33705);
+console.log('PASS: both reported amounts, partial/full net payment, no WHT');
