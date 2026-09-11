@@ -159,7 +159,7 @@ export async function updateCategory(oldId, c) {
 const TEAM_PALETTE = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#0891b2", "#db2777", "#ca8a04", "#0d9488"];
 export function listTeams() {
   return _cached("teams", async () => {
-    const { data, error } = await supabase.from("teams").select("*").order("id");
+    const { data, error } = await supabase.rpc("list_teams_for_role");
     if (error) throw error;
     return (data || []).map((t, i) => ({ ...t, color: t.color || TEAM_PALETTE[i % TEAM_PALETTE.length] }));
   });
@@ -691,7 +691,7 @@ export async function listStockCounts() {
   const [scRes, itemRes, profRes] = await Promise.all([
     _allRows((f, t) => supabase.from("stock_counts").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("stock_count_items").select("count_id,counted_qty,diff", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
-    supabase.from("profiles").select("id,name,email"),
+    supabase.from("staff_directory").select("id,name,email"),
   ]);
   if (scRes.error) throw scRes.error;
   const nameById = Object.fromEntries((profRes.data || []).map((p) => [p.id, p.name || p.email]));
@@ -901,7 +901,7 @@ async function _loadPurchaseOrders() {
     _rows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),
     _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("job_orders").select("job_no,quote_no,assigned_team,status", { count: "exact" }).order("job_no").range(f, t)),
-    supabase.from("teams").select("id,name"),
+    supabase.from("team_directory").select("id,name"),
   ]);
   if (poRes.error) throw poRes.error;
   if (itemRes.error) throw itemRes.error;
@@ -944,7 +944,7 @@ export async function listMaterialPreps() {
     _rows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),
     _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("job_orders").select("job_no,quote_no,assigned_team,status", { count: "exact" }).order("job_no").range(f, t)),
-    supabase.from("teams").select("id,name"),
+    supabase.from("team_directory").select("id,name"),
     // ใบสั่งซื้อ/ชุดเบิกที่แตกออกจากใบเตรียมวัสดุ (ผูกด้วย prep_no) — ไว้โชว์บนการ์ดและกันกดสร้างซ้ำ
     _rows((f, t) => supabase.from("purchase_orders").select("po_no,prep_no,status,issue_date,created_at", { count: "exact" }).not("prep_no", "is", null).order("po_no").range(f, t)).catch(() => ({ data: [] })),
     _rows((f, t) => supabase.from("transactions").select("ref_no,prep_no,txn_date,type", { count: "exact" }).not("prep_no", "is", null).eq("type", "withdraw").order("id").range(f, t)).catch(() => ({ data: [] })),
@@ -1196,7 +1196,7 @@ export async function listPayables() {
     _rows((f, t) => supabase.from("sub_payouts").select("*", { count: "exact" }).neq("status", "paid").order("created_at", { ascending: false }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("job_orders").select("job_no,assigned_team,labor_total,labor_paid_amt,scheduled_at", { count: "exact" }).eq("labor_confirmed", true).gt("labor_total", 0).order("job_no").range(f, t))
       .catch(() => ({ data: [] })),
-    supabase.from("teams").select("id,name"),
+    supabase.from("team_directory").select("id,name"),
     _rows((f, t) => supabase.from("quotations").select("quote_no,customer_id,title", { count: "exact" }).order("quote_no").range(f, t)),   // PO → ใบเสนอ → ลูกค้า + ชื่องาน
     _rows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
   ]);
@@ -1435,7 +1435,7 @@ export async function followupState() {
   const today = new Date().toISOString().slice(0, 10);
   const [cs, profs] = await Promise.all([
     _fetchAll((f, t) => supabase.from("customers").select("id,name,owner_id,stage,next_followup", { count: "exact" }).or("stage.not.is.null,next_followup.not.is.null").order("id").range(f, t)).catch(() => []),
-    supabase.from("profiles").select("id,name,email").then((r) => r.data || []),
+    supabase.from("staff_directory").select("id,name,email").then((r) => r.data || []),
   ]);
   const nm = Object.fromEntries(profs.map((p) => [p.id, p.name || p.email]));
   const scheduled = [], suppress = [], all = [];
@@ -3213,7 +3213,7 @@ async function _loadJobOrders({ fieldOnly = false, team = null } = {}) {
   const [j, cu, tm, si, ct, qt, qit, jv] = await Promise.all([
     _rows((f, t) => supabase.from("job_orders").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("job_no").range(f, t)),
     _rows((f, t) => supabase.from("customers").select("id,name,address", { count: "exact" }).order("id").range(f, t)),
-    supabase.from("teams").select("id,name"),
+    supabase.from("team_directory").select("id,name"),
     _rows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat,created_by", { count: "exact" }).order("quote_no").range(f, t)),
@@ -3244,7 +3244,7 @@ async function _loadJobOrders({ fieldOnly = false, team = null } = {}) {
 export async function listCustomerJobs(customerId) {
   const [j, tm] = await Promise.all([
     supabase.from("job_orders").select("job_no,title,details,scheduled_at,end_date,slot,status,assigned_team,created_at").eq("customer_id", customerId).order("scheduled_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }),
-    supabase.from("teams").select("id,name"),
+    supabase.from("team_directory").select("id,name"),
   ]);
   if (j.error) throw j.error;
   const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
@@ -3258,7 +3258,7 @@ export async function listCustomerDocs(customerId) {
     supabase.from("invoices").select("invoice_no,status,issue_date,total,installment,pct,created_at,site_id").eq("customer_id", customerId),
     supabase.from("receipts").select("receipt_no,status,issue_date,net,created_at,site_id").eq("customer_id", customerId),
     supabase.from("job_orders").select("job_no,title,scheduled_at,end_date,slot,status,assigned_team,created_at,site_id").eq("customer_id", customerId),
-    supabase.from("teams").select("id,name"),
+    supabase.from("team_directory").select("id,name"),
     // ใบส่งมอบงาน (mig 202 ho_no) — โชว์ในประวัติลูกค้าเหมือนเอกสารอื่น · fallback ถ้ายังไม่รัน 202
     supabase.from("job_handovers").select("id,ho_no,job_no,status,doc_date,created_at,cust_rating").eq("customer_id", customerId)
       .then((r) => (r.error && /ho_no|cust_rating|column/i.test(r.error.message || "") ? supabase.from("job_handovers").select("id,job_no,status,doc_date,created_at").eq("customer_id", customerId) : r))
@@ -3436,7 +3436,7 @@ export async function saveJobOrder(jo, author) {
   await supabase.from("job_logs").insert({ job_no: jo.job_no, type: "edit", status: headStatus || null, author: author || null, created_by: user?.id || null });
   // handoff: notify the assigned team's members
   if (jo.assigned_team) {
-    const { data: tm } = await supabase.from("profiles").select("id").eq("team", jo.assigned_team);
+    const { data: tm } = await supabase.from("staff_directory").select("id").eq("team", jo.assigned_team);
     const cnA = await _custName(jo.customer_id);
     notify((tm || []).map((p) => p.id), { category: "job", title: `🔧 มอบหมายงานใหม่: ${cnA || jo.job_no}`, body: `${jo.title || "งานติดตั้ง/บริการ"} · ${jo.job_no}`, url: "joborders", ref_type: "job", ref_no: jo.job_no });
   }
@@ -3489,7 +3489,7 @@ export async function listHandovers(jobNo) {
   const ids = [...new Set(rows.map((r) => r.created_by).filter(Boolean))];
   let names = {};
   if (ids.length) {
-    const { data: ps } = await supabase.from("profiles").select("id,name,email").in("id", ids);
+    const { data: ps } = await supabase.from("staff_directory").select("id,name,email").in("id", ids);
     names = Object.fromEntries((ps || []).map((p) => [p.id, p.name || p.email]));
   }
   return rows.map((r) => ({ ...r, creatorName: names[r.created_by] || "" }));
@@ -3823,7 +3823,7 @@ export async function listReviews() {
   const custIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))];
   const [cu, tm, wr] = await Promise.all([
     custIds.length ? supabase.from("customers").select("id,name").in("id", custIds) : Promise.resolve({ data: [] }),
-    supabase.from("teams").select("id,name"),
+    supabase.from("team_directory").select("id,name"),
     supabase.from("web_reviews").select("id,source_job"),   // published set (source_job) — ถ้ายังไม่รัน 208 คอลัมน์หาย → treated as none
   ]);
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
@@ -4121,7 +4121,7 @@ export async function saleAdminKpi(from, to) {
   const [qs, jos, profs, boqs, lineMsgs, custs] = await Promise.all([
     _fetchAll((f, t) => supabase.from("quotations").select("quote_no,boq_no,created_by,status,issue_date,approved_at,variation_of", { count: "exact" }).order("quote_no").range(f, t)),
     _fetchAll((f, t) => supabase.from("job_orders").select("job_no,quote_no,status,rating", { count: "exact" }).order("job_no").range(f, t)),
-    supabase.from("profiles").select("id,name,email,role").then((r) => r.data || []),
+    supabase.from("staff_directory").select("id,name,email,role").then((r) => r.data || []),
     _fetchAll((f, t) => supabase.from("boqs").select("boq_no,created_at", { count: "exact" }).order("boq_no").range(f, t)).catch(() => []),
     // ข้อความแชตลูกค้าในช่วง (เรียงตามเวลา) — คิดเวลาตอบลีด · sent_by = พนักงานที่ตอบ (null = บอท/ระบบ ไม่นับ)
     _fetchAll((f, t) => { let b = supabase.from("line_messages").select("line_user_id,direction,sent_by,created_at", { count: "exact" }).order("created_at").range(f, t); if (from) b = b.gte("created_at", from); if (to) b = b.lte("created_at", to + "T23:59:59"); return b; }).catch(() => []),
@@ -4420,7 +4420,7 @@ export const NOTIFY_CATS = [
 ];
 async function _usersByRole(roles) {
   if (!roles?.length) return [];
-  const { data } = await supabase.from("profiles").select("id").in("role", roles);
+  const { data } = await supabase.from("staff_directory").select("id").in("role", roles);
   return (data || []).map((p) => p.id);
 }
 // who watches a job: office (admin/exec/sales) + the assigned team's members
@@ -4432,7 +4432,7 @@ async function _jobWatchers(job_no) {
     const { data: jo } = await supabase.from("job_orders").select("assigned_team").eq("job_no", job_no).maybeSingle();
     const office = await _usersByRole(["admin", "exec", "sales", "field_sales", "lead_tech"]); // หัวหน้าช่างคุมทุกทีม — ต้องเห็นความเคลื่อนไหวงานด้วย
     let team = [];
-    if (jo?.assigned_team) { const { data } = await supabase.from("profiles").select("id").eq("team", jo.assigned_team); team = (data || []).map((p) => p.id); }
+    if (jo?.assigned_team) { const { data } = await supabase.from("staff_directory").select("id").eq("team", jo.assigned_team); team = (data || []).map((p) => p.id); }
     return [...new Set([...office, ...team])];
   } catch { return []; }
 }
@@ -4469,7 +4469,7 @@ export async function notify(recipientIds, { category, title, body, url, ref_typ
     const uid = await _uid();
     const ids = [...new Set((recipientIds || []).filter((id) => id && id !== uid))];
     if (!ids.length) return;
-    const { data: profs } = await supabase.from("profiles").select("id,role").in("id", ids);
+    const { data: profs } = await supabase.from("staff_directory").select("id,role").in("id", ids);
     const settings = await _notifySettings();
     const allowed = (profs || []).filter((p) => { const s = settings[p.role]; return !s || s[category] !== false; }).map((p) => p.id);
     if (!allowed.length) return;
@@ -4601,7 +4601,7 @@ export async function deleteTask(id) {
 export async function listTaskComments(taskId) {
   const [c, profs] = await Promise.all([
     supabase.from("task_comments").select("*").eq("task_id", taskId).order("created_at", { ascending: true }),
-    supabase.from("profiles").select("id,name,email"),
+    supabase.from("staff_directory").select("id,name,email"),
   ]);
   if (c.error) throw c.error;
   const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
@@ -5186,7 +5186,7 @@ export function listExpenses(status) { return _cached("listExpenses:" + String(s
 async function _loadExpenses(status) {
   // กันเพดาน 1000 แถว — ทุกการจ่าย PO สร้างใบเบิก 1 ใบ ตารางโตเร็ว · PayVendorModal พึ่ง list นี้ตัดสินว่าใบเบิกเดิม "ถูกลบ" หรือยัง
   const build = (f, t) => { let q = supabase.from("expense_requests").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
-  const [exRows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,email")]);
+  const [exRows, profs] = await Promise.all([_fetchAll(build), supabase.from("staff_directory").select("id,name,email")]);
   const ex = { data: exRows };
   const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
   const enriched = await _enrichExpenseJobs(ex.data || []);
@@ -5202,7 +5202,7 @@ export async function decideExpense(id, status, note) {
     throw new Error(`เปลี่ยนสถานะกลับไม่ได้ — ใบนี้จ่ายไปแล้ว ${Number(ex0.paid_amount).toLocaleString("en-US")} บาท (หน้าจออาจค้าง — รีเฟรชก่อน)`);
   // กันอนุมัติใบเบิกของตัวเอง — ยกเว้นธุรการ/ผู้บริหาร (แนวเดียวกับล็อกอนุมัติใบลาฝั่ง HR)
   if (status === "approved" && ex0.requester === uid) {
-    const { data: me } = await supabase.from("profiles").select("role").eq("id", uid).maybeSingle();
+    const { data: me } = await supabase.from("staff_directory").select("role").eq("id", uid).maybeSingle();
     if (!["admin", "exec"].includes(me?.role)) throw new Error("อนุมัติใบเบิกของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารเป็นคนอนุมัติ");
   }
   const { error } = await supabase.from("expense_requests").update({ status, approver: uid, decided_at: new Date().toISOString(), decide_note: note || null }).eq("id", id);
@@ -5396,17 +5396,7 @@ export async function updateProfile(id, fields) {
 // create a brand-new login account + set its profile (admin only).
 // Uses a throwaway client so the admin's own session is untouched.
 export async function createUser({ email, password, name, role, team }) {
-  const tmp = createClient(_url, _anon, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data, error } = await tmp.auth.signUp({ email: email.trim(), password });
-  if (error) throw error;
-  const uid = data.user?.id;
-  if (!uid) throw new Error("สร้างบัญชีไม่สำเร็จ (อาจต้องปิด Confirm email ใน Supabase)");
-  const { error: e2 } = await supabase.from("profiles").upsert(
-    { id: uid, email: email.trim(), name: name?.trim() || email.trim(), role: role || "tech", team: ["tech", "assistant"].includes(role) ? (team || null) : null },
-    { onConflict: "id" }
-  );
-  if (e2) throw e2;
-  return data.user;
+  return callAdminUser({ action: "create", email, password, name, role, team });
 }
 
 // admin actions that need the service-role key → serverless function (guarded to admin/exec)
@@ -5707,11 +5697,11 @@ export async function searchFbMessages(term, { limit = 300 } = {}) {
 }
 // staff list (for owner dropdown + showing who replied)
 export async function listStaff() {
-  let { data, error } = await supabase.from("profiles").select("id,name,email,role,avatar_url").order("name");
+  let { data, error } = await supabase.from("staff_directory").select("id,name,email,role,avatar_url").order("name");
   // ห้ามให้ลิสต์พนักงานล้มทั้งก้อน — ถ้า staffMap ว่าง ชื่อผู้ตอบแชตทุกคนจะกลายเป็น "ทีมงาน"
   // ลดรูปลงเรื่อย ๆ: ไม่มี avatar_url (ยังไม่รัน 083) → คอลัมน์หลัก → คอลัมน์ต่ำสุด
-  if (error) ({ data, error } = await supabase.from("profiles").select("id,name,email,role").order("name"));
-  if (error) ({ data, error } = await supabase.from("profiles").select("id,name,email"));
+  if (error) ({ data, error } = await supabase.from("staff_directory").select("id,name,email,role").order("name"));
+  if (error) ({ data, error } = await supabase.from("staff_directory").select("id,name,email"));
   if (error) throw error;
   return (data || []).map((p) => ({ ...p, name: p.name || p.email }));
 }
@@ -5921,7 +5911,7 @@ export async function listMyLeaves() {
 export async function listLeaves(status) {
   // กันเพดาน 1000 แถว — ใบลาสะสมทุกปีไม่มีตัวกรองช่วงวัน พอเกินพันใบ ใบเก่าจะหลุดเงียบ ๆ ทำรายงาน/เงินเดือนย้อนหลังเพี้ยน
   const build = (f, t) => { let q = supabase.from("hr_leaves").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
-  const [lvRows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,role,department")]);
+  const [lvRows, profs] = await Promise.all([_fetchAll(build), supabase.from("staff_directory").select("id,name,role,department")]);
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
   return lvRows.map((l) => ({ ...l, name: pm[l.user_id]?.name || "-", department: posLabel(pm[l.user_id]) }));
 }
@@ -5976,7 +5966,7 @@ export async function cancelMyAdvance(id) {
 export async function listAdvances(status) {
   // กันเพดาน 1000 แถว — คำขอเบิกสะสมเรื่อย ๆ เหมือนใบลา
   const build = (f, t) => { let q = supabase.from("hr_advances").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
-  const [avRows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,role,department")]);
+  const [avRows, profs] = await Promise.all([_fetchAll(build), supabase.from("staff_directory").select("id,name,role,department")]);
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
   return avRows.map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]) }));
 }
@@ -6112,7 +6102,7 @@ async function _jobBriefMap(jobNos) {
 }
 export async function listOt(status) {
   const build = (f, t) => { let q = supabase.from("hr_ot").select("*", { count: "exact" }).order("ot_date", { ascending: false }).order("id").range(f, t); if (status) q = q.eq("status", status); return q; };
-  const [rows, profs] = await Promise.all([_fetchAll(build), supabase.from("profiles").select("id,name,role,department")]);
+  const [rows, profs] = await Promise.all([_fetchAll(build), supabase.from("staff_directory").select("id,name,role,department")]);
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
   const jm = await _jobBriefMap(rows.map((r) => r.job_no)).catch(() => ({}));
   return rows.map((a) => ({ ...a, name: pm[a.user_id]?.name || "-", department: posLabel(pm[a.user_id]), jobCustomer: jm[a.job_no]?.customer || null, jobDetails: jm[a.job_no]?.details || null }));
@@ -6171,7 +6161,7 @@ export async function markOtPaid(period, ids) {
 export async function listLoans(activeOnly) {
   let q = supabase.from("hr_loans").select("*").order("created_at", { ascending: false });
   if (activeOnly) q = q.eq("status", "active");
-  const [rows, profs] = await Promise.all([q, supabase.from("profiles").select("id,name,role,department")]);
+  const [rows, profs] = await Promise.all([q, supabase.from("staff_directory").select("id,name,role,department")]);
   if (rows.error) throw rows.error;
   const pm = Object.fromEntries((profs.data || []).map((p) => [p.id, p]));
   return (rows.data || []).map((l) => ({ ...l, name: pm[l.user_id]?.name || "-", department: posLabel(pm[l.user_id]) }));
@@ -6181,17 +6171,17 @@ export async function listMyLoans() {
   const { data, error } = await supabase.from("hr_loans").select("*").eq("user_id", uid).order("created_at", { ascending: false });
   if (error) throw error; return data || [];
 }
-export async function saveLoan({ id, user_id, principal, installment, note }) {
+export async function saveLoan({ id, user_id, principal, installment, note, status }) {
   const uid = await _uid();
   const P = Number(principal) || 0, I = Number(installment) || 0;
   if (id) {   // แก้ยอด/ค่างวด → recompute balance = ยอดยืม − ที่หักไปแล้ว
     const { data: pays } = await supabase.from("hr_loan_payments").select("amount").eq("loan_id", id);
     const paid = (pays || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const bal = Math.max(0, P - paid);
-    const { error } = await supabase.from("hr_loans").update({ principal: P, installment: I, note: note || null, balance: bal, status: bal <= 0 ? "closed" : "active" }).eq("id", id);
+    const { error } = await supabase.from("hr_loans").update({ principal: P, installment: I, note: note || null, balance: bal, status: status === "pending" ? "pending" : bal <= 0 ? "closed" : "active" }).eq("id", id);
     if (error) throw error; return;
   }
-  const { error } = await supabase.from("hr_loans").insert({ user_id, principal: P, installment: I, balance: P, status: P <= 0 ? "closed" : "active", note: note || null, created_by: uid });
+  const { error } = await supabase.from("hr_loans").insert({ user_id, principal: P, installment: I, balance: P, status: status === "pending" ? "pending" : P <= 0 ? "closed" : "active", note: note || null, created_by: uid });
   if (error) throw error;
 }
 export async function deleteLoan(id) {
@@ -6215,7 +6205,7 @@ export async function unsettleLoan(period) {
     ]);
     const paid = (ps || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const bal = Math.max(0, (Number(loan?.principal) || 0) - paid);
-    await supabase.from("hr_loans").update({ balance: bal, status: bal <= 0 ? "closed" : "active" }).eq("id", lid);
+    await supabase.from("hr_loans").update({ balance: bal, status: status === "pending" ? "pending" : bal <= 0 ? "closed" : "active" }).eq("id", lid);
   }
 }
 // ตอนทำจ่ายทั้งรอบ — บันทึกงวดผ่อน (idempotent ต่อ period ผ่าน unique loan+period) แล้ว recompute balance
@@ -6230,7 +6220,7 @@ export async function markLoanPaid(period, items) {
     ]);
     const paid = (pays || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const bal = Math.max(0, (Number(loan?.principal) || 0) - paid);
-    await supabase.from("hr_loans").update({ balance: bal, status: bal <= 0 ? "closed" : "active" }).eq("id", it.id);
+    await supabase.from("hr_loans").update({ balance: bal, status: status === "pending" ? "pending" : bal <= 0 ? "closed" : "active" }).eq("id", it.id);
   }
 }
 
@@ -6256,7 +6246,7 @@ export async function listHrStaff() {
   // HR covers permanent staff only — subcontractor-team members are excluded (managed on the ช่างซัพ page)
   let [pr, tm] = await Promise.all([
     supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso,citizen_id,active").order("name"),
-    supabase.from("teams").select("id,type"),
+    supabase.from("team_directory").select("id,type"),
   ]);
   // pre-196 fallback — ยังไม่มีคอลัมน์ active (สถานะพ้นสภาพ)
   if (pr.error && /active/i.test(pr.error.message || "")) pr = await supabase.from("profiles").select("id,name,email,role,team,department,work_pattern,sat_group,hire_date,signature_url,pay_type,base_pay,ot_rate,sso,citizen_id").order("name");
@@ -6285,7 +6275,7 @@ export async function updateHrProfile(id, fields) {
   if (Object.keys(payFields).length) {
     const { error } = await supabase.from("hr_pay").upsert({ user_id: id, ...payFields, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
     // ยังไม่รัน mig 154 → เขียนลงคอลัมน์เดิมใน profiles ไปก่อน
-    if (error) Object.assign(profFields, payFields);
+    if (error) throw error;
     else await logAudit({ action: "update", target_type: "hr_pay", target_no: id, reason: "แก้ข้อมูลค่าจ้าง: " + Object.keys(payFields).join(", ") }).catch(() => {});
   }
   if (Object.keys(profFields).length) {
@@ -6676,7 +6666,7 @@ async function _actorName() {
   if (_actorNameCache) return _actorNameCache;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase.from("profiles").select("name,email").eq("id", user.id).maybeSingle();
+  const { data } = await supabase.from("staff_directory").select("name,email").eq("id", user.id).maybeSingle();
   _actorNameCache = data?.name || data?.email || null;
   return _actorNameCache;
 }
@@ -6807,7 +6797,7 @@ export async function syncCashEntriesFromDocs() {
     _fetchAll((f, t) => supabase.from("purchase_orders").select("po_no,supplier,status,created_at,received_at,vat,paid_at,expense_id", { count: "exact" }).order("po_no").range(f, t)).then((rows) => ({ data: rows })),
     _fetchAll((f, t) => supabase.from("po_items").select("po_no,qty,price", { count: "exact" }).order("id").range(f, t)).then((rows) => ({ data: rows })), // กันเพดาน 1000 แถว
     _allRows((f, t) => supabase.from("customers").select("id,name", { count: "exact" }).order("id").range(f, t)),
-    supabase.from("teams").select("id,name"),
+    supabase.from("team_directory").select("id,name"),
     // ดึงฟิลด์ที่ใช้เทียบด้วย (direction/status/entry_date/amount/note/entity) → sync ข้าม update ที่ค่าไม่เปลี่ยน (ลดเขียน DB/ล้างแคช)
     _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited,direction,status,entry_date,amount,note,entity", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows }))
       .catch(() => _fetchAll((f, t) => supabase.from("cash_entries").select("id,source_type,source_ref,edited,direction,status,entry_date,amount,note", { count: "exact" }).neq("source_type", "manual").order("id").range(f, t)).then((rows) => ({ data: rows }))), // pre-entity fallback
@@ -6869,10 +6859,10 @@ export async function syncCashEntriesFromDocs() {
   // อ่านเฉพาะ role office: RLS ของ hr_advances กรองแถวเงียบ ๆ ให้ role อื่นเห็นแค่ของตัวเอง — ถ้าปล่อยผ่าน sync จะกวาดเส้นของคนอื่นทิ้ง (บทเรียนเดียวกับ mig 085)
   let advRows = null, pnAdv = {};
   try {
-    const { data: meRow } = await supabase.from("profiles").select("role").eq("id", await _uid()).maybeSingle();
+    const { data: meRow } = await supabase.from("staff_directory").select("role").eq("id", await _uid()).maybeSingle();
     if (["admin", "exec", "finance", "hr"].includes(meRow?.role)) {
       advRows = await _fetchAll((f, t) => supabase.from("hr_advances").select("id,user_id,amount,paid_out_at", { count: "exact" }).not("paid_out_at", "is", null).order("id").range(f, t));
-      pnAdv = Object.fromEntries(((await supabase.from("profiles").select("id,name")).data || []).map((p) => [p.id, p.name]));
+      pnAdv = Object.fromEntries(((await supabase.from("staff_directory").select("id,name")).data || []).map((p) => [p.id, p.name]));
     }
   } catch (_) { advRows = null; }
   if (advRows) advRows.forEach((x) => desired.push({ source_type: "advance", source_ref: String(x.id), direction: "out", status: "actual", entry_date: _d(x.paid_out_at), amount: Number(x.amount) || 0, note: `เบิกเงินล่วงหน้า${pnAdv[x.user_id] ? " · " + pnAdv[x.user_id] : ""}` }));
@@ -7008,10 +6998,10 @@ export async function listChatRooms() {
   let [rooms, members, staff] = await Promise.all([
     supabase.from("chat_rooms").select("*"),
     supabase.from("chat_members").select("room_id,user_id,last_read_at"),
-    supabase.from("profiles").select("id,name,email,avatar_url"),
+    supabase.from("staff_directory").select("id,name,email,avatar_url"),
   ]);
   if (rooms.error) throw rooms.error;
-  if (staff.error && /avatar_url/i.test(staff.error.message || "")) staff = await supabase.from("profiles").select("id,name,email"); // migration 083 not run yet
+  if (staff.error && /avatar_url/i.test(staff.error.message || "")) staff = await supabase.from("staff_directory").select("id,name,email"); // migration 083 not run yet
   const nameById = Object.fromEntries((staff.data || []).map((p) => [p.id, p.name || p.email]));
   const avById = Object.fromEntries((staff.data || []).map((p) => [p.id, p.avatar_url]));
   const memByRoom = {}; (members.data || []).forEach((m) => { (memByRoom[m.room_id] = memByRoom[m.room_id] || []).push(m); });
@@ -7257,8 +7247,8 @@ const _toolErr = (e) => new Error(/tool/.test(e.message || "") && /relation|find
 export async function listTools() {
   const [t, tm, pf, ty] = await Promise.all([
     supabase.from("tools").select("*").order("name"),
-    supabase.from("teams").select("id,name"),
-    supabase.from("profiles").select("id,name,email"),
+    supabase.from("team_directory").select("id,name"),
+    supabase.from("staff_directory").select("id,name,email"),
     supabase.from("tool_types").select("id,name,emoji,photo_url")
       .then((r) => r.error ? supabase.from("tool_types").select("id,name,emoji") : r, () => ({ data: [] })),  // pre-181 → ไม่มี photo_url · pre-179 → ว่าง
   ]);
@@ -7339,8 +7329,8 @@ export async function listToolMoves() {
   const [mv, t, pf, tm] = await Promise.all([
     supabase.from("tool_moves").select("*").order("created_at", { ascending: false }).limit(300),
     supabase.from("tools").select("id,name,code"),
-    supabase.from("profiles").select("id,name,email"),
-    supabase.from("teams").select("id,name"),
+    supabase.from("staff_directory").select("id,name,email"),
+    supabase.from("team_directory").select("id,name"),
   ]);
   if (mv.error) throw _toolErr(mv.error);
   const tn = Object.fromEntries((t.data || []).map((x) => [x.id, x]));
@@ -7400,4 +7390,21 @@ export async function vatSummary(ym) {
     (items || []).forEach((it) => { buyVat += (Number(it.qty) || 0) * (Number(it.price) || 0) * 0.07; });   // ราคาที่เก็บเป็นก่อน VAT เสมอ
   }
   return { saleVat: _round2(saleVat), buyVat: _round2(buyVat), net: _round2(saleVat - buyVat), saleCount: (rc.data || []).length, buyCount: pos.length };
+}
+
+// Private personnel files. Store object paths, never expiring/public URLs.
+export async function uploadHrDocument(userId, file) {
+  const path = `${userId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const { error } = await supabase.storage.from("hr-documents").upload(path, file, { upsert: false });
+  if (error) throw error;
+  return path;
+}
+export async function openHrDocument(doc) {
+  if (!doc.path) { if (doc.url) window.open(doc.url, "_blank", "noopener,noreferrer"); return; }
+  const popup = window.open("about:blank", "_blank");
+  if (popup) popup.opener = null;
+  const { data, error } = await supabase.storage.from("hr-documents").createSignedUrl(doc.path, 60);
+  if (error) { popup?.close(); throw error; }
+  if (popup) popup.location.replace(data.signedUrl);
+  else window.location.assign(data.signedUrl);
 }

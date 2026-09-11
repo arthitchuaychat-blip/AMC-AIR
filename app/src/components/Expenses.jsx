@@ -11,7 +11,7 @@ import { UIcon } from "../icons";
 import { useLang } from "../lib/i18n";
 import FilterBar from "./FilterBar";
 
-const OFFICE = ["admin", "exec", "finance", "hr"]; // hr: อนุมัติ/จ่ายเบิก + คุมเงินสดย่อย (v249)
+const OFFICE = ["admin", "exec", "finance"]; // HR uses employee self-service; payment authority is separate.
 const EST = { pending: { t: "รออนุมัติ", m: "အတည်ပြုရန် စောင့်", c: "b-amber" }, approved: { t: "อนุมัติ · รอจ่าย", m: "အတည်ပြုပြီး · ငွေပေးရန် စောင့်", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", m: "ပယ်ချ", c: "b-red" }, paid: { t: "จ่ายแล้ว", m: "ပေးပြီး", c: "b-green" } };
 // เบิกเงินไปแล้ว (จ่ายครบหรือบางส่วน) แต่ยังไม่มีรูปใบเสร็จ/บิลแนบ → ตามทวงใบเสร็จ
 const needReceipt = (x) => x.status !== "rejected" && (x.status === "paid" || Number(x.paid_amount) > 0) && !(x.attachments?.length);
@@ -218,7 +218,7 @@ function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegister
   const [q, setQ] = React.useState("");
   const [dateR, setDateR] = React.useState({ from: "", to: "" });
   async function load() { try { setList(await listMyExpenses()); } catch (e) { flash(L("โหลดไม่สำเร็จ: ", "ဖွင့်မရ: ") + (e.message || e), true); setList([]); } }
-  React.useEffect(() => { load(); listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: null } : {}).then((j) => setJobs(j.filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
+  React.useEffect(() => { load(); if (role !== "hr" && role !== "maid" && role !== "graphic") listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: null } : {}).then((j) => setJobs(j.filter((x) => x.status !== "cancelled"))).catch(() => {}); }, []);
   React.useEffect(() => { if (initialSearch) { setQ(initialSearch); onConsumed && onConsumed(); } }, [initialSearch]); // eslint-disable-line react-hooks/exhaustive-deps · จากชิปในใบ PO → ใส่ค้นหาเลข PO
   const pendRcpt = (list || []).filter(needReceipt).length;
   const activeCount = (q ? 1 : 0) + (dateR.from || dateR.to ? 1 : 0);
@@ -594,7 +594,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
             {needReceipt(x) && <button className="btn-ghost sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จแทนพนักงาน", "ဝန်ထမ်းကိုယ်စား ဘောက်ချာ တွဲ")}</button>}
             {isAssetExp(x) && onRegisterAsset && <button className="btn-ghost sm" style={{ color: "#137a54", borderColor: "#99e2c4" }} onClick={() => onRegisterAsset(assetPrefillOf(x))} title={L("นำไปสร้างทะเบียนสินทรัพย์ (คิดค่าเสื่อม)", "ပိုင်ဆိုင်မှု မှတ်ပုံတင်")}>🏗️ {L("ขึ้นทะเบียนสินทรัพย์", "ပိုင်ဆိုင်မှု မှတ်ပုံတင်")}</button>}
             {/* ยกเลิกการจ่าย — ผู้บริหารเท่านั้น (เจ้าของเคาะ) */}
-            {(x.status === "paid" || Number(x.paid_amount) > 0) && role === "exec" && <button className="btn-ghost sm danger" onClick={() => unpay(x)}>↩️ {L("ยกเลิกการจ่าย", "ငွေပေးမှု ပယ်ဖျက်")}</button>}
+            {(x.status === "paid" || Number(x.paid_amount) > 0) && ["exec", "admin"].includes(role) && <button className="btn-ghost sm danger" onClick={() => unpay(x)}>↩️ {L("ยกเลิกการจ่าย", "ငွေပေးမှု ပယ်ဖျက်")}</button>}
           </ExpenseCard>
         ))}
       </div>

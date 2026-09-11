@@ -1,3 +1,4 @@
+import { canManagePermissions, isManagement, roleCeiling } from "../lib/roleCapabilities";
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
@@ -23,7 +24,8 @@ function Fold({ icon, title, sub, children, defaultOpen = false }) {
 }
 
 // editable role → module permission matrix. ธุรการ/ผู้บริหาร can adjust who sees/edits each menu.
-function PermissionsCard({ flash }) {
+function PermissionsCard({ flash, actorRole }) {
+  const editable = canManagePermissions(actorRole);
   const [perms, setP] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
   React.useEffect(() => { getRolePermissions().then((o) => setP(mergePerms(o))).catch(() => setP(mergePerms(null))); }, []);
@@ -41,6 +43,7 @@ function PermissionsCard({ flash }) {
     setP((p) => ({ ...p, [role]: { ...DEFAULT_PERMS[role] } }));
   }
   async function save() {
+    if (!editable) return;
     setSaving(true);
     try { await saveRolePermissions(perms); setPerms(mergePerms(perms)); flash("บันทึกสิทธิ์แล้ว ✓ — รีเฟรชหน้าเพื่อให้เมนูอัปเดตครบทุกคน"); }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e) + " (รัน 039_role_permissions.sql แล้วหรือยัง?)", true); }
@@ -50,17 +53,17 @@ function PermissionsCard({ flash }) {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="sec-head">
-        <div><div className="sec-title">สิทธิ์การใช้งานตามตำแหน่ง</div><div className="sec-sub">กดที่ช่องเพื่อสลับ — แก้ไข / ดู / ไม่เห็น · ธุรการมีสิทธิ์สูงสุด</div></div>
+        <div><div className="sec-title">สิทธิ์การใช้งานตามตำแหน่ง</div><div className="sec-sub">ผู้บริหารเปลี่ยนสิทธิ์ได้ · ผู้จัดการดูตารางได้ · งานส่วนตัวพนักงานยังเปิดทุกตำแหน่ง</div></div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn-ghost sm" onClick={() => setP(mergePerms(DEFAULT_PERMS))}>คืนค่าเริ่มต้น</button>
-          <button className="btn-primary sm" disabled={saving} onClick={save}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> บันทึก</button>
+          <button className="btn-ghost sm" disabled={!editable} onClick={() => setP(mergePerms(DEFAULT_PERMS))}>คืนค่าเริ่มต้น</button>
+          <button className="btn-primary sm" disabled={saving || !editable} onClick={save}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> บันทึก</button>
         </div>
       </div>
       <div style={{ overflowX: "auto" }}>
         <table className="perm-table">
           <thead><tr><th style={{ textAlign: "left" }}>เมนู / ฟีเจอร์</th>{PERM_ROLES.map((r) => (
             <th key={r}><div>{PERM_ROLE_LABEL[r]}</div>
-              <button type="button" title={`รีเซ็ต ${PERM_ROLE_LABEL[r]} เป็นค่าเริ่มต้น`} onClick={() => resetRole(r)}
+              <button type="button" disabled={!editable} title={`รีเซ็ต ${PERM_ROLE_LABEL[r]} เป็นค่าเริ่มต้น`} onClick={() => resetRole(r)}
                 style={{ marginTop: 3, fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, padding: "1px 6px", cursor: "pointer" }}>↺ รีเซ็ต</button></th>
           ))}</tr></thead>
           <tbody>
@@ -68,7 +71,7 @@ function PermissionsCard({ flash }) {
               <tr key={m.id}>
                 <td style={{ textAlign: "left" }}>{m.label}</td>
                 {PERM_ROLES.map((r) => { const lv = perms[r][m.id] || "none"; const s = CELL[lv]; return (
-                  <td key={r}><button type="button" className="perm-cell" style={{ color: s.c, background: s.bg }} onClick={() => cycle(r, m.id, m.editable)}>{s.t}</button></td>
+                  <td key={r}><button type="button" className="perm-cell" disabled={!editable || isManagement(r) || roleCeiling(r, m.id) === "none" || m.id === "attendance"} style={{ color: s.c, background: s.bg }} onClick={() => cycle(r, m.id, m.editable)}>{s.t}</button></td>
                 ); })}
               </tr>
             ))}
@@ -107,7 +110,7 @@ function NotifyCard({ flash }) {
               <tr key={c.id}>
                 <td style={{ textAlign: "left" }}>{c.label}</td>
                 {PERM_ROLES.map((r) => { const on = isOn(r, c.id); return (
-                  <td key={r}><button type="button" className="perm-cell" style={on ? { color: "#0a6b3d", background: "#dcf5e8" } : { color: "#7C8CA1", background: "var(--surface-2)" }} onClick={() => toggle(r, c.id)}>{on ? "เปิด" : "ปิด"}</button></td>
+                  <td key={r}><button type="button" className="perm-cell" disabled={isManagement(r) || roleCeiling(r, m.id) === "none" || m.id === "attendance"} style={on ? { color: "#0a6b3d", background: "#dcf5e8" } : { color: "#7C8CA1", background: "var(--surface-2)" }} onClick={() => toggle(r, c.id)}>{on ? "เปิด" : "ปิด"}</button></td>
                 ); })}
               </tr>
             ))}
@@ -272,7 +275,9 @@ function TeamRow({ team, onChanged, flash }) {
 }
 
 // แถวผู้ใช้: ปกติเป็นโหมดอ่าน (ชื่อ · ตำแหน่ง · ทีม · อีเมล) — กด "แก้ไข" ถึงเปิดฟอร์ม+ตั้งรหัสใหม่
-function UserRow({ p, teams, onChanged, flash }) {
+function UserRow({ p, teams, onChanged, flash, actorRole }) {
+  const canAssign = canManagePermissions(actorRole);
+  const protectedOwner = actorRole !== "exec" && p.role === "exec";
   const [edit, setEdit] = React.useState(false);
   const [name, setName] = React.useState(p.name || "");
   const [email, setEmail] = React.useState(p.email || "");
@@ -286,7 +291,7 @@ function UserRow({ p, teams, onChanged, flash }) {
   async function save() {
     setBusy(true);
     try {
-      await updateProfile(p.id, { name, role, team });
+      await updateProfile(p.id, { name, team, ...(canAssign ? { role } : {}) });
       if (email.trim() && email.trim() !== p.email) await adminSetUserEmail(p.id, email.trim());
       if (pw.trim()) { await adminSetUserPassword(p.id, pw.trim()); setPw(""); }
       flash(`บันทึก ${email.trim() || p.email} แล้ว`); setEdit(false); onChanged();
@@ -330,16 +335,16 @@ function UserRow({ p, teams, onChanged, flash }) {
   return (
     <div className="set-item-edit">
       <div className="set-row set-row-user">
-        <input className="inp" style={{ flex: "1.4", minWidth: 150 }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="อีเมล" />
+        <input className="inp" style={{ flex: "1.4", minWidth: 150 }} disabled={protectedOwner} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="อีเมล" />
         <input className="inp" style={{ flex: "1", minWidth: 90 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="ชื่อ" />
-        <Combo className="inp" value={role} onChange={(e) => setRole(e.target.value)}>
+        <Combo className="inp" disabled={!canAssign} title="เฉพาะผู้บริหารเปลี่ยนสิทธิ์ได้" value={role} onChange={(e) => setRole(e.target.value)}>
           {ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
         </Combo>
         <Combo className="inp" value={team} onChange={(e) => setTeam(e.target.value)} disabled={!["tech", "assistant"].includes(role)}>
           <option value="">— ทีม —</option>
           {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </Combo>
-        <input className="inp" style={{ flex: "1", minWidth: 110 }} type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="ตั้งรหัสใหม่ (เว้นว่าง=ไม่เปลี่ยน)" />
+        <input className="inp" style={{ flex: "1", minWidth: 110 }} type="text" disabled={protectedOwner} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="ตั้งรหัสใหม่ (เว้นว่าง=ไม่เปลี่ยน)" />
       </div>
       <div className="set-edit-acts">
         <button className="btn-ghost sm" onClick={() => setEdit(false)}>ยกเลิก</button>
@@ -737,7 +742,7 @@ export default function Settings({ role }) {
 
       {!loading && (
         <>
-        {can(role, "settings", "edit") && <Fold icon="🔐" title="สิทธิ์การใช้งานตามตำแหน่ง" sub="แก้ไข / ดู / ไม่เห็น รายเมนู รายตำแหน่ง"><PermissionsCard flash={flash} /></Fold>}
+        {can(role, "settings") && <Fold icon="🔐" title="สิทธิ์การใช้งานตามตำแหน่ง" sub="แก้ไข / ดู / ไม่เห็น รายเมนู รายตำแหน่ง"><PermissionsCard actorRole={role} flash={flash} /></Fold>}
         {can(role, "settings", "edit") && <Fold icon="🧾" title="ประวัติการลบ / ยกเลิกเอกสาร (Audit)" sub="ตรวจย้อนหลังว่าใครลบ/ยกเลิกอะไร + กู้คืนเอกสาร"><AuditCard flash={flash} /></Fold>}
         {can(role, "settings", "edit") && <Fold icon="🔔" title="การแจ้งเตือน" sub="เปิด/ปิดแจ้งเตือนแต่ละกลุ่มกิจกรรม ตามตำแหน่ง"><NotifyCard flash={flash} /></Fold>}
         {can(role, "settings", "edit") && <Fold icon="🤖" title="ตอบแชต LINE อัตโนมัติ" sub="ข้อความตอบกลับลูกค้าอัตโนมัติ"><AutoReplyCard flash={flash} /></Fold>}
@@ -772,10 +777,10 @@ export default function Settings({ role }) {
           {/* USERS */}
           <div className="card">
             <div className="sec-head"><div><div className="sec-title">ผู้ใช้งาน</div><div className="sec-sub">{profiles.length} คน</div></div>
-              <button className={showAddUser ? "btn-ghost sm" : "btn-primary sm"} onClick={() => setShowAddUser((v) => !v)}>
+              <button disabled={!canManagePermissions(role)} title="การสร้างบัญชีพร้อมกำหนดตำแหน่งทำได้โดยผู้บริหาร" className={showAddUser ? "btn-ghost sm" : "btn-primary sm"} onClick={() => setShowAddUser((v) => !v)}>
                 {showAddUser ? "ปิดฟอร์ม" : <><UIcon name="plus" size={14} color="#fff" strokeWidth={2.4} /> เพิ่มผู้ใช้</>}
               </button></div>
-            {showAddUser && <div className="set-add set-add-user">
+            {showAddUser && canManagePermissions(role) && <div className="set-add set-add-user">
               <input className="inp" value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} placeholder="อีเมล" />
               <input className="inp" type="text" value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} placeholder="รหัสผ่าน (≥6)" />
               <input className="inp" value={nu.name} onChange={(e) => setNu({ ...nu, name: e.target.value })} placeholder="ชื่อ" />
@@ -789,7 +794,7 @@ export default function Settings({ role }) {
               <button className="btn-primary" disabled={addingU} onClick={addUser}><UIcon name="plus" size={15} color="#fff" strokeWidth={2.4} /> เพิ่มผู้ใช้</button>
             </div>}
             <div className="set-list">
-              {profiles.map((p) => <UserRow key={p.id} p={p} teams={teams} onChanged={load} flash={flash} />)}
+              {profiles.map((p) => <UserRow actorRole={role} key={p.id} p={p} teams={teams} onChanged={load} flash={flash} />)}
             </div>
           </div>
         </div>

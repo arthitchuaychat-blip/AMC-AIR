@@ -1,0 +1,16 @@
+# Proposed v831 — Role access and employee privacy
+
+Status: NOT deployed. Automatic approval review rejected both the original broad migration and this narrower production migration. Production code and permissions remain unchanged.
+
+The saved HR permissions still inherited sales, procurement and finance access. Managers could also change roles and reset an executive's credentials. This release separates module visibility, privileged actions and database access.
+
+- Executives and managers can use every business module. Only executives can assign roles, create accounts with roles or edit the permission matrix. Managers can view the matrix and manage ordinary accounts, but cannot take over an executive account.
+- HR has personnel, time/leave/OT, draft payroll and pending employee loan preparation. Managers/executives approve leave, OT, wage changes and payroll closure; finance pays approved disbursements. Closing a payroll round continues to create approved salary expenses, with necessary recipient bank details. Existing payroll formulas and the historical `paid`/closed-round representation are preserved.
+- Every employee retains their own attendance, leave, advances, live wage information and payslips. Private profiles and pay tables are scoped separately from the staff directory. HR cannot prepare/approve its own payroll row; management completes that row.
+- Head technicians retain every team's field job view and see the members of assigned teams. Ordinary technicians stay scoped to their team. Viewing other teams does not grant status-edit authority over them.
+- Only the executive, manager and HR saved matrices are updated. Other saved role settings are retained and asserted unchanged. HR-only fences close inherited access on 63 business tables; non-HR users retain their existing workflow policies. Four employee/payroll tables receive private-data scopes. Executives are added to 10 existing manager-only policies.
+- HR's former authorization is removed from customer communication and other service-key API gateways. New personnel documents use private storage and short-lived signed links. This does not migrate all historical files in the shared photos bucket.
+
+Validation: production build; frontend permission behavior with stale overrides; mocked account-administration API tests (no messages sent); dashboard loading/report metric regressions; transaction/rollback database integration covering all 12 roles, self-service wages/payslips, HR draft preparation and denials, manager escalation denials, field team scope, inactive users and anonymous internal access. No real payroll/expense payment was executed. Browser interactions with live employee accounts were not performed.
+
+The proposed SQL is `supabase/pending/role_access_v831_scoped.sql`. It has not been applied or recorded as a migration. Production application and database deployment are blocked pending approval of this concrete scope. `app/scripts/test-role-access-database.sql` runs transactional fixtures against the applied schema and rolls them back. Use only in an authorized database session. The emergency rollback SQL is `supabase/rollback_role_access_v831.sql`; apply it as a new recorded migration if rollback is necessary and restore application commit `1972330ac6006c0c75bf74668aaed1d192b8e5a4`. Keep newly uploaded private HR documents private.

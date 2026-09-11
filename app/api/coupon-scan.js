@@ -3,7 +3,7 @@ const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
 const IMG = { "image/jpeg": 1, "image/png": 1, "image/gif": 1, "image/webp": 1 };
-const OFFICE = ["admin", "exec", "finance", "hr", "sales", "field_sales", "graphic", "stock"];
+const OFFICE = ["admin", "exec", "finance", "sales", "field_sales", "graphic", "stock"];
 
 async function readJson(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -19,8 +19,8 @@ export default async function handler(req, res) {
     const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${jwt}` } });
     if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
     const user = await ur.json();
-    const prof = (await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])))[0];
-    if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
+    const prof = (await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role,active`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])))[0];
+    if ((prof?.active === false || !OFFICE.includes(prof?.role))) return res.status(403).json({ error: "forbidden" });
     if (!process.env.ANTHROPIC_API_KEY) return res.status(500).json({ error: "no ANTHROPIC_API_KEY" });
 
     const { imageUrl } = await readJson(req);

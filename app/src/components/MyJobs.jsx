@@ -1,6 +1,6 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
-import { listJobOrders, updateJobStatus, updateVisitStatus, addJobLog, submitOt } from "../lib/api";
+import { listStaff, listJobOrders, updateJobStatus, updateVisitStatus, addJobLog, submitOt } from "../lib/api";
 import { UIcon } from "../icons";
 import { slotDef, jobDays, parseYmd, thDayMon, scheduleLabel, JOB_STATUSES, ymd } from "../lib/schedule";
 import JobTimeline, { Linkify } from "./JobTimeline";
@@ -17,7 +17,7 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
   const lang = useLang(); // "my" เฉพาะช่างที่เลือกภาษาพม่า (ฝั่งหลังบ้าน = "th" เสมอ)
   const t = (th, my) => (lang === "my" ? my : th);
   const stLbl = (s) => (lang === "my" ? (JOB_STATUS_MY[s] || STATUS[s]?.th) : STATUS[s]?.th); // สถานะงาน (แปลตามภาษา)
-  const allTeams = role === "lead_tech"; // หัวหน้าช่างเห็นงานทุกทีม
+  const allTeams = ["lead_tech", "exec", "admin"].includes(role); // หัวหน้าช่างเห็นงานทุกทีม
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
@@ -32,11 +32,11 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
     try {
       // จอช่าง: ให้ฐานข้อมูลกรองทีมและตัดราคาออกตั้งแต่ต้นทาง (mig 166)
       // ตัวกรองฝั่งจอด้านล่างคงไว้เป็นตาข่ายกันพลาด (ทำซ้ำได้ ไม่เสียหาย)
-      const all = await listJobOrders({ fieldOnly: true, team: allTeams ? null : team });
+      const [all, staff] = await Promise.all([listJobOrders({ fieldOnly: true, team: allTeams ? null : team }), allTeams ? listStaff() : Promise.resolve([])]);
       // a job is "mine" if my team is on ANY of its visits (fallback: legacy assigned_team)
       const mine = allTeams ? all : all.filter((j) =>
         (j.visits && j.visits.length) ? j.visits.some((v) => v.assigned_team === team) : j.assigned_team === team);
-      setList(mine);
+      setList(mine.map((j) => ({ ...j, teamMembers: staff.filter((p) => p.active !== false && p.team && (p.team === j.assigned_team || j.visits?.some((v) => v.assigned_team === p.team))).map((p) => p.name || p.email) })));
     } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -165,6 +165,7 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
                 </div>}
               </div>
 
+              {allTeams && jo.teamMembers?.length > 0 && <div className="myjob-row"><UIcon name="user" size={15} /> ทีมที่มอบหมาย: {jo.teamMembers.join(", ")}</div>}
               {jo.contact_name && <div className="myjob-row"><UIcon name="user" size={15} color="var(--ink-3)" /> {jo.contact_name}
                 {jo.contact_phone && <a href={`tel:${jo.contact_phone}`} className="myjob-call">📞 {jo.contact_phone}</a>}</div>}
               {!jo.contact_name && jo.contact_phone && <div className="myjob-row"><span>📞</span> <a href={`tel:${jo.contact_phone}`} className="myjob-call">{jo.contact_phone}</a></div>}

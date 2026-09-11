@@ -44,8 +44,8 @@ export default async function handler(req, res) {
   const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${jwt}` } });
   if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
   const user = await ur.json();
-  const prof = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-  if (!OFFICE.includes(prof[0]?.role)) return res.status(403).json({ error: "forbidden" });
+  const prof = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role,active`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  if ((prof[0]?.active === false || !OFFICE.includes(prof[0]?.role))) return res.status(403).json({ error: "forbidden" });
 
   const { poNo } = await readJson(req);
   if (!poNo) return res.status(400).json({ error: "ไม่ระบุเลข PO" });

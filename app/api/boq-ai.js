@@ -4,7 +4,7 @@
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
-const OFFICE = ["admin", "exec", "sales", "field_sales", "finance", "hr"];
+const OFFICE = ["admin", "exec", "sales", "field_sales", "finance"];
 const IMG_TYPES = { "image/jpeg": 1, "image/png": 1, "image/gif": 1, "image/webp": 1 };
 
 // แยก JSON จากคำตอบ AI แบบทน: ตัด fence, หา { ... } ตัวนอกสุด, ถ้ายาวเกินถูกตัดกลาง (unterminated) ลองปิดวงเล็บ/ตัด lines ท้าย
@@ -112,8 +112,8 @@ export default async function handler(req, res) {
   const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${jwt}` } });
   if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
   const user = await ur.json();
-  const prof = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-  if (!OFFICE.includes(prof[0]?.role)) return res.status(403).json({ error: "forbidden" });
+  const prof = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role,active`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  if ((prof[0]?.active === false || !OFFICE.includes(prof[0]?.role))) return res.status(403).json({ error: "forbidden" });
 
   const { imageUrls = [], spec = "", brief = "" } = await readJson(req);
   if (!imageUrls.length && !spec.trim()) return res.status(400).json({ error: "ต้องมีรูปแบบ หรือ รายการสเปคอย่างน้อยอย่างใดอย่างหนึ่ง" });

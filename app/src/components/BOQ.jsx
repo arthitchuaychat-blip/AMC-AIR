@@ -67,7 +67,7 @@ function SectionBlock({ sec, items, pool, onAdd, onSet, onDel, onMove }) {
 export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpenQuote, onOpenDoc, newForCustomer, onNewConsumed, onGoChat, draft, onDraftConsumed }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "boq", "edit");
-  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
+  const canDelete = ["exec", "admin"].includes(role); // ลบจริงได้เฉพาะธุรการ
   const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
   const [list, setList] = React.useState([]);
   // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ

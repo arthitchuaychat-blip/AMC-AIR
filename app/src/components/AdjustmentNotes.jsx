@@ -30,7 +30,7 @@ function genNo(kind) { const d = new Date(), p = (n) => String(n).padStart(2, "0
 export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวา
   const canEdit = can(role, "adjnote", "edit");
-  const canDelete = role === "admin";
+  const canDelete = ["exec", "admin"].includes(role);
   const [list, setList] = React.useState([]);
   const [receipts, setReceipts] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);

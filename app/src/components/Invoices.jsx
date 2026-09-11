@@ -33,7 +33,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreateReceipt, onOpenDoc, focus, onFocusConsumed, onGoChat }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "invoice", "edit");
-  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
+  const canDelete = ["exec", "admin"].includes(role); // ลบจริงได้เฉพาะธุรการ
   const [list, setList] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
   const [custs, setCusts] = React.useState([]);

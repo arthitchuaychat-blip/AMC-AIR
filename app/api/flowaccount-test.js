@@ -16,8 +16,9 @@ export default async function handler(req, res) {
   const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${token}` } });
   if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
   const user = await ur.json();
-  const pr = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: { apikey: KEY(), Authorization: `Bearer ${KEY()}` } });
-  const role = ((pr.ok ? await pr.json() : [])[0] || {}).role;
+  const pr = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role,active`, { headers: { apikey: KEY(), Authorization: `Bearer ${KEY()}` } });
+  const checkedProfile = (pr.ok ? await pr.json() : [])[0];
+  const role = checkedProfile?.active === false ? null : checkedProfile?.role;
   if (!OFFICE.includes(role)) return res.status(403).json({ error: "forbidden" });
 
   const id = process.env.FLOWACCOUNT_CLIENT_ID, secret = process.env.FLOWACCOUNT_CLIENT_SECRET;
