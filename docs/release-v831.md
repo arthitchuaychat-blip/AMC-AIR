@@ -1,6 +1,6 @@
-# Proposed v831 — Role access and employee privacy
+# v831 — Role access and employee privacy
 
-Status: NOT deployed. Automatic approval review rejected both the original broad migration and this narrower production migration. Production code and permissions remain unchanged.
+Status: Production database migration applied on 2026-09-11 after the owner explicitly approved the concrete v831 package. PR #3 was merged into main as b758cee7570682ad730e3ab91222b6ca0909f4ed. Vercel reported successful deployments for all four linked projects, including the AMC management production project. The 12-role database regression suite passed again against the applied schema with every fixture rolled back. Browser interactions with live employee accounts remain untested.
 
 The saved HR permissions still inherited sales, procurement and finance access. Managers could also change roles and reset an executive's credentials. This release separates module visibility, privileged actions and database access.
 
@@ -13,4 +13,4 @@ The saved HR permissions still inherited sales, procurement and finance access. 
 
 Validation: production build; frontend permission behavior with stale overrides; mocked account-administration API tests (no messages sent); dashboard loading/report metric regressions; transaction/rollback database integration covering all 12 roles, self-service wages/payslips, HR draft preparation and denials, manager escalation denials, field team scope, inactive users and anonymous internal access. No real payroll/expense payment was executed. Browser interactions with live employee accounts were not performed.
 
-The proposed SQL is `supabase/pending/role_access_v831_scoped.sql`. It has not been applied or recorded as a migration. Production application and database deployment are blocked pending approval of this concrete scope. `app/scripts/test-role-access-database.sql` runs transactional fixtures against the applied schema and rolls them back. Use only in an authorized database session. The emergency rollback SQL is `supabase/rollback_role_access_v831.sql`; apply it as a new recorded migration if rollback is necessary and restore application commit `1972330ac6006c0c75bf74668aaed1d192b8e5a4`. Keep newly uploaded private HR documents private.
+The applied migration is `supabase/migrations/20260911041007_role_access_v831_scoped.sql`, matching the version recorded by Supabase. Earlier automatic review rejections were resolved by the owner approving this concrete package before deployment. `app/scripts/test-role-access-database.sql` runs transactional fixtures against the applied schema and rolls them back. Use only in an authorized database session. The emergency rollback SQL is `supabase/rollback_role_access_v831.sql`; apply it as a new recorded migration if rollback is necessary and restore application commit `1972330ac6006c0c75bf74668aaed1d192b8e5a4`. Keep newly uploaded private HR documents private.
