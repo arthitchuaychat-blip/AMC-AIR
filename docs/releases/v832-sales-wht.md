@@ -20,7 +20,9 @@ Browser interaction testing was unavailable in this runtime because a Chromium e
 
 ## Deployment
 
-Apply `supabase/pending/sales_wht_v832.sql` before merging the app. After success, move it to the migrations directory using the exact version reported by Supabase. Check schema/RLS advisories and Vercel statuses. Do not label deployment complete until both database and app are confirmed.
+Applied successfully on 2026-09-11 as `20260911050748_sales_wht_v832` through Supabase. All four Vercel preview builds passed. Production merge is the remaining deployment step.
+
+Before/after database checks match: 281 receipts, total 8,787,030.34, WHT 24,685.18, net 8,762,345.16; 337 invoices, total 11,904,252.35 and WHT 41,409.64. Security advisors reviewed the intentional authenticated SECURITY DEFINER RPC exposure: role/permission gates and negative permission tests are in place; no new evidence-table RLS omission was reported. Existing unrelated security findings were not changed in this release.
 
 Emergency compatibility rollback: restore the v831 app, then review/apply `supabase/rollback/sales_wht_v832.sql`. It restores previous export RPCs and removes new document guards while retaining evidence, private files, columns and audit history. Do not delete customer data.
 
