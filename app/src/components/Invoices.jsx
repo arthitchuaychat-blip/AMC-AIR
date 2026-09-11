@@ -39,6 +39,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [custs, setCusts] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState("");
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
   const [printI, setPrintI] = React.useState(null);
@@ -61,8 +62,9 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   async function load() {
     setLoading(true);
-    try { setWhtLocks(await salesWhtLocks()); const [iv, q, co, dl, cu] = await Promise.all([listInvoices(), listQuotations(), getCompanies(), listDocLinks(), listCustomers()]); setList(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); setCusts(cu); }
-    catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
+    setLoadError("");
+    try { const [locks, iv, q, co, dl, cu] = await Promise.all([salesWhtLocks(), listInvoices(), listQuotations(), getCompanies(), listDocLinks(), listCustomers()]); setWhtLocks(locks); setList(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); setCusts(cu); }
+    catch (e) { setLoadError("โหลดข้อมูลเอกสารไม่สำเร็จ: " + (e.message || e)); flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
@@ -356,7 +358,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       </div>
       </FilterBar>
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบส่งของ/ใบแจ้งหนี้" : "ไม่พบใบส่งของ/ใบแจ้งหนี้"}</div>}
+      {loadError && <div className="empty" role="alert"><p>{loadError}</p><p>ยังยืนยันจำนวนเอกสารไม่ได้ หากมีรายการเดิมแสดงอยู่ อาจยังไม่ใช่ข้อมูลล่าสุด</p><button type="button" className="btn" disabled={loading} onClick={load}>ลองโหลดใหม่</button></div>}
+      {!loading && !loadError && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบส่งของ/ใบแจ้งหนี้" : "ไม่พบใบส่งของ/ใบแจ้งหนี้"}</div>}
       <div className="job-cards">
         {shown.map((x) => {
           const st = STATUS[x.status] || STATUS.unpaid;
