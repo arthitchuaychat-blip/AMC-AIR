@@ -1,3 +1,4 @@
+import { isManagement, roleCeiling } from "./roleCapabilities";
 // Central permission engine.
 //
 // Each (role × module) has a level: "none" | "view" | "edit".
@@ -107,10 +108,15 @@ export const DEFAULT_PERMS = {
   lead_tech: { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, adjnote: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, paycenter: E, myjobs: E, joborders: V, handover: E, schedule: V, catalog: V, movements: E, jobs: V, subcontract: N, suppliers: N, prep: N, po: N, tools: V, handbook: V, settings: N },
   tech:      { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, adjnote: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, paycenter: E, myjobs: E, joborders: V, handover: E, schedule: V, catalog: N, movements: E, jobs: N, subcontract: N, suppliers: N, prep: N, po: N, tools: V, handbook: V, settings: N },
   assistant: { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, adjnote: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, paycenter: E, myjobs: E, joborders: V, handover: E, schedule: V, catalog: N, movements: E, jobs: N, subcontract: N, suppliers: N, prep: N, po: N, tools: V, handbook: V, settings: N },  // ผู้ช่วยช่าง = เหมือนช่างทุกอย่าง
-  hr:        { marketing: E, dashboard: V, kpi: V, saleshub: E, customers: E, pipeline: V, reviews: V, followup: V, weborders: V, website: E, chat: E, email: E, teamchat: E, tasks: E, attendance: E, hr: E, boq: E, quote: E, invoice: E, recvcenter: E, receipt: E, adjnote: E, billing: E, receivables: V, payables: V, tax: N, profit: V, cashflow: E, loans: V, recurring: V, assets: V, expenses: E, paycenter: E, myjobs: N, joborders: E, handover: E, schedule: E, catalog: E, movements: E, jobs: N, subcontract: E, suppliers: E, prep: E, po: E, tools: V, handbook: V, settings: N },  // บุคคล = HR + ขาย + จัดซื้อ (PO/ผู้ขาย/เตรียมวัสดุ/รับของ)
+  hr:        { teamchat: E, tasks: E, attendance: E, handbook: V, hr: E, expenses: E, paycenter: E },
   graphic:   { marketing: E, dashboard: N, customers: N, followup: N, reviews: E, weborders: V, website: E, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, adjnote: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, paycenter: E, myjobs: N, joborders: N, handover: N, schedule: N, catalog: V, movements: N, jobs: N, subcontract: N, suppliers: N, prep: N, po: N, tools: N, handbook: V, settings: N },
   maid:      { dashboard: N, customers: N, followup: N, weborders: N, website: N, chat: N, teamchat: E, tasks: E, attendance: E, hr: N, boq: N, quote: N, invoice: N, receipt: N, adjnote: N, billing: N, receivables: N, payables: N, tax: N, profit: N, cashflow: N, expenses: E, paycenter: E, myjobs: N, joborders: N, handover: N, schedule: N, catalog: N, movements: N, jobs: N, subcontract: N, suppliers: N, prep: N, po: N, tools: N, handbook: V, settings: N },
 };
+
+// September 2026 owner-approved policy. Self-service is separate from HR admin.
+for (const role of ["exec", "admin"]) {
+  for (const module of MODULES) DEFAULT_PERMS[role][module.id] = E;
+}
 
 const RANK = { none: 0, view: 1, edit: 2 };
 
@@ -136,11 +142,17 @@ export function mergePerms(override) {
   return out;
 }
 
-export function setPerms(p) { _perms = p || DEFAULT_PERMS; }
+export function setPerms(p) { _perms = mergePerms(p); }
 export function getPerms() { return _perms; }
 
 export function levelOf(role, module) {
-  return (_perms[role] && _perms[role][module]) || DEFAULT_PERMS[role]?.[module] || N;
+  const cap = roleCeiling(role, module);
+  if (cap === N) return N;
+  if (isManagement(role)) return E;
+  // Each employee keeps their own attendance, leave, advances and salary screen.
+  if (ROLES.includes(role) && module === "attendance") return E;
+  const configured = (_perms[role] && _perms[role][module]) || DEFAULT_PERMS[role]?.[module] || N;
+  return RANK[configured] > RANK[cap] ? cap : configured;
 }
 
 // can(role, module, "view"|"edit")

@@ -6,7 +6,7 @@
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
-const OFFICE = ["admin", "sales", "exec", "finance", "hr", "stock", "graphic"];
+const OFFICE = ["admin", "sales", "field_sales", "exec", "finance", "stock", "graphic"];
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "method" });
@@ -17,9 +17,9 @@ export default async function handler(req, res) {
   const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${token}` } });
   if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
   const user = await ur.json();
-  const pr = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: sbH() });
+  const pr = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role,active`, { headers: sbH() });
   const prof = (pr.ok ? await pr.json() : [])[0];
-  if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
+  if ((prof?.active === false || !OFFICE.includes(prof?.role))) return res.status(403).json({ error: "forbidden" });
 
   const { brand, series, items } = req.body || {};
   if (!brand && !series) return res.status(400).json({ error: "ต้องระบุ brand/series" });

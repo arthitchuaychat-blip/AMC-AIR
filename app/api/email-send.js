@@ -2,7 +2,7 @@
 // สิทธิ์: เฉพาะทีมหลังบ้าน (ตรวจ JWT)
 import { SB, KEY, sbH, sbGet, gmailAccessToken, gmail } from "./_gmail.js";
 
-const OFFICE = ["admin", "exec", "finance", "hr", "sales", "field_sales", "graphic"];
+const OFFICE = ["admin", "exec", "finance", "sales", "field_sales", "graphic"];
 
 async function readJson(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -20,8 +20,8 @@ export default async function handler(req, res) {
     const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${jwt}` } });
     if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
     const user = await ur.json();
-    const prof = (await sbGet(`profiles?id=eq.${user.id}&select=role`))[0];
-    if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
+    const prof = (await sbGet(`profiles?id=eq.${user.id}&select=role,active`))[0];
+    if ((prof?.active === false || !OFFICE.includes(prof?.role))) return res.status(403).json({ error: "forbidden" });
 
     const { threadId, to, subject, text, html, attachments } = await readJson(req);
     const atts = Array.isArray(attachments) ? attachments : [];

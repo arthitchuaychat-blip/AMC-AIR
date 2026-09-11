@@ -8,7 +8,7 @@ import crypto from "crypto";
 const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
-const OFFICE = ["admin", "sales", "exec", "finance", "hr"];
+const OFFICE = ["admin", "sales", "field_sales", "exec", "finance"];
 const SECRET = () => process.env.HANDOVER_SHARE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 function shareToken(id) {
   return crypto.createHmac("sha256", SECRET()).update("ho:" + String(id)).digest("hex").slice(0, 24);
@@ -34,9 +34,9 @@ export default async function handler(req, res) {
     if (!ur.ok) return res.status(401).json({ error: "unauthorized" });
     const user = await ur.json();
     stage = "profile";
-    const pr = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: sbH() });
+    const pr = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role,active`, { headers: sbH() });
     const prof = (pr.ok ? await pr.json() : [])[0];
-    if (!OFFICE.includes(prof?.role)) return res.status(403).json({ error: "forbidden" });
+    if ((prof?.active === false || !OFFICE.includes(prof?.role))) return res.status(403).json({ error: "forbidden" });
 
     stage = "readbody";
     const { id } = await readJson(req);

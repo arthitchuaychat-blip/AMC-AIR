@@ -1,3 +1,5 @@
+import { canApprovePayroll, canSetPayRates, canPay, isManagement } from "../lib/roleCapabilities";
+import { uploadHrDocument, openHrDocument } from "../lib/api";
 import React from "react";
 import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, listPayslipsFull, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, settlePayrollAdvances, saleAdminKpi, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof, checkPriorRoundClosed } from "../lib/api";
 import html2canvas from "html2canvas";
@@ -50,21 +52,21 @@ export default function HR({ role }) {
         {HR_GROUPS.map(([id, label, ids]) => <button type="button" className={"seg-btn hub-tab" + (ids.includes(tab) ? " on" : "")} aria-pressed={ids.includes(tab)} key={id} onClick={() => setTab(ids[0])}>{label}</button>)}
       </div>
       <div className="cat-filter report-tabs">
-        {TABS.filter(([id]) => HR_GROUPS.find(([, , ids]) => ids.includes(tab))?.[2].includes(id)).map(([v, l]) => <button key={v} type="button" className={"cat-chip" + (tab === v ? " on" : "")} aria-pressed={tab === v} onClick={() => setTab(v)}>{l}</button>)}
+        {TABS.filter(([id]) => (role !== "hr" || id !== "perf")).filter(([id]) => HR_GROUPS.find(([, , ids]) => ids.includes(tab))?.[2].includes(id)).map(([v, l]) => <button key={v} type="button" className={"cat-chip" + (tab === v ? " on" : "")} aria-pressed={tab === v} onClick={() => setTab(v)}>{l}</button>)}
       </div>
 
-      {tab === "today" && <TodayTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
+      {tab === "today" && <TodayTab canApprove={isManagement(role)} staff={staff} settings={settings} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
       {tab === "calendar" && <CalendarTab staff={staff} settings={settings} holidays={holidays} holSet={holSet} flash={flash} />}
-      {tab === "leaves" && <LeavesTab staff={staff} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
-      {tab === "ot" && <OtTab canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
-      {tab === "advances" && <AdvancesTab canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
-      {tab === "loans" && <LoansTab staff={staff} canManage={canManage} flash={flash} />}
+      {tab === "leaves" && <LeavesTab canApprove={isManagement(role)} staff={staff} holSet={holSet} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
+      {tab === "ot" && <OtTab canApprove={isManagement(role)} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
+      {tab === "advances" && <AdvancesTab canApprove={isManagement(role)} canDisburse={canPay(role)} canManage={canManage} lockSelfId={lockSelfId} flash={flash} />}
+      {tab === "loans" && <LoansTab role={role} staff={staff} canManage={canManage} flash={flash} />}
       {tab === "employees" && <EmployeesTab staff={staff} canManage={canManage} flash={flash} />}
       {tab === "overview" && <OverviewTab staff={staff} canManage={canManage} flash={flash} onGoTab={setTab} />}
       {tab === "report" && <ReportTab staff={staff} settings={settings} holSet={holSet} canManage={canManage} flash={flash} />}
-      {tab === "payroll" && <PayrollTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
-      {tab === "perf" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
-      {tab === "staff" && <StaffTab staff={staff} settings={settings} holidays={holidays} onReload={loadBase} flash={flash} />}
+      {tab === "payroll" && <PayrollTab selfId={selfId} role={role} staff={staff} settings={settings} holSet={holSet} flash={flash} />}
+      {tab === "perf" && role !== "hr" && <PerfTab staff={staff} settings={settings} holSet={holSet} flash={flash} />}
+      {tab === "staff" && <StaffTab role={role} staff={staff} settings={settings} holidays={holidays} onReload={loadBase} flash={flash} />}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
     </div>
@@ -118,7 +120,7 @@ function EmployeeModal({ emp, onClose, onSaved, flash }) {
   async function pickDocs(e) {
     const list = Array.from(e.target.files || []); e.target.value = ""; if (!list.length) return;
     setUpBusy(true);
-    try { const add = []; for (const file of list) { const url = await uploadExpenseFile(file); add.push({ name: file.name, url }); } set("documents", [...(f.documents || []), ...add]); }
+    try { const add = []; for (const file of list) { const path = await uploadHrDocument(emp.id, file); add.push({ name: file.name, path }); } set("documents", [...(f.documents || []), ...add]); }
     catch (err) { flash("อัปโหลดไม่สำเร็จ: " + (err.message || err), true); }
     setUpBusy(false);
   }
@@ -151,7 +153,7 @@ function EmployeeModal({ emp, onClose, onSaved, flash }) {
             {(f.documents || []).length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5, margin: "4px 0 8px" }}>
               {f.documents.map((d, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, background: "var(--surface-2)", borderRadius: 8, padding: "5px 10px" }}>
-                  <a href={d.url} target="_blank" rel="noreferrer" style={{ flex: 1, color: "var(--primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {d.name || "เอกสาร"}</a>
+                  <a href={d.path ? "#" : d.url} onClick={(e) => { e.preventDefault(); openHrDocument(d).catch((err) => flash(err.message, true)); }} style={{ flex: 1, color: "var(--primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {d.name || "เอกสาร"}</a>
                   <button type="button" className="tb-cmt-x" onClick={() => set("documents", f.documents.filter((_, j) => j !== i))}><UIcon name="x" size={12} /></button>
                 </div>
               ))}
@@ -243,7 +245,7 @@ function OverviewTab({ staff, canManage, flash, onGoTab }) {
 }
 
 // ---------- TODAY ----------
-function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
+function TodayTab({ canApprove, staff, settings, holSet, canManage, lockSelfId, flash }) {
   const [att, setAtt] = React.useState([]);
   const [onLeave, setOnLeave] = React.useState({});
   const [loading, setLoading] = React.useState(true);
@@ -346,15 +348,15 @@ function TodayTab({ staff, settings, holSet, canManage, lockSelfId, flash }) {
             {status !== "leave" && onLeave[p.id]?.h > 0 && <span className="job-badge b-blue">{leaveLabel(onLeave[p.id].t)} {onLeave[p.id].h} ชม.</span>}
             {/* แนว A: OT วันทำงาน — HR อนุมัติจากเวลาที่อยู่จริง (พนักงานไม่ต้องยื่นเอง) */}
             {canManage && work && s?.otHours > 0 && (autoOt.has(p.id)
-              ? <button className="btn-ghost sm" title="อนุมัติแล้ว — กดเพื่อถอน OT วันนี้" onClick={() => unapproveOt(p)}>OT ✓ {s.otHours} ชม.</button>
+              ? <button className="btn-ghost sm" title="อนุมัติแล้ว — กดเพื่อถอน OT วันนี้" disabled={!canApprove} onClick={() => unapproveOt(p)}>OT ✓ {s.otHours} ชม.</button>
               : (a?.check_out_at
-                  ? <button className="btn-primary sm ok" title="อนุมัติเวลาที่อยู่เกินเป็น OT เข้าเงินเดือน" onClick={() => approveAsOt(p, a, s)}>อนุมัติเป็น OT {s.otHours} ชม.</button>
+                  ? <button className="btn-primary sm ok" title="อนุมัติเวลาที่อยู่เกินเป็น OT เข้าเงินเดือน" disabled={!canApprove} onClick={() => approveAsOt(p, a, s)}>อนุมัติเป็น OT {s.otHours} ชม.</button>
                   : <span className="jo-dim" style={{ fontSize: 11 }} title="ต้องเช็คเอาท์ก่อนจึงคิดชั่วโมง OT ได้">รอเช็คเอาท์</span>))}
             {/* วันหยุด — ต้องรับรองก่อน ค่าวันหยุดถึงคิดเข้าเงินเดือน (mig 191) */}
             {canManage && !work && a?.check_in_at && (a?.hol_ok
-              ? <button className="btn-ghost sm" title="รับรองแล้ว — กดเพื่อถอนการรับรองวันหยุด" onClick={() => toggleHol(p, a, false)}>วันหยุด ✓</button>
+              ? <button className="btn-ghost sm" title="รับรองแล้ว — กดเพื่อถอนการรับรองวันหยุด" disabled={!canApprove} onClick={() => toggleHol(p, a, false)}>วันหยุด ✓</button>
               : (a?.check_out_at
-                  ? <button className="btn-primary sm ok" title="รับรองงานวันหยุดให้คิดค่าวันหยุดเข้าเงินเดือน" onClick={() => toggleHol(p, a, true)}>รับรองวันหยุด</button>
+                  ? <button className="btn-primary sm ok" title="รับรองงานวันหยุดให้คิดค่าวันหยุดเข้าเงินเดือน" disabled={!canApprove} onClick={() => toggleHol(p, a, true)}>รับรองวันหยุด</button>
                   : <span className="jo-dim" style={{ fontSize: 11 }} title="ต้องเช็คเอาท์ก่อนจึงคิดค่าวันหยุดได้">รอเช็คเอาท์</span>))}
             {rowManage && <button className="btn-ghost sm" title="แก้ไขเวลาเข้า-ออก" onClick={() => setEdit({ p, a })}><UIcon name="edit" size={13} /></button>}
             {rowManage && a && <button className="btn-ghost sm danger" title="ลบเวลาเข้า-ออก" onClick={() => delAtt(p)}><UIcon name="trash" size={13} /></button>}
@@ -522,13 +524,14 @@ function CalendarTab({ staff, settings, holidays, holSet, flash }) {
 }
 
 // ---------- LEAVES ----------
-function LeavesTab({ staff, holSet, canManage, lockSelfId, flash }) {
+function LeavesTab({ canApprove, staff, holSet, canManage, lockSelfId, flash }) {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [edit, setEdit] = React.useState(null); // leave being edited
   async function load() { try { setList(await listLeaves()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
   React.useEffect(() => { load(); }, []);
   async function decide(l, status) {
+    if (!canApprove) return;
     const lbl = { approved: "อนุมัติ", rejected: "ไม่อนุมัติ", pending: "คืนเป็นรออนุมัติ" }[status];
     if (!await confirmDialog(`${lbl}ใบลาของ ${l.name}?`)) return;
     try { await decideLeave(l.id, status); flash(lbl + "แล้ว"); load(); }
@@ -556,9 +559,9 @@ function LeavesTab({ staff, holSet, canManage, lockSelfId, flash }) {
               <span className={"job-badge " + b.c}>{b.t}</span>
               {/* ฝ่ายบุคคลอนุมัติ/แก้/ลบใบลาของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารเป็นคนตัดสิน (แบบเดียวกับล็อกเวลาเข้างาน) */}
               {l.user_id === lockSelfId ? <span className="jo-dim" title="ใบลาของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span> : <>
-                {l.status === "pending" && <button className="btn-primary sm ok" onClick={() => decide(l, "approved")}>อนุมัติ</button>}
-                {l.status === "pending" && <button className="btn-ghost sm" onClick={() => decide(l, "rejected")}>ไม่อนุมัติ</button>}
-                {l.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(l, "pending")}>คืนรออนุมัติ</button>}
+                {l.status === "pending" && <button disabled={!canApprove} className="btn-primary sm ok" onClick={() => decide(l, "approved")}>อนุมัติ</button>}
+                {l.status === "pending" && <button disabled={!canApprove} className="btn-ghost sm" onClick={() => decide(l, "rejected")}>ไม่อนุมัติ</button>}
+                {l.status !== "pending" && <button disabled={!canApprove} className="btn-ghost sm" onClick={() => decide(l, "pending")}>คืนรออนุมัติ</button>}
                 {canManage && <button className="btn-ghost sm" title="แก้ไขใบลา" onClick={() => setEdit(l)}><UIcon name="edit" size={13} /></button>}
                 {canManage && <button className="btn-ghost sm danger" title="ลบใบลา" onClick={() => del(l)}><UIcon name="trash" size={13} /></button>}
               </>}
@@ -638,7 +641,7 @@ function LeaveEditModal({ leave, staff, holSet, onClose, onSaved, flash }) {
 }
 
 // ---------- CASH ADVANCES (เบิกเงินล่วงหน้า) ----------
-function AdvancesTab({ canManage, lockSelfId, flash }) {
+function AdvancesTab({ canApprove, canDisburse, canManage, lockSelfId, flash }) {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [edit, setEdit] = React.useState(null); // advance being edited
@@ -647,6 +650,7 @@ function AdvancesTab({ canManage, lockSelfId, flash }) {
   async function load() { try { setList(await listAdvances()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
   React.useEffect(() => { load(); }, []);
   async function decide(a, status) {
+    if (!canApprove) return;
     const lbl = { approved: "อนุมัติ", rejected: "ไม่อนุมัติ", pending: "คืนเป็นรออนุมัติ" }[status];
     if (!await confirmDialog(`${lbl}คำขอเบิก ${fmtBaht(a.amount)} ของ ${a.name}?`)) return;
     try { await decideAdvance(a.id, status); flash(lbl + "แล้ว"); load(); }
@@ -677,14 +681,14 @@ function AdvancesTab({ canManage, lockSelfId, flash }) {
             <div className="hr-leave-act">
               {a.pay_slip_url && <img src={a.pay_slip_url} alt="สลิปโอนเงิน" title="สลิปโอนเงิน — กดดูเต็ม" style={{ width: 30, height: 30, objectFit: "cover", borderRadius: 7, border: "1px solid var(--line)", cursor: "zoom-in" }} onClick={() => window.open(a.pay_slip_url, "_blank")} />}
               <span className={"job-badge " + b.c}>{b.t}</span>
-              {canManage && a.status === "approved" && !a.paid_out_at && <button className="btn-primary sm" onClick={() => setPayFor(a)}>💸 โอนจ่าย + สลิป</button>}
+              {canDisburse && a.status === "approved" && !a.paid_out_at && <button className="btn-primary sm" onClick={() => setPayFor(a)}>💸 โอนจ่าย + สลิป</button>}
               {canManage && a.pay_slip_url && <button className="btn-ghost sm" title="ส่งสลิปเข้าแชตให้พนักงาน" onClick={() => setSlipFor(a)}>📲 ส่งสลิปแชต</button>}
               {/* 🔒 โอนเงินให้พนักงานแล้ว ห้ามเปลี่ยนสถานะ/แก้/ลบ — ไม่งั้นเงินออกไปแล้วแต่ไม่ถูกหักเงินเดือน */}
               {/* ฝ่ายบุคคลอนุมัติ/แก้คำขอเบิกของตัวเองไม่ได้ — ให้ธุรการ/ผู้บริหารตัดสิน */}
               {a.user_id === lockSelfId ? <span className="jo-dim" title="คำขอของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ" style={{ fontSize: 11 }}>🔒 ของตัวเอง</span> : <>
-                {a.status === "pending" && <button className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
-                {a.status === "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
-                {!a.paid_out_at && a.status !== "paid" && a.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
+                {a.status === "pending" && <button disabled={!canApprove} className="btn-primary sm ok" onClick={() => decide(a, "approved")}>อนุมัติ</button>}
+                {a.status === "pending" && <button disabled={!canApprove} className="btn-ghost sm" onClick={() => decide(a, "rejected")}>ไม่อนุมัติ</button>}
+                {!a.paid_out_at && a.status !== "paid" && a.status !== "pending" && <button disabled={!canApprove} className="btn-ghost sm" onClick={() => decide(a, "pending")}>คืนรออนุมัติ</button>}
                 {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm" title="แก้ไขคำขอ" onClick={() => setEdit(a)}><UIcon name="edit" size={13} /></button>}
                 {canManage && !a.paid_out_at && a.status !== "paid" && <button className="btn-ghost sm danger" title="ลบคำขอ" onClick={() => del(a)}><UIcon name="trash" size={13} /></button>}
               </>}
@@ -702,12 +706,13 @@ function AdvancesTab({ canManage, lockSelfId, flash }) {
 }
 
 // ---- อนุมัติ OT (mig 184) — mirror AdvancesTab ----
-function OtTab({ canManage, lockSelfId, flash }) {
+function OtTab({ canApprove, canManage, lockSelfId, flash }) {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   async function load() { try { setList(await listOt()); } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); } setLoading(false); }
   React.useEffect(() => { load(); }, []);
   async function decide(o, status) {
+    if (!canApprove) return;
     const lbl = { approved: "อนุมัติ", rejected: "ไม่อนุมัติ", pending: "คืนเป็นรออนุมัติ" }[status];
     if (!await confirmDialog(`${lbl} OT ${o.hours} ชม. ของ ${o.name} (${thDate(o.ot_date)})?`)) return;
     try { await decideOt(o.id, status); flash(lbl + "แล้ว"); load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
@@ -734,9 +739,9 @@ function OtTab({ canManage, lockSelfId, flash }) {
               {awaitCheckout && <HrOtCheckout ot={o} onDone={(m) => { flash(m); load(); }} flash={flash} />}
               {o.status !== "paid" && <HrOtEdit ot={o} onDone={(m) => { flash(m); load(); }} flash={flash} />}
               {o.user_id === lockSelfId ? <span className="jo-dim" style={{ fontSize: 11 }} title="ใบของตัวเอง — ให้ธุรการ/ผู้บริหารอนุมัติ">🔒 ของตัวเอง</span> : <>
-                {o.status === "pending" && <button className="btn-primary sm ok" onClick={() => decide(o, "approved")}>อนุมัติ</button>}
-                {o.status === "pending" && <button className="btn-ghost sm" onClick={() => decide(o, "rejected")}>ไม่อนุมัติ</button>}
-                {o.status !== "paid" && o.status !== "pending" && <button className="btn-ghost sm" onClick={() => decide(o, "pending")}>คืนรออนุมัติ</button>}
+                {o.status === "pending" && <button disabled={!canApprove} className="btn-primary sm ok" onClick={() => decide(o, "approved")}>อนุมัติ</button>}
+                {o.status === "pending" && <button disabled={!canApprove} className="btn-ghost sm" onClick={() => decide(o, "rejected")}>ไม่อนุมัติ</button>}
+                {o.status !== "paid" && o.status !== "pending" && <button disabled={!canApprove} className="btn-ghost sm" onClick={() => decide(o, "pending")}>คืนรออนุมัติ</button>}
               </>}
             </div>
           </div>
@@ -799,7 +804,7 @@ function HrOtEdit({ ot, onDone, flash }) {
 }
 
 // ---- เงินยืมพนักงาน (mig 184) — HR เปิดยืม, ผ่อนอัตโนมัติจนครบ ----
-function LoansTab({ staff, canManage, flash }) {
+function LoansTab({ role, staff, canManage, flash }) {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [ed, setEd] = React.useState(null);
@@ -807,7 +812,7 @@ function LoansTab({ staff, canManage, flash }) {
   React.useEffect(() => { load(); }, []);
   async function save() {
     if (!ed.user_id) return flash("เลือกพนักงานก่อน", true);
-    try { await saveLoan(ed); setEd(null); flash("บันทึกแล้ว ✓"); load(); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    try { await saveLoan({ ...ed, status: isManagement(role) ? ed.status : "pending" }); setEd(null); flash("บันทึกแล้ว ✓"); load(); } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function del(l) {
     if (!await confirmDialog(`ลบเงินยืมของ ${l.name}? (ประวัติผ่อนจะหายด้วย)`)) return;
@@ -829,9 +834,10 @@ function LoansTab({ staff, canManage, flash }) {
               ยืม <b>{fmtBaht(l.principal)}</b> · ผ่อนเดือนละ {fmtBaht(l.installment)}
               {l.note && <div className="jo-dim">{l.note}</div>}</div>
             <div className="hr-leave-act">
-              <span className={"job-badge " + (l.status === "closed" ? "b-green" : "b-amber")}>{l.status === "closed" ? "ครบแล้ว" : "คงเหลือ " + fmtBaht(l.balance)}</span>
-              {canManage && <button className="btn-ghost sm" onClick={() => setEd({ id: l.id, user_id: l.user_id, principal: l.principal, installment: l.installment, note: l.note || "" })}><UIcon name="edit" size={13} /></button>}
-              {canManage && <button className="btn-ghost sm danger" onClick={() => del(l)}><UIcon name="trash" size={13} /></button>}
+              <span className={"job-badge " + (l.status === "closed" ? "b-green" : "b-amber")}>{l.status === "pending" ? "รอผู้บริหาร/ผู้จัดการอนุมัติ" : l.status === "closed" ? "ครบแล้ว" : "คงเหลือ " + fmtBaht(l.balance)}</span>
+              {isManagement(role) && l.status === "pending" && <button className="btn-primary sm" onClick={async () => { try { await saveLoan({ ...l, status: "active" }); await load(); } catch (e) { flash(e.message, true); } }}>อนุมัติเงินยืม</button>}
+              {canManage && (isManagement(role) || l.status === "pending") && <button className="btn-ghost sm" onClick={() => setEd({ status: l.status, id: l.id, user_id: l.user_id, principal: l.principal, installment: l.installment, note: l.note || "" })}><UIcon name="edit" size={13} /></button>}
+              {canManage && (isManagement(role) || l.status === "pending") && <button className="btn-ghost sm danger" onClick={() => del(l)}><UIcon name="trash" size={13} /></button>}
             </div>
           </div>
         ))}
@@ -1404,7 +1410,7 @@ function KpiDetailModal({ r, ym, onClose }) {
 }
 
 // ---------- PAYROLL (เงินเดือน) ----------
-function PayrollTab({ staff, settings, holSet, flash }) {
+function PayrollTab({ role, selfId, staff, settings, holSet, flash }) {
   const pad = (n) => String(n).padStart(2, "0");
   const [ym, setYm] = React.useState(() => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; });
   const { from, to } = payPeriod(ym);
@@ -1572,7 +1578,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     document.body.removeChild(host);
     setDmBusy(null);
   }
-  const setA = (id, k, v) => setAdj((s) => ({ ...s, [id]: { ...s[id], [k]: Number(v) || 0 } }));
+  const setA = (id, k, v) => { if (role === "hr" && id === selfId) return; return setAdj((s) => ({ ...s, [id]: { ...s[id], [k]: Number(v) || 0 } })); };
   const payable = (rows || []).filter((r) => (Number(r.p.base_pay) || 0) > 0 || r.st.present > 0);
   // ยอดรวมทุกคอลัมน์ (แถวรวมท้ายตาราง)
   const colTot = payable.reduce((a, r) => { const c = calcOf(r); ["base", "otPay", "holPay", "dLate", "dAbsent", "dLeave", "dSso", "dTax", "dAdvance", "dLoan", "dWater", "dElectric", "bonus", "otherDeduct", "net"].forEach((k) => { a[k] = (a[k] || 0) + (Number(c[k]) || 0); }); return a; }, {});
@@ -1582,11 +1588,12 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   const remainNet = remainRows.reduce((a, r) => a + calcOf(r).net, 0);
 
   async function saveRun(markPaid, meta) {
+    if (markPaid && !canApprovePayroll(role)) return;
     setBusy(true);
     try {
       let runNet = 0, ledgerSkipped = false;
       // สลิปทั้งรอบบันทึกในคำสั่งเดียว (savePayslips) — กันเน็ตหลุดกลางทางแล้วได้รอบครึ่ง ๆ กลาง ๆ
-      const rows = payable.map((r) => {
+      const rows = payable.filter((r) => role !== "hr" || r.p.id !== selfId).map((r) => {
         const c = calcOf(r); runNet += c.net;
         return { period: ym, user_id: r.p.id, pay_type: r.p.pay_type || "monthly",
           base: c.base, ot_pay: c.otPay, hol_pay: c.holPay, present_days: r.st.present, absent_days: r.st.absent, leave_days: r.st.leaveDays, over_leave_days: r.st.overLeave,
@@ -1623,6 +1630,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   // ส่งเงินเดือนทั้งรอบเข้าเมนู "เบิกจ่าย" เป็นใบเบิกรายคน — จ่าย/แบ่งจ่ายที่นั่นเหมือนค่าใช้จ่ายอื่น
   // ล็อกสลิป (paid = ปิดรอบ) + เคลียร์เบิกล่วงหน้า/OT/เงินยืม แต่ "ไม่" เดินบัญชี/กระแสเงินสดตรงนี้ (ให้การจ่ายใบเบิกเป็นตัวเดินเงิน)
   async function sendRoundToExpenses(meta) {
+    if (!canApprovePayroll(role)) return;
     // กันปิดรอบข้ามเดือน — ถ้ารอบก่อนหน้ายังไม่ปิด ยอดเบิกล่วงหน้า/เงินยืมอาจตัดผิดรอบ/ยกยอดพลาด
     const prior = await checkPriorRoundClosed(ym).catch(() => null);
     if (prior?.needsClose) {
@@ -1638,11 +1646,12 @@ function PayrollTab({ staff, settings, holSet, flash }) {
       await settlePayrollAdvances(ym, payable.map((r) => ({ userId: r.p.id, advIds: advIdsByUser[r.p.id] || [], carry: calcOf(r).advanceCarry || 0 })));
       await markOtPaid(ym, payable.flatMap((r) => otIdsByUser[r.p.id] || [])).catch(() => {});
       await markLoanPaid(ym, payable.flatMap((r) => loanItemsByUser[r.p.id] || [])).catch(() => {});
+      const bankProfiles = await listHrProfiles();
       const people = payable.map((r) => {
         const c = calcOf(r);
         const dTot = (c.dLate || 0) + (c.dAbsent || 0) + (c.dLeave || 0) + (c.dSso || 0) + (c.dTax || 0) + (c.dAdvance || 0) + (c.dLoan || 0) + (c.dWater || 0) + (c.dElectric || 0) + (c.otherDeduct || 0);
         return { user_id: r.p.id, name: r.p.name || r.p.email, net: c.net,
-          breakdown: `รอบ ${ym} · ฐาน ${fmtBaht(c.base)}${c.otPay ? ` · OT ${fmtBaht(c.otPay)}` : ""}${c.holPay ? ` · วันหยุด ${fmtBaht(c.holPay)}` : ""}${c.bonus ? ` · โบนัส ${fmtBaht(c.bonus)}` : ""}${c.allowance ? ` · เงินเพิ่ม ${fmtBaht(c.allowance)}` : ""}${dTot ? ` · หักรวม −${fmtBaht(dTot)}` : ""} = สุทธิ ${fmtBaht(c.net)}` };
+          breakdown: `${bankProfiles[r.p.id]?.bank_name || ""} ${bankProfiles[r.p.id]?.bank_account || ""} · รอบ ${ym} · ฐาน ${fmtBaht(c.base)}${c.otPay ? ` · OT ${fmtBaht(c.otPay)}` : ""}${c.holPay ? ` · วันหยุด ${fmtBaht(c.holPay)}` : ""}${c.bonus ? ` · โบนัส ${fmtBaht(c.bonus)}` : ""}${c.allowance ? ` · เงินเพิ่ม ${fmtBaht(c.allowance)}` : ""}${dTot ? ` · หักรวม −${fmtBaht(dTot)}` : ""} = สุทธิ ${fmtBaht(c.net)}` };
       });
       const made = await pushPayrollToExpenses(ym, people, { payDate: meta?.payDate || payDate });
       flash(made ? `ส่งเงินเดือน ${made} คนเข้าเมนูเบิกจ่ายแล้ว ✓ — ไปกด “จ่าย” (แบ่งจ่ายได้) ที่เมนูเบิกจ่าย` : "รอบนี้ถูกส่งเข้าเบิกจ่ายไปแล้วก่อนหน้านี้ (ไม่มีใบใหม่)");
@@ -1654,6 +1663,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   // ซ่อมยอดเบิกล่วงหน้าของรอบที่ปิดแล้ว (เช่นปิดไว้ด้วยเวอร์ชันเก่า ใบเบิกไม่ถูกปิดผูกรอบ)
   //   ปิดใบเบิกที่ยังค้าง (อ่านสดจาก DB) ผูกกับรอบนี้ + ยกส่วนเกิน (สรุปจากสลิปที่แช่แข็ง) ไปหักรอบหน้า
   async function repairAdvances() {
+    if (!canApprovePayroll(role)) return;
     if (!await confirmDialog({ title: `ซ่อมยอดเบิกล่วงหน้ารอบ ${ym}?`, message: "ปิดใบเบิกล่วงหน้าที่ยัง “ค้าง” ให้ผูกกับรอบนี้ + ยกส่วนที่หักไม่หมดไปหักรอบหน้า\n(ใช้กรณีปิดรอบไว้ด้วยเวอร์ชันเก่า แล้วยอดยกมาไม่ขึ้นในรอบถัดไป)", confirmText: "ซ่อมเลย" })) return;
     setBusy(true);
     try {
@@ -1676,6 +1686,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   }
   // จ่ายเงินเดือนทีละคน (ทยอยจ่ายจนครบ)
   async function payOne(r, meta) {
+    if (!canApprovePayroll(role)) return;
     setBusy(true);
     try {
       const c = calcOf(r);
@@ -1694,6 +1705,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
     setBusy(false);
   }
   async function cancelPay() {
+    if (!canApprovePayroll(role)) return;
     // กติกาเดียวกับเอกสารขาย: ยกเลิกต้องระบุเหตุผลเสมอ — ลง audit log ไว้ตรวจย้อนหลัง
     const reason = await confirmDialog({ title: `ยกเลิก/เปิดรอบเงินเดือน ${ym} ใหม่?`,
       message: "• สลิปกลับเป็นฉบับร่าง (แก้ไข/คำนวณใหม่ได้)\n• ยอดเบิกล่วงหน้า/OT/เงินยืมที่หักไป คืนสภาพ\n• ลบใบเบิกเงินเดือนในเมนูเบิกจ่าย “เฉพาะใบที่ยังไม่ได้จ่าย” · ใบที่จ่าย/จ่ายบางส่วนแล้วคงไว้ (เงินออกจริงแล้ว)",
@@ -1719,20 +1731,20 @@ function PayrollTab({ staff, settings, holSet, flash }) {
   return (
     <div className="card">
       <div className="sec-head">
-        <div><div className="sec-title">เงินเดือน · รอบ {ym}</div>
+        <div><div className="sec-title">เงินเดือน · รอบ {ym}</div>{role === "hr" && <p className="sec-sub">HR จัดเตรียมร่างของพนักงาน → ผู้บริหาร/ผู้จัดการอนุมัติ → การเงินจ่าย · รายการของตนให้ผู้จัดการตรวจ</p>}
           <div className="sec-sub">รอบตัดวันที่ 25 — {from} ถึง {to} · จ่ายวันสิ้นเดือน (วันที่ {lastDay}){paidStatus === "paid" ? " · 📤 ส่งเข้าเบิกจ่ายแล้ว (จ่ายที่เมนูเบิกจ่าย)" : paidStatus === "partial" ? ` · 🟡 ส่งบางส่วน ${paidCnt}/${payable.length} คน` : ""}</div></div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input className="inp" type="month" value={ym} onChange={(e) => setYm(e.target.value)} style={{ width: 160 }} />
           {paidStatus === "paid" ? (
             <>
               <span className="job-badge b-green">📤 ส่งเข้าเบิกจ่ายแล้ว</span>
-              <button className="btn-ghost sm" disabled={busy} title="ปิดใบเบิกล่วงหน้าที่ยังค้าง + ยกส่วนเกินไปหักรอบหน้า (ใช้เมื่อปิดรอบด้วยเวอร์ชันเก่า แล้วยอดยกมาไม่ขึ้น)" onClick={repairAdvances}>🔄 ซ่อมยอดเบิก</button>
-              <button className="btn-ghost sm danger" disabled={busy} title="เปิดรอบใหม่ + ลบใบเบิกที่ยังไม่จ่าย" onClick={cancelPay}>ยกเลิก/เปิดรอบใหม่</button>
+              <button className="btn-ghost sm" disabled={busy || !canApprovePayroll(role)} title="ปิดใบเบิกล่วงหน้าที่ยังค้าง + ยกส่วนเกินไปหักรอบหน้า (ใช้เมื่อปิดรอบด้วยเวอร์ชันเก่า แล้วยอดยกมาไม่ขึ้น)" onClick={repairAdvances}>🔄 ซ่อมยอดเบิก</button>
+              <button className="btn-ghost sm danger" disabled={busy || !canApprovePayroll(role)} title="เปิดรอบใหม่ + ลบใบเบิกที่ยังไม่จ่าย" onClick={cancelPay}>ยกเลิก/เปิดรอบใหม่</button>
             </>
           ) : (
             <>
-              <button className="btn-ghost sm" disabled={busy || !payable.length} onClick={() => saveRun(false)}>บันทึกรอบ</button>
-              <button className="btn-primary sm ok" disabled={busy || !payable.length} title="ปิดรอบ + ส่งเงินเดือนทุกคนเข้าเมนูเบิกจ่าย (จ่าย/แบ่งจ่ายที่นั่น)" onClick={() => setSendModal(true)}>📤 ส่งเข้าเบิกจ่าย</button>
+              <button className="btn-ghost sm" disabled={busy || !payable.length || (role === "hr" && !selfId)} onClick={() => saveRun(false)}>บันทึกรอบ</button>
+              <button className="btn-primary sm ok" disabled={busy || !payable.length || !canApprovePayroll(role)} title="ผู้บริหาร/ผู้จัดการอนุมัติปิดรอบ + ส่งเงินเดือนทุกคนเข้าเมนูเบิกจ่าย (จ่าย/แบ่งจ่ายที่นั่น)" onClick={() => setSendModal(true)}>📤 อนุมัติส่งเข้าเบิกจ่าย</button>
             </>
           )}
           <button className="btn-ghost sm" disabled={!payable.length} title="ตรวจเรต OT ทุกคน — เทียบเรตเก่าที่บันทึกไว้ กับเรตอัตโนมัติจากฐาน" onClick={() => setOtAudit(true)}>🔍 ตรวจ OT</button>
@@ -1772,7 +1784,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
         <div style={{ border: "1.5px solid #e67912", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
             <span style={{ fontWeight: 800, color: "#b45309" }}>🏖️ งานวันหยุดรอรับรอง {pendingHol.length} วัน — วันที่ยังไม่รับรอง ค่าวันหยุดจะยังไม่ถูกคิดเงินในรอบนี้</span>
-            <button className="btn-primary sm ok" disabled={busy} onClick={async () => {
+            <button className="btn-primary sm ok" disabled={busy || !canApprovePayroll(role)} onClick={async () => {
               if (!await confirmDialog(`รับรองงานวันหยุดทั้งหมด ${pendingHol.length} วัน?`)) return;
               setBusy(true);
               try { for (const x of pendingHol) await setAttendanceHolOk(x.a.user_id, x.a.work_date, true); flash("รับรองงานวันหยุดทั้งหมดแล้ว ✓"); await load(); }
@@ -1783,7 +1795,7 @@ function PayrollTab({ staff, settings, holSet, flash }) {
           <div className="jo-dim" style={{ marginBottom: 6 }}>ตรวจก่อนรับรองว่ามาทำงานจริงในวันหยุด (ไม่ใช่แค่แวะเข้ามา) — รับรองแยกรายวันได้ที่ปุ่มด้านล่าง หรือในแท็บ “วันนี้” (เลือกวันที่)</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {pendingHol.map((x) => (
-              <button key={x.a.id} className="btn-ghost sm" style={{ borderColor: "#e67912" }} disabled={busy} title="กดเพื่อรับรองงานวันหยุดวันนี้วันเดียว"
+              <button key={x.a.id} className="btn-ghost sm" style={{ borderColor: "#e67912" }} disabled={busy || !canApprovePayroll(role)} title="ผู้บริหาร/ผู้จัดการรับรองงานวันหยุด"
                 onClick={async () => { try { await setAttendanceHolOk(x.a.user_id, x.a.work_date, true); flash(`รับรองวันหยุด ${x.name} ✓`); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }}>
                 {x.name} · {thDate(x.a.work_date)} · {x.hours} ชม.
               </button>
@@ -2016,13 +2028,13 @@ function SendToExpenseModal({ total, count, defaultDate, onClose, onConfirm }) {
           <div className="jo-dim">ระบบจะ<b>ปิดรอบ</b> (ล็อกสลิปทุกคน) + เคลียร์เบิกล่วงหน้า/OT/เงินยืม แล้วสร้าง<b>ใบเบิกเงินเดือนรายคน</b> (อนุมัติแล้ว รอจ่าย) ในเมนูเบิกจ่าย — ไปกดจ่ายเต็ม/แบ่งจ่ายที่นั่นเหมือนค่าใช้จ่ายอื่น · เงินจะเดินบัญชี + เข้ากระแสเงินสด<b>ตอนจ่ายจริง</b></div>
         </div>
         <div className="modal-foot"><button className="btn-ghost" onClick={onClose}>ยกเลิก</button>
-          <button className="btn-primary" onClick={() => onConfirm({ payDate })}>📤 ส่งเข้าเบิกจ่าย</button></div>
+          <button className="btn-primary" onClick={() => onConfirm({ payDate })}>📤 อนุมัติส่งเข้าเบิกจ่าย</button></div>
       </div>
     </div>
   );
 }
 
-function PayRow({ p, onSave }) {
+function PayRow({ p, onSave, editable }) {
   const [payType, setPayType] = React.useState(p.pay_type || "monthly");
   const [basePay, setBasePay] = React.useState(p.base_pay ?? 0);
   const [otRate, setOtRate] = React.useState(p.ot_rate ?? 0);
@@ -2046,7 +2058,7 @@ function PayRow({ p, onSave }) {
     if (Object.keys(fields).length) onSave(fields);
   };
   return (
-    <div className="hr-pay-row">
+    <fieldset disabled={!editable} className="hr-pay-row" style={{ border: 0, padding: 0 }}>
       <div className="hr-name"><b>{p.name || p.email}</b></div>
       <select className="inp" style={{ width: 110 }} value={payType} onChange={(e) => { const nt = e.target.value; setPayType(nt); const f = { pay_type: nt }; if (Number(basePay) > 0) { const a = nt === "daily" ? autoDailyOt(basePay) : calcAutoOt(basePay); f.ot_rate = a; setOtRate(a); } onSave(f); }}>
         <option value="monthly">รายเดือน</option><option value="daily">รายวัน</option>
@@ -2062,7 +2074,7 @@ function PayRow({ p, onSave }) {
       <span className="inp inp-unit" style={{ width: 140 }} title="ภาษีหัก ณ ที่จ่าย (ภ.ง.ด.1) ต่อเดือน ที่บัญชีเคาะ — 0 = ไม่ถึงเกณฑ์เสียภาษี"><span className="unit-pre">ภาษี ฿</span>
         <input type="number" min="0" value={taxWht} onChange={(e) => setTaxWht(e.target.value)}
           onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (Number(p.tax_wht) || 0)) onSave({ tax_wht: v }); }} /><span className="unit-suf">/ด.</span></span>
-    </div>
+    </fieldset>
   );
 }
 
@@ -2094,7 +2106,7 @@ function SigRow({ p, onSaved, flash }) {
   );
 }
 
-function StaffTab({ staff, settings, holidays, onReload, flash }) {
+function StaffTab({ role, staff, settings, holidays, onReload, flash }) {
   const [s, setS] = React.useState(settings);
   const [nh, setNh] = React.useState({ day: "", name: "" });
   React.useEffect(() => { setS(settings); }, [settings]);
@@ -2146,7 +2158,7 @@ function StaffTab({ staff, settings, holidays, onReload, flash }) {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="sec-head"><div><div className="sec-title">ค่าจ้าง / เงินเดือน (ต่อคน)</div><div className="sec-sub">ตั้งฐานเงินเดือน (รายเดือน/รายวัน) · เรต OT ต่อชั่วโมง · ประกันสังคม 5% (เพดาน 17,500 = สูงสุด 875)</div></div></div>
         <div className="set-list">
-          {staff.map((p) => <PayRow key={p.id} p={p} onSave={(fields) => setPattern(p, fields)} />)}
+          {staff.map((p) => <PayRow editable={canSetPayRates(role)} key={p.id} p={p} onSave={(fields) => setPattern(p, fields)} />)}
         </div>
       </div>
 

@@ -78,7 +78,7 @@ export default function PurchaseOrders({ role, prefill, onPrefillConsumed, onRec
   const isAdmin = can(role, "po", "edit");
   // กติกาเจ้าของ: ยกเลิก = ฝ่ายขาย/ธุรการวัสดุ (และผู้มีสิทธิ์แก้ PO) · ลบถาวร = ธุรการเท่านั้น (เหมือนเอกสารอื่นทุกใบ)
   const canCancel = isAdmin || role === "sales" || role === "field_sales" || role === "stock";
-  const canDelete = role === "admin";
+  const canDelete = ["exec", "admin"].includes(role);
   const [pos, setPos] = React.useState([]);
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);

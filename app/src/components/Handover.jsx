@@ -15,7 +15,7 @@ const STATUS = { draft: { th: "ฉบับร่าง", cls: "b-grey" }, submi
 
 export default function Handover({ role, me, startJob, onStartConsumed, focusJob, onFocusConsumed, onOpenDoc }) {
   const canEdit = can(role, "handover", "edit");
-  const canDelete = role === "admin";
+  const canDelete = ["exec", "admin"].includes(role);
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);

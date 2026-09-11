@@ -39,7 +39,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onCreatePo, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "quote", "edit");
-  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
+  const canDelete = ["exec", "admin"].includes(role); // ลบจริงได้เฉพาะธุรการ
   const [list, setList] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);

@@ -142,7 +142,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "v830 · แก้แดชบอร์ดระหว่างโหลดข้อมูล";
+const BUILD = "v831 · สิทธิ์ตามตำแหน่งและข้อมูลส่วนตัว";
 
 function SetupNotice() {
   return (
@@ -269,7 +269,10 @@ export default function App() {
       .then((p) => { if (!alive) return; if (p) { setProfile(p); setProfileFailed(false); } else if (tries < 4) setTimeout(() => load(tries + 1), 900); else setProfileFailed(true); })
       .catch(() => { if (!alive) return; if (tries < 4) setTimeout(() => load(tries + 1), 900); else setProfileFailed(true); });
     setProfileFailed(false); load(0);
-    return () => { alive = false; };
+    const refresh = () => { if (document.visibilityState === "visible") load(0); };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => { alive = false; document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", refresh); };
   }, [uid]);
 
   // load the editable role→module permission overrides (falls back to the shipped defaults)
@@ -287,7 +290,7 @@ export default function App() {
   const mySub = !!(profile && teams.some((t) => t.id === profile.team && t.type === "sub"));
   const navIds = (r) => {
     let ids = navForRole(r);
-    if (mySub) {
+    if (mySub && !["exec", "admin"].includes(r)) {
       ids = ids.filter((id) => id !== "attendance" && id !== "hr");   // ช่างซัพไม่เข้าเมนู HR/เข้างานของบริษัท
       if (!ids.includes("subcontract")) ids = [...ids, "subcontract"]; // แต่เปิด "งานค้างจ่าย" (มุมมองอ่านอย่างเดียวของทีมตัวเอง)
     }
@@ -302,8 +305,8 @@ export default function App() {
     // (id ย่อยอย่าง boq/handover อยู่ใน navForRole อยู่แล้ว)
     const hubs = Object.keys(HUB_SUBS).filter((h) => hubVisible(profile.role, h));
     const ok = new Set([...safe, ...hubs]);
-    setView((v) => (v && ok.has(v) ? v : safe[0]));
-  }, [profile, permsV, mySub]);
+    setView((v) => (v && ok.has(v) ? v : profile.role === "hr" ? "hr" : safe[0]));
+  }, [profile, permsV, mySub, view]);
 
   // sidebar badges: unread notifications grouped by category → number on each menu (like the LINE chat badge)
   const refreshNavNotif = React.useCallback(() => { unreadByModule().then(setNotifCounts).catch(() => {}); }, []);
@@ -461,7 +464,9 @@ export default function App() {
   // ทีมช่าง (ช่าง/ผู้ช่วยช่าง/หัวหน้าช่าง) + แม่บ้าน เลือกภาษาพม่าได้ (แรงงานพม่า) · ฝั่งหลังบ้าน/ออฟฟิศเป็นไทยเสมอ
   const canBurmese = role === "tech" || role === "assistant" || role === "lead_tech" || role === "maid";
   const effLang = canBurmese ? lang : "th";
+  const viewAllowed = !!profile && (navIds(role).includes(view) || hubVisible(role, view));
   async function go(id) {
+    if (!profile || !(navIds(role).includes(id) || hubVisible(role, id))) return;
     // สลับเมนูขณะฟอร์มค้าง = ฟอร์มถูก unmount ทิ้งเหมือนกัน ต้องถามก่อน
     if (hasUnsaved() && !await confirmDialog({
       title: "มีเอกสารที่กรอกค้างไว้",
@@ -612,6 +617,7 @@ export default function App() {
         {profile?.id && can(role, "teamchat") && <ChatDock me={profile} hidden={view === "teamchat"} onOpenFull={() => go("teamchat")} />}
         <InstallBanner />
         <React.Suspense fallback={<div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)" }}>กำลังโหลด…</div>}>
+        {viewAllowed ? <>
         {view === "dashboard" && <Dashboard role={role} onReorder={(items) => { setPoPrefill(items); go("po"); }}
           onOpenQuote={(qn) => { setQuoteFocus(qn); go("quote"); }} onOpenJob={(jn) => { setJobFocus(jn); go("joborders"); }} onGo={(v) => go(v)} onOpenDoc={openDoc} />}
         {view === "kpi" && <KpiScorecard />}
@@ -746,6 +752,7 @@ export default function App() {
         {view === "hr" && <HR role={role} />}
         {view === "subcontract" && <Subcontractor role={role} onOpenDoc={openDoc} mySub={mySub} />}
         {view === "settings" && <Settings role={role} />}
+        </> : <div className="empty" role="status">กำลังเปิดหน้าที่คุณมีสิทธิ์ใช้งาน…</div>}
         </React.Suspense>
         </ErrorBoundary>
       </main>

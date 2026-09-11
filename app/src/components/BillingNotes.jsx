@@ -32,7 +32,7 @@ const genNo = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"
 export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoChat }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "billing", "edit");
-  const canDelete = role === "admin";
+  const canDelete = ["exec", "admin"].includes(role);
   const [list, setList] = React.useState([]);
   const [invoices, setInvoices] = React.useState([]);
   const [custs, setCusts] = React.useState([]);

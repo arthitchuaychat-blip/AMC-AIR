@@ -32,7 +32,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onOpenDoc, focus, onFocusConsumed, onGoChat }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "receipt", "edit");
-  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
+  const canDelete = ["exec", "admin"].includes(role); // ลบจริงได้เฉพาะธุรการ
   // ส่งใบกำกับภาษีเข้า FlowAccount — ต้องตรงกับ allowlist ฝั่งเซิร์ฟเวอร์ (api/flowaccount-doc.js)
   const canSendFlow = ["admin", "exec", "finance", "sales", "field_sales", "hr"].includes(role);
   const [list, setList] = React.useState([]);

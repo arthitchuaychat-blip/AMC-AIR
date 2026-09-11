@@ -7,7 +7,7 @@ const SB = () => process.env.SUPABASE_URL;
 const KEY = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sbH = () => ({ apikey: KEY(), Authorization: `Bearer ${KEY()}`, "Content-Type": "application/json" });
 
-const OFFICE = ["admin", "exec", "sales", "field_sales", "finance", "hr"];
+const OFFICE = ["admin", "exec", "sales", "field_sales", "finance"];
 
 export default async function handler(req, res) {
   if (!SB() || !KEY()) return res.status(503).json({ error: "ขาด SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY" });
@@ -21,8 +21,8 @@ export default async function handler(req, res) {
       const ur = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: KEY(), Authorization: `Bearer ${jwt}` } });
       if (ur.ok) {
         const user = await ur.json();
-        const prof = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-        if (OFFICE.includes(prof[0]?.role)) ok = true;
+        const prof = await fetch(`${SB()}/rest/v1/profiles?id=eq.${user.id}&select=role,active`, { headers: sbH() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+        if (prof[0]?.active !== false && OFFICE.includes(prof[0]?.role)) ok = true;
       }
     }
   }

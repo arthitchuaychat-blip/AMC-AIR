@@ -480,7 +480,7 @@ function PayTab({ role, jobs, quoteBy, subTeams, teamById, payouts, onReload, fl
                 {canEditPayout && <button className="btn-ghost sm" disabled={busy} title="แก้ไขยอดค่าแรงจ่าย (ธุรการ/บัญชี)" onClick={() => setEditPo(p)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {p.status !== "paid" && <button className="btn-primary sm ok" disabled={busy} onClick={() => setPayFor(p)}>บันทึกจ่ายเงิน</button>}
                 {p.status !== "paid" && <button className="btn-ghost sm danger" disabled={busy} onClick={() => cancel(p)}>ยกเลิก</button>}
-                {role === "admin" && <button className="btn-ghost sm danger" disabled={busy} title="ลบใบจ่ายถาวร (ธุรการเท่านั้น — กติกาบ้าน)" onClick={() => del(p)}><UIcon name="trash" size={14} /> ลบ</button>}
+                {["exec", "admin"].includes(role) && <button className="btn-ghost sm danger" disabled={busy} title="ลบใบจ่ายถาวร (ธุรการเท่านั้น — กติกาบ้าน)" onClick={() => del(p)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div>
             </div>
             {isOpen && (

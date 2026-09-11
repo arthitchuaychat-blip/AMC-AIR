@@ -27,7 +27,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const canEdit = can(role, "joborders", "edit");
   // ช่าง/หัวหน้าช่าง เห็นเฉพาะงานของทีมตัวเอง (งานตัวเอง) — ทีมหลังบ้านเห็นทุกงาน
   const fieldOnly = role === "tech" || role === "assistant" || role === "lead_tech";
-  const canDelete = role === "admin"; // ลบจริงได้เฉพาะธุรการ
+  const canDelete = ["exec", "admin"].includes(role); // ลบจริงได้เฉพาะธุรการ
   // งานที่ถูกล็อก (อนุมัติ/ปิดงานแล้ว) แก้ไข/ปลดล็อกได้เฉพาะทีมออฟฟิศที่ดูแลใบงาน (ธุรการ/ผู้บริหาร/ฝ่ายขาย)
   const canOverrideLock = role === "admin" || role === "exec" || role === "sales" || role === "field_sales";
   const canEditJob = (jo) => canEdit && (!jo.locked || canOverrideLock);
