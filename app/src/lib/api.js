@@ -1347,7 +1347,8 @@ export async function requestPoPaymentBatch(pos) {
 }
 
 // ---------- CRM: customers (+ contacts + sites) ----------
-// fetch every row across pages — adapts to whatever per-request cap the server enforces (uses count to know when done)
+// Fetch all pages, including when the server caps responses below 1000.
+// Counts are optional: without a count, stop only on an empty page.
 async function _fetchAll(build) {
   let from = 0, all = [], total = Infinity;
   while (all.length < total) {
@@ -1357,7 +1358,7 @@ async function _fetchAll(build) {
     if (!data || !data.length) break;
     all = all.concat(data);
     from += data.length;
-    if (count == null && data.length < 1000) break;
+    // A short page can be the server cap, not the end of the result set.
   }
   return all;
 }
@@ -1679,7 +1680,7 @@ async function _loadBoqs(opts = {}) {
   const cids = _idsOf(b.data, "customer_id"), sids = _idsOf(b.data, "site_id");
   const [it, cu, si, ct, qt] = await Promise.all([
     // ห้ามอ่านทั้งตารางตรง ๆ — Supabase ตัดที่ 1000 แถว รายการใบใหม่ (id ท้ายตาราง) จะหายทั้งที่บันทึกสำเร็จ
-    _allRows((f, t) => _onlyNos(supabase.from("boq_items").select("*", { count: "exact" }), "boq_no", nos).order("id").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("boq_items").select("*"), "boq_no", nos).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
@@ -2006,7 +2007,7 @@ export async function autoPostReceipts({ from, to } = {}) {
   ]);
   const done = new Set(posted.map((x) => x.ref_type + ":" + x.ref_no));
   const qnos = [...new Set([...inv.map((x) => x.quote_no), ...rc.filter((x) => !x.invoice_no).map((x) => x.quote_no)].filter(Boolean))];
-  const items = qnos.length ? await _fetchAll((f, t) => supabase.from("quotation_items").select("quote_no,name,description,kind,qty,unit_price,discount", { count: "exact" }).in("quote_no", qnos).order("id").range(f, t)) : [];
+  const items = qnos.length ? await _fetchAll((f, t) => supabase.from("quotation_items").select("quote_no,name,description,kind,qty,unit_price,discount").in("quote_no", qnos).order("id").range(f, t)) : [];
   const itemsByQ = {}; items.forEach((x) => { (itemsByQ[x.quote_no] ||= []).push(x); });
 
   const tasks = [];
@@ -2522,7 +2523,7 @@ async function _loadQuotations(opts = {}) {
   const scope = nos || (since ? _capNos(_idsOf(q.data, "quote_no")) : null);
   const cScope = scoped ? _capNos(cids) : null, sScope = scoped ? _capNos(sids) : null;
   const [it, cu, si, ct, jo, inv] = await Promise.all([
-    _allRows((f, t) => _onlyNos(supabase.from("quotation_items").select("*", { count: "exact" }), "quote_no", scope).order("id").range(f, t)), // กันเพดาน 1000 แถว
+    _allRows((f, t) => _onlyNos(supabase.from("quotation_items").select("*"), "quote_no", scope).order("id").range(f, t)), // กันเพดาน 1000 แถว
     _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", sScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", cScope).order("id").range(f, t)),
@@ -3216,7 +3217,7 @@ async function _loadJobOrders({ fieldOnly = false, team = null } = {}) {
     _rows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
     _rows((f, t) => supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat,created_by", { count: "exact" }).order("quote_no").range(f, t)),
-    _rows((f, t) => supabase.from("quotation_items").select("*", { count: "exact" }).order("id").range(f, t)), // select * เผื่อคอลัมน์ discount (mig 142) ยังไม่ได้รัน
+    _rows((f, t) => supabase.from("quotation_items").select("*").order("id").range(f, t)), // select * เผื่อคอลัมน์ discount (mig 142) ยังไม่ได้รัน
     _rows((f, t) => supabase.from("job_visits").select("*", { count: "exact" }).order("visit_date", { ascending: true }).order("id").range(f, t)),
   ]);
   if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error; if (qit.error) throw qit.error;

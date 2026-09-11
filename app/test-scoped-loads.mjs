@@ -3,6 +3,7 @@
 //   (1) เรียกแบบไม่ระบุใบ  → ต้องไม่มีตัวกรอง in/ov เลย (พฤติกรรมเดิมเป๊ะ)
 //   (2) เรียกแบบ { nos:[...] } → ทุกตารางต้องถูกกรอง และลูกค้า/ไซต์ต้องกรองตาม id ที่ใบนั้นอ้างถึงเท่านั้น
 import fs from "node:fs";
+import { calculateSalesWht } from "./src/lib/salesWht.js";
 import assert from "node:assert/strict";
 
 const SRC = fs.readFileSync(process.argv[2], "utf8");
@@ -63,8 +64,8 @@ return { listBoqs: _loadBoqs, listQuotations: _loadQuotations, listInvoices: _lo
 `.replace(/export async function/g, "async function");
 
 const { listBoqs, listQuotations, listInvoices, listReceipts } = new Function(
-  "supabase", "_fetchAll", "_firstContacts", "_creators", "_gmap", mod
-)(supabase, _fetchAll, _firstContacts, _creators, _gmap);
+  "supabase", "_fetchAll", "_firstContacts", "_creators", "_gmap", "calculateSalesWht", mod
+)(supabase, _fetchAll, _firstContacts, _creators, _gmap, calculateSalesWht);
 
 let pass = 0, fail = 0;
 const check = (name, fn) => { try { fn(); console.log("  ✓ " + name); pass++; } catch (e) { console.log("  ✗ " + name + "\n      " + e.message); fail++; } };
