@@ -1,4 +1,5 @@
 import React from "react";
+import RenewQuotation from "./RenewQuotation";
 import { calculateSalesWht, whtRate } from "../lib/salesWht.js";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
@@ -39,6 +40,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onCreatePo, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
+  const [renewQuote, setRenewQuote] = React.useState(null);
   const canEdit = can(role, "quote", "edit");
   const canDelete = ["exec", "admin"].includes(role); // ลบจริงได้เฉพาะธุรการ
   const [list, setList] = React.useState([]);
@@ -469,6 +471,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         </div>
       </div>
 
+      {renewQuote && <RenewQuotation quote={renewQuote} onClose={() => setRenewQuote(null)} onRenewed={() => { setRenewQuote(null); setStatusF("sent"); flash("ต่ออายุแล้ว — ตรวจสอบใบเสนอราคาแล้วกดอนุมัติได้"); load(); }} />}
       <FilterBar id="quote" count={activeCount} resultCount={fl.length} resultLabel="ใบ">
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ...STATUS_OPTS, ["cancelled", "ยกเลิก"]].map(([v, l]) => (
@@ -521,6 +524,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintQ(q); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && q.status !== "cancelled" && <button className="btn-ghost sm" disabled={q.hasInvoice} title={q.hasInvoice ? "มีใบแจ้งหนี้แล้ว — แก้ไขไม่ได้ (ยกเลิกใบแจ้งหนี้/ใบเสร็จก่อน)" : (q.hasJob ? "มีใบงานแล้ว — แก้ได้ (จะเตือนให้ตรวจใบงาน)" : "")} onClick={() => startEdit(q)}><UIcon name="edit" size={14} /> แก้ไข</button>}
                 {canEdit && q.status === "approved" && !q.variation_of && <button className="btn-ghost sm" style={{ color: "#0891b2", borderColor: "#a5f0f5", background: "#ecfeff" }} title="งานเสริมหน้างาน — สร้างใบเสนอราคาเพิ่มเติม กำไรรวมกับงานนี้เป็นก้อนเดียว (ทำงานเสริมบนใบงานเดิม ไม่ต้องเปิดใบงานใหม่)" onClick={() => startVariation(q)}>➕ ใบเสนอเพิ่มเติม</button>}
+                {canEdit && q.status === "expired" && <button className="btn-primary" disabled={!!lockMsg(q)} title={lockMsg(q) || "กำหนดวันยืนราคาใหม่ โดยใช้เลขที่และราคาเดิม"} onClick={() => setRenewQuote(q)}>ต่ออายุใบเสนอราคา</button>}
                 {canEdit && (q.status === "draft" || q.status === "sent") && <button className="btn-issue green" onClick={() => approve(q)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.6} /> อนุมัติ</button>}
                 {canEdit && q.status === "approved" && !q.hasInvoice && !q.hasJob && !(docLinks.byQuote[q.quote_no]?.poNos || []).length &&
                   <button className="btn-ghost sm" title="คืนสถานะเป็น 'ส่งแล้ว' เพื่อแก้ไขใบที่อนุมัติแล้ว (บังคับเหตุผล + ลงประวัติ)" onClick={() => unapprove(q)}>คืนสถานะแก้ไข</button>}
