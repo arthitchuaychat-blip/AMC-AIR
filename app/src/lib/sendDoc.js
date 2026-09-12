@@ -42,12 +42,13 @@ function dataUrlToBlob(dataUrl) {
 
 // one captured A4 page per PDF page, fit within the page margins, aspect preserved
 function pagesToPdfBlob(pages) {
-  const pdf = new jsPDF({ unit: "pt", format: "a4" });
+  const pdf = new jsPDF({ unit: "pt", format: "a4", compress: true });
   const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
   // แต่ละหน้าที่จับภาพมาเป็น "หน้าเต็ม A4 พร้อมขอบกระดาษในตัวแล้ว" (printDoc .pg) → วางเต็มหน้า
   pages.forEach((p, i) => {
     if (i) pdf.addPage();
-    pdf.addImage(p.dataUrl, "PNG", 0, 0, pageW, pageH);
+    // Lossless PNG compression: keep full-resolution text without embedding raw RGB pages.
+    pdf.addImage(p.dataUrl, "PNG", 0, 0, pageW, pageH, undefined, "FAST");
   });
   return pdf.output("blob");
 }
