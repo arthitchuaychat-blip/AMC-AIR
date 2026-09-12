@@ -61,3 +61,31 @@
 }
 @media screen and (max-width:480px) { .amc-design .executive-kpis { grid-template-columns:minmax(0,1fr); } }
 @media (prefers-reduced-motion:reduce) { .amc-design .nav-item { transition:none; } }
+
+/* Approved 3D card surfaces: CSS-only, screen-only, no content or action changes. */
+@media screen {
+ .amc-design { --card-depth:inset 0 1px 0 rgba(255,255,255,.96),inset 0 -2px 0 rgba(28,88,145,.055),0 3px 0 rgba(49,112,172,.055),0 5px 14px rgba(30,83,137,.085); }
+ .amc-design :is(.card,.job-card,.jo-card,.cat-card,.stat-card,.acc-card,.ar-cust-card,.approve-card,.ho-card,.wo-card,.pipe-card,.tb-card,.mv-card,.set-team-card,.tc-job-card) {
+  box-shadow:var(--card-depth); border-radius:13px;
+ }
+ /* Preserve semantic border/background colours, including warnings and outgoing chat cards. */
+ .amc-design :is(.job-card,.jo-card,.ar-cust-card,.wo-card) { border-bottom-width:2px; }
+ .amc-design .dch { background-image:linear-gradient(180deg,rgba(255,255,255,.8),rgba(239,247,255,.22)); }
+ .amc-design .dch-title { font-weight:750; color:var(--navy); }
+ .amc-design .dch-no { color:#174a87; font-weight:750; }
+ .amc-design .dch-amt b { font-weight:800; font-variant-numeric:tabular-nums; }
+ .amc-design .dch-cust { border:1px solid #e0ecf9; border-radius:8px; box-shadow:inset 0 1px 0 #fff; }
+ .amc-design .dch-badges { gap:5px; flex-wrap:wrap; }
+ .amc-design .vat-badge { display:inline-flex; align-items:center; min-height:24px; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:800; line-height:1.35; letter-spacing:.15px; box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 2px 3px rgba(30,60,100,.12); }
+ .amc-design .vat-badge.vat-on { color:#fff; background:linear-gradient(150deg,#8250df,#6332ba); border:1px solid #6332ba; }
+ .amc-design .vat-badge.vat-off { color:#fff; background:linear-gradient(150deg,#55657e,#35435b); border:1px solid #35435b; }
+ .amc-design .dch-badges .job-badge { min-height:24px; padding:3px 8px; border-radius:6px; box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 2px 3px rgba(30,60,100,.12); }
+ .amc-design .doc-links { gap:5px; padding-top:5px; padding-bottom:5px; }
+ .amc-design .job-actions :is(.btn-primary,.btn-ghost,.btn-danger,.btn-danger-sm) { border-radius:8px; box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 2px 2px rgba(34,75,119,.07); }
+ .amc-design .job-actions :is(button,a):disabled { box-shadow:none; }
+ .amc-design .job-cards { gap:12px; }
+ .amc-design .card .card { box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 2px 5px rgba(30,83,137,.045); }
+}
+@media screen and (hover:hover) {
+ .amc-design :is(.cat-card.clickable,.stat-card.clickable,.clickable-card,.tb-card,.mv-card):hover { transform:none; box-shadow:inset 0 1px 0 #fff,0 3px 0 rgba(49,112,172,.06),0 7px 17px rgba(30,83,137,.13); }
+}
