@@ -1,4 +1,6 @@
 import React from "react";
+import FloatingIcon from "./FloatingIcon";
+const DOC_ICON = {boq:"boq",quote:"quote",job:"joborders",invoice:"invoice",receipt:"receipt",po:"po",creditnote:"adjnote",debitnote:"adjnote"};
 
 // "เชื่อมโยง" row: clickable chips for every related document in the chain (both directions).
 // Pass the doc numbers you want to show; `self` ({type,no}) is excluded. onOpen(type, no) handles navigation.
@@ -25,7 +27,7 @@ export default function DocChips({ boqNo, quoteNo, jobNos = [], invoiceNos = [],
         return (
           <button key={t + n + i} className={"doclink dl-" + t} onClick={(e) => { e.stopPropagation(); onOpen && onOpen(t, n); }}
             style={done ? { background: "#f0fdf4", borderColor: "#86efac", color: "#15803d", fontWeight: 700 } : {}}>
-            {LABEL[t](n)}{done ? " · ✓ เสร็จปิดงาน" : ""}
+            <FloatingIcon menuId={DOC_ICON[t]} name="document" size={20} />{LABEL[t](n)}{done ? " · ✓ เสร็จปิดงาน" : ""}
           </button>
         );
       })}

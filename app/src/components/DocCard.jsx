@@ -1,4 +1,6 @@
 import React from "react";
+import FloatingIcon from "./FloatingIcon";
+const DOC_MENU = { QT:"quote", INV:"invoice", REC:"receipt", BOQ:"boq", BQ:"boq", PO:"po", BN:"billing", CN:"adjnote", DN:"adjnote", JOB:"joborders" };
 import { fmtBaht, fmtDocDate } from "../lib/format";
 
 // หัวการ์ดเอกสารขายมาตรฐาน — ทุกเมนู (BOQ/ใบเสนอราคา/ใบแจ้งหนี้/ใบวางบิล/ใบเสร็จ) หน้าตาเดียวกัน:
@@ -13,7 +15,7 @@ export default function DocCardHead({ no, badges, title, sub, by, date, amountLa
     <div className={"dch" + (onClick ? " dch-click" : "")} onClick={onClick} role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && onClick(e) : undefined}>
       <div className="dch-id">
-        <span className="dch-no">{no}</span>
+        <div className="dch-number-row"><FloatingIcon menuId={DOC_MENU[String(no || "").split("-")[0]]} name="document" size={28} /><span className="dch-no">{no}</span></div>
         {badges ? <div className="dch-badges">{badges}</div> : null}
       </div>
       <div className="dch-mid">
@@ -22,15 +24,14 @@ export default function DocCardHead({ no, badges, title, sub, by, date, amountLa
       </div>
       <div className="dch-right">
         {rightExtra}
-        {by ? <span className="dch-by">👤 {by}</span> : null}
-        {date ? <span className="dch-date">📅 {fmtDocDate(date)}</span> : null}
+        <div className="dch-meta-line">{by ? <span className="dch-by">{by}</span> : null}{by && date ? <span aria-hidden="true">·</span> : null}{date ? <span className="dch-date">{fmtDocDate(date)}</span> : null}</div>
         {amountNode || <div className="dch-amt"><span>{amountLabel}</span><b>{fmtBaht(amount)}</b></div>}
       </div>
     </div>
     {(c.name || addr) && (
       <div className="dch-cust">
         <div className="dch-cust-row">
-          <span className="dch-ic">{partyIcon}</span><b>{c.name || "ไม่ระบุลูกค้า"}</b>
+          <span className="dch-ic">{partyIcon === "🏢" || partyIcon === "🏭" ? <FloatingIcon name="building" size={22} /> : partyIcon}</span><b>{c.name || "ไม่ระบุลูกค้า"}</b>
           {c.code ? <span className="dch-code">{c.code}</span> : null}
           {showContact ? <span className="dch-dim">👤 {c.contactName}</span> : null}
           {c.phone ? <a className="ref-link" href={`tel:${c.phone}`} onClick={(e) => e.stopPropagation()}>📞 {c.phone}</a> : null}

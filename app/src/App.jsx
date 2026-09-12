@@ -147,7 +147,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "v834 · ธีมไอคอน 3D";
+const BUILD = "v835 · การ์ดกระชับและไอคอนแยกเมนู";
 
 function SetupNotice() {
   return (
@@ -553,7 +553,7 @@ export default function App() {
                 // real link → can Ctrl/กลางคลิก/คลิกขวา "เปิดในแท็บใหม่" ได้ · คลิกปกติยังเป็น SPA แท็บเดิม
                 <a key={id} href={"#" + id} aria-current={view === id ? "page" : undefined} title={primary} style={{ textDecoration: "none" }} className={"nav-item" + (view === id ? " on" : "")}
                   onClick={(e) => { if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); go(id); }}>
-                  <FloatingIcon name={n.icon} size={34} />
+                  <FloatingIcon name={n.icon} menuId={id} size={34} />
                   <span className="nav-th">{primary}</span>
                   <span className="nav-en">{secondary}</span>
                   {id === "chat" && chatUnread > 0 && <span className="nav-badge" title={`${chatUnread} แชตค้างตอบ`}>{chatUnread > 99 ? "99+" : chatUnread}</span>}
