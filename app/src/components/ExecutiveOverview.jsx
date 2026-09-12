@@ -1,13 +1,14 @@
 import React from "react";
+import FloatingIcon from "./FloatingIcon";
 import { can } from "../lib/permissions";
 import { fmtBaht, fmtNum, inRange } from "../lib/format";
 import { cashAccounts, cashAccountTotal } from "../lib/reportMetrics";
 import { UIcon } from "../icons";
 import ReportChart from "./ReportChart";
 
-function Metric({ label, value, sub, hero, onClick, children }) {
+function Metric({ icon = "dashboard", label, value, sub, hero, onClick, children }) {
   return <section className={"stat-card dash-stat executive-metric" + (hero ? " dash-stat--hero" : "")}>
-    <div className="stat-label">{label}</div><div className="stat-val">{value}</div><div className="stat-sub">{sub}</div>{children}
+    <FloatingIcon name={icon} size={58} className="metric-3d" /><div className="stat-label">{label}</div><div className="stat-val">{value}</div><div className="stat-sub">{sub}</div>{children}
     {onClick && <button type="button" className="executive-link" onClick={onClick}>ดูรายละเอียด <UIcon name="chevR" size={14} /></button>}
   </section>;
 }
@@ -39,14 +40,14 @@ export default function ExecutiveOverview({ role, ov, quotes, stats, act, accoun
     {errors.length > 0 && <div className="report-warning" role="alert">โหลดข้อมูลไม่ครบ: {errors.join(" · ")} <button className="btn-ghost sm" onClick={onRetry}>ลองใหม่</button></div>}
     <div className="executive-kpis">
       <Metric hero label="ยอดขายอนุมัติ · ก่อน VAT" value={ov ? fmtBaht(stats.sale) : "…"} sub={`${periodLabel} · ${ov ? fmtNum(stats.count) : "…"} ใบ${stockReady && ov ? ` · แอร์ ${fmtNum(airCount)} เครื่อง/ชุดตามรายการ` : ""}`} onClick={() => onDocs("q_all")} />
-      {financial && <Metric label="เงินสดและธนาคาร" value={accounts ? fmtBaht(cashAccountTotal(accounts, entity)) : accountError ? "โหลดไม่สำเร็จ" : "…"} sub={`ณ ${today} · ${selectedAccounts.length} บัญชี · ไม่รวมค้างรับ`} onClick={() => onGo?.("expenses")}>
+      {financial && <Metric icon="wallet" label="เงินสดและธนาคาร" value={accounts ? fmtBaht(cashAccountTotal(accounts, entity)) : accountError ? "โหลดไม่สำเร็จ" : "…"} sub={`ณ ${today} · ${selectedAccounts.length} บัญชี · ไม่รวมค้างรับ`} onClick={() => onGo?.("expenses")}>
         <label className="executive-account-filter">เฉพาะยอดบัญชี<select className="inp" aria-label="กิจการเฉพาะยอดเงินสดและธนาคาร" value={entity} onChange={(e) => setEntity(e.target.value)}><option value="all">ทุกกิจการ</option><option value="company">บริษัท</option><option value="personal">บุคคล</option></select></label>
       </Metric>}
-      {can(role, "receivables") && <Metric label="เงินค้างรับตามใบแจ้งหนี้" value={act ? fmtBaht(act.receivable) : actionError ? "โหลดไม่สำเร็จ" : "…"} sub={`ยอดปัจจุบันทั้งระบบ · เกินกำหนด ${act ? fmtNum(act.overdueCount) : "…"} ใบ`} onClick={() => onGo?.("receivables")} />}
-      {can(role, "profit") && <Metric label="กำไรประมาณการ BOQ" value={ov ? stats.covered ? fmtBaht(stats.est) : "ต้นทุนยังไม่ครบ" : "…"} sub={`${periodLabel} · มีต้นทุน ${stats.covered || 0}/${stats.count} ใบ · เฉพาะใบที่มีต้นทุน`} onClick={() => onDocs("est")} />}
+      {can(role, "receivables") && <Metric icon="receipt" label="เงินค้างรับตามใบแจ้งหนี้" value={act ? fmtBaht(act.receivable) : actionError ? "โหลดไม่สำเร็จ" : "…"} sub={`ยอดปัจจุบันทั้งระบบ · เกินกำหนด ${act ? fmtNum(act.overdueCount) : "…"} ใบ`} onClick={() => onGo?.("receivables")} />}
+      {can(role, "profit") && <Metric icon="trend" label="กำไรประมาณการ BOQ" value={ov ? stats.covered ? fmtBaht(stats.est) : "ต้นทุนยังไม่ครบ" : "…"} sub={`${periodLabel} · มีต้นทุน ${stats.covered || 0}/${stats.count} ใบ · เฉพาะใบที่มีต้นทุน`} onClick={() => onDocs("est")} />}
     </div>
     <section className="card executive-actions"><div className="sec-head"><div><div className="sec-title">ต้องจัดการ</div><div className="sec-sub">สถานะปัจจุบันทั้งระบบ · ไม่ขึ้นกับช่วงวันที่หรือพนักงานที่เลือก</div></div></div>
-      <div className="executive-action-grid">{actions.map((a) => <button type="button" key={a.title} className={"executive-action" + (a.urgent ? " urgent" : "")} onClick={a.go}><span className="executive-action-title"><UIcon name={a.icon} size={18} />{a.title}</span><strong>{a.value}</strong><span>{a.sub}</span><span className="executive-link">เปิดรายการ →</span></button>)}</div>
+      <div className="executive-action-grid">{actions.map((a) => <button type="button" key={a.title} className={"executive-action" + (a.urgent ? " urgent" : "")} onClick={a.go}><span className="executive-action-title"><FloatingIcon name={a.icon} size={30} />{a.title}</span><strong>{a.value}</strong><span>{a.sub}</span><span className="executive-link">เปิดรายการ →</span></button>)}</div>
     </section>
     <div className="executive-panels">
       <section className="card"><div className="sec-head"><div><div className="sec-title">แนวโน้มยอดขาย</div><div className="sec-sub">{periodLabel} · ตามวันอนุมัติ · ยอดก่อน VAT · งวดที่ยังไม่ครบแสดงถึงวันที่เลือก</div></div><button className="btn-ghost sm" onClick={() => onTab("trend")}>รายงานเพิ่มเติม</button></div>

@@ -1,0 +1,63 @@
+/* Screen-only presentation. Document/PDF templates and business rules are unchanged. */
+@media screen {
+ .app.amc-design { --primary:#0861f7; --navy:#102b56; --bg:#edf7ff; --surface:#fff; --surface-2:#edf6ff; --line:#dceaf8; --ink:#132b50; --ink-2:#4e6281; --ink-3:#657995; }
+ .amc-design .main { background:linear-gradient(135deg,#edf8ff 0%,#f3f8ff 65%,#eaf5ff 100%); padding:calc(20px * var(--dunit)) calc(24px * var(--dunit)); }
+ .amc-design .sidebar { width:252px; gap:10px; padding:14px 10px 10px; background:#fff; border-right:1px solid #dceaf8; }
+ .amc-design .brand-name { font-size:21px; font-weight:800; letter-spacing:-.6px; }
+ .amc-design .brand-name span { color:#0861f7; font-weight:800; }
+ .amc-design .nav { gap:4px; }
+ .amc-design .nav-grouphead { padding:8px 10px 4px; }
+ .amc-design .nav-item { grid-template-columns:34px minmax(0,1fr); gap:1px 9px; padding:7px 10px; min-height:50px; border-radius:10px; color:#132b50; }
+ .amc-design .nav-item > .floating-icon { grid-column:1; grid-row:1 / span 2; }
+ .amc-design .nav-th { font-weight:600; font-size:13.5px; line-height:1.4; }
+ .amc-design .nav-en { color:#627795; font-size:10px; }
+ .amc-design .nav-item.on,.amc-design .nav-item.on:hover { background:linear-gradient(100deg,#d9efff,#eaf5ff); color:#0754d9; box-shadow:none; }
+ .amc-design .nav-item.on::before { content:""; position:absolute; left:0; top:7px; bottom:7px; width:4px; border-radius:5px; background:#0861f7; }
+ .amc-design .nav-item.on .nav-en { color:#42658c; }
+ .amc-design .nav-item.on .nav-badge { color:#fff; background:#e6354c; }
+ .amc-design .nav-item:hover:not(.on) { background:#f0f8ff; }
+ .amc-design .user-chip { background:#eff7ff; border:1px solid #e1edf9; }
+ .amc-design :is(.card,.stat-card,.job-card) { border-color:#d8e9f8; border-radius:13px; box-shadow:0 2px 8px rgba(37,104,164,.045); }
+ .amc-design .page-title { font-size:26px; font-weight:800; line-height:1.3; letter-spacing:-.5px; }
+ .amc-design .page-sub { margin-top:3px; line-height:1.45; }
+ .amc-design :is(.dash-head,.adm-head) { gap:10px; margin-bottom:14px; }
+ .amc-design .sec-title { font-size:17px; font-weight:750; }
+ .amc-design .filterbar { margin-bottom:12px; }
+ .amc-design .filterbar-body { padding:10px 12px; border-color:#d8e9f8; }
+ .amc-design .cat-filter { gap:6px; margin-bottom:10px; }
+ .amc-design :is(.filterbar-toggle,.cat-search) { min-height:36px; padding:6px 10px; }
+ .amc-design .cat-chip { min-height:32px; padding:5px 10px; }
+ .amc-design .job-card { padding:12px 15px; }
+ .amc-design .dch { padding:7px 10px; gap:5px 12px; }
+ .amc-design .dch-cust { padding:6px 10px; gap:3px; background:#edf5ff; }
+ .amc-design .job-actions { margin-top:7px; gap:6px; }
+ .amc-design .executive-kpis { gap:12px; margin:12px 0 16px; }
+ .amc-design .executive-metric { position:relative; padding:16px; gap:5px; background:#fff; color:#132b50; border:1px solid #d8e9f8; min-height:168px; }
+ .amc-design .executive-metric > .metric-3d { position:absolute; right:13px; top:17px; }
+ .amc-design .executive-metric > .stat-label { padding-right:65px; color:#102b56; font-weight:700; font-size:14px; min-height:40px; line-height:1.4; }
+ .amc-design .executive-metric .stat-val { color:#0758ed; font-size:clamp(23px,2vw,31px); line-height:1.25; letter-spacing:-.6px; font-weight:800; margin:2px 0 6px; }
+ .amc-design .executive-metric .stat-sub { color:#526986; font-size:12px; line-height:1.5; }
+ .amc-design .executive-metric.dash-stat--hero .executive-link { color:#0861f7; }
+ .amc-design .executive-metric.dash-stat--hero::before { display:none; }
+ .amc-design .executive-actions { margin-bottom:16px; }
+ .amc-design .executive-action { border-color:#dceaf8; padding:8px 12px; gap:4px; }
+ .amc-design .executive-action-title { color:#102b56; line-height:1.4; }
+ .amc-design .executive-action strong { color:#0758ed; }
+ .amc-design .executive-action.urgent strong { color:#cf273d; }
+ .amc-design .executive-panels { gap:14px; margin-bottom:16px; }
+ .amc-design .executive-model { padding:10px 0; }
+ .amc-design .executive-link { font-weight:600; }
+ .amc-design .floating-icon { display:inline-block; width:var(--float-size,34px); height:var(--float-size,34px); flex:none; background-image:url('/icons/amc-3d-v1.webp'); background-repeat:no-repeat; background-size:calc(var(--float-size,34px) * 5) calc(var(--float-size,34px) * 5); background-position:calc(var(--float-x,0) * var(--float-size,34px) * -1) calc(var(--float-y,0) * var(--float-size,34px) * -1); vertical-align:middle; filter:drop-shadow(0 2px 1px rgba(29,69,104,.10)); }
+}
+@media screen and (max-width:1180px) { .amc-design .executive-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media screen and (max-width:760px) {
+ .amc-design .main { padding:14px 12px; }
+ .amc-design .page-title { font-size:23px; }
+ .amc-design .executive-metric { padding:13px; }
+ .amc-design .executive-metric > .metric-3d { --float-size:44px !important; right:10px; top:13px; }
+ .amc-design .executive-metric > .stat-label { padding-right:48px; }
+ .amc-design :is(.cat-chip,.filterbar-toggle,.btn-ghost.sm) { min-height:44px; }
+ .amc-design .nav-item { min-height:50px; }
+}
+@media screen and (max-width:480px) { .amc-design .executive-kpis { grid-template-columns:minmax(0,1fr); } }
+@media (prefers-reduced-motion:reduce) { .amc-design .nav-item { transition:none; } }
