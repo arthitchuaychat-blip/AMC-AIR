@@ -98,14 +98,26 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
         setList(j); setTeams(t); setTemplates(tpl || []); setHoFlags(hf || {});
         setCusts([]); setQuotes([]); setDocLinks({ byQuote: {} }); setStaff([]);
       } else {
-        const [j, c, t, q, dl, ps, tpl, hf] = await Promise.all([listJobOrders(), listCustomers(), listTeams(), listQuotations(), listDocLinks(), listProfiles().catch(() => []), listJobTemplates().catch(() => []), listHandoverFlags().catch(() => ({}))]);
-        setList(j); setCusts(c); setTeams(t); setQuotes(q); setDocLinks(dl); setStaff(ps || []); setTemplates(tpl || []); setHoFlags(hf || {});
+        const [j, t, dl, hf] = await Promise.all([listJobOrders(), listTeams(), listDocLinks(), listHandoverFlags().catch(() => ({}))]);
+        setList(j); setTeams(t); setDocLinks(dl); setHoFlags(hf || {});
       }
     }
     catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
   React.useEffect(() => { load(); }, []);
+
+  const [editorReady, setEditorReady] = React.useState(false);
+  const [editorError, setEditorError] = React.useState("");
+  const [editorRetry, setEditorRetry] = React.useState(0);
+  React.useEffect(() => {
+    if (fieldOnly || (!ed && !prefill && !surveyFor)) { setEditorReady(false); return; }
+    let active = true; setEditorReady(false); setEditorError("");
+    Promise.all([listCustomers(), listQuotations(), listJobTemplates()]).then(([c,q,tpl]) => {
+      if (!active) return; setCusts(c); setQuotes(q); setTemplates(tpl); setEditorReady(true);
+    }).catch(e => { if (active) setEditorError(e.message || "โหลดไม่สำเร็จ"); });
+    return () => { active = false; };
+  }, [!!ed, prefill, surveyFor, fieldOnly, editorRetry]);
 
   // ---------- job templates (แม่แบบงาน) ----------
   async function reloadTemplates() { try { setTemplates(await listJobTemplates()); } catch { /* ignore */ } }
@@ -140,7 +152,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   // contact/site fields (always present from listQuotations) so it doesn't depend on
   // the customers list having finished loading.
   React.useEffect(() => {
-    if (!prefill) return;
+    if (!prefill || !editorReady || loading) return;
     const q = prefill;
     const cust = custs.find((c) => String(c.id) === String(q.customer_id));
     const site = cust?.sites?.find((s) => String(s.id) === String(q.site_id));
@@ -169,18 +181,18 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       survey_job_no: surveyCand?.job_no || "", sales_note: svBrief, sales_photos: svPhotos,
     });
     onPrefillConsumed && onPrefillConsumed();
-  }, [prefill, custs]);
+  }, [prefill, custs, editorReady, loading]);
 
   // open a new SURVEY job prefilled with this customer (launched from the chat panel)
   React.useEffect(() => {
-    if (!surveyFor || !custs.length) return;
+    if (!surveyFor || !editorReady || !custs.length) return;
     const c = custs.find((x) => String(x.id) === String(surveyFor));
     const address = c?.address || "";
     setEd({ ...blankEd(), customer_id: String(surveyFor), title: "สำรวจงาน", job_type: "survey",
       contact_name: c?.contacts?.[0]?.name || "", contact_phone: c?.contacts?.[0]?.phone || "",
       address, map_url: mapLink(address) });
     onSurveyConsumed && onSurveyConsumed();
-  }, [surveyFor, custs]);
+  }, [surveyFor, custs, editorReady]);
 
   // open a new job editor prefilled from a calendar slot (date/team/slot picked on the Schedule page)
   React.useEffect(() => {
@@ -402,6 +414,7 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   }
 
   // ---------- EDITOR ----------
+  if (!fieldOnly && (ed || prefill || surveyFor) && !editorReady) return <div className="adm"><div className="empty" role={editorError ? "alert" : undefined}>{editorError || "กำลังเตรียมข้อมูลใบงาน…"}{editorError && <button className="btn-primary" onClick={() => setEditorRetry(x => x + 1)}>ลองใหม่</button>}<button className="btn-ghost" onClick={() => { setEd(null); onPrefillConsumed?.(); onSurveyConsumed?.(); }}>กลับ</button></div></div>;
   if (ed) {
     return (
       <div className="adm">

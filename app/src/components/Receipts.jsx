@@ -1,4 +1,5 @@
 import React from "react";
+import { scopedDocuments } from "../lib/scopedDocuments";
 import { calculateSalesWht, salesItems, enrichSalesItems, whtEnabled, whtRate as parseWhtRate } from "../lib/salesWht.js";
 import SalesWhtControl from "./SalesWhtControl";
 import WhtEvidenceModal from "./WhtEvidenceModal";
@@ -65,7 +66,16 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   async function load() {
     setLoading(true);
     setLoadError("");
-    try { const [locks, rc, iv, q, co, dl] = await Promise.all([salesWhtLocks(), listReceipts(), listInvoices(), listQuotations(), getCompanies(), listDocLinks()]); setWhtLocks(locks); setList(rc); setInvoices(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
+    try {
+      const [locks, rc, co, dl] = await Promise.all([salesWhtLocks(), listReceipts(), getCompanies(), listDocLinks()]);
+      const [iv, q] = await Promise.all([
+        scopedDocuments(listInvoices, rc.map(x => x.invoice_no)),
+        scopedDocuments(listQuotations, rc.map(x => x.quote_no)),
+      ]);
+      const found = new Set(q.map(x => x.quote_no));
+      if (rc.some(x => x.quote_no && !found.has(x.quote_no))) throw new Error("ข้อมูลใบเสนอราคาที่อ้างอิงไม่ครบ กรุณาตรวจสิทธิ์หรือโหลดใหม่");
+      setWhtLocks(locks); setList(rc); setInvoices(old => [...new Map([...old,...iv].map(x => [x.invoice_no,x])).values()]); setQuotes(old => [...new Map([...old,...q].map(x => [x.quote_no,x])).values()]); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl);
+    }
     catch (e) { setLoadError("โหลดข้อมูลเอกสารไม่สำเร็จ: " + (e.message || e)); flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
     setLoading(false);
   }
@@ -75,9 +85,27 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printR) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintR(null); }, 120); return () => clearTimeout(t); }, [printR]);
   // open the create form prefilled from an invoice (link from the invoice page)
-  React.useEffect(() => { if (!fromInvoice || !invoices.length) return; startNew(); onPickInvoice(fromInvoice); onFromInvoiceConsumed && onFromInvoiceConsumed(); }, [fromInvoice, invoices]);
+
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
+  const [editorReady, setEditorReady] = React.useState(false);
+  const [editorError, setEditorError] = React.useState("");
+  const [editorRetry, setEditorRetry] = React.useState(0);
+  React.useEffect(() => {
+    if (!ed && !fromInvoice) { setEditorReady(false); return; }
+    let active = true; setEditorReady(false); setEditorError("");
+    (async () => {
+      const iv = await listInvoices();
+      const eligible = iv.filter(x => x.status === "unpaid" && !x.hasReceipt || x.invoice_no === fromInvoice || x.invoice_no === ed?.invoice_no);
+      const qs = await scopedDocuments(listQuotations, eligible.map(x => x.quote_no));
+      const found = new Set(qs.map(x => x.quote_no));
+      if (eligible.some(x => x.quote_no && !found.has(x.quote_no))) throw new Error("ข้อมูลใบเสนอราคาสำหรับออกใบเสร็จไม่ครบ");
+      if (!active) return;
+      setInvoices(iv); setQuotes(old => [...new Map([...old,...qs].map(x => [x.quote_no,x])).values()]); setEditorReady(true);
+    })().catch(e => { if (active) setEditorError(e.message || "โหลดไม่สำเร็จ"); });
+    return () => { active = false; };
+  }, [!!ed, fromInvoice, editorRetry]);
+  React.useEffect(() => { if (!fromInvoice || !editorReady || !invoices.length) return; startNew(); onPickInvoice(fromInvoice); onFromInvoiceConsumed?.(); }, [fromInvoice, invoices, editorReady]);
   const openInvoices = invoices.filter((x) => x.status === "unpaid" && !x.hasReceipt);
   const invByNo = React.useMemo(() => Object.fromEntries(invoices.map((x) => [x.invoice_no, x])), [invoices]);
   const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
@@ -198,6 +226,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   }
 
   // ---------- EDITOR ----------
+  if ((ed || fromInvoice) && !editorReady) return <div className="adm"><div className="empty" role={editorError ? "alert" : undefined}>{editorError || "กำลังเตรียมข้อมูลออกใบเสร็จ…"}<button className="btn-ghost" onClick={() => { setEd(null); onFromInvoiceConsumed?.(); }}>กลับ</button>{editorError && <button className="btn-primary" onClick={() => setEditorRetry(x => x + 1)}>ลองใหม่</button>}</div></div>;
   if (ed) {
     return (
       <div className="adm">
