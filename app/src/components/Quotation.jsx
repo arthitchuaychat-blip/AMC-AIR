@@ -1,4 +1,5 @@
 import React from "react";
+import { loadQuotationPage } from "../lib/quotationPage";
 import RenewQuotation from "./RenewQuotation";
 import { calculateSalesWht, whtRate } from "../lib/salesWht.js";
 import { confirmDialog } from "./ConfirmDialog";
@@ -58,25 +59,48 @@ export default function Quotation({ role, newForCustomer, onNewConsumed, focus, 
   const [docF, setDocF] = React.useState(() => new Set()); // เลือกหลายตัวได้ (ว่าง = ทุกใบ) · no_invoice/no_job/no_ac_po
   const toggleDocF = (v) => setDocF((s) => { if (v === "all") return new Set(); const n = new Set(s); n.has(v) ? n.delete(v) : n.add(v); return n; });
   const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
-  // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
-  const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
   const [search, setSearch] = React.useState("");
   const [byPerson, setByPerson] = React.useState(""); // กรองตามผู้สร้างเอกสาร
-  // ตัวเลือกผู้สร้าง = ชื่อผู้สร้างที่มีจริงในใบทั้งหมด (ก่อนกรอง) — ไม่ยิง API เพิ่ม
-  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
-  async function load() {
-    setLoading(true);
-    try { await expireOverdueQuotes(); } catch { /* best-effort — เลยวันยืนราคา → หมดอายุ ก่อนโหลดรายการ */ }
-    try { const [q, c, m, b, co, dl] = await Promise.all([listQuotations(), listCustomers(), listMaterialsLite(), listBoqs(), getCompanies(), listDocLinks()]); setList(q); setCusts(c); setMats(m); setBoqs(b); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
-    catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
-    setLoading(false);
+  const [page, setPage] = React.useState(0);
+  const [summary, setSummary] = React.useState({ total: 0, baseTotal: 0, hidden: 0, creators: [], statuses: {} });
+  const [loadError, setLoadError] = React.useState("");
+  const [editorBusy, setEditorBusy] = React.useState(false);
+  const requestId = React.useRef(0);
+  const filterKey = JSON.stringify([search, dateR, statusF, vatF, byPerson, [...docF].sort()]);
+  const previousFilter = React.useRef(filterKey);
+  const creatorOpts = summary.creators || [];
+  const dateHidden = summary.hidden || 0;
+  async function load(force = true) {
+    const id = ++requestId.current;
+    setLoading(true); setLoadError("");
+    try {
+      const result = await loadQuotationPage({ p_search: search.trim(), p_from: dateR.from || null, p_to: dateR.to || null, p_status: statusF, p_vat: vatF, p_creator: byPerson, p_docs: [...docF].sort(), p_offset: page * 50 }, force);
+      if (id !== requestId.current) return;
+      if (page > 0 && page * 50 >= result.total) { setPage(Math.max(0, Math.ceil(result.total / 50) - 1)); return; }
+      setList(result.rows); setSummary(result); setDocLinks(result.links);
+    } catch (e) { if (id === requestId.current) setLoadError(e.message || "โหลดไม่สำเร็จ"); }
+    finally { if (id === requestId.current) setLoading(false); }
   }
-  React.useEffect(() => { load(); }, []);
+  React.useEffect(() => {
+    if (previousFilter.current !== filterKey) { previousFilter.current = filterKey; if (page !== 0) { setPage(0); return; } }
+    const t = setTimeout(() => load(false), 250);
+    return () => { clearTimeout(t); requestId.current++; };
+  }, [filterKey, page]);
+  async function editorData() {
+    setEditorBusy(true);
+    try {
+      const [c,m,b] = await Promise.all([listCustomers(),listMaterialsLite(),fromBoq ? listBoqs({ nos: [fromBoq] }) : Promise.resolve(null)]);
+      setCusts(c); setMats(m); if (b) setBoqs(b); return c;
+    } catch(e) { flash("โหลดข้อมูลสร้างเอกสารไม่สำเร็จ: " + e.message, true); return null; }
+    finally { setEditorBusy(false); }
+  }
+  React.useEffect(() => { if (newForCustomer || fromBoq || ed) editorData(); }, [newForCustomer, fromBoq, !!ed]);
+  React.useEffect(() => { getCompanies().then(c => setCompanies(c || {vat:{},novat:{}})).catch(e => flash(e.message,true)); }, []);
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printQ) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintQ(null); }, 120); return () => clearTimeout(t); }, [printQ]);
   // open focused on a specific quote (from the dashboard report link)
@@ -85,13 +109,14 @@ export default function Quotation({ role, newForCustomer, onNewConsumed, focus, 
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
   // สร้างใบเสนอราคาเป็นจุดเริ่มต้นทุกงาน: กรอกลูกค้า+รายการ+ราคา แล้วระบบสร้าง BOQ ให้อัตโนมัติตอนบันทึก
-  function startNew(customerId = "") {
-    const c = custs.find(x => String(x.id) === String(customerId));
+  async function startNew(customerId = "") {
+    const customers = await editorData(); if (!customers) return;
+    const c = customers.find(x => String(x.id) === String(customerId));
     setEd({ quote_no: genNo(), _quick: true, customer_id: c?.id || "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: c?.type === "company", wht_rate: 3, pay_method: "cash", note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] });
   }
   React.useEffect(() => {
     if (!newForCustomer || !custs.some(c => String(c.id) === String(newForCustomer))) return;
-    startNew(newForCustomer); onNewConsumed?.();
+    onNewConsumed?.(); startNew(newForCustomer);
   }, [newForCustomer, custs]);
   // ใบเสนอราคาเพิ่มเติม (mig 188): งานเสริมหน้างาน — ผูกใบแม่ (variation_of) · กำไรรวมงานเดียว · สร้าง BOQ ของใบเพิ่มเติมด้วย
   function startVariation(q) { setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", job_type: q.job_type || "", title: `งานเพิ่มเติม (จาก ${q.quote_no})`, status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: !!q.vat, wht: !!q.wht, wht_rate: whtRate(q.wht_rate), pay_method: q.payMethod || "cash", note: "", internal_note: `งานเสริมหน้างานของ ${q.quote_no}`, sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", variation_of: q.quote_no, items: [] }); }
@@ -111,6 +136,11 @@ export default function Quotation({ role, newForCustomer, onNewConsumed, focus, 
     ? `แก้ไข/ลบใบเสนอราคานี้ไม่ได้ — มี${[q.hasInvoice && "ใบแจ้งหนี้", q.hasJob && `ใบงาน ${q.jobNo || ""}`].filter(Boolean).join(" และ ")}แล้ว\nต้องลบเอกสารถัดไป (ใบแจ้งหนี้/ใบเสร็จ/ใบงาน) ก่อน`
     : null;
   async function startEdit(q) {
+    if (!await editorData()) return;
+    let fresh;
+    try { fresh = await listQuotations({ nos: [q.quote_no], fresh: Date.now() }); } catch(e) { return flash("โหลดใบเสนอราคาล่าสุดไม่สำเร็จ: " + e.message, true); }
+    if (!fresh.length) return flash("ไม่พบใบเสนอราคา กรุณาโหลดใหม่", true);
+    q = fresh[0];
     // ล็อกเฉพาะเมื่อออกใบแจ้งหนี้แล้ว (เงิน/บัญชีผูกแล้ว) — มีใบงาน/อนุมัติยังแก้ได้จนกว่าจะแจ้งหนี้
     if (q.hasInvoice) return alert(`ใบเสนอราคา ${q.quote_no} มีใบแจ้งหนี้แล้ว — แก้ไขไม่ได้\nต้องยกเลิกใบแจ้งหนี้/ใบเสร็จก่อน`);
     // มีใบงานแล้วแต่ยังไม่แจ้งหนี้ → แก้ได้ แต่เตือนให้ตรวจใบงานให้ตรงกัน
@@ -318,7 +348,7 @@ export default function Quotation({ role, newForCustomer, onNewConsumed, focus, 
 
           {!ed._edit && !ed.boq_no && <div className="fld"><div style={{ background: "#fffbeb", border: "1px solid #fcd34d", color: "#92400e", borderRadius: 8, padding: "9px 12px", fontSize: 13, lineHeight: 1.6 }}>⚡ <b>สร้างใบเสนอราคา</b> — ไม่ต้องเลือก BOQ · กรอกลูกค้า + รายการ + ราคา แล้วกดบันทึก ระบบจะสร้าง BOQ ให้อัตโนมัติ<br /><span style={{ color: "#b45309" }}>ต้นทุนประมาณการดึงจากคลัง · รายการที่ยังไม่มีต้นทุนต้องเติมใน BOQ ก่อนใช้ประเมินกำไร</span></div></div>}
           {/* pull from BOQ */}
-          <details><summary>อ้างอิง BOQ เดิม (ถ้ามี)</summary><div className="fld"><span>ดึงรายการจาก BOQ (เพิ่มเฉพาะรายการใหม่ · ไม่ทับของเดิม)</span>
+          <details onToggle={e => { if (e.currentTarget.open) listBoqs().then(setBoqs).catch(err => flash("โหลด BOQ ไม่สำเร็จ: " + err.message, true)); }}><summary>อ้างอิง BOQ เดิม (ถ้ามี)</summary><div className="fld"><span>ดึงรายการจาก BOQ (เพิ่มเฉพาะรายการใหม่ · ไม่ทับของเดิม)</span>
             <div className="line-add">
               {/* เลือก BOQ แล้วดึง ลูกค้า/ไซต์/VAT มาให้ด้วย (ถ้ายังไม่ได้เลือก) — เดิมได้แค่เลข BOQ ทำให้บันทึกใบที่ไม่มีลูกค้าได้ */}
               <Combo className="inp" value={ed.boq_no} onChange={(e) => {
@@ -446,40 +476,31 @@ export default function Quotation({ role, newForCustomer, onNewConsumed, focus, 
   }
 
   // ---------- LIST ----------
-  // base หลังค้นหา+ช่วงวันที่ — ใช้ทั้งนับจำนวนบนชิปตัวกรองและกรองแสดงผล
-  const fl0 = list.filter((q) => inDateRange(q.issue_date, dateR)
-    && (matchText(search, q.quote_no, q.customerName, q.contactName, q.title, q.boq_no, q.note, q.internal_note) || matchPhone(search, q.contactPhone)));
-  const hasAc = (q) => (q.items || []).some((it) => it.kind === "ac");
-  const noAcPo = (q) => hasAc(q) && q.status !== "cancelled" && !(docLinks.byQuote[q.quote_no]?.poNos || []).length; // มีแอร์แต่ยังไม่เปิดใบสั่งซื้อ
-  const docPred = (q, f) => f === "all" ? true : f === "no_invoice" ? !q.hasInvoice : f === "no_job" ? !q.hasJob : noAcPo(q);
-  const docMatch = (q) => docF.size === 0 || [...docF].every((f) => docPred(q, f));   // เลือกหลายตัว = ต้องเข้าทุกเงื่อนไข (AND)
-  const nStatus = (v) => fl0.filter((q) => v === "all" || q.status === v).length;
-  const nVat = (v) => fl0.filter((q) => v === "all" || (v === "vat" ? !!q.vat : !q.vat)).length;
-  const nDoc = (v) => fl0.filter((q) => docPred(q, v)).length;
+  const hasAc = q => (q.items || []).some(it => it.kind === "ac");
+  const nStatus = v => v === "all" ? summary.baseTotal : summary.statuses?.[v] || 0;
+  const nVat = v => v === "all" ? summary.baseTotal : v === "vat" ? summary.vatCount : summary.novatCount;
+  const nDoc = v => v === "all" ? summary.baseTotal : v === "no_invoice" ? summary.noInvoice : v === "no_job" ? summary.noJob : summary.noAcPo;
   // จำนวนตัวกรองที่ใช้อยู่ (ต่างจากค่าเริ่มต้น) — โชว์บนแถบตัวกรองยุบได้
   // ช่วงวันที่นับเป็น active เฉพาะเมื่อต่างจากค่าเริ่มต้น 6 เดือนล่าสุด (ไม่งั้นจะขึ้น 1 ตลอด)
   const _dfltR = defaultDocRange();
   const dateActive = (dateR.from || dateR.to) && !(dateR.from === _dfltR.from && dateR.to === _dfltR.to);
   const activeCount = (statusF !== "all" ? 1 : 0) + (vatF !== "all" ? 1 : 0) + docF.size + (byPerson ? 1 : 0) + (dateActive ? 1 : 0);
-  const fl = fl0.filter((q) => (statusF === "all" || q.status === statusF)
-    && (vatF === "all" || (vatF === "vat" ? !!q.vat : !q.vat))
-    && (!byPerson || (q.createdByName || "") === byPerson)
-    && docMatch(q));
+  const fl = list;
   return (
     <div className="adm">
       <div className="adm-head">
-        <div><h1 className="page-title">ใบเสนอราคา <span className="page-title-en">Quotations</span></h1><p className="page-sub">{list.length} ใบ</p></div>
+        <div><h1 className="page-title">ใบเสนอราคา <span className="page-title-en">Quotations</span></h1><p className="page-sub">{summary.total} ใบ</p></div>
         <div className="cat-head-actions">
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
             <input placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
-          {canEdit && <button className="btn-primary" onClick={() => startNew()}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบเสนอราคา</button>}
+          {canEdit && <button className="btn-primary" disabled={editorBusy} onClick={() => startNew()}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบเสนอราคา</button>}
         </div>
       </div>
 
       {renewQuote && <RenewQuotation quote={renewQuote} onClose={() => setRenewQuote(null)} onRenewed={() => { setRenewQuote(null); setStatusF("sent"); flash("ต่ออายุแล้ว — ตรวจสอบใบเสนอราคาแล้วกดอนุมัติได้"); load(); }} />}
-      <FilterBar id="quote" count={activeCount} resultCount={fl.length} resultLabel="ใบ">
+      <FilterBar id="quote" count={activeCount} resultCount={summary.total} resultLabel="ใบ">
       <div className="cat-filter">
         {[["all", "ทั้งหมด"], ...STATUS_OPTS, ["cancelled", "ยกเลิก"]].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)}
@@ -510,12 +531,14 @@ export default function Quotation({ role, newForCustomer, onNewConsumed, focus, 
       </div>
       </FilterBar>
 
-      {loading && <div className="empty">กำลังโหลด…</div>}
+      {(loading || editorBusy) && <div className="empty">{editorBusy ? "กำลังเตรียมข้อมูลเอกสาร…" : "กำลังโหลด…"}</div>}
+      {loadError && <div role="alert" className="empty">{loadError} <button className="btn-ghost" onClick={() => load()}>ลองใหม่</button></div>}
+      <div className="cat-filter"><span>พบ {summary.total} ใบ · หน้า {page + 1} / {Math.max(1, Math.ceil(summary.total / 50))}</span><button className="btn-ghost" disabled={loading || page === 0} onClick={() => setPage(p => p - 1)}>ก่อนหน้า</button><button className="btn-ghost" disabled={loading || (page + 1) * 50 >= summary.total} onClick={() => setPage(p => p + 1)}>ถัดไป</button><button className="btn-ghost" onClick={() => load()} disabled={loading}>โหลดข้อมูลล่าสุด</button></div>
       {(() => {
         return (<>
-      {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสนอราคา" : "ไม่พบใบเสนอราคาที่ตรงเงื่อนไข"}</div>}
+      {!loading && !loadError && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบเสนอราคา" : "ไม่พบใบเสนอราคาที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">
-        {fl.map((q) => {
+        {(!loading && !loadError ? fl : []).map((q) => {
           const st = STATUS[q.status] || STATUS.draft;
           return (
             <div className={"card job-card doc2" + (q.status !== "draft" && q.status !== "sent" ? " closed" : "")} key={q.quote_no}>
