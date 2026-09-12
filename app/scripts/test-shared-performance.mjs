@@ -1,0 +1,38 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import { visiblePolling } from '../src/lib/visiblePolling.js';
+import { calculateSalesWht } from '../src/lib/salesWht.js';
+let tick, change, calls=0, done, removed=false;
+const doc={visibilityState:'hidden',addEventListener:(_,f)=>change=f,removeEventListener:()=>removed=true};
+const stop=visiblePolling(()=>{calls++;return new Promise(r=>done=r);},100,doc,{setInterval:f=>(tick=f,1),clearInterval:()=>{}});
+tick();assert.equal(calls,0);
+doc.visibilityState='visible';change();tick();assert.equal(calls,1);
+done();await Promise.resolve();tick();assert.equal(calls,2);
+stop();done();await Promise.resolve();tick();assert.equal(calls,2);assert.ok(removed);
+
+const api=fs.readFileSync('src/lib/api.js','utf8');
+const signal=fs.readFileSync('src/lib/cacheSignals.js','utf8').replace(/export /g,'');
+let auth;
+const ctx={Map,Set,Date,Promise,supabase:{auth:{onAuthStateChange:f=>auth=f},from:()=>({select(){return this},insert(){return this},update(){return this},upsert(){return this},delete(){return this}}),rpc:()=>Promise.resolve({data:[]})}};
+vm.createContext(ctx);
+vm.runInContext(signal+'\n'+api.slice(api.indexOf('const _CACHE_TTL'),api.indexOf('// default icon')),ctx);
+let reads=0;
+const get=()=>ctx._cached('documents',async()=>++reads,45000);
+await get();await ctx.supabase.rpc('team_unread_count');await get();assert.equal(reads,1);
+ctx.supabase.from('x').update({});await get();assert.equal(reads,2);
+await ctx.supabase.rpc('unknown_write');await get();assert.equal(reads,3);
+auth('SIGNED_IN',{user:{id:'a'}});await get();auth('TOKEN_REFRESHED',{user:{id:'a'}});await get();assert.equal(reads,4);
+auth('SIGNED_IN',{user:{id:'b'}});await get();assert.equal(reads,5);
+auth('SIGNED_OUT',null);await get();assert.equal(reads,6);
+let reject;
+const old=ctx._cached('race',()=>new Promise((_,r)=>reject=r),45000);
+ctx.bustShort();await ctx._cached('race',async()=>42,45000);reject(Error('old request'));await assert.rejects(old);
+assert.equal(await ctx._cached('race',async()=>99,45000),42);
+
+const helper=api.slice(api.indexOf('function hydrateQuotationBundle('),api.indexOf('\nexport async function saveQuotation'));
+const hydrate=new Function('calculateSalesWht','_gmap',helper+';return hydrateQuotationBundle;')(calculateSalesWht,()=>null);
+const bundle={quotes:[{quote_no:'Q',customer_id:1,status:'sent',valid_until:'2099-01-01',vat:true,wht:true,wht_rate:3,discount_type:'percent',discount_value:10}],items:[{quote_no:'Q',kind:'service',qty:1,unit_price:1000},{quote_no:'Q',kind:'ac',qty:1,unit_price:2000}],customers:[{id:1,type:'company',name:'Test'}],sites:[],contacts:[],jobs:[],invoices:[],creators:{}};
+let q=hydrate(bundle)[0];assert.equal(q.grand,2889);assert.equal(q.whtAmt,27);assert.equal(q.netPay,2862);
+bundle.customers[0].type='person';q=hydrate(bundle)[0];assert.equal(q.whtAmt,0);assert.equal(q.grand,2889);
+console.log('PASS hidden polling, no overlap, cleanup, read RPC cache retention, mutation/auth invalidation, stale failure race, bundle VAT/WHT/discount and individual customer');

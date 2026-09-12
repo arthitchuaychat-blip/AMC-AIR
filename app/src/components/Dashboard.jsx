@@ -1,3 +1,4 @@
+import { scopedDocuments } from "../lib/scopedDocuments";
 import React from "react";
 import { listMaterials, listCategories, listTeams, listTransactionsSince, listQuotations, listBoqs, listReceipts, listAdjustmentNotes, dashboardActionLite, vatSummary, listAccounts, listProfiles, quoteAttribution } from "../lib/api";
 import { sumAdj } from "../lib/adjustments";
@@ -122,7 +123,7 @@ export default function Dashboard({ role, onReorder, onOpenQuote, onOpenJob, onG
       try {
         const [qs, rcs, cats, ans] = await Promise.all([listQuotations(opt), listReceipts(opt), listCategories(), listAdjustmentNotes()]);
         const boqNos = [...new Set(qs.map((q) => q.boq_no).filter(Boolean))];
-        const bs = boqNos.length ? await listBoqs({ nos: boqNos }) : [];
+        const bs = await scopedDocuments(listBoqs, boqNos);
         // ใบเสร็จที่ผูกใบเสนอนอกช่วง → ขอแค่ "ใครขาย/ทีมไหน" ของใบเสนอพวกนั้นมาเพิ่ม (ตารางบาง 2 คอลัมน์)
         // ไม่งั้นพอผู้ใช้เลือกตัวกรองพนักงานขาย ใบเสร็จเหล่านั้นจะถูกทิ้งทั้งที่เป็นเงินที่เก็บได้จริง
         const inWin = new Set(qs.map((q) => q.quote_no));

@@ -1,3 +1,6 @@
+import SpeedReport from "./components/SpeedReport";
+import { beginScreenTiming, clearSpeedSamples } from "./lib/screenTiming";
+import { visiblePolling } from "./lib/visiblePolling";
 import React from "react";
 import { supabase, hasConfig } from "./lib/supabase";
 import { getProfile, signOut, countUnreadChats, countUnreadTeamChats, getRolePermissions, listTeams, unreadByModule, markModuleRead, poReceivedQty, getQuoteItems, countEmailUnread, syncEmails } from "./lib/api";
@@ -142,7 +145,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "v832 · ภาษีหัก ณ ที่จ่ายและหลักฐาน";
+const BUILD = "v833 · ปรับการโหลดข้อมูลและวัดความเร็ว";
 
 function SetupNotice() {
   return (
@@ -310,59 +313,55 @@ export default function App() {
   }, [profile, permsV, mySub, view]);
 
   // sidebar badges: unread notifications grouped by category → number on each menu (like the LINE chat badge)
-  const refreshNavNotif = React.useCallback(() => { unreadByModule().then(setNotifCounts).catch(() => {}); }, []);
+  const refreshNavNotif = React.useCallback(() => { if (document.visibilityState === "hidden") return; return unreadByModule().then(setNotifCounts).catch(() => {}); }, []);
   React.useEffect(() => {
     if (!profile) { setNotifCounts({}); return; }
-    refreshNavNotif();
-    const iv = setInterval(refreshNavNotif, 60000);
+    const stopPoll = visiblePolling(refreshNavNotif, 60000);
     // หน่วง realtime: เหตุการณ์รัว ๆ (แจ้งเตือนหลายอันพร้อมกัน) → นับครั้งเดียวใน 4 วิ · ลดยิง query
     let t = null; const soon = () => { if (t) return; t = setTimeout(() => { t = null; refreshNavNotif(); }, 4000); };
     const ch = supabase.channel("nav-notif")
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, soon)
       .subscribe();
-    return () => { clearInterval(iv); if (t) clearTimeout(t); supabase.removeChannel(ch); };
+    return () => { stopPoll(); if (t) clearTimeout(t); supabase.removeChannel(ch); };
   }, [profile, refreshNavNotif]);
 
   // sidebar badge: count of chats with unread messages — live via realtime, with a polling fallback
   React.useEffect(() => {
     if (!profile || !can(profile.role, "chat")) { setChatUnread(0); return; }
     let alive = true;
-    const refresh = () => countUnreadChats().then((n) => { if (alive) setChatUnread(n); }).catch(() => {});
-    refresh();
-    const iv = setInterval(refresh, 60000);
+    const refresh = () => document.visibilityState === "hidden" ? Promise.resolve() : countUnreadChats().then((n) => { if (alive) setChatUnread(n); }).catch(() => {});
+    const stopPoll = visiblePolling(refresh, 60000);
     let t = null; const soon = () => { if (t) return; t = setTimeout(() => { t = null; refresh(); }, 4000); };
     const ch = supabase.channel("nav-chat-unread")
       .on("postgres_changes", { event: "*", schema: "public", table: "line_contacts" }, soon)
       .subscribe();
-    return () => { alive = false; clearInterval(iv); if (t) clearTimeout(t); supabase.removeChannel(ch); };
+    return () => { alive = false; stopPoll(); if (t) clearTimeout(t); supabase.removeChannel(ch); };
   }, [profile, permsV]);
 
   // sidebar badge: อีเมลค้างอ่าน — ดึงเมลใหม่ทุก 3 นาที (dedup เร็ว) + นับค้างอ่าน + realtime
   React.useEffect(() => {
     if (!profile || !can(profile.role, "email", "view")) { setEmailUnread(0); return; }
     let alive = true;
-    const count = () => countEmailUnread().then((n) => { if (alive) setEmailUnread(n); }).catch(() => {});
-    const syncCount = () => syncEmails().catch(() => {}).then(count);
-    syncCount();
-    const iv = setInterval(syncCount, 180000);
+    const count = () => document.visibilityState === "hidden" ? Promise.resolve() : countEmailUnread().then((n) => { if (alive) setEmailUnread(n); }).catch(() => {});
+    const syncCount = () => document.visibilityState === "hidden" ? Promise.resolve() : syncEmails().catch(() => {}).then(count);
+    const stopPoll = visiblePolling(syncCount, 180000);
     const ch = supabase.channel("nav-email-unread")
       .on("postgres_changes", { event: "*", schema: "public", table: "email_threads" }, count)
       .subscribe();
-    return () => { alive = false; clearInterval(iv); supabase.removeChannel(ch); };
+    return () => { alive = false; stopPoll(); supabase.removeChannel(ch); };
   }, [profile, permsV]);
 
   // sidebar badge: unread team-chat messages — live via realtime, polling fallback
   React.useEffect(() => {
     if (!profile || !can(profile.role, "teamchat")) { setTeamUnread(0); return; }
     let alive = true;
-    const refresh = () => countUnreadTeamChats().then((n) => { if (alive) setTeamUnread(n); }).catch(() => {});
-    refresh();
-    const iv = setInterval(refresh, 60000);
+    const refresh = () => document.visibilityState === "hidden" ? Promise.resolve() : countUnreadTeamChats().then((n) => { if (alive) setTeamUnread(n); }).catch(() => {});
+    const stopPoll = visiblePolling(refresh, 60000);
     let t = null; const soon = () => { if (t) return; t = setTimeout(() => { t = null; refresh(); }, 4000); };
     const ch = supabase.channel("nav-team-unread")
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, soon)
       .subscribe();
-    return () => { alive = false; clearInterval(iv); if (t) clearTimeout(t); supabase.removeChannel(ch); };
+    return () => { alive = false; stopPoll(); if (t) clearTimeout(t); supabase.removeChannel(ch); };
   }, [profile, permsV, view]);
 
   React.useEffect(() => { try { localStorage.setItem("amc_lang", lang); } catch (_) {} }, [lang]);
@@ -475,6 +474,7 @@ export default function App() {
       confirmText: "เปลี่ยนเมนู", cancelText: "อยู่ต่อ",
     })) return;
     if (view && view !== id) { setNavHist((h) => [...h, view]); window.history.pushState(null, ""); }
+    if (view !== id) beginScreenTiming(id);
     setView(id); setMenuOpen(false);
     // opening a menu clears its "unread activity" badge
     if (!NAV_BADGE_SKIP[id] && (notifCounts[id] || 0) > 0) {
@@ -600,7 +600,8 @@ export default function App() {
               <div className="user-role">{ROLE_LABEL[role] || role}</div>
             </div>
           </div>
-          <button className="logout-btn" onClick={() => signOut()}>
+          {role === "exec" && <SpeedReport />}
+          <button className="logout-btn" onClick={() => { clearSpeedSamples(); signOut(); }}>
             <UIcon name="logout" size={16} /> ออกจากระบบ
           </button>
           <div style={{ fontSize: 10.5, color: "var(--ink-3)", textAlign: "center", marginTop: 8, opacity: 0.7 }}>เวอร์ชัน {BUILD}</div>

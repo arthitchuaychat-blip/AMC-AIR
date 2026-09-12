@@ -1,3 +1,4 @@
+import { useScreenTiming } from "../lib/screenTiming";
 import React from "react";
 import { loadSubcontractData } from "../lib/subcontractData";
 import SubcontractRateSettings from "./SubcontractRateSettings";
@@ -179,6 +180,7 @@ function OfficeSubcontractor({ role, onOpenDoc }) {
   const subJobs = jobs.filter((j) => subTeamIds.has(j.assigned_team) && j.status !== "cancelled");
 
   const ready = !loading && !loadError && loadedTab === tab;
+  useScreenTiming("subcontract", loading || (!loadError && loadedTab !== tab) || (!rates && !ratesError), loadError || ratesError);
 
   return (
     <div className="adm">

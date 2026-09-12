@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-let rpc=0, detail=0, listener, empty=false, fail=false, user='u1';
+let rpc=0, detail=0, listener, invalidator, empty=false, fail=false, user='u1';
 const src=fs.readFileSync('src/lib/quotationPage.js','utf8').replace(/^import .*;$/gm,'').replace('export async function','async function');
-const ctx={Map,Date,Error,supabase:{auth:{onAuthStateChange:f=>listener=f,getSession:async()=>({data:{session:{user:{id:user}}}})},rpc:async()=>{rpc++;return fail?{error:Error('offline')}:{data:{nos:empty?[]:['Q2','Q1']}};}},expireOverdueQuotes:async()=>{},listQuotations:async opts=>{detail++;assert.ok(opts.nos.length<=50);return [{quote_no:'Q1'},{quote_no:'Q2'}];}};
+const ctx={Map,Date,Error,onDataInvalidated:f=>invalidator=f,hydrateQuotationBundle:b=>b.quotes,supabase:{auth:{onAuthStateChange:f=>listener=f,getSession:async()=>({data:{session:{user:{id:user}}}})},rpc:async()=>{rpc++;return fail?{error:Error('offline')}:{data:{nos:empty?[]:['Q2','Q1'],bundle:{quotes:empty?[]:[{quote_no:'Q1'},{quote_no:'Q2'}]}}};}},expireOverdueQuotes:async()=>{},listQuotations:async opts=>{detail++;assert.ok(opts.nos.length<=50);return [{quote_no:'Q1'},{quote_no:'Q2'}];}};
 vm.createContext(ctx);vm.runInContext(src,ctx);
 let r=await ctx.loadQuotationPage({p_offset:0});assert.equal(r.rows[0].quote_no,'Q2');
 await ctx.loadQuotationPage({p_offset:0});assert.equal(rpc,1);
@@ -11,4 +11,5 @@ await ctx.loadQuotationPage({p_offset:0},true);assert.equal(rpc,2);
 user='u2';await ctx.loadQuotationPage({p_offset:0});assert.equal(rpc,3);
 listener();empty=true;const before=detail;r=await ctx.loadQuotationPage({p_offset:0});assert.equal(r.rows.length,0);assert.equal(detail,before);
 listener();fail=true;await assert.rejects(ctx.loadQuotationPage({p_offset:0}));fail=false;await ctx.loadQuotationPage({p_offset:0});assert.equal(rpc,6);
+invalidator();await ctx.loadQuotationPage({p_offset:0});assert.equal(rpc,7);
 console.log('PASS page order, warm cache, force refresh, account isolation, auth invalidation, empty scope, retry after failure');

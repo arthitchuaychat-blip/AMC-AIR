@@ -1,3 +1,4 @@
+import { useScreenTiming } from "../lib/screenTiming";
 import React from "react";
 import { loadQuotationPage } from "../lib/quotationPage";
 import RenewQuotation from "./RenewQuotation";
@@ -69,6 +70,7 @@ export default function Quotation({ role, newForCustomer, onNewConsumed, focus, 
   const [page, setPage] = React.useState(0);
   const [summary, setSummary] = React.useState({ total: 0, baseTotal: 0, hidden: 0, creators: [], statuses: {} });
   const [loadError, setLoadError] = React.useState("");
+  useScreenTiming("quote", loading, loadError);
   const [editorBusy, setEditorBusy] = React.useState(false);
   const requestId = React.useRef(0);
   const filterKey = JSON.stringify([search, dateR, statusF, vatF, byPerson, [...docF].sort()]);
@@ -88,7 +90,7 @@ export default function Quotation({ role, newForCustomer, onNewConsumed, focus, 
   }
   React.useEffect(() => {
     if (previousFilter.current !== filterKey) { previousFilter.current = filterKey; if (page !== 0) { setPage(0); return; } }
-    const t = setTimeout(() => load(false), 250);
+    const t = setTimeout(() => load(false), search.trim() ? 250 : 0);
     return () => { clearTimeout(t); requestId.current++; };
   }, [filterKey, page]);
   async function editorData() {

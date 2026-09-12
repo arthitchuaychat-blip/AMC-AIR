@@ -1,3 +1,5 @@
+import { READ_RPCS, invalidateData } from "./cacheSignals.js";
+export { hydrateQuotationBundle };
 import { calculateSalesWht, whtRate } from "./salesWht.js";
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
@@ -23,11 +25,11 @@ const _SHORT_TTL = 45 * 1000;     // สั้น: 45 วินาที (ลิ
 const _cache = new Map();  // key -> { at:number, p:Promise, ttl:number }
 function bustCache(key) { if (key) _cache.delete(key); else _cache.clear(); }
 // ล้างเฉพาะแคช "สั้น" (ลิสต์เอกสาร) — เรียกอัตโนมัติทุกครั้งที่มีการเขียนตาราง
-function bustShort() { for (const [k, v] of _cache) { if (v.ttl === _SHORT_TTL) _cache.delete(k); } }
+function bustShort() { invalidateData(); for (const [k, v] of _cache) { if (v.ttl === _SHORT_TTL) _cache.delete(k); } }
 function _cached(key, loader, ttl = _CACHE_TTL) {
   const hit = _cache.get(key);
   if (hit && (Date.now() - hit.at) < hit.ttl) return hit.p;
-  const p = loader().catch((e) => { _cache.delete(key); throw e; }); // ล้มแล้วอย่าแคชความล้มเหลว
+  const p = loader().catch((e) => { if (_cache.get(key)?.p === p) _cache.delete(key); throw e; }); // ล้มแล้วอย่าแคชความล้มเหลว
   _cache.set(key, { at: Date.now(), p, ttl });
   return p;
 }
@@ -49,9 +51,14 @@ function _cached(key, loader, ttl = _CACHE_TTL) {
     return b;
   };
   // RPC ที่เขียนข้อมูล (set_job_status, replace_quotation_items, set_receipt_flowaccount ฯลฯ)
-  // เลี่ยงตัวดัก .from() → ต้องล้างแคชด้วย · RPC ที่เป็น read แค่ over-bust (ปลอดภัย โหลดใหม่เฉย ๆ)
+  // ล้างแคชสำหรับคำสั่งเขียน/ไม่รู้จักเท่านั้น · อ่านที่ตรวจ STABLE แล้วไม่ล้างแคช
   const rawRpc = supabase.rpc.bind(supabase);
-  supabase.rpc = (...args) => { try { bustShort(); } catch (_) {} return rawRpc(...args); };
+  supabase.rpc = (...args) => { if (!READ_RPCS.has(args[0])) { try { bustShort(); } catch (_) {} } return rawRpc(...args); };
+  let actor;
+  supabase.auth.onAuthStateChange((event, session) => {
+    const next = session?.user?.id || null;
+    if (actor !== next || event === "SIGNED_OUT" || event === "USER_UPDATED") { actor = next; _cache.clear(); invalidateData(); }
+  });
   supabase.__writeBust = true;
 })();
 
@@ -2533,6 +2540,11 @@ async function _loadQuotations(opts = {}) {
   const qR = (nos || since) ? q : await qP;
   if (qR.error) throw qR.error;
   if (it.error) throw it.error; if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (jo.error) throw jo.error;
+  const cb = await _creators(scoped ? _idsOf(qR.data, "created_by") : null);
+  return hydrateQuotationBundle({quotes:qR.data,items:it.data,customers:cu.data,sites:si.data,contacts:ct.data,jobs:jo.data,invoices:inv.data,creators:cb});
+}
+function hydrateQuotationBundle(bundle) {
+  const qR={data:bundle.quotes}, it={data:bundle.items}, cu={data:bundle.customers}, si={data:bundle.sites}, ct={data:bundle.contacts}, jo={data:bundle.jobs}, inv={data:bundle.invoices}, cb=bundle.creators || {};
   const byQ = {}; (it.data || []).forEach((x) => { (byQ[x.quote_no] = byQ[x.quote_no] || []).push(x); });
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
@@ -2543,7 +2555,6 @@ async function _loadQuotations(opts = {}) {
   const firstContact = {}; (ct.data || []).forEach((c) => { if (!firstContact[c.customer_id]) firstContact[c.customer_id] = c; });
   const jobByQuote = {}; (jo.data || []).forEach((j) => { if (j.quote_no && j.status !== "cancelled" && !jobByQuote[j.quote_no]) jobByQuote[j.quote_no] = j; });
   const billedByQ = {}, invCntByQ = {}; (inv.data || []).forEach((x) => { if (x.status !== "cancelled") { billedByQ[x.quote_no] = (billedByQ[x.quote_no] || 0) + Number(x.total || 0); invCntByQ[x.quote_no] = (invCntByQ[x.quote_no] || 0) + 1; } });
-  const cb = await _creators(scoped ? _idsOf(qR.data, "created_by") : null);
   return (qR.data || []).map((qo) => {
     const items = byQ[qo.quote_no] || [];
     // วิธีการรับเงิน: ราคาบัตรปรับเข้า "ราคาต่อหน่วยของแต่ละรายการ" (ปัดขึ้นบาทเต็ม/หน่วย) — ไม่มีบรรทัดค่าธรรมเนียม
@@ -2571,7 +2582,9 @@ async function _loadQuotations(opts = {}) {
     const address = siteAddress || custAddr[qo.customer_id] || null;
     const map_url = (s && s.map_url) || _gmap(address);
     const ct0 = firstContact[qo.customer_id];
-    return { ...qo, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
+    const thaiToday = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0,10);
+    const effectiveStatus = ["draft","sent"].includes(qo.status) && qo.valid_until && qo.valid_until < thaiToday ? "expired" : qo.status;
+    return { ...qo, status: effectiveStatus, customerName: custName[qo.customer_id] || null, customerAddr: custAddr[qo.customer_id] || null,
       customerTaxId: custTax[qo.customer_id] || null, customerBranch: custBranch[qo.customer_id] || null, customerType: custType[qo.customer_id] || null, customerCode: qo.customer_id || null, siteName: s?.site_name || null,
       siteAddress, address, map_url, createdByName: cb[qo.created_by] || null,
       mainContactName: ct0?.name || null, mainContactPhone: ct0?.phone || null, siteContactName: s?.contact_name || null, siteContactPhone: s?.phone || null,

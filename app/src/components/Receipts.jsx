@@ -1,3 +1,4 @@
+import { useScreenTiming } from "../lib/screenTiming";
 import React from "react";
 import { scopedDocuments } from "../lib/scopedDocuments";
 import { calculateSalesWht, salesItems, enrichSalesItems, whtEnabled, whtRate as parseWhtRate } from "../lib/salesWht.js";
@@ -43,6 +44,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
   const [loadError, setLoadError] = React.useState("");
+  useScreenTiming("receipt", loading, loadError);
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
   const [printR, setPrintR] = React.useState(null);
