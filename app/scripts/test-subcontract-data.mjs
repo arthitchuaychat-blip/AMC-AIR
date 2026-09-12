@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync('src/lib/subcontractData.js','utf8').replace(/^import .*;$/gm,'').replace('export async function','async function');
+let calls=[],empty=false,broken=false;
+const context={Set,Object,Promise,Error,listTeams:async()=>{calls.push('teams');return [{id:'sub',type:'sub'},{id:'own',type:'regular'}];},listJobOrders:async()=>{calls.push('jobs');return empty?[]:[...Array.from({length:251},(_,i)=>({quote_no:'Q'+i,assigned_team:'sub',status:'pending'})),{quote_no:'Q0',assigned_team:'sub',status:'pending'},{quote_no:'EXCLUDED',assigned_team:'own',status:'pending'},{quote_no:'CANCELLED',assigned_team:'sub',status:'cancelled'}];},listQuotations:async({nos})=>{assert.ok(nos.length>0&&nos.length<=100);calls.push(nos);return broken?[]:nos.map(quote_no=>({quote_no}));},listSubPayouts:async()=>{calls.push('payouts');return [];},jobMaterialCost:async()=>{calls.push('cost');return {};}};
+vm.createContext(context);vm.runInContext(source,context);
+assert.equal(await context.loadSubcontractData('settings'),null);assert.equal(calls.length,0);
+let result=await context.loadSubcontractData('labor');assert.equal(Object.keys(result.quoteBy).length,251);assert.equal(calls.filter(Array.isArray).length,3);assert.ok(!calls.includes('payouts')&&!calls.includes('cost'));
+calls=[];await context.loadSubcontractData('pay');assert.ok(calls.includes('payouts')&&!calls.includes('cost'));
+calls=[];await context.loadSubcontractData('score');assert.ok(calls.includes('payouts')&&calls.includes('cost'));
+empty=true;calls=[];await context.loadSubcontractData('labor');assert.equal(calls.filter(Array.isArray).length,0);
+empty=false;broken=true;await assert.rejects(context.loadSubcontractData('labor'));
+console.log('PASS settings no document requests, 251 quotes in bounded batches, deduplication, excluded teams/cancelled jobs, pay/score dependencies, empty scope, missing data blocks financial UI');

@@ -1,4 +1,5 @@
 import React from "react";
+import { loadSubcontractData } from "../lib/subcontractData";
 import SubcontractRateSettings from "./SubcontractRateSettings";
 import {DEFAULT_SUB_RATES,validateSubRates} from "../lib/subcontractRates";
 import {getAppConfig,resetJobLaborDefaults} from "../lib/api";
@@ -151,29 +152,40 @@ function OfficeSubcontractor({ role, onOpenDoc }) {
   const [toast, setToast] = React.useState(null);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
+  const [loadError, setLoadError] = React.useState("");
+  const loadId = React.useRef(0);
+  const activeTab = React.useRef(tab); activeTab.current = tab;
+  const [loadedTab, setLoadedTab] = React.useState(null);
   async function load() {
-    setLoading(true);
+    if (tab !== activeTab.current) return;
+    const id = ++loadId.current;
+    setLoading(tab !== "settings"); setLoadError("");
     try {
-      const [jo, tm, qs, po, mc] = await Promise.all([listJobOrders(), listTeams(), listQuotations(), listSubPayouts(), jobMaterialCost()]);
-      setJobs(jo); setTeams(tm); setQuoteBy(Object.fromEntries(qs.map((q) => [q.quote_no, q]))); setPayouts(po); setMatCost(mc);
-    } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
-    setLoading(false);
+      const data = await loadSubcontractData(tab);
+      if (id !== loadId.current) return;
+      if (data) {
+        setJobs(data.jobs); setTeams(data.teams); setQuoteBy(data.quoteBy);
+        setPayouts(data.payouts); setMatCost(data.matCost);
+      }
+      setLoadedTab(tab);
+    } catch (e) { if (id === loadId.current) setLoadError("โหลดไม่สำเร็จ: " + (e.message || e)); }
+    finally { if (id === loadId.current) setLoading(false); }
   }
-  React.useEffect(() => { load(); }, []);
+  React.useEffect(() => { load(); return () => { loadId.current++; }; }, [tab]);
 
   const subTeams = teams.filter((t) => t.type === "sub");
   const subTeamIds = new Set(subTeams.map((t) => t.id));
   const teamById = Object.fromEntries(teams.map((t) => [t.id, t]));
   const subJobs = jobs.filter((j) => subTeamIds.has(j.assigned_team) && j.status !== "cancelled");
 
-  if (loading) return <div className="adm"><div className="empty">กำลังโหลด…</div></div>;
+  const ready = !loading && !loadError && loadedTab === tab;
 
   return (
     <div className="adm">
       <div className="adm-head"><div><h1 className="page-title">ช่างซัพ <span className="page-title-en">Subcontractors</span></h1>
         <p className="page-sub">ค่าแรงเหมาต่องาน → ยืนยันค่าแรง → ค่าแรงรอจ่าย (แบ่งจ่ายได้ · หัก ณ ที่จ่าย 3% เฉพาะงาน VAT) → ส่งสลิปให้ทีม</p></div></div>
 
-      {subTeams.length === 0 && <div className="card"><div className="empty">ยังไม่มีทีมช่างซัพ — ไปตั้งค่าได้ที่ ตั้งค่า → ทีมช่าง แล้วเลือกประเภท "ช่างซัพ"</div></div>}
+      {ready && tab !== "settings" && subTeams.length === 0 && <div className="card"><div className="empty">ยังไม่มีทีมช่างซัพ — ไปตั้งค่าได้ที่ ตั้งค่า → ทีมช่าง แล้วเลือกประเภท "ช่างซัพ"</div></div>}
 
       {<>
         <div className="cat-filter">
@@ -181,11 +193,13 @@ function OfficeSubcontractor({ role, onOpenDoc }) {
             style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l}</button>)}
         </div>
 
+        {tab !== "settings" && (loading || (!loadError && loadedTab !== tab)) && <div className="empty">กำลังโหลดข้อมูลแท็บนี้…</div>}
+        {loadError && <div className="empty" role="alert">{loadError} <button className="btn-ghost" onClick={load}>ลองใหม่</button></div>}
         {ratesError && <p role="alert">โหลดค่าเริ่มต้นไม่สำเร็จ: {ratesError}</p>}
         {tab === "settings" && (rates ? <SubcontractRateSettings value={rates} canEdit={["exec","admin"].includes(role)} onSaved={setRates}/> : <p>กำลังโหลดค่าเริ่มต้น…</p>)}
-        {tab === "labor" && <LaborTab rates={rates} jobs={subJobs} quoteBy={quoteBy} teamById={teamById} subTeams={subTeams} canLabor={canLabor} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
-        {tab === "pay" && canPay && <PayTab role={role} jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} teamById={teamById} payouts={payouts} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
-        {tab === "score" && <ScoreTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} matCost={matCost} payouts={payouts} />}
+        {ready && tab === "labor" && <LaborTab rates={rates} jobs={subJobs} quoteBy={quoteBy} teamById={teamById} subTeams={subTeams} canLabor={canLabor} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
+        {ready && tab === "pay" && canPay && <PayTab role={role} jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} teamById={teamById} payouts={payouts} onReload={load} flash={flash} onOpenDoc={onOpenDoc} />}
+        {ready && tab === "score" && <ScoreTab jobs={subJobs} quoteBy={quoteBy} subTeams={subTeams} matCost={matCost} payouts={payouts} />}
       </>}
 
       {toast && <div className={"toast" + (toast.bad ? " bad" : "")}>{toast.m}</div>}
