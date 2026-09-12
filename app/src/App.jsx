@@ -211,6 +211,7 @@ export default function App() {
   const [joPrefill, setJoPrefill] = React.useState(null);
   const [joSchedule, setJoSchedule] = React.useState(null);
   const [withdrawCtx, setWithdrawCtx] = React.useState(null);
+  const [quoteNewCust, setQuoteNewCust] = React.useState(null);
   const [quoteFocus, setQuoteFocus] = React.useState(null);
   const [jobFocus, setJobFocus] = React.useState(null);
   const [hoStartJob, setHoStartJob] = React.useState(null);   // open a NEW handover for this job
@@ -641,7 +642,7 @@ export default function App() {
           onCreateJob={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }} />}
         {view === "chat" && <Chat role={role} onOpenDoc={openDoc} onGoCustomers={(name) => { setCustFocus(name); go("saleshub"); }}
           focus={chatFocus} onFocusConsumed={() => setChatFocus(null)}
-          onCreateBoq={(cid) => { setBoqNewCust(String(cid)); go("boq"); }}
+          onCreateQuote={(cid) => { setQuoteNewCust(String(cid)); go("quote"); }}
           onCreateSurvey={(cid) => { setJobSurveyCust(String(cid)); go("joborders"); }}
           onCreateTask={(cid, name) => { setTaskPrefill({ customerId: cid ? String(cid) : null, name: name || null }); go("tasks"); }} />}
         {view === "email" && <Email role={role} me={profile} />}
@@ -653,6 +654,7 @@ export default function App() {
           boqNewCust={boqNewCust} onBoqNewConsumed={() => setBoqNewCust(null)}
           boqDraft={boqDraft} onBoqDraftConsumed={() => setBoqDraft(null)}
           quoteFocus={quoteFocus} onQuoteFocusConsumed={() => setQuoteFocus(null)}
+          quoteNewCust={quoteNewCust} onQuoteNewConsumed={() => setQuoteNewCust(null)}
           quoteFromBoq={quoteFromBoq} onQuoteFromBoqConsumed={() => setQuoteFromBoq(null)}
           onCreateInvoice={(quoteNo) => { setInvoiceFromQuote(quoteNo); go("invoice"); }}
           onCreateJob={(q) => { setJoPrefill(q); go("joborders"); }}

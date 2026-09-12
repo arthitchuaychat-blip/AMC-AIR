@@ -92,7 +92,7 @@ async function dlFile(url, name) {
   } catch { window.open(url, "_blank", "noopener"); }
 }
 
-export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCreateSurvey, onCreateTask, focus, onFocusConsumed }) {
+export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, onCreateSurvey, onCreateTask, focus, onFocusConsumed }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ประวัติเอกสารลูกค้า → พรีวิวแผงขวาก่อน
   const canSend = can(role, "chat", "edit");
   const [allC, setAllC] = React.useState({ line: [], fb: [] });   // ผู้ติดต่อทั้ง 2 แหล่ง — ไว้โชว์ยอดค้างอ่านทุกแท็บพร้อมกัน
@@ -1180,7 +1180,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateBoq, onCr
                     <button className="btn-primary sm" onClick={() => editCustomer(cust)}><UIcon name="edit" size={13} color="#fff" /> แก้ไขข้อมูล</button>
                     <button className="btn-ghost sm" onClick={() => onCreateSurvey && onCreateSurvey(cust.id)}>📋 สร้างใบงาน</button>
                     <button className="btn-ghost sm" onClick={() => onCreateTask && onCreateTask(cust.id, cust.name)}>✅ สร้างงานติดตาม</button>
-                    <button className="btn-ghost sm" onClick={() => onCreateBoq && onCreateBoq(cust.id)}>📋 สร้าง BOQ</button>
+                    {can(role, "quote", "edit") && <button className="btn-ghost sm" onClick={() => onCreateQuote && onCreateQuote(cust.id)}>📋 สร้างใบเสนอราคา</button>}
                     <button className="btn-ghost sm" onClick={() => onGoCustomers && onGoCustomers(cust.name)}>เปิดหน้าลูกค้า</button>
                     <button className="btn-ghost sm" onClick={() => onLink(null)}>ยกเลิกการเชื่อม</button>
                   </div>}

@@ -16,7 +16,7 @@ const TABS = [
 
 export default function CostQuoteHub({ initialTab, role,
   boqFocus, onBoqFocusConsumed, boqNewCust, onBoqNewConsumed, boqDraft, onBoqDraftConsumed,
-  quoteFocus, onQuoteFocusConsumed, quoteFromBoq, onQuoteFromBoqConsumed,
+  quoteNewCust, onQuoteNewConsumed, quoteFocus, onQuoteFocusConsumed, quoteFromBoq, onQuoteFromBoqConsumed,
   onCreateInvoice, onCreateJob, onCreatePo, onOpenJob, onOpenDoc, onGoChat }) {
   const tabs = TABS.filter((t) => can(role, t.key));
   const [tab, setTab] = React.useState(initialTab && tabs.some((t) => t.key === initialTab) ? initialTab : tabs[0]?.key || "quote");
@@ -27,6 +27,7 @@ export default function CostQuoteHub({ initialTab, role,
   React.useEffect(() => { if (boqNewCust || boqDraft) setTab("boq"); }, [boqNewCust, boqDraft]);
   React.useEffect(() => { if (quoteFocus) { setQFocus(quoteFocus); setTab("quote"); } }, [quoteFocus]);
   React.useEffect(() => { if (quoteFromBoq) { setQFromBoq(quoteFromBoq); setTab("quote"); } }, [quoteFromBoq]);
+  React.useEffect(() => { if (quoteNewCust) setTab("quote"); }, [quoteNewCust]);
   const cur = tabs.find((t) => t.key === tab) || tabs[0];
   if (!cur) return <div className="empty">ไม่มีสิทธิ์เข้าถึงเมนูนี้</div>;
   return (
@@ -47,6 +48,7 @@ export default function CostQuoteHub({ initialTab, role,
           draft={boqDraft} onDraftConsumed={onBoqDraftConsumed}
           onOpenQuote={(qn) => { setQFocus(qn); setTab("quote"); }} onOpenDoc={onOpenDoc} onGoChat={onGoChat} />}
         {cur.key === "quote" && <Quotation role={role} focus={qFocus} onFocusConsumed={() => { setQFocus(null); onQuoteFocusConsumed && onQuoteFocusConsumed(); }}
+          newForCustomer={quoteNewCust} onNewConsumed={onQuoteNewConsumed}
           fromBoq={qFromBoq} onFromBoqConsumed={() => { setQFromBoq(null); onQuoteFromBoqConsumed && onQuoteFromBoqConsumed(); }}
           onCreateInvoice={onCreateInvoice} onCreateJob={onCreateJob} onCreatePo={onCreatePo}
           onOpenBoq={(bn) => { setBFocus(bn); setTab("boq"); }} onOpenJob={onOpenJob} onOpenDoc={onOpenDoc} onGoChat={onGoChat} />}

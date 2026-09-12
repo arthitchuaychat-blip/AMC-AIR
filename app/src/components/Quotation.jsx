@@ -35,10 +35,9 @@ const STATUS = {
 const STATUS_OPTS = [["draft", "ร่าง"], ["sent", "ส่งแล้ว"], ["approved", "อนุมัติ"], ["rejected", "ปฏิเสธ"], ["expired", "หมดอายุ"]];
 const ST_COLOR = { draft: "#64748b", sent: "#1d4ed8", approved: "#16a34a", rejected: "#dc2626", expired: "#b45309", cancelled: "#991b1b" };
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `QT-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
-function genBoqNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `BOQ-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onCreatePo, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
+export default function Quotation({ role, newForCustomer, onNewConsumed, focus, onFocusConsumed, fromBoq, onFromBoqConsumed, onCreateInvoice, onCreateJob, onCreatePo, onOpenBoq, onOpenJob, onOpenDoc, onGoChat }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const [renewQuote, setRenewQuote] = React.useState(null);
   const canEdit = can(role, "quote", "edit");
@@ -85,10 +84,16 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   React.useEffect(() => { if (!focus) return; setEd(null); setStatusF("all"); setDateR({ from: "", to: "" }); setSearch(focus); onFocusConsumed && onFocusConsumed(); }, [focus]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
-  // ⚡ ใบเสนอเร็ว — สำหรับงานที่ราคาชัด (ล้าง/ซ่อม): กรอกลูกค้า+รายการ+ราคา แล้วระบบสร้าง BOQ ให้อัตโนมัติตอนบันทึก
-  function startQuick() { setEd({ quote_no: genNo(), _quick: true, customer_id: "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
-  function startNew() { setEd({ quote_no: genNo(), customer_id: "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: true, wht: false, wht_rate: 3, pay_method: "cash", note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] }); }
-  // ใบเสนอราคาเพิ่มเติม (mig 188): งานเสริมหน้างาน — ผูกใบแม่ (variation_of) · กำไรรวมงานเดียว · ไม่ต้องมี BOQ ของตัวเอง
+  // สร้างใบเสนอราคาเป็นจุดเริ่มต้นทุกงาน: กรอกลูกค้า+รายการ+ราคา แล้วระบบสร้าง BOQ ให้อัตโนมัติตอนบันทึก
+  function startNew(customerId = "") {
+    const c = custs.find(x => String(x.id) === String(customerId));
+    setEd({ quote_no: genNo(), _quick: true, customer_id: c?.id || "", site_id: "", boq_no: "", job_type: "", title: "", status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: c?.vat ?? true, wht: c?.type === "company", wht_rate: 3, pay_method: "cash", note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: [] });
+  }
+  React.useEffect(() => {
+    if (!newForCustomer || !custs.some(c => String(c.id) === String(newForCustomer))) return;
+    startNew(newForCustomer); onNewConsumed?.();
+  }, [newForCustomer, custs]);
+  // ใบเสนอราคาเพิ่มเติม (mig 188): งานเสริมหน้างาน — ผูกใบแม่ (variation_of) · กำไรรวมงานเดียว · สร้าง BOQ ของใบเพิ่มเติมด้วย
   function startVariation(q) { setEd({ quote_no: genNo(), customer_id: q.customer_id || "", site_id: q.site_id || "", boq_no: "", job_type: q.job_type || "", title: `งานเพิ่มเติม (จาก ${q.quote_no})`, status: "draft", issue_date: today(), valid_until: "", discount_type: "amount", discount_value: 0, vat: !!q.vat, wht: !!q.wht, wht_rate: whtRate(q.wht_rate), pay_method: q.payMethod || "cash", note: "", internal_note: `งานเสริมหน้างานของ ${q.quote_no}`, sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", variation_of: q.quote_no, items: [] }); }
   // create a new quotation prefilled from a BOQ (customer/site + pulled items)
   function startFromBoq(boqNo) {
@@ -188,8 +193,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
   async function save() {
     const dk = draftKey;   // เก็บไว้ก่อน — setEd(null) ตอนท้ายทำให้ draftKey กลายเป็น null
     if (!ed.items.length) return flash("เพิ่มรายการอย่างน้อย 1 รายการ", true);
-    // กติกาบริษัท: เอกสารขายทุกใบต้องเริ่มจาก BOQ — ใบใหม่ต้องอ้าง BOQ เสมอ (ใบเก่าที่ไม่มีแก้ไขต่อได้)
-    if (!ed._edit && !ed.boq_no && !ed.variation_of && !ed._quick) return flash("ใบเสนอราคาต้องเริ่มจาก BOQ — เลือก BOQ ที่ช่อง 'อ้างอิง BOQ' หรือไปสร้างจากเมนู BOQ (ปุ่ม 'สร้างใบเสนอราคา' บนการ์ด)", true);   // ใบเสริม (variation)/ใบเสนอเร็ว ไม่ต้องมี BOQ ก่อน (เร็วจะสร้างให้อัตโนมัติ)
+    // เริ่มจากใบเสนอราคา แล้วสร้าง BOQ ต้นทุนอัตโนมัติสำหรับใบใหม่
     // ไม่มีลูกค้า = เอกสารทั้งสายไม่มีชื่อลูกค้า (ตามหนี้ไม่ได้ · ใบกำกับภาษีใช้ไม่ได้ · เงินเข้าธนาคารไม่รู้ของใคร)
     if (!ed.customer_id) return flash("เลือกลูกค้าก่อนบันทึก — ใบเสนอราคาที่ไม่มีลูกค้าจะทำให้ใบแจ้งหนี้/ใบเสร็จที่ออกต่อไม่มีชื่อลูกค้า ตามหนี้และใช้ทางภาษีไม่ได้", true);
     if (ed._edit && !await confirmDialog(`ยืนยันบันทึกการแก้ไขใบเสนอราคา ${ed.quote_no} ?`)) return;
@@ -204,17 +208,19 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
       }
       // ส่วนลดรายบรรทัดห้ามเกินมูลค่าบรรทัด — กันบรรทัดติดลบไหลไปถึงยอดรวม/หัก ณ ที่จ่าย
       const items = ed.items.map((x) => ({ ...x, discount: Math.min(Number(x.discount) || 0, Math.round(Number(x.qty) * adjUnit(x.unit_price) * 100) / 100) }));
-      // ⚡ ใบเสนอเร็ว: ยังไม่มี BOQ → สร้างให้อัตโนมัติ (ต้นทุน: บริการ=0 · สินค้า=ต้นทุนจากคลัง) แล้วผูกใบเสนอเข้ากับมัน
+      // ใบใหม่ทุกประเภท: สร้าง BOQ ต้นทุนอัตโนมัติ แล้วผูกกับใบเสนอราคา
       let boqNo = ed.boq_no;
-      if (!boqNo && !ed._edit && !ed.variation_of) {
-        boqNo = genBoqNo();
+      if (!boqNo && !ed._edit) {
+        boqNo = `BOQ-${quoteNo}`;
         const boqItems = ed.items.map((it) => ({
           section: it.kind === "ac" ? "ac" : it.kind === "service" ? "service" : "charged",
           code: it.code || null, name: it.name, unit: it.unit, qty: Number(it.qty) || 0,
-          unit_cost: it.kind === "service" ? 0 : (matMap[it.code]?.cost ?? 0),
+          unit_cost: matMap[it.code] ? (Number(matMap[it.code].cost) || 0) * unitFactor(matMap[it.code], it.unit || matMap[it.code].unit) : 0, description: it.description || "",
         }));
         await saveBoq({ boq_no: boqNo, customer_id: ed.customer_id, site_id: ed.site_id || null, job_type: ed.job_type || null, title: ed.title || null, issue_date: ed.issue_date || today(), status: "open", note: ed.note || "", internal_note: ed.internal_note || "", terms_payment: ed.terms_payment || "", terms_freebies: ed.terms_freebies || "", terms_warranty: ed.terms_warranty || "" }, boqItems);
       }
+      // Keep the generated BOQ reference on retries if quotation saving fails.
+      if (boqNo && !ed.boq_no) setEd(e => ({ ...e, boq_no: boqNo }));
       const sig = ed.sign_on ? mySignature() : null;
       await saveQuotation({ ...ed, quote_no: quoteNo, boq_no: boqNo || null, sign_url: sig?.url || null, sign_name: sig?.name || null }, items);
       // 🎟️ ใช้คูปองที่เลือก → บันทึกว่าใช้กับใบเสนอนี้ (non-fatal ถ้าพลาด)
@@ -225,12 +231,12 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
         const rows = (ed.items || []).map((it) => ({
           section: it.kind === "ac" ? "ac" : it.kind === "service" ? "service" : "charged",
           item_code: it.code || null, name: it.name, unit: it.unit, qty: it.qty,
-          unit_cost: it.kind === "service" ? 0 : (matMap[it.code]?.cost ?? 0), description: it.description || "",   // บริการ=ต้นทุน 0 · สินค้า=ต้นทุนจากคลัง
+          unit_cost: matMap[it.code] ? (Number(matMap[it.code].cost) || 0) * unitFactor(matMap[it.code], it.unit || matMap[it.code].unit) : 0, description: it.description || "",
         }));
         try { synced = await syncBoqItems(boqNo, rows); } catch { /* non-fatal */ }
       }
       const renum = quoteNo !== ed.quote_no ? ` · ⚠️ เลขที่เดิมชนกับใบอื่น — ใบนี้ได้เลขใหม่ ${quoteNo}` : "";
-      flash((ed._quick && synced >= 0 ? `บันทึกใบเสนอเร็วแล้ว · สร้าง BOQ ${boqNo} ให้อัตโนมัติ` : synced > 0 ? `บันทึกแล้ว · ซิงค์ ${synced} รายการเข้า ${boqNo}` : "บันทึกใบเสนอราคาแล้ว") + renum);
+      flash((!ed._edit && boqNo ? `บันทึกใบเสนอราคาแล้ว · อ้างอิง BOQ ${boqNo} ให้อัตโนมัติ` : synced > 0 ? `บันทึกแล้ว · ซิงค์ ${synced} รายการเข้า ${boqNo}` : "บันทึกใบเสนอราคาแล้ว") + renum);
       clearOnSaved(dk); setEd(null); await load();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
@@ -310,9 +316,9 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             <label className="fld"><span>ยืนราคาถึง</span><input className="inp" type="date" value={ed.valid_until} onChange={(e) => setQ("valid_until", e.target.value)} /></label>
           </div>
 
-          {ed._quick && !ed.boq_no && <div className="fld"><div style={{ background: "#fffbeb", border: "1px solid #fcd34d", color: "#92400e", borderRadius: 8, padding: "9px 12px", fontSize: 13, lineHeight: 1.6 }}>⚡ <b>โหมดใบเสนอเร็ว</b> — ไม่ต้องเลือก BOQ · กรอกลูกค้า + รายการ + ราคา แล้วกดบันทึก ระบบจะสร้าง BOQ ให้อัตโนมัติ<br /><span style={{ color: "#b45309" }}>ต้นทุน: บริการ = 0 · สินค้า = ดึงจากคลังอัตโนมัติ (แก้ทีหลังในเมนู BOQ ได้)</span></div></div>}
+          {!ed._edit && !ed.boq_no && <div className="fld"><div style={{ background: "#fffbeb", border: "1px solid #fcd34d", color: "#92400e", borderRadius: 8, padding: "9px 12px", fontSize: 13, lineHeight: 1.6 }}>⚡ <b>สร้างใบเสนอราคา</b> — ไม่ต้องเลือก BOQ · กรอกลูกค้า + รายการ + ราคา แล้วกดบันทึก ระบบจะสร้าง BOQ ให้อัตโนมัติ<br /><span style={{ color: "#b45309" }}>ต้นทุนประมาณการดึงจากคลัง · รายการที่ยังไม่มีต้นทุนต้องเติมใน BOQ ก่อนใช้ประเมินกำไร</span></div></div>}
           {/* pull from BOQ */}
-          <div className="fld"><span>ดึงรายการจาก BOQ (เพิ่มเฉพาะรายการใหม่ · ไม่ทับของเดิม)</span>
+          <details><summary>อ้างอิง BOQ เดิม (ถ้ามี)</summary><div className="fld"><span>ดึงรายการจาก BOQ (เพิ่มเฉพาะรายการใหม่ · ไม่ทับของเดิม)</span>
             <div className="line-add">
               {/* เลือก BOQ แล้วดึง ลูกค้า/ไซต์/VAT มาให้ด้วย (ถ้ายังไม่ได้เลือก) — เดิมได้แค่เลข BOQ ทำให้บันทึกใบที่ไม่มีลูกค้าได้ */}
               <Combo className="inp" value={ed.boq_no} onChange={(e) => {
@@ -329,11 +335,13 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
                   return next;
                 });
               }}>
-                <option value="">{ed._edit ? "— ไม่อ้าง BOQ —" : "— เลือก BOQ (จำเป็น) —"}</option>{custBoqs.map((b) => <option key={b.boq_no} value={b.boq_no}>{b.boq_no}{b.title ? ` · ${b.title}` : ""}</option>)}
+                <option value="">{ed._edit ? "— ไม่อ้าง BOQ —" : "— สร้าง BOQ อัตโนมัติเมื่อบันทึก —"}</option>{custBoqs.map((b) => <option key={b.boq_no} value={b.boq_no}>{b.boq_no}{b.title ? ` · ${b.title}` : ""}</option>)}
               </Combo>
               <button className="btn-ghost sm" onClick={pullFromBoq} disabled={!ed.boq_no}><UIcon name="box" size={14} /> ดึงรายการ</button>
             </div>
           </div>
+
+          </details>
 
           {/* add item */}
           <div className="fld"><span>เพิ่มรายการ (สินค้า/บริการ)</span>
@@ -466,8 +474,7 @@ export default function Quotation({ role, focus, onFocusConsumed, fromBoq, onFro
             <input placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
-          {canEdit && <button className="btn-ghost" onClick={startQuick} title="งานที่ราคาชัด (ล้าง/ซ่อม) — กรอกลูกค้า+รายการ+ราคา แล้วบันทึก ระบบสร้าง BOQ ให้อัตโนมัติ (ไม่ต้องทำ BOQ เอง)" style={{ color: "#b45309", borderColor: "#fcd34d", background: "#fffbeb" }}>⚡ ใบเสนอเร็ว</button>}
-          {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบเสนอราคา</button>}
+          {canEdit && <button className="btn-primary" onClick={() => startNew()}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้างใบเสนอราคา</button>}
         </div>
       </div>
 
