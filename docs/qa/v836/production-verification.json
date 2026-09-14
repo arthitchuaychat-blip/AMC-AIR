@@ -1,6 +1,6 @@
 {
   "date": "2026-09-14",
-  "stage": "database-applied-ui-pending",
+  "stage": "production-live",
   "database": {
     "boq_page": {
       "proacl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
@@ -192,5 +192,65 @@
     "afterCategories": 7,
     "beforeCategories": 7,
     "newFindings": []
+  },
+  "release": {
+    "pr": 6,
+    "merge_commit": "88557528a22bdd186ce5409f502eac07e2943de2",
+    "tested_tree": "290edb93705194aad2ddd004be1af93b5cf5cccd",
+    "http_checks": [
+      {
+        "url": "https://api.github.com/repos/arthitchuaychat-blip/AMC-AIR/commits/88557528a22bdd186ce5409f502eac07e2943de2/status",
+        "state": "success",
+        "statuses": [
+          {
+            "context": "Vercel – amc-air-6os6",
+            "state": "success",
+            "target_url": "https://vercel.com/arthit-chuaychat-s-projects/amc-air-6os6/G18HmxLb5oURU61MLaGRvGwtD7fj"
+          },
+          {
+            "context": "Vercel – amc-air-tkaw",
+            "state": "success",
+            "target_url": "https://vercel.com/arthit-chuaychat-s-projects/amc-air-tkaw/HF4zAj1URYcE1S6XyjsPFadXW19X"
+          },
+          {
+            "context": "Vercel – amc-air-497i",
+            "state": "success",
+            "target_url": "https://vercel.com/arthit-chuaychat-s-projects/amc-air-497i/MVwKJAydc7pGCBUcNGaByyTSssqF"
+          },
+          {
+            "context": "Vercel – amc-air",
+            "state": "success",
+            "target_url": "https://vercel.com/arthit-chuaychat-s-projects/amc-air/52U6y3etZtAGEVziJ8u2h1gyu4CV"
+          }
+        ]
+      },
+      {
+        "url": "https://app.amcair.net",
+        "status": 200,
+        "assets": [
+          "/assets/index-CZ-VhUL4.js"
+        ],
+        "has_v836": true,
+        "has_boq_page": true,
+        "has_job_order_bundle": true
+      },
+      {
+        "url": "https://amc-air.vercel.app",
+        "status": 200,
+        "assets": [
+          "/assets/index-CZ-VhUL4.js"
+        ],
+        "has_v836": true,
+        "has_boq_page": true,
+        "has_job_order_bundle": true
+      }
+    ],
+    "browser": {
+      "url": "https://app.amcair.net",
+      "script": "/assets/index-CZ-VhUL4.js",
+      "login_rendered": true,
+      "application_errors": 0,
+      "authenticated": false
+    }
   }
 }
