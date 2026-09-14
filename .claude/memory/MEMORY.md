@@ -1,6 +1,6 @@
 # Memory index
 
-- [Customer chat attachments](customer-chat-attachments.md) — v837 prepared: drag/drop and clipboard images, video/file attachments, wrong-room and partial-retry guards; not deployed.
+- [Customer chat attachments](customer-chat-attachments.md) — v837 live via PR #7: drag/drop and clipboard images, video/file attachments, wrong-room and partial-retry guards; deployment verified.
 
 - [Job read / BOQ v836](job-read-boq-v836.md) — permission fix and 50-row BOQ pilot; live v836 via merged PR #6, production migration and both app domains verified; tests/measurements and known baseline failures.
 

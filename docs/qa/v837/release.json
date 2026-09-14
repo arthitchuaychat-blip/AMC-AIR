@@ -1,0 +1,88 @@
+{
+  "date": "2026-09-14",
+  "status": "production-live",
+  "pr": 7,
+  "merge_commit": "01818ade1a854ae82d01e2f79b02f3d8fabaa41a",
+  "tested_tree": "92605fc30d8bea0f08a435352156f58f83587cb8",
+  "http": [
+    {
+      "url": "https://api.github.com/repos/arthitchuaychat-blip/AMC-AIR/commits/01818ade1a854ae82d01e2f79b02f3d8fabaa41a/status",
+      "state": "success",
+      "statuses": [
+        {
+          "context": "Vercel – amc-air-6os6",
+          "state": "success"
+        },
+        {
+          "context": "Vercel – amc-air-497i",
+          "state": "success"
+        },
+        {
+          "context": "Vercel – amc-air-tkaw",
+          "state": "success"
+        },
+        {
+          "context": "Vercel – amc-air",
+          "state": "success"
+        }
+      ]
+    },
+    {
+      "url": "https://app.amcair.net",
+      "status": 200,
+      "assets": [
+        "/assets/index-DBe58ZiR.js"
+      ],
+      "v837": true,
+      "chat_assets": [
+        "assets/Chat-DFjynO6E.js"
+      ]
+    },
+    {
+      "url": "https://amc-air.vercel.app",
+      "status": 200,
+      "assets": [
+        "/assets/index-DBe58ZiR.js"
+      ],
+      "v837": true,
+      "chat_assets": [
+        "assets/Chat-DFjynO6E.js"
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "url": "https://app.amcair.net/assets/Chat-DFjynO6E.js",
+      "status": 200,
+      "paste_handler": true,
+      "drop_handler": true,
+      "video_preview": true,
+      "paste_hint": true
+    },
+    {
+      "endpoint": "fb-send GET",
+      "status": 405,
+      "body": "{\"error\":\"method\"}"
+    }
+  ],
+  "browser": {
+    "url": "https://app.amcair.net/",
+    "script": "/assets/index-DBe58ZiR.js",
+    "login_rendered": true,
+    "application_errors": 0,
+    "authenticated": false
+  },
+  "tests": {
+    "chat_attachments": "passed",
+    "chat_search": "10/10 passed",
+    "fb_send_syntax": "passed",
+    "build": "passed",
+    "known_baseline_failures": [
+      "Receipts unpaid status badge",
+      "Settings undefined m",
+      "loan code undefined status"
+    ]
+  },
+  "production_customer_messages_sent": 0,
+  "database_migrations": 0
+}
