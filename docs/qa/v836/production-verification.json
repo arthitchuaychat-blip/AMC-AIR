@@ -1,0 +1,196 @@
+{
+  "date": "2026-09-14",
+  "stage": "database-applied-ui-pending",
+  "database": {
+    "boq_page": {
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "proconfig": [
+        "search_path=public, pg_temp"
+      ],
+      "proname": "boq_page",
+      "prosecdef": false,
+      "provolatile": "s"
+    },
+    "migration": {
+      "name": "job_read_scope_and_boq_page",
+      "version": "20260914101017"
+    },
+    "room_policy_digest": "ab1faa65d84b725f5f4c4d090651b8ec",
+    "status_function_digest": "27142e9ce43151e15b30fb660ae6f84b"
+  },
+  "readOnlyVerification": [
+    {
+      "boq_page_rows": 50,
+      "boq_total": 687,
+      "field_scope_checked": false,
+      "passed": true,
+      "role": "admin",
+      "visible_jobs": 628
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "assistant",
+      "visible_jobs": 117
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "assistant",
+      "visible_jobs": 61
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "assistant",
+      "visible_jobs": 109
+    },
+    {
+      "boq_page_rows": 50,
+      "boq_total": 687,
+      "field_scope_checked": false,
+      "passed": true,
+      "role": "exec",
+      "visible_jobs": 628
+    },
+    {
+      "boq_page_rows": 50,
+      "boq_total": 687,
+      "field_scope_checked": false,
+      "passed": true,
+      "role": "field_sales",
+      "visible_jobs": 628
+    },
+    {
+      "boq_page_rows": 50,
+      "boq_total": 687,
+      "field_scope_checked": false,
+      "passed": true,
+      "role": "finance",
+      "visible_jobs": 628
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": false,
+      "passed": true,
+      "role": "graphic",
+      "visible_jobs": 628
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "lead_tech",
+      "visible_jobs": 628
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": false,
+      "passed": true,
+      "role": "maid",
+      "visible_jobs": 0
+    },
+    {
+      "boq_page_rows": 50,
+      "boq_total": 687,
+      "field_scope_checked": false,
+      "passed": true,
+      "role": "sales",
+      "visible_jobs": 628
+    },
+    {
+      "boq_page_rows": 50,
+      "boq_total": 687,
+      "field_scope_checked": false,
+      "passed": true,
+      "role": "stock",
+      "visible_jobs": 628
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "tech",
+      "visible_jobs": 117
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "tech",
+      "visible_jobs": 55
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "tech",
+      "visible_jobs": 61
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "tech",
+      "visible_jobs": 41
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "tech",
+      "visible_jobs": 1
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "tech",
+      "visible_jobs": 26
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "tech",
+      "visible_jobs": 47
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "tech",
+      "visible_jobs": 21
+    },
+    {
+      "boq_page_rows": 0,
+      "boq_total": 0,
+      "field_scope_checked": true,
+      "passed": true,
+      "role": "tech",
+      "visible_jobs": 62
+    }
+  ],
+  "advisors": {
+    "afterCategories": 7,
+    "beforeCategories": 7,
+    "newFindings": []
+  }
+}

@@ -69,6 +69,14 @@ const SEARCHABLE = [
 ];
 for (const [th, f, v] of SEARCHABLE) {
   const s = read("src/components/" + f);
+  if (["BOQ.jsx", "Quotation.jsx"].includes(f)) {
+    const sql = read("../supabase/migrations/" + (f === "BOQ.jsx" ? "20260914101017_job_read_scope_and_boq_page.sql" : "20260912030204_quotation_server_pagination.sql"));
+    const alias = f === "BOQ.jsx" ? "b" : "q";
+    check(`${th}: ส่งคำค้นไปฐานข้อมูลและค้นหมายเหตุทั้งสองช่อง`,
+      s.includes("p_search: search.trim()") && sql.includes(`${alias}.note`) && sql.includes(`${alias}.internal_note`) && sql.includes("p_search"),
+      "ต้องส่งคำค้นเข้า SQL ที่กรองเอกสารทุกหน้า (มี behavioral tests ใน scripts/test-job-read-database.mjs)");
+    continue;
+  }
   const line = s.split("\n").find((l) => /matchText\((?:search|q),/.test(l) && new RegExp(`${v}\\.(?:boq_no|quote_no|invoice_no|billing_no|receipt_no|po_no)`).test(l)) || "";
   check(`${th}: ช่องค้นหาค้นหมายเหตุได้`,
     line.includes(`${v}.note`) && line.includes(`${v}.internal_note`),

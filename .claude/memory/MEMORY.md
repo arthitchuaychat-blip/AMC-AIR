@@ -1,5 +1,7 @@
 # Memory index
 
+- [Job read / BOQ v836](job-read-boq-v836.md) — permission fix and 50-row BOQ pilot; production migration installed and verified, PR #6 rollout in progress; tests/measurements and known baseline failures.
+
 - [Git BOQ case](git-boq-case.md) — git add ต้องก็อปพาธจาก git status เป๊ะ ๆ (BOQ.jsx ตัวใหญ่) ไม่งั้นหลุดเงียบ; ความจำอยู่บน Google Drive ผ่าน junction
 - [PowerShell + ภาษาไทย](ps1-thai-bom.md) — .ps1 ที่มีคอมเมนต์ไทยต้องเซฟ UTF-8 **พร้อม BOM** ไม่งั้น PS 5.1 พังด้วย error หลอกว่า "Missing closing '}'"
 - [รูปแอร์ทางการ](ac-official-media.md) — manifest acOfficialMedia.js + ปุ่มนำเข้าทั้งชุด (ดาวน์โหลดเก็บเข้า storage เรา ห้าม hotlink); ?acimg=1 สำรวจ + กับดัก codesNoPhoto cap 12; รุ่นที่ยังหารูปไม่ได้

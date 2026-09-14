@@ -1677,7 +1677,11 @@ export async function backfillQuoteForJob(jo, { saleAmount, vat = false } = {}) 
   if (error) throw error;
   return { boqNo, quoteNo };
 }
-export function listBoqs(opts = {}) { return _cached("listBoqs:" + JSON.stringify(opts || {}), () => _loadBoqs(opts), _SHORT_TTL); }
+export function listBoqs({ force = false, ...opts } = {}) {
+  const key = "listBoqs:" + JSON.stringify(opts);
+  if (force) bustCache(key);
+  return _cached(key, () => _loadBoqs(opts), _SHORT_TTL);
+}
 async function _loadBoqs(opts = {}) {
   const nos = _scopeNos(opts);
   const bP = _allRows((f, t) => _onlyNos(supabase.from("boqs").select("*", { count: "exact" }), "boq_no", nos).order("created_at", { ascending: false }).order("boq_no").range(f, t));
@@ -1700,6 +1704,7 @@ async function _loadBoqs(opts = {}) {
   const custName = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const custAddr = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const custTax = Object.fromEntries((cu.data || []).map((c) => [c.id, c.tax_id]));
+  const custVat = Object.fromEntries((cu.data || []).map((c) => [c.id, c.vat]));
   const custBranch = Object.fromEntries((cu.data || []).map((c) => [c.id, c.branch]));
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
@@ -1714,7 +1719,7 @@ async function _loadBoqs(opts = {}) {
     const items = byBoq[bo.boq_no] || [];
     const ct0 = cc[bo.customer_id];
     const s = bo.site_id ? sm[bo.site_id] : null;
-    return { ...bo, customerName: custName[bo.customer_id] || null, customerCode: bo.customer_id || null,
+    return { ...bo, customerVat: custVat[bo.customer_id], customerName: custName[bo.customer_id] || null, customerCode: bo.customer_id || null,
       customerAddr: custAddr[bo.customer_id] || null, customerTaxId: custTax[bo.customer_id] || null,
       siteName: s?.site_name || null, siteAddress: s?.address || null, createdByName: cb[bo.created_by] || null,
       mapUrl: (s && s.map_url) || _gmap(s?.address || custAddr[bo.customer_id]),
@@ -1863,7 +1868,7 @@ export async function autoPostExpenses({ from, to } = {}) {
     _fetchAll((f, t) => supabase.from("sub_payouts").select("id,team,net,status,paid_at,created_at", { count: "exact" }).eq("status", "paid").order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("job_orders").select("job_no,quote_no", { count: "exact" }).order("job_no").range(f, t)),
     _fetchAll((f, t) => supabase.from("quotations").select("quote_no,vat", { count: "exact" }).order("quote_no").range(f, t)),
-    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_type,ref_no", { count: "exact" }).in("ref_type", ["po", "po_pay", "expense", "payout"]).neq("status", "void").range(f, t)),
+    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_type,ref_no", { count: "exact" }).in("ref_type", ["po", "po_pay", "expense", "payout"]).neq("status", "void").order("id").range(f, t)),
   ]);
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
   const jobQuote = {}; jobs.forEach((j) => { if (j.quote_no) jobQuote[j.job_no] = j.quote_no; });
@@ -1959,7 +1964,7 @@ export async function autoPostPayroll({ from, to } = {}) {
   const [slips, profs, posted] = await Promise.all([
     _fetchAll((f, t) => supabase.from("payslips").select("*", { count: "exact" }).eq("status", "paid").order("id").range(f, t)),
     _fetchAll((f, t) => supabase.from("profiles").select("id,name,role", { count: "exact" }).order("id").range(f, t)),
-    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_no", { count: "exact" }).eq("ref_type", "payroll").neq("status", "void").range(f, t)),
+    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_no", { count: "exact" }).eq("ref_type", "payroll").neq("status", "void").order("id").range(f, t)),
   ]);
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
   const role = {}, nameOf = {}; profs.forEach((p) => { role[p.id] = p.role; nameOf[p.id] = p.name; });
@@ -2010,7 +2015,7 @@ export async function autoPostReceipts({ from, to } = {}) {
   const [inv, rc, posted] = await Promise.all([
     _fetchAll((f, t) => supabase.from("invoices").select("invoice_no,quote_no,issue_date,created_at,base,vat_amt,total,status", { count: "exact" }).neq("status", "cancelled").order("invoice_no").range(f, t)),
     _fetchAll((f, t) => supabase.from("receipts").select("receipt_no,invoice_no,quote_no,issue_date,created_at,payment_method,base,vat_amt,total,wht_amt,net,status", { count: "exact" }).eq("status", "paid").order("receipt_no").range(f, t)),
-    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_type,ref_no", { count: "exact" }).in("ref_type", ["invoice", "receipt"]).neq("status", "void").range(f, t)),
+    _fetchAll((f, t) => supabase.from("acc_journal").select("ref_type,ref_no", { count: "exact" }).in("ref_type", ["invoice", "receipt"]).neq("status", "void").order("id").range(f, t)),
   ]);
   const done = new Set(posted.map((x) => x.ref_type + ":" + x.ref_no));
   const qnos = [...new Set([...inv.map((x) => x.quote_no), ...rc.filter((x) => !x.invoice_no).map((x) => x.quote_no)].filter(Boolean))];
@@ -3192,15 +3197,19 @@ function _firstContacts(rows) { const m = {}; (rows || []).forEach((c) => { if (
 // เดิมโหลด quotation_items ทั้งตารางแบบ select * ลงมือถือช่าง = ราคาต่อหน่วย+ส่วนลดของทุกลูกค้าอยู่ในเครื่อง
 // ⚠️ โหมดออฟฟิศ (ค่าเริ่มต้น) ต้องได้ผลเท่าเดิมเป๊ะ — quoteGrand/salesName/boq_no ถูกใช้ที่หน้าแชตและแผงพรีวิว
 //    ถ้าเผลอให้ออฟฟิศไปใช้โหมดช่าง มูลค่างานจะกลายเป็น 0 บาททุกใบแบบเงียบ ๆ
-export function listJobOrders(opts = {}) { return _cached("listJobOrders:" + JSON.stringify(opts || {}), () => _loadJobOrders(opts), _SHORT_TTL); }
-async function _loadJobOrders({ fieldOnly = false, team = null } = {}) {
+export function listJobOrders({ force = false, ...opts } = {}) {
+  const key = "listJobOrders:" + JSON.stringify(opts);
+  if (force) bustCache(key);
+  return _cached(key, () => _loadJobOrders(opts), _SHORT_TTL);
+}
+async function _loadJobOrders({ fieldOnly = false, team = null, nos = null } = {}) {
+  if (Array.isArray(nos) && !nos.length) return [];
   if (fieldOnly) {
     const { data, error } = await supabase.rpc("jobs_for_team", { p_team: team || null });
-    // ยังไม่รัน mig 166 → ถอยไปทางเดิม จอช่างต้องไม่พังระหว่างรอ deploy/รัน SQL
-    // (ยังเห็นราคาอยู่เหมือนเดิมจนกว่าจะรัน migration — เป็นสถานะชั่วคราวที่ยอมรับได้ ดีกว่าเปิดแอปไม่ได้)
-    if (error && /jobs_for_team|does not exist|PGRST202/i.test(error.message || "")) return listJobOrders();
+    // Fail closed for every error, including a missing RPC. Never request office data.
     if (error) throw error;
-    return (data || []).map((r) => {
+    if (!Array.isArray(data)) throw new Error("ข้อมูลใบงานไม่ครบ กรุณาลองใหม่");
+    return data.filter(r => !nos || nos.includes(r.job_no)).map((r) => {
       const site = r.site_id ? { site_name: r.site_name, address: r.site_address, map_url: r.site_map_url, contact_name: r.site_contact_name, phone: r.site_phone } : null;
       const address = (site && site.address) || r.address || r.customer_address || null;
       return {
@@ -3222,25 +3231,18 @@ async function _loadJobOrders({ fieldOnly = false, team = null } = {}) {
       };
     });
   }
-  const _rows = (build) => _fetchAll(build).then((rows) => ({ data: rows })); // กันเพดาน 1000 แถวทุกก้อน — ใบงาน/ลูกค้า/รอบนัดโตเรื่อย ๆ
-  const [j, cu, tm, si, ct, qt, qit, jv] = await Promise.all([
-    _rows((f, t) => supabase.from("job_orders").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("job_no").range(f, t)),
-    _rows((f, t) => supabase.from("customers").select("id,name,address", { count: "exact" }).order("id").range(f, t)),
-    supabase.from("team_directory").select("id,name"),
-    _rows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
-    _rows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
-    _rows((f, t) => supabase.from("quotations").select("quote_no,boq_no,discount_type,discount_value,vat,created_by", { count: "exact" }).order("quote_no").range(f, t)),
-    _rows((f, t) => supabase.from("quotation_items").select("*").order("id").range(f, t)), // select * เผื่อคอลัมน์ discount (mig 142) ยังไม่ได้รัน
-    _rows((f, t) => supabase.from("job_visits").select("*", { count: "exact" }).order("visit_date", { ascending: true }).order("id").range(f, t)),
-  ]);
-  if (j.error) throw j.error; if (cu.error) throw cu.error; if (tm.error) throw tm.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error; if (qit.error) throw qit.error;
+  // Installed read-only invoker RPC: one snapshot, only related records, same hydration.
+  const { data, error } = await supabase.rpc("job_order_bundle", { p_nos: nos });
+  if (error) throw error;
+  if (!data || ["jobs", "customers", "teams", "sites", "contacts", "quotes", "items", "visits"].some(k => !Array.isArray(data[k]))) throw new Error("ข้อมูลใบงานไม่ครบ กรุณาลองใหม่");
+  const [j, cu, tm, si, ct, qt, qit, jv] = ["jobs", "customers", "teams", "sites", "contacts", "quotes", "items", "visits"].map(k => ({ data: data[k] }));
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
   const ca = Object.fromEntries((cu.data || []).map((c) => [c.id, c.address]));
   const tn = Object.fromEntries((tm.data || []).map((t) => [t.id, t.name]));
   const visitsByJob = {}; (jv?.data || []).forEach((v) => { (visitsByJob[v.job_no] = visitsByJob[v.job_no] || []).push({ ...v, teamName: v.assigned_team ? (tn[v.assigned_team] || v.assigned_team) : null }); });
   const sm = Object.fromEntries((si.data || []).map((s) => [s.id, s]));
   const cc = _firstContacts(ct.data);
-  const cb = await _creators(); // id → name (for job creator + quote salesperson)
+  const cb = data.creators || {}; // id → name (for job creator + quote salesperson)
   const salesByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, cb[x.created_by] || null]));
   const boqByQuote = Object.fromEntries((qt.data || []).map((x) => [x.quote_no, x.boq_no]));
   // grand total per quote + confirmation item list (AC + service only, no materials) for the order-confirmation copy
@@ -3254,6 +3256,14 @@ async function _loadJobOrders({ fieldOnly = false, team = null } = {}) {
 }
 
 // job-order history for one customer (newest first) — for the customer detail timeline
+export async function getJobOrder(jobNo) {
+  const { data: role, error } = await supabase.rpc("app_actor_role");
+  if (error) throw error;
+  if (!role) throw new Error("กรุณาเข้าสู่ระบบใหม่");
+  const rows = await listJobOrders({ fieldOnly: ["tech", "assistant", "lead_tech"].includes(role), nos: [jobNo] });
+  return rows.find(j => j.job_no === jobNo) || null;
+}
+
 export async function listCustomerJobs(customerId) {
   const [j, tm] = await Promise.all([
     supabase.from("job_orders").select("job_no,title,details,scheduled_at,end_date,slot,status,assigned_team,created_at").eq("customer_id", customerId).order("scheduled_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }),
@@ -3331,7 +3341,8 @@ export async function listJobLogs(job_no) {
 
 // shared timeline for a linked-job group: all logs across every job in the group
 export async function listJobLogsByGroup(groupNo) {
-  const { data: jobs } = await supabase.from("job_orders").select("job_no").or(`group_no.eq.${groupNo},job_no.eq.${groupNo}`);
+  const { data: jobs, error } = await supabase.rpc("job_field_refs", { p_group: groupNo });
+  if (error) throw error;
   const nos = (jobs || []).map((j) => j.job_no);
   return nos.length ? listJobLogs(nos) : [];
 }
@@ -4449,10 +4460,12 @@ async function _usersByRole(roles) {
 // who watches a job: office (admin/exec/sales) + the assigned team's members
 // ชื่อลูกค้าจาก id · และชื่อลูกค้าจากเลขงาน — ใช้ทำหัวข้อแจ้งเตือนงานให้เห็นว่าเป็นลูกค้าใคร
 async function _custName(id) { if (!id) return ""; try { const { data } = await supabase.from("customers").select("name").eq("id", id).maybeSingle(); return data?.name || ""; } catch { return ""; } }
-async function _jobCust(job_no) { try { const { data: jo } = await supabase.from("job_orders").select("customer_id").eq("job_no", job_no).maybeSingle(); return jo ? await _custName(jo.customer_id) : ""; } catch { return ""; } }
+async function _jobCust(job_no) { try { const { data, error } = await supabase.rpc("job_field_refs", { p_job: job_no }); return error ? "" : data?.[0]?.customer_name || ""; } catch { return ""; } }
 async function _jobWatchers(job_no) {
   try {
-    const { data: jo } = await supabase.from("job_orders").select("assigned_team").eq("job_no", job_no).maybeSingle();
+    const { data: refs, error } = await supabase.rpc("job_field_refs", { p_job: job_no });
+    if (error || !refs?.length) return [];
+    const jo = refs[0];
     const office = await _usersByRole(["admin", "exec", "sales", "field_sales", "lead_tech"]); // หัวหน้าช่างคุมทุกทีม — ต้องเห็นความเคลื่อนไหวงานด้วย
     let team = [];
     if (jo?.assigned_team) { const { data } = await supabase.from("staff_directory").select("id").eq("team", jo.assigned_team); team = (data || []).map((p) => p.id); }

@@ -107,13 +107,19 @@ function Composer({ jobNo, author, parentId, placeholder, onPosted, flash, compa
 // Append-only timeline of a job: status changes + photo/comment updates (with replies).
 export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, flash }) {
   const [logs, setLogs] = React.useState(null);
+  const [loadError, setLoadError] = React.useState("");
+  const loadSeq = React.useRef(0);
   const [lightbox, setLightbox] = React.useState(null);   // { images, index }
   const [replyTo, setReplyTo] = React.useState(null);     // parent log id whose reply box is open
 
   const shared = !!linked && !!groupNo;
-  async function load() { try { setLogs(shared ? await listJobLogsByGroup(groupNo) : await listJobLogs(jobNo)); } catch (e) { flash && flash("โหลดความเคลื่อนไหวไม่สำเร็จ: " + (e.message || e), true); setLogs([]); } }
+  async function load() {
+    const seq = ++loadSeq.current; setLogs(null); setLoadError("");
+    try { const data = shared ? await listJobLogsByGroup(groupNo) : await listJobLogs(jobNo); if (seq === loadSeq.current) setLogs(data); }
+    catch (e) { if (seq === loadSeq.current) { setLogs([]); setLoadError(e.message || String(e)); } }
+  }
   // ⚠️ dep เป็น `shared` (boolean) ไม่ใช่ `linked` (อาร์เรย์) — ไม่งั้น parent สร้าง linked ใหม่ทุกเรนเดอร์ → โหลดซ้ำไม่หยุด → หน้ากระพริบ
-  React.useEffect(() => { load(); }, [jobNo, groupNo, shared]);
+  React.useEffect(() => { load(); return () => { loadSeq.current++; }; }, [jobNo, groupNo, shared]);
   const openLb = (images, index) => setLightbox({ images, index });
 
   // split into top-level entries + replies grouped by parent
@@ -127,7 +133,8 @@ export default function JobTimeline({ jobNo, groupNo, linked, canPost, author, f
       {canPost && <Composer jobNo={jobNo} author={author} onPosted={load} flash={flash} />}
 
       {logs === null && <div className="tl-empty">กำลังโหลด…</div>}
-      {logs && tops.length === 0 && <div className="tl-empty">ยังไม่มีความเคลื่อนไหว</div>}
+      {loadError && <div className="tl-empty" role="alert">โหลดความเคลื่อนไหวไม่สำเร็จ: {loadError} <button className="btn-ghost sm" onClick={load}>ลองใหม่</button></div>}
+      {!loadError && logs && tops.length === 0 && <div className="tl-empty">ยังไม่มีความเคลื่อนไหว</div>}
       {logs && tops.length > 0 && (
         <div className="tl-list">
           {tops.slice().reverse().map((l) => {

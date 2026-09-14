@@ -1,0 +1,242 @@
+[
+  {
+    "suite": "scripts/test-admin-user-access.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-document-pagination.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-document-startup.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-expense-net-display.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-job-loading.mjs",
+    "baseline": null,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-job-read-database.mjs",
+    "baseline": null,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-quotation-first.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-quotation-page-cache.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-role-access-v831.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-sales-flowaccount.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-sales-wht.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-shared-performance.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-subcontract-data.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "scripts/test-subcontract-rates.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-api-security.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-boq-internal.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-chat-search.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-customer-form.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-dashboard-loading.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-doc-address.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-doc-notes-edit.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-doc-notes.mjs",
+    "baseline": 1,
+    "current": 0
+  },
+  {
+    "suite": "test-document-presentation.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-dual-unit.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-financing-guards.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-flowaccount-send-once.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-invoice-guard.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-item-replace-rls.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-job-quote-pending.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-job-visits.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-material-form.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-numbers-recheck.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-payroll-recheck.mjs",
+    "baseline": 1,
+    "current": 1
+  },
+  {
+    "suite": "test-payslip-frozen.mjs",
+    "baseline": 1,
+    "current": 1
+  },
+  {
+    "suite": "test-portfolio-album.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-promise-all-arity.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-quote-wht.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-recheck-regressions.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-report-metrics.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-sales-receive.mjs",
+    "baseline": 1,
+    "current": 1
+  },
+  {
+    "suite": "test-scoped-loads.mjs",
+    "baseline": 1,
+    "current": 0
+  },
+  {
+    "suite": "test-status-badges.mjs",
+    "baseline": 1,
+    "current": 1
+  },
+  {
+    "suite": "test-stock-source.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-tax-buyvat.mjs",
+    "baseline": 1,
+    "current": 1
+  },
+  {
+    "suite": "test-thumb-missing-mat.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-undefined-vars.mjs",
+    "baseline": 1,
+    "current": 1
+  },
+  {
+    "suite": "test-web-ac-filters.mjs",
+    "baseline": 0,
+    "current": 0
+  },
+  {
+    "suite": "test-weborder-link.mjs",
+    "baseline": 0,
+    "current": 0
+  }
+]

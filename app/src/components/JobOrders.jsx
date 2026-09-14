@@ -39,10 +39,12 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   const [custs, setCusts] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [laborDefaults,setLaborDefaults]=React.useState(null);
-  React.useEffect(()=>{getAppConfig("subcontractor_rates",DEFAULT_SUB_RATES).then(setLaborDefaults).catch(e=>flash("โหลดค่าแรงเริ่มต้นไม่สำเร็จ: "+e.message,true));},[]);
+  React.useEffect(()=>{if (!fieldOnly) getAppConfig("subcontractor_rates",DEFAULT_SUB_RATES).then(setLaborDefaults).catch(e=>flash("โหลดค่าแรงเริ่มต้นไม่สำเร็จ: "+e.message,true));},[fieldOnly]);
   const [staff, setStaff] = React.useState([]);
   const [quotes, setQuotes] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState("");
+  const loadSeq = React.useRef(0);
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
   const [saving, setSaving] = React.useState(false);   // กันกดบันทึกซ้ำตอนเน็ตช้า (เดิมกด 2 ที = ได้ใบงาน/รอบเข้างานซ้ำ)
@@ -85,27 +87,30 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
   // (เคยพลาด: บางจุดรีเฟรชด้วยโหมดออฟฟิศ แล้วราคาไหลกลับเข้าจอช่างเงียบ ๆ)
   const reloadJobs = () => listJobOrders(fieldOnly ? { fieldOnly: true, team: role === "lead_tech" ? null : myTeam } : {});
 
-  async function load() {
-    setLoading(true);
+  async function load(force = false) {
+    const seq = ++loadSeq.current;
+    setLoading(true); setLoadError("");
     try {
       if (fieldOnly) {
         // จอช่าง: เอาเฉพาะงานของทีมตัวเอง และไม่มีข้อมูลราคาติดมา (mig 166)
         // ไม่โหลดลูกค้า/ใบเสนอ/ชิปเชื่อมโยง/ทะเบียนพนักงาน — ช่างแก้ใบงานไม่ได้จึงไม่ได้ใช้
         const [j, t, tpl, hf] = await Promise.all([
-          listJobOrders({ fieldOnly: true, team: role === "lead_tech" ? null : myTeam }),
+          listJobOrders({ fieldOnly: true, team: role === "lead_tech" ? null : myTeam, force: force === true }),
           listTeams(), listJobTemplates().catch(() => []), listHandoverFlags().catch(() => ({})),
         ]);
+        if (seq !== loadSeq.current) return;
         setList(j); setTeams(t); setTemplates(tpl || []); setHoFlags(hf || {});
         setCusts([]); setQuotes([]); setDocLinks({ byQuote: {} }); setStaff([]);
       } else {
-        const [j, t, dl, hf] = await Promise.all([listJobOrders(), listTeams(), listDocLinks(), listHandoverFlags().catch(() => ({}))]);
+        const [j, t, dl, hf] = await Promise.all([listJobOrders({ force: force === true }), listTeams(), listDocLinks(), listHandoverFlags().catch(() => ({}))]);
+        if (seq !== loadSeq.current) return;
         setList(j); setTeams(t); setDocLinks(dl); setHoFlags(hf || {});
       }
     }
-    catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
-    setLoading(false);
+    catch (e) { if (seq === loadSeq.current) { setList([]); setLoadError(e.message || String(e)); } }
+    finally { if (seq === loadSeq.current) setLoading(false); }
   }
-  React.useEffect(() => { load(); }, []);
+  React.useEffect(() => { load(); return () => { loadSeq.current++; }; }, [role, myTeam, fieldOnly]);
 
   const [editorReady, setEditorReady] = React.useState(false);
   const [editorError, setEditorError] = React.useState("");
@@ -723,11 +728,12 @@ export default function JobOrders({ role, me, myTeam, focus, onFocusConsumed, pr
       </FilterBar>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
+      {!loading && loadError && <div className="empty" role="alert"><p>โหลดใบงานไม่สำเร็จ: {loadError}</p><button className="btn-ghost" onClick={() => load(true)}>ลองใหม่</button></div>}
       {(() => {
         return (<>
-          {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบงาน" : "ไม่พบใบงานที่ตรงเงื่อนไข"}</div>}
+          {!loading && !loadError && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบงาน" : "ไม่พบใบงานที่ตรงเงื่อนไข"}</div>}
           <div className="job-cards">
-            {fl.map((jo) => {
+            {(!loading && !loadError ? fl : []).map((jo) => {
           const st = STATUS[jo.status] || STATUS.pending;
           return (
             <div className={"card job-card" + (jo.status === "done" || jo.status === "cancelled" ? " closed" : "")} key={jo.job_no}>
