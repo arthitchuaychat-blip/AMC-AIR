@@ -1,5 +1,7 @@
 # Memory index
 
+- [Customer chat attachments](customer-chat-attachments.md) — v837 prepared: drag/drop and clipboard images, video/file attachments, wrong-room and partial-retry guards; not deployed.
+
 - [Job read / BOQ v836](job-read-boq-v836.md) — permission fix and 50-row BOQ pilot; live v836 via merged PR #6, production migration and both app domains verified; tests/measurements and known baseline failures.
 
 - [Git BOQ case](git-boq-case.md) — git add ต้องก็อปพาธจาก git status เป๊ะ ๆ (BOQ.jsx ตัวใหญ่) ไม่งั้นหลุดเงียบ; ความจำอยู่บน Google Drive ผ่าน junction
