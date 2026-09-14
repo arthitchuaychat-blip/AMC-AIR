@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const db = new PGlite();
 const read = p => fs.readFileSync(new URL(p, import.meta.url), 'utf8');
-const migration = read('../../supabase/migrations/20260914060726_job_read_scope_and_boq_page.sql');
+const migration = read('../../supabase/migrations/20260914101017_job_read_scope_and_boq_page.sql');
 const permissions = JSON.parse(read('./fixtures/job-menu-permissions.json'));
 let checks = 0;
 const eq = (actual, expected, label) => { assert.deepEqual(actual, expected, label); checks++; };
@@ -143,6 +143,9 @@ try {
   await actor(4);
   eq((await value("select quotation_page(p_search=>'customer-note-find')")).nos,['QA'],'quotation customer note search');
   eq((await value("select quotation_page(p_search=>'internal-note-find')")).nos,['QA'],'quotation internal note search');
+  await db.exec('reset role');
+  const verification = await db.exec(read('../../docs/proposals/verify-v836-read-scope.sql'));
+  eq(verification.flatMap(r=>r.rows||[]).find(r=>r.verification)?.verification.every(r=>r.passed),true,'production read-only verification script');
   // Rollback restores only this release; the previously installed field boundary stays.
   await db.exec('reset role');
   await db.exec(read('../../docs/proposals/rollback-v836-job-read-and-boq.sql'));

@@ -70,7 +70,7 @@ const SEARCHABLE = [
 for (const [th, f, v] of SEARCHABLE) {
   const s = read("src/components/" + f);
   if (["BOQ.jsx", "Quotation.jsx"].includes(f)) {
-    const sql = read("../supabase/migrations/" + (f === "BOQ.jsx" ? "20260914060726_job_read_scope_and_boq_page.sql" : "20260912030204_quotation_server_pagination.sql"));
+    const sql = read("../supabase/migrations/" + (f === "BOQ.jsx" ? "20260914101017_job_read_scope_and_boq_page.sql" : "20260912030204_quotation_server_pagination.sql"));
     const alias = f === "BOQ.jsx" ? "b" : "q";
     check(`${th}: ส่งคำค้นไปฐานข้อมูลและค้นหมายเหตุทั้งสองช่อง`,
       s.includes("p_search: search.trim()") && sql.includes(`${alias}.note`) && sql.includes(`${alias}.internal_note`) && sql.includes("p_search"),
