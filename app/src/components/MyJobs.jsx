@@ -20,33 +20,37 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
   const allTeams = ["lead_tech", "exec", "admin"].includes(role); // หัวหน้าช่างเห็นงานทุกทีม
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState("");
+  const loadSeq = React.useRef(0);
   const [toast, setToast] = React.useState(null);
   const [tab, setTab] = React.useState("todo"); // todo | doing | done
   const [expanded, setExpanded] = React.useState({}); // job_no → show full details/brief/timeline
   const [busy, setBusy] = React.useState(null); // job_no/visit id ที่กำลังอัปเดต — กันกดรัวตอนเน็ตช้า (log ซ้ำ)
   const toggle = (no) => setExpanded((e) => ({ ...e, [no]: !e[no] }));
 
-  async function load() {
-    if (!allTeams && !team) { setLoading(false); return; }
-    setLoading(true);
+  async function load(force = false) {
+    const seq = ++loadSeq.current;
+    if (!allTeams && !team) { setList([]); setLoadError(""); setLoading(false); return; }
+    setLoading(true); setLoadError("");
     try {
       // จอช่าง: ให้ฐานข้อมูลกรองทีมและตัดราคาออกตั้งแต่ต้นทาง (mig 166)
       // ตัวกรองฝั่งจอด้านล่างคงไว้เป็นตาข่ายกันพลาด (ทำซ้ำได้ ไม่เสียหาย)
-      const [all, staff] = await Promise.all([listJobOrders({ fieldOnly: true, team: allTeams ? null : team }), allTeams ? listStaff() : Promise.resolve([])]);
+      const [all, staff] = await Promise.all([listJobOrders({ fieldOnly: true, team: allTeams ? null : team, force: force === true }), allTeams ? listStaff() : Promise.resolve([])]);
+      if (seq !== loadSeq.current) return;
       // a job is "mine" if my team is on ANY of its visits (fallback: legacy assigned_team)
       const mine = allTeams ? all : all.filter((j) =>
-        (j.visits && j.visits.length) ? j.visits.some((v) => v.assigned_team === team) : j.assigned_team === team);
+        j.assigned_team === team || j.visits?.some((v) => v.assigned_team === team));
       setList(mine.map((j) => ({ ...j, teamMembers: staff.filter((p) => p.active !== false && p.team && (p.team === j.assigned_team || j.visits?.some((v) => v.assigned_team === p.team))).map((p) => p.name || p.email) })));
-    } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
-    setLoading(false);
+    } catch (e) { if (seq === loadSeq.current) { setList([]); setLoadError(e.message || String(e)); } }
+    finally { if (seq === loadSeq.current) setLoading(false); }
   }
-  React.useEffect(() => { load(); }, [team, allTeams]);
+  React.useEffect(() => { load(); return () => { loadSeq.current++; }; }, [role, team, allTeams]);
   // ช่างเปิดแอปค้างทั้งวัน — กลับมาที่แอป (สลับจากไลน์/กล้อง) ให้โหลดงานใหม่เอง จะได้เห็นงานใหม่/เลื่อนนัด/ผลอนุมัติ
   React.useEffect(() => {
-    const onVis = () => { if (document.visibilityState === "visible") load(); };
+    const onVis = () => { if (document.visibilityState === "visible") load(true); };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [team, allTeams]);
+  }, [role, team, allTeams]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); }
 
   // ขอนัดหมายเพิ่ม: ต้องบอกเหตุผลเสมอ (ของขาด/ลูกค้าไม่อยู่ ฯลฯ) — ออฟฟิศจะได้นัดใหม่ถูก · ลงไทม์ไลน์ให้อัตโนมัติ
@@ -130,15 +134,16 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
             <button key={v} className={"cat-chip" + (tab === v ? " on" : "")} onClick={() => setTab(v)}
               style={tab === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{lang === "my" ? (MYJOB_TAB_MY[v] || l) : l} ({byStatus[v].length})</button>
           ))}
-          <button className="cat-chip" onClick={load} disabled={loading} title={t("โหลดงานล่าสุด", "အသစ်ဖွင့်")}>🔄 {t("รีเฟรช", "ပြန်ဖွင့်")}</button>
+          <button className="cat-chip" onClick={() => load(true)} disabled={loading} title={t("โหลดงานล่าสุด", "အသစ်ဖွင့်")}>🔄 {t("รีเฟรช", "ပြန်ဖွင့်")}</button>
         </div>
       </div>
 
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && shown.length === 0 && <div className="empty">{tab === "todo" ? t("ไม่มีงานต้องทำวันนี้ 🎉", "ဒီနေ့ လုပ်စရာ မရှိပါ 🎉") : tab === "upcoming" ? t("ยังไม่มีงานที่กำลังจะมาถึง", "လာမည့် အလုပ် မရှိသေးပါ") : t("ไม่มีงานในสถานะนี้", "ဒီအခြေအနေတွင် အလုပ်မရှိပါ")}</div>}
+      {!loading && loadError && <div className="empty" role="alert"><p>{t("โหลดงานไม่สำเร็จ", "အလုပ်များ ဖွင့်၍မရ")}: {loadError}</p><button className="btn-ghost" onClick={() => load(true)}>{t("ลองใหม่", "ပြန်ကြိုးစားပါ")}</button></div>}
+      {!loading && !loadError && shown.length === 0 && <div className="empty">{tab === "todo" ? t("ไม่มีงานต้องทำวันนี้ 🎉", "ဒီနေ့ လုပ်စရာ မရှိပါ 🎉") : tab === "upcoming" ? t("ยังไม่มีงานที่กำลังจะมาถึง", "လာမည့် အလုပ် မရှိသေးပါ") : t("ไม่มีงานในสถานะนี้", "ဒီအခြေအနေတွင် အလုပ်မရှိပါ")}</div>}
 
       <div className="job-cards">
-        {shown.map((jo) => {
+        {(!loading && !loadError ? shown : []).map((jo) => {
           const st = STATUS[jo.status] || STATUS.pending;
           // show the visit(s) relevant to this team (lead sees all visits)
           const myVisits = (jo.visits && jo.visits.length)

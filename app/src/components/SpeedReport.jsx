@@ -1,6 +1,6 @@
 import React from 'react';
 import { speedSamples } from '../lib/screenTiming';
-const names = { quote: 'ใบเสนอราคา', receipt: 'ใบเสร็จ', subcontract: 'ช่างซัพ' };
+const names = { boq: 'ต้นทุน (BOQ)', quote: 'ใบเสนอราคา', receipt: 'ใบเสร็จ', subcontract: 'ช่างซัพ' };
 export default function SpeedReport() {
   const [rows, setRows] = React.useState(null);
   return <>

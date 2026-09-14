@@ -157,8 +157,9 @@ check("ใบเสร็จ: OR issue_date กับ created_at (ใบเก�
   assert.deepEqual(calls.find((c) => c.table === "receipts").filters, ["or(issue_date.gte.2026-07-01,created_at.gte.2026-07-01)"]);
 });
 
-check("ไม่มีที่ไหนใช้ .lte(to) กับคอลัมน์ timestamptz (จะตัดงานของวันสุดท้ายทิ้งทั้งวัน)", () => {
-  assert.ok(!/\.lte\(\s*["'](approved_at|created_at)/.test(SRC), "เจอ .lte บน timestamptz");
+check("ไม่ใช้วันเปล่าเป็นขอบบนแบบ inclusive ของ timestamptz", () => {
+  // A full timestamp is legitimate; the old check rejected every .lte call.
+  assert.ok(!/\.lte\(\s*["'](approved_at|created_at)["']\s*,\s*(?:to|until|endDate)\s*\)/.test(SRC), "เจอ .lte ที่ตัดวันสุดท้ายทิ้ง");
 });
 
 calls = []; headRows = {};
@@ -319,19 +320,10 @@ check("เทียบทีมแบบ union (รอบนัดที่ท�
   assert.ok(/or exists \(select 1 from job_visits v where v\.job_no ?= ?jo\.job_no and v\.assigned_team ?= ?s\.team\)/.test(flat), "ไม่ได้เทียบทีมของรอบนัด");
 });
 
-check("หน้าจอที่ช่างเข้าถึงได้ ต้องเรียกใบงานแบบ fieldOnly", () => {
-  const PAGES = ["Movements.jsx", "Schedule.jsx", "Expenses.jsx", "MyJobs.jsx", "JobOrders.jsx"];
-  const bad = [];
-  for (const f of PAGES) {
-    const src = fs.readFileSync("src/components/" + f, "utf8");
-    if (!/fieldOnly/.test(src)) { bad.push(f + " (ไม่มีโหมดจอช่างเลย)"); continue; }
-    // เรียกแบบไม่มีอาร์กิวเมนต์ยอมได้เฉพาะในสาขาออฟฟิศ — บรรทัดนั้นต้องโหลดลูกค้าด้วย ซึ่งจอช่างไม่โหลด
-    for (const [k, line] of src.split("\n").entries()) {
-      if (line.includes("listJobOrders()") && !line.includes("listCustomers()")) bad.push(f + ":" + (k + 1));
-    }
-  }
-  assert.deepEqual(bad, [], "ยังเรียกโหมดออฟฟิศ: " + bad.join(", "));
-});
+// Execute the actual branches and failure cases. Loading customers on the same
+// source line was never evidence that a call was restricted to office users.
+await import("./scripts/test-job-loading.mjs");
+check("โหลดงานแต่ละตำแหน่งและกรณีผิดพลาด ผ่านการเรียกโค้ดจริง", () => {});
 
 check("จอช่างต้องไม่มีชิปที่พาไปเปิดใบเสนอราคา (มีราคาเต็ม)", () => {
   const s = fs.readFileSync("src/components/JobOrders.jsx", "utf8");

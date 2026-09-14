@@ -37,7 +37,7 @@ export default function TaskBoard({ role, me, prefill, onPrefillConsumed, focus,
 
   async function load() {
     setLoading(true);
-    try { const [t, s, c, j] = await Promise.all([listTasks(), listProfiles(), listCustomers(), listJobOrders().catch(() => [])]); setTasks(t); setStaff(s); setCusts(c); setJobs((j || []).filter((x) => x.status !== "cancelled")); }
+    try { const [t, s, c, j] = await Promise.all([listTasks(), listProfiles(), listCustomers(), listJobOrders(["tech", "assistant", "lead_tech"].includes(role) ? { fieldOnly: true } : {}).catch(() => [])]); setTasks(t); setStaff(s); setCusts(c); setJobs((j || []).filter((x) => x.status !== "cancelled")); }
     catch (e) { flash(L("โหลดไม่สำเร็จ: ", "ဖွင့်၍ မရပါ: ") + (e.message || e), true); }
     setLoading(false);
   }

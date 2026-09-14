@@ -1,8 +1,10 @@
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, listDocLinks, docNoTaken, setWebOrderBoq, aiDraftBoq, uploadExpenseFile, uploadDocFile } from "../lib/api";
-import { fmtBaht, fmtNum, custCode, matchText, matchPhone, fmtDocDate } from "../lib/format";
+import { listBoqs, saveBoq, deleteBoq, setBoqStatus, listCustomers, listMaterialsLite, getCompanies, docNoTaken, setWebOrderBoq, aiDraftBoq, uploadExpenseFile, uploadDocFile } from "../lib/api";
+import { loadBoqPage } from "../lib/boqPage";
+import { useScreenTiming } from "../lib/screenTiming";
+import { fmtBaht, fmtNum, custCode, fmtDocDate } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import ItemPicker from "./ItemPicker";
@@ -12,7 +14,7 @@ import DocChips from "./DocChips";
 import DocCardHead from "./DocCard";
 import { useDocPeek } from "./DocPeek";
 import ChatCustomerLink from "./ChatCustomerLink";
-import DateRangeBar, { inDateRange, defaultDocRange } from "./DateRangeBar";
+import DateRangeBar, { defaultDocRange } from "./DateRangeBar";
 import FilterBar from "./FilterBar";
 import GrowArea from "./GrowArea";
 import DocSlip from "./DocSlip";
@@ -71,10 +73,19 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
   const [list, setList] = React.useState([]);
   // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
-  const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date || x.created_at, dateR)).length, [list, dateR]);
+  const [summary, setSummary] = React.useState({ total: 0, allTotal: 0, baseTotal: 0, hidden: 0, creators: [], types: {} });
+  const dateHidden = summary.hidden;
   const [custs, setCusts] = React.useState([]);
   const [mats, setMats] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState("");
+  const [editorBusy, setEditorBusy] = React.useState(false);
+  const [editorError, setEditorError] = React.useState("");
+  const [editorReady, setEditorReady] = React.useState(false);
+  const [page, setPage] = React.useState(0);
+  const requestId = React.useRef(0);
+  const editorRequest = React.useRef(null);
+  useScreenTiming("boq", loading, loadError);
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null); // {boq_no, customer_id, site_id, title, note, items{}}
   const [aiOpen, setAiOpen] = React.useState(false);   // โมดัลช่วยร่าง BOQ จากแบบ
@@ -82,7 +93,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const [typeF, setTypeF] = React.useState("all"); // กรองตามประเภทงาน (CRM)
   const [byPerson, setByPerson] = React.useState(""); // กรองตามผู้สร้างเอกสาร
   // ตัวเลือกผู้สร้าง = ชื่อผู้สร้างที่มีจริงในใบทั้งหมด (ก่อนกรอง) — ไม่ยิง API เพิ่ม
-  const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
+  const creatorOpts = summary.creators || [];
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [printB, setPrintB] = React.useState(null);
   const [saving, setSaving] = React.useState(false);   // กันกดบันทึกซ้ำตอนเน็ตช้า (เดิมกด 2 ที = ได้ 2 ใบ)
@@ -90,27 +101,65 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const { draftKey, clearOnSaved, closeGuard } = useFormDraft(ed, setEd, { kind: "boq", idOf: (e) => (e._edit ? e.boq_no : null), label: "BOQ" });
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
-  async function load() {
-    setLoading(true);
-    try { const [b, c, m, co, dl] = await Promise.all([listBoqs(), listCustomers(), listMaterialsLite(), getCompanies(), listDocLinks()]); setList(b); setCusts(c); setMats(m); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); }
-    catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
-    setLoading(false);
+  const filterKey = JSON.stringify([search, dateR, typeF, byPerson]);
+  const previousFilter = React.useRef(filterKey);
+  async function load(force = true) {
+    const id = ++requestId.current;
+    setLoading(true); setLoadError("");
+    try {
+      const result = await loadBoqPage({ p_search: search.trim(), p_from: dateR.from || null, p_to: dateR.to || null, p_type: typeF, p_creator: byPerson, p_offset: page * 50 }, force);
+      if (id !== requestId.current) return;
+      if (page > 0 && page * 50 >= result.total) { setPage(Math.max(0, Math.ceil(result.total / 50) - 1)); return; }
+      setList(result.rows); setSummary(result); setDocLinks(result.links);
+    } catch (e) { if (id === requestId.current) { setList([]); setLoadError(e.message || String(e)); } }
+    finally { if (id === requestId.current) setLoading(false); }
   }
-  React.useEffect(() => { load(); }, []);
+  React.useEffect(() => {
+    if (previousFilter.current !== filterKey) { previousFilter.current = filterKey; if (page !== 0) { setPage(0); return; } }
+    const timer = setTimeout(() => load(false), search.trim() ? 250 : 0);
+    return () => { clearTimeout(timer); requestId.current++; };
+  }, [filterKey, page]);
+  async function editorData() {
+    if (editorRequest.current) return editorRequest.current;
+    setEditorBusy(true); setEditorError("");
+    const task = (async () => {
+      try { const [c, m, co] = await Promise.all([listCustomers(), listMaterialsLite(), getCompanies()]); setCusts(c); setMats(m); setCompanies(co); setEditorReady(true); return true; }
+      catch (e) { setEditorError("โหลดข้อมูลสร้างเอกสารไม่สำเร็จ: " + (e.message || e)); return false; }
+      finally { setEditorBusy(false); editorRequest.current = null; }
+    })();
+    editorRequest.current = task;
+    return task;
+  }
+  async function freshBoq(bo) {
+    try {
+      const rows = await listBoqs({ nos: [bo.boq_no], force: true });
+      if (!rows.length) throw new Error("ไม่พบ BOQ กรุณาโหลดใหม่");
+      return rows[0];
+    } catch (e) { flash("โหลด BOQ ไม่สำเร็จ: " + (e.message || e), true); return null; }
+  }
+  async function printBoq(bo) {
+    const win = openPrintWindow();
+    try {
+      const [fresh, co] = await Promise.all([freshBoq(bo), getCompanies()]);
+      if (!fresh) { win?.close(); return; }
+      setCompanies(co); printWin.current = win; setPrintB(fresh);
+    } catch (e) { win?.close(); flash("โหลดข้อมูลพิมพ์ไม่สำเร็จ: " + (e.message || e), true); }
+  }
   // เปิดเจาะจงใบ (มาจากลิงก์/ชิปเชื่อมโยง) → ล้างช่วงวันที่ ไม่งั้นใบเก่ากว่า 6 เดือนจะขึ้นว่าไม่พบ
-  React.useEffect(() => { if (focus) { setEd(null); setDateR({ from: "", to: "" }); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
+  React.useEffect(() => { if (focus) { setEd(null); setDateR({ from: "", to: "" }); setSearch(focus); setTypeF("all"); setByPerson(""); setPage(0); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
   React.useEffect(() => { if (!printB) return; const t = setTimeout(() => { writeAndPrint(printWin.current); printWin.current = null; setPrintB(null); }, 120); return () => clearTimeout(t); }, [printB]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
   const matMap = React.useMemo(() => Object.fromEntries(mats.map((m) => [m.code, m])), [mats]);
 
-  function startNew() { setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", job_type: "", issue_date: today(), note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
-  function startNewFor(customerId) { setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", job_type: "", issue_date: today(), note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
+  async function startNew() { if (!await editorData()) return; setEd({ boq_no: genNo(), customer_id: "", site_id: "", title: "", job_type: "", issue_date: today(), note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); }
+  async function startNewFor(customerId) { if (!await editorData()) return; setEd({ boq_no: genNo(), customer_id: String(customerId || ""), site_id: "", title: "", job_type: "", issue_date: today(), note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "", items: blankItems() }); onNewConsumed?.(); }
   // open a fresh BOQ pre-filled with this customer (e.g. launched from the chat panel)
-  React.useEffect(() => { if (newForCustomer) { startNewFor(newForCustomer); onNewConsumed && onNewConsumed(); } }, [newForCustomer]);
+  React.useEffect(() => { if (newForCustomer) startNewFor(newForCustomer); }, [newForCustomer]);
+  React.useEffect(() => { if (draft) editorData(); }, [draft]);
   // เปิด BOQ ใหม่พร้อมรายการจากคำสั่งซื้อหน้าเว็บ
   // ⚠️ ต้องรอ mats โหลดเสร็จก่อน ไม่งั้น matMap ว่าง → ต้นทุนเป็น 0 ทุกบรรทัด
-  React.useEffect(() => { if (!draft || !mats.length) return; startNewFromWebOrder(draft); onDraftConsumed && onDraftConsumed(); }, [draft, mats.length]);
+  React.useEffect(() => { if (!draft || !editorReady) return; startNewFromWebOrder(draft); onDraftConsumed && onDraftConsumed(); }, [draft, editorReady, mats]);
   function startNewFromWebOrder(d) {
     const items = blankItems();
     const missing = [];
@@ -138,14 +187,18 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   const lockMsg = (bo) => bo.hasQuote ? `แก้ไข/ลบ BOQ นี้ไม่ได้ — สร้างใบเสนอราคา ${bo.quoteNo || ""} จาก BOQ นี้แล้ว\nต้องลบใบเสนอราคา (และเอกสารถัดไป) ก่อน` : null;
   // edit: allowed while the linked quote is still a draft; locked only once it's approved
   const editLockMsg = (bo) => bo.quoteApproved ? `แก้ไข BOQ นี้ไม่ได้ — ใบเสนอราคา ${bo.quoteNo || ""} อนุมัติแล้ว\n(แก้ไขได้เฉพาะตอนใบเสนอราคายังไม่อนุมัติ)` : null;
-  function startEdit(bo) {
+  async function startEdit(bo) {
+    if (!await editorData()) return;
+    bo = await freshBoq(bo); if (!bo) return;
     const lk = editLockMsg(bo); if (lk) return alert(lk);
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
     setEd({ _edit: true, _wasCancelled: bo.status === "cancelled", boq_no: bo.boq_no, customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title || "", job_type: bo.job_type || "", issue_date: bo.issue_date || (bo.created_at || "").slice(0, 10), note: bo.note || "", internal_note: bo.internal_note || "", sign_on: !!bo.sign_url, terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
   }
   // duplicate: copy items/details into a brand-new BOQ (new number, not _edit) — for similar jobs
-  function duplicate(bo) {
+  async function duplicate(bo) {
+    if (!await editorData()) return;
+    bo = await freshBoq(bo); if (!bo) return;
     const items = blankItems();
     bo.items.forEach((x) => { (items[x.section] = items[x.section] || []).push({ code: x.item_code, name: x.name, unit: x.unit, qty: Number(x.qty), unit_cost: Number(x.unit_cost), description: x.description || "" }); });
     setEd({ boq_no: genNo(), customer_id: bo.customer_id || "", site_id: bo.site_id || "", title: bo.title ? bo.title + " (สำเนา)" : "", job_type: bo.job_type || "", issue_date: today(), note: bo.note || "", internal_note: bo.internal_note || "", sign_on: defaultSignOn(), terms_payment: bo.terms_payment || "", terms_freebies: bo.terms_freebies || "", terms_warranty: bo.terms_warranty || "", items });
@@ -309,29 +362,30 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
   return (
     <div className="adm">
       <div className="adm-head">
-        <div><h1 className="page-title">BOQ <span className="page-title-en">Bill of Quantities</span></h1><p className="page-sub">{list.length} ใบ · ประมาณการต้นทุนงาน</p></div>
+        <div><h1 className="page-title">BOQ <span className="page-title-en">Bill of Quantities</span></h1><p className="page-sub">{loading ? "กำลังโหลด…" : loadError ? "โหลดข้อมูลไม่สำเร็จ" : `${summary.total} ใบตามตัวกรอง · ประมาณการต้นทุนงาน`}</p></div>
         <div className="cat-head-actions">
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
-            <input placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
-            {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
+            <input aria-label="ค้นหา BOQ ทุกหน้า" placeholder="ค้นหาเลขที่ / ลูกค้า / เบอร์โทร / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
+            {search && <button className="cat-search-x" aria-label="ล้างคำค้นหา BOQ" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
-          {canEdit && <button className="btn-primary" onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> สร้าง BOQ</button>}
+          <button className="btn-ghost" disabled={loading} onClick={() => load(true)}>รีเฟรช</button>
+          {canEdit && <button className="btn-primary" disabled={editorBusy} onClick={startNew}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> {editorBusy ? "กำลังเตรียม…" : "สร้าง BOQ"}</button>}
         </div>
       </div>
+      {editorError && <div className="empty" role="alert"><p>{editorError}</p><button className="btn-ghost" disabled={editorBusy} onClick={() => newForCustomer ? startNewFor(newForCustomer) : draft ? editorData() : setEditorError("")}>{newForCustomer || draft ? "ลองใหม่" : "ปิด"}</button></div>}
       {(() => {
         // base หลังค้นหา+ช่วงวันที่ — ใช้นับจำนวนบนชิปตัวกรองประเภทงาน (CRM)
         // กรองด้วยวันที่เดียวกับที่การ์ดแสดง (issue_date) ไม่ใช่วันที่สร้างแถว — ใบที่ลงวันที่ย้อนหลัง
         // เคยหลุดช่วงที่เลือกทั้งที่บนการ์ดขึ้นวันที่ในช่วง · ใบเก่าก่อน mig 119 ไม่มี issue_date → ใช้ created_at
-        const fl0 = list.filter((bo) => inDateRange(bo.issue_date || bo.created_at, dateR) && (matchText(search, bo.boq_no, bo.customerName, bo.contactName, bo.title, bo.note, bo.internal_note) || matchPhone(search, bo.contactPhone)));
-        const nType = (v) => fl0.filter((bo) => v === "all" || bo.job_type === v).length;
-        const fl = fl0.filter((bo) => (typeF === "all" || bo.job_type === typeF) && (!byPerson || (bo.createdByName || "") === byPerson));
+        const nType = (v) => v === "all" ? summary.baseTotal : (summary.types?.[v] || 0);
+        const fl = loading || loadError ? [] : list;
         // จำนวนตัวกรองที่ใช้อยู่ (ต่างจากค่าเริ่มต้น) — โชว์บนแถบตัวกรองยุบได้
         // ช่วงวันที่นับเป็น active เฉพาะเมื่อต่างจากค่าเริ่มต้น 6 เดือนล่าสุด (ไม่งั้นจะขึ้น 1 ตลอด)
         const _dfltR = defaultDocRange();
         const dateActive = (dateR.from || dateR.to) && !(dateR.from === _dfltR.from && dateR.to === _dfltR.to);
         const activeCount = (typeF !== "all" ? 1 : 0) + (byPerson ? 1 : 0) + (dateActive ? 1 : 0);
         return (<>
-      <FilterBar id="boq" count={activeCount} resultCount={fl.length} resultLabel="ใบ">
+      <FilterBar id="boq" count={activeCount} resultCount={summary.total} resultLabel="ใบ">
       <div className="cat-filter">
         {[["all", "ทุกประเภทงาน"], ...JOB_TYPES.map(([v, l, ic]) => [v, `${ic} ${l}`])].map(([v, l]) => (
           <button key={v} className={"cat-chip" + (typeF === v ? " on" : "")} onClick={() => setTypeF(v)}
@@ -339,7 +393,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
         ))}
         <DateRangeBar value={dateR} onChange={setDateR} hidden={dateHidden} />
         {creatorOpts.length > 0 && (
-          <select className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
+          <select aria-label="ผู้สร้าง BOQ" className="inp" style={{ width: "auto", flex: "none" }} value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
             <option value="">👤 ผู้สร้างทั้งหมด</option>
             {creatorOpts.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
@@ -347,7 +401,8 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
       </div>
       </FilterBar>
       {loading && <div className="empty">กำลังโหลด…</div>}
-      {!loading && fl.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}
+      {!loading && loadError && <div className="empty" role="alert"><p>โหลด BOQ ไม่สำเร็จ: {loadError}</p><button className="btn-ghost" onClick={() => load(true)}>ลองใหม่</button></div>}
+      {!loading && !loadError && fl.length === 0 && <div className="empty">{summary.allTotal === 0 ? "ยังไม่มี BOQ" : "ไม่พบ BOQ ที่ตรงเงื่อนไข"}</div>}
       <div className="job-cards">
         {fl.map((bo) => (
           <div className="card job-card doc2" key={bo.boq_no}>
@@ -356,7 +411,7 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
                 {bo.status === "cancelled" && <span className="job-badge b-red">ยกเลิกแล้ว</span>}
                 {bo.job_type && (() => { const d = jobTypeDef(bo.job_type); return <span className="job-badge" style={{ background: d[3] }}>{d[2]} {d[1]}</span>; })()}
               </>}
-              title={bo.title} sub={`${bo.items.length} รายการ`} by={bo.createdByName}
+              title={bo.title} sub={`${bo.itemCount} รายการ`} by={bo.createdByName}
               date={bo.issue_date || bo.created_at} amountLabel="ต้นทุนรวม" amount={bo.total}
               customer={{ name: bo.customerName, contactName: bo.contactName || bo.mainContactName, phone: bo.contactPhone || bo.mainContactPhone, addr: bo.customerAddr, siteAddress: bo.siteAddress, mapUrl: bo.mapUrl }} />
             {(() => { const ch = docLinks.byQuote[bo.quoteNo] || {}; return <DocChips jobStatusBy={docLinks.jobStatusBy || {}} quoteNo={bo.quoteNo} jobNos={ch.jobNos} invoiceNos={ch.invoiceNos} receiptNos={ch.receiptNos} poNos={ch.poNos} self={{ type: "boq", no: bo.boq_no }} onOpen={openPeek} />; })()}
@@ -367,19 +422,24 @@ export default function BOQ({ role, onCreateQuote, focus, onFocusConsumed, onOpe
               {onCreateQuote && bo.status !== "cancelled" && (bo.hasQuote
                 ? <span className="job-badge b-green">✓ ออกใบเสนอราคาแล้ว</span>
                 : (canEdit && <button className="btn-primary sm" onClick={() => onCreateQuote(bo.boq_no)}><UIcon name="clipboard" size={14} color="#fff" /> สร้างใบเสนอราคา</button>))}
-              <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(bo); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-              {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => duplicate(bo)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
-              {canEdit && <button className="btn-ghost sm" disabled={bo.quoteApproved} title={editLockMsg(bo) || (bo.status === "cancelled" ? "แก้ไขแล้วบันทึก — ใบจะกลับมาใช้งานได้" : "")} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
+              <button className="btn-ghost sm" onClick={() => printBoq(bo)}><UIcon name="catalog" size={14} /> พิมพ์</button>
+              {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" disabled={editorBusy} onClick={() => duplicate(bo)}><UIcon name="clipboard" size={14} /> สร้างซ้ำ</button>}
+              {canEdit && <button className="btn-ghost sm" disabled={bo.quoteApproved || editorBusy} title={editLockMsg(bo) || (bo.status === "cancelled" ? "แก้ไขแล้วบันทึก — ใบจะกลับมาใช้งานได้" : "")} onClick={() => startEdit(bo)}><UIcon name="edit" size={14} /> แก้ไข</button>}
               {canEdit && bo.status !== "cancelled" && <button className="btn-ghost sm" disabled={bo.hasQuote} title={lockMsg(bo) || ""} onClick={() => cancel(bo)}>ยกเลิก</button>}
               {canDelete && <button className="btn-ghost sm danger" disabled={bo.hasQuote} title={bo.hasQuote ? (lockMsg(bo) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(bo)}><UIcon name="trash" size={14} /> ลบ</button>}
             </div></div>
           </div>
         ))}
       </div>
+      {!loadError && summary.total > 0 && <nav aria-label="หน้า BOQ" className="cat-filter" style={{ justifyContent: "center", flexWrap: "wrap", marginTop: 16 }}>
+        <button className="btn-ghost" disabled={loading || page === 0} onClick={() => setPage(p => p - 1)}>ก่อนหน้า</button>
+        <span aria-live="polite">หน้า {page + 1} / {Math.max(1, Math.ceil(summary.total / 50))} · {summary.total} ใบ</span>
+        <button className="btn-ghost" disabled={loading || (page + 1) * 50 >= summary.total} onClick={() => setPage(p => p + 1)}>ถัดไป</button>
+      </nav>}
         </>);
       })()}
 
-      {printB && (() => { const _c = custs.find((x) => String(x.id) === String(printB.customer_id)); const company = _c?.vat === false ? companies.novat : companies.vat; return (
+      {printB && (() => { const company = printB.customerVat === false ? companies.novat : companies.vat; return (
         <DocSlip company={company} titleTh="ใบประมาณการ (BOQ)" titleEn="BILL OF QUANTITIES" docNo={printB.boq_no}
           metaRows={[{ label: "วันที่", value: printB.issue_date || (printB.created_at || "").slice(0, 10) }, { label: "ชื่องาน", value: printB.title }]}
           projectTitle={printB.title}

@@ -25,20 +25,23 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
   const [jobs, setJobs] = React.useState([]);
   const [teams, setTeams] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState("");
+  const [retry, setRetry] = React.useState(0);
   const [detail, setDetail] = React.useState(null); // job/visit entry shown in the popup
   const [gcal, setGcal] = React.useState(false); // Google Calendar subscribe panel
   const [events, setEvents] = React.useState([]);   // นัดหมายอิสระ (calendar_events)
   const [evtEdit, setEvtEdit] = React.useState(null); // { ...event } หรือ {} (สร้างใหม่) → เปิด modal
 
-  React.useEffect(() => { (async () => {
-    setLoading(true);
+  React.useEffect(() => { let active = true; (async () => {
+    setLoading(true); setLoadError(""); setDetail(null);
     try {
-      const [j, t, ev] = await Promise.all([listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: role === "lead_tech" ? null : team } : {}), listTeams(), listCalendarEvents().catch(() => [])]);
+      const [j, t, ev] = await Promise.all([listJobOrders(role === "tech" || role === "assistant" || role === "lead_tech" ? { fieldOnly: true, team: role === "lead_tech" ? null : team, force: retry > 0 } : { force: retry > 0 }), listTeams(), listCalendarEvents()]);
+      if (!active) return;
       setJobs(j); setTeams(t); setEvents(ev);
     }
-    catch (e) { console.error(e); }
-    setLoading(false);
-  })(); }, []);
+    catch (e) { if (active) { setJobs([]); setEvents([]); setLoadError(e.message || String(e)); } }
+    finally { if (active) setLoading(false); }
+  })(); return () => { active = false; }; }, [role, team, retry]);
   async function reloadEvents() { try { setEvents(await listCalendarEvents()); } catch { /* noop */ } }
   const openEntry = (j) => { if (j._event) setEvtEdit(j._event); else setDetail(j); };
 
@@ -151,7 +154,7 @@ export default function Schedule({ role, team, me, onOpenJob, onNewJob }) {
         ))}
       </div>
 
-      {loading ? <div className="empty">กำลังโหลด…</div> : (
+      {loading ? <div className="empty">กำลังโหลด…</div> : loadError ? <div className="empty" role="alert"><p>โหลดปฏิทินไม่สำเร็จ: {loadError}</p><button className="btn-ghost" onClick={() => setRetry(n => n + 1)}>ลองใหม่</button></div> : (
         view === "list" ? <AgendaView /> : view === "week" ? <WeekView /> : view === "day" ? <DayView /> : <MonthView />
       )}
 

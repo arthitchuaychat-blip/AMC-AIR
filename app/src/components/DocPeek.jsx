@@ -1,5 +1,5 @@
 import React from "react";
-import { listBoqs, listQuotations, listInvoices, listReceipts, listPurchaseOrders, listMaterialsLite, listJobOrders, listBillingNotes, listAdjustmentNotes } from "../lib/api";
+import { listBoqs, listQuotations, listInvoices, listReceipts, listPurchaseOrders, listMaterialsLite, getJobOrder, listBillingNotes, listAdjustmentNotes } from "../lib/api";
 import { fmtBaht, fmtNum, fmtDocDate } from "../lib/format";
 import { JOB_STATUSES, jobTypeDef } from "../lib/schedule";
 import { UIcon } from "../icons";
@@ -47,7 +47,7 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
         }
         else if (type === "billing") d = (await listBillingNotes()).find((x) => x.billing_no === no);
         else if (type === "creditnote" || type === "debitnote") d = (await listAdjustmentNotes()).find((x) => x.note_no === no);
-        else if (type === "job") d = (await listJobOrders()).find((x) => x.job_no === no);
+        else if (type === "job") d = await getJobOrder(no);
         if (alive) { setDoc(d || null); setLoading(false); }
       } catch (e) { if (alive) { setErr(e.message || String(e)); setLoading(false); } }
     })();

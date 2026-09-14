@@ -8,7 +8,7 @@ assert.equal(rows.length,251);assert.equal(requests.length,3);assert.ok(requests
 requests=[];await scopedDocuments(async()=>{requests.push(1);},[]);assert.equal(requests.length,0);
 await assert.rejects(scopedDocuments(async()=>{throw Error('offline');},['Q']));
 
-function loader(file,end) { const s=fs.readFileSync('src/components/'+file,'utf8');return s.slice(s.indexOf('  async function load()'),s.indexOf(end,s.indexOf('  async function load()'))); }
+function loader(file,end) { const s=fs.readFileSync('src/components/'+file,'utf8');const start=s.indexOf('  async function load(');return s.slice(start,s.indexOf(end,start)); }
 const seen=[];const state={};
 const ctx={Promise,Set,Map,Error,Object,scopedDocuments,flash:()=>{},
 salesWhtLocks:async()=>[],listReceipts:async()=>[{quote_no:'Q1',invoice_no:'I1'}],getCompanies:async()=>({}),listDocLinks:async()=>({}),
@@ -17,10 +17,10 @@ listQuotations:async o=>{assert.deepEqual(o.nos,['Q1']);seen.push('quote');retur
 for(const key of ['Loading','LoadError','WhtLocks','List','Invoices','Quotes','Companies','DocLinks'])ctx['set'+key]=v=>state[key]=typeof v==='function'?v(state[key]||[]):v;
 vm.createContext(ctx);await vm.runInContext(loader('Receipts.jsx','  React.useEffect(() => { load();')+';load()',ctx);
 assert.equal(state.List.length,1);assert.equal(state.LoadError,'');assert.equal(seen.length,2);
-const jobs={Promise,fieldOnly:false,role:'admin',myTeam:null,flash:()=>{}};
+const jobs={Promise,loadSeq:{current:0},fieldOnly:false,role:'admin',myTeam:null,flash:()=>{}};
 const called=[];
 for(const name of ['listJobOrders','listTeams','listDocLinks','listHandoverFlags','listCustomers','listQuotations','listProfiles','listJobTemplates'])jobs[name]=async()=>{called.push(name);return [];};
-for(const k of ['Loading','List','Teams','DocLinks','HoFlags','Custs','Quotes','Staff','Templates'])jobs['set'+k]=()=>{};
+for(const k of ['Loading','LoadError','List','Teams','DocLinks','HoFlags','Custs','Quotes','Staff','Templates'])jobs['set'+k]=()=>{};
 vm.createContext(jobs);await vm.runInContext(loader('JobOrders.jsx','  React.useEffect(() => { load();')+';load()',jobs);
 assert.deepEqual(called.sort(),['listDocLinks','listHandoverFlags','listJobOrders','listTeams'].sort());
 called.length=0;jobs.fieldOnly=true;jobs.role='tech';await vm.runInContext('load()',jobs);assert.ok(!called.includes('listQuotations')&&!called.includes('listCustomers'));

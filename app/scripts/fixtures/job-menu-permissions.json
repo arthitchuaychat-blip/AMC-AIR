@@ -1,0 +1,74 @@
+{
+  "admin": {
+    "joborders": "edit",
+    "jobs": "edit",
+    "myjobs": "edit",
+    "schedule": "edit"
+  },
+  "assistant": {
+    "joborders": "none",
+    "jobs": "none",
+    "myjobs": "edit",
+    "schedule": "view"
+  },
+  "exec": {
+    "joborders": "edit",
+    "jobs": "edit",
+    "myjobs": "edit",
+    "schedule": "edit"
+  },
+  "field_sales": {
+    "joborders": "edit",
+    "jobs": "edit",
+    "myjobs": "none",
+    "schedule": "edit"
+  },
+  "finance": {
+    "joborders": "view",
+    "jobs": "edit",
+    "myjobs": "none",
+    "schedule": "view"
+  },
+  "graphic": {
+    "joborders": "view",
+    "jobs": "none",
+    "myjobs": "none",
+    "schedule": "none"
+  },
+  "hr": {
+    "joborders": null,
+    "jobs": null,
+    "myjobs": null,
+    "schedule": null
+  },
+  "lead_tech": {
+    "joborders": "edit",
+    "jobs": "view",
+    "myjobs": "edit",
+    "schedule": "edit"
+  },
+  "maid": {
+    "joborders": "none",
+    "jobs": "none",
+    "myjobs": "none",
+    "schedule": "none"
+  },
+  "sales": {
+    "joborders": "edit",
+    "jobs": "edit",
+    "myjobs": "none",
+    "schedule": "edit"
+  },
+  "stock": {
+    "joborders": "view",
+    "jobs": "edit",
+    "myjobs": "view",
+    "schedule": "view"
+  },
+  "tech": {
+    "joborders": "none",
+    "jobs": "none",
+    "myjobs": "edit",
+    "schedule": "view"
+  }
+}
