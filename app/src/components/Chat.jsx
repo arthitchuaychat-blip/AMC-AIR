@@ -9,7 +9,7 @@ import { supabase } from "../lib/supabase";
 import { buildOrderConfirm } from "../lib/confirmText";
 import { scheduleLabel, JOB_STATUSES } from "../lib/schedule";
 const JOB_ST_LABEL = Object.fromEntries((JOB_STATUSES || []).map(([v, l]) => [v, l]));
-import { fmtBaht, fmtNum, custCode, matchText, matchPhone, eqi, ATTACH_ACCEPT } from "../lib/format";
+import { fmtBaht, fmtNum, custCode, matchText, matchPhone, eqi } from "../lib/format";
 import { can } from "../lib/permissions";
 import { QR_MY } from "../lib/i18n";
 import { UIcon, MaterialThumb } from "../icons";
@@ -19,6 +19,7 @@ import DocCapture from "./DocCapture";
 import { useDocPeek } from "./DocPeek";
 import { captureDocToStage, captureDocForEmail } from "../lib/sendDoc";
 import html2canvas from "html2canvas";
+import { CHAT_FILE_ACCEPT, transferHasFiles, transferFiles, createChatUploadQueue, isChatSendKey } from "../lib/chatAttachments";
 
 const initial = (s) => (s || "?").trim()[0]?.toUpperCase() || "?";
 // LINE's basic bot-sendable sticker sets (only these official packages can be sent by a bot)
@@ -105,6 +106,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
   const [text, setText] = React.useState("");
   const [q, setQ] = React.useState("");
   const [sending, setSending] = React.useState(false);
+  const sendingRef = React.useRef(false);
   const [stickerOpen, setStickerOpen] = React.useState(false);
   const [stickerSet, setStickerSet] = React.useState(0);
   const [acPicker, setAcPicker] = React.useState(false);
@@ -130,6 +132,17 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
   const [qrPendImgs, setQrPendImgs] = React.useState([]);  // รูปจากข้อความสำเร็จรูปที่กดไว้ — ส่งพร้อมข้อความตอนกดส่ง
   const [pending, setPending] = React.useState([]);        // รูป/ไฟล์ที่เลือกไว้ "พักก่อนส่ง" [{type:'image'|'file', url, name}] — กดตรวจแล้วค่อยส่ง
   const [uploading, setUploading] = React.useState(false); // กำลังอัปโหลดไฟล์เข้าที่พัก
+  const [attachmentError, setAttachmentError] = React.useState("");
+  const [draggingFiles, setDraggingFiles] = React.useState(false);
+  const dragDepth = React.useRef(0);
+  const inputRef = React.useRef(null);
+  const uploadQueue = React.useRef(null);
+  if (!uploadQueue.current) uploadQueue.current = createChatUploadQueue({
+    upload: uploadChatImage,
+    append: (a) => setPending((p) => [...p, a]),
+    busy: setUploading,
+    error: setAttachmentError,
+  });
   const [emojiOpen, setEmojiOpen] = React.useState(false);
   const [toolsOpen, setToolsOpen] = React.useState(() => { try { return localStorage.getItem("amc_chat_tools") !== "0"; } catch { return true; } }); // พับ/กางแถบเครื่องมือ+คำตอบสำเร็จรูป (จำค่าไว้)
   const toggleTools = () => setToolsOpen((o) => { const n = !o; try { localStorage.setItem("amc_chat_tools", n ? "1" : "0"); } catch {} if (!n) { setEmojiOpen(false); setStickerOpen(false); setQrbOpen(false); } return n; });
@@ -206,6 +219,11 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
   const [poPicker, setPoPicker] = React.useState(false); // โมดัลเลือก PO ส่งเข้าแชตซัพ
   const [pos, setPos] = React.useState([]);              // ใบสั่งซื้อ (โหลดครั้งแรกที่กดส่ง PO)
   const [channel, setChannel] = React.useState("line"); // "line" | "fb" | "sup" | "cm" — unified inbox switch
+  React.useLayoutEffect(() => {
+    uploadQueue.current.reset();
+    setPending([]); setAttachmentError(""); setDraggingFiles(false); dragDepth.current = 0;
+    return () => uploadQueue.current.reset();
+  }, [sel, channel, canSend]);
   const isFb = channel === "fb";
   const isSup = channel === "sup";   // แท็บซัพพลายเออร์ = ผู้ติดต่อ LINE ที่ kind='supplier' (mig 138)
   const isCm = channel === "cm";     // แท็บคอมเมนต์ Facebook (mig 193) — แยกจากระบบแชต/contact เดิม
@@ -414,27 +432,39 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
 
   async function send() {
     const t = text.trim(), imgs = qrPendImgs, pend = pending;
-    if ((!t && !imgs.length && !pend.length) || !sel || sending) return;
+    if ((!t && !imgs.length && !pend.length) || !sel || !canSend || sending || sendingRef.current || uploading || uploadQueue.current.uploading) return;
+    const generation = uploadQueue.current.generation;
+    const sameDraft = () => generation === uploadQueue.current.generation;
+    sendingRef.current = true;
     setSending(true);
     try {
       const qrb = (!isFb && qrButtons.filter((x) => x.label.trim() && x.text.trim())) || [];   // ปุ่มให้ลูกค้ากด (LINE เท่านั้น)
       if (t) {
         if (isFb) await sendFbMessage(sel, t, replyTo ? { replyToMid: replyTo.fb_message_id } : undefined);
         else await sendLineMessage(sel, t, { ...(replyTo ? { quoteToken: replyTo.quote_token, quotedMessageId: replyTo.line_message_id } : {}), ...(qrb.length ? { quickReplies: qrb } : {}) }); // LINE appends via realtime
+        if (sameDraft()) {
+          setText((s) => s === text ? "" : s);
+          setReplyTo((s) => s === replyTo ? null : s);
+          setQrButtons((s) => s === qrButtons ? [] : s);
+        }
       }
-      for (const u of imgs) await chSendImage(sel, u);   // รูปแนบจากข้อความสำเร็จรูป — ตามหลังข้อความ
+      for (const u of imgs) {
+        await chSendImage(sel, u);
+        if (sameDraft()) setQrPendImgs((s) => { const i = s.indexOf(u); return s.filter((_, j) => j !== i); });
+      }
       for (const a of pend) {                            // ของที่ "พักไว้" ตรวจแล้ว → ส่งตามลำดับ
         if (a.type === "file") await (isFb ? sendFbFile(sel, a.url, a.name) : sendLineFile(sel, a.url, a.name));   // PDF/ไฟล์ → FB ต้องส่งเป็น type:file (ส่งเป็นรูปจะ upload ไม่สำเร็จ)
         else await chSendImage(sel, a.url);              // รูป (ทั้ง LINE/FB)
+        if (sameDraft()) setPending((s) => s.filter((x) => x !== a)); // Retry only attachments not confirmed sent.
       }
-      if (isFb) setMsgs(await chListMessages(sel));      // FB: เผื่อ realtime ไม่ทัน → รีเฟรช
+      if (isFb) { const rows = await chListMessages(sel); if (sameDraft()) setMsgs(rows); }
       // คนตอบคนแรก = ผู้รับผิดชอบลูกค้าโดยอัตโนมัติ (แชตลูกค้าที่ยังไม่มีผู้รับผิดชอบ · LINE + FB)
       if (!isSup && myId && selContact && selContact.kind !== "supplier" && !selContact.assigned_to) {
         try { if (isFb) await setFbOwner(sel, myId); else await setLineOwner(sel, myId); await loadContacts(); } catch (e2) { /* ไม่ให้ล้มการส่ง */ }
       }
-      setText(""); setReplyTo(null); setQrPendImgs([]); setPending([]); setQrButtons([]);
     }
     catch (e) { flash("ส่งไม่สำเร็จ: " + (e.message || e), true); }
+    sendingRef.current = false;
     setSending(false);
   }
   async function onLink(cid) {
@@ -483,21 +513,48 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
     if (!pos.length) { try { setPos(await listPurchaseOrders()); } catch (e) { flash("โหลดใบสั่งซื้อไม่สำเร็จ: " + (e.message || e), true); } }
   }
 
-  // เลือกรูป → อัปโหลดแล้ว "พักไว้" ในช่องแชต (ยังไม่ส่ง) → ตรวจแล้วกดส่ง
-  async function onImage(e) {
-    const fs = Array.from(e.target.files || []); e.target.value = ""; if (!fs.length || !sel) return;
-    setUploading(true);
-    try { for (const f of fs) { const url = await uploadChatImage(f); setPending((p) => [...p, { type: "image", url, name: f.name }]); } }
-    catch (ex) { flash("อัปโหลดรูปไม่สำเร็จ: " + (ex.message || ex), true); }
-    setUploading(false);
+  // All file entry points stage attachments; only send() contacts the customer.
+  function stageFiles(files, asFile = false) {
+    if (!canSend || !sel || isCm) return;
+    if (sending || sendingRef.current || uploading) { setAttachmentError("กำลังส่งหรืออัปโหลด กรุณารอแล้วแนบไฟล์อีกครั้ง"); return; }
+    void uploadQueue.current.add(files, asFile);
   }
-  // เลือกไฟล์ → อัปโหลดแล้วพักไว้ (ยังไม่ส่ง) → ตรวจแล้วกดส่ง (LINE ส่งเป็นลิงก์ให้กด)
-  async function onFile(e) {
-    const fs = Array.from(e.target.files || []); e.target.value = ""; if (!fs.length || !sel) return;
-    setUploading(true);
-    try { for (const f of fs) { const url = await uploadChatImage(f); setPending((p) => [...p, { type: "file", url, name: f.name }]); } }
-    catch (ex) { flash("อัปโหลดไฟล์ไม่สำเร็จ: " + (ex.message || ex), true); }
-    setUploading(false);
+  function onImage(e) {
+    const files = Array.from(e.target.files || []); e.target.value = "";
+    stageFiles(files);
+  }
+  function onFile(e) {
+    const files = Array.from(e.target.files || []); e.target.value = "";
+    stageFiles(files, true);
+  }
+  function onPasteFiles(e) {
+    const files = transferFiles(e.clipboardData);
+    if (!files.length) return; // Let the browser paste ordinary text, including Ctrl/Cmd+V.
+    e.preventDefault();
+    stageFiles(files);
+  }
+  function onDragFiles(e) {
+    if (!transferHasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    const ready = canSend && sel && !isCm && !sending && !uploading;
+    e.dataTransfer.dropEffect = ready ? "copy" : "none";
+    if (e.type === "dragenter") dragDepth.current++;
+    setDraggingFiles(!!ready);
+  }
+  function onLeaveFiles(e) {
+    if (!transferHasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (!dragDepth.current) setDraggingFiles(false);
+  }
+  function onDropFiles(e) {
+    if (!transferHasFiles(e.dataTransfer)) return;
+    e.preventDefault(); e.stopPropagation();
+    dragDepth.current = 0; setDraggingFiles(false);
+    const files = transferFiles(e.dataTransfer);
+    if (!files.length) { setAttachmentError("กรุณาลากไฟล์โดยตรง ไม่รองรับการแนบโฟลเดอร์"); return; }
+    stageFiles(files);
+    inputRef.current?.focus();
   }
   // pick a product/service from the catalog → choose the payment-method price → send to the customer
   async function openAcPicker() {
@@ -857,7 +914,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
         </div>
 
         {/* thread */}
-        <div className="chat-thread">
+        <div className={"chat-thread chat-file-target" + (draggingFiles ? " dragging-files" : "")}
+          onDragEnter={onDragFiles} onDragOver={onDragFiles} onDragLeave={onLeaveFiles} onDrop={onDropFiles}>
+          {draggingFiles && <div className="chat-file-drop" role="status">วางภาพ วิดีโอ หรือไฟล์ที่นี่ — ตรวจแล้วค่อยส่ง</div>}
           {!selContact ? <div className="chat-empty">เลือกผู้ติดต่อทางซ้ายเพื่อดูบทสนทนา</div> : (
             <>
               <div className="chat-thread-head">
@@ -954,8 +1013,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
                     <label className={"chat-tool" + (sending || uploading ? " disabled" : "")}>📷 รูป
                       <input type="file" accept="image/*" multiple hidden disabled={sending || uploading} onChange={onImage} />
                     </label>
-                    <label className={"chat-tool" + (sending || uploading ? " disabled" : "")}>📎 ไฟล์
-                      <input type="file" accept={ATTACH_ACCEPT} multiple hidden disabled={sending || uploading} onChange={onFile} />
+                    <label className={"chat-tool" + (sending || uploading ? " disabled" : "")}>📎 วิดีโอ / ไฟล์
+                      <input type="file" accept={CHAT_FILE_ACCEPT} multiple hidden disabled={sending || uploading} onChange={onFile} />
                     </label>
                     <button className={"chat-tool" + (emojiOpen ? " primary" : "")} disabled={sending} onClick={() => { setEmojiOpen((o) => !o); setStickerOpen(false); }}>😀 อีโมจิ</button>
                     {!isFb && <button className={"chat-tool" + (stickerOpen ? " primary" : "")} disabled={sending} onClick={() => { setStickerOpen((o) => !o); setEmojiOpen(false); }}>😊 สติกเกอร์</button>}
@@ -1018,13 +1077,13 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
                         <span className="qr-imgrow">
                           {pending.map((a, i) => (
                             <span className="qr-imgchip" key={a.url + i} title={a.name || ""}>
-                              {a.type === "image" ? <img src={a.url} alt="" /> : <span style={{ fontSize: 11, padding: "0 7px", display: "inline-flex", alignItems: "center", height: "100%", whiteSpace: "nowrap" }}>📄 {(a.name || "ไฟล์").slice(0, 12)}</span>}
-                              <button title="เอาออก" onClick={() => setPending((s) => s.filter((_, j) => j !== i))}>✕</button>
+                              {a.type === "image" ? <img src={a.url} alt={a.name || "ภาพแนบ"} /> : a.media === "video" ? <video className="chat-pending-video" src={a.url} controls preload="metadata" aria-label={a.name || "วิดีโอแนบ"} /> : <span style={{ fontSize: 11, padding: "0 7px", display: "inline-flex", alignItems: "center", height: "100%", whiteSpace: "nowrap" }}>📄 {(a.name || "ไฟล์").slice(0, 12)}</span>}
+                              <button title="เอาออก" disabled={sending} onClick={() => setPending((s) => s.filter((_, j) => j !== i))}>✕</button>
                             </span>
                           ))}
                         </span>
                       </div>
-                      {pending.length > 0 && <button className="chat-reply-cancel" title="ล้างที่แนบทั้งหมด" onClick={() => setPending([])}>✕</button>}
+                      {pending.length > 0 && <button className="chat-reply-cancel" title="ล้างที่แนบทั้งหมด" disabled={sending} onClick={() => setPending([])}>✕</button>}
                     </div>
                   )}
                   {replyTo && (
@@ -1054,10 +1113,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
                       <button className="chat-reply-cancel" title="ยกเลิกรูปแนบทั้งหมด" onClick={() => setQrPendImgs([])}>✕</button>
                     </div>
                   )}
+                  {attachmentError && <div className="chat-attachment-error" role="alert">{attachmentError}</div>}
+                  <div className="chat-attachment-hint">ลากภาพ วิดีโอ หรือไฟล์มาวาง · Ctrl+V / ⌘V วางภาพ · สูงสุด 25 MB ต่อไฟล์{!isFb && " · วิดีโอและไฟล์ส่งเป็นลิงก์"}</div>
                   <div className="chat-compose">
-                    <textarea className="inp chat-input" rows={4} value={text} placeholder={sending ? "กำลังส่ง…" : (replyTo ? "พิมพ์คำตอบ…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)")}
+                    <textarea ref={inputRef} onPaste={onPasteFiles} className="inp chat-input" rows={4} value={text} placeholder={sending ? "กำลังส่ง…" : (replyTo ? "พิมพ์คำตอบ…" : "พิมพ์ข้อความ… (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)")}
                       onChange={(e) => setText(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
+                      onKeyDown={(e) => { if (isChatSendKey(e)) { e.preventDefault(); send(); } }} />
                     <button className="btn-primary" disabled={sending || uploading || (!text.trim() && !qrPendImgs.length && !pending.length)} onClick={send}>{sending ? "…" : uploading ? "…" : "ส่ง"}</button>
                   </div>
                 </div>

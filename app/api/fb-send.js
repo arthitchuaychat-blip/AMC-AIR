@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       fd.append("recipient", JSON.stringify({ id: to }));
       fd.append("messaging_type", mt);
       if (tag) fd.append("tag", tag);
-      fd.append("message", JSON.stringify({ attachment: { type: isImage ? "image" : "file", payload: { is_reusable: true } } }));
+      fd.append("message", JSON.stringify({ attachment: { type: isImage ? "image" : /^video\//.test(ct) ? "video" : "file", payload: { is_reusable: true } } }));
       fd.append("filedata", new Blob([buf], { type: ct }), fname);
       return fetch(endpoint, { method: "POST", body: fd });   // อย่าตั้ง Content-Type เอง — multipart boundary อัตโนมัติ
     }
