@@ -1,42 +1,41 @@
-# Sales document review and currency display — v838
+# Sales document review — v838 (draft)
 
-Date: 2026-09-15. Baseline: `d6de1fbea4aae6848cbee52953382a384abea1b4`.
-Status: implementation prepared for review; not a production release.
+Date: 2026-09-15. Current main baseline: `70260d86760903eb6590c29b91629e4798c58b8c`.
+Status: code and rendered-content checks complete; A4 visual check pending. Not deployed to production.
 
-## Assessment
+## Review
 
-The existing templates have a suitable business-document structure: a consistent blue letterhead, separate billing/site information, right-aligned numeric columns, an emphasized final total, terms, and signatures. This is a source and server-rendered HTML review, not a completed visual approval of A4 output. Browser access to the local harness was blocked; font wrapping, page breaks, and printer output remain unverified.
+The source has a consistent blue letterhead, billing and site address blocks, numeric columns, totals, terms and signatures. This is a source and rendered-HTML assessment. It is not a visual approval of font sizes, Thai wrapping or printed pagination.
 
-| Document | Existing strengths | Follow-up recommendation |
-| --- | --- | --- |
-| Quotation | Clear validity/reference fields, project name, item discounts and payment terms | Keep the structure. Use the same date format and payment/discount detail in print and capture. |
-| Delivery note / invoice | Separates contract and installment totals in the print template | Visually distinguish contract reference amounts from the amount due now. The capture title and installment breakdown should match print. |
-| Receipt / tax invoice | Print includes installment base, VAT, withholding and net receipt, plus payment confirmation | Make the current installment the primary summary. Bring the capture installment breakdown into alignment with print. |
-| Billing note | Lists related invoices with a clear total | Consider invoice-specific column names instead of the generic quantity/unit-price columns. |
-| Credit / debit note | Reason, related document numbers and adjustment totals are present | Keep labels consistent across print and capture, including withholding detail. |
+| Document | Assessment and next visual check |
+| --- | --- |
+| Quotation | Keep the basic structure. Currency prefixes add clutter; remove them while stating the unit in the amount heading. Check long Thai descriptions and discount-column width. |
+| Delivery note / invoice | The current installment should be easier to distinguish from the full contract amount. Check the longer combined Thai/English title and multi-page totals. |
+| Receipt / tax invoice | Keep payment confirmation and installment base/VAT visible. Check that the net receipt is clearly the main total and that signatures fit the last page. |
+| Billing note | Invoice-specific headings would be clearer than empty quantity/unit-price columns. Visible invoice count must exclude cancelled invoices. |
+| Credit / debit note | Preserve the reason, references and withholding detail. Check long reasons and note titles. |
 
-## Existing inconsistencies found (not changed in this patch)
+## Implemented in this draft
 
-- `DocCapture.jsx` invoice and receipt totals omit the current-installment base and VAT rows that `Invoices.jsx` and `Receipts.jsx` already show. A partial-payment document therefore presents different detail depending on export path.
-- Capture quotation, invoice and receipt customer objects omit `customerBranch`; native print passes it. `DocSlip` can consequently show the default head-office label in capture for a customer with a branch.
-- Capture invoice title is INVOICE, while native print is DELIVERY NOTE / INVOICE. Quotation capture also omits the native after-discount subtotal and card-installment information.
-- Sales templates duplicate their content between menu print and capture. A later shared-renderer change should preserve saved values, signatures, withholding rules and document lifecycle behavior, with output comparisons before rollout.
-- Secondary text is approximately 9–11.5px in CSS. Printed readability and long Thai descriptions need visual confirmation; no conclusion about actual clipping is claimed.
-
-These are presentation findings, not a tax-compliance certification. No financial policy or calculation is changed here.
-
-## Implemented
-
-- Added `fmtDocAmount`, retaining the exact existing separators, decimal precision and rounding from `fmtBaht`, without its leading baht symbol.
-- Applied it only to quotation, invoice, receipt/tax invoice, billing and credit/debit document output in the menu and capture paths.
-- Added an optional currency-unit label to the amount column (`จำนวนเงิน (บาท)` or the existing adjustment label plus `(บาท)`). The same header is used on repeated pages.
-- Kept other menu money displays, purchase/BOQ output, data loading, database policies, calculations and pagination code unchanged.
+- Remove the leading baht symbol only in sales document amounts, preserving the existing separators, precision and rounding. The amount heading states `(บาท)`.
+- Align capture output with the existing native print output: customer branch, saved signature or explicit no-signature choice, quotation card/discount details, invoice title, installment base/VAT and per-line withholding annotations.
+- Use the same saved values and existing withholding display logic as native print. No tax rule, calculation in the data layer, access policy or document lifecycle change.
+- Native billing count now counts the same live invoices that are printed; cancelled invoices remain excluded.
+- All five document families now produce identical print/capture HTML in the tested cases.
+- Print pagination and the document CSS are unchanged. Visual hierarchy and billing-column redesign remain recommendations pending visual review.
 
 ## Verification
 
-- Rendered the actual native print JSX and actual `DocCapture` slip functions through React's server renderer, using synthetic company/customer data. No live customer documents or messages were used.
-- Compared 40 before/after outputs: five document families × print/capture × four scenarios (discount + withholding, simple VAT, no VAT, and 40 item rows).
-- All numeric tokens were identical. In every case, the complete HTML matched the baseline after only removing `฿` and adding ` (บาท)` to the amount heading. This also confirms preservation of descriptive text, payment confirmation, terms and signatures in those fixtures.
-- Production build passed.
-- `npm test` stopped at the existing `Receipts.jsx` unpaid-status badge failure. The independent undefined-variable check reported the existing `Settings.jsx` variable `m` and `api.js` variable `status`; no new missing identifiers were reported.
-- Browser A4/font/page-break verification remains outstanding. Keep this change in review until a print preview can be checked.
+- `npm run test:sales-documents`: 548 assertions across 110 rendered outputs (11 scenarios × 5 families × 2 paths).
+- Cases cover VAT/no VAT, discount/withholding, 40 rows, full-card/10-month installments, unpaid receipt, credit/debit, saved/empty signatures, cancelled invoices and fractional withholding rates.
+- Independent expected amounts verify a 50% installment: base 29,500.00, VAT 2,065.00, withholding 105.00, net 31,460.00. Internal notes remain absent.
+- Compared 20 native print outputs with the pre-change baseline: complete HTML matches after only removing the baht prefix and adding the currency heading. The cancelled-invoice count fix is separately covered by its fixture.
+- Production build passes. Address, customer-note, quotation-WHT, BOQ-internal, sales-WHT and recheck regression tests pass.
+- `npm test` still stops at the pre-existing Receipts unpaid badge check. Undefined-variable scan still reports the pre-existing Settings `m` and API loan `status` references; no new identifiers.
+- Cloud browser reaches the Vercel preview sign-in screen. It cannot inspect the document without authenticated preview access. Earlier local-harness navigation was blocked by browser policy. No visual or printer approval is claimed.
+
+## Remaining release gate
+
+Inspect a real A4 preview (including long Thai rows, a partial-payment invoice/receipt, and repeated page headers) before publishing. Use the `_design/` harness procedure in `.claude/memory/print-pagination.md`; synthetic fixtures only. Do not send test documents to customers. Alternatively, the owner can provide exported PDFs for the visual review.
+
+PR #8 remains a draft. The head-technician production fix from PR #9 is preserved on this branch.
