@@ -1,5 +1,7 @@
 # Memory index
 
+- [Document preview](document-preview.md) — v839: sales drawers use actual A4 print/capture output with descriptions, original/copy and zoom; 94 browser checks pass.
+
 - [Sales document review](sales-document-review.md) — approved v838 release: blue originals, gray copies, Sarabun, full-payment labels and print/capture parity; 743 assertions and 60 Chrome layouts pass.
 
 - [Head technician work status](lead-tech-work-status.md) — production fix for start/submit without an assigned team; cross-team field actions, existing lock/approval guards preserved; 157 regression assertions.

@@ -3,6 +3,7 @@ import { listBoqs, listQuotations, listInvoices, listReceipts, listPurchaseOrder
 import { fmtBaht, fmtNum, fmtDocDate } from "../lib/format";
 import { JOB_STATUSES, jobTypeDef } from "../lib/schedule";
 import { UIcon } from "../icons";
+import DocPreview from "./DocPreview";
 
 // แผงพรีวิวเอกสารด้านขวา — เปิดจากชิป "เชื่อมโยง" บนใบงาน: ดูสรุปเร็ว ๆ โดยไม่หลุดจากหน้าเดิม
 // อยากแก้/พิมพ์ค่อยกด "เปิดหน้าเต็ม" (พฤติกรรมเดิม = เปิดแท็บใหม่ของเมนูนั้น)
@@ -24,6 +25,13 @@ const ST_TH = {
 };
 
 export default function DocPeek({ type, no, onClose, onOpenFull }) {
+  if (["quote", "invoice", "receipt", "billing", "creditnote", "debitnote"].includes(type)) {
+    return <DocPreview key={`${type}:${no}`} type={type} no={no} title={META[type].th} onClose={onClose} onOpenFull={onOpenFull} />;
+  }
+  return <DocSummaryPeek type={type} no={no} onClose={onClose} onOpenFull={onOpenFull} />;
+}
+
+function DocSummaryPeek({ type, no, onClose, onOpenFull }) {
   const [doc, setDoc] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState(null);
@@ -63,7 +71,7 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
       const price = Number(it.price_show ?? it.unit_price ?? it.price ?? it.unit_cost) || 0;   // price_show = ราคาตามวิธีชำระ (ใบเสนอราคาแบบบัตร)
       const disc = Number(it.discount) || 0;   // ส่วนลดรายรายการ (mig 142)
       // snapshot ของใบส่งของ/ใบเสร็จเก็บ amount สุทธิ (หักส่วนลดแล้ว) — ใช้ค่านั้นก่อน ค่อย fallback คำนวณเอง
-      return { name: it.name || it.item_code || it.material_code || "-", qty, unit: it.unit || "", price, amount: it.amount != null ? (Number(it.amount) || 0) : qty * price - disc, disc, free: it.section === "free" };
+      return { name: it.name || it.item_code || it.material_code || "-", description: it.description || "", qty, unit: it.unit || "", price, amount: it.amount != null ? (Number(it.amount) || 0) : qty * price - disc, disc, free: it.section === "free" };
     });
   }, [doc, type]);
 
@@ -127,7 +135,7 @@ export default function DocPeek({ type, no, onClose, onOpenFull }) {
                   <div className="cd-sec">รายการ ({lines.length})</div>
                   {lines.map((l, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: "1px dashed var(--line-2)", fontSize: 12.5 }}>
-                      <span style={{ flex: 1 }}>{l.name}</span>
+                      <span style={{ flex: 1 }}>{l.name}{l.description && <span style={{ display: "block", whiteSpace: "pre-wrap", color: "var(--ink-3)", marginTop: 4 }}>{l.description}</span>}</span>
                       <span style={{ color: "var(--ink-3)", whiteSpace: "nowrap" }}>{fmtNum(l.qty)} {l.unit} × {fmtBaht(l.price)}{l.disc > 0 && <span style={{ color: "var(--down)" }}> −{fmtBaht(l.disc)}</span>}</span>
                       <span style={{ fontWeight: 700, whiteSpace: "nowrap", minWidth: 78, textAlign: "right" }}>{l.free ? "แถม" : fmtBaht(l.amount)}</span>
                     </div>

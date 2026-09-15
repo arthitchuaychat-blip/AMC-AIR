@@ -52,7 +52,7 @@ export default function DocCapture({ type, no, onReady, onError }) {
           if (!x) throw new Error("ไม่พบใบวางบิล " + no);
           alive && setData({ companies, x });
         } else throw new Error("ชนิดเอกสารไม่รองรับ");
-      } catch (e) { onError && onError(e.message || String(e)); }
+      } catch (e) { if (alive) onError && onError(e.message || String(e)); }
     })();
     return () => { alive = false; };
   }, [type, no]);
