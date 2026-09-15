@@ -1,0 +1,52 @@
+{
+  "verified_at": "2026-09-15T06:01:30.458Z",
+  "release": "v838",
+  "merge_commit": "66ec9b73b1c01ca0e40b89446231df452528dac6",
+  "verified_tree": "c927e2ff991ec9154c2a426ba7f775db0b93b4cf",
+  "deployment_statuses": [
+    {
+      "context": "Vercel – amc-air-6os6",
+      "state": "success",
+      "url": "https://vercel.com/arthit-chuaychat-s-projects/amc-air-6os6/qG5NadZLmSzKGi5tvu8WSie53e3j"
+    },
+    {
+      "context": "Vercel – amc-air-497i",
+      "state": "success",
+      "url": "https://vercel.com/arthit-chuaychat-s-projects/amc-air-497i/HwLq7qUNuDE2Tnmyn2joxj44gzeX"
+    },
+    {
+      "context": "Vercel – amc-air-tkaw",
+      "state": "success",
+      "url": "https://vercel.com/arthit-chuaychat-s-projects/amc-air-tkaw/7raSB7qUg7m3aWsiVD6bgvCdvFcq"
+    },
+    {
+      "context": "Vercel – amc-air",
+      "state": "success",
+      "url": "https://vercel.com/arthit-chuaychat-s-projects/amc-air/DUN5qZpJwwpGjXrz14Hsn8kggfLN"
+    }
+  ],
+  "domains": [
+    {
+      "url": "https://app.amcair.net/",
+      "login_screen_loaded": true,
+      "script": "/assets/index-BGVjJmEo.js",
+      "stylesheet": "/assets/index-BMuQmCGu.css",
+      "stylesheet_matches_verified_local_build": true
+    },
+    {
+      "url": "https://amc-air.vercel.app/",
+      "login_screen_loaded": true,
+      "script": "/assets/index-BGVjJmEo.js",
+      "stylesheet": "/assets/index-BMuQmCGu.css",
+      "stylesheet_matches_verified_local_build": true
+    }
+  ],
+  "version_evidence": "Production deployment points to verified source tree containing BUILD v838; both live domains load the new sales stylesheet.",
+  "verification_limits": "Login screens and asset references checked in Chrome. Production JS asset could not be opened directly by the browser client, so its literal BUILD value was not separately read. No authenticated customer-record interactions or physical printer tests.",
+  "temporary_qa_removed_from_release_tree": true,
+  "assertions": 743,
+  "rendered_outputs": 140,
+  "chrome_layout_cases": 60,
+  "chrome_failures": 0,
+  "live_customer_records_modified": false
+}
