@@ -2,6 +2,8 @@
 // money — always 2 decimals
 export const fmtBaht = (n) => "฿" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const fmtBaht2 = fmtBaht;
+// Sales documents label the currency in the column heading; preserve the money formatting.
+export const fmtDocAmount = (n) => fmtBaht(n).slice(1);
 export const fmtNum = (n) => Math.round(n || 0).toLocaleString("en-US");
 export const fmtCompact = (n) => {
   n = n || 0;

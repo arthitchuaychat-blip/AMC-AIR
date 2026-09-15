@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles.css";
 import "./design-system.css";
+import "./sales-documents.css";
 import App from "./App";
 
 // URL ของบันเดิลหลักที่กำลังรันอยู่ (…/assets/index-XXXX.js) — ใช้เทียบว่ามี deploy ใหม่หรือยัง

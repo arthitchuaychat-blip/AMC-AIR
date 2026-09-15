@@ -1,0 +1,35 @@
+{
+  "date": "2026-09-15",
+  "ssr_assertions": 743,
+  "rendered_outputs": 140,
+  "chrome_layout_cases": 60,
+  "chrome_failures": [],
+  "scenarios": [
+    "full",
+    "standard",
+    "long",
+    "novat"
+  ],
+  "copies": [
+    "ต้นฉบับ",
+    "สำเนา",
+    "both"
+  ],
+  "fonts": [
+    "Sarabun 400",
+    "Sarabun 600",
+    "Sarabun 700"
+  ],
+  "checks": [
+    "A4 height",
+    "repeated header",
+    "matching column groups",
+    "item preservation",
+    "one signature section per document",
+    "original/copy palette"
+  ],
+  "css_sha256": "03a3be8e2667d623fd854589ecee1e402198e482c9a6766c20078acfc9975225",
+  "pagination_sha256": "84cff8211e1bf1d364917a701de89d652efeb522e2e0d39a6b26a7a9c95fde39",
+  "physical_printer_tested": false,
+  "synthetic_only": true
+}

@@ -4,7 +4,7 @@ import SalesWhtControl from "./SalesWhtControl";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { listAdjustmentNotes, saveAdjustmentNote, setAdjustmentNoteStatus, deleteAdjustmentNote, listReceipts, listQuotations, listDocLinks, getCompanies, docNoTaken } from "../lib/api";
-import { fmtBaht2, custCode, round2, matchText } from "../lib/format";
+import { fmtBaht2, custCode, round2, matchText, fmtDocAmount } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
@@ -336,7 +336,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
           });
         }
         return (
-          <DocSlip company={co} titleTh={K2.th} titleEn={K2.en} docNo={printA.note_no}
+          <DocSlip currencyUnit="บาท" company={co} titleTh={K2.th} titleEn={K2.en} docNo={printA.note_no}
             metaRows={[{ label: "วันที่", value: printA.issue_date }, { label: "อ้างอิงใบเสร็จ", value: printA.receipt_no }, { label: "อ้างอิงใบแจ้งหนี้", value: printA.invoice_no }, { label: "อ้างอิงใบเสนอ", value: printA.quote_no }]}
             projectTitle={`เหตุผลการ${K2.verb}: ${printA.reason || "-"}`}
             customer={{ name: printA.customerName, code: custCode(printA.customerCode), taxId: printA.customerTaxId, branch: printA.customerBranch, address: printA.customerAddr, contactName: printA.mainContactName, contactPhone: printA.mainContactPhone, siteName: printA.siteName, siteAddress: printA.siteAddress, siteContactName: printA.siteContactName, siteContactPhone: printA.siteContactPhone, mapUrl: printA.mapUrl }}
@@ -344,18 +344,18 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
             signLabels={["ผู้ออกเอกสาร", "ผู้รับเอกสาร / ลูกค้า"]} signUrl={printA.sign_url} signName={printA.sign_name}
             unitHead="หน่วยละ" amountHead={`ยอด${K2.verb}`}
             totals={<div className="doc-totals">
-              <div><span>รวมยอด{K2.verb}ก่อนภาษี</span><b>{fmtBaht(printA.base)}</b></div>
-              {printA.is_vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(printA.vat_amt)}</b></div> : null}
-              <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtBaht(printA.total)}</b></div>
-              {printA.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {rate}%</span><b>− {fmtBaht(printA.wht_amt)}</b></div>}
-              <div className="doc-grand"><span>ยอดสุทธิ ({K2.verb})</span><b>{fmtBaht(printA.net)}</b></div>
+              <div><span>รวมยอด{K2.verb}ก่อนภาษี</span><b>{fmtDocAmount(printA.base)}</b></div>
+              {printA.is_vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(printA.vat_amt)}</b></div> : null}
+              <div className="doc-grand"><span>รวมทั้งสิ้น</span><b>{fmtDocAmount(printA.total)}</b></div>
+              {printA.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {rate}%</span><b>− {fmtDocAmount(printA.wht_amt)}</b></div>}
+              <div className="doc-grand"><span>ยอดสุทธิ ({K2.verb})</span><b>{fmtDocAmount(printA.net)}</b></div>
             </div>}>
             {its.map((it, i) => (
               <tr key={i}><td>{i + 1}</td><td>{it.code || "-"}</td>
                 <td>{it.name}{it.desc ? <div className="doc-item-desc">{it.desc}</div> : null}
-                  {perLineWht[i] > 0 && <div className="doc-item-desc" style={{ color: "#b91c1c" }}>↳ หัก ณ ที่จ่าย {rate}% จากยอด {fmtBaht(perLineBase[i])} = − {fmtBaht(perLineWht[i])}</div>}
+                  {perLineWht[i] > 0 && <div className="doc-item-desc" style={{ color: "#b91c1c" }}>↳ หัก ณ ที่จ่าย {rate}% จากยอด {fmtDocAmount(perLineBase[i])} = − {fmtDocAmount(perLineWht[i])}</div>}
                 </td>
-                <td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.price)}</td><td className="r">{fmtBaht(Number(it.amount) || (Number(it.qty) * Number(it.price)))}</td></tr>
+                <td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtDocAmount(it.price)}</td><td className="r">{fmtDocAmount(Number(it.amount) || (Number(it.qty) * Number(it.price)))}</td></tr>
             ))}
           </DocSlip>
         );
