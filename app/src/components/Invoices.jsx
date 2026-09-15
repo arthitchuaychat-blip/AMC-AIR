@@ -4,7 +4,7 @@ import SalesWhtControl from "./SalesWhtControl";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { salesWhtLocks, listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks, listCustomers, docNoTaken } from "../lib/api";
-import { fmtBaht2, custCode, round2, matchText, matchPhone, fmtDocDate } from "../lib/format";
+import { fmtBaht2, custCode, round2, matchText, matchPhone, fmtDocDate, fmtDocAmount } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
@@ -400,24 +400,24 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         const svcAmtP = whtItems.reduce((a, i) => a + (Number(i.amount) || 0), 0);
         const whtBaseP = allAmtP > 0 ? round2((printI.base || 0) * svcAmtP / allAmtP) : 0;
         return (
-        <DocSlip company={co} titleTh="ใบส่งของ / ใบแจ้งหนี้" titleEn="DELIVERY NOTE / INVOICE" docNo={printI.invoice_no} discountCol={(q?.items || []).some((x) => Number(x.discount) > 0)}
+        <DocSlip currencyUnit="บาท" company={co} titleTh="ใบส่งของ / ใบแจ้งหนี้" titleEn="DELIVERY NOTE / INVOICE" docNo={printI.invoice_no} discountCol={(q?.items || []).some((x) => Number(x.discount) > 0)}
           metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, { label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }]}
           projectTitle={printI.title}
           customer={{ name: printI.customerName, code: custCode(printI.customerCode), taxId: printI.customerTaxId, branch: printI.customerBranch, address: printI.customerAddr, contactName: printI.mainContactName, contactPhone: printI.mainContactPhone, siteName: printI.siteName, siteAddress: printI.siteAddress, siteContactName: printI.siteContactName, siteContactPhone: printI.siteContactPhone, mapUrl: printI.mapUrl }}
           terms={printI.note || co.default_terms} termsPayment={printI.terms_payment} termsFreebies={printI.terms_freebies} termsWarranty={printI.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]} signUrl={printI.sign_url} signName={printI.sign_name}
           totals={<div className="doc-totals">
-            <div><span>รวมเป็นเงิน</span><b>{fmtBaht(q?.subtotal || 0)}</b></div>
-            {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(q.discount)}</b></div>}
-            {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(q.vatAmt)}</b></div> : null}
-            <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtBaht(q?.grand || 0)}</b></div>
+            <div><span>รวมเป็นเงิน</span><b>{fmtDocAmount(q?.subtotal || 0)}</b></div>
+            {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtDocAmount(q.discount)}</b></div>}
+            {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(q.vatAmt)}</b></div> : null}
+            <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtDocAmount(q?.grand || 0)}</b></div>
             <div style={{ marginTop: 4 }}><span>งวดที่ {printI.installment} ({Math.round(printI.pct)}%)</span><b /></div>
             {/* แสดงมูลค่า+VAT ของ "งวดนี้" ตามที่เรียกเก็บจริง (ม.86/4) — เดิมมีแต่ VAT ของทั้งสัญญาด้านบน */}
-            {Number(printI.base) > 0 && <div><span>มูลค่าก่อนภาษีงวดนี้</span><b>{fmtBaht(printI.base)}</b></div>}
-            {Number(printI.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtBaht(printI.vat_amt)}</b></div>}
-            <div className="doc-grand"><span>ยอดชำระงวดนี้</span><b>{fmtBaht(printI.total)}</b></div>
-            {printI.wht_amt > 0 && <div className="doc-wht-note"><span>ฐานค่าบริการที่ถูกหัก ณ ที่จ่าย</span><b>{fmtBaht(whtBaseP)}</b></div>}
-            {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {whtRate(printI.wht_rate)}% (ตอนชำระ)</span><b>− {fmtBaht(printI.wht_amt)}</b></div>}
-            {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtBaht(printI.total - printI.wht_amt)}</b></div>}
+            {Number(printI.base) > 0 && <div><span>มูลค่าก่อนภาษีงวดนี้</span><b>{fmtDocAmount(printI.base)}</b></div>}
+            {Number(printI.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtDocAmount(printI.vat_amt)}</b></div>}
+            <div className="doc-grand"><span>ยอดชำระงวดนี้</span><b>{fmtDocAmount(printI.total)}</b></div>
+            {printI.wht_amt > 0 && <div className="doc-wht-note"><span>ฐานค่าบริการที่ถูกหัก ณ ที่จ่าย</span><b>{fmtDocAmount(whtBaseP)}</b></div>}
+            {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {whtRate(printI.wht_rate)}% (ตอนชำระ)</span><b>− {fmtDocAmount(printI.wht_amt)}</b></div>}
+            {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtDocAmount(printI.total - printI.wht_amt)}</b></div>}
           </div>}>
           {/* ราคาบรรทัดพิมพ์ = price_show (รวมค่าบัตรแล้ว) ให้บวกลงตัวกับยอดรวมที่คิดจาก price_show — เหมือนใบเสนอราคา */}
           {(() => {
@@ -442,9 +442,9 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
               return (
                 <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td>
                   <td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}
-                    {ok && <div className="doc-item-desc" style={{ color: "#b91c1c" }}>↳ หัก ณ ที่จ่าย {rate}% จากยอด {fmtBaht(perLineBase[i])} = − {fmtBaht(perLineWht[i])}</div>}
+                    {ok && <div className="doc-item-desc" style={{ color: "#b91c1c" }}>↳ หัก ณ ที่จ่าย {rate}% จากยอด {fmtDocAmount(perLineBase[i])} = − {fmtDocAmount(perLineWht[i])}</div>}
                   </td>
-                  <td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
+                  <td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtDocAmount(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtDocAmount(it.discount) : "-"}</td>}<td className="r">{fmtDocAmount(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
               );
             });
           })()}

@@ -1,7 +1,7 @@
 import React from "react";
 import { listBillingNotes, saveBillingNote, setBillingNoteStatus, deleteBillingNote, listInvoices, listCustomers, getCompanies, listDocLinks, docNoTaken } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
-import { fmtBaht, custCode, fmtDocDate, matchText, matchPhone } from "../lib/format";
+import { fmtBaht, custCode, fmtDocDate, matchText, matchPhone, fmtDocAmount } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
@@ -203,20 +203,20 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
         const has = (c) => c && Object.keys(c).length;
         const co = printB.vat ? (has(companies.vat) ? companies.vat : companies.novat || {}) : (has(companies.novat) ? companies.novat : companies.vat || {});
         return (
-          <DocSlip company={co} titleTh="ใบวางบิล / ใบแจ้งหนี้รวม" titleEn="BILLING NOTE" docNo={printB.billing_no}
+          <DocSlip currencyUnit="บาท" company={co} titleTh="ใบวางบิล / ใบแจ้งหนี้รวม" titleEn="BILLING NOTE" docNo={printB.billing_no}
             metaRows={[{ label: "วันที่", value: printB.issue_date }, { label: "จำนวนใบแจ้งหนี้", value: String(printB.invoices.length) }]}
             customer={{ name: printB.customerName, code: custCode(printB.customerCode), taxId: printB.customerTaxId, branch: printB.customerBranch, address: printB.customerAddr, contactName: printB.mainContactName, contactPhone: printB.mainContactPhone, siteName: printB.siteName, siteAddress: printB.siteAddress, siteContactName: printB.siteContactName, siteContactPhone: printB.siteContactPhone, mapUrl: printB.mapUrl }}
             terms={printB.note} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]} signUrl={printB.sign_url} signName={printB.sign_name}
             totals={<div className="doc-totals">
               {printB.wht > 0 ? <>
-                <div><span>ยอดวางบิลรวม</span><b>{fmtBaht(printB.total)}</b></div>
-                <div><span>หัก ณ ที่จ่าย</span><b>− {fmtBaht(printB.wht)}</b></div>
-                <div className="doc-grand"><span>ยอดสุทธิที่ต้องชำระ</span><b>{fmtBaht(printB.net)}</b></div>
-              </> : <div className="doc-grand"><span>ยอดวางบิลรวมทั้งสิ้น</span><b>{fmtBaht(printB.total)}</b></div>}
+                <div><span>ยอดวางบิลรวม</span><b>{fmtDocAmount(printB.total)}</b></div>
+                <div><span>หัก ณ ที่จ่าย</span><b>− {fmtDocAmount(printB.wht)}</b></div>
+                <div className="doc-grand"><span>ยอดสุทธิที่ต้องชำระ</span><b>{fmtDocAmount(printB.net)}</b></div>
+              </> : <div className="doc-grand"><span>ยอดวางบิลรวมทั้งสิ้น</span><b>{fmtDocAmount(printB.total)}</b></div>}
             </div>}>
             {/* พิมพ์เฉพาะใบแจ้งหนี้ที่ยัง live — ใบยกเลิกห้ามโผล่ในใบวางบิลที่ส่งลูกค้า (ยอดรวมจาก api ก็ตัดออกแล้ว) */}
             {liveInv(printB).map((iv, i) => (
-              <tr key={iv.invoice_no}><td>{i + 1}</td><td>{iv.invoice_no}</td><td>ใบแจ้งหนี้ · งวดที่ {iv.installment} ({Math.round(iv.pct)}%){iv.issue_date ? ` · ${iv.issue_date}` : ""}</td><td className="r" /><td className="r" /><td className="r">{fmtBaht(iv.total)}</td></tr>
+              <tr key={iv.invoice_no}><td>{i + 1}</td><td>{iv.invoice_no}</td><td>ใบแจ้งหนี้ · งวดที่ {iv.installment} ({Math.round(iv.pct)}%){iv.issue_date ? ` · ${iv.issue_date}` : ""}</td><td className="r" /><td className="r" /><td className="r">{fmtDocAmount(iv.total)}</td></tr>
             ))}
           </DocSlip>
         );

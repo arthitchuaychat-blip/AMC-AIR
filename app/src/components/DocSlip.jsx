@@ -34,7 +34,7 @@ function officerSign() {
 }
 
 // terms = "หมายเหตุ (ลูกค้าเห็น)" ของเอกสารใบนั้น — คนละตัวกับหมายเหตุภายในซึ่งห้ามพิมพ์ออกเอกสารเด็ดขาด
-export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, partyLabel = "ลูกค้า", projectTitle, terms, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], signUrl, signName, children, totals, discountCol = false, internal = false, unitHead = "หน่วยละ", amountHead = "จำนวนเงิน" }) {
+export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRows = [], customer = {}, partyLabel = "ลูกค้า", projectTitle, terms, termsPayment, termsFreebies, termsWarranty, bank, paymentInfo, signLabels = [], signUrl, signName, children, totals, discountCol = false, internal = false, unitHead = "หน่วยละ", amountHead = "จำนวนเงิน", currencyUnit }) {
   const co = company || {};
   // explicit per-document signature (saved on the doc) wins; otherwise fall back to the device toggle
   const sign = signUrl !== undefined ? (signUrl ? { url: signUrl, name: signName || "" } : null) : officerSign();
@@ -96,7 +96,7 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
           {/* column-header strip — shares the colgroup with the body so columns align */}
           <table className="doc-colstrip"><ColGroup discountCol={discountCol} /><tbody>
             <tr className="doc-colhead">
-              <th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">{unitHead}</th>{discountCol && <th className="r">ส่วนลด</th>}<th className="r">{amountHead}</th>
+              <th>#</th><th>รหัส</th><th>รายการ</th><th className="r">จำนวน</th><th className="r">{unitHead}</th>{discountCol && <th className="r">ส่วนลด</th>}<th className="r">{amountHead}{currencyUnit ? ` (${currencyUnit})` : ""}</th>
             </tr>
           </tbody></table>
         </div>

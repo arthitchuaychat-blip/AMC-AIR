@@ -7,7 +7,7 @@ import WhtEvidenceModal from "./WhtEvidenceModal";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
 import { salesWhtLocks, listReceipts, listInvoices, listQuotations, saveReceipt, deleteReceipt, setReceiptStatus, setReceiptWht, getCompanies, listDocLinks, flowaccountSendDoc, saveReceiptFlowAccount, claimReceiptFlowAccount, releaseReceiptFlowAccount, clearReceiptFlowAccount, docNoTaken } from "../lib/api";
-import { fmtBaht2, custCode, round2, matchText, fmtDocDate } from "../lib/format";
+import { fmtBaht2, custCode, round2, matchText, fmtDocDate, fmtDocAmount } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
 import DocSlip from "./DocSlip";
@@ -388,24 +388,24 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
         const paid = printR.status === "paid";
         const q = quoteByNo[printR.quote_no];
         return (
-        <DocSlip company={co} titleTh={baseTitle} titleEn={isVat ? "RECEIPT / TAX INVOICE" : "RECEIPT"} docNo={printR.receipt_no} discountCol={(q?.items || []).some((x) => Number(x.discount) > 0)}
+        <DocSlip currencyUnit="บาท" company={co} titleTh={baseTitle} titleEn={isVat ? "RECEIPT / TAX INVOICE" : "RECEIPT"} docNo={printR.receipt_no} discountCol={(q?.items || []).some((x) => Number(x.discount) > 0)}
           metaRows={[{ label: "วันที่", value: printR.issue_date }, { label: "อ้างอิงใบแจ้งหนี้", value: printR.invoice_no }, { label: "อ้างอิงใบเสนอ", value: printR.quote_no }, { label: "อ้างอิง BOQ", value: printR.boq_no }, { label: "อ้างอิงใบงาน", value: printR.job_no }]}
           projectTitle={printR.title}
           customer={{ name: printR.customerName, code: custCode(printR.customerCode), taxId: printR.customerTaxId, branch: printR.customerBranch, address: printR.customerAddr, contactName: printR.mainContactName, contactPhone: printR.mainContactPhone, siteName: printR.siteName, siteAddress: printR.siteAddress, siteContactName: printR.siteContactName, siteContactPhone: printR.siteContactPhone, mapUrl: printR.mapUrl }}
           terms={printR.note} termsPayment={printR.terms_payment} termsFreebies={printR.terms_freebies} termsWarranty={printR.terms_warranty} bank={co.bank_info} signLabels={["ผู้รับเงิน", "ผู้จ่ายเงิน"]} signUrl={printR.sign_url} signName={printR.sign_name}
-          paymentInfo={paid ? `ได้รับชำระเงินแล้ว · วันที่ ${printR.issue_date || "-"} · โดย ${printR.payment_method || "-"} · จำนวน ${fmtBaht(printR.net)}` : null}
+          paymentInfo={paid ? `ได้รับชำระเงินแล้ว · วันที่ ${printR.issue_date || "-"} · โดย ${printR.payment_method || "-"} · จำนวน ${fmtDocAmount(printR.net)}` : null}
           totals={<div className="doc-totals">
-            <div><span>รวมเป็นเงิน</span><b>{fmtBaht(q?.subtotal || 0)}</b></div>
-            {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtBaht(q.discount)}</b></div>}
-            {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtBaht(q.vatAmt)}</b></div> : null}
-            <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtBaht(q?.grand || 0)}</b></div>
+            <div><span>รวมเป็นเงิน</span><b>{fmtDocAmount(q?.subtotal || 0)}</b></div>
+            {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtDocAmount(q.discount)}</b></div>}
+            {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(q.vatAmt)}</b></div> : null}
+            <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtDocAmount(q?.grand || 0)}</b></div>
             <div style={{ marginTop: 4 }}><span>รับชำระตามใบแจ้งหนี้ {printR.invoice_no}{inv ? ` · งวดที่ ${inv.installment} (${Math.round(inv.pct)}%)` : ""}</span><b /></div>
             {/* ใบกำกับภาษีต้องแสดง "มูลค่า + VAT ของยอดที่เรียกเก็บจริง" (ม.86/4) — เดิมโชว์ VAT ของทั้งสัญญา ลูกค้าเครดิตภาษีซื้อผิดยอด */}
-            {Number(printR.base) > 0 && <div><span>มูลค่าก่อนภาษีงวดนี้</span><b>{fmtBaht(printR.base)}</b></div>}
-            {Number(printR.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtBaht(printR.vat_amt)}</b></div>}
-            <div className="doc-grand"><span>รวมเป็นเงินงวดนี้</span><b>{fmtBaht(printR.total)}</b></div>
-            {printR.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {parseWhtRate(printR.wht_rate)}%</span><b>− {fmtBaht(printR.wht_amt)}</b></div>}
-            <div className="doc-grand"><span>รับเงินสุทธิ</span><b>{fmtBaht(printR.net)}</b></div>
+            {Number(printR.base) > 0 && <div><span>มูลค่าก่อนภาษีงวดนี้</span><b>{fmtDocAmount(printR.base)}</b></div>}
+            {Number(printR.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtDocAmount(printR.vat_amt)}</b></div>}
+            <div className="doc-grand"><span>รวมเป็นเงินงวดนี้</span><b>{fmtDocAmount(printR.total)}</b></div>
+            {printR.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {parseWhtRate(printR.wht_rate)}%</span><b>− {fmtDocAmount(printR.wht_amt)}</b></div>}
+            <div className="doc-grand"><span>รับเงินสุทธิ</span><b>{fmtDocAmount(printR.net)}</b></div>
           </div>}>
           {/* ราคาบรรทัดพิมพ์ = price_show (รวมค่าบัตรแล้ว) ให้บวกลงตัวกับยอดรวม — เหมือนใบเสนอราคา */}
           {(() => {
@@ -431,9 +431,9 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
               return (
                 <tr key={i}><td>{i + 1}</td><td>{it.item_code || "-"}</td>
                   <td>{it.name}{it.description ? <div className="doc-item-desc">{it.description}</div> : null}
-                    {ok && <div className="doc-item-desc" style={{ color: "#b91c1c" }}>↳ หัก ณ ที่จ่าย {rate}% จากยอด {fmtBaht(perLineBase[i])} = − {fmtBaht(perLineWht[i])}</div>}
+                    {ok && <div className="doc-item-desc" style={{ color: "#b91c1c" }}>↳ หัก ณ ที่จ่าย {rate}% จากยอด {fmtDocAmount(perLineBase[i])} = − {fmtDocAmount(perLineWht[i])}</div>}
                   </td>
-                  <td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtBaht(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtBaht(it.discount) : "-"}</td>}<td className="r">{fmtBaht(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
+                  <td className="r">{Number(it.qty)} {it.unit || ""}</td><td className="r">{fmtDocAmount(it.price_show ?? it.unit_price)}</td>{hasD && <td className="r">{Number(it.discount) > 0 ? "− " + fmtDocAmount(it.discount) : "-"}</td>}<td className="r">{fmtDocAmount(Number(it.qty) * Number(it.price_show ?? it.unit_price) - (Number(it.discount) || 0))}</td></tr>
               );
             });
           })()}
