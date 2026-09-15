@@ -107,8 +107,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- เปิดสายไปเซิร์ฟเวอร์รูป/ข้อมูล (Supabase) + ไลบรารีล่วงหน้า → รูปสินค้า/ผลงานโหลดเร็วขึ้น (ประหยัด DNS+TLS ครั้งแรก) -->
 <link rel="preconnect" href="https://tpyrlxhoyghawqvsphfj.supabase.co" crossorigin />
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-<!-- IBM Plex Sans Thai (หลัก 400–700) + Noto Sans Thai เฉพาะน้ำหนัก 800 (หัวข้อหนาพิเศษ) — ตัดน้ำหนัก Noto ที่ซ้ำ IBM Plex ออก เบาลง 4 ไฟล์ -->
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai:wght@800&display=swap" rel="stylesheet" />
+<!-- Future Air: Kanit headings + Anuphan body. -->
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=Kanit:wght@400;500&display=swap" rel="stylesheet" />
 
 <style>
 :root{
@@ -569,8 +569,11 @@ footer{background:#0b1b33}
 .order-ok p{font-size:13.5px;color:var(--ink-2);line-height:1.7;margin:0 0 18px}
 .order-ok .btn{justify-content:center}
 </style>
+<link rel="stylesheet" href="/future-air.css" />
+<script src="/landing-catalog.js"></script>
+<script src="/future-air.js" defer></script>
 </head>
-<body>
+<body class="future-air">
 <!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KNT3RKJB"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -658,6 +661,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <button class="hs-arrow hs-prev" id="hsPrev" aria-label="ก่อนหน้า">‹</button>
   <button class="hs-arrow hs-next" id="hsNext" aria-label="ถัดไป">›</button>
   <div class="hs-dots" id="hsDots"></div>
+  <button type="button" class="fa-cover-pause" id="hsPause" aria-pressed="false">พักภาพ</button>
 </section>
 
 <section class="hero">
@@ -681,9 +685,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <button class="go" id="hsGo">ค้นหา</button>
       </div>
     </div>
+    <div class="fa-scene" role="img" aria-label="กราฟิกเครื่องปรับอากาศและการไหลของอากาศ">
+      <div class="fa-grid"></div><div class="fa-orbit"></div><div class="fa-ac"><span></span></div>
+      <div class="fa-filter"></div><div class="fa-stream"></div><div class="fa-base"></div>
+      <span class="fa-art-label one">AIR CONDITIONING</span><span class="fa-art-label two">INSTALLATION</span><span class="fa-art-label three">AMC AIR</span>
+    </div>
     <div class="hero-pf">
       <div class="hero-pf-grid" id="heroPf"></div>
       <button class="hero-pf-all" id="heroPfAll">ดูผลงานทั้งหมด →</button>
+    </div>
+  </div>
+</section>
+
+<section class="fa-paths" aria-labelledby="faChooseTitle">
+  <div class="wrap">
+    <div class="fa-path-head"><h2 id="faChooseTitle">เริ่มจากแอร์ที่คุณต้องการ</h2><a href="/air-conditioners" data-campaign-link>ดูแอร์พร้อมติดตั้งทั้งหมด →</a></div>
+    <div class="fa-path-grid">
+      <a class="fa-path-card" href="/air-conditioners/wall-mounted" data-campaign-link><small>WALL-MOUNTED</small><h3>แอร์ติดผนัง</h3><p>เลือกรุ่นและขนาดให้เหมาะกับห้องและการใช้งาน</p><span class="fa-link">ดูแอร์ติดผนัง →</span></a>
+      <a class="fa-path-card" href="/air-conditioners/cassette" data-campaign-link><small>CASSETTE</small><h3>แอร์ฝังฝ้า</h3><p>จัดความเย็นให้ลงตัวกับร้านค้าและสำนักงาน</p><span class="fa-link">ดูแอร์ฝังฝ้า →</span></a>
+      <a class="fa-path-card" href="/services/installation" data-campaign-link><small>INSTALLATION</small><h3>บริการติดตั้ง</h3><p>ประเมินตำแหน่ง วัสดุ และขอบเขตงานก่อนเริ่ม</p><span class="fa-link">ดูรายละเอียดติดตั้ง →</span></a>
     </div>
   </div>
 </section>
@@ -697,14 +717,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <p class="lead">ตั้งแต่ติดตั้งเครื่องใหม่ ดูแลรักษา ไปจนถึงซ่อมแก้ไข ด้วยทีมช่างผู้ชำนาญ</p>
     </div>
     <div class="row" id="svcRow">
-      <div class="it" data-svc="ติดตั้ง"><span class="em">❄️</span> ติดตั้งแอร์ <small>บ้าน/สำนักงาน เดินท่อเรียบร้อย ทดสอบก่อนส่งมอบ</small>
-        <ul class="svc-li"><li>สำรวจหน้างานฟรี</li><li>แถมชุดวัสดุติดตั้งมาตรฐาน</li><li>รับประกันงานติดตั้ง</li></ul></div>
-      <div class="it" data-svc="ล้าง"><span class="em">💧</span> ล้างแอร์ / บำรุงรักษา <small>ล้างใหญ่ เป่าโฟม ถึงแผงคอยล์ เย็นเต็มระบบ</small>
-        <ul class="svc-li"><li>ตรวจเช็กน้ำยา/ระบบ</li><li>แนะนำรอบล้างทุก 6 เดือน</li><li>มีบริการสัญญารายปี</li></ul></div>
-      <div class="it" data-svc="ย้าย"><span class="em">↔️</span> ย้ายแอร์ <small>ถอด–ติดตั้งจุดใหม่ ครบวงจร</small>
-        <ul class="svc-li"><li>เก็บน้ำยาก่อนถอด</li><li>ติดตั้งใหม่พร้อมทดสอบ</li><li>รับประกันงานติดตั้ง</li></ul></div>
-      <div class="it" data-svc="ซ่อม"><span class="em">🔧</span> ซ่อม / แก้ไข <small>แอร์ไม่เย็น น้ำหยด เสียงดัง วินิจฉัยทุกอาการ</small>
-        <ul class="svc-li"><li>ประเมินอาการก่อนซ่อม</li><li>อะไหล่แท้</li><li>รับประกันงานซ่อม</li></ul></div>
+      <a class="it" data-svc="ติดตั้ง" href="/services/installation" data-campaign-link><span class="em">❄️</span> ติดตั้งแอร์ <small>บ้าน/สำนักงาน เดินท่อเรียบร้อย ทดสอบก่อนส่งมอบ</small>
+        <ul class="svc-li"><li>สำรวจหน้างานฟรี</li><li>แถมชุดวัสดุติดตั้งมาตรฐาน</li><li>รับประกันงานติดตั้ง</li></ul></a>
+      <a class="it" data-svc="ล้าง" href="/services/cleaning" data-campaign-link><span class="em">💧</span> ล้างแอร์ / บำรุงรักษา <small>ล้างใหญ่ เป่าโฟม ถึงแผงคอยล์ เย็นเต็มระบบ</small>
+        <ul class="svc-li"><li>ตรวจเช็กน้ำยา/ระบบ</li><li>แนะนำรอบล้างทุก 6 เดือน</li><li>มีบริการสัญญารายปี</li></ul></a>
+      <a class="it" data-svc="ย้าย" href="/services/relocation" data-campaign-link><span class="em">↔️</span> ย้ายแอร์ <small>ถอด–ติดตั้งจุดใหม่ ครบวงจร</small>
+        <ul class="svc-li"><li>เก็บน้ำยาก่อนถอด</li><li>ติดตั้งใหม่พร้อมทดสอบ</li><li>รับประกันงานติดตั้ง</li></ul></a>
+      <a class="it" data-svc="ซ่อม" href="/services/repair" data-campaign-link><span class="em">🔧</span> ซ่อม / แก้ไข <small>แอร์ไม่เย็น น้ำหยด เสียงดัง วินิจฉัยทุกอาการ</small>
+        <ul class="svc-li"><li>ประเมินอาการก่อนซ่อม</li><li>อะไหล่แท้</li><li>รับประกันงานซ่อม</li></ul></a>
     </div>
   </div>
 </section>
@@ -882,7 +902,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <a href="#top" class="logo"><span class="mark"><img src="logo-sm.png" alt="AMC AIR" width="128" height="128" decoding="async"></span><b>AMC<span> AIR</span></b></a>
         <p style="margin-top:12px;font-size:13.5px;color:#94a3b8">จำหน่าย ติดตั้ง ล้าง ซ่อมแอร์ครบวงจร โดยทีมช่างมืออาชีพ</p>
       </div>
-      <div class="fcol"><h4>บริการ</h4><a href="#services">ติดตั้งแอร์</a><a href="#services">ล้างแอร์</a><a href="#services">ซ่อมแอร์</a></div>
+      <div class="fcol"><h4>บริการ</h4><a href="/services/installation" data-campaign-link>ติดตั้งแอร์</a><a href="/services/cleaning" data-campaign-link>ล้างแอร์</a><a href="/services/repair" data-campaign-link>ซ่อมแอร์</a></div>
       <div class="fcol"><h4>บริษัท</h4><a href="#products">สินค้า</a><a href="#portfolio">ผลงาน</a><a href="#reviews">รีวิว</a><a href="#contact">ติดต่อ</a></div>
     </div>
     <div class="copy">© <span id="yr"></span> AMC AIR · สงวนลิขสิทธิ์</div>
@@ -1243,7 +1263,7 @@ async function loadProducts() {
     allProducts = (data || []).map((r) => ({ code: r.code, name: r.name_th || r.name_en || r.code, price: r.sale_price, photo: r.photo_url, kind: r.kind, category: r.category, tag: r.kind === "service" && SVC_TH[r.category] ? "บริการ · " + SVC_TH[r.category] : KIND_TH[r.kind] || "", brand: r.brand, btu: r.btu, btuMin: r.btu_min, btuMax: r.btu_max, ac_type: r.ac_type, powerCostYear: r.power_cost_year, features: r.features,
       series: r.series, voltage: r.voltage, refrigerant: r.refrigerant, seer: r.seer, pipe: r.pipe_size, energyLabel: r.energy_label }));
     prodNote = allProducts.length ? "" : "ยังไม่มีสินค้าที่เผยแพร่ — ติ๊ก “ขึ้นเว็บ” ที่สินค้าในระบบหลังบ้าน";
-    fillFilters(); renderProducts();
+    fillFilters(); syncCatalogControls(); renderProducts();
     renderCart();   // วาดตะกร้าใหม่หลังรู้จักสินค้าแล้ว — ตัวเลือก "ซื้อพร้อมติดตั้ง" ถึงจะจับคู่ได้
     // มาจากหน้ารายละเอียดสินค้า (/p/…) กด "ใส่ตะกร้า" → /?add=CODE → หยิบลงตะกร้าแล้วเปิดลิ้นชักให้เลย
     const addCode = new URLSearchParams(location.search).get("add");
@@ -1489,12 +1509,16 @@ async function loadServices() {
     const { data } = await sb.from("web_services").select("*").eq("active", true).order("sort").order("id");
     if (!data || !data.length) return;
     const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    $("#svcRow").innerHTML = data.map((s) => `
-      <div class="it"${s.svc ? ` data-svc="${esc(s.svc)}"` : ""}>
+    $("#svcRow").innerHTML = data.map((s) => {
+      const path = window.AMCLandingCatalog?.servicePath(s.svc);
+      const tag = path ? 'a' : 'div';
+      return `
+      <${tag} class="it"${path ? ` href="${path}"` : ''}${s.svc ? ` data-svc="${esc(s.svc)}"` : ""}>
         <span class="em">${s.image_url ? `<img src="${esc(s.image_url)}" alt="" loading="lazy">` : esc(s.emoji || "🔧")}</span> ${esc(s.title)}
         ${s.subtitle ? `<small>${esc(s.subtitle)}</small>` : ""}
         ${s.bullets ? `<ul class="svc-li">${String(s.bullets).split(/\n+/).map((b) => b.trim()).filter(Boolean).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}
-      </div>`).join("");
+      </${tag}>`;
+    }).join("");
   } catch (e) {}
 }
 async function loadPress() {
@@ -1604,7 +1628,10 @@ async function loadBanners() {
   const n = banners.length; let idx = 0, timer = null;
   const dotEls = dots.querySelectorAll(".hs-dot");
   const go = (i) => { idx = (i + n) % n; track.style.transform = `translateX(-${idx * 100}%)`; dotEls.forEach((d, k) => d.classList.toggle("on", k === idx)); };
-  const start = () => { if (n > 1) timer = setInterval(() => go(idx + 1), 2000); };
+  const start = () => { if (n > 1) timer = setInterval(() => {
+    if (document.hidden || $("#hsPause")?.getAttribute("aria-pressed") === "true" || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    go(idx + 1);
+  }, 5000); };
   const reset = () => { clearInterval(timer); start(); };
   $("#hsPrev").onclick = () => { go(idx - 1); reset(); };
   $("#hsNext").onclick = () => { go(idx + 1); reset(); };
@@ -1612,6 +1639,22 @@ async function loadBanners() {
   start();
 }
 
+// Landing deep links initialize the existing catalog once. Filters still work normally afterwards.
+function syncCatalogControls() {
+  [["#fltModel", prodBrand], ["#fltType", prodFilter === 'service' ? '' : prodType],
+   ["#fltBtu", prodFilter === 'service' ? '' : String(prodBtu)], ["#fltService", prodSvc],
+   ["#fltSvcType", prodFilter === 'service' ? prodType : ''], ["#fltSvcBtu", prodFilter === 'service' ? String(prodBtu) : ''],
+   ["#ppModel", prodBrand], ["#ppType", prodType], ["#ppBtu", String(prodBtu)], ["#ppService", prodSvc]]
+    .forEach(([id, value]) => { if ($(id)) $(id).value = value; });
+  if ($("#prodSearch")) $("#prodSearch").value = prodQuery;
+  setProdTab(prodFilter);
+}
+const landingFilters = window.AMCLandingCatalog?.readFilters(location.search);
+if (landingFilters) {
+  prodFilter = landingFilters.kind; prodType = landingFilters.type;
+  prodSvc = landingFilters.service; prodQuery = landingFilters.query;
+  syncCatalogControls();
+}
 renderCart();
 loadProducts();
 loadSeriesInfo();
@@ -1655,6 +1698,7 @@ route();
   $("svcRow")?.addEventListener("click", (e) => {
     const el = e.target.closest(".it[data-svc]");
     if (!el) return;
+    if (el.matches('a[href]')) return;
     if ($("fltService")) $("fltService").value = el.dataset.svc;
     if ($("fltSvcType")) $("fltSvcType").value = "";
     if ($("fltSvcBtu")) $("fltSvcBtu").value = "";
@@ -1719,6 +1763,17 @@ route();
 <script>
 (function () {
   const EN = {
+    "เริ่มจากแอร์ที่คุณต้องการ":"Start with the right air conditioner",
+    "ดูแอร์พร้อมติดตั้งทั้งหมด →":"Explore air conditioners →",
+    "แอร์ติดผนัง":"Wall-mounted air conditioners", "แอร์ฝังฝ้า":"Cassette air conditioners",
+    "บริการติดตั้ง":"Installation service",
+    "เลือกรุ่นและขนาดให้เหมาะกับห้องและการใช้งาน":"Choose a model and capacity for your room and usage.",
+    "จัดความเย็นให้ลงตัวกับร้านค้าและสำนักงาน":"Cooling options for shops and offices.",
+    "ประเมินตำแหน่ง วัสดุ และขอบเขตงานก่อนเริ่ม":"Agree on positions, materials, and scope before work begins.",
+    "ดูแอร์ติดผนัง →":"Explore wall-mounted AC →", "ดูแอร์ฝังฝ้า →":"Explore cassette AC →",
+    "ดูรายละเอียดติดตั้ง →":"View installation details →",
+    "พักภาพ":"Pause slides", "เล่นภาพต่อ":"Play slides",
+    "กราฟิกเครื่องปรับอากาศและการไหลของอากาศ":"Illustration of an air conditioner and airflow",
     // เมนู / หัวเว็บ
     "บริการ": "Services", "สินค้า": "Products", "ผลงาน": "Portfolio", "รีวิว": "Reviews", "ติดต่อ": "Contact",
     "ขอใบเสนอราคา": "Get a Quote", "ตะกร้า": "Cart", "เมนู": "Menu",
