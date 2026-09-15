@@ -34,7 +34,7 @@ function PermissionsCard({ flash, actorRole }) {
   const CELL = { none: { t: "—", c: "#7C8CA1", bg: "var(--surface-2)" }, view: { t: "ดู", c: "#1d4ed8", bg: "#e6efff" }, edit: { t: "แก้ไข", c: "#0a6b3d", bg: "#dcf5e8" } };
   const cycle = (role, mod, editable) => setP((p) => {
     const cur = p[role][mod] || "none";
-    const nxt = (editable ? NEXT : NEXT2)[cur] ?? "none";
+    const nxt = (editable && roleCeiling(role, mod) === "edit" ? NEXT : NEXT2)[cur] ?? "none";
     return { ...p, [role]: { ...p[role], [mod]: nxt } };
   });
   // reset just ONE role's column to its shipped default (doesn't touch other roles' customizations)

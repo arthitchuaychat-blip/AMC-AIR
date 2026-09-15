@@ -4,4 +4,4 @@ export const cacheRevision = () => revision;
 export function invalidateData() { revision++; for (const fn of listeners) fn(); }
 export function onDataInvalidated(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 // Only functions verified STABLE in the production catalog. Unknown RPCs still invalidate.
-export const READ_RPCS = new Set(['hr_today','app_actor_role','jobs_for_team','job_field_refs','job_order_bundle','boq_page','kpi_scorecard','list_teams_for_role','quotation_page','quotation_page_bundle','sales_wht_locks','sub_pending_for_team','team_unread_count']);
+export const READ_RPCS = new Set(['finance_payroll_report','hr_today','app_actor_role','jobs_for_team','job_field_refs','job_order_bundle','boq_page','kpi_scorecard','list_teams_for_role','quotation_page','quotation_page_bundle','sales_wht_locks','sub_pending_for_team','team_unread_count']);

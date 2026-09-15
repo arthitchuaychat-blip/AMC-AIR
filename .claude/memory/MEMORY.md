@@ -1,5 +1,7 @@
 # Memory index
 
+- [Finance payroll read](hr-system.md) — v841: accounting reads base rates and saved payroll through RLS; drafts/history, detail, CSV and print; existing HR approvals unchanged.
+
 - [Document preview](document-preview.md) — v839: sales drawers use actual A4 print/capture output with descriptions, original/copy and zoom; 94 browser checks pass.
 
 - [Sales document review](sales-document-review.md) — approved v838 release: blue originals, gray copies, Sarabun, full-payment labels and print/capture parity; 743 assertions and 60 Chrome layouts pass.
