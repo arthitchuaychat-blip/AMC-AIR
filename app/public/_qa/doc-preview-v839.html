@@ -5,7 +5,7 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn){for(let i=0;i<160;i++){const x=fn();if(x)return x;await wait(50)}throw Error('Preview timeout')}
 const inner=()=>demo.contentDocument;
 const view=()=>inner().querySelector('.doc-preview-viewport');
-async function ready(){await until(()=>view()?.getAttribute('aria-busy')==='false'&&inner().querySelector('.doc-preview-pages')?.textContent);await wait(80);return inner().querySelector('.doc-preview-sheet iframe').contentDocument}
+async function ready(){await wait(120);await until(()=>view()?.getAttribute('aria-busy')==='false'&&inner().querySelector('.doc-preview-pages')?.textContent&&inner().querySelector('.doc-preview-sheet iframe')?.contentDocument?.querySelector('.pg'));await wait(80);return inner().querySelector('.doc-preview-sheet iframe').contentDocument}
 function select(el,val){el.value=val;el.dispatchEvent(new Event('change',{bubbles:true}))}
 function open(){demo.style.width=width.value+'px';demo.style.maxWidth='100%';demo.contentWindow.qaMount(kind.value,scenario.value);}
 document.getElementById('open').onclick=open;kind.onchange=scenario.onchange=open;width.onchange=()=>demo.style.width=width.value+'px';
