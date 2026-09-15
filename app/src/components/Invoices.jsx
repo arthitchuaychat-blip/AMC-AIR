@@ -409,8 +409,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
           totals={<div className="doc-totals">
             <div><span>รวมเป็นเงิน</span><b>{fmtDocAmount(q?.subtotal || 0)}</b></div>
             {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtDocAmount(q.discount)}</b></div>}
-            {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(q.vatAmt)}</b></div> : null}
-            <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtDocAmount(q?.grand || 0)}</b></div>
+            {!fullPayment && q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(q.vatAmt)}</b></div> : null}
+            {!fullPayment && <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtDocAmount(q?.grand || 0)}</b></div>}
             {!fullPayment && <div style={{ marginTop: 4 }}><span>งวดที่ {printI.installment} ({Math.round(printI.pct)}%)</span><b /></div>}
             {/* แสดงมูลค่า+VAT ของ "งวดนี้" ตามที่เรียกเก็บจริง (ม.86/4) — เดิมมีแต่ VAT ของทั้งสัญญาด้านบน */}
             {Number(printI.base) > 0 && <div><span>{fullPayment ? "มูลค่าก่อนภาษี" : "มูลค่าก่อนภาษีงวดนี้"}</span><b>{fmtDocAmount(printI.base)}</b></div>}

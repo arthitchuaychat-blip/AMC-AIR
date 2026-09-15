@@ -131,6 +131,7 @@ function paginateOne(docEl) {
   if (!docEl || !headerEl || !bodyTable) return;
   const copyLabel = docEl.getAttribute("data-copy") || "";
   const copyClass = copyLabel.includes("สำเนา") ? " is-copy" : "";
+  const inlineCopyMark = docEl.classList.contains("doc-sales");
 
   const colgroup = bodyTable.querySelector("colgroup");
   const colgroupHTML = colgroup ? colgroup.outerHTML : "";
@@ -142,8 +143,8 @@ function paginateOne(docEl) {
   const pageH = 297 * MM;
   const usable = pageH - (TOP_MM + BOTTOM_MM) * MM;     // printable height per page
   const headerH = headerEl.offsetHeight;
-  const footerH = 26;                                    // เผื่อที่ให้เลขหน้า
-  const markH = copyLabel ? 26 : 0;                      // เผื่อที่ให้ป้าย ต้นฉบับ/สำเนา
+  const footerH = inlineCopyMark ? 36 : 26;                                    // เผื่อที่ให้เลขหน้า
+  const markH = copyLabel && !inlineCopyMark ? 26 : 0;                      // เผื่อที่ให้ป้าย ต้นฉบับ/สำเนา
   const budget = Math.max(120, usable - headerH - footerH - markH - 6);   // px available for rows on each page
   const heights = rows.map((r) => r.offsetHeight);
 
@@ -176,7 +177,7 @@ function paginateOne(docEl) {
   const html = pages.map((idxs, p) => {
     const body = idxs.map((i) => rows[i].outerHTML).join("");
     return `<div class="pg">`
-      + (copyLabel ? `<div class="pg-copymark${copyClass}">${copyLabel}</div>` : "")
+      + (copyLabel && !inlineCopyMark ? `<div class="pg-copymark${copyClass}">${copyLabel}</div>` : "")
       + `<div class="pg-body">`
       + headerHTML
       + `<table class="doc-sheet">${colgroupHTML}<tbody>${body}</tbody></table>`

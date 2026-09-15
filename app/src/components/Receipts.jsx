@@ -398,13 +398,13 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
           totals={<div className="doc-totals">
             <div><span>รวมเป็นเงิน</span><b>{fmtDocAmount(q?.subtotal || 0)}</b></div>
             {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtDocAmount(q.discount)}</b></div>}
-            {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(q.vatAmt)}</b></div> : null}
-            <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtDocAmount(q?.grand || 0)}</b></div>
-            <div style={{ marginTop: 4 }}><span>รับชำระตามใบแจ้งหนี้ {printR.invoice_no}{inv && !fullPayment ? ` · งวดที่ ${inv.installment} (${Math.round(inv.pct)}%)` : ""}</span><b /></div>
+            {!fullPayment && q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(q.vatAmt)}</b></div> : null}
+            {!fullPayment && <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtDocAmount(q?.grand || 0)}</b></div>}
+            {!fullPayment && <div style={{ marginTop: 4 }}><span>รับชำระตามใบแจ้งหนี้ {printR.invoice_no}{inv && !fullPayment ? ` · งวดที่ ${inv.installment} (${Math.round(inv.pct)}%)` : ""}</span><b /></div>}
             {/* ใบกำกับภาษีต้องแสดง "มูลค่า + VAT ของยอดที่เรียกเก็บจริง" (ม.86/4) — เดิมโชว์ VAT ของทั้งสัญญา ลูกค้าเครดิตภาษีซื้อผิดยอด */}
             {Number(printR.base) > 0 && <div><span>{fullPayment ? "มูลค่าก่อนภาษี" : "มูลค่าก่อนภาษีงวดนี้"}</span><b>{fmtDocAmount(printR.base)}</b></div>}
             {Number(printR.vat_amt) > 0 && <div><span>{fullPayment ? "ภาษีมูลค่าเพิ่ม 7%" : "ภาษีมูลค่าเพิ่ม 7% งวดนี้"}</span><b>{fmtDocAmount(printR.vat_amt)}</b></div>}
-            <div className="doc-grand"><span>{fullPayment ? "รวมเป็นเงิน" : "รวมเป็นเงินงวดนี้"}</span><b>{fmtDocAmount(printR.total)}</b></div>
+            <div className="doc-grand"><span>{fullPayment ? "รวมทั้งสิ้น" : "รวมเป็นเงินงวดนี้"}</span><b>{fmtDocAmount(printR.total)}</b></div>
             {printR.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {parseWhtRate(printR.wht_rate)}%</span><b>− {fmtDocAmount(printR.wht_amt)}</b></div>}
             <div className="doc-grand"><span>รับเงินสุทธิ</span><b>{fmtDocAmount(printR.net)}</b></div>
           </div>}>

@@ -1,12 +1,10 @@
-# Sales document review — v838 draft
+# Sales documents — v838
 
-Owner resumed this task after the head-technician hotfix on 2026-09-15. Draft PR #8 (`work/sales-document-review`); NOT deployed. Head technician fix PR #9 is merged into the branch and must remain.
+Owner approved the mockup and instructed production deployment on 2026-09-15. Release through PR #8 (`work/sales-document-review`), preserving the PR #9 head-technician fix.
 
-- Owner wants a review from quotation through receipt/tax invoice and removal of the B/baht symbol beside amounts.
-- Draft removes currency prefixes from sales documents only; preserves numbers and labels the amount heading in baht.
-- Follow-up aligns capture with native print for branch, saved signatures, card-installment details, installment base/VAT, titles and withholding annotations. Billing count excludes cancelled invoices.
-- `npm run test:sales-documents`: 727 assertions / 140 actual JSX outputs pass. Build and relevant document checks pass. Known unrelated baseline failures are recorded in `docs/qa/v838/sales-document-review.md`.
-- A4 visual approval remains pending: local harness was blocked by browser policy; Vercel preview requires login. Do not claim a visual check or release this draft without completing it. The owner can supply exported PDFs instead.
-- Detailed review and remaining visual recommendations: `docs/qa/v838/sales-document-review.md`. Keep document CSS and pagination stable until visually checked.
-
-- Owner clarification: when one invoice covers exactly 100% of the quote, printed/captured invoice, receipt and billing rows must omit installment numbering. Remove “งวดนี้” from full-payment amount labels as well. Use the unrounded invoice `pct` (numeric/string 100); partial invoices retain their labels. This is presentation only and does not mark invoices as paid.
+- `.doc-sales` scopes the approved design to sales output. New `sales-documents.css`: blue original, gray copy, fixed Sarabun 400/600/700; company logo remains unchanged.
+- `DocSlip` carries the original/copy badge in its repeated header. `printDoc` reserves 36px for the sales footer and omits the old standalone sales badge. BOQ/purchase behavior stays unchanged.
+- Currency prefix removed from sales output only. Exact 100% invoices have no installment labels and no duplicate VAT/full-contract totals. Partial payments retain installment labels; no payment-state or financial-rule changes.
+- Capture content now matches native print, including branches, saved signatures and withholding details. Billing counts exclude cancelled invoices.
+- 743 SSR assertions / 140 outputs pass; 60 Chrome layout cases pass. Real Sarabun weights loaded. The former visual-review blocker is resolved with a temporary synthetic harness, which this release deletes.
+- Full review, screenshots and known unrelated test baseline failures: `docs/qa/v838/sales-document-review.md`. Production verification is recorded there after deployment in a separate JSON record.

@@ -1,42 +1,28 @@
-# Sales document review — v838 (draft)
+# Sales documents — approved v838 release
 
-Date: 2026-09-15. Current main baseline: `70260d86760903eb6590c29b91629e4798c58b8c`.
-Status: code and rendered-content checks complete; A4 visual check pending. Not deployed to production.
+Owner approved the blue-original / gray-copy mockup, Sarabun typography, and production deployment on 2026-09-15. Release is deployed by merging PR #8. Production confirmation is recorded separately after deployment.
 
-## Review
+## Changes
 
-The source has a consistent blue letterhead, billing and site address blocks, numeric columns, totals, terms and signatures. This is a source and rendered-HTML assessment. It is not a visual approval of font sizes, Thai wrapping or printed pagination.
-
-| Document | Assessment and next visual check |
-| --- | --- |
-| Quotation | Keep the basic structure. Currency prefixes add clutter; remove them while stating the unit in the amount heading. Check long Thai descriptions and discount-column width. |
-| Delivery note / invoice | The current installment should be easier to distinguish from the full contract amount. Check the longer combined Thai/English title and multi-page totals. |
-| Receipt / tax invoice | Keep payment confirmation and installment base/VAT visible. Check that the net receipt is clearly the main total and that signatures fit the last page. |
-| Billing note | Invoice-specific headings would be clearer than empty quantity/unit-price columns. Visible invoice count must exclude cancelled invoices. |
-| Credit / debit note | Preserve the reason, references and withholding detail. Check long reasons and note titles. |
-
-## Implemented in this draft
-
-- Remove the leading baht symbol only in sales document amounts, preserving the existing separators, precision and rounding. The amount heading states `(บาท)`.
-- Align capture output with the existing native print output: customer branch, saved signature or explicit no-signature choice, quotation card/discount details, invoice title, installment base/VAT and per-line withholding annotations.
-- Use the same saved values and existing withholding display logic as native print. No tax rule, calculation in the data layer, access policy or document lifecycle change.
-- Owner clarification implemented: a 100% invoice omits installment numbers and uses ordinary amount labels without “งวดนี้”, in both print and capture. Billing rows say “เต็มจำนวน (100%)”. Partial invoices retain installment labels; the check uses the unrounded percentage, so 99.99% does not become a full payment. Values and payment status are unchanged.
-- Native billing count now counts the same live invoices that are printed; cancelled invoices remain excluded.
-- All five document families now produce identical print/capture HTML in the tested cases.
-- Print pagination and the document CSS are unchanged. Visual hierarchy and billing-column redesign remain recommendations pending visual review.
+- Sales documents use Sarabun 400 for text, 600 for emphasis/table headings, and 700 for titles. Explicit sales-only styles are independent of the application font preference.
+- Original documents use blue `#1959b8`; copies use gray `#5d636b`. The palette applies to headings, table headers, customer panels, project labels, total bars and page rules. The company logo and brand name retain their original colors.
+- Original/copy badges are included in the repeated header and remain explicit in monochrome printing. The existing print/capture copy selector and the no-stamp option are preserved.
+- Sales amounts no longer have a baht prefix. The amount heading states `(บาท)`.
+- Exact 100% invoices omit installment numbering and “งวดนี้”. Their summaries show VAT and the final total once; partial invoices retain installment references and contract context. Stored values and paid/unpaid state are unchanged.
+- Print/capture content matches for customer branch, saved signatures, card/discount information, installment base/VAT and withholding annotations. Billing invoice counts exclude cancelled invoices.
+- BOQ, purchasing, application screens, data loading, permission rules and financial calculations are unchanged. Sales pagination reserves 36px for the new footer and puts the badge inside the measured header; non-sales pagination keeps its old reserve and badge.
 
 ## Verification
 
-- `npm run test:sales-documents`: 727 assertions across 140 rendered outputs (14 scenarios × 5 families × 2 paths).
-- Cases cover VAT/no VAT, discount/withholding, 40 rows, full-card/10-month installments, unpaid receipt, credit/debit, saved/empty signatures, cancelled invoices fractional withholding rates, full payments (numeric/string 100%) and the 99.99% boundary.
-- Independent expected amounts verify a 50% installment: base 29,500.00, VAT 2,065.00, withholding 105.00, net 31,460.00. Internal notes remain absent.
-- Compared 20 native print outputs with the pre-change baseline: complete HTML matches after only removing the baht prefix and adding the currency heading. The cancelled-invoice count fix is separately covered by its fixture.
-- Production build passes. Address, customer-note, quotation-WHT, BOQ-internal, sales-WHT and recheck regression tests pass.
-- `npm test` still stops at the pre-existing Receipts unpaid badge check. Undefined-variable scan still reports the pre-existing Settings `m` and API loan `status` references; no new identifiers.
-- Cloud browser reaches the Vercel preview sign-in screen. It cannot inspect the document without authenticated preview access. Earlier local-harness navigation was blocked by browser policy. No visual or printer approval is claimed.
+- `npm run test:sales-documents`: **743 assertions / 140 rendered outputs**, including VAT/no VAT, discounts, full/partial/card payment, unpaid receipts, signatures, cancelled invoices, fractional withholding and 40 rows. Actual print and capture JSX produce matching HTML.
+- Chrome A4 harness: **60 layout cases, zero failures** after correcting the sales-footer reserve. Five families × four scenarios (full, partial, 40 rows, no VAT) × original/copy/both. Checked page height, repeated headers, column groups, row preservation, signatures, colors and actual Sarabun 400/600/700 font loading.
+- The long quotation initially exceeded A4 by about 2 CSS pixels; the increased footer reserve fixed it. Final original/copy screenshots are saved alongside this report.
+- Build passes. Address, customer-note, BOQ-internal and sales-WHT checks pass. `npm test` still stops at the pre-existing Receipts unpaid badge check; the undefined-variable scan still reports existing Settings `m` and API loan `status` references.
+- All visual tests used synthetic records. No customer messages, live document changes or database migrations were performed.
+- Temporary public `_qa/sales-v838.html` existed only to run the isolated browser harness. This release removes it from the application.
 
-## Remaining release gate
+## Limits
 
-Inspect a real A4 preview (including long Thai rows, a partial-payment invoice/receipt, and repeated page headers) before publishing. Use the `_design/` harness procedure in `.claude/memory/print-pagination.md`; synthetic fixtures only. Do not send test documents to customers. Alternatively, the owner can provide exported PDFs for the visual review.
+Chrome page geometry and rendered text were checked; a physical printer was not exercised. Long customer/site details and all payment/warranty terms can legitimately require a second page. Existing record content is retained.
 
-PR #8 remains a draft. The head-technician production fix from PR #9 is preserved on this branch.
+Screenshots: [original](original.jpg), [copy](copy.jpg).

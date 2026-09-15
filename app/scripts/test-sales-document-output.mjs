@@ -40,6 +40,7 @@ for(const key of ['inv','r','a'])Object.assign(fixtures.fractional[key],{wht_rat
 fixtures.fractional.r.net=fixtures.fractional.r.total-52.51;
 fixtures.fractional.a.net=fixtures.fractional.a.total-52.51;
 fixtures.full=scenario();
+for(const key of ['q','inv','r','b','a'])fixtures.full[key].terms_payment='ชำระเต็มจำนวน 100%';
 for(const key of ['inv','r'])Object.assign(fixtures.full[key],{pct:100,base:59000,vat_amt:4130,total:63130,wht_amt:210,net:62920});
 Object.assign(fixtures.full.b,{total:63130,wht:210,net:62920});
 fixtures.fullString=structuredClone(fixtures.full); fixtures.fullString.inv.pct='100'; fixtures.fullString.b.invoices[0].pct='100';
@@ -59,6 +60,7 @@ generated+=`\nconst fixtures=${JSON.stringify(fixtures)}; const fixtureBefore=JS
 fs.writeFileSync(`${out}/renderer.jsx`,generated);
 await build({entryPoints:[`${out}/renderer.jsx`],outfile:`${out}/renderer-${phase}.mjs`,bundle:true,platform:'node',format:'esm',banner:{js:"import{createRequire}from'node:module';const require=createRequire(import.meta.url);"},nodePaths:[app+'/node_modules'],external:['stream','util'],logLevel:'warning'});
 const {default:rendered}=await import(pathToFileURL(`${out}/renderer-${phase}.mjs`));
+if(process.argv[2])fs.writeFileSync(process.argv[2],JSON.stringify(rendered));
 let checks=0;
 function check(ok,message){assert.ok(ok,message);checks++;}
 for(const [key,html] of Object.entries(rendered)){
@@ -74,6 +76,11 @@ for(const mode of ['print','capture']){
    const html=rendered[scenario+'-'+mode+'-'+kind];
    check(!html.includes('งวดที่')&&!html.includes('งวดนี้'),`${scenario}/${mode}/${kind}: full payment has no installment labels`);
    check(html.includes('62,920.00'),`${scenario}/${mode}/${kind}: net total unchanged`);
+  }
+  for(const kind of ['invoice','receipt']){
+   const h=rendered[scenario+'-'+mode+'-'+kind];
+   check(!h.includes('เต็มสัญญา'),`${scenario}/${mode}/${kind}: full-payment summary is not duplicated`);
+   check((h.match(/ภาษีมูลค่าเพิ่ม 7%/g)||[]).length===1,`${scenario}/${mode}/${kind}: VAT appears once`);
   }
   const html=rendered[scenario+'-'+mode+'-invoice'];
   check(html.includes('มูลค่าก่อนภาษี</span><b>59,000.00'),scenario+'/'+mode+': full-payment base retained');

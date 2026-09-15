@@ -40,8 +40,8 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
   const sign = signUrl !== undefined ? (signUrl ? { url: signUrl, name: signName || "" } : null) : officerSign();
   return (
     <div className="print-area">
-      <div className="doc">
-        {/* repeating header (printDoc.js makes this position:fixed on every page) */}
+      <div className={currencyUnit ? "doc doc-sales" : "doc"}>
+        {/* Repeated by the measured page builder in printDoc.js. */}
         <div className="doc-running">
           {/* เอกสารภายใน (เช่น BOQ ที่พิมพ์ต้นทุน) — อยู่ใน .doc-running ที่ printDoc.js ก็อปไปหัวทุกหน้าให้เอง */}
           {internal && <div className="doc-internal">⚠️ เอกสารภายใน — ห้ามส่งลูกค้า</div>}
@@ -58,11 +58,19 @@ export default function DocSlip({ company = {}, titleTh, titleEn, docNo, metaRow
                 {(co.email || co.website) && <div className="doc-co-line">{[co.email, co.website].filter(Boolean).join(" · ")}</div>}
               </div>
             </div>
-            <div className="doc-meta">
+            {currencyUnit ? <div className="doc-version">
+              <span className="doc-version-original">ต้นฉบับ<small>ORIGINAL</small></span>
+              <span className="doc-version-copy">สำเนา<small>COPY</small></span>
+            </div> : <div className="doc-meta">
               <div className="doc-title">{titleTh}</div>
               {titleEn && <div className="doc-title-en">{titleEn}</div>}
-            </div>
+            </div>}
           </div>
+
+          {currencyUnit && <div className="doc-meta">
+            <div className="doc-title">{titleTh}</div>
+            {titleEn && <div className="doc-title-en">{titleEn}</div>}
+          </div>}
 
           <div className="doc-band">
             <div className="doc-cust">
