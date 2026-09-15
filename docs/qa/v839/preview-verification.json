@@ -1,0 +1,35 @@
+{
+  "release": "v839",
+  "date": "2026-09-15",
+  "chrome_checks": 94,
+  "failures": [],
+  "viewport_widths": [
+    1440,
+    390
+  ],
+  "document_types": [
+    "quote",
+    "invoice",
+    "receipt",
+    "billing",
+    "creditnote",
+    "debitnote"
+  ],
+  "checks": [
+    "actual document template and product descriptions",
+    "A4 repeated pages",
+    "full-payment wording",
+    "gray copies match original page count",
+    "40 descriptions retained",
+    "fit width and 150% zoom without repagination",
+    "load error and retry",
+    "close and full-page navigation",
+    "job summary preserved",
+    "scoped sales-document reads"
+  ],
+  "sales_output_assertions": 743,
+  "sales_rendered_outputs": 140,
+  "preview_source_sha256": "e21804996d39855f79785ae58e2bbd343e93b44c693412112b491602975f995b",
+  "physical_printer_tested": false,
+  "synthetic_data_only": true
+}
