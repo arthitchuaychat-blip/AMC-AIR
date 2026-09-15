@@ -13,7 +13,7 @@ function element(attributes={}) {
     click(){this.handlers.click?.();},
   };
 }
-function fixture({search='',saved=null,noteValue='',landing=true}={}) {
+function fixture({search='',saved=null,noteValue='',landing=true,hostname='www.amcair.net'}={}) {
   const link=element({href:'/?interest=แอร์พร้อมติดตั้ง#contact'});
   const note={value:noteValue};
   const slides=[element(),element(),element()];
@@ -22,16 +22,18 @@ function fixture({search='',saved=null,noteValue='',landing=true}={}) {
   const gallery={querySelectorAll:()=>slides,querySelector:selector=>nodes[selector]};
   const pause=element({'aria-pressed':'false'});
   const store=new Map(saved ? [['amc_attr',JSON.stringify(saved)]] : []);
+  const documentEvents={},toasts=[];
   const document={
     body:{classList:{contains:()=>landing}}, referrer:'https://www.google.com/',
     querySelector:selector=>selector==='#leadForm textarea[name="note"]' ? note : null,
     querySelectorAll:selector=>selector==='a[data-campaign-link]' ? [link] : selector==='[data-fa-banners]' ? [gallery] : [],
     getElementById:id=>id==='hsPause' ? pause : null,
+    addEventListener:(name,handler,capture)=>{documentEvents[name]={handler,capture};},
   };
-  vm.runInNewContext(script,{document,location:{search,origin:'https://www.amcair.net'},URL,URLSearchParams,
+  vm.runInNewContext(script,{document,window:{toast:message=>toasts.push(message)},location:{search,origin:'https://'+hostname,hostname},URL,URLSearchParams,
     localStorage:{getItem:key=>store.get(key),setItem:(key,value)=>store.set(key,value)},
   });
-  return {link,note,slides,previous,next,counter,pause,store};
+  return {link,note,slides,previous,next,counter,pause,store,documentEvents,toasts};
 }
 
 test('all three original covers can be paged in both directions, including wraparound',()=>{
@@ -68,4 +70,17 @@ test('pause button retains Thai source labels for the existing reversible langua
   f.pause.click();assert.equal(f.pause.getAttribute('aria-pressed'),'true');assert.equal(f.pause.textContent,'เล่นภาพต่อ');
   f.pause.click();assert.equal(f.pause.getAttribute('aria-pressed'),'false');assert.equal(f.pause.textContent,'พักภาพ');
   assert.equal(f.store.size,0);
+});
+
+test('branch-preview forms stop before existing submission handlers; production stays unchanged',()=>{
+  const f=fixture({hostname:'amc-air-tkaw-git-work-future-team.vercel.app'});
+  assert.equal(f.documentEvents.submit.capture,true);
+  for(const id of ['leadForm','orderForm']){
+    let prevented=false,stopped=false;
+    f.documentEvents.submit.handler({target:{id},preventDefault(){prevented=true;},stopImmediatePropagation(){stopped=true;}});
+    assert.equal(prevented,true);assert.equal(stopped,true);
+  }
+  assert.equal(f.toasts.length,2);
+  assert.equal(fixture().documentEvents.submit,undefined);
+  assert.equal(fixture({hostname:'amc-air-tkaw.vercel.app'}).documentEvents.submit,undefined);
 });

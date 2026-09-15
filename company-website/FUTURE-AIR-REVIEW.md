@@ -20,13 +20,13 @@ The existing company configuration, banner records, service text, portfolio albu
 
 These pages render content and metadata on the server, are included in the sitemap, and read only published public website data. Each page displays up to six relevant catalog items. Prices come from the existing published catalog. Services without published prices offer a quote request, without a fabricated offer. Product details and ordering continue through the existing product / cart flow.
 
-Quote links prefill the existing request form with the selected topic. Existing first-touch attribution and campaign parameters are retained. This update never automatically submits a form or creates an order.
+Quote links prefill the existing request form with the selected topic. Existing first-touch attribution and campaign parameters are retained. This update never automatically submits a form or creates an order. On Vercel branch-preview aliases (`-git-*.vercel.app`), a capture-phase form guard prevents the existing lead/order handlers from writing real requests. Custom production domains and existing production aliases keep their original submission behavior.
 
 ## Verification
 
 Run: `node --test company-website/tests/*.test.cjs` from the repository root.
 
-- 13 tests pass: category isolation, all seven routes, canonical URLs, sitemap, original covers, image pagination, pause control, campaign / quote context, existing notes, unknown-route 404, data failure, public text escaping, product codes containing `/`, and original form / gallery / catalog hooks.
+- 14 tests pass: category isolation, all seven routes, canonical URLs, sitemap, original covers, image pagination, pause control, campaign / quote context, existing notes, unknown-route 404, data failure, public text escaping, product codes containing `/`, original form / gallery / catalog hooks, and preventing real lead/order submission from branch-preview links.
 - All modified browser scripts and server modules parse. CSS and configuration JSON parse; `git diff --check` passes.
 - Source comparison confirms 28 existing commerce / content / routing functions and the entire `AMC_CONFIG` block are unchanged.
 - Read-only checks against the existing public data returned all three active cover images. The air-conditioner page rendered six real catalog entries; the cleaning page displayed the request path without an invented price. Both returned HTTP 200 with successful data reads. No form submission or database write was performed.

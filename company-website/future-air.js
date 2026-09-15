@@ -2,6 +2,16 @@
 (function () {
   'use strict';
   const params = new URLSearchParams(location.search);
+  // Branch previews use the public catalog, but must not create real customer requests.
+  // Production custom domains and existing production aliases keep their original behavior.
+  if (location.hostname.endsWith('.vercel.app') && location.hostname.includes('-git-')) {
+    document.addEventListener('submit', event => {
+      if (!['leadForm','orderForm'].includes(event.target.id)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (typeof window.toast === 'function') window.toast('หน้าทดลอง: ยังไม่ได้ส่งคำขอหรือสร้างรายการจริง');
+    }, true);
+  }
   // Reuse the site's existing attribution key so a landing-page visit keeps its source.
   if (document.body.classList.contains('fa-landing')) {
     try {
