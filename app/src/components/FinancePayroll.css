@@ -1,0 +1,25 @@
+.finance-payroll-toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.finance-payroll-toolbar label{display:grid;gap:5px;font-size:13px;flex:1 1 160px}
+.finance-payroll-totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+.finance-payroll-totals .card{display:grid;gap:8px;margin:0}
+.finance-payroll-totals span,.finance-payroll-person dt{font-size:12px;color:var(--ink-3)}
+.finance-payroll-totals strong{font-size:21px;font-variant-numeric:tabular-nums}
+.finance-payroll-list{display:grid;gap:12px}
+.finance-payroll-person h2{font-size:17px;margin:0 0 4px}
+.finance-payroll-person dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+.finance-payroll-person dd{margin:4px 0 0;font-weight:700;font-variant-numeric:tabular-nums}
+.finance-payroll-state{font-size:12px;color:var(--ink-2);margin:8px 0}
+.finance-payroll-actions{display:flex;gap:8px;flex-wrap:wrap}
+.finance-payroll-person>.finance-payroll-slip{border-top:1px solid var(--line-2);margin-top:16px}
+.finance-payroll-slip{box-sizing:border-box;break-after:page;page-break-after:always}
+.finance-payroll-slip:last-child{break-after:auto;page-break-after:auto}
+.finance-payroll-slip .ps-tbl{font-size:12px}
+.finance-payroll-slip .ps-tbl td{padding:3px 6px}
+.finance-payroll-slip .ps-net td{font-size:14px}
+.finance-payroll-slip [role=alert],.finance-payroll-person>[role=alert]{color:#b45309;font-size:12px}
+@media(max-width:640px){
+ .finance-payroll-totals,.finance-payroll-person dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .finance-payroll-toolbar>button{flex:1 1 140px}
+ .finance-payroll-person .finance-payroll-slip{padding:12px 0}
+ .finance-payroll-totals strong{font-size:18px}
+}

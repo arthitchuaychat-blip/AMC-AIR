@@ -1,6 +1,7 @@
 import { canApprovePayroll, canSetPayRates, canPay, isManagement } from "../lib/roleCapabilities";
 import { uploadHrDocument, openHrDocument } from "../lib/api";
 import React from "react";
+import FinancePayroll from "./FinancePayroll";
 import { listAttendance, listLeaves, decideLeave, updateLeave, deleteLeave, deleteAttendance, setAttendanceOtOk, setAttendanceHolOk, listHrStaff, updateHrProfile, getHrSettings, saveHrSettings, listHolidays, saveHoliday, deleteHoliday, getLeaveQuotas, saveLeaveQuota, listPayslips, listPayslipsFull, savePayslips, setPayslipPaid, setPayslipPaidOne, upsertPayrollCashEntry, removePayrollCashEntry, unsettleAdvances, listJobOrders, listTeams, getCompanies, adminSaveAttendance, listAdvances, decideAdvance, updateAdvance, deleteAdvance, markAdvancesPaid, settlePayrollAdvances, saleAdminKpi, uploadSignature, getProfile, listAccounts, payAdvanceOut, uploadExpenseFile, listChatRooms, sendChatMessage, sendChatImage, createDmRoom, bookSalaryEntry, removeSalaryEntry, uploadChatImage, logAudit, pushPayrollToExpenses, voidPayrollExpenses, getSalarySlipProof, checkPriorRoundClosed } from "../lib/api";
 import html2canvas from "html2canvas";
 import { openPrintWindow, writeAndPrint } from "../lib/printDoc";
@@ -26,6 +27,10 @@ const thDate = (s) => hrParseYmd(s).toLocaleDateString("th-TH", { weekday: "shor
 const monthRange = (ym) => { const [y, m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); const p = (n) => String(n).padStart(2, "0"); return [`${ym}-01`, `${ym}-${p(last)}`, last]; };
 
 export default function HR({ role }) {
+  return role === "finance" ? <FinancePayroll /> : <HrManagement role={role} />;
+}
+
+function HrManagement({ role }) {
   const canManage = role === "admin" || role === "exec" || role === "hr"; // ธุรการ/ผู้บริหาร/ฝ่ายบุคคล แก้ไข/ลบได้
   const [selfId, setSelfId] = React.useState(null);       // uid ของผู้ใช้ปัจจุบัน — ฝ่ายบุคคลห้ามแก้เวลาของตัวเอง
   React.useEffect(() => { getProfile().then((p) => setSelfId(p?.id || null)).catch(() => {}); }, []);

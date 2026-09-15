@@ -16,6 +16,7 @@ export function roleCeiling(role, module) {
   if (module === "permissions") return canManagePermissions(role) ? "edit" : "none";
   if (isManagement(role)) return "edit";
   if (role === "hr" && !HR_MODULES.has(module)) return "none";
+  if (module === "hr" && role === "finance") return "view";
   if (module === "hr" && role !== "hr") return "none";
   return "edit";
 }

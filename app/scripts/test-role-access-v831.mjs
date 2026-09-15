@@ -8,10 +8,11 @@ const {ROLES,MODULES,can,setPerms,DEFAULT_PERMS,canManagePermissions,canApproveP
 setPerms(Object.fromEntries(ROLES.map(r=>[r,Object.fromEntries(MODULES.map(m=>[m.id,'edit']))])));
 for(const m of ['customers','chat','email','boq','quote','cashflow','profit','po','joborders','settings']) assert.equal(can('hr',m),false,`HR ${m}`);
 for(const r of ROLES) assert.equal(can(r,'attendance','edit'),true,`${r} self-service`);
-for(const r of ['sales','field_sales','finance','stock','lead_tech','tech','assistant','graphic','maid']) assert.equal(can(r,'hr'),false,`${r} HR`);
+for(const r of ['sales','field_sales','stock','lead_tech','tech','assistant','graphic','maid']) assert.equal(can(r,'hr'),false,`${r} HR`);
 for(const r of ['exec','admin']) for(const m of MODULES) assert.equal(can(r,m.id,'edit'),true,`${r} ${m.id}`);
 assert.equal(canManagePermissions('exec'),true); assert.equal(canManagePermissions('admin'),false);
 for(const r of ['hr','sales','finance']) assert.equal(canApprovePayroll(r),false);
+assert.equal(can('finance','hr','view'),true); assert.equal(can('finance','hr','edit'),false);
 assert.equal(canPay('finance'),true); assert.equal(canPay('hr'),false);
 assert.equal(canViewAllTeams('lead_tech'),true); assert.equal(canViewAllTeams('tech'),false);
 setPerms(DEFAULT_PERMS);
