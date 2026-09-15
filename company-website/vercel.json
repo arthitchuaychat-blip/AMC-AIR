@@ -3,6 +3,13 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
+    { "source": "/air-conditioners", "destination": "/api/landing?slug=air-conditioners" },
+    { "source": "/air-conditioners/wall-mounted", "destination": "/api/landing?slug=air-conditioners/wall-mounted" },
+    { "source": "/air-conditioners/cassette", "destination": "/api/landing?slug=air-conditioners/cassette" },
+    { "source": "/services/installation", "destination": "/api/landing?slug=services/installation" },
+    { "source": "/services/cleaning", "destination": "/api/landing?slug=services/cleaning" },
+    { "source": "/services/repair", "destination": "/api/landing?slug=services/repair" },
+    { "source": "/services/relocation", "destination": "/api/landing?slug=services/relocation" },
     { "source": "/products", "destination": "/" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/a/:id", "destination": "/api/article?id=:id" },

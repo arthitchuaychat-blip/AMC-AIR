@@ -1,5 +1,6 @@
 // /sitemap.xml — แผนผังเว็บอัปเดตเองอัตโนมัติ (หน้าแรก + หน้าสินค้า + สินค้าทุกตัว + บทความทุกเรื่อง)
 const { sbGet, esc, SITE } = require("./_shared");
+const { pages } = require('../landing-catalog');
 
 module.exports = async (req, res) => {
   let products = [], articles = [];
@@ -9,6 +10,7 @@ module.exports = async (req, res) => {
   const urls = [
     { loc: `${SITE}/`, priority: "1.0" },
     { loc: `${SITE}/products`, priority: "0.9" },
+    ...pages.map(page => ({ loc: `${SITE}/${page.slug}`, priority: "0.8" })),
     ...products.map((p) => ({ loc: `${SITE}/p/${encodeURIComponent(p.code)}`, priority: "0.7" })),
     ...articles.map((a) => ({ loc: `${SITE}/a/${a.id}`, lastmod: (a.created_at || "").slice(0, 10), priority: "0.6" })),
   ];
