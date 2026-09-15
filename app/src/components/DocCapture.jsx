@@ -101,7 +101,7 @@ function billingSlip(x, companies) {
         </> : <div className="doc-grand"><span>ยอดวางบิลรวมทั้งสิ้น</span><b>{fmtDocAmount(x.total)}</b></div>}
       </div>}>
       {live.map((iv, i) => (
-        <tr key={iv.invoice_no}><td>{i + 1}</td><td>{iv.invoice_no}</td><td>ใบแจ้งหนี้ · งวดที่ {iv.installment} ({Math.round(iv.pct)}%){iv.issue_date ? ` · ${iv.issue_date}` : ""}</td><td className="r" /><td className="r" /><td className="r">{fmtDocAmount(iv.total)}</td></tr>
+        <tr key={iv.invoice_no}><td>{i + 1}</td><td>{iv.invoice_no}</td><td>ใบแจ้งหนี้ · {Number(iv.pct) === 100 ? "เต็มจำนวน (100%)" : `งวดที่ ${iv.installment} (${Math.round(iv.pct)}%)`}{iv.issue_date ? ` · ${iv.issue_date}` : ""}</td><td className="r" /><td className="r" /><td className="r">{fmtDocAmount(iv.total)}</td></tr>
       ))}
     </DocSlip>
   );
@@ -208,9 +208,10 @@ function invoiceSlip(x, q, companies) {
     const allAmtP = (x.items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0);
     const svcAmtP = whtItems.reduce((a, i) => a + (Number(i.amount) || 0), 0);
     const whtBaseP = allAmtP > 0 ? round2((x.base || 0) * svcAmtP / allAmtP) : 0;
-    return (
+    const fullPayment = Number(x.pct) === 100;
+  return (
     <DocSlip currencyUnit="บาท" company={co} titleTh="ใบส่งของ / ใบแจ้งหนี้" titleEn="DELIVERY NOTE / INVOICE" docNo={x.invoice_no} discountCol={(q?.items || []).some((x) => Number(x.discount) > 0)}
-      metaRows={[{ label: "วันที่", value: x.issue_date }, { label: "ครบกำหนด", value: x.due_date }, { label: "อ้างอิงใบเสนอ", value: x.quote_no }, { label: "อ้างอิง BOQ", value: x.boq_no }, { label: "งวดที่", value: `${x.installment} (${Math.round(x.pct)}%)` }]}
+      metaRows={[{ label: "วันที่", value: x.issue_date }, { label: "ครบกำหนด", value: x.due_date }, { label: "อ้างอิงใบเสนอ", value: x.quote_no }, { label: "อ้างอิง BOQ", value: x.boq_no }, ...(fullPayment ? [] : [{ label: "งวดที่", value: `${x.installment} (${Math.round(x.pct)}%)` }])]}
       projectTitle={x.title}
       customer={{ name: x.customerName, code: custCode(x.customerCode), taxId: x.customerTaxId, branch: x.customerBranch, address: x.customerAddr, contactName: x.mainContactName, contactPhone: x.mainContactPhone, siteName: x.siteName, siteAddress: x.siteAddress, siteContactName: x.siteContactName, siteContactPhone: x.siteContactPhone, mapUrl: x.mapUrl }}
       terms={x.note || co.default_terms} termsPayment={x.terms_payment} termsFreebies={x.terms_freebies} termsWarranty={x.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]} signUrl={x.sign_url} signName={x.sign_name}
@@ -219,14 +220,14 @@ function invoiceSlip(x, q, companies) {
         {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtDocAmount(q.discount)}</b></div>}
         {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(q.vatAmt)}</b></div> : null}
         <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtDocAmount(q?.grand || 0)}</b></div>
-        <div style={{ marginTop: 4 }}><span>งวดที่ {x.installment} ({Math.round(x.pct)}%)</span><b /></div>
+        {!fullPayment && <div style={{ marginTop: 4 }}><span>งวดที่ {x.installment} ({Math.round(x.pct)}%)</span><b /></div>}
         {/* แสดงมูลค่า+VAT ของ "งวดนี้" ตามที่เรียกเก็บจริง (ม.86/4) — เดิมมีแต่ VAT ของทั้งสัญญาด้านบน */}
-        {Number(x.base) > 0 && <div><span>มูลค่าก่อนภาษีงวดนี้</span><b>{fmtDocAmount(x.base)}</b></div>}
-        {Number(x.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtDocAmount(x.vat_amt)}</b></div>}
-        <div className="doc-grand"><span>ยอดชำระงวดนี้</span><b>{fmtDocAmount(x.total)}</b></div>
+        {Number(x.base) > 0 && <div><span>{fullPayment ? "มูลค่าก่อนภาษี" : "มูลค่าก่อนภาษีงวดนี้"}</span><b>{fmtDocAmount(x.base)}</b></div>}
+        {Number(x.vat_amt) > 0 && <div><span>{fullPayment ? "ภาษีมูลค่าเพิ่ม 7%" : "ภาษีมูลค่าเพิ่ม 7% งวดนี้"}</span><b>{fmtDocAmount(x.vat_amt)}</b></div>}
+        <div className="doc-grand"><span>{fullPayment ? "ยอดชำระ" : "ยอดชำระงวดนี้"}</span><b>{fmtDocAmount(x.total)}</b></div>
         {x.wht_amt > 0 && <div className="doc-wht-note"><span>ฐานค่าบริการที่ถูกหัก ณ ที่จ่าย</span><b>{fmtDocAmount(whtBaseP)}</b></div>}
         {x.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {whtRate(x.wht_rate)}% (ตอนชำระ)</span><b>− {fmtDocAmount(x.wht_amt)}</b></div>}
-        {x.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtDocAmount(x.total - x.wht_amt)}</b></div>}
+        {x.wht_amt > 0 && <div className="doc-grand"><span>{fullPayment ? "ยอดรับสุทธิ" : "ยอดรับสุทธิงวดนี้"}</span><b>{fmtDocAmount(x.total - x.wht_amt)}</b></div>}
       </div>}>
       {/* ราคาบรรทัดพิมพ์ = price_show (รวมค่าบัตรแล้ว) ให้บวกลงตัวกับยอดรวมที่คิดจาก price_show — เหมือนใบเสนอราคา */}
       {(() => {
@@ -266,7 +267,8 @@ function receiptSlip(x, q, inv, companies) {
     const co = isVat ? companies.vat : companies.novat;
     const baseTitle = isVat ? "ใบเสร็จรับเงิน/ใบกำกับภาษี" : "ใบเสร็จรับเงิน";
     const paid = x.status === "paid";
-    return (
+    const fullPayment = Number(inv?.pct) === 100;
+  return (
     <DocSlip currencyUnit="บาท" company={co} titleTh={baseTitle} titleEn={isVat ? "RECEIPT / TAX INVOICE" : "RECEIPT"} docNo={x.receipt_no} discountCol={(q?.items || []).some((x) => Number(x.discount) > 0)}
       metaRows={[{ label: "วันที่", value: x.issue_date }, { label: "อ้างอิงใบแจ้งหนี้", value: x.invoice_no }, { label: "อ้างอิงใบเสนอ", value: x.quote_no }, { label: "อ้างอิง BOQ", value: x.boq_no }, { label: "อ้างอิงใบงาน", value: x.job_no }]}
       projectTitle={x.title}
@@ -278,11 +280,11 @@ function receiptSlip(x, q, inv, companies) {
         {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtDocAmount(q.discount)}</b></div>}
         {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(q.vatAmt)}</b></div> : null}
         <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtDocAmount(q?.grand || 0)}</b></div>
-        <div style={{ marginTop: 4 }}><span>รับชำระตามใบแจ้งหนี้ {x.invoice_no}{inv ? ` · งวดที่ ${inv.installment} (${Math.round(inv.pct)}%)` : ""}</span><b /></div>
+        <div style={{ marginTop: 4 }}><span>รับชำระตามใบแจ้งหนี้ {x.invoice_no}{inv && !fullPayment ? ` · งวดที่ ${inv.installment} (${Math.round(inv.pct)}%)` : ""}</span><b /></div>
         {/* ใบกำกับภาษีต้องแสดง "มูลค่า + VAT ของยอดที่เรียกเก็บจริง" (ม.86/4) — เดิมโชว์ VAT ของทั้งสัญญา ลูกค้าเครดิตภาษีซื้อผิดยอด */}
-        {Number(x.base) > 0 && <div><span>มูลค่าก่อนภาษีงวดนี้</span><b>{fmtDocAmount(x.base)}</b></div>}
-        {Number(x.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtDocAmount(x.vat_amt)}</b></div>}
-        <div className="doc-grand"><span>รวมเป็นเงินงวดนี้</span><b>{fmtDocAmount(x.total)}</b></div>
+        {Number(x.base) > 0 && <div><span>{fullPayment ? "มูลค่าก่อนภาษี" : "มูลค่าก่อนภาษีงวดนี้"}</span><b>{fmtDocAmount(x.base)}</b></div>}
+        {Number(x.vat_amt) > 0 && <div><span>{fullPayment ? "ภาษีมูลค่าเพิ่ม 7%" : "ภาษีมูลค่าเพิ่ม 7% งวดนี้"}</span><b>{fmtDocAmount(x.vat_amt)}</b></div>}
+        <div className="doc-grand"><span>{fullPayment ? "รวมเป็นเงิน" : "รวมเป็นเงินงวดนี้"}</span><b>{fmtDocAmount(x.total)}</b></div>
         {x.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {whtRate(x.wht_rate)}%</span><b>− {fmtDocAmount(x.wht_amt)}</b></div>}
         <div className="doc-grand"><span>รับเงินสุทธิ</span><b>{fmtDocAmount(x.net)}</b></div>
       </div>}>

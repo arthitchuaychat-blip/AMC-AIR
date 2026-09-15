@@ -399,9 +399,10 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
         const allAmtP = (printI.items || []).reduce((a, i) => a + (Number(i.amount) || 0), 0);
         const svcAmtP = whtItems.reduce((a, i) => a + (Number(i.amount) || 0), 0);
         const whtBaseP = allAmtP > 0 ? round2((printI.base || 0) * svcAmtP / allAmtP) : 0;
+        const fullPayment = Number(printI.pct) === 100;
         return (
         <DocSlip currencyUnit="บาท" company={co} titleTh="ใบส่งของ / ใบแจ้งหนี้" titleEn="DELIVERY NOTE / INVOICE" docNo={printI.invoice_no} discountCol={(q?.items || []).some((x) => Number(x.discount) > 0)}
-          metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, { label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }]}
+          metaRows={[{ label: "วันที่", value: printI.issue_date }, { label: "ครบกำหนด", value: printI.due_date }, { label: "อ้างอิงใบเสนอ", value: printI.quote_no }, { label: "อ้างอิง BOQ", value: printI.boq_no }, ...(fullPayment ? [] : [{ label: "งวดที่", value: `${printI.installment} (${Math.round(printI.pct)}%)` }])]}
           projectTitle={printI.title}
           customer={{ name: printI.customerName, code: custCode(printI.customerCode), taxId: printI.customerTaxId, branch: printI.customerBranch, address: printI.customerAddr, contactName: printI.mainContactName, contactPhone: printI.mainContactPhone, siteName: printI.siteName, siteAddress: printI.siteAddress, siteContactName: printI.siteContactName, siteContactPhone: printI.siteContactPhone, mapUrl: printI.mapUrl }}
           terms={printI.note || co.default_terms} termsPayment={printI.terms_payment} termsFreebies={printI.terms_freebies} termsWarranty={printI.terms_warranty} bank={co.bank_info} signLabels={["ผู้วางบิล", "ผู้รับวางบิล"]} signUrl={printI.sign_url} signName={printI.sign_name}
@@ -410,14 +411,14 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
             {q?.discount > 0 && <div><span>ส่วนลด</span><b>− {fmtDocAmount(q.discount)}</b></div>}
             {q?.vat ? <div><span>ภาษีมูลค่าเพิ่ม 7%</span><b>{fmtDocAmount(q.vatAmt)}</b></div> : null}
             <div className="doc-grand"><span>รวมทั้งสิ้น (เต็มสัญญา)</span><b>{fmtDocAmount(q?.grand || 0)}</b></div>
-            <div style={{ marginTop: 4 }}><span>งวดที่ {printI.installment} ({Math.round(printI.pct)}%)</span><b /></div>
+            {!fullPayment && <div style={{ marginTop: 4 }}><span>งวดที่ {printI.installment} ({Math.round(printI.pct)}%)</span><b /></div>}
             {/* แสดงมูลค่า+VAT ของ "งวดนี้" ตามที่เรียกเก็บจริง (ม.86/4) — เดิมมีแต่ VAT ของทั้งสัญญาด้านบน */}
-            {Number(printI.base) > 0 && <div><span>มูลค่าก่อนภาษีงวดนี้</span><b>{fmtDocAmount(printI.base)}</b></div>}
-            {Number(printI.vat_amt) > 0 && <div><span>ภาษีมูลค่าเพิ่ม 7% งวดนี้</span><b>{fmtDocAmount(printI.vat_amt)}</b></div>}
-            <div className="doc-grand"><span>ยอดชำระงวดนี้</span><b>{fmtDocAmount(printI.total)}</b></div>
+            {Number(printI.base) > 0 && <div><span>{fullPayment ? "มูลค่าก่อนภาษี" : "มูลค่าก่อนภาษีงวดนี้"}</span><b>{fmtDocAmount(printI.base)}</b></div>}
+            {Number(printI.vat_amt) > 0 && <div><span>{fullPayment ? "ภาษีมูลค่าเพิ่ม 7%" : "ภาษีมูลค่าเพิ่ม 7% งวดนี้"}</span><b>{fmtDocAmount(printI.vat_amt)}</b></div>}
+            <div className="doc-grand"><span>{fullPayment ? "ยอดชำระ" : "ยอดชำระงวดนี้"}</span><b>{fmtDocAmount(printI.total)}</b></div>
             {printI.wht_amt > 0 && <div className="doc-wht-note"><span>ฐานค่าบริการที่ถูกหัก ณ ที่จ่าย</span><b>{fmtDocAmount(whtBaseP)}</b></div>}
             {printI.wht_amt > 0 && <div><span>หัก ณ ที่จ่าย {whtRate(printI.wht_rate)}% (ตอนชำระ)</span><b>− {fmtDocAmount(printI.wht_amt)}</b></div>}
-            {printI.wht_amt > 0 && <div className="doc-grand"><span>ยอดรับสุทธิงวดนี้</span><b>{fmtDocAmount(printI.total - printI.wht_amt)}</b></div>}
+            {printI.wht_amt > 0 && <div className="doc-grand"><span>{fullPayment ? "ยอดรับสุทธิ" : "ยอดรับสุทธิงวดนี้"}</span><b>{fmtDocAmount(printI.total - printI.wht_amt)}</b></div>}
           </div>}>
           {/* ราคาบรรทัดพิมพ์ = price_show (รวมค่าบัตรแล้ว) ให้บวกลงตัวกับยอดรวมที่คิดจาก price_show — เหมือนใบเสนอราคา */}
           {(() => {

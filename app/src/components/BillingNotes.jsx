@@ -216,7 +216,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
             </div>}>
             {/* พิมพ์เฉพาะใบแจ้งหนี้ที่ยัง live — ใบยกเลิกห้ามโผล่ในใบวางบิลที่ส่งลูกค้า (ยอดรวมจาก api ก็ตัดออกแล้ว) */}
             {liveInv(printB).map((iv, i) => (
-              <tr key={iv.invoice_no}><td>{i + 1}</td><td>{iv.invoice_no}</td><td>ใบแจ้งหนี้ · งวดที่ {iv.installment} ({Math.round(iv.pct)}%){iv.issue_date ? ` · ${iv.issue_date}` : ""}</td><td className="r" /><td className="r" /><td className="r">{fmtDocAmount(iv.total)}</td></tr>
+              <tr key={iv.invoice_no}><td>{i + 1}</td><td>{iv.invoice_no}</td><td>ใบแจ้งหนี้ · {Number(iv.pct) === 100 ? "เต็มจำนวน (100%)" : `งวดที่ ${iv.installment} (${Math.round(iv.pct)}%)`}{iv.issue_date ? ` · ${iv.issue_date}` : ""}</td><td className="r" /><td className="r" /><td className="r">{fmtDocAmount(iv.total)}</td></tr>
             ))}
           </DocSlip>
         );

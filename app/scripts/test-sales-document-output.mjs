@@ -39,6 +39,11 @@ fixtures.fractional=scenario();
 for(const key of ['inv','r','a'])Object.assign(fixtures.fractional[key],{wht_rate:1.5,wht_amt:52.51});
 fixtures.fractional.r.net=fixtures.fractional.r.total-52.51;
 fixtures.fractional.a.net=fixtures.fractional.a.total-52.51;
+fixtures.full=scenario();
+for(const key of ['inv','r'])Object.assign(fixtures.full[key],{pct:100,base:59000,vat_amt:4130,total:63130,wht_amt:210,net:62920});
+Object.assign(fixtures.full.b,{total:63130,wht:210,net:62920});
+fixtures.fullString=structuredClone(fixtures.full); fixtures.fullString.inv.pct='100'; fixtures.fullString.b.invoices[0].pct='100';
+fixtures.nearlyFull=scenario(); fixtures.nearlyFull.inv.pct=99.99;
 const saved=JSON.stringify(fixtures);
 const prelude=`import React from 'react'; import {renderToStaticMarkup} from 'react-dom/server'; import DocSlip from '${app}/src/components/DocSlip.jsx'; import * as F from '${app}/src/lib/format.js'; import {whtRate} from '${app}/src/lib/salesWht.js'; const {fmtBaht,fmtBaht2,fmtNum,custCode,round2,fmtDocDate,fmtDocAmount}=F; const parseWhtRate=whtRate;`;
 let generated=prelude;
@@ -64,6 +69,19 @@ for(const [key,html] of Object.entries(rendered)){
  if(key.includes('-print-'))check(html===rendered[key.replace('-print-','-capture-')],key+': print and capture are identical');
 }
 for(const mode of ['print','capture']){
+ for(const scenario of ['full','fullString']){
+  for(const kind of ['invoice','receipt','billing']){
+   const html=rendered[scenario+'-'+mode+'-'+kind];
+   check(!html.includes('งวดที่')&&!html.includes('งวดนี้'),`${scenario}/${mode}/${kind}: full payment has no installment labels`);
+   check(html.includes('62,920.00'),`${scenario}/${mode}/${kind}: net total unchanged`);
+  }
+  const html=rendered[scenario+'-'+mode+'-invoice'];
+  check(html.includes('มูลค่าก่อนภาษี</span><b>59,000.00'),scenario+'/'+mode+': full-payment base retained');
+  check(html.includes('ภาษีมูลค่าเพิ่ม 7%</span><b>4,130.00'),scenario+'/'+mode+': full-payment VAT retained');
+ }
+ for(const scenario of ['standard','nearlyFull']){
+  for(const kind of ['invoice','receipt','billing'])check(rendered[scenario+'-'+mode+'-'+kind].includes('งวดที่'),`${scenario}/${mode}/${kind}: partial payments retain installment labels`);
+ }
  const invoice=rendered['standard-'+mode+'-invoice'];
  const receipt=rendered['standard-'+mode+'-receipt'];
  for(const html of [invoice,receipt]){

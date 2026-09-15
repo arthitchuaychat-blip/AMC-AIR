@@ -20,14 +20,15 @@ The source has a consistent blue letterhead, billing and site address blocks, nu
 - Remove the leading baht symbol only in sales document amounts, preserving the existing separators, precision and rounding. The amount heading states `(บาท)`.
 - Align capture output with the existing native print output: customer branch, saved signature or explicit no-signature choice, quotation card/discount details, invoice title, installment base/VAT and per-line withholding annotations.
 - Use the same saved values and existing withholding display logic as native print. No tax rule, calculation in the data layer, access policy or document lifecycle change.
+- Owner clarification implemented: a 100% invoice omits installment numbers and uses ordinary amount labels without “งวดนี้”, in both print and capture. Billing rows say “เต็มจำนวน (100%)”. Partial invoices retain installment labels; the check uses the unrounded percentage, so 99.99% does not become a full payment. Values and payment status are unchanged.
 - Native billing count now counts the same live invoices that are printed; cancelled invoices remain excluded.
 - All five document families now produce identical print/capture HTML in the tested cases.
 - Print pagination and the document CSS are unchanged. Visual hierarchy and billing-column redesign remain recommendations pending visual review.
 
 ## Verification
 
-- `npm run test:sales-documents`: 548 assertions across 110 rendered outputs (11 scenarios × 5 families × 2 paths).
-- Cases cover VAT/no VAT, discount/withholding, 40 rows, full-card/10-month installments, unpaid receipt, credit/debit, saved/empty signatures, cancelled invoices and fractional withholding rates.
+- `npm run test:sales-documents`: 727 assertions across 140 rendered outputs (14 scenarios × 5 families × 2 paths).
+- Cases cover VAT/no VAT, discount/withholding, 40 rows, full-card/10-month installments, unpaid receipt, credit/debit, saved/empty signatures, cancelled invoices fractional withholding rates, full payments (numeric/string 100%) and the 99.99% boundary.
 - Independent expected amounts verify a 50% installment: base 29,500.00, VAT 2,065.00, withholding 105.00, net 31,460.00. Internal notes remain absent.
 - Compared 20 native print outputs with the pre-change baseline: complete HTML matches after only removing the baht prefix and adding the currency heading. The cancelled-invoice count fix is separately covered by its fixture.
 - Production build passes. Address, customer-note, quotation-WHT, BOQ-internal, sales-WHT and recheck regression tests pass.

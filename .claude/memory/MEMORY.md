@@ -1,6 +1,6 @@
 # Memory index
 
-- [Sales document review](sales-document-review.md) — v838 draft PR #8 resumed: currency prefix removal and print/capture content alignment; 548 assertions pass; A4 visual review pending.
+- [Sales document review](sales-document-review.md) — v838 draft PR #8 resumed: currency prefix removal and print/capture content alignment; 727 assertions pass; A4 visual review pending.
 
 - [Head technician work status](lead-tech-work-status.md) — production fix for start/submit without an assigned team; cross-team field actions, existing lock/approval guards preserved; 157 regression assertions.
 
