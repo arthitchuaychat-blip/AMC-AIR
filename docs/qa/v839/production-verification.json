@@ -1,0 +1,36 @@
+{
+  "release": "v839",
+  "verified_at": "2026-09-15T06:26:49.751Z",
+  "merge_commit": "b0e1e9750e832cd2cdbe78de82eeb4e0de9ce3bd",
+  "source_tree": "fb74708fcd2fa2574ba9049d506eda26cb9b508a",
+  "deployments": [
+    {
+      "context": "Vercel – amc-air-6os6",
+      "state": "success"
+    },
+    {
+      "context": "Vercel – amc-air-497i",
+      "state": "success"
+    },
+    {
+      "context": "Vercel – amc-air-tkaw",
+      "state": "success"
+    },
+    {
+      "context": "Vercel – amc-air",
+      "state": "success"
+    }
+  ],
+  "domains": [
+    "https://app.amcair.net/",
+    "https://amc-air.vercel.app/"
+  ],
+  "both_login_screens_loaded": true,
+  "live_script": "/assets/index-ghXIGXA9.js",
+  "previous_script": "/assets/index-BGVjJmEo.js",
+  "synthetic_browser_checks": 94,
+  "sales_output_assertions": 743,
+  "temporary_review_page_removed_from_release": true,
+  "authenticated_customer_records_tested": false,
+  "customer_records_modified": false
+}
