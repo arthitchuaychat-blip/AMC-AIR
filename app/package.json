@@ -11,8 +11,9 @@
     "test:chat-attachments": "node scripts/test-chat-attachments.mjs",
     "test:reports": "node test-report-metrics.mjs",
     "test:dashboard": "node test-dashboard-loading.mjs",
-    "test:work-scope": "node scripts/test-job-read-database.mjs && node scripts/test-job-loading.mjs && node scripts/test-boq-page-cache.mjs && node scripts/test-document-startup.mjs && node scripts/test-quotation-page-cache.mjs && node test-doc-notes.mjs && node test-job-visits.mjs src/lib/api.js && node test-chat-search.mjs",
-    "test:menus:browser": "node scripts/test-menu-browser.mjs"
+    "test:work-scope": "node scripts/test-job-read-database.mjs && node scripts/test-lead-tech-status.mjs && node scripts/test-job-loading.mjs && node scripts/test-boq-page-cache.mjs && node scripts/test-document-startup.mjs && node scripts/test-quotation-page-cache.mjs && node test-doc-notes.mjs && node test-job-visits.mjs src/lib/api.js && node test-chat-search.mjs",
+    "test:menus:browser": "node scripts/test-menu-browser.mjs",
+    "test:lead-tech-status": "node scripts/test-lead-tech-status.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

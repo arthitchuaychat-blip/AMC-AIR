@@ -1,5 +1,7 @@
 # Memory index
 
+- [Head technician work status](lead-tech-work-status.md) — production fix for start/submit without an assigned team; cross-team field actions, existing lock/approval guards preserved; 157 regression assertions.
+
 - [Customer chat attachments](customer-chat-attachments.md) — v837 live via PR #7: drag/drop and clipboard images, video/file attachments, wrong-room and partial-retry guards; deployment verified.
 
 - [Job read / BOQ v836](job-read-boq-v836.md) — permission fix and 50-row BOQ pilot; live v836 via merged PR #6, production migration and both app domains verified; tests/measurements and known baseline failures.
