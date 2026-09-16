@@ -62,6 +62,18 @@ const MyJobs = React.lazy(() => import("./components/MyJobs"));
 const Invoices = React.lazy(() => import("./components/Invoices"));
 const Receipts = React.lazy(() => import("./components/Receipts"));
 const AdjustmentNotes = React.lazy(() => import("./components/AdjustmentNotes"));
+
+const AUTH_WAIT_MS = 8000;
+
+// Auth is an external dependency. Bound the initial wait so an outage cannot
+// leave the whole SPA on an endless loading screen.
+export function withDeadline(promise, ms = AUTH_WAIT_MS) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("AUTH_TIMEOUT")), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 const Receivables = React.lazy(() => import("./components/Receivables"));
 const RecvCenter = React.lazy(() => import("./components/RecvCenter"));
 const Payables = React.lazy(() => import("./components/Payables"));
@@ -190,6 +202,7 @@ function useNewVersion() {
 
 export default function App() {
   const [ready, setReady] = React.useState(false);
+  const [authInitFailed, setAuthInitFailed] = React.useState(false);
   const newVersion = useNewVersion();   // มี deploy ใหม่ → โชว์แถบให้กดโหลด
   // ลิงก์ public ใบส่งมอบงานสำหรับลูกค้า (?ho=<id>&t=<token>) — เปิดดูได้โดยไม่ต้องล็อกอิน
   const publicHo = React.useMemo(() => { try { const p = new URLSearchParams(window.location.search); const id = p.get("ho"), t = p.get("t"); return id && t ? { id, t } : null; } catch { return null; } }, []);
@@ -251,13 +264,21 @@ export default function App() {
   const [profileFailed, setProfileFailed] = React.useState(false);   // โหลดโปรไฟล์ล้มครบรอบ → โชว์ปุ่มลองใหม่/ออก แทนค้าง
   React.useEffect(() => {
     if (!hasConfig) { setReady(true); return; }
-    // .finally → ready=true เสมอแม้ getSession ล้ม (ไม่ค้างหน้า "กำลังโหลด" · ไม่มี session ก็เด้ง Login)
-    supabase.auth.getSession().then(({ data }) => setSession(data.session)).catch(() => {}).finally(() => setReady(true));
+    let alive = true, authRecovered = false;
+    // getSession may refresh an expired token over the network. During an Auth
+    // incident it must fail visibly instead of holding the entire app forever.
+    withDeadline(supabase.auth.getSession()).then(({ data, error }) => {
+      if (error) throw error;
+      if (alive) { setSession(data.session); setAuthInitFailed(false); }
+    }).catch(() => { if (alive && !authRecovered) setAuthInitFailed(true); })
+      .finally(() => { if (alive) setReady(true); });
     // อัปเดต session เฉพาะเมื่อ "ผู้ใช้เปลี่ยน" (เข้า/ออกระบบ) — ไม่ใช่ทุกครั้งที่ token refresh
     //   ทุก ~1 ชม. Supabase ยิง TOKEN_REFRESHED · sync ข้ามแท็บ · focus → ถ้า setSession ทุกครั้ง = re-render ทั้งแอปรัว ๆ
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) =>
-      setSession((prev) => (prev?.user?.id === (s?.user?.id || null) ? prev : s)));
-    return () => sub.subscription.unsubscribe();
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      if (s) { authRecovered = true; setAuthInitFailed(false); }
+      setSession((prev) => (prev?.user?.id === (s?.user?.id || null) ? prev : s));
+    });
+    return () => { alive = false; sub.subscription.unsubscribe(); };
   }, []);
 
   // ⚠️ key ข้อมูลผู้ใช้ (profile/perms/teams) ด้วย "user id" ไม่ใช่ทั้ง session object —
@@ -267,18 +288,33 @@ export default function App() {
 
   React.useEffect(() => {
     if (!uid) { setProfile(null); return; }
-    let alive = true;
+    let alive = true, inFlight = null, timeoutId = null, retryId = null, tries = 0;
     // ⚠️ getProfile() เรียก supabase.auth.getUser() (ตรวจ token กับเซิร์ฟเวอร์) — ช่วง token refresh/เน็ตสะดุด
     //   อาจได้ user=null → คืน null · ห้าม setProfile(null) เด็ดขาด ไม่งั้น role ตกเป็น "tech" (ธุรการเห็นสิทธิช่าง)
-    //   ⇒ ได้โปรไฟล์จริงเท่านั้นถึง set · null/พลาด = เก็บของเดิมไว้แล้ว retry (สูงสุด ~4 ครั้ง)
-    const load = (tries) => getProfile()
-      .then((p) => { if (!alive) return; if (p) { setProfile(p); setProfileFailed(false); } else if (tries < 4) setTimeout(() => load(tries + 1), 900); else setProfileFailed(true); })
-      .catch(() => { if (!alive) return; if (tries < 4) setTimeout(() => load(tries + 1), 900); else setProfileFailed(true); });
-    setProfileFailed(false); load(0);
-    const refresh = () => { if (document.visibilityState === "visible") load(0); };
+    //   ⇒ ได้โปรไฟล์จริงเท่านั้นถึง set · null/พลาด = เก็บของเดิมไว้และ retry แบบจำกัด
+    const load = () => {
+      if (!alive || inFlight) return; // focus/visibility events share one Auth request
+      const request = getProfile(); inFlight = request;
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => { if (alive && inFlight === request) setProfileFailed(true); }, AUTH_WAIT_MS);
+      request.then((p) => {
+        if (!alive) return;
+        if (p) { setProfile(p); setProfileFailed(false); tries = 0; }
+        else throw new Error("PROFILE_MISSING");
+      }).catch(() => {
+        if (!alive) return;
+        if (tries < 2) { tries += 1; retryId = setTimeout(load, 1500); }
+        else setProfileFailed(true);
+      }).finally(() => {
+        clearTimeout(timeoutId);
+        if (inFlight === request) inFlight = null;
+      });
+    };
+    setProfileFailed(false); load();
+    const refresh = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", refresh);
-    return () => { alive = false; document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", refresh); };
+    return () => { alive = false; clearTimeout(timeoutId); clearTimeout(retryId); document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", refresh); };
   }, [uid]);
 
   // load the editable role→module permission overrides (falls back to the shipped defaults)
@@ -436,6 +472,12 @@ export default function App() {
   if (publicHo) return <PublicHandover id={publicHo.id} token={publicHo.t} />;   // ลูกค้าเปิดจากลิงก์ LINE — ไม่ต้องล็อกอิน
   if (!hasConfig) return <SetupNotice />;
   if (!ready) return <div className="login-stage"><div className="page-sub">กำลังโหลด…</div></div>;
+  if (authInitFailed) return (
+    <div className="login-stage"><div style={{ textAlign: "center", maxWidth: 380 }}>
+      <div className="page-sub" style={{ marginBottom: 12, lineHeight: 1.7 }}>ระบบยืนยันตัวตนตอบช้าหรือขัดข้องชั่วคราว<br />งานที่บันทึกไว้แล้วไม่สูญหาย</div>
+      <button className="btn-primary" onClick={() => window.location.reload()}>ลองเชื่อมต่อใหม่</button>
+    </div></div>
+  );
   if (!session) return <Login />;
   // ล็อกอินแล้วแต่โปรไฟล์ยังโหลดไม่เสร็จ → โชว์ "กำลังโหลด" · ห้าม render แอปด้วย role fallback "tech"
   //   (ไม่งั้นธุรการเห็นสิทธิช่างแว้บ ๆ ระหว่างโหลด) — profile จะมาชัวร์เพราะ effect ด้านบน retry ให้
