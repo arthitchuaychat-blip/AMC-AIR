@@ -2,6 +2,7 @@ import React from "react";
 import { listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead } from "../lib/api";
 import { pushSupported, notifyPermission, enablePush } from "../lib/push";
 import { UIcon } from "../icons";
+import { visiblePolling } from "../lib/visiblePolling";
 
 const CAT_ICON = { team_chat: "💬", task: "📋", job: "🔧", hr: "🧑‍💼", customer_chat: "💬" };
 const fmtWhen = (s) => { const d = new Date(s), now = Date.now(), diff = (now - d.getTime()) / 1000;
@@ -27,7 +28,9 @@ export default function NotificationBell({ onOpen }) {
 
   async function refresh() { try { setUnread(await countUnreadNotifications()); } catch (_) {} }
   async function loadList() { try { setItems(await listNotifications(40)); } catch (_) {} }
-  React.useEffect(() => { refresh(); const t = setInterval(refresh, 30000); return () => clearInterval(t); }, []);
+  // The navigation already receives notification changes through Realtime.
+  // This is only a fallback for the bell, so keep it light and pause off-screen.
+  React.useEffect(() => visiblePolling(refresh, 120000), []);
   React.useEffect(() => { if (open) loadList(); }, [open]);
   React.useEffect(() => {
     if (!open) return;
