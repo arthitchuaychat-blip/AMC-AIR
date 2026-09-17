@@ -28,7 +28,7 @@ const fmtBaht = fmtBaht2; // receipts show 2 decimals
 // ราคา/ยอด = ราคาแสดงจริง (price_show รวมค่าบัตร) − ส่วนลดบรรทัด · หัก ณ ที่จ่ายติดธงเฉพาะลูกค้านิติบุคคล (บุคคลธรรมดาห้ามหัก)
 const METHODS = ["เงินสด", "โอนเงิน", "เช็ค", "บัตรเครดิต", "Trade Baht"];
 // ⚠️ ต้องมีทุกสถานะที่ setReceiptStatus เขียนได้ — สถานะที่ขาดจะตกไป fallback แล้วโชว์ป้ายผิด
-const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber" }, paid: { th: "ชำระเงินแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิกแล้ว", cls: "b-red" } };
+const RSTATUS = { pending: { th: "รอชำระเงิน", cls: "b-amber" }, unpaid: { th: "ยังไม่ชำระ", cls: "b-amber" }, paid: { th: "ชำระเงินแล้ว", cls: "b-green" }, cancelled: { th: "ยกเลิกแล้ว", cls: "b-red" } };
 function genNo() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `REC-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
 const today = () => new Date().toISOString().slice(0, 10);
 

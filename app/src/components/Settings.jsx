@@ -110,7 +110,7 @@ function NotifyCard({ flash }) {
               <tr key={c.id}>
                 <td style={{ textAlign: "left" }}>{c.label}</td>
                 {PERM_ROLES.map((r) => { const on = isOn(r, c.id); return (
-                  <td key={r}><button type="button" className="perm-cell" disabled={isManagement(r) || roleCeiling(r, m.id) === "none" || m.id === "attendance"} style={on ? { color: "#0a6b3d", background: "#dcf5e8" } : { color: "#7C8CA1", background: "var(--surface-2)" }} onClick={() => toggle(r, c.id)}>{on ? "เปิด" : "ปิด"}</button></td>
+                  <td key={r}><button type="button" className="perm-cell" disabled={isManagement(r) || roleCeiling(r, c.id) === "none" || c.id === "attendance"} style={on ? { color: "#0a6b3d", background: "#dcf5e8" } : { color: "#7C8CA1", background: "var(--surface-2)" }} onClick={() => toggle(r, c.id)}>{on ? "เปิด" : "ปิด"}</button></td>
                 ); })}
               </tr>
             ))}

@@ -6236,12 +6236,12 @@ export async function unsettleLoan(period) {
   await supabase.from("hr_loan_payments").delete().eq("period", period);
   for (const lid of loanIds) {
     const [{ data: loan }, { data: ps }] = await Promise.all([
-      supabase.from("hr_loans").select("principal").eq("id", lid).maybeSingle(),
+      supabase.from("hr_loans").select("principal,status").eq("id", lid).maybeSingle(),   // ต้องดึง status มาด้วย — ใช้ตัดสินว่าคง pending ไว้ไหม
       supabase.from("hr_loan_payments").select("amount").eq("loan_id", lid),
     ]);
     const paid = (ps || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const bal = Math.max(0, (Number(loan?.principal) || 0) - paid);
-    await supabase.from("hr_loans").update({ balance: bal, status: status === "pending" ? "pending" : bal <= 0 ? "closed" : "active" }).eq("id", lid);
+    await supabase.from("hr_loans").update({ balance: bal, status: loan?.status === "pending" ? "pending" : bal <= 0 ? "closed" : "active" }).eq("id", lid);   // เดิมอ้าง status ที่ไม่มีในขอบเขต → throw หลังลบงวดแล้ว = balance ไม่ถูก recompute
   }
 }
 // ตอนทำจ่ายทั้งรอบ — บันทึกงวดผ่อน (idempotent ต่อ period ผ่าน unique loan+period) แล้ว recompute balance
@@ -6251,12 +6251,13 @@ export async function markLoanPaid(period, items) {
     if (!it.id || !(Number(it.amount) > 0)) continue;
     await supabase.from("hr_loan_payments").upsert({ loan_id: it.id, period, amount: Number(it.amount) || 0 }, { onConflict: "loan_id,period", ignoreDuplicates: true });
     const [{ data: loan }, { data: pays }] = await Promise.all([
-      supabase.from("hr_loans").select("principal").eq("id", it.id).maybeSingle(),
+      supabase.from("hr_loans").select("principal,status").eq("id", it.id).maybeSingle(),   // ต้องดึง status มาด้วย — ใช้ตัดสินว่าคง pending ไว้ไหม
       supabase.from("hr_loan_payments").select("amount").eq("loan_id", it.id),
     ]);
     const paid = (pays || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const bal = Math.max(0, (Number(loan?.principal) || 0) - paid);
-    await supabase.from("hr_loans").update({ balance: bal, status: status === "pending" ? "pending" : bal <= 0 ? "closed" : "active" }).eq("id", it.id);
+    // เดิมอ้าง `status` ที่ไม่มีในขอบเขต → ReferenceError หลัง upsert งวดไปแล้ว = จ่ายถูกบันทึกแต่ balance/สถานะไม่อัปเดต (ข้อมูลครึ่งทาง)
+    await supabase.from("hr_loans").update({ balance: bal, status: loan?.status === "pending" ? "pending" : bal <= 0 ? "closed" : "active" }).eq("id", it.id);
   }
 }
 

@@ -37,17 +37,19 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
   const [recvF, setRecvF] = React.useState("all"); // all | received | pending — กรองสถานะรับสินค้า (เฉพาะ PO)
   const [openCred, setOpenCred] = React.useState(null);
   const [totals, setTotals] = React.useState(null);   // {receivable, payable} — การ์ดสุทธิ
+  const [loadError, setLoadError] = React.useState(""); // โหลดล้มต้องเห็นชัด ไม่ใช่ตารางว่างที่ดูเหมือน "ไม่มีค้างจ่าย"
   const [toast, setToast] = React.useState(null);
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
   const today = todayYmd();
 
   async function load() {
+    setLoadError("");
     try {
       const list = await listPayables();
       setRows(list.filter((r) => r.amount > 0).map((r) => ({ ...r, days: r.date ? daysSince(r.date, today) : null, age: ageKey(r.date ? daysSince(r.date, today) : null) }))
         .sort((a, b) => (b.date || "").localeCompare(a.date || ""))); // ล่าสุดบนสุด (ตามวันที่เอกสาร)
       dashboardActionLite().then(setTotals).catch(() => {});
-    } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setRows([]); }
+    } catch (e) { setLoadError("โหลดไม่สำเร็จ: " + (e.message || e)); setRows([]); }   // ห้ามให้ error หายไปกับ toast แล้วเหลือตารางว่างเหมือน "ไม่มีค้างจ่าย"
   }
   React.useEffect(() => { load(); }, []);
 
@@ -176,6 +178,7 @@ export default function Payables({ role, onOpenPo, onGoExpenses, onGoSub }) {
       </FilterBar>
 
       {rows === null ? <div className="empty">กำลังโหลด…</div>
+        : loadError ? <div role="alert" className="empty">{loadError} <button className="btn-ghost" onClick={() => load()}>ลองใหม่</button></div>
         : shown.length === 0 ? <div className="empty" style={{ padding: 40 }}>🎉 ไม่มียอดค้างจ่าย — จ่ายครบทุกรายการแล้ว</div>
         : view === "type" ? (
           <div className="ar-buckets">

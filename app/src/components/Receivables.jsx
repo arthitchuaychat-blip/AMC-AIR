@@ -42,6 +42,8 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
   const [totals, setTotals] = React.useState(null);   // {receivable, payable} — การ์ดสุทธิ
   const [dun, setDun] = React.useState({});            // ประวัติทวงต่อลูกค้า (เก็บในเครื่องนี้)
   const [toast, setToast] = React.useState(null);
+  const [busy, setBusy] = React.useState(null);        // invoice_no/customer_id ที่กำลังเขียน — กันกดซ้ำ (ตัดหนี้สูญ/ทวง)
+  const [loadError, setLoadError] = React.useState(""); // โหลดล้มต้องเห็นชัด ไม่ใช่ตารางว่างที่ดูเหมือน "ไม่มีหนี้ค้าง"
   const flash = (m, bad) => { setToast({ m, bad }); setTimeout(() => setToast(null), 2600); };
   const today = todayYmd();
 
@@ -52,12 +54,16 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
   }, []);
   const daysSinceDun = (cid) => { const d = dun[cid]; return d ? daysOverdue(d, today) : null; };
   async function markDunned(cid) {
+    if (busy) return;                            // กันกดรัว — ไม่เขียน team_kv ซ้ำระหว่างรอผล
+    setBusy(cid);
     setDun((m) => ({ ...m, [cid]: today }));   // แสดงทันที (optimistic)
     try { await setTeamKV("ar_dunning", cid, today); flash("บันทึกว่าทวงแล้ววันนี้ ✓ (ทั้งทีมเห็นตรงกัน)"); }
     catch { try { const n = { ...(JSON.parse(localStorage.getItem("ar_dunning") || "{}")), [cid]: today }; localStorage.setItem("ar_dunning", JSON.stringify(n)); } catch { /* ignore */ } flash("บันทึกทวงเฉพาะเครื่องนี้ — สิทธิ์ไม่พอบันทึกส่วนกลาง", true); }
+    finally { setBusy(null); }
   }
 
   async function load() {
+    setLoadError("");
     try {
       const [inv, rec] = await Promise.all([listInvoices(), listReceipts()]);
       dashboardActionLite().then(setTotals).catch(() => {});
@@ -83,12 +89,13 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
         .filter((x) => x.owed > 0)
         .sort((a, b) => (b.days || 0) - (a.days || 0));
       setRows(ar);
-    } catch (e) { flash("โหลดไม่สำเร็จ: " + (e.message || e), true); setRows([]); }
+    } catch (e) { setLoadError("โหลดไม่สำเร็จ: " + (e.message || e)); setRows([]); }   // ห้ามให้ error หายไปกับ toast แล้วเหลือตารางว่างเหมือน "ไม่มีหนี้ค้าง"
   }
   React.useEffect(() => { load(); }, []);
 
   // ตัดหนี้สูญ = เลิกตามใบนี้ แต่ยอดขาย/ภาษีขายยังอยู่ในประวัติ (ต่างจากยกเลิกที่ลบยอดขายทิ้งด้วย)
   async function writeOff(r) {
+    if (busy) return;                            // กันกดซ้ำ — server กันตัดซ้ำอยู่แล้ว แต่ UI ยิงซ้อน = ออดิท/sync กระแสเงินสดซ้ำ
     const reason = await confirmDialog({
       title: `ตัดหนี้สูญ ${r.invoice_no}?`,
       message: `${r.customerName} · ค้าง ${fmtBaht(r.owed)}${r.days > 0 ? ` · เกินกำหนด ${r.days} วัน` : ""}\n\nใบนี้จะหลุดจากยอดค้างรับและจากประมาณการเงินเข้า แต่ยอดขายและภาษีขายยังอยู่ในประวัติครบ (งานทำไปแล้ว ใบกำกับภาษีออกไปแล้ว)\n\nถ้าเก็บเงินได้ทีหลัง ต้องแจ้งให้แก้สถานะกลับ`,
@@ -96,8 +103,10 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
       prompt: { label: "เหตุผล (บังคับ)", placeholder: "เช่น ลูกค้าปิดกิจการ · ติดต่อไม่ได้เกิน 1 ปี · ตกลงยอมความแล้ว", required: true },
     });
     if (!reason) return;
+    setBusy(r.invoice_no);
     try { await setInvoiceBadDebt(r.invoice_no, String(reason)); flash(`ตัดหนี้สูญ ${r.invoice_no} แล้ว`); await load(); }
     catch (e) { flash(e.message || String(e), true); }
+    finally { setBusy(null); }
   }
 
   const matches = (r) => { const n = q.trim().toLowerCase(); if (!n) return true; return [r.customerName, r.invoice_no, r.title, r.phone].some((f) => String(f || "").toLowerCase().includes(n)); };
@@ -163,7 +172,7 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
             <ChatCustomerLink role={role} customerId={r.customer_id} onGoChat={onGoChat} />
             {onOpenInvoice && <button className="btn-ghost sm" onClick={() => onOpenInvoice(r.invoice_no)}><UIcon name="clipboard" size={13} /> ดูใบ</button>}
             {/* ตัดหนี้สูญ = การเงิน/ผู้บริหาร/ธุรการเท่านั้น (เป็นการยอมรับว่าเก็บเงินไม่ได้) */}
-            {["admin", "exec", "finance"].includes(role) && <button className="btn-ghost sm" style={{ color: "#dc2626" }} onClick={(e) => { e.stopPropagation(); writeOff(r); }}>ตัดหนี้สูญ</button>}
+            {["admin", "exec", "finance"].includes(role) && <button className="btn-ghost sm" style={{ color: "#dc2626" }} disabled={busy === r.invoice_no} onClick={(e) => { e.stopPropagation(); writeOff(r); }}>ตัดหนี้สูญ</button>}
           </span>
         </div>
       </div>
@@ -221,6 +230,7 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
       </div>
 
       {rows === null ? <div className="empty">กำลังโหลด…</div>
+        : loadError ? <div role="alert" className="empty">{loadError} <button className="btn-ghost" onClick={() => load()}>ลองใหม่</button></div>
         : shown.length === 0 ? <div className="empty" style={{ padding: 40 }}>🎉 ไม่มีเงินค้างรับ — เก็บเงินครบทุกใบแล้ว</div>
         : view === "aging" ? (
           <div className="ar-buckets">
@@ -260,7 +270,7 @@ export default function Receivables({ role, onOpenInvoice, onGoChat }) {
                   <div className="ar-cust-actions">
                     {c.phone && <a className="btn-ghost sm" href={`tel:${c.phone}`}><UIcon name="user" size={13} /> โทร {c.phone}</a>}
                     <ChatCustomerLink role={role} customerId={c.customer_id} onGoChat={onGoChat} />
-                    {overdue && <button className="btn-ghost sm" style={{ color: shouldDun ? "#b91c1c" : "var(--ink-3)" }} title="บันทึกว่าทวงลูกค้ารายนี้แล้ววันนี้ (ทั้งทีมเห็นตรงกัน)" onClick={() => markDunned(c.customer_id)}>✅ ทวงแล้ววันนี้</button>}
+                    {overdue && <button className="btn-ghost sm" style={{ color: shouldDun ? "#b91c1c" : "var(--ink-3)" }} title="บันทึกว่าทวงลูกค้ารายนี้แล้ววันนี้ (ทั้งทีมเห็นตรงกัน)" disabled={busy === c.customer_id} onClick={() => markDunned(c.customer_id)}>✅ ทวงแล้ววันนี้</button>}
                   </div>
                   {open && <div className="ar-cust-invs">{c.invoices.map((r) => <InvoiceRow key={r.invoice_no} r={r} showBucket />)}</div>}
                 </div>
