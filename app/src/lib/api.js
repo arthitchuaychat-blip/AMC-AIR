@@ -4933,9 +4933,25 @@ async function _upsertIdem(table, row, onConflict) {
   if (error) throw error;
   return { dup: false };
 }
+// insert แบบกันซ้ำระดับ DB (คู่กับ _upsertIdem) — ใช้กับตารางที่ "สร้างแถวใหม่" เช่น expense_requests
+//   · ตัดคอลัมน์ที่ migration ยังไม่รันทิ้งทีละคอลัมน์ (เหมือน _insertDropMissing) — รวมถึง request_id เอง
+//   · 23505 บน request_id → { dup:true } = ส่งไปแล้วจากรอบก่อน (กดซ้ำ/retry) ให้ผู้เรียกข้าม side effect (แจ้งเตือนซ้ำ)
+async function _insertIdem(table, row) {
+  const r = { ...row };
+  for (let i = 0; i < 12; i++) {
+    const { error } = await supabase.from(table).insert(r);
+    if (!error) return { dup: false };
+    if (r.request_id && /request_id/i.test(error.message || "") && /23505|duplicate|unique/i.test(String(error.code || "") + (error.message || ""))) return { dup: true };
+    const col = _missingCol(error);
+    if (col && col in r) { delete r[col]; continue; }
+    throw error;
+  }
+  throw new Error("insert failed after dropping missing columns");
+}
 export async function submitExpense(e) {
   const uid = await _uid();
   const row = {
+    request_id: e.request_id || null,   // UUID ต่อการเปิดฟอร์ม — กันส่งคำขอเบิกซ้ำระดับ DB (mig 20260917110000)
     requester: uid, job_no: e.job_no || null, category: e.category || null, title: e.title?.trim(), amount: Number(e.amount) || 0, vat_amt: Number(e.vat_amt) || 0,
     kind: e.kind || null, pay_method: e.pay_method || null, asset_tag: e.asset_tag || null, recurring: !!e.recurring,   // โครงสร้างทำจ่าย (mig 241)
     supplier: e.supplier?.trim() || null,   // ชื่อผู้ขาย (mig 243)
@@ -4943,7 +4959,8 @@ export async function submitExpense(e) {
     expected_pay_date: e.expected_pay_date || null,   // วันครบกำหนดจ่าย (ป้อนกระแสเงินสด)
     note: e.note?.trim() || null, attachments: e.attachments || [], created_by: uid,
   };
-  await _insertDropMissing("expense_requests", row);   // ตัดเฉพาะคอลัมน์ที่มายเกรชันยังไม่รัน (supplier/wht/expected_pay_date/… คงไว้ถ้าคอลัมน์มี)
+  const { dup } = await _insertIdem("expense_requests", row);   // ตัดเฉพาะคอลัมน์ที่มายเกรชันยังไม่รัน (supplier/wht/expected_pay_date/… คงไว้ถ้าคอลัมน์มี)
+  if (dup) return { dup: true };   // ส่งไปแล้วจากรอบก่อน (กดซ้ำ/retry หลังเน็ตหลุด) — ไม่แจ้งเตือนซ้ำ
   const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🧾 ${me?.name || "พนักงาน"} ขอเบิกค่าใช้จ่าย ${Number(e.amount) || 0} บาท`, body: e.title || "", url: "expenses", ref_type: "expense" });
 }

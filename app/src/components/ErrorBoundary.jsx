@@ -1,4 +1,5 @@
 import React from "react";
+import { reportClientError } from "../lib/errorReport";
 
 // ตาข่ายกันเหนียวระดับหน้าจอ — ถ้าโค้ดวาดหน้าใดหน้าหนึ่ง throw (ข้อมูลแถวเดียวผิดรูป วันที่เพี้ยน
 // ฟิลด์ที่คาดว่าไม่ null) React จะถอดทั้งต้นไม้ทิ้ง ผู้ใช้เห็นจอขาวล้วน ไม่มีข้อความ ไม่มีเมนู
@@ -26,8 +27,10 @@ export default class ErrorBoundary extends React.Component {
         if (Date.now() - last > 15000) { sessionStorage.setItem("amc_chunk_reload", String(Date.now())); window.location.reload(); return; }
       } catch { /* sessionStorage ปิด → ตกไปโชว์กล่อง error */ }
     }
-    // เก็บไว้ให้เปิด console ดูได้ — ไม่ส่งออกที่ไหน (ข้อมูลลูกค้าอาจติดไปกับ stack)
+    // เก็บไว้ให้เปิด console ดูได้ + ส่งเข้า client_errors "ของเราเอง" (ไม่ใช่บริการภายนอก — ข้อมูลลูกค้าอาจติดไปกับ stack)
+    // แบบตัดสั้น อ่านได้เฉพาะ admin/exec · ตัวรายงานห้ามพังเอง (ดู lib/errorReport.js)
     console.error("หน้าจอพัง:", err, info?.componentStack);
+    reportClientError("render", err, { componentStack: info?.componentStack });
     // เก็บ componentStack ไว้โชว์ในกล่องด้วย — ลำพัง "reading 'color'" ไม่พอจะรู้ว่าพังที่ไหน
     this.setState({ stack: info?.componentStack || "" });
   }

@@ -232,7 +232,7 @@ function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegister
     <div className="card">
       <div className="sec-head"><div><div className="sec-title">{L("คำขอเบิกของฉัน", "ကျွန်ုပ်၏ တောင်းခံစာရင်း")}</div><div className="sec-sub">{L("เบิกค่าใช้จ่ายทั่วไป หรือเบิกจากใบงาน (ค่าใช้จ่ายงานจะรวมเป็นต้นทุนงาน)", "ယေဘုယျ ကုန်ကျစရိတ် သို့မဟုတ် အလုပ်လွှာမှ တောင်းခံ (အလုပ်စရိတ်ကို အလုပ်ကုန်ကျစရိတ်တွင် ပေါင်းမည်)")}
         {pendRcpt > 0 && <b style={{ color: "#d97706" }}> · 📎 {L(`ค้างแนบใบเสร็จ ${pendRcpt} รายการ`, `ဘောက်ချာ တွဲရန်ကျန် ${pendRcpt} ခု`)}</b>}</div></div>
-        <button className="btn-primary" onClick={() => setForm({ title: "", amount: "", category: "", job_no: "", note: "", attachments: [], has_vat: false })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> {L("ขอเบิกใหม่", "အသစ် တောင်းခံ")}</button></div>
+        <button className="btn-primary" onClick={() => setForm({ request_id: crypto.randomUUID(), title: "", amount: "", category: "", job_no: "", note: "", attachments: [], has_vat: false })}><UIcon name="plus" size={16} color="#fff" strokeWidth={2.4} /> {L("ขอเบิกใหม่", "အသစ် တောင်းခံ")}</button></div>
       <FilterBar id="expenses-mine" count={activeCount}>
         <div className="cat-filter" style={{ marginBottom: 10, alignItems: "center" }}>
           <div className="cat-search" style={{ flex: "1 1 220px" }}><UIcon name="search" size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("ค้นหา ลูกค้า / เลข PO / ชื่อรายการ…", "ရှာဖွေ ဖောက်သည် / PO နံပါတ် / အမည်…")} /></div>

@@ -4,6 +4,7 @@ import "./styles.css";
 import "./design-system.css";
 import "./sales-documents.css";
 import App from "./App";
+import { installGlobalErrorReporting } from "./lib/errorReport";
 
 // URL ของบันเดิลหลักที่กำลังรันอยู่ (…/assets/index-XXXX.js) — ใช้เทียบว่ามี deploy ใหม่หรือยัง
 try { window.__APP_ASSET__ = import.meta.url; } catch { /* ignore */ }
@@ -16,6 +17,9 @@ window.addEventListener("vite:preloadError", () => {
     if (Date.now() - last > 15000) { sessionStorage.setItem("amc_chunk_reload", String(Date.now())); window.location.reload(); }
   } catch { window.location.reload(); }
 });
+
+// เก็บ error ที่ ErrorBoundary ไม่เห็น (event handler / promise ไม่ได้ await) ลง client_errors ของเราเอง — ดู lib/errorReport.js
+installGlobalErrorReporting();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

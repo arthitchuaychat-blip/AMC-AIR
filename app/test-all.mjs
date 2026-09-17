@@ -44,6 +44,8 @@ const SUITES = [
   ["test-money-docs.mjs"],
   ["test-doc-idempotency.mjs"],
   ["test-select-narrow.mjs"],
+  ["test-expense-idempotency.mjs"],
+  ["test-error-report.mjs"],
 ];
 
 const failed = [];

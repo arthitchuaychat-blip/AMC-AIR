@@ -1,0 +1,43 @@
+# ด่านตรวจอัตโนมัติก่อนขึ้นจริง — รันทุก PR และทุก push เข้า main
+#
+# ทำไม: npm test เพิ่งเขียวครบ 36/36 (v846) → ใช้เป็นด่านบังคับได้แล้ว
+# ขั้นต่อไปที่เจ้าของทำเอง: GitHub → Settings → Branches → Add rule สำหรับ main
+#   ☑ Require a pull request before merging   ☑ Require status checks to pass → เลือก "test-and-build"
+# แล้วจะไม่มีใคร (คนหรือ AI session ไหน) push ขึ้น main ได้โดยไม่ผ่านด่านนี้
+name: test-and-build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: app
+    env:
+      TZ: Asia/Bangkok   # เทสต์เวลาไทย (ภาษีซื้อ/เข้างาน) ต้องคิดใน timezone เดียวกับผู้ใช้
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install (ตาม lockfile เป๊ะ)
+        run: npm ci
+
+      - name: Test — ทุก suite (test-all.mjs ไม่หยุดกลางทาง)
+        run: npm test
+
+      - name: Build (Vite production)
+        run: npm run build
+
+      - name: Syntax check serverless functions (app/api)
+        run: for f in api/*.js; do node --check "$f" || exit 1; done

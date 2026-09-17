@@ -52,3 +52,4 @@
 - [Loans / financing menu](loans-financing.md) — เมนูหนี้สิน (รถเช่าซื้อ 6 คัน + สินเชื่อออฟฟิศ): ตาราง loans mig 242, คำนวณ flat/reducing, ปุ่มจ่ายงวด→เบิกจ่าย, SUZUKI ป้อนแล้ว
 - [UI design system](ui-design.md) — พาเลตต์กลาง + เอกสารพิมพ์แช่แข็ง · v828 screen design: เมนู/แท็บไอคอนเส้น การ์ดขาวเงาบาง ฟอนต์อ่านง่าย; เจ้าของอนุญาตขึ้นจริง
 - [Doc idempotency](doc-idempotency.md) — กันบันทึกเอกสารเงินซ้ำ 2 ชั้น: busy guard ฝั่งจอ + request_id unique ระดับ DB (UUID ต่อการเปิดฟอร์ม) · migration รันแล้ว 17 ก.ย. 2026 · วิธีต่อยอดตารางอื่น
+- [Client error tracking](client-error-tracking.md) — เก็บ error จากเครื่องผู้ใช้ลง client_errors ของเราเอง (v847) ไม่ส่งบริการภายนอก · ตัดสั้น · admin/exec อ่าน · rate limit · วิธีดู

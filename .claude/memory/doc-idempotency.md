@@ -12,3 +12,5 @@ metadata:
 - **ทำไมต้องเป็น UUID ต่อการเปิดฟอร์ม:** แยก "กดครั้งเดิมซ้ำ/retry หลังเน็ตหลุด" (UUID เดิม → ปฏิเสธ) ออกจาก "จ่ายบางส่วนรอบใหม่/ออกใบใหม่" (เปิดฟอร์มใหม่ = UUID ใหม่ → ผ่าน) — unique บนเลขใบ/ใบแจ้งหนี้อย่างเดียวจะขวางงวดที่ถูกต้อง (ประเด็นที่ GPT ท้วงและถูก)
 - **ต่อยอดตารางอื่น (เบิกจ่าย/รับของ/เบิกสต๊อก):** เพิ่มคอลัมน์+index แบบเดียวกัน → ใส่ `request_id` ใน state ตอนเปิดฟอร์ม → เปลี่ยน upsert เป็น `_upsertIdem` → เพิ่มเคสใน `test-doc-idempotency.mjs` (ตรวจครบ 4 ชั้น: ฟอร์ม/api/helper/migration)
 - test: `test-money-views.mjs` (ลูกหนี้/เจ้าหนี้) · `test-money-docs.mjs` (guard เอกสาร 4 ชนิด) · `test-doc-idempotency.mjs` (ชั้น DB) · ดู [[build-passes-page-dead]] (npm test รันครบทุก suite แล้ว)
+
+**ต่อยอดแล้ว (v847):** `expense_requests` — `_insertIdem(table,row)` (คู่ของ _upsertIdem สำหรับตาราง insert ใหม่) ใน `submitExpense` + ฟอร์มขอเบิกใหม่ใส่ `request_id` ตอนเปิด (Expenses.jsx setForm) · mig `20260917110000_expense_request_id.sql` · test `test-expense-idempotency.mjs`. ยังไม่ทำ: รับของ PO / เบิกสต๊อก (Movements) — ใช้ pattern เดียวกัน
