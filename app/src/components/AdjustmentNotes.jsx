@@ -38,6 +38,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState(null);   // "save" | note_no ที่กำลังเขียน — กันกดซ้ำ (ออก/ยกเลิก/ลบ ใบเพิ่ม-ลดหนี้)
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
   const [printA, setPrintA] = React.useState(null);
@@ -106,6 +107,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
   const net = round2(total - whtAmt);
 
   async function save() {
+    if (busy) return;                              // กันกดซ้ำ — ออกใบเพิ่ม/ลดหนี้ซ้อนกัน
     if (!src) return flash("เลือกใบเสร็จต้นทางก่อน", true);
     if (!ed.reason.trim()) return flash("ใส่เหตุผลการปรับ (ลูกค้าจะเห็นในเอกสาร)", true);
     if (!items.some((i) => i.name.trim() && i.amount > 0)) return flash("ใส่รายการที่" + KINDS[ed.kind].verb + "อย่างน้อย 1 บรรทัด", true);
@@ -118,20 +120,28 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
       note: ed.note, internal_note: ed.internal_note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty,
       ...(() => { const sig = ed.sign_on ? mySignature() : null; return { sign_url: sig?.url || null, sign_name: sig?.name || null }; })(),
     };
+    setBusy("save");
     try {
       if (await docNoTaken("adjustment_notes", a.note_no)) return flash(`เลขที่ ${a.note_no} ถูกใช้แล้ว — เปลี่ยนเลขก่อนบันทึก`, true);
       await saveAdjustmentNote(a); flash(`ออก${KINDS[ed.kind].th} ${a.note_no} แล้ว`); setEd(null); await load();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    finally { setBusy(null); }
   }
   async function cancel(x) {
+    if (busy) return;
     const reason = await confirmDialog({ title: `ยกเลิก${KINDS[x.kind].th} ${x.note_no}?`, message: "เก็บประวัติไว้ · เอกสารจะไม่นับในสายเชื่อมโยง", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น ออกผิด · ยอดผิด", required: true } });
     if (reason === false) return;
+    setBusy(x.note_no);
     try { await setAdjustmentNoteStatus(x.note_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+    finally { setBusy(null); }
   }
   async function del(x) {
+    if (busy) return;
     const reason = await confirmDialog({ title: `ลบ${KINDS[x.kind].th} ${x.note_no}?`, message: "เก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ออกผิด", required: true } });
     if (reason === false) return;
+    setBusy(x.note_no);
     try { await deleteAdjustmentNote(x.note_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); }
+    finally { setBusy(null); }
   }
   function doPrint(x) { printWin.current = openPrintWindow(); setPrintA(x); }
 
@@ -239,7 +249,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
-            <button className="btn-primary" style={{ flex: 1 }} disabled={!src} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> ออก{K.th}</button>
+            <button className="btn-primary" style={{ flex: 1 }} disabled={busy !== null || !src} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> ออก{K.th}</button>
           </div>
         </div>
         {toast && <Toast t={toast} />}
@@ -306,8 +316,8 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
                 <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
                 <button className="btn-ghost sm" onClick={() => doPrint(x)}><UIcon name="catalog" size={14} /> พิมพ์</button>
                 {canEdit && !cancelled && <button className="btn-ghost sm" onClick={() => startEdit(x)}><UIcon name="edit" size={14} /> แก้ไข</button>}
-                {canEdit && !cancelled && <button className="btn-ghost sm" style={{ color: "#b45309" }} onClick={() => cancel(x)}>ยกเลิก</button>}
-                {canDelete && <button className="btn-ghost sm" style={{ color: "#b91c1c" }} onClick={() => del(x)}><UIcon name="trash" size={14} /> ลบ</button>}
+                {canEdit && !cancelled && <button className="btn-ghost sm" style={{ color: "#b45309" }} disabled={busy === x.note_no} onClick={() => cancel(x)}>ยกเลิก</button>}
+                {canDelete && <button className="btn-ghost sm" style={{ color: "#b91c1c" }} disabled={busy === x.note_no} onClick={() => del(x)}><UIcon name="trash" size={14} /> ลบ</button>}
               </div>
             </div>
           );

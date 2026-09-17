@@ -43,6 +43,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const [quotes, setQuotes] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState(null);   // "save" | receipt_no ที่กำลังเขียน — กันกดซ้ำ (ออกใบเสร็จ/รับเงิน/ยกเลิก/ลบ) · sendToFlow มี faBusy แยกอยู่แล้ว
   const [loadError, setLoadError] = React.useState("");
   useScreenTiming("receipt", loading, loadError);
   const [toast, setToast] = React.useState(null);
@@ -119,7 +120,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
     const items = iv?.items?.length ? iv.items.map((x) => ({ ...x })) : salesItems(quoteByNo[iv?.quote_no]);
     setEd((s) => ({ ...s, invoice_no, items: enrichSalesItems(items, quoteByNo[iv?.quote_no]), wht: whtEnabled(iv, iv?.customerType), wht_rate: parseWhtRate(iv?.wht_rate), note: s.note || iv?.note || "", internal_note: s.internal_note || iv?.internal_note || "", terms_payment: iv?.terms_payment || "", terms_freebies: iv?.terms_freebies || "", terms_warranty: iv?.terms_warranty || "" }));
   }
-  async function markPaid(x) { try { await setReceiptStatus(x.receipt_no, "paid", x.invoice_no); flash("รับเงินแล้ว ✓"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function markPaid(x) { if (busy) return; setBusy(x.receipt_no); try { await setReceiptStatus(x.receipt_no, "paid", x.invoice_no); flash("รับเงินแล้ว ✓"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } finally { setBusy(null); } }
   const setF = (k, v) => setEd((e) => ({ ...e, [k]: v }));
   const selInv = ed?.invoice_no ? invByNo[ed.invoice_no] : null;
   const whtRate = parseWhtRate(ed?.wht_rate);
@@ -128,6 +129,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const net = selInv ? round2((Number(selInv.total) || 0) - whtAmt) : 0;
 
   async function save() {
+    if (busy) return;                              // กันออกใบเสร็จซ้ำ — genNo ละเอียดแค่วินาที กดคร่อมวินาทีได้ 2 ใบ
     if (!selInv) return flash("เลือกใบแจ้งหนี้ก่อน", true);
     const r = {
       receipt_no: ed.receipt_no, invoice_no: selInv.invoice_no, quote_no: selInv.quote_no || null, boq_no: selInv.boq_no || null, job_no: null,
@@ -136,15 +138,17 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
       note: ed.note, internal_note: ed.internal_note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty,
       ...(() => { const sig = ed.sign_on ? mySignature() : null; return { sign_url: sig?.url || null, sign_name: sig?.name || null }; })(),
     };
+    setBusy("save");
     try {
       // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — เช็คก่อนเสมอ (เลขแก้มือได้)
       if (await docNoTaken("receipts", r.receipt_no)) return flash(`เลขที่ ${r.receipt_no} ถูกใช้แล้ว — เปลี่ยนเลขที่ก่อนบันทึก`, true);
       await saveReceipt(r); flash(r.status === "paid" ? `ออกใบเสร็จ + ปิดใบแจ้งหนี้ ${selInv.invoice_no} แล้ว` : `ออกใบเสร็จ (รอชำระเงิน) แล้ว`); setEd(null); await load();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    finally { setBusy(null); }
   }
-  async function del(x) { const reason = await confirmDialog({ title: `ลบใบเสร็จ ${x.receipt_no}?`, message: "ใบแจ้งหนี้จะกลับเป็นค้างชำระ · ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ออกผิด · รับเงินผิดยอด", required: true } }); if (reason === false) return; try { await deleteReceipt(x.receipt_no, x.invoice_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
-  async function cancel(x) { const reason = await confirmDialog({ title: `ยกเลิกใบเสร็จ ${x.receipt_no}?`, message: "เก็บประวัติไว้ · ใบแจ้งหนี้กลับเป็นค้างชำระ", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น รับเงินผิดยอด · ออกผิดใบ", required: true } }); if (reason === false) return; try { await setReceiptStatus(x.receipt_no, "cancelled", x.invoice_no, reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(x) { if (busy) return; const reason = await confirmDialog({ title: `ลบใบเสร็จ ${x.receipt_no}?`, message: "ใบแจ้งหนี้จะกลับเป็นค้างชำระ · ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ออกผิด · รับเงินผิดยอด", required: true } }); if (reason === false) return; setBusy(x.receipt_no); try { await deleteReceipt(x.receipt_no, x.invoice_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } finally { setBusy(null); } }
+  async function cancel(x) { if (busy) return; const reason = await confirmDialog({ title: `ยกเลิกใบเสร็จ ${x.receipt_no}?`, message: "เก็บประวัติไว้ · ใบแจ้งหนี้กลับเป็นค้างชำระ", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น รับเงินผิดยอด · ออกผิดใบ", required: true } }); if (reason === false) return; setBusy(x.receipt_no); try { await setReceiptStatus(x.receipt_no, "cancelled", x.invoice_no, reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } finally { setBusy(null); } }
   async function sendToFlow(x) {
     // (1) VAT เท่านั้น — ตัดสินจาก "ยอด VAT บนใบเสร็จจริง" ไม่ใช่ธงในใบเสนอที่อาจโหลดไม่ครบ
     //     ใบกำกับภาษีต้องมี VAT · ฝั่งเซิร์ฟเวอร์ (flowaccount-doc.js) ก็ปฏิเสธ tax-invoice ที่ไม่มี VAT ซ้ำอีกชั้น
@@ -277,7 +281,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
-            <button className="btn-primary" style={{ flex: 1 }} disabled={!selInv} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> ออกใบเสร็จ</button>
+            <button className="btn-primary" style={{ flex: 1 }} disabled={busy !== null || !selInv} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> ออกใบเสร็จ</button>
           </div>
         </div>
         {toast && <Toast t={toast} />}
@@ -356,7 +360,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
             <InternalNoteTag note={x.internal_note} role={role} />
             <div className="job-lines"><div className="job-actions">
               <ChatCustomerLink role={role} customerId={x.customer_id} onGoChat={onGoChat} />
-              {canEdit && x.status === "pending" && <button className="btn-primary sm" onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
+              {canEdit && x.status === "pending" && <button className="btn-primary sm" disabled={busy === x.receipt_no} onClick={() => markPaid(x)}><UIcon name="check" size={14} color="#fff" strokeWidth={2.4} /> รับเงินแล้ว</button>}
               {x.wht_amt > 0 && <button className="btn-ghost sm" onClick={() => setEvidenceDoc(x)}>หลักฐานหัก ณ ที่จ่าย</button>}
               <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> {x.customerType === "company" ? "รายการ / หัก ณ ที่จ่าย" : "รายการเอกสาร"}</button>
               {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => setNotesEd({ kind: "receipt", docNo: x.receipt_no, title: x.title, note: x.note, internalNote: x.internal_note })}><UIcon name="edit" size={14} /> หมายเหตุ</button>}
@@ -372,8 +376,8 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
                     ? <button className="btn-ghost sm" style={{ color: "#b45309" }} disabled={faBusy === x.receipt_no} title="ค้างสถานะกำลังส่ง — เช็กใน FlowAccount ว่ามีเอกสารใบนี้แล้วหรือยัง แล้วบันทึกเลข/ปลดล็อก (ไม่ส่งซ้ำอัตโนมัติ)" onClick={() => resolvePending(x)}>⚠️ ค้างส่ง — จัดการ</button>
                     : <button className="btn-ghost sm" disabled={faBusy === x.receipt_no} title="ส่งใบกำกับภาษีเข้า FlowAccount" onClick={() => sendToFlow(x)}>{faBusy === x.receipt_no ? "กำลังส่ง…" : "↗ FlowAccount"}</button>
               )}
-              {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(x)}>ยกเลิก</button>}
-              {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
+              {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" disabled={busy === x.receipt_no} onClick={() => cancel(x)}>ยกเลิก</button>}
+              {canDelete && <button className="btn-ghost sm danger" disabled={busy === x.receipt_no} title="ลบถาวร (ธุรการ)" onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
             </div></div>
           </div>
           );

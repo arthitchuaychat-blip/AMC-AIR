@@ -38,6 +38,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
   const [custs, setCusts] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState(false);   // กันกดซ้ำ ยกเลิก/ลบ ใบวางบิล (คอมโพเนนต์นอก — CreateModal มี busy ของตัวเองแยกต่างหาก)
   const [ed, setEd] = React.useState(null);     // create modal
   const [openInv, setOpenInv] = React.useState(null); // billing_no whose invoices are expanded
   const [printB, setPrintB] = React.useState(null);
@@ -68,8 +69,8 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
     const rc = b.invoices.filter((iv) => iv.hasReceipt).map((iv) => iv.invoice_no);
     return rc.length ? `ยกเลิก/ลบใบวางบิลนี้ไม่ได้ — ใบแจ้งหนี้ ${rc.join(", ")} ออกใบเสร็จแล้ว\nต้องยกเลิกใบเสร็จก่อน (ยกเลิกจากเอกสารล่าสุดย้อนกลับ)` : null;
   };
-  async function cancel(b) { const lk = lockMsg(b); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบวางบิล ${b.billing_no}?`, message: "เก็บประวัติไว้", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น แก้ไขรายการ · วางบิลใหม่", required: true } }); if (reason === false) return; try { await setBillingNoteStatus(b.billing_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
-  async function del(b) { const lk = lockMsg(b); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบวางบิล ${b.billing_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } }); if (reason === false) return; try { await deleteBillingNote(b.billing_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
+  async function cancel(b) { if (busy) return; const lk = lockMsg(b); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบวางบิล ${b.billing_no}?`, message: "เก็บประวัติไว้", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น แก้ไขรายการ · วางบิลใหม่", required: true } }); if (reason === false) return; setBusy(true); try { await setBillingNoteStatus(b.billing_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } finally { setBusy(false); } }
+  async function del(b) { if (busy) return; const lk = lockMsg(b); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบวางบิล ${b.billing_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ทำผิด · ซ้ำ", required: true } }); if (reason === false) return; setBusy(true); try { await deleteBillingNote(b.billing_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } finally { setBusy(false); } }
 
   if (loading) return <div className="adm"><div className="empty">กำลังโหลด…</div></div>;
 
@@ -170,8 +171,8 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
               <button className="btn-ghost sm" onClick={() => setOpenInv(openInv === b.billing_no ? null : b.billing_no)}><UIcon name="clipboard" size={14} /> {openInv === b.billing_no ? "ซ่อนรายการ" : "ดูใบแจ้งหนี้ / ออกใบเสร็จ"}</button>
               {canEdit && b.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => setNotesEd({ kind: "billing", docNo: b.billing_no, title: b.customerName, note: b.note, internalNote: b.internal_note })}><UIcon name="edit" size={14} /> หมายเหตุ</button>}
               <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintB(b); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-              {canEdit && b.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => cancel(b)}>ยกเลิก</button>}
-              {canDelete && <button className="btn-ghost sm danger" title="ลบถาวร (ธุรการ)" onClick={() => del(b)}><UIcon name="trash" size={14} /></button>}
+              {canEdit && b.status !== "cancelled" && <button className="btn-ghost sm" disabled={busy} onClick={() => cancel(b)}>ยกเลิก</button>}
+              {canDelete && <button className="btn-ghost sm danger" disabled={busy} title="ลบถาวร (ธุรการ)" onClick={() => del(b)}><UIcon name="trash" size={14} /></button>}
             </div></div>
             {openInv === b.billing_no && (
               <div className="bn-invlist">

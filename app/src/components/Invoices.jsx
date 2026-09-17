@@ -39,6 +39,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [custs, setCusts] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
   const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState(null);   // "save" | invoice_no ที่กำลังเขียน — กันกดซ้ำ (สร้าง/ยกเลิก/ลบ ใบแจ้งหนี้)
   const [loadError, setLoadError] = React.useState("");
   const [toast, setToast] = React.useState(null);
   const [ed, setEd] = React.useState(null);
@@ -143,6 +144,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   })();
 
   async function save() {
+    if (busy) return;                              // กันกดซ้ำ — docNoTaken เช็คแล้วแต่สองคลิกซ้อนวิ่งผ่านพร้อมกันได้
     if (!selQ) return flash("เลือกใบเสนอราคาก่อน", true);
     // ปล่อยวันครบกำหนดว่าง = ใบนี้จะไม่โผล่ใน "เกินกำหนดชำระ" ตลอดกาล ต้องให้ยืนยันก่อน ไม่ใช่ผ่านเงียบ ๆ
     if (!ed.due_date && !await confirmDialog({
@@ -173,19 +175,21 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       note: ed.note, internal_note: ed.internal_note, terms_payment: ed.terms_payment, terms_freebies: ed.terms_freebies, terms_warranty: ed.terms_warranty, status: "unpaid",
       ...(() => { const sig = ed.sign_on ? mySignature() : null; return { sign_url: sig?.url || null, sign_name: sig?.name || null }; })(),
     };
+    setBusy("save");
     try {
       // เลขซ้ำ = upsert ทับใบเดิมเงียบ ๆ — เช็คก่อนเสมอ (เลขแก้มือได้)
       if (await docNoTaken("invoices", inv.invoice_no)) return flash(`เลขที่ ${inv.invoice_no} ถูกใช้แล้ว — เปลี่ยนเลขที่ก่อนบันทึก`, true);
       await saveInvoice(inv); flash(`สร้างใบส่งของ/ใบแจ้งหนี้งวดที่ ${installment} แล้ว`); setEd(null); await load();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    finally { setBusy(null); }
   }
   // chain lock: can't edit/delete/cancel an invoice that already has a receipt downstream
   // ลำดับการยกเลิก: ใบเสร็จก่อน → ใบวางบิล → แล้วจึงใบแจ้งหนี้ (ยกเลิกจากเอกสารล่าสุดย้อนกลับ)
   const lockMsg = (x) => x.hasReceipt ? "แก้ไข/ลบ/ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — ออกใบเสร็จจากใบนี้แล้ว\nต้องยกเลิก/ลบใบเสร็จก่อน"
     : x.billingNo ? `แก้ไข/ลบ/ยกเลิกใบแจ้งหนี้นี้ไม่ได้ — อยู่ในใบวางบิล ${x.billingNo}\nต้องยกเลิกใบวางบิลก่อน (ยกเลิกจากเอกสารล่าสุดย้อนกลับ)` : null;
-  async function del(x) { const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบส่งของ/ใบแจ้งหนี้ ${x.invoice_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ออกผิด · ลูกค้ายกเลิก", required: true } }); if (reason === false) return; try { await deleteInvoice(x.invoice_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } }
-  async function cancel(x) { const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบส่งของ/ใบแจ้งหนี้ ${x.invoice_no}?`, message: "ยอดจะคืนกลับไปคงเหลือ", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น แก้ไขยอด · ลูกค้าเปลี่ยนใจ", required: true } }); if (reason === false) return; try { await setInvoiceStatus(x.invoice_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } }
+  async function del(x) { if (busy) return; const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ลบใบส่งของ/ใบแจ้งหนี้ ${x.invoice_no}?`, message: "ข้อมูลจะถูกเก็บไว้ในประวัติการลบ (กู้คืนได้)", confirmText: "ลบ", prompt: { label: "เหตุผลที่ลบ", placeholder: "เช่น ออกผิด · ลูกค้ายกเลิก", required: true } }); if (reason === false) return; setBusy(x.invoice_no); try { await deleteInvoice(x.invoice_no, reason); flash("ลบแล้ว"); await load(); } catch (e) { flash("ลบไม่สำเร็จ: " + (e.message || e), true); } finally { setBusy(null); } }
+  async function cancel(x) { if (busy) return; const lk = lockMsg(x); if (lk) return alert(lk); const reason = await confirmDialog({ title: `ยกเลิกใบส่งของ/ใบแจ้งหนี้ ${x.invoice_no}?`, message: "ยอดจะคืนกลับไปคงเหลือ", confirmText: "ยกเลิกใบนี้", prompt: { label: "เหตุผลที่ยกเลิก", placeholder: "เช่น แก้ไขยอด · ลูกค้าเปลี่ยนใจ", required: true } }); if (reason === false) return; setBusy(x.invoice_no); try { await setInvoiceStatus(x.invoice_no, "cancelled", reason); flash("ยกเลิกแล้ว"); await load(); } catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); } finally { setBusy(null); } }
 
   // ---------- EDITOR ----------
   if (ed) {
@@ -287,7 +291,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button className="btn-ghost" onClick={() => setEd(null)}>ยกเลิก</button>
-            <button className="btn-primary" style={{ flex: 1 }} disabled={!selQ || (!freeJob && newTotal <= 0)} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {freeJob ? "สร้างใบแจ้งหนี้ ฿0 (งานฟรี)" : "สร้างใบส่งของ/ใบแจ้งหนี้"}</button>
+            <button className="btn-primary" style={{ flex: 1 }} disabled={busy !== null || !selQ || (!freeJob && newTotal <= 0)} onClick={save}><UIcon name="check" size={16} color="#fff" strokeWidth={2.4} /> {freeJob ? "สร้างใบแจ้งหนี้ ฿0 (งานฟรี)" : "สร้างใบส่งของ/ใบแจ้งหนี้"}</button>
           </div>
         </div>
         {toast && <Toast t={toast} />}
@@ -384,8 +388,8 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
                 <button className="btn-ghost sm" onClick={() => setView(x)}><UIcon name="clipboard" size={14} /> {x.customerType === "company" ? "รายการ / หัก ณ ที่จ่าย" : "รายการเอกสาร"}</button>
                 {canEdit && x.status !== "cancelled" && <button className="btn-ghost sm" onClick={() => setNotesEd({ kind: "invoice", docNo: x.invoice_no, title: x.title, note: x.note, internalNote: x.internal_note })}><UIcon name="edit" size={14} /> หมายเหตุ</button>}
                 <button className="btn-ghost sm" onClick={() => { printWin.current = openPrintWindow(); setPrintI(x); }}><UIcon name="catalog" size={14} /> พิมพ์</button>
-                {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" disabled={x.hasReceipt} title={lockMsg(x) || ""} onClick={() => cancel(x)}>ยกเลิก</button>}
-                {canDelete && <button className="btn-ghost sm danger" disabled={x.hasReceipt} title={x.hasReceipt ? (lockMsg(x) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
+                {canEdit && x.status === "unpaid" && <button className="btn-ghost sm" disabled={busy === x.invoice_no || x.hasReceipt} title={lockMsg(x) || ""} onClick={() => cancel(x)}>ยกเลิก</button>}
+                {canDelete && <button className="btn-ghost sm danger" disabled={busy === x.invoice_no || x.hasReceipt} title={x.hasReceipt ? (lockMsg(x) || "") : "ลบถาวร (ธุรการ)"} onClick={() => del(x)}><UIcon name="trash" size={14} /></button>}
               </div></div>
             </div>
           );
