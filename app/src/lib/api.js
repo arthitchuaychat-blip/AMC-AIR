@@ -2808,7 +2808,7 @@ export async function saveInvoice(inv) {
     if (billedOther + (Number(inv.total) || 0) > qg.grand + 1)
       throw new Error(`ยอดวางบิลรวมเกินยอดใบเสนอราคา — วางแล้ว ${billedOther.toLocaleString("en-US")} + งวดนี้ ${(Number(inv.total) || 0).toLocaleString("en-US")} > ${qg.grand.toLocaleString("en-US")} (อาจมีคนวางบิลพร้อมกันจากอีกเครื่อง — รีเฟรชแล้วลองใหม่)`);
   }
-  const { error } = await supabase.from("invoices").upsert({
+  const { dup } = await _upsertIdem("invoices", { request_id: inv.request_id || null,   // กันซ้ำระดับ DB (UUID ต่อการเปิดฟอร์ม)
     invoice_no: inv.invoice_no, quote_no: inv.quote_no || null, boq_no: inv.boq_no || null,
     customer_id: inv.customer_id || null, site_id: inv.site_id || null,
     issue_date: inv.issue_date || null, due_date: inv.due_date || null,
@@ -2816,8 +2816,8 @@ export async function saveInvoice(inv) {
     base: Number(inv.base) || 0, vat_amt: Number(inv.vat_amt) || 0, total: Number(inv.total) || 0,
     wht_enabled: !!inv.wht_enabled, wht_amt: Number(inv.wht_amt) || 0, wht_rate: whtRate(inv.wht_rate), items: inv.items || [],
     note: inv.note?.trim() || null, internal_note: inv.internal_note?.trim() || null, ..._termCols(inv), ..._signCols(inv), status: inv.status || "unpaid", created_by: user?.id || null,
-  }, { onConflict: "invoice_no" });
-  if (error) throw error;
+  }, "invoice_no");
+  if (dup) return { dup: true };   // บันทึกไปแล้วจากรอบก่อน (กดซ้ำ/retry หลังเน็ตหลุด) — ข้าม side effect ที่ทำไปแล้ว
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background (unpaid invoice → "คาดว่าจะรับ")
   syncInternalNote({ quoteNo: inv.quote_no }, inv.internal_note).catch(() => {});
 }
@@ -2950,14 +2950,14 @@ export async function saveReceipt(r) {
     if (re) throw re;
     if ((count || 0) > 0) throw new Error("ใบแจ้งหนี้นี้มีใบเสร็จอยู่แล้ว — ห้ามออกซ้ำ (อาจมีคนออกให้พร้อมกันจากอีกเครื่อง)");
   }
-  const { error } = await supabase.from("receipts").upsert({
+  const { dup } = await _upsertIdem("receipts", { request_id: r.request_id || null,   // กันซ้ำระดับ DB (UUID ต่อการเปิดฟอร์ม)
     receipt_no: r.receipt_no, invoice_no: r.invoice_no || null, quote_no: r.quote_no || null, boq_no: r.boq_no || null, job_no: r.job_no || null,
     customer_id: r.customer_id || null, site_id: r.site_id || null, issue_date: r.issue_date || null, payment_method: r.payment_method || null,
     base: Number(r.base) || 0, vat_amt: Number(r.vat_amt) || 0, total: Number(r.total) || 0, wht_amt: Number(r.wht_amt) || 0, net: Number(r.net) || 0,
     wht: !!r.wht, wht_rate: whtRate(r.wht_rate), items: r.items || [],
     status, note: r.note?.trim() || null, internal_note: r.internal_note?.trim() || null, ..._termCols(r), ..._signCols(r), created_by: user?.id || null,
-  }, { onConflict: "receipt_no" });
-  if (error) throw error;
+  }, "receipt_no");
+  if (dup) return { dup: true };   // บันทึกไปแล้วจากรอบก่อน (กดซ้ำ/retry หลังเน็ตหลุด) — ข้าม side effect ที่ทำไปแล้ว
   if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no).neq("status", "cancelled"); // ห้ามปลุกใบที่ยกเลิกแล้วกลับมา
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
   syncBankReceipts().catch(() => {});        // auto-post the deposit into the bank-account ledger
@@ -3009,7 +3009,7 @@ export async function saveAdjustmentNote(a) {
     if (re) throw re;
     if (rcRow && rcRow.status === "cancelled") throw new Error("ใบเสร็จต้นทางถูกยกเลิกแล้ว — ออกใบลด/เพิ่มหนี้ไม่ได้");
   }
-  const { error } = await supabase.from("adjustment_notes").upsert({
+  const { dup } = await _upsertIdem("adjustment_notes", { request_id: a.request_id || null,   // กันซ้ำระดับ DB (UUID ต่อการเปิดฟอร์ม)
     note_no: a.note_no, kind, receipt_no: a.receipt_no || null, invoice_no: a.invoice_no || null, quote_no: a.quote_no || null,
     boq_no: a.boq_no || null, job_no: a.job_no || null, customer_id: a.customer_id || null, site_id: a.site_id || null,
     issue_date: a.issue_date || null, reason: a.reason?.trim() || null, is_vat: !!a.is_vat, items: a.items || [],
@@ -3017,8 +3017,8 @@ export async function saveAdjustmentNote(a) {
     wht_enabled: !!a.wht_enabled, wht_rate: whtRate(a.wht_rate), wht_amt: Number(a.wht_amt) || 0, net: Number(a.net) || 0,
     note: a.note?.trim() || null, internal_note: a.internal_note?.trim() || null, ..._termCols(a), ..._signCols(a),
     status: a.status === "cancelled" ? "cancelled" : "issued", created_by: user?.id || null,
-  }, { onConflict: "note_no" });
-  if (error) throw error;
+  }, "note_no");
+  if (dup) return { dup: true };   // บันทึกไปแล้วจากรอบก่อน (กดซ้ำ/retry หลังเน็ตหลุด) — ข้าม side effect ที่ทำไปแล้ว
   bustCache("listAdjustmentNotes"); bustCache("listDocLinks");
   syncInternalNote({ invoiceNo: a.invoice_no }, a.internal_note).catch(() => {});
 }
@@ -3086,12 +3086,12 @@ async function _loadBillingNotes() {
 }
 export async function saveBillingNote(b) {
   const uid = await _uid();
-  const { error } = await supabase.from("billing_notes").upsert({
+  const { dup } = await _upsertIdem("billing_notes", { request_id: b.request_id || null,   // กันซ้ำระดับ DB (UUID ต่อการเปิดฟอร์ม)
     billing_no: b.billing_no, customer_id: b.customer_id || null, site_id: b.site_id || null,
     issue_date: b.issue_date || null, note: b.note || null, internal_note: b.internal_note?.trim() || null, invoice_nos: b.invoice_nos || [], ..._signCols(b),
     status: b.status || "open", created_by: uid,
-  }, { onConflict: "billing_no" });
-  if (error) throw error;
+  }, "billing_no");
+  if (dup) return { dup: true };   // บันทึกไปแล้วจากรอบก่อน (กดซ้ำ/retry หลังเน็ตหลุด) — ข้าม side effect ที่ทำไปแล้ว
   syncInternalNote({ invoiceNo: (b.invoice_nos || [])[0] }, b.internal_note).catch(() => {});
 }
 // ใบวางบิลมีใบเสร็จ live ในสมาชิกไหม — ตัวล็อกโซ่ฝั่ง server (เดิมเช็คแค่ใน UI จาก data ตอนโหลดหน้า → 2 เครื่องแข่งกันหลุดได้)
@@ -4917,6 +4917,21 @@ async function _insertDropMissing(table, row) {
     throw error;
   }
   throw new Error("insert failed after dropping missing columns");
+}
+// กันบันทึกเอกสารเงินซ้ำระดับ DB (mig 20260917100000_doc_request_id) — ชั้นสองต่อจาก busy guard ฝั่งจอ
+//   request_id = UUID ต่อการ "เปิดฟอร์ม" 1 ครั้ง (ไม่ใช่ต่อใบ) → กดซ้ำ/retry หลังเน็ตหลุด = ค่าเดิม → unique ปฏิเสธใบที่ 2
+//   · 23505 บน request_id  → ใบนี้บันทึกไปแล้วจากรอบก่อน → คืน { dup:true } ให้ผู้เรียก "ข้าม side effect" ไม่ใช่โยน error
+//   · ยังไม่รัน migration (คอลัมน์ไม่มี) → ตัด request_id ทิ้งแล้วบันทึกตามปกติ (ไม่ทำแอปพังก่อนรัน SQL)
+//   · เปิดฟอร์มใหม่ = UUID ใหม่ → ออกใบใหม่/จ่ายงวดถัดไปได้ตามปกติ (แยก "กดครั้งเดิมซ้ำ" ออกจาก "รอบใหม่")
+async function _upsertIdem(table, row, onConflict) {
+  let { error } = await supabase.from(table).upsert(row, { onConflict });
+  if (error && row.request_id && _missingCol(error) === "request_id") {
+    const { request_id, ...rest } = row;
+    ({ error } = await supabase.from(table).upsert(rest, { onConflict }));
+  }
+  if (error && row.request_id && /request_id/i.test(error.message || "") && /23505|duplicate|unique/i.test(String(error.code || "") + (error.message || ""))) return { dup: true };
+  if (error) throw error;
+  return { dup: false };
 }
 export async function submitExpense(e) {
   const uid = await _uid();

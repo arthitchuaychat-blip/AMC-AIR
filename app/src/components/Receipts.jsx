@@ -113,7 +113,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
   const invByNo = React.useMemo(() => Object.fromEntries(invoices.map((x) => [x.invoice_no, x])), [invoices]);
   const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
-  function startNew() { setEd({ receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", items: [], wht_rate: 3, note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "" }); }
+  function startNew() { setEd({ request_id: crypto.randomUUID(), receipt_no: genNo(), invoice_no: "", issue_date: today(), payment_method: METHODS[1], status: "paid", items: [], wht_rate: 3, note: "", internal_note: "", sign_on: defaultSignOn(), terms_payment: "", terms_freebies: "", terms_warranty: "" }); }
   // copy the invoice's line items (with WHT flags) + end-of-document terms when an invoice is selected
   function onPickInvoice(invoice_no) {
     const iv = invByNo[invoice_no];
@@ -132,6 +132,7 @@ export default function Receipts({ role, fromInvoice, onFromInvoiceConsumed, onO
     if (busy) return;                              // กันออกใบเสร็จซ้ำ — genNo ละเอียดแค่วินาที กดคร่อมวินาทีได้ 2 ใบ
     if (!selInv) return flash("เลือกใบแจ้งหนี้ก่อน", true);
     const r = {
+      request_id: ed.request_id || null,   // UUID ต่อการเปิดฟอร์ม — กันซ้ำระดับ DB
       receipt_no: ed.receipt_no, invoice_no: selInv.invoice_no, quote_no: selInv.quote_no || null, boq_no: selInv.boq_no || null, job_no: null,
       customer_id: selInv.customer_id || null, site_id: selInv.site_id || null, issue_date: ed.issue_date || null, payment_method: ed.payment_method || null,
       base: selInv.base, vat_amt: selInv.vat_amt, total: selInv.total, wht_amt: whtAmt, net, wht: whtCalc.enabled, wht_rate: whtRate, items: whtCalc.items, status: ed.status || "paid",

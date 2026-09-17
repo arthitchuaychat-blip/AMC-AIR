@@ -159,7 +159,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "v843 · เกราะเอกสารเงิน r2: กันกดซ้ำ ออก/ยกเลิก/ลบ ใบแจ้งหนี้·ใบเสร็จ(+รับเงินแล้ว)·ใบเพิ่ม-ลดหนี้·ใบวางบิล";
+const BUILD = "v844 · กันซ้ำระดับ DB: request_id ต่อการเปิดฟอร์ม ใบแจ้งหนี้·ใบเสร็จ·ใบเพิ่ม-ลดหนี้·ใบวางบิล (ต้องรัน SQL 20260917100000)";
 
 function SetupNotice() {
   return (

@@ -13,7 +13,8 @@ const api = fs.readFileSync("src/lib/api.js", "utf8");
 console.log("\nการ์ดกันวางบิลเกินยอดใบเสนอราคา:");
 
 // ดึงโค้ดจริง: _quoteGrand + ส่วนหัวของ saveInvoice ที่เป็นตัวการ์ด
-const src = api.slice(api.indexOf("async function _quoteGrand"), api.indexOf("const { error } = await supabase.from(\"invoices\").upsert("))
+// หมุดตัดโค้ดปลายทาง: v844 เปลี่ยน upsert ตรง → _upsertIdem (กันซ้ำระดับ DB) — ถ้าบรรทัดนั้นเปลี่ยนอีกต้องอัปเดตหมุดนี้
+const src = api.slice(api.indexOf("async function _quoteGrand"), api.indexOf("const { dup } = await _upsertIdem(\"invoices\", {"))
   .replace("export async function saveInvoice", "async function saveInvoice") + "\n  return \"ผ่านการ์ด\";\n}";
 
 // supabase ปลอม: คุมได้ว่าแต่ละตารางจะตอบอะไร

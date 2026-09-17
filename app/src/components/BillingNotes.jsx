@@ -84,7 +84,7 @@ export default function BillingNotes({ role, onOpenDoc, onCreateReceipt, onGoCha
             <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบแจ้งหนี้ / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
             {search && <button className="cat-search-x" onClick={() => setSearch("")}><UIcon name="x" size={15} /></button>}
           </div>
-          {canEdit && <button className="btn-primary" onClick={() => setEd({ billing_no: genNo(), customer_id: "", issue_date: today(), note: "", internal_note: "", sign_on: defaultSignOn(), sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
+          {canEdit && <button className="btn-primary" onClick={() => setEd({ request_id: crypto.randomUUID(), billing_no: genNo(), customer_id: "", issue_date: today(), note: "", internal_note: "", sign_on: defaultSignOn(), sel: {} })}><UIcon name="plus" size={16} color="#fff" /> สร้างใบวางบิล</button>}
         </div>
       </div>
 
@@ -258,7 +258,7 @@ function CreateModal({ ed, setEd, custs, invoices, billedInvNos, onSaved, flash 
         if (fresh === bnNo || await docNoTaken("billing_notes", fresh)) { flash(`เลขที่ ${bnNo} ถูกใช้แล้ว — ปิดแล้วเปิดสร้างใหม่`, true); setBusy(false); return; }
         bnNo = fresh;
       }
-      await saveBillingNote({ billing_no: bnNo, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, internal_note: ed.internal_note, sign_url: sig?.url || null, sign_name: sig?.name || null, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" });
+      await saveBillingNote({ request_id: ed.request_id || null, billing_no: bnNo, customer_id: ed.customer_id, site_id: chosen[0]?.site_id || null, issue_date: ed.issue_date, note: ed.note, internal_note: ed.internal_note, sign_url: sig?.url || null, sign_name: sig?.name || null, invoice_nos: chosen.map((x) => x.invoice_no), status: "open" });
       flash("สร้างใบวางบิลแล้ว ✓" + (bnNo !== ed.billing_no ? ` · ⚠️ เลขที่เดิมชนกับใบอื่น — ใบนี้ได้เลขใหม่ ${bnNo}` : "")); onSaved();
     }
     catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }

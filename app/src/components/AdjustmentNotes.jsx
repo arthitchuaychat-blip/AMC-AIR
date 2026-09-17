@@ -62,7 +62,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
   const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
   function startNew(kind) {
-    setEd({ note_no: genNo(kind), kind, receipt_no: "", issue_date: today(), reason: "", wht_rate: 3,
+    setEd({ request_id: crypto.randomUUID(), note_no: genNo(kind), kind, receipt_no: "", issue_date: today(), reason: "", wht_rate: 3,
       items: [blankItem()], note: "", internal_note: "", sign_on: defaultSignOn(),
       terms_payment: "", terms_freebies: "", terms_warranty: "", _src: null });
   }
@@ -112,6 +112,7 @@ export default function AdjustmentNotes({ role, onOpenDoc, onGoChat }) {
     if (!ed.reason.trim()) return flash("ใส่เหตุผลการปรับ (ลูกค้าจะเห็นในเอกสาร)", true);
     if (!items.some((i) => i.name.trim() && i.amount > 0)) return flash("ใส่รายการที่" + KINDS[ed.kind].verb + "อย่างน้อย 1 บรรทัด", true);
     const a = {
+      request_id: ed.request_id || null,   // UUID ต่อการเปิดฟอร์ม — กันซ้ำระดับ DB
       note_no: ed.note_no, kind: ed.kind, receipt_no: ed.receipt_no || null, invoice_no: src.invoice_no || null,
       quote_no: src.quote_no || null, boq_no: src.boq_no || null, job_no: src.job_no || null,
       customer_id: src.customer_id || src.customerCode || null, site_id: src.site_id || null, issue_date: ed.issue_date || null,

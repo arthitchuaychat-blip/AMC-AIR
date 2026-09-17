@@ -83,7 +83,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
 
   function startNew(quoteNo = "") {
     const q = quoteNo ? quoteByNo[quoteNo] : null;
-    setEd({ invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: q ? dueFromTerms(today(), q.customer_id) : "", basis: "percent", basis_value: 100, note: q?.note || "", internal_note: q?.internal_note || "", sign_on: defaultSignOn(),
+    setEd({ request_id: crypto.randomUUID(), invoice_no: genNo(), quote_no: quoteNo, issue_date: today(), due_date: q ? dueFromTerms(today(), q.customer_id) : "", basis: "percent", basis_value: 100, note: q?.note || "", internal_note: q?.internal_note || "", sign_on: defaultSignOn(),
       wht: !!q?.wht, wht_rate: whtRate(q?.wht_rate),
       terms_payment: q?.terms_payment || "", terms_freebies: q?.terms_freebies || "", terms_warranty: q?.terms_warranty || "" });
   }
@@ -168,6 +168,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
     const items = snap.map((it) => ({ ...it, wht: useWht && it.wht }));
     const wht_rate = whtRate(ed.wht_rate);
     const inv = {
+      request_id: ed.request_id || null,   // UUID ต่อการเปิดฟอร์ม — กันซ้ำระดับ DB
       invoice_no: ed.invoice_no, quote_no: selQ.quote_no, boq_no: selQ.boq_no || null,
       customer_id: selQ.customer_id || null, site_id: selQ.site_id || null,
       issue_date: ed.issue_date || null, due_date: ed.due_date || null, installment, pct: round2(f * 100),
