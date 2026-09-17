@@ -1692,7 +1692,7 @@ async function _loadBoqs(opts = {}) {
   const [it, cu, si, ct, qt] = await Promise.all([
     // ห้ามอ่านทั้งตารางตรง ๆ — Supabase ตัดที่ 1000 แถว รายการใบใหม่ (id ท้ายตาราง) จะหายทั้งที่บันทึกสำเร็จ
     _allRows((f, t) => _onlyNos(supabase.from("boq_items").select("*"), "boq_no", nos).order("id").range(f, t)),
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,vat,branch,type", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,status", { count: "exact" }), "boq_no", nos).order("quote_no").range(f, t)),
@@ -2536,7 +2536,7 @@ async function _loadQuotations(opts = {}) {
   const cScope = scoped ? _capNos(cids) : null, sScope = scoped ? _capNos(sids) : null;
   const [it, cu, si, ct, jo, inv] = await Promise.all([
     _allRows((f, t) => _onlyNos(supabase.from("quotation_items").select("*"), "quote_no", scope).order("id").range(f, t)), // กันเพดาน 1000 แถว
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", cScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,vat,branch,type", { count: "exact" }), "id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", sScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("job_no,quote_no,scheduled_at,status,assigned_team", { count: "exact" }), "quote_no", scope).order("job_no").range(f, t)),
@@ -2731,7 +2731,7 @@ async function _loadInvoices(opts = {}) {
   if (iv.error) throw iv.error;
   const cids = _idsOf(iv.data, "customer_id"), sids = _idsOf(iv.data, "site_id"), qnos = _idsOf(iv.data, "quote_no");
   const [cu, si, ct, qt, rc, bn] = await Promise.all([
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,vat,branch,type", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,title", { count: "exact" }), "quote_no", nos && (qnos.length ? qnos : ["__none__"])).order("quote_no").range(f, t)),
@@ -2906,7 +2906,7 @@ async function _loadReceipts(opts = {}) {
   const sScope = scoped ? _capNos(_idsOf(rc.data, "site_id")) : null;
   const qScope = scoped ? _capNos(_idsOf(rc.data, "quote_no")) : null;
   const [cu, si, ct, jo, qt] = await Promise.all([
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("*", { count: "exact" }), "id", cScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,vat,branch,type", { count: "exact" }), "id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", sScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", cScope).order("id").range(f, t)),
     _allRows((f, t) => _onlyNos(supabase.from("job_orders").select("job_no,quote_no", { count: "exact" }), "quote_no", qScope).order("job_no").range(f, t)),
@@ -2979,7 +2979,7 @@ export function listAdjustmentNotes(opts = {}) { return _cached("listAdjustmentN
 async function _loadAdjustmentNotes() {
   const [an, cu, si, ct] = await Promise.all([
     _allRows((f, t) => supabase.from("adjustment_notes").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("note_no").range(f, t)),
-    _allRows((f, t) => supabase.from("customers").select("*", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id,vat,branch,type", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
   ]);
@@ -3051,7 +3051,7 @@ async function _loadBillingNotes() {
   const [bn, iv, cu, si, ct, rc, qt] = await Promise.all([
     _allRows((f, t) => supabase.from("billing_notes").select("*", { count: "exact" }).order("created_at", { ascending: false }).order("billing_no").range(f, t)),
     _allRows((f, t) => supabase.from("invoices").select("invoice_no,total,wht_amt,installment,pct,status,issue_date,quote_no", { count: "exact" }).order("invoice_no").range(f, t)),
-    _allRows((f, t) => supabase.from("customers").select("*", { count: "exact" }).order("id").range(f, t)),
+    _allRows((f, t) => supabase.from("customers").select("id,name,address,tax_id,vat,branch,type", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }).order("id").range(f, t)),
     _allRows((f, t) => supabase.from("receipts").select("invoice_no,status", { count: "exact" }).order("receipt_no").range(f, t)),
