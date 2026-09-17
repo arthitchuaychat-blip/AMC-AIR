@@ -18,7 +18,11 @@ const i = pr.indexOf("export function frozenPayslip(s) {");
 // frozenPayslip เป็นฟังก์ชันสุดท้ายของไฟล์ — ตัดถึงท้ายไฟล์ แล้วกันไว้ว่าถ้ามีใครเพิ่ม export ต่อท้าย ต้องรู้ตัว
 if (pr.indexOf("export ", i + 10) !== -1) { console.log("  ✗ มี export ตัวอื่นต่อท้าย frozenPayslip — แก้วิธีตัดโค้ดในเทสต์นี้ก่อน"); process.exit(1); }
 const body = pr.slice(i).replace("export function frozenPayslip(s) {", "").trimEnd().replace(/\}$/, "");
-const frozen = new Function("s", body);
+// frozenPayslip เรียก parseAllowances/allowanceTotal (ใช้ ALLOWANCE_KINDS) ซึ่งอยู่ "ก่อน" มันในไฟล์ → ต้องตัดมาใส่ใน snippet ด้วย
+// (เดิม eval เฉพาะ frozenPayslip → ReferenceError: parseAllowances is not defined หลังเพิ่มเงินเพิ่มลงสลิป)
+const r0Line = pr.slice(pr.indexOf("const r0 = "), pr.indexOf("\n", pr.indexOf("const r0 = ")));   // r0 = ตัวปัด otRate (ไม่ export อยู่กลางไฟล์)
+const helpers = r0Line + "\n" + pr.slice(pr.indexOf("export const ALLOWANCE_KINDS"), pr.indexOf("export function allowanceNote")).replace(/^export /gm, "");
+const frozen = new Function("s", helpers + "\n" + body);
 
 console.log("\nสลิปเงินเดือนรอบที่จ่ายแล้ว (frozen) — ตัวเลขต้องบวกลง:");
 

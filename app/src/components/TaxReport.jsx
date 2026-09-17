@@ -64,7 +64,7 @@ export default function TaxReport({ role }) {
 
   // aggregate per month (index 0–11): tax is recognised on the receipt (ใบกำกับภาษี) date
   // ภาษีซื้อ: จากใบสั่งซื้อที่ติ๊ก VAT และรับของ/จ่ายแล้ว ลงเดือนตามวันรับของ (ประมาณการ — ตอนยื่นจริงใช้ใบกำกับภาษีซื้อจากผู้ขาย)
-  // ⚠️ ยังไม่รวม VAT จากใบเบิกจ่าย (บิลหน้างานที่ไม่ได้ผ่าน PO) — ตาราง expense_requests ยังไม่มีคอลัมน์ VAT
+  // + VAT จากใบเบิกจ่าย (บิลหน้างานที่ไม่ผ่าน PO) ที่ติ๊ก "มีใบกำกับภาษีซื้อ" และจ่ายแล้ว — ดู expVat ด้านล่าง (คอมเมนต์เดิมที่บอกว่า "ยังไม่รวม" ล้าสมัยแล้ว)
   const months = React.useMemo(() => {
     const m = Array.from({ length: 12 }, () => ({ count: 0, base: 0, vat: 0, buyVat: 0, buyCount: 0, wht: 0, net: 0, rows: [] }));
     ofYear.forEach((r) => {

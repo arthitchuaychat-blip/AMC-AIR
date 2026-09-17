@@ -65,7 +65,13 @@ check("ปุ่มยกเลิกในหน้าจอตรงกับ 
 // ---------- ตรวจไขว้: ทุก role ที่แอปให้ movements=edit ต้องเขียน transactions ได้จริง ----------
 const insRoles = rolesIn(ins?.sql);
 const editRoles = Object.entries(PERMS).filter(([, p]) => p.movements === "E").map(([r]) => r);
-const orphans = editRoles.filter((r) => !insRoles.includes(r) && !new RegExp(`my_role\\(\\) = '${r}'`).test(ins?.sql || ""));
+// policy ตัดสินด้วย my_role() ซึ่ง (v831) แม็ป role ย่อยเป็น role หลักก่อน: field_sales→sales, assistant→tech
+// ต้องแม็ปแบบเดียวกันก่อนเทียบ ไม่งั้นรายงานผิดว่า "RLS ปิด" ทั้งที่ runtime เขียนได้ — อ่านการแม็ปจาก migration จริง ไม่ hardcode
+const roleFiles = fs.readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
+const myRoleDef = roleFiles.map((f) => fs.readFileSync(`${DIR}/${f}`, "utf8")).filter((s) => /function public\.my_role\(\)/.test(s)).pop() || "";
+const ALIAS = Object.fromEntries([...myRoleDef.matchAll(/when '([a-z_]+)' then '([a-z_]+)'/g)].map((m) => [m[1], m[2]]));
+const effRole = (r) => ALIAS[r] || r;
+const orphans = editRoles.filter((r) => { const e = effRole(r); return !insRoles.includes(e) && !new RegExp(`my_role\\(\\) = '${e}'`).test(ins?.sql || ""); });
 check(`ทุก role ที่กดบันทึกได้ในแอป เขียน DB ได้จริง (${editRoles.join(", ")})`, orphans.length === 0,
   `role ที่แอปเปิดให้แต่ RLS ปิด: ${orphans.join(", ")} — กดแล้วเด้ง error หรือบันทึกไม่ติดเงียบ ๆ`);
 

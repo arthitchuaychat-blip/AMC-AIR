@@ -18,7 +18,10 @@ check("เก็บ ot_min ที่จ่ายจริง (c.otHours×60) ไ
 // รันสูตร frozenPayslip จริง: จ่าย 2.5 ชม. (เรต 60 = 150) → ot_min เก็บ 150 → อ่านกลับต้องได้ 2.5 ชม. ไม่ใช่ 3.33
 const i = pr.indexOf("export function frozenPayslip(s) {");
 const body = pr.slice(i).replace("export function frozenPayslip(s) {", "").trimEnd().replace(/\}$/, "");
-const frozen = new Function("s", body);
+// frozenPayslip เรียก parseAllowances/allowanceTotal (ใช้ ALLOWANCE_KINDS) ซึ่งอยู่ "ก่อน" มันในไฟล์ → ต้องตัดมาใส่ใน snippet ด้วย
+const r0Line = pr.slice(pr.indexOf("const r0 = "), pr.indexOf("\n", pr.indexOf("const r0 = ")));   // r0 = ตัวปัด otRate (ไม่ export อยู่กลางไฟล์)
+const helpers = r0Line + "\n" + pr.slice(pr.indexOf("export const ALLOWANCE_KINDS"), pr.indexOf("export function allowanceNote")).replace(/^export /gm, "");
+const frozen = new Function("s", helpers + "\n" + body);
 const otHours = 2.5, otRate = 60, otPay = Math.round(otHours * otRate); // 150
 const storedMin = Math.round(otHours * 60); // สูตรใหม่: 150
 const f = frozen({ ot_min: storedMin, ot_pay: otPay, base: 0, net: 0 });

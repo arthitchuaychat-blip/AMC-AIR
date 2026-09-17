@@ -11,7 +11,8 @@ import fs from "node:fs";
 
 let pass = 0, fail = 0;
 const check = (name, ok, why) => { if (ok) { console.log("  ✓ " + name); pass++; } else { console.log("  ✗ " + name + (why ? "\n      " + why : "")); fail++; } };
-const mig = fs.readFileSync("../supabase/migrations/173_fix_item_replace_duplicates.sql", "utf8");
+// normalize CRLF → LF: บน Windows (autocrlf) ไฟล์เป็น \r\n ทำให้หมุด "from boq_items\n)" หาไม่เจอ → ไปตัดท้ายไฟล์แทนแล้วรายงานผิดว่า "ขาดคีย์ boq_no"
+const mig = fs.readFileSync("../supabase/migrations/173_fix_item_replace_duplicates.sql", "utf8").replace(/\r\n/g, "\n");
 
 console.log("\nรายการเอกสารซ้ำตอนบันทึก (RLS ลบไม่ติด):");
 
