@@ -59,6 +59,10 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
+  // request_id ต่อ "ความพยายามส่ง" — ล้างเมื่อสำเร็จเท่านั้น: กดซ้ำ/retry หลังเน็ตหลุดใช้ id เดิม → DB รู้ว่าชุดนี้บันทึกไปแล้ว
+  // แยก ref ต่อ flow (ส่งรายการเอง / เบิกตามงาน) ไม่ให้การจองค้างของอันหนึ่งไปขวางอีกอัน
+  const reqRef1 = React.useRef(null), reqRef2 = React.useRef(null);
+  const reqIdOf = (r) => (r.current ||= crypto.randomUUID());
   const [printData, setPrintData] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set()); // group keys that are open
   const [editId, setEditId] = React.useState(null);   // transaction id being edited
@@ -337,7 +341,7 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
           unit_cost: l.unitCost, reason, txn_date: txnDate || undefined,
           prep_no: type === "withdraw" ? prepNo : null,   // ผูกกลับใบเตรียมวัสดุ (เฉพาะรายการเบิก)
           po_no: type === "purchase" ? (receivePo || null) : null,   // ตราใบสั่งซื้อ (mig 151) — ยกเลิกรับเข้าลบครบชุด
-        })));
+        })), { request_id: reqIdOf(reqRef1) });   // กันชุดซ้ำระดับ DB (write_requests)
       } catch (e) { if (claimedPo) await unmarkPoReceived(receivePo).catch(() => {}); throw e; }
       // weighted moving average: คิดจาก "สต๊อกสดหลังรับ" (อ่านใหม่จาก DB — เดิมใช้สต๊อก ณ ตอนเปิดหน้า แท็บค้างทั้งวันต้นทุนเพี้ยน)
       if (type === "purchase") {
@@ -365,15 +369,19 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
             po_no: receivePo,     // ตราใบสั่งซื้อ (ไว้ค้นหา/รายงาน)
             twin_ref: buyRef,     // ผูกกับชุดรับของ "รอบนี้" — ยกเลิกรอบไหนลบเฉพาะคู่ของรอบนั้น (mig 155)
           })).filter((r) => r.qty > 0.0001);
-          if (jobRows.length) await recordTransactions(jobRows);
+          if (jobRows.length) await recordTransactions(jobRows, { request_id: reqIdOf(reqRef1) + ":job" });   // ชุดคู่แฝดใช้ id เดียวกัน + suffix
         }
         if (receivePo && fullReceive) setReceivePo(null);
       }
       flash(`${T.th} ${lines.length} รายการ สำเร็จ${type === "purchase" && receivePo ? (fullReceive ? (receiveJob?.job_no ? ` · ปิดใบสั่งซื้อ + เบิกเข้างาน ${receiveJob.job_no} แล้ว` : " · ปิดใบสั่งซื้อแล้ว") : " · รับบางส่วน — ใบยังค้าง \"รอรับของ\" ไว้รับส่วนที่เหลือ") : ""}`);
       if (fullReceive) { setReceiveJob(null); setPoLines0(null); }
+      reqRef1.current = null;   // สำเร็จแล้ว → ครั้งหน้าเป็นความพยายามใหม่
       setLines([]); setJobNo("");
       await load();
-    } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    } catch (e) {
+      if (e?.dup) { flash("รายการชุดนี้บันทึกไปแล้วจากรอบก่อน (กดซ้ำ/เน็ตหลุด) — ไม่บันทึกซ้ำ"); reqRef1.current = null; setLines([]); setJobNo(""); await load(); }
+      else flash("บันทึกไม่สำเร็จ: " + (e.message || e), true);
+    }
     setBusy(false);
   }
 
@@ -390,11 +398,15 @@ export default function Movements({ role, myTeam, prefill, onPrefillConsumed, wi
     try {
       await recordTransactions(rows.map((r) => ({
         type, job_no: job.job_no, team: job.team, material_code: r.code, qty: r.qty, unit_cost: r.unitCost, reason, txn_date: txnDate || undefined,
-      })));
+      })), { request_id: reqIdOf(reqRef2) });   // กันชุดซ้ำระดับ DB (write_requests)
       flash(`${T.th} งาน ${job.job_no} สำเร็จ`);
+      reqRef2.current = null;   // สำเร็จแล้ว → ครั้งหน้าเป็นความพยายามใหม่
       setSelJob(""); setQtyByCode({});
       await load();
-    } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
+    } catch (e) {
+      if (e?.dup) { flash("รายการชุดนี้บันทึกไปแล้วจากรอบก่อน (กดซ้ำ/เน็ตหลุด) — ไม่บันทึกซ้ำ"); reqRef2.current = null; setSelJob(""); setQtyByCode({}); await load(); }
+      else flash("บันทึกไม่สำเร็จ: " + (e.message || e), true);
+    }
     setBusy(false);
   }
 

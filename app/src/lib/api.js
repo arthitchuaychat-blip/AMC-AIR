@@ -602,9 +602,15 @@ function txnRefNo(type) {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
   return `${pfx}-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
-export async function recordTransactions(rows) {
+export async function recordTransactions(rows, opts = {}) {
   const { data: { user } } = await supabase.auth.getUser();
   const ref = txnRefNo(rows[0]?.type);   // all lines recorded together share one ref number
+  // กันชุดซ้ำระดับ DB: จอง request_id (UUID ต่อ "ความพยายามส่ง" จากหน้าจอ) ก่อน insert ทั้งชุด — ดู _claimRequest
+  //   ซ้ำ → โยน error ที่มี e.dup = true ให้หน้าจอบอกผู้ใช้และ "หยุดทั้ง flow" (ไม่คิดต้นทุนเฉลี่ย/เบิกคู่แฝดซ้ำ)
+  if (opts.request_id) {
+    const c = await _claimRequest(opts.request_id, rows[0]?.type, ref);
+    if (c.dup) { const e = new Error("รายการชุดนี้บันทึกไปแล้วจากรอบก่อน"); e.dup = true; e.ref = c.ref_no; throw e; }
+  }
   const payload = rows.map((t) => ({
     txn_date: t.txn_date || new Date().toISOString().slice(0, 10),
     type: t.type,
@@ -624,7 +630,7 @@ export async function recordTransactions(rows) {
   if (error && /twin_ref/i.test(error.message || "")) { payload.forEach((r) => delete r.twin_ref); ({ error } = await supabase.from("transactions").insert(payload)); } // pre-155 fallback
   if (error && /po_no/i.test(error.message || "")) { payload.forEach((r) => delete r.po_no); ({ error } = await supabase.from("transactions").insert(payload)); }   // pre-151 fallback
   if (error && /prep_no/i.test(error.message || "")) { payload.forEach((r) => delete r.prep_no); ({ error } = await supabase.from("transactions").insert(payload)); } // pre-115 fallback
-  if (error) throw error;
+  if (error) { if (opts.request_id) await _releaseRequest(opts.request_id).catch(() => {}); throw error; }   // ปล่อยการจองให้กดใหม่ได้
   return ref;   // ผู้เรียกใช้ผูกชุดคู่แฝดได้
 }
 
@@ -4948,6 +4954,20 @@ async function _insertIdem(table, row) {
   }
   throw new Error("insert failed after dropping missing columns");
 }
+// จอง request_id สำหรับ "ชุดหลายแถว" (recordTransactions) — unique ต่อแถวใช้ไม่ได้เพราะทั้งชุดแชร์ id เดียว
+//   ตาราง write_requests (mig 20260917130000): request_id = PK → insert ซ้ำ = 23505 = ชุดนี้บันทึกไปแล้ว
+//   ตารางยังไม่มี (ยังไม่รัน SQL) → ไม่จอง ทำงานเหมือนเดิม · insert ชุดล้ม → _releaseRequest ปล่อยจองให้กดใหม่ได้
+async function _claimRequest(request_id, kind, ref_no) {
+  const { error } = await supabase.from("write_requests").insert({ request_id, kind: kind || null, ref_no: ref_no || null });
+  if (!error) return { dup: false };
+  if (/23505|duplicate|unique/i.test(String(error.code || "") + (error.message || ""))) {
+    const { data } = await supabase.from("write_requests").select("ref_no").eq("request_id", request_id).maybeSingle();
+    return { dup: true, ref_no: data?.ref_no || null };
+  }
+  if (/relation|does not exist|schema cache|PGRST205|42P01/i.test(error.message || "")) return { dup: false };   // ยังไม่รัน migration
+  throw error;
+}
+async function _releaseRequest(request_id) { await supabase.from("write_requests").delete().eq("request_id", request_id); }
 export async function submitExpense(e) {
   const uid = await _uid();
   const row = {
