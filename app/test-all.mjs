@@ -47,6 +47,7 @@ const SUITES = [
   ["test-expense-idempotency.mjs"],
   ["test-error-report.mjs"],
   ["test-txn-idempotency.mjs"],
+  ["test-error-viewer.mjs"],
 ];
 
 const failed = [];
