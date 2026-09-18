@@ -58,3 +58,4 @@
 - [Backup & restore runbook](../../docs/runbooks/backup-restore.md) — คู่มือสำรอง/กู้คืน Supabase (DB+Storage+env) · Free ไม่มี backup อัตโนมัติ · ซ้อมกู้ไตรมาสละครั้ง · ตารางติดตามอยู่ท้ายไฟล์ (docs/runbooks/backup-restore.md)
 - [Doc window loading](doc-window-loading.md) — โหลดเอกสารเฉพาะช่วงวันที่ (since) + listXTotals แบบบางสำหรับตัวเลขที่ต้องนับจากทุกใบ (ใบแจ้งหนี้ v850) แบบแผนสำหรับหน้าอื่น
 - [Storage backup](storage-backup.md) — สำรองไฟล์แนบ photos 26 GB → Google Drive K: (Stream) ด้วย scripts/backup-storage.mjs ทุกวันที่ 1 · กับดัก Supabase CLI
+- [Mobile picker remount](mobile-picker-remount.md) — Android เลือกรูปแล้วเด้งออก: reload-on-visibility ที่ถอด UI ตอน loading ทำลายฟอร์มแนบไฟล์ → silent refresh + ร่างใน sessionStorage (v855)

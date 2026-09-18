@@ -53,6 +53,7 @@ const SUITES = [
   ["test-expense-merged.mjs"],
   ["test-chat-perf.mjs"],
   ["test-chat-waiting.mjs"],
+  ["test-myjobs-photo-bounce.mjs"],
 ];
 
 const failed = [];

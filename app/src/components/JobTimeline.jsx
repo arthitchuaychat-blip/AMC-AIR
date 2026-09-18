@@ -71,8 +71,15 @@ function Photos({ photos, onOpen }) {
 
 // shared add box (top-level comment or a reply when parentId/jobNo is the parent's)
 function Composer({ jobNo, author, parentId, placeholder, onPosted, flash, compact }) {
-  const [note, setNote] = React.useState("");
-  const [photos, setPhotos] = React.useState([]);
+  // ร่าง (ข้อความ + รูปที่อัปโหลดแล้ว) เก็บใน sessionStorage ต่อใบงาน/ต่อกล่องตอบกลับ — กล่องนี้ถูกถอดจากจอ/หน้าโหลดใหม่เมื่อไร ของที่แนบไว้ไม่หาย
+  // (มือถือ Android สลับไปแอปเลือกรูปแล้วกลับมา เป็นจังหวะที่เกิดบ่อยสุด) · โพสต์สำเร็จ/ลบจนว่าง = ล้างร่าง
+  const draftKey = "amc_tl_draft:" + (jobNo || "") + ":" + (parentId || "");
+  const readDraft = () => { try { const d = JSON.parse(sessionStorage.getItem(draftKey) || "null"); return d && typeof d === "object" ? d : {}; } catch { return {}; } };
+  const [note, setNote] = React.useState(() => String(readDraft().note || ""));
+  const [photos, setPhotos] = React.useState(() => { const p = readDraft().photos; return Array.isArray(p) ? p.filter((u) => typeof u === "string") : []; });
+  React.useEffect(() => {
+    try { if (note || photos.length) sessionStorage.setItem(draftKey, JSON.stringify({ note, photos })); else sessionStorage.removeItem(draftKey); } catch { /* ignore */ }
+  }, [note, photos, draftKey]);
   const [uploading, setUploading] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   async function onFiles(e) {
