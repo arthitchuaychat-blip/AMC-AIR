@@ -49,6 +49,7 @@ const SUITES = [
   ["test-txn-idempotency.mjs"],
   ["test-error-viewer.mjs"],
   ["test-invoice-window.mjs"],
+  ["test-cash-nonop.mjs"],
 ];
 
 const failed = [];

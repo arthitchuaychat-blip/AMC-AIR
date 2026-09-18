@@ -3,6 +3,7 @@ import { listCashEntries, addCashEntry, updateCashEntry, deleteCashEntry, getOpe
 import { confirmDialog } from "./ConfirmDialog";
 import { fmtBaht } from "../lib/format";
 import { UIcon } from "../icons";
+import { isNonOp, nonOpKind, NONOP_LABEL, NONOP_DIRECTION, USER_TYPES } from "../lib/cashKinds";
 import "./CashFlow.css";   // ดีไซน์ใหม่ — ทุก selector อยู่ใต้ .cfx-root (ไม่กระทบหน้าอื่น)
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -14,10 +15,11 @@ const thShort = (s) => new Date(s + "T00:00:00").toLocaleDateString("th-TH", { d
 const thMonthKey = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("th-TH", { month: "long", year: "numeric" });
 const weekStartYmd = (s) => { const d = new Date(s + "T00:00:00"); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return ymd(d); };
 const weekEndYmd = (startYmd) => { const d = new Date(startYmd + "T00:00:00"); d.setDate(d.getDate() + 6); return ymd(d); };
-const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", labor_owed: "ค่าแรงช่างซัพ (รอเบิก)", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย", expense_paid: "เบิกจ่าย (จ่ายแล้ว)", expense_due: "เบิกจ่าย (ค้างจ่าย)", advance: "เบิกเงินล่วงหน้า", loan: "ค่างวดผ่อน (สินเชื่อ)", recur: "รายจ่ายประจำ" };
+const SRC = { invoice: "ใบแจ้งหนี้", receipt: "ใบเสร็จ", payout: "ช่างซัพ", labor_owed: "ค่าแรงช่างซัพ (รอเบิก)", po: "ใบสั่งซื้อ", manual: "เพิ่มเอง", salary: "เงินเดือน", expense: "เบิกจ่าย", expense_paid: "เบิกจ่าย (จ่ายแล้ว)", expense_due: "เบิกจ่าย (ค้างจ่าย)", advance: "เบิกเงินล่วงหน้า", loan: "ค่างวดผ่อน (สินเชื่อ)", recur: "รายจ่ายประจำ", ...NONOP_LABEL };
 const GRAINS = [["chart", "กราฟ"], ["calendar", "ปฏิทิน"], ["day", "รายวัน"], ["week", "สัปดาห์"], ["month", "เดือน"], ["year", "ปี"]];
 // จัดหมวดเงินออกจาก source_type — ใช้ทั้งสรุปแยกหมวด + ส่งออก CSV
 const CAT = (e) => {
+  const k = nonOpKind(e); if (k) return NONOP_LABEL[k];   // โอนระหว่างบัญชี/เจ้าของเบิกใช้/เติมเงิน — ไม่ใช่รายรับ-รายจ่ายธุรกิจ
   const s = e.source_type;
   if (s === "salary" || s === "advance") return "คน (เงินเดือน/เบิกล่วงหน้า)";
   if (s === "po") return "วัสดุ/สั่งซื้อ (PO)";
@@ -85,8 +87,10 @@ export default function CashFlow() {
     if (amt <= 0) return flash("ใส่จำนวนเงินมากกว่า 0", true);
     setBusy(true);
     try {
-      await addCashEntry({ direction: "out", status: "actual", entity: from, entry_date: date, amount: amt, note: `🔄 โอนไปบัญชี${L[to]}${note ? " · " + note : ""}` });
-      await addCashEntry({ direction: "in", status: "actual", entity: to, entry_date: date, amount: amt, note: `🔄 รับโอนจากบัญชี${L[from]}${note ? " · " + note : ""}` });
+      // 2 ขาใช้ชนิด transfer + source_ref คู่กัน (-out/-in) → ระบบรู้ว่าไม่ใช่รายรับ/จ่าย และจับคู่ขาโอนได้ภายหลัง
+      const xid = "xfer-" + crypto.randomUUID();
+      await addCashEntry({ source_type: "transfer", source_ref: xid + "-out", direction: "out", status: "actual", entity: from, entry_date: date, amount: amt, note: `🔄 โอนไปบัญชี${L[to]}${note ? " · " + note : ""}` });
+      await addCashEntry({ source_type: "transfer", source_ref: xid + "-in", direction: "in", status: "actual", entity: to, entry_date: date, amount: amt, note: `🔄 รับโอนจากบัญชี${L[from]}${note ? " · " + note : ""}` });
       flash(`บันทึกโอน ${L[from]} → ${L[to]} ${fmtBaht(amt)} แล้ว ✓ (ไม่นับเป็นรายรับ/จ่าย)`);
       setTransfer(false); await load();
     } catch (e) { flash("โอนไม่สำเร็จ: " + (e.message || e), true); }
@@ -94,7 +98,7 @@ export default function CashFlow() {
   }
   async function removeEntry(e) {
     // เส้นจากเอกสารลบตรงนี้ไม่ได้ — sync รอบหน้าจะสร้างกลับมาใหม่อยู่ดี ให้ไปจัดการเอกสารต้นทาง
-    if (e.source_type && e.source_type !== "manual") {
+    if (e.source_type && !USER_TYPES.includes(e.source_type)) {   // manual/โอน/เจ้าของเบิกใช้-เติมเงิน = ผู้ใช้สร้างเอง ลบได้
       if (e.source_type === "opening") return alert("แถวเงินสดยกมา — แก้ที่ช่อง 'เงินสดยกมา' ด้านบนแทน");
       return alert(`ลบตรงนี้ไม่ได้ — รายการนี้มาจาก "${SRC[e.source_type] || e.source_type}" (ลบแล้วระบบจะสร้างกลับมาเอง)\nให้ไปยกเลิก/ลบเอกสารต้นทาง แล้วรายการนี้จะหายตามอัตโนมัติ`);
     }
@@ -111,13 +115,15 @@ export default function CashFlow() {
       if (grain === "week") { key = weekStartYmd(e.entry_date); sort = key; label = `${thShort(key)} – ${thShort(weekEndYmd(key))}`; }
       else if (grain === "year") { key = e.entry_date.slice(0, 4); sort = key + "-01-01"; label = `ปี ${Number(key) + 543}`; }
       else { key = e.entry_date.slice(0, 7); sort = key + "-01"; label = thMonthKey(key); }
-      const b = map[key] || (map[key] = { key, sort, label, actIn: 0, actOut: 0, projIn: 0, projOut: 0 });
+      const b = map[key] || (map[key] = { key, sort, label, actIn: 0, actOut: 0, projIn: 0, projOut: 0, nonOp: 0 });
       const amt = Number(e.amount) || 0;
-      if (e.status === "actual") { if (e.direction === "in") b.actIn += amt; else b.actOut += amt; }
+      // โอนระหว่างบัญชี/เจ้าของเบิกใช้-เติมเงิน: ไม่นับเป็นรับ-จ่ายจริง แต่ต้องเข้า "เงินสดสะสม" (nonOp = สุทธิ +เข้า/−ออก)
+      if (e.status === "actual" && isNonOp(e)) b.nonOp += (e.direction === "in" ? amt : -amt);
+      else if (e.status === "actual") { if (e.direction === "in") b.actIn += amt; else b.actOut += amt; }
       else { if (e.direction === "in") b.projIn += amt; else b.projOut += amt; }
     });
     const arr = Object.values(map).sort((a, b) => a.sort.localeCompare(b.sort));
-    let run = openingVal; arr.forEach((b) => { run += b.actIn - b.actOut; b.balA = run; });
+    let run = openingVal; arr.forEach((b) => { run += b.actIn - b.actOut + b.nonOp; b.balA = run; });
     return arr;
   }, [ents, grain, openingVal]);
 
@@ -147,8 +153,9 @@ export default function CashFlow() {
     let inNow = 0, outNow = 0, inPrev = 0, outPrev = 0, endBal = openingVal;
     ents.forEach((e) => {
       const amt = Number(e.amount) || 0, k = e.entry_date.slice(0, 7), v = sgn(e) * amt;
-      if (e.status === "actual" && k === mk) { if (e.direction === "in") inNow += amt; else outNow += amt; }
-      if (e.status === "actual" && k === pmk) { if (e.direction === "in") inPrev += amt; else outPrev += amt; }
+      const op = !isNonOp(e);   // การ์ด "รับจริง/จ่ายจริง" นับเฉพาะรายรับ-รายจ่ายธุรกิจ (ยอดคงเหลือ endBal ด้านล่างยังนับทุกรายการ)
+      if (op && e.status === "actual" && k === mk) { if (e.direction === "in") inNow += amt; else outNow += amt; }
+      if (op && e.status === "actual" && k === pmk) { if (e.direction === "in") inPrev += amt; else outPrev += amt; }
       if (e.entry_date <= lastY) endBal += v;   // คาดการณ์ (จริง+ประมาณการ) ถึงสิ้นเดือนที่เลือก
     });
     const pct = (a, b) => (b > 0 ? Math.round((a - b) / b * 100) : null);
@@ -203,8 +210,15 @@ export default function CashFlow() {
     : grain === "year" ? null : [`${year}-01-01`, `${year}-12-31`];
   const viewEnts = React.useMemo(() => viewRange ? ents.filter((e) => e.entry_date >= viewRange[0] && e.entry_date <= viewRange[1]) : ents, [ents, grain, anchor, year]); // eslint-disable-line
   const catRows = React.useMemo(() => {
-    const m = {}; viewEnts.filter((e) => e.direction === "out").forEach((e) => { const c = CAT(e); m[c] = (m[c] || 0) + (Number(e.amount) || 0); });
+    const m = {}; viewEnts.filter((e) => e.direction === "out" && !isNonOp(e)).forEach((e) => { const c = CAT(e); m[c] = (m[c] || 0) + (Number(e.amount) || 0); });
     return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [viewEnts]);
+  // เงินที่ขยับแต่ไม่ใช่รายรับ-รายจ่ายธุรกิจ ในช่วงที่ดู (เฉพาะที่เกิดจริง) — โชว์แยกให้เจ้าของเห็นว่าเบิกใช้ส่วนตัวไปเท่าไร
+  const nonOpSum = React.useMemo(() => {
+    const o = { transfer_in: 0, transfer_out: 0, owner_draw: 0, owner_in: 0 };
+    viewEnts.forEach((e) => { if (e.status !== "actual") return; const k = nonOpKind(e); if (!k) return; const amt = Number(e.amount) || 0;
+      if (k === "transfer") o[e.direction === "in" ? "transfer_in" : "transfer_out"] += amt; else o[k] += amt; });
+    return o;
   }, [viewEnts]);
   const catMax = Math.max(...catRows.map(([, v]) => v), 1);
   const catTotal = catRows.reduce((a, [, v]) => a + v, 0);
@@ -345,7 +359,7 @@ export default function CashFlow() {
         <div className="cfx-panel" style={{ marginTop: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
             <b style={{ fontSize: 15 }}>💸 เงินออกแยกหมวด <span className="jo-dim" style={{ fontWeight: 400, fontSize: 12.5 }}>({(grain === "day" || grain === "chart" || grain === "calendar") ? thMonth(anchor) : grain === "year" ? "ทุกปี" : `ปี ${year + 543}`} · จริง+คาดการณ์)</span></b>
-            <span className="jo-dim" style={{ fontSize: 12.5 }}>รวมออก {fmtBaht(catTotal)}</span>
+            <span className="jo-dim" style={{ fontSize: 12.5 }}>รวมออก {fmtBaht(catTotal)}{(nonOpSum.owner_draw > 0 || nonOpSum.transfer_out > 0) ? " · ไม่รวม" + (nonOpSum.owner_draw > 0 ? " เจ้าของเบิกใช้ " + fmtBaht(nonOpSum.owner_draw) : "") + (nonOpSum.transfer_out > 0 ? " โอนระหว่างบัญชี " + fmtBaht(nonOpSum.transfer_out) : "") : ""}</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             {catRows.map(([c, v]) => (
@@ -494,14 +508,15 @@ function Mini({ k, v, accent }) { return <div style={{ flex: "1 1 130px", backgr
 
 function SummaryTable({ buckets, withProj, grain }) {
   if (buckets.length === 0) return <div className="empty">ยังไม่มีรายการในช่วงนี้ — กด “ซิงค์จากเอกสาร” หรือ “เพิ่มรายการ”</div>;
-  const tot = buckets.reduce((a, b) => ({ actIn: a.actIn + b.actIn, actOut: a.actOut + b.actOut, projIn: a.projIn + b.projIn, projOut: a.projOut + b.projOut }), { actIn: 0, actOut: 0, projIn: 0, projOut: 0 });
+  const tot = buckets.reduce((a, b) => ({ actIn: a.actIn + b.actIn, actOut: a.actOut + b.actOut, projIn: a.projIn + b.projIn, projOut: a.projOut + b.projOut, nonOp: a.nonOp + (b.nonOp || 0) }), { actIn: 0, actOut: 0, projIn: 0, projOut: 0, nonOp: 0 });
+  const hasNonOp = buckets.some((b) => Math.abs(b.nonOp || 0) > 0.005);   // มีโอนระหว่างบัญชี/เจ้าของเบิกใช้ → โชว์คอลัมน์แยก ไม่งั้นเงินสดสะสมจะดูไม่ลงกับ รับ−จ่าย
   const head = grain === "week" ? "สัปดาห์" : grain === "year" ? "ปี" : "เดือน";
   return (
     <div className="card" style={{ padding: 0, overflow: "auto" }}>
       <table className="cf-table">
         <thead><tr>
           <th style={{ textAlign: "left" }}>{head}</th>
-          <th>รับจริง</th><th>จ่ายจริง</th><th>สุทธิจริง</th>
+          <th>รับจริง</th><th>จ่ายจริง</th><th>สุทธิจริง</th>{hasNonOp && <th title="โอนระหว่างบัญชี · เจ้าของเบิกใช้ส่วนตัว · เจ้าของเติมเงิน — ไม่นับเป็นรายรับ/รายจ่าย แต่เข้าเงินสดสะสม">โอน/เจ้าของ</th>}
           {withProj && <><th>คาดว่าจะรับ</th><th>คาดว่าจะจ่าย</th></>}
           <th>เงินสดสะสม</th>
         </tr></thead>
@@ -511,7 +526,7 @@ function SummaryTable({ buckets, withProj, grain }) {
               <td style={{ textAlign: "left" }}>{b.label}</td>
               <td className="up">{b.actIn ? fmtBaht(b.actIn) : "—"}</td>
               <td className="down">{b.actOut ? "−" + fmtBaht(b.actOut) : "—"}</td>
-              <td style={{ fontWeight: 700, color: net >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(net)}</td>
+              <td style={{ fontWeight: 700, color: net >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(net)}</td>{hasNonOp && <td style={{ color: "var(--ink-2)" }}>{Math.abs(b.nonOp || 0) > 0.005 ? fmtBaht(b.nonOp) : "—"}</td>}
               {withProj && <><td style={{ color: "#2563eb" }}>{b.projIn ? fmtBaht(b.projIn) : "—"}</td><td style={{ color: "#d97706" }}>{b.projOut ? "−" + fmtBaht(b.projOut) : "—"}</td></>}
               <td style={{ fontWeight: 700, color: b.balA >= 0 ? "var(--ink)" : "var(--down)" }}>{fmtBaht(b.balA)}</td>
             </tr>
@@ -520,7 +535,7 @@ function SummaryTable({ buckets, withProj, grain }) {
         <tfoot><tr>
           <td style={{ textAlign: "left" }}>รวม</td>
           <td className="up">{fmtBaht(tot.actIn)}</td><td className="down">−{fmtBaht(tot.actOut)}</td>
-          <td style={{ color: (tot.actIn - tot.actOut) >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(tot.actIn - tot.actOut)}</td>
+          <td style={{ color: (tot.actIn - tot.actOut) >= 0 ? "var(--up)" : "var(--down)" }}>{fmtBaht(tot.actIn - tot.actOut)}</td>{hasNonOp && <td style={{ color: "var(--ink-2)" }}>{fmtBaht(tot.nonOp)}</td>}
           {withProj && <><td style={{ color: "#2563eb" }}>{fmtBaht(tot.projIn)}</td><td style={{ color: "#d97706" }}>−{fmtBaht(tot.projOut)}</td></>}
           <td>—</td>
         </tr></tfoot>
@@ -604,16 +619,23 @@ function CfCol({ title, entries, onEdit, onDel }) {
 
 function CashEntryModal({ entry, onClose, onSaved, flash }) {
   const isNew = !entry.id;
-  const [f, setF] = React.useState({ direction: entry.direction || "in", status: entry.status || "actual", entity: entry.entity === "personal" ? "personal" : "company", entry_date: entry.entry_date || todayYmd(), amount: entry.amount ?? "", note: entry.note || "" });
+  // ลักษณะรายการ: manual = รายรับ/จ่ายธุรกิจอื่น ๆ · owner_draw/owner_in = เงินเจ้าของ (ไม่นับเป็นค่าใช้จ่าย/รายได้) · ขาโอน (transfer) สร้างจากปุ่มโอนเท่านั้น
+  const kind0 = ["owner_draw", "owner_in"].includes(nonOpKind(entry)) ? nonOpKind(entry) : "manual";
+  const [f, setF] = React.useState({ source_type: kind0, direction: entry.direction || "in", status: entry.status || "actual", entity: entry.entity === "personal" ? "personal" : "company", entry_date: entry.entry_date || todayYmd(), amount: entry.amount ?? "", note: entry.note || "" });
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const setKind = (k) => setF((s) => ({ ...s, source_type: k, direction: NONOP_DIRECTION[k] || s.direction, status: k === "manual" ? s.status : "actual" }));
+  const kindEditable = isNew || USER_TYPES.includes(entry.source_type || "manual") && entry.source_type !== "transfer";
   async function save() {
     if (!(Number(f.amount) > 0)) return flash("ใส่จำนวนเงินก่อน", true);
     if (!f.entry_date) return flash("เลือกวันที่ก่อน", true);
     setBusy(true);
     try {
-      if (isNew) await addCashEntry(f);
-      else await updateCashEntry(entry.id, f);
+      // ส่ง source_type เฉพาะรายการที่ผู้ใช้สร้างเอง — เส้นจากเอกสาร/ขาโอน ห้ามถูกเปลี่ยนชนิด (ไม่งั้น sync จะสร้างเส้นซ้ำ)
+      const { source_type: _k, ...noKind } = f;
+      const payload = kindEditable ? f : noKind;
+      if (isNew) await addCashEntry(payload);
+      else await updateCashEntry(entry.id, payload);
       flash("บันทึกแล้ว ✓"); onSaved();
     } catch (e) { flash("บันทึกไม่สำเร็จ: " + (e.message || e), true); }
     setBusy(false);
@@ -625,7 +647,15 @@ function CashEntryModal({ entry, onClose, onSaved, flash }) {
           <button className="modal-x" onClick={onClose}><UIcon name="x" size={18} /></button></div>
         <div className="modal-body">
           {/* เส้นจากเอกสาร: ล็อกทิศทาง/สถานะ — พลิกใบเสร็จเป็น "เงินออก" ได้ = ยอดสะสมเพี้ยน 2 เท่า (แก้ได้แค่วัน/ยอด/โน้ต) */}
-          {(() => { const locked = !isNew && entry?.source_type && entry.source_type !== "manual"; return (
+          {kindEditable && (
+            <label className="fld"><span>ลักษณะรายการ</span>
+              <select className="inp" value={f.source_type} onChange={(e) => setKind(e.target.value)}>
+                <option value="manual">รายรับ/รายจ่ายของธุรกิจ (อื่น ๆ ที่ไม่มีเอกสารในระบบ)</option>
+                <option value="owner_draw">👤 เจ้าของเบิกใช้ส่วนตัว — ไม่นับเป็นค่าใช้จ่ายธุรกิจ</option>
+                <option value="owner_in">💰 เจ้าของเติมเงินเข้า / เงินส่วนตัวเข้า — ไม่นับเป็นรายได้</option>
+              </select></label>
+          )}
+          {(() => { const locked = (!isNew && entry?.source_type && !["manual", "owner_draw", "owner_in"].includes(entry.source_type)) || f.source_type !== "manual"; return (
           <div className="fld-row">
             <label className="fld"><span>ประเภท{locked ? " 🔒" : ""}</span>
               <select className="inp" value={f.direction} disabled={locked} onChange={(e) => set("direction", e.target.value)}>
@@ -637,7 +667,7 @@ function CashEntryModal({ entry, onClose, onSaved, flash }) {
               </select></label>
           </div>
           ); })()}
-          {(() => { const locked = !isNew && entry?.source_type && entry.source_type !== "manual"; return (
+          {(() => { const locked = !isNew && entry?.source_type && !["manual", "owner_draw", "owner_in"].includes(entry.source_type); return (
           <label className="fld"><span>กิจการ{locked ? " 🔒" : ""}</span>
             <select className="inp" value={f.entity} disabled={locked} onChange={(e) => set("entity", e.target.value)}>
               <option value="company">🏢 บริษัท (เงินเข้า/ออกบัญชีบริษัท)</option><option value="personal">👤 บุคคล (อาทิตย์)</option>

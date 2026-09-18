@@ -6,6 +6,7 @@ import { supabase } from "./supabase";
 import { deriveJobStatus } from "./schedule";
 import { ROLE_LABEL } from "./permissions";
 import { installmentAt, dueDateOf } from "./loans";
+import { NONOP_TYPES, NONOP_DIRECTION, NONOP_NOTE_PREFIX } from "./cashKinds";
 import { requireFinancingState, requireSubmittedInstallment } from "./financingGuards";
 import { chatStageToPipe, pipeStageToChat } from "./pipeline";
 
@@ -6834,13 +6835,26 @@ export async function listCashEntries() {
   // cash_entries โตเร็วสุดในระบบ (ทุกใบแจ้งหนี้/ใบเสร็จ/PO/เบิกจ่าย/เงินเดือน) — ไม่กันเพดาน 1000 แถว เดือนล่าสุดจะหายจากจอทั้งเดือน
   return _fetchAll((f, t) => supabase.from("cash_entries").select("*", { count: "exact" }).order("entry_date", { ascending: true }).order("id").range(f, t));
 }
+// ชนิด non-operating (โอนระหว่างบัญชี/เจ้าของเบิกใช้/เจ้าของเติมเงิน) — ดู lib/cashKinds.js · mig 20260918150000
+// DB ที่ยังไม่รัน migration จะปฏิเสธชนิดใหม่ (CHECK 23514) → เก็บเป็น manual + คำนำหน้าโน้ตที่ nonOpKind() จำได้ แอปจึงแยกยอดถูกทั้ง 2 กรณี
+const _isTypeCheckErr = (error) => !!error && (error.code === "23514" || /source_type|check constraint/i.test(error.message || ""));
+function _asManualNonOp(row, kind) {
+  const pre = NONOP_NOTE_PREFIX[kind] || "";
+  const note = String(row.note || "");
+  const out = { ...row, source_type: "manual", note: note.startsWith(pre.slice(0, 2)) ? note : `${pre}${note ? " · " + note : ""}` };
+  delete out.source_ref;
+  return out;
+}
 export async function addCashEntry(e) {
   const uid = await _uid();
-  const row = {
-    direction: e.direction, status: e.status, entry_date: e.entry_date, entity: e.entity === "personal" ? "personal" : "company",
-    amount: Number(e.amount) || 0, note: e.note || null, source_type: "manual", edited: true, created_by: uid,
+  const kind = NONOP_TYPES.includes(e.source_type) ? e.source_type : "manual";
+  let row = {
+    direction: NONOP_DIRECTION[kind] || e.direction, status: e.status, entry_date: e.entry_date, entity: e.entity === "personal" ? "personal" : "company",
+    amount: Number(e.amount) || 0, note: e.note || null, source_type: kind, edited: true, created_by: uid,
+    ...(kind !== "manual" && e.source_ref ? { source_ref: String(e.source_ref) } : {}),
   };
   let { error } = await supabase.from("cash_entries").insert(row);
+  if (kind !== "manual" && _isTypeCheckErr(error)) { row = _asManualNonOp(row, kind); ({ error } = await supabase.from("cash_entries").insert(row)); }   // pre-migration fallback
   if (error && /entity|PGRST204/i.test(error.message || "")) { delete row.entity; ({ error } = await supabase.from("cash_entries").insert(row)); }   // pre-233 fallback
   if (error) throw error;
 }
@@ -6849,7 +6863,18 @@ export async function updateCashEntry(id, f) {
   ["direction", "status", "entry_date", "note"].forEach((k) => { if (f[k] !== undefined) patch[k] = f[k]; });
   if (f.amount !== undefined) patch.amount = Number(f.amount) || 0;
   if (f.entity !== undefined) patch.entity = f.entity === "personal" ? "personal" : "company";
+  // เปลี่ยนลักษณะรายการได้เฉพาะในกลุ่มที่ผู้ใช้สร้างเอง (manual ↔ owner_draw ↔ owner_in) — ห้ามแตะชนิดของเส้นจากเอกสาร/ขาโอน
+  const kind = ["manual", "owner_draw", "owner_in"].includes(f.source_type) ? f.source_type : null;
+  if (kind) {
+    // กันชั้นที่ 2 (นอกจากฟอร์ม): เปลี่ยนชนิดได้ก็ต่อเมื่อแถวปัจจุบันเป็นชนิดที่ผู้ใช้สร้างเองจริง ๆ — เส้นจากเอกสารถูกเปลี่ยนเป็น manual = sync สร้างเส้นซ้ำ
+    const { data: cur } = await supabase.from("cash_entries").select("source_type").eq("id", id).maybeSingle();
+    if (cur && ["manual", "owner_draw", "owner_in"].includes(cur.source_type)) { patch.source_type = kind; if (NONOP_DIRECTION[kind]) patch.direction = NONOP_DIRECTION[kind]; }
+  }
   let { error } = await supabase.from("cash_entries").update(patch).eq("id", id);
+  if (kind && kind !== "manual" && _isTypeCheckErr(error)) {   // pre-migration fallback: คงเป็น manual แต่ใส่คำนำหน้าให้ระบบจำชนิดได้
+    const fb = _asManualNonOp({ ...patch, note: patch.note ?? f.note ?? "" }, kind);
+    ({ error } = await supabase.from("cash_entries").update(fb).eq("id", id));
+  }
   if (error && /entity|PGRST204/i.test(error.message || "")) { delete patch.entity; ({ error } = await supabase.from("cash_entries").update(patch).eq("id", id)); }   // pre-233 fallback
   if (error) throw error;
 }
