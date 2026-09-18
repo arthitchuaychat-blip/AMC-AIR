@@ -1,7 +1,8 @@
 import React from "react";
+import { waitInfo, WAIT_STYLE, quickMatch, byWaitingLongest } from "../lib/chatWaiting";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, getCompanies, markQuoteSent, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply, scanCouponImage, claimByCode } from "../lib/api";
+import { CHAT_TAIL, listLineContacts, listLineMessages, searchLineMessages, sendLineMessage, sendLineImage, sendLineFile, sendLineSticker, uploadChatImage, uploadDocFile, linkLineContact, addLineCustomer, removeLineCustomer, markLineRead, clearLineWaiting, clearFbWaiting, setLineContactKind, listSuppliers, listPurchaseOrders, listFbContacts, listFbMessages, sendFbMessage, sendFbImage, sendFbFile, linkFbContact, markFbRead, listCustomers, listCustomerDocs, listJobOrders, listTeams, listMaterialsLite, getJobRateLink, getHandoverLink, listHandovers, listQuickReplies, addQuickReply, updateQuickReply, saveQuickReplyOrder, deleteQuickReply, setLineStage, setLineOwner, setLineAiOff, setLineNote, setLineTags, setFbStage, setFbOwner, setFbNote, setFbTags, setFbAiOff, searchFbMessages, sendEmail, setLinePinned, setFbPinned, setLineName, setFbName, getCompanies, markQuoteSent, listStaff, getProfile, getAcSeries, getAutoReply, saveAutoReply, scanCouponImage, claimByCode } from "../lib/api";
 import TeamQueuePanel from "./TeamQueuePanel";
 import FbComments from "./FbComments";
 import { TYPE_LABEL, DOC_FILTERS, stOf } from "../lib/docmeta";
@@ -337,6 +338,10 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
     catch (e) { flash("เปลี่ยนไม่สำเร็จ: " + (e.message || e), true); }
   }
   // ปักหมุดแชต (ดันขึ้นบนสุด) + เปลี่ยนชื่อลูกค้าในแชต — ทุกแพลตฟอร์ม (mig 223)
+  async function clearWaiting(c) {
+    try { await (isFb ? clearFbWaiting(c.line_user_id) : clearLineWaiting(c.line_user_id)); patchLocal(c.line_user_id, { waiting_since: null }); flash("ทำเครื่องหมาย \"ไม่ต้องตอบ\" แล้ว ✓ — ถ้าลูกค้าทักมาใหม่จะกลับมานับรอเอง"); }
+    catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
+  }
   async function togglePin(c) {
     try { await (isFb ? setFbPinned(c.line_user_id, !c.pinned) : setLinePinned(c.line_user_id, !c.pinned)); patchLocal(c.line_user_id, { pinned: !c.pinned }); flash(!c.pinned ? "ปักหมุดแชตไว้ด้านบนแล้ว 📌" : "ยกเลิกปักหมุดแล้ว"); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
@@ -835,21 +840,31 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
     }, 300);
     return () => { dropped = true; clearTimeout(t); };
   }, [q, channel]);
+  // ตัวกรองด่วน + นาฬิกา (ป้าย "รอตอบ 25 น." ต้องเดินเองทุกนาที แม้รายชื่ออยู่ใน useMemo)
+  const [quickF, setQuickF] = React.useState("all");
+  const [nowTick, setNowTick] = React.useState(() => Date.now());
+  React.useEffect(() => { const t = setInterval(() => setNowTick(Date.now()), 60000); return () => clearInterval(t); }, []);
+  const tabContacts = React.useMemo(() => contacts.filter((c) => (isFb ? true : isSup ? c.kind === "supplier" : (c.kind || "customer") !== "supplier")), [contacts, isFb, isSup]);
+  const hasWaitCol = React.useMemo(() => tabContacts.some((c) => c.waiting_since !== undefined), [tabContacts]);   // DB ยังไม่รัน migration → ซ่อนป้าย/ตัวกรองรอตอบ
+  const quickCounts = React.useMemo(() => { const n = { unread: 0, waiting: 0, mine: 0, pinned: 0 }; tabContacts.forEach((c) => { for (const k of Object.keys(n)) if (quickMatch(c, k, myId)) n[k]++; }); return n; }, [tabContacts, myId]);
   const shown = React.useMemo(() => contacts.filter((c) =>
     (stageF === "all" || (c.stage || "new") === stageF)
     && (ownerF === "all" ? true : ownerF === "me" ? c.assigned_to === myId : ownerF === "none" ? !c.assigned_to : c.assigned_to === ownerF)
     // แท็บซัพ = เฉพาะผู้ติดต่อที่ติดป้ายซัพพลายเออร์ · แท็บ LINE ลูกค้า = ที่เหลือ (FB ไม่มีป้าย)
     && (isFb ? true : isSup ? c.kind === "supplier" : (c.kind || "customer") !== "supplier")
     // ชื่อ/ลูกค้าที่ผูก/ข้อความล่าสุด/เบอร์ — หรือเจอคำนี้ในประวัติแชตของห้องนั้น (ค้นจากเซิร์ฟเวอร์)
+    && quickMatch(c, quickF, myId)
     && (matchText(q, c.display_name, c.customerName, c.last_message) || matchPhone(q, c.phone) || !!msgHits[c.line_user_id]))
     // ปักหมุดขึ้นบนสุดก่อน · แล้วห้องที่ยังไม่อ่าน · ที่เหลือเรียงตามข้อความล่าสุด
     .sort((a, b) => {
+      // โหมด "รอตอบ": คนที่รอนานสุดขึ้นก่อน (ไม่สนปักหมุด/ค้างอ่าน)
+      if (quickF === "waiting") return byWaitingLongest(a, b);
       const ap = a.pinned ? 1 : 0, bp = b.pinned ? 1 : 0;
       if (ap !== bp) return bp - ap;
       const au = (a.unread || 0) > 0 ? 1 : 0, bu = (b.unread || 0) > 0 ? 1 : 0;
       if (au !== bu) return bu - au;
       return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
-    }), [contacts, stageF, ownerF, myId, isFb, isSup, q, msgHits]);
+    }), [contacts, stageF, ownerF, myId, isFb, isSup, q, msgHits, quickF]);
 
   // ===== กันหน้าอืด (v853) =====
   // หน้านี้เป็นคอมโพเนนต์ก้อนเดียว — เดิมพิมพ์ 1 ตัวอักษรในช่องข้อความ = วาดรายชื่อแชตทั้ง 1,000+ ห้อง + ฟองข้อความหลายร้อยฟองใหม่ทุกครั้ง
@@ -858,7 +873,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
   const fnRef = React.useRef({});
   fnRef.current = { openContact, jumpToMsg, dlFile, scanCoupon };
   const [convoLimit, setConvoLimit] = React.useState(CONVO_PAGE);
-  React.useEffect(() => { setConvoLimit(CONVO_PAGE); }, [channel, q, stageF, ownerF]);
+  React.useEffect(() => { setConvoLimit(CONVO_PAGE); }, [channel, q, stageF, ownerF, quickF]);
   const convoEl = React.useMemo(() => shown.slice(0, convoLimit).map((c) => {
               const sd = stageDef(c.stage);
               return (
@@ -874,6 +889,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
                       </div>
                     : <div className="chat-convo-last">{c.last_message || "—"}</div>}
                   <div className="chat-convo-tags">
+                    {(() => { const w = waitInfo(c, nowTick); return w ? <span className="conv-owner" title={"ลูกค้าพิมพ์เป็นคนสุดท้าย — รอตอบตั้งแต่ " + new Date(c.waiting_since).toLocaleString("th-TH")} style={{ ...WAIT_STYLE[w.lvl], border: "1px solid", fontWeight: 700 }}>⏳ รอตอบ {w.t}</span> : null; })()}
                     <span className="conv-stage" style={{ background: sd.color }}>{sd.label}</span>
                     {c.customerName && <span className="chat-link-chip">🔗 {c.customerName}</span>}
                     {c.assigned_to && staffMap[c.assigned_to] && <span className="conv-owner">👤 {staffMap[c.assigned_to]}</span>}
@@ -882,7 +898,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
                 {c.unread > 0 && <span className="chat-unread">{c.unread}</span>}
               </button>
               );
-            }), [shown, convoLimit, sel, msgHits, staffMap, isFb]);
+            }), [shown, convoLimit, sel, msgHits, staffMap, isFb, nowTick]);
   const selName = selContact?.display_name;
   const msgsEl = React.useMemo(() => msgs.map((m, i) => {
                   const prev = msgs[i - 1];
@@ -993,6 +1009,17 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
           <div className="chat-search"><UIcon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="ค้นหาผู้ติดต่อ / ลูกค้า / ข้อความในแชต" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
+          <div className="chat-quickf" style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "8px 10px 0" }}>
+            {[["all", "ทั้งหมด"], ["unread", "ยังไม่อ่าน"], ...(hasWaitCol ? [["waiting", "⏳ รอตอบ"]] : []), ["mine", "ของฉัน"], ["pinned", "📌 ปักหมุด"]].map(([v, l]) => {
+              const on = quickF === v, n = v === "all" ? 0 : quickCounts[v], hot = v === "waiting" && n > 0;
+              return (
+                <button key={v} type="button" onClick={() => setQuickF(v)} aria-pressed={on}
+                  style={{ border: "1px solid " + (on ? "var(--brand,#0e7490)" : hot ? "#fca5a5" : "var(--line,#e5e7eb)"), background: on ? "var(--brand,#0e7490)" : hot ? "#fef2f2" : "var(--surface,#fff)", color: on ? "#fff" : hot ? "#b42318" : "var(--ink-2,#475569)", borderRadius: 999, padding: "4px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", lineHeight: 1.5 }}>
+                  {l}{n > 0 ? " " + n : ""}
+                </button>
+              );
+            })}
+          </div>
           <div className="chat-listfilter">
             <Combo className="inp" value={stageF} onChange={(e) => setStageF(e.target.value)}>
               <option value="all">ทุกสถานะ</option>{STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -1034,6 +1061,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
                     {!isSup && <span className="conv-owner">👤 {(selContact.assigned_to && staffMap[selContact.assigned_to]) || "ยังไม่มีผู้รับผิดชอบ"}</span>}
                   </div>
                 </div>
+                {(() => { const w = waitInfo(selContact, nowTick); return w ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "none" }}>
+                    <span className="conv-owner" style={{ ...WAIT_STYLE[w.lvl], border: "1px solid", fontWeight: 700 }}>⏳ รอตอบ {w.t}</span>
+                    {canSend && <button type="button" className="btn-ghost sm" title="ลูกค้าพิมพ์ปิดท้าย (เช่น ขอบคุณครับ) ไม่ต้องตอบ — เอาออกจากรายการรอตอบ" onClick={() => clearWaiting(selContact)}>✓ ไม่ต้องตอบ</button>}
+                  </span>
+                ) : null; })()}
                 {canSend && <button className={"chat-hd-btn" + (selContact.pinned ? " on" : "")} onClick={() => togglePin(selContact)} title={selContact.pinned ? "ยกเลิกปักหมุด" : "ปักหมุดแชตนี้ไว้ด้านบน"}>📌</button>}
                 {canSend && onCreateTask && <button className="chat-info-toggle" onClick={() => onCreateTask(selContact.customer_id || null, selContact.customerName || selContact.display_name)} title="สร้างงานในกระดานสั่งงาน">✅</button>}
                 <button className="chat-info-toggle" onClick={() => setShowInfo((s) => !s)} title="ข้อมูลลูกค้า"><UIcon name="building" size={18} /></button>
