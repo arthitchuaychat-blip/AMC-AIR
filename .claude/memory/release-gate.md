@@ -1,6 +1,6 @@
 ---
 name: release-gate
-description: ด่านปล่อยรุ่นตั้งแต่ 17 ก.ย. 2026 — main ถูกป้องกัน (push ตรงถูกปฏิเสธ) ต้องส่งเป็น PR ให้ CI test-and-build เขียวแล้วเจ้าของกด Merge; วิธีส่งงาน, ข้อความปฏิเสธที่จะเจอ, กับดัก "branch ต้องทันสมัย"
+description: ด่านปล่อยรุ่นตั้งแต่ 17 ก.ย. 2026 — main ถูกป้องกัน (push ตรงถูกปฏิเสธ) ต้องส่งเป็น PR ให้ CI test-and-build เขียวแล้ว merge; บนคอมมี gh CLI ทำ PR + auto-merge เองครบวงจร (พาธเต็ม + < /dev/null), บนแท็บเล็ตให้ลิงก์เจ้าของ; กับดัก "branch ต้องทันสมัย"
 metadata:
   type: project
 ---
@@ -9,8 +9,13 @@ metadata:
 
 **วิธีส่งงานทุกครั้ง (แทน "push main"):**
 1. ทำบนสาขา (`harden/…`, `fix/…`) → ผ่าน `npm test` (0 ตก) + `npm run build` ในเครื่องก่อน
-2. `git push -u origin <สาขา>` → GitHub พิมพ์ลิงก์ `https://github.com/arthitchuaychat-blip/AMC-AIR/pull/new/<สาขา>` → **ให้ลิงก์นี้เจ้าของ** (ไม่มี `gh` CLI ในเครื่อง สร้าง PR จากเทอร์มินัลไม่ได้)
-3. เจ้าของกด Create PR → CI รัน ~30 วิ → ปุ่ม Merge เขียวเมื่อผ่าน / เทาเมื่อตก → เจ้าของกด Merge → Vercel deploy จาก main
+2. `git push -u origin <สาขา>`
+3. **บนคอมเจ้าของ (มี `gh` CLI, ล็อกอินแล้ว 18 ก.ย. 2026 — ทำเองได้ครบ ไม่ต้องรบกวนเจ้าของ):**
+   - เรียกด้วยพาธเต็มเสมอ `"/c/Program Files/GitHub CLI/gh.exe"` (PATH ของ Bash tool ไม่เห็น `gh`) · ต่อท้ายคำสั่ง `< /dev/null` กัน gh รอ stdin ค้าง (เคยค้าง 120 วิ)
+   - เขียน body ลงไฟล์ใน scratchpad (ลงท้าย `🤖 Generated with [Claude Code](https://claude.com/claude-code)`) → `gh pr create --base main --head <สาขา> --title "…" --body-file <ไฟล์>`
+   - `gh pr merge <เลข> --auto --merge --delete-branch` → `gh pr checks <เลข> --watch --fail-fast` (CI ~30 วิ) → `gh pr view <เลข> --json state,mergedAt` ต้องเป็น MERGED → `git pull origin main` แล้วเช็ก BUILD
+   - PR #16 (v849) คือใบแรกที่ทำครบวงจรแบบนี้ สำเร็จ · เจ้าของคาดหวังแบบนี้: "เช็คความถูกต้องให้ แล้ว Merge pull request อัตโนมัติให้"
+   **บนแท็บเล็ต (ไม่มี gh):** ให้ลิงก์ `https://github.com/arthitchuaychat-blip/AMC-AIR/pull/new/<สาขา>` เจ้าของกด Create PR → Enable auto-merge เอง
 4. หลัง merge: `git checkout main && git pull` ก่อนเริ่มงานถัดไป (กฎ 0 เดิม)
 - memory (`.claude/memory/`) ก็ต้องไปกับ PR — รวมในสาขาของงานนั้น อย่าแยก PR เฉพาะ memory ถ้าไม่จำเป็น
 - **กับดัก "Require branches to be up to date":** ถ้า main ขยับหลังเปิด PR (เจ้าของ merge PR อื่นก่อน) ปุ่ม Merge จะขอให้อัปเดตสาขา → `git merge origin/main` เข้าสาขาแล้ว push อีกครั้ง (หรือกด "Update branch" ใน PR) — CI จะรันใหม่

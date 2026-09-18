@@ -12,7 +12,7 @@ ERP ของร้านแอร์ AMC AIR + เว็บขายหน้�
 ## กฎเหล็ก (ห้ามละเมิด)
 
 0. **เจ้าของทำงานสลับ คอม ↔ แท็บเล็ต (claude.ai/code)** — บนคอม: `git pull origin main` ก่อนเริ่มแก้โค้ดทุกเซสชัน (แท็บเล็ต clone ใหม่เสมอจึงล่าสุดอยู่แล้ว) และ push ทันทีที่จบงานทุกครั้ง อย่าปล่อยงานค้างไม่ push
-   - **main ถูกป้องกันแล้ว (17 ก.ย. 2026) — push ตรงเข้า main ถูกปฏิเสธ (GH006):** ทำบนสาขา → `git push -u origin <สาขา>` → ให้ลิงก์ `…/pull/new/<สาขา>` เจ้าของ → CI `test-and-build` ต้องเขียว → เจ้าของกด Merge · ไม่มี `gh` CLI · รายละเอียด `.claude/memory/release-gate.md`
+   - **main ถูกป้องกันแล้ว (17 ก.ย. 2026) — push ตรงเข้า main ถูกปฏิเสธ (GH006):** ทำบนสาขา → `git push -u origin <สาขา>` → สร้าง PR + เปิด auto-merge เองด้วย `gh` (บนคอมเจ้าของมี `gh` CLI ล็อกอินแล้ว 18 ก.ย. 2026 — เรียกด้วยพาธเต็ม `"/c/Program Files/GitHub CLI/gh.exe"` ใน Bash) → CI `test-and-build` เขียว → GitHub merge ให้เอง · บนแท็บเล็ตไม่มี gh → ให้ลิงก์ `…/pull/new/<สาขา>` เจ้าของกดเอง · รายละเอียด `.claude/memory/release-gate.md`
 
 0.1 **ความจำต้องเดินทางไปกับ repo** — `.claude/memory/*.md` คือความจำที่ใช้ร่วมทุกเครื่อง
    - **ทุกเครื่อง**: อ่าน `.claude/memory/MEMORY.md` ก่อนเริ่มงาน · เขียน/แก้ความจำแล้ว **commit `.claude/memory/` ไปกับงานด้วยเสมอ**
