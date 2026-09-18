@@ -10,3 +10,4 @@ metadata:
 - **กติกาตัวรายงาน:** ห้ามโยน error ออก (try/catch ทั้งตัว) · จำกัดอัตรา (ซ้ำใน 60 วิส่งครั้งเดียว, ≤10/นาที) · ข้าม chunk error หลัง deploy (รีโหลดเองอยู่แล้ว) · ไม่มี user = ไม่ส่ง. test: `test-error-report.mjs`.
 - **ดู error:** Supabase SQL: `select at, build, kind, url, left(message,120) from client_errors order by at desc limit 50;` — ยังไม่มีหน้าจอในแอป (ทำได้ทีหลังใน Settings/Exec ถ้าเจ้าของขอ).
 - **migration client_errors รันแล้ว 2026-09-17** (ยืนยันผ่าน REST) — ระบบเก็บ error ทำงานแล้วบน production
+- **มีหน้าจอดูในแอปแล้ว (v849):** Settings → การ์ด "🐞 ข้อผิดพลาดจากเครื่องผู้ใช้" (`ErrorsCard` ใน Settings.jsx, admin/exec เท่านั้น) · `api.listClientErrors({kind,q,limit})` อ่านอย่างเดียว · test `test-error-viewer.mjs` — ไม่ต้องเปิด SQL แล้ว

@@ -55,3 +55,4 @@
 - [Client error tracking](client-error-tracking.md) — เก็บ error จากเครื่องผู้ใช้ลง client_errors ของเราเอง (v847) ไม่ส่งบริการภายนอก · ตัดสั้น · admin/exec อ่าน · rate limit · วิธีดู
 - [Verify migration via REST](verify-migration-via-rest.md) — เช็กว่า migration รันแล้วจริงด้วย curl + anon key (200=มี, 404=ตารางไม่มี, 400=คอลัมน์ไม่มี) ไม่ต้องเข้า dashboard
 - [Release gate](release-gate.md) — main ถูกป้องกัน (17 ก.ย. 2026): ส่งงานเป็น PR + CI test-and-build เขียว + เจ้าของ Merge · ลิงก์ pull/new · กับดัก branch ต้องทันสมัย
+- [Backup & restore runbook](../../docs/runbooks/backup-restore.md) — คู่มือสำรอง/กู้คืน Supabase (DB+Storage+env) · Free ไม่มี backup อัตโนมัติ · ซ้อมกู้ไตรมาสละครั้ง · ตารางติดตามอยู่ท้ายไฟล์ (docs/runbooks/backup-restore.md)

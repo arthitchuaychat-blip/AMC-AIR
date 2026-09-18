@@ -2,7 +2,7 @@ import { canManagePermissions, isManagement, roleCeiling } from "../lib/roleCapa
 import React from "react";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { listTeams, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, setProfileActive, listCategories, saveCategory, deleteCategory, updateCategory, setCategoryMatGroup, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, uploadWebLogo, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
+import { listTeams, listClientErrors, saveTeam, deleteTeam, listProfiles, updateProfile, createUser, adminSetUserEmail, adminSetUserPassword, adminDeleteUser, setProfileActive, listCategories, saveCategory, deleteCategory, updateCategory, setCategoryMatGroup, listBrands, saveBrand, deleteBrand, listBtus, saveBtu, deleteBtu, getCompanies, saveCompany, uploadWebLogo, getRolePermissions, saveRolePermissions, flowaccountTest, syncChatGroups, getNotifySettings, saveNotifySettings, NOTIFY_CATS, listAuditLogs, getAutoReply, saveAutoReply } from "../lib/api";
 import { fmtBaht } from "../lib/format";
 import { MODULES as PERM_MODULES, ROLES as PERM_ROLES, ROLE_LABEL as PERM_ROLE_LABEL, DEFAULT_PERMS, mergePerms, setPerms, can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -655,6 +655,67 @@ function AutoReplyCard({ flash }) {
   );
 }
 
+// ข้อผิดพลาดจากเครื่องผู้ใช้ (client_errors — mig 20260917120000) — เห็นก่อนพนักงานมาบอก · อ่านอย่างเดียว (RLS: admin/exec)
+// โครงเดียวกับ AuditCard ใช้คลาส audit-* เดิม ไม่เพิ่ม CSS
+const ERR_KINDS = { all: "ทุกชนิด", render: "หน้าจอพัง (render)", "window.error": "โค้ดพัง (error)", unhandledrejection: "โหลด/บันทึกล้มเงียบ (promise)" };
+function ErrorsCard({ flash }) {
+  const [rows, setRows] = React.useState(null);
+  const [kind, setKind] = React.useState("all");
+  const [q, setQ] = React.useState("");
+  const [open, setOpen] = React.useState(null);   // id ที่กางรายละเอียด stack
+  const [busy, setBusy] = React.useState(false);
+
+  async function load() {
+    setBusy(true);
+    try { setRows(await listClientErrors({ kind, q })); }
+    catch (e) { flash("โหลดข้อผิดพลาดไม่สำเร็จ: " + (e.message || e) + " (รัน 20260917120000_client_errors.sql แล้วหรือยัง?)", true); setRows([]); }
+    setBusy(false);
+  }
+  React.useEffect(() => { load(); }, [kind]);
+
+  const fmtTs = (ts) => { try { return new Date(ts).toLocaleString("th-TH", { day: "2-digit", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch { return ts; } };
+  const badge = (k) => k === "render" ? { t: "หน้าจอพัง", c: "#fff", bg: "#dc2626" }
+    : k === "unhandledrejection" ? { t: "ล้มเงียบ", c: "#9a3412", bg: "#ffedd5" }
+    : { t: "โค้ดพัง", c: "#7f1d1d", bg: "#fee2e2" };
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="sec-head">
+        <div><div className="sec-title">ข้อผิดพลาดจากเครื่องผู้ใช้ <span style={{ fontWeight: 500, color: "var(--ink-3)" }}>(client_errors)</span></div>
+          <div className="sec-sub">แอปเก็บให้อัตโนมัติเมื่อหน้าจอพัง / โค้ดพัง / บันทึกล้มเงียบ — รู้ก่อนพนักงานมาบอก · เก็บในระบบเราเอง ตัดสั้น ไม่มีข้อมูลฟอร์ม</div></div>
+        <button className="btn-ghost sm" disabled={busy} onClick={load}>🔄 รีเฟรช</button>
+      </div>
+
+      <div className="audit-filters">
+        <Combo className="inp" value={kind} onChange={(e) => setKind(e.target.value)}>
+          {Object.entries(ERR_KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </Combo>
+        <input className="inp" placeholder="ค้นหา ข้อความ / หน้า / เวอร์ชัน" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") load(); }} />
+      </div>
+
+      {rows === null ? <div className="empty">กำลังโหลด…</div>
+        : rows.length === 0 ? <div className="empty sm">🎉 ไม่มีข้อผิดพลาดที่เก็บไว้</div>
+        : (
+          <div className="audit-list">
+            {rows.map((r) => { const b = badge(r.kind); return (
+              <div key={r.id} className="audit-row">
+                <div className="audit-main">
+                  <span className="audit-badge" style={{ color: b.c, background: b.bg }}>{b.t}</span>
+                  <span className="audit-type">{r.build || "—"}</span>
+                  <b className="audit-no">{r.url || "—"}</b>
+                  <span className="audit-ts">{fmtTs(r.at)}</span>
+                  {(r.stack || r.component_stack) && <button className="btn-ghost xs" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? "ซ่อน" : "รายละเอียด"}</button>}
+                </div>
+                <div className="audit-reason">{r.message}</div>
+                {open === r.id && <pre className="audit-snap" style={{ whiteSpace: "pre-wrap", fontSize: 11, maxHeight: 220, overflow: "auto" }}>{[r.stack, r.component_stack, r.ua].filter(Boolean).join("\n\n")}</pre>}
+              </div>
+            ); })}
+          </div>
+        )}
+    </div>
+  );
+}
+
 export default function Settings({ role }) {
   const [teams, setTeams] = React.useState([]);
   const [profiles, setProfiles] = React.useState([]);
@@ -744,6 +805,7 @@ export default function Settings({ role }) {
         <>
         {can(role, "settings") && <Fold icon="🔐" title="สิทธิ์การใช้งานตามตำแหน่ง" sub="แก้ไข / ดู / ไม่เห็น รายเมนู รายตำแหน่ง"><PermissionsCard actorRole={role} flash={flash} /></Fold>}
         {can(role, "settings", "edit") && <Fold icon="🧾" title="ประวัติการลบ / ยกเลิกเอกสาร (Audit)" sub="ตรวจย้อนหลังว่าใครลบ/ยกเลิกอะไร + กู้คืนเอกสาร"><AuditCard flash={flash} /></Fold>}
+        {["admin", "exec"].includes(role) && <Fold icon="🐞" title="ข้อผิดพลาดจากเครื่องผู้ใช้" sub="หน้าจอพัง / โค้ดพัง / บันทึกล้มเงียบ — แอปเก็บให้เอง เห็นก่อนพนักงานมาบอก"><ErrorsCard flash={flash} /></Fold>}
         {can(role, "settings", "edit") && <Fold icon="🔔" title="การแจ้งเตือน" sub="เปิด/ปิดแจ้งเตือนแต่ละกลุ่มกิจกรรม ตามตำแหน่ง"><NotifyCard flash={flash} /></Fold>}
         {can(role, "settings", "edit") && <Fold icon="🤖" title="ตอบแชต LINE อัตโนมัติ" sub="ข้อความตอบกลับลูกค้าอัตโนมัติ"><AutoReplyCard flash={flash} /></Fold>}
         {can(role, "settings", "edit") && <Fold icon="👥" title="กลุ่มแชต “พนักงานประจำ”" sub="ซิงก์สมาชิกห้องแชตพนักงานอัตโนมัติ"><ChatGroupsCard flash={flash} /></Fold>}

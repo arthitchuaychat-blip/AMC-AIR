@@ -15,3 +15,5 @@ metadata:
 - memory (`.claude/memory/`) ก็ต้องไปกับ PR — รวมในสาขาของงานนั้น อย่าแยก PR เฉพาะ memory ถ้าไม่จำเป็น
 - **กับดัก "Require branches to be up to date":** ถ้า main ขยับหลังเปิด PR (เจ้าของ merge PR อื่นก่อน) ปุ่ม Merge จะขอให้อัปเดตสาขา → `git merge origin/main` เข้าสาขาแล้ว push อีกครั้ง (หรือกด "Update branch" ใน PR) — CI จะรันใหม่
 - ห้ามแนะนำให้เจ้าของปิด/ข้ามกฎเพื่อความสะดวก — ถ้า CI ตก ต้องแก้ให้ผ่าน (ดู [[build-passes-page-dead]])
+
+**ตั้งค่า repo เพิ่ม (18 ก.ย. 2026):** Automatically delete head branches ✓ · Always suggest updating PR branches ✓ (มีปุ่ม Update branch ใน PR) · **Allow auto-merge ✓** → บอกเจ้าของได้ว่า "กด Create pull request แล้วกด **Enable auto-merge** ปิดหน้าจอได้เลย" GitHub merge ให้เมื่อ CI เขียว (ยังบังคับ test เหมือนเดิม). เจ้าของ merge PR แรก (#15) ด้วยตัวเองสำเร็จแล้ว — เข้าใจ flow แล้ว (ถามว่า merge คืออะไร → อธิบายเทียบ "ร่าง → ตรวจ → อนุมัติเข้าต้นฉบับ")

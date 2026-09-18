@@ -6785,6 +6785,17 @@ export async function listAuditLogs({ type = "all", action = "all", from, to, q,
   return rows;
 }
 
+// ข้อผิดพลาดจากเครื่องผู้ใช้ (client_errors — mig 20260917120000) — อ่านอย่างเดียว · RLS ให้เฉพาะ admin/exec
+// เก็บโดย lib/errorReport.js (ตัดสั้น ไม่มีข้อมูลฟอร์ม) · ไม่มีปุ่มลบ — เป็นหลักฐานไว้ไล่บั๊ก
+export async function listClientErrors({ kind = "all", q = "", limit = 200 } = {}) {
+  let query = supabase.from("client_errors").select("id,at,build,url,kind,message,stack,component_stack,ua").order("at", { ascending: false }).limit(limit);
+  if (kind && kind !== "all") query = query.eq("kind", kind);
+  const { data, error } = await query;
+  if (error) throw error;
+  let rows = data || [];
+  if (q) { const n = q.toLowerCase(); rows = rows.filter((r) => [r.message, r.url, r.build, r.kind].some((f) => String(f || "").toLowerCase().includes(n))); }
+  return rows;
+}
 // add all permanent staff to the "พนักงานประจำ" group (insert-only) — admin/exec only
 export async function syncChatGroups() {
   const { error } = await supabase.rpc("chat_sync_groups");
