@@ -50,6 +50,7 @@ const SUITES = [
   ["test-error-viewer.mjs"],
   ["test-invoice-window.mjs"],
   ["test-cash-nonop.mjs"],
+  ["test-expense-merged.mjs"],
 ];
 
 const failed = [];
