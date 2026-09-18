@@ -35,11 +35,35 @@
    ```
 3. เช็กว่าไฟล์มีขนาดสมเหตุสมผล (หลาย MB ไม่ใช่ 0 KB) แล้วอัปโหลดคลาวด์
 
-### 3.2 ไฟล์แนบ (Storage)
-Dashboard → **Storage** → เข้าแต่ละ bucket → เลือกทั้งหมด → **Download** (หรือใช้ CLI `supabase storage` ดาวน์โหลดทั้ง bucket) → เก็บ `D:\backups\storage\YYYY-MM-DD\` — ทำ**เดือนละครั้ง** (ไฟล์ใหญ่แต่เปลี่ยนน้อย)
+### 3.2 ไฟล์แนบ (Storage) — ⚠️ Supabase ไม่สำรองส่วนนี้ให้เลย สำเนาของเราคือสำเนาเดียว
+**ที่เก็บ:** Google Drive บัญชี arthitchuaychat@gmail.com (5 TB) → `K:\My Drive\amc-backups\storage\photos\…` ผ่าน Google Drive for desktop โหมด **Stream** (ไฟล์อยู่บนคลาวด์ ในเครื่องเห็นเป็นไดรฟ์ K: กินที่แค่แคช ตั้งแคชไว้ D:) · **ห้าม**ตั้ง Drive แบบ Mirror/ซิงก์ทั้งเครื่อง (เคยทำ C: เต็ม) · ห้ามลบไฟล์ใน K: เพื่อเคลียร์ที่ (= ลบบนคลาวด์)
+
+**ครั้งแรก 18 ก.ย. 2026:** ดึงทั้ง bucket `photos` 22,513 ไฟล์ / 26 GB ใช้เวลา ~2 ชม. 20 นาที (Supabase CLI 2.117 ผ่าน `npx supabase storage cp -r ss:///photos/ ./` — dst ต้องเป็นพาธ relative, ตัวอักษรไดรฟ์ถูกอ่านเป็น URL) แล้ว robocopy /MOVE เข้า K: · bucket อื่น (`hr-documents` `sales-wht-evidence` `AMC pic.` `tm_slides`) **ว่าง** ณ วันนั้น
+โครงสร้างใน photos: `materials` รูปสินค้า (10.5k ไฟล์ 5 GB) · `docs` เอกสาร/PDF แนบใบงาน (14 GB) · `line`/`chat` รูปจากแชต · `attendance` รูปลงเวลา · `expenses` บิลเบิกจ่าย · `signatures` ลายเซ็น · `tasks` รูปหน้างาน · `web-*` รูปเว็บไซต์ — **ที่หายแล้วหาใหม่ไม่ได้** = expenses, signatures, tasks, docs (หลักฐานบัญชี/ภาษี)
+
+**ทุกเดือน (วันที่ 1) — ดึงเฉพาะไฟล์ใหม่ ไม่โหลดซ้ำ:** ดับเบิลคลิก **`scripts\backup-storage.cmd`** ใน repo (หรือบอก Claude ให้รัน) → สคริปต์ `scripts/backup-storage.mjs` ถามฐานข้อมูล (`storage.objects`) ว่ามีไฟล์อะไร → เทียบกับ K: → ดึงเฉพาะที่ขาด → พิมพ์ "✓ ครบ" + พื้นที่ว่าง (เตือนถ้า < 20 GB) → log ที่ `K:\My Drive\amc-backups\storage\_logs\` · ใช้ token จาก `npx supabase login` (ทำครั้งเดียว ไม่มี key ในไฟล์) · `supabase link` ทำไว้ที่ `D:\backups` (มี `supabase/.temp`) — ถ้าย้ายเครื่อง: login ใหม่ + `npx supabase link --project-ref tpyrlxhoyghawqvsphfj` ใน D:\backups
+- ไฟล์ที่ถูกลบบน Supabase สคริปต์**ไม่ลบ**ในสำเนา (เก็บประวัติ) แค่รายงานจำนวน
+- ถ้ามี bucket ใหม่ที่มีไฟล์ สคริปต์เตือนให้แก้ค่า `BUCKET`
+- **เมื่อที่เต็ม:** โหมด Stream ไม่กินที่ในเครื่อง · ถ้า Google Drive ใกล้เต็ม (5 TB) ค่อยคิด · ถ้า D: (แคช) ต่ำกว่า 20 GB → Drive Preferences → Local cached files → ล้างแคช หรือย้ายไปไดรฟ์อื่น
 
 ### 3.3 ค่าตั้งค่าลับ (Vercel env)
-Vercel → Project → Settings → Environment Variables → จดชื่อตัวแปรทั้งหมด + ที่มาของค่า (LINE console / ผู้ให้บริการ AI ฯลฯ) ใส่ไฟล์ **ในที่ปลอดภัย** (password manager) — ไม่ต้องจดค่าถ้ากู้จากผู้ให้บริการได้
+Vercel → Project → Settings → Environment Variables — **จดเฉพาะชื่อ** (ค่าไม่ต้องจด ขอใหม่จากผู้ให้บริการได้ทุกตัว) · ในไฟล์นี้มีแต่ชื่อ ไม่มีค่า ⚠️ ห้ามใส่ค่าลงมาเด็ดขาด
+
+**Project `amc-air` (แอป ERP) — 24 ตัว ตรวจ 18 ก.ย. 2026:**
+
+| กลุ่ม | ตัวแปร | ขอใหม่ได้จาก |
+|---|---|---|
+| Supabase (ย้าย project ต้องเปลี่ยนทั้งชุด) | `SUPABASE_URL` `SUPABASE_SERVICE_ROLE_KEY` `VITE_SUPABASE_URL` `VITE_SUPABASE_ANON_KEY` | Supabase → Project Settings → API |
+| LINE (แชต + บอท) | `LINE_CHANNEL_SECRET` `LINE_CHANNEL_ACCESS_TOKEN` | LINE Developers Console → channel AMC AIR |
+| LINE (The Top Mentor — ค้างจากตอนยังอยู่ repo นี้) | `MENTOR_LINE_CHANNEL_SECRET` `MENTOR_LINE_ACCESS_TOKEN` | ย้ายไป project the-top-mentor แล้ว → ลบออกจาก amc-air ได้ |
+| AI บอท | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys |
+| FlowAccount (เลิกใช้ 1 ม.ค. 2027) | `FLOWACCOUNT_CLIENT_ID` `FLOWACCOUNT_CLIENT_SECRET` `FLOWACCOUNT_ENV` | FlowAccount → ตั้งค่า API |
+| Facebook Page (Messenger) | `FB_APP_SECRET` `FB_PAGE_ID` `FB_PAGE_ACCESS_TOKEN` `FB_VERIFY_TOKEN` | Meta for Developers → แอป AMC · VERIFY_TOKEN ตั้งเอง |
+| Gmail (ส่งอีเมลจากแอป) | `GMAIL_OAUTH_CLIENT_ID` `GMAIL_OAUTH_CLIENT_SECRET` `GMAIL_ADDRESS` | Google Cloud Console → OAuth credentials |
+| แจ้งเตือน push ในเบราว์เซอร์ | `VAPID_PUBLIC_KEY` `VAPID_PRIVATE_KEY` `VAPID_SUBJECT` | สร้างคู่ใหม่ได้เอง (`npx web-push generate-vapid-keys`) — ผู้ใช้ต้องกดอนุญาตแจ้งเตือนใหม่ |
+| ภายในแอป | `CRON_SECRET` `CALENDAR_FEED_TOKEN` | สุ่มใหม่ได้เอง (ลิงก์ปฏิทินเดิมจะใช้ไม่ได้ ต้องแจกใหม่) |
+
+**Project `amc-air-497i` (เว็บ www.amcair.net):** ตรวจ 18 ก.ย. 2026 — **ไม่มี env เลย** (Supabase URL/anon key เป็นค่าสาธารณะฝังในโค้ด) → ไม่มีอะไรต้องกู้
 
 ## 4. ซ้อมกู้คืน (ไตรมาสละครั้ง — สำคัญที่สุด)
 
@@ -77,8 +101,8 @@ Vercel → Project → Settings → Environment Variables → จดชื่อ
 |---|---|---|---|---|
 | ตรวจแผน Supabase + ตั้ง daily backup/PITR | ครั้งเดียว | อาทิตย์ | 18 ก.ย. 2026 | Pro · daily backup ทำงานอยู่ (เห็น 7 วัน 11–17 ก.ย. ชนิด PHYSICAL) · PITR ยังไม่เปิด |
 | สำรองฐานข้อมูล (ข้อ 3.1) | Free: ทุกสัปดาห์ · Pro: ทุกเดือน | อาทิตย์ | — | |
-| สำรองไฟล์แนบ (ข้อ 3.2) | ทุกเดือน | อาทิตย์ | — | |
-| จดค่าตั้งค่าลับ (ข้อ 3.3) | เมื่อเพิ่ม/เปลี่ยน key | อาทิตย์ | — | |
+| สำรองไฟล์แนบ (ข้อ 3.2) | ทุกเดือน (วันที่ 1) | อาทิตย์ / Claude | **18 ก.ย. 2026 ✅** | ครั้งแรกเต็มก้อน photos 22,5xx ไฟล์ 26 GB → K:\My Drive\amc-backups · ครั้งถัดไป 1 ต.ค. 2026 รัน scripts\backup-storage.cmd |
+| จดค่าตั้งค่าลับ (ข้อ 3.3) | เมื่อเพิ่ม/เปลี่ยน key | อาทิตย์ | 18 ก.ย. 2026 | amc-air ครบ 24 ตัว · amc-air-497i ยังไม่ได้ตรวจ |
 | **ซ้อมกู้คืน (ข้อ 4)** | **ทุกไตรมาส** | อาทิตย์ | **18 ก.ย. 2026 ✅ ผ่าน** | สำรอง 17 ก.ย. → amc-restore-test ~10 นาที · customers 709 / quotations 732 / invoices 354 / receipts 297 / REC-260916-08094 ตรงทุกช่อง · ครั้งถัดไป ≈ ธ.ค. 2026 |
 
 ---
