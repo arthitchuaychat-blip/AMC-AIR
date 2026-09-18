@@ -24,7 +24,7 @@
 ## 3. สำรองด้วยมือ (Free: ทุกสัปดาห์ · Pro: ทุกเดือนเป็นสำเนานอกระบบ)
 
 ### 3.1 ฐานข้อมูล
-**วิธี A — จาก Dashboard (ง่ายสุด, Pro):** Database → Backups → เลือกวันล่าสุด → **Download** → ได้ไฟล์ `.sql`/`.tar` → เก็บที่ `D:\backups\db\amc-YYYY-MM-DD.sql` + อัปโหลดคลาวด์
+**วิธี A — จาก Dashboard:** ❌ **ใช้ไม่ได้กับ project นี้** — ตรวจแล้ว 18 ก.ย. 2026 สำรองรายวันของ Supabase เป็นชนิด **PHYSICAL** (Database → Backups → Scheduled backups) มีแต่ปุ่ม **Restore** (= กู้ทับระบบจริง ⚠️ ห้ามกดเล่น) **ไม่มีปุ่ม Download** จึงเอาไฟล์ออกมาเก็บนอกระบบเองไม่ได้ → สำเนานอกระบบต้องใช้ **วิธี B** เท่านั้น · ส่วนการซ้อมกู้ใช้แท็บ **Restore to new project** (ข้อ 4)
 
 **วิธี B — ด้วยคำสั่ง (ทุกแผน):** ต้องมี Supabase CLI (ติดตั้งครั้งเดียว: `npm i -g supabase`)
 1. Dashboard → **Settings → Database → Connection string** → เลือก **URI** → กด copy (⚠️ ในนั้นมี**รหัสผ่านฐานข้อมูล** = ความลับ **ห้ามวางในแชต/ห้าม commit**)
@@ -43,24 +43,31 @@ Vercel → Project → Settings → Environment Variables → จดชื่อ
 
 ## 4. ซ้อมกู้คืน (ไตรมาสละครั้ง — สำคัญที่สุด)
 
-การซ้อม = พิสูจน์ว่าไฟล์สำรอง**ใช้ได้จริง** โดยไม่แตะระบบจริงเลย
-1. สร้าง Supabase project **ใหม่** ชื่อ `amc-restore-test` (แผน Free พอ)
-2. เอาไฟล์ `.sql` ล่าสุดมากู้เข้า project ใหม่:
+การซ้อม = พิสูจน์ว่าสำรอง**ใช้กู้ได้จริง** โดยไม่แตะระบบจริงเลย — **วิธีที่ใช้จริงและผ่านแล้ว (18 ก.ย. 2026, ~10 นาที):**
+1. project จริง → **Database → Backups → แท็บ "Restore to new project"** (BETA) — ⚠️ **ไม่ใช่**ปุ่ม Restore ในแท็บ Scheduled backups (อันนั้นกู้ทับระบบจริง)
+2. แถวสำรองล่าสุด → **Restore** → Continue → ตั้ง **New Project Name = `amc-restore-test`** (ลบอีเมลที่ระบบใส่มาให้ออก) · รหัสผ่านฐานข้อมูลระบบสุ่มให้ (ไม่ต้องใช้ในการซ้อม) → **Restore to new project** · ค่าใช้จ่าย ~$14.83/เดือน คิดรายชั่วโมง เปิดไม่กี่ชั่วโมงแล้วลบ = ไม่กี่บาท
+3. ระหว่างรอ (5–15 นาที) เปิด **SQL Editor ของ project จริง** รันนับตัวเลขต้นฉบับ (ตัดที่เวลาสำรอง = 21:05 UTC ของวันก่อน):
+   ```sql
+   select
+     (select count(*) from customers  where created_at < '<วันสำรอง> 21:05:00+00') as customers,
+     (select count(*) from quotations where created_at < '<วันสำรอง> 21:05:00+00') as quotations,
+     (select count(*) from invoices   where created_at < '<วันสำรอง> 21:05:00+00') as invoices,
+     (select count(*) from receipts   where created_at < '<วันสำรอง> 21:05:00+00') as receipts,
+     (select max(receipt_no) from receipts where created_at < '<วันสำรอง> 21:05:00+00') as last_receipt;
    ```
-   psql "<connection string ของ project ทดสอบ>" -f D:\backups\db\amc-YYYY-MM-DD.sql
-   ```
-   (หรือ Dashboard → SQL Editor วางเนื้อหาไฟล์ ถ้าไฟล์ไม่ใหญ่มาก)
-3. เปิด Dashboard → Table Editor ของ project ทดสอบ → สุ่มเช็ก: จำนวนลูกค้า / ใบเสร็จล่าสุด / ยอดกระแสเงินสดล่าสุด **ตรงกับระบบจริง ณ วันสำรอง**ไหม
-4. (ถ้าอยากซ้อมเต็ม) Vercel → สร้าง preview ที่ชี้ env ไป project ทดสอบ → ล็อกอินเปิดแดชบอร์ด/ใบเสนอราคา/ใบเสร็จ 1 ใบ
-5. **ลบ project ทดสอบทิ้ง** (Settings → General → Delete project) เพื่อไม่ให้มีสำเนาข้อมูลลูกค้าค้างอยู่
-6. จดผลในตารางข้อ 6 (วันที่ซ้อม · ใช้เวลากี่นาที · ปัญหาที่เจอ)
+4. project ใหม่พร้อม (ป้าย COMPLETED / Go to new project) → **เช็กชื่อมุมบนซ้าย = amc-restore-test** → SQL Editor → รัน SQL **ชุดเดียวกัน** → ทั้ง 5 ช่อง**ต้องเท่ากันเป๊ะ**
+5. (ถ้าอยากซ้อมเต็ม) Vercel → สร้าง preview ที่ชี้ env ไป project ทดสอบ → ล็อกอินเปิดแดชบอร์ด/ใบเสนอราคา/ใบเสร็จ 1 ใบ
+6. **ลบ project ทดสอบทิ้ง** (ใน amc-restore-test → Project Settings → General → Delete project → พิมพ์ชื่อยืนยัน) เพื่อเลิกจ่าย compute และไม่ให้มีสำเนาข้อมูลลูกค้าค้างอยู่
+7. จดผลในตารางข้อ 6 (วันที่ซ้อม · ใช้เวลากี่นาที · ปัญหาที่เจอ)
+
+สิ่งที่ Restore to new project **ไม่**ย้ายมา (หน้าจอบอกเอง): ไฟล์แนบ Storage, Edge Functions, ค่า Auth/API keys, extensions — ถ้าเกิดเหตุจริงแล้วต้องย้ายแอปไปชี้ project ใหม่ ต้องตั้ง Auth/keys ใน Vercel ใหม่ และไฟล์แนบต้องมีสำเนาจากข้อ 3.2
 
 ## 5. เมื่อเกิดเหตุจริง (ข้อมูลหาย/ผิดพลาดวงกว้าง)
 
 1. **หยุดเขียน**: แจ้งทุกคนหยุดใช้แอปชั่วคราว · จดเวลาที่เกิดเหตุ (นาที)
 2. **อย่าแก้/ลบเพิ่ม** — ยิ่งแก้ ยิ่งกู้ยาก
 3. ถ้ามี **PITR** → Database → Backups → Point in time → เลือกเวลา "ก่อนเกิดเหตุ 5 นาที" → Restore (Supabase ทำให้ทั้งหมด)
-4. ถ้ามีแค่ **daily backup / ไฟล์ .sql** → กู้เข้า **project ใหม่** ก่อน (ข้อ 4) ตรวจให้แน่ใจ → แล้วค่อยชี้ Vercel env ไป project ใหม่ (ห้ามกู้ทับ project จริงโดยไม่ตรวจ)
+4. ถ้ามีแค่ **daily backup** → ใช้แท็บ **Restore to new project** กู้เข้า project ใหม่ก่อน (ข้อ 4) ตรวจตัวเลขให้แน่ใจ → แล้วค่อยชี้ Vercel env (SUPABASE URL/keys) ไป project ใหม่ · หรือถ้ามั่นใจว่าต้องย้อนทั้งระบบจริง ๆ ค่อยกด Restore ในแท็บ Scheduled backups (ทับของจริง ย้อนกลับไม่ได้)
 5. ข้อมูลที่พนักงานคีย์ **หลัง**จุดที่กู้ ต้องคีย์ใหม่ — เช็กจาก LINE/กระดาษ/ใบเสร็จจริง
 6. หลังจบ: เขียนสั้น ๆ ว่าเกิดอะไร กู้ยังไง เสียข้อมูลกี่นาที → ปรับความถี่สำรองถ้าจำเป็น
 
@@ -68,11 +75,11 @@ Vercel → Project → Settings → Environment Variables → จดชื่อ
 
 | งาน | ความถี่ | ผู้รับผิดชอบ | ทำล่าสุด | หมายเหตุ |
 |---|---|---|---|---|
-| ตรวจแผน Supabase + ตั้ง daily backup/PITR | ครั้งเดียว | อาทิตย์ | — | |
+| ตรวจแผน Supabase + ตั้ง daily backup/PITR | ครั้งเดียว | อาทิตย์ | 18 ก.ย. 2026 | Pro · daily backup ทำงานอยู่ (เห็น 7 วัน 11–17 ก.ย. ชนิด PHYSICAL) · PITR ยังไม่เปิด |
 | สำรองฐานข้อมูล (ข้อ 3.1) | Free: ทุกสัปดาห์ · Pro: ทุกเดือน | อาทิตย์ | — | |
 | สำรองไฟล์แนบ (ข้อ 3.2) | ทุกเดือน | อาทิตย์ | — | |
 | จดค่าตั้งค่าลับ (ข้อ 3.3) | เมื่อเพิ่ม/เปลี่ยน key | อาทิตย์ | — | |
-| **ซ้อมกู้คืน (ข้อ 4)** | **ทุกไตรมาส** | อาทิตย์ | — | ครั้งแรกควรทำภายใน 30 วัน |
+| **ซ้อมกู้คืน (ข้อ 4)** | **ทุกไตรมาส** | อาทิตย์ | **18 ก.ย. 2026 ✅ ผ่าน** | สำรอง 17 ก.ย. → amc-restore-test ~10 นาที · customers 709 / quotations 732 / invoices 354 / receipts 297 / REC-260916-08094 ตรงทุกช่อง · ครั้งถัดไป ≈ ธ.ค. 2026 |
 
 ---
 *สร้าง 18 ก.ย. 2026 (v849) — ส่วนหนึ่งของแผน stability · โค้ด/migrations อยู่บน GitHub อยู่แล้ว ไม่ต้องสำรองแยก*
