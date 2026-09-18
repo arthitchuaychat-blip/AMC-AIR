@@ -12,6 +12,7 @@ ERP ของร้านแอร์ AMC AIR + เว็บขายหน้�
 ## กฎเหล็ก (ห้ามละเมิด)
 
 0. **เจ้าของทำงานสลับ คอม ↔ แท็บเล็ต (claude.ai/code)** — บนคอม: `git pull origin main` ก่อนเริ่มแก้โค้ดทุกเซสชัน (แท็บเล็ต clone ใหม่เสมอจึงล่าสุดอยู่แล้ว) และ push ทันทีที่จบงานทุกครั้ง อย่าปล่อยงานค้างไม่ push
+   - **main ถูกป้องกันแล้ว (17 ก.ย. 2026) — push ตรงเข้า main ถูกปฏิเสธ (GH006):** ทำบนสาขา → `git push -u origin <สาขา>` → ให้ลิงก์ `…/pull/new/<สาขา>` เจ้าของ → CI `test-and-build` ต้องเขียว → เจ้าของกด Merge · ไม่มี `gh` CLI · รายละเอียด `.claude/memory/release-gate.md`
 
 0.1 **ความจำต้องเดินทางไปกับ repo** — `.claude/memory/*.md` คือความจำที่ใช้ร่วมทุกเครื่อง
    - **ทุกเครื่อง**: อ่าน `.claude/memory/MEMORY.md` ก่อนเริ่มงาน · เขียน/แก้ความจำแล้ว **commit `.claude/memory/` ไปกับงานด้วยเสมอ**
@@ -21,8 +22,8 @@ ERP ของร้านแอร์ AMC AIR + เว็บขายหน้�
 2. **Migration รันเองไม่ได้** — เขียนไฟล์ใน `supabase/migrations/` แล้ว**วาง SQL ในแชต**ให้เจ้าของไปรันใน Supabase SQL Editor เสมอ (ล่าสุด: 174 — เช็กเลขในโฟลเดอร์ก่อนตั้งใหม่เสมอ เคยตั้งชนกันมาแล้ว)
 3. **ก่อน commit**: `git reset -q .claude/settings.local.json` แล้ว `git add` เฉพาะไฟล์ที่ระบุชื่อ (ห้าม `-A`/`.`) — **ก็อปพาธจาก `git status` ตรง ๆ** (กับดัก: ไฟล์คือ `app/src/components/BOQ.jsx` ตัวใหญ่ — add เป็น `Boq.jsx` จะหลุดเงียบ)
 4. **Bump `BUILD`** ใน `app/src/App.jsx` ทุกครั้งที่แก้โค้ดใน app/ (แก้เฉพาะ `app/api/*` ไม่ต้อง bump) — เวอร์ชันโชว์มุมซ้ายล่างไว้เช็กว่าเบราว์เซอร์โหลดบันเดิลใหม่
-5. Commit ลงท้าย `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` · ห้าม commit ไฟล์ `_design/*`
-6. **ตรวจงาน** = `npm run build` ใน `app/` + `node --check` สำหรับไฟล์ api (แอปล็อกอินอยู่ ไม่มี browser preview) — งานพิมพ์เอกสารตรวจใน harness `_design/`
+5. Commit ลงท้าย `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` · ห้าม commit ไฟล์ `_design/*`
+6. **ตรวจงาน** = `npm test` ใน `app/` (test-all.mjs รันครบทุก suite **ต้อง 0 ตก** — CI ใช้ชุดเดียวกัน ตกแล้ว merge ไม่ได้) + `npm run build` + `node --check` สำหรับไฟล์ api (แอปล็อกอินอยู่ ไม่มี browser preview) — งานพิมพ์เอกสารตรวจใน harness `_design/` · เพิ่ม suite ใหม่ = เพิ่มใน `SUITES` ของ `app/test-all.mjs`
 
 ## กติกาเอกสารของเจ้าของ (ต้องรักษาไว้ทุกงานใหม่)
 
