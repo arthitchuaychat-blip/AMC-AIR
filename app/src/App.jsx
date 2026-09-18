@@ -159,7 +159,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "v850 · ใบแจ้งหนี้: โหลดเฉพาะช่วงวันที่ที่เลือกจากเซิร์ฟเวอร์ (ค่าเริ่มต้น 6 เดือน) + ยอดวางบิล/งวด/ใบที่ซ่อน นับจากชุดสรุปทุกใบ";
+const BUILD = "v851 · กระแสเงินสด: แยก โอนระหว่างบัญชี / เจ้าของเบิกใช้ส่วนตัว / เจ้าของเติมเงินเข้า ออกจากรับ-จ่ายจริง (ยังนับในยอดคงเหลือ)";
 if (typeof window !== "undefined") window.__amcBuild = BUILD;   // ให้ตัวรายงาน error (lib/errorReport.js) บอกได้ว่าเวอร์ชันไหนพัง
 
 function SetupNotice() {
