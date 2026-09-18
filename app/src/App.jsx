@@ -159,7 +159,7 @@ const ROLE_LABEL = { exec: "ผู้บริหาร", admin: "ฝ่าย�
 // chat & teamchat have their own dedicated badges — skip the notification-based one for them
 const NAV_BADGE_SKIP = { chat: 1, email: 1, teamchat: 1 };
 // bump this each deploy — shown in the sidebar so we can confirm the browser loaded the latest build
-const BUILD = "v854 · แชตลูกค้า: ป้าย ⏳ รอตอบ (ลูกค้าพูดเป็นคนสุดท้าย แม้เปิดอ่านแล้ว) + ชิปกรองด่วน ทั้งหมด/ยังไม่อ่าน/รอตอบ/ของฉัน/ปักหมุด + ปุ่มไม่ต้องตอบ";
+const BUILD = "v855 · แก้ช่าง (Android) เลือกรูปในความเคลื่อนไหวแล้วเด้งออก: กลับเข้าแอปโหลดงานแบบเงียบ ไม่ถอดการ์ดออกจากจอ + จำร่างข้อความ/รูป และการ์ดที่กางไว้";
 if (typeof window !== "undefined") window.__amcBuild = BUILD;   // ให้ตัวรายงาน error (lib/errorReport.js) บอกได้ว่าเวอร์ชันไหนพัง
 
 function SetupNotice() {

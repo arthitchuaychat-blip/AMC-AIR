@@ -22,16 +22,26 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
   const [loading, setLoading] = React.useState(true);
   const [loadError, setLoadError] = React.useState("");
   const loadSeq = React.useRef(0);
+  const listRef = React.useRef([]);   // ค่าล่าสุดของ list ให้ตัวโหลดเบื้องหลังรู้ว่ามีรายการบนจออยู่แล้วหรือยัง (effect ด้านล่างไม่ได้ผูกกับ list)
+  React.useEffect(() => { listRef.current = list; }, [list]);
   const [toast, setToast] = React.useState(null);
   const [tab, setTab] = React.useState("todo"); // todo | doing | done
-  const [expanded, setExpanded] = React.useState({}); // job_no → show full details/brief/timeline
+  // จำการ์ดที่กางไว้ข้ามการโหลดหน้าใหม่ — มือถือ RAM น้อยปิดแท็บทิ้งตอนสลับไปกล้อง/แกลเลอรี กลับมาหน้าโหลดใหม่ การ์ดจะได้กางรอที่เดิม (คู่กับร่างใน JobTimeline)
+  const [expanded, setExpanded] = React.useState(() => { try { return JSON.parse(sessionStorage.getItem("amc_myjobs_expanded") || "{}") || {}; } catch { return {}; } }); // job_no → show full details/brief/timeline
+  React.useEffect(() => { try { sessionStorage.setItem("amc_myjobs_expanded", JSON.stringify(expanded)); } catch { /* โหมดส่วนตัว/พื้นที่เต็ม — ไม่เป็นไร */ } }, [expanded]);
   const [busy, setBusy] = React.useState(null); // job_no/visit id ที่กำลังอัปเดต — กันกดรัวตอนเน็ตช้า (log ซ้ำ)
   const toggle = (no) => setExpanded((e) => ({ ...e, [no]: !e[no] }));
 
-  async function load(force = false) {
+  // silent = รีเฟรชเบื้องหลังตอนกลับเข้าแอป — ห้ามขึ้น "กำลังโหลด…"
+  // ⚠️ บั๊ก v854-: ตอน loading รายการงานทั้งหมดถูกถอดออกจากจอ (ดู .map ด้านล่าง) → กล่อง "ความเคลื่อนไหว" ที่ช่างกำลังแนบรูปถูกทำลายไปด้วย
+  //   Android: ตัวเลือกรูป/กล้องเป็นแอปแยก → หน้าเว็บถูกซ่อน → เลือกรูปเสร็จกลับมา visibilitychange ยิงพร้อมกับไฟล์ที่เลือก
+  //   → โหลดใหม่ → รูปที่เพิ่งเลือกหาย จอเด้งกลับ = "เลือกรูปแล้วเด้งออก" (iPhone/คอม ตัวเลือกรูปไม่ซ่อนหน้าเว็บ จึงไม่เป็น · พิมพ์ข้อความไม่ได้ออกจากหน้า จึงไม่เป็น)
+  async function load(force = false, silent = false) {
     const seq = ++loadSeq.current;
+    const quiet = silent === true && listRef.current.length > 0;   // มีรายการบนจอแล้ว → เปลี่ยนข้อมูลเงียบ ๆ การ์ด (key=job_no) ไม่ถูกถอด state ข้างในอยู่ครบ
     if (!allTeams && !team) { setList([]); setLoadError(""); setLoading(false); return; }
-    setLoading(true); setLoadError("");
+    if (!quiet) setLoading(true);
+    setLoadError("");
     try {
       // จอช่าง: ให้ฐานข้อมูลกรองทีมและตัดราคาออกตั้งแต่ต้นทาง (mig 166)
       // ตัวกรองฝั่งจอด้านล่างคงไว้เป็นตาข่ายกันพลาด (ทำซ้ำได้ ไม่เสียหาย)
@@ -41,13 +51,13 @@ export default function MyJobs({ role, team, me, onWithdraw, onHandover }) {
       const mine = allTeams ? all : all.filter((j) =>
         j.assigned_team === team || j.visits?.some((v) => v.assigned_team === team));
       setList(mine.map((j) => ({ ...j, teamMembers: staff.filter((p) => p.active !== false && p.team && (p.team === j.assigned_team || j.visits?.some((v) => v.assigned_team === p.team))).map((p) => p.name || p.email) })));
-    } catch (e) { if (seq === loadSeq.current) { setList([]); setLoadError(e.message || String(e)); } }
+    } catch (e) { if (seq === loadSeq.current && !quiet) { setList([]); setLoadError(e.message || String(e)); } }   // รีเฟรชเบื้องหลังพลาด (เน็ตหน้างานสะดุด) → เก็บรายการเดิมไว้ ไม่ล้างจอ
     finally { if (seq === loadSeq.current) setLoading(false); }
   }
   React.useEffect(() => { load(); return () => { loadSeq.current++; }; }, [role, team, allTeams]);
   // ช่างเปิดแอปค้างทั้งวัน — กลับมาที่แอป (สลับจากไลน์/กล้อง) ให้โหลดงานใหม่เอง จะได้เห็นงานใหม่/เลื่อนนัด/ผลอนุมัติ
   React.useEffect(() => {
-    const onVis = () => { if (document.visibilityState === "visible") load(true); };
+    const onVis = () => { if (document.visibilityState === "visible") load(true, true); };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [role, team, allTeams]);
