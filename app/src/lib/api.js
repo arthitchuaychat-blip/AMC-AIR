@@ -5733,6 +5733,16 @@ export async function linkLineContact(uid, customerId) {
 export async function markLineRead(uid) {
   await supabase.from("line_contacts").update({ unread: 0 }).eq("line_user_id", uid);
 }
+// "ไม่ต้องตอบ" — ล้างสถานะรอตอบของห้อง (ลูกค้าพิมพ์ปิดท้าย เช่น ขอบคุณครับ) · ลูกค้าทักมาใหม่ trigger จะเริ่มนับรอใหม่เอง (mig 20260918190000)
+const _waitErr = (error) => (error && (error.code === "PGRST204" || /waiting_since|schema cache/i.test(error.message || "")) ? new Error("ต้องรัน migration chat_waiting (20260918190000) ใน Supabase ก่อน") : error);
+export async function clearLineWaiting(uid) {
+  const { error } = await supabase.from("line_contacts").update({ waiting_since: null }).eq("line_user_id", uid);
+  if (error) throw _waitErr(error);
+}
+export async function clearFbWaiting(psid) {
+  const { error } = await supabase.from("fb_contacts").update({ waiting_since: null }).eq("psid", psid);
+  if (error) throw _waitErr(error);
+}
 // how many chats still have unread (waiting to be answered) — for the sidebar badge
 export async function countUnreadChats() {
   const { count, error } = await supabase.from("line_contacts").select("line_user_id", { count: "exact", head: true }).gt("unread", 0);

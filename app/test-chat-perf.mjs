@@ -15,12 +15,12 @@ const RET = SRC.slice(SRC.indexOf("\n  return (\n    <div className=\"adm\">"));
 console.log("\n(1) ไม่วาดซ้ำทั้งหน้าเมื่อพิมพ์:");
 check("รายชื่อแชต: กรอง+เรียงผ่าน useMemo · JSX ผ่าน useMemo · วาดทีละ CONVO_PAGE ห้อง มีปุ่มแสดงเพิ่ม", () => {
   assert.ok(SRC.includes("const shown = React.useMemo(() => contacts.filter((c) =>"));
-  assert.ok(SRC.includes("}), [contacts, stageF, ownerF, myId, isFb, isSup, q, msgHits]);"));
+  assert.ok(SRC.includes("}), [contacts, stageF, ownerF, myId, isFb, isSup, q, msgHits, quickF]);"));
   assert.ok(SRC.includes("const convoEl = React.useMemo(() => shown.slice(0, convoLimit).map((c) => {"));
-  assert.ok(SRC.includes("}), [shown, convoLimit, sel, msgHits, staffMap, isFb]);"));
+  assert.ok(SRC.includes("}), [shown, convoLimit, sel, msgHits, staffMap, isFb, nowTick]);"));
   assert.ok(RET.includes("{convoEl}") && RET.includes("setConvoLimit((n) => n + CONVO_PAGE)"));
   assert.ok(!RET.includes("{shown.map("), "ยังมี shown.map วาดตรง ๆ ใน JSX");
-  assert.ok(SRC.includes("React.useEffect(() => { setConvoLimit(CONVO_PAGE); }, [channel, q, stageF, ownerF]);"), "เปลี่ยนตัวกรองต้องรีเซ็ตจำนวนที่วาด");
+  assert.ok(SRC.includes("React.useEffect(() => { setConvoLimit(CONVO_PAGE); }, [channel, q, stageF, ownerF, quickF]);"), "เปลี่ยนตัวกรองต้องรีเซ็ตจำนวนที่วาด");
 });
 check("ฟองข้อความ: JSX ผ่าน useMemo (ขึ้นกับ msgs ไม่ขึ้นกับ text ที่พิมพ์) · ไม่มี msgs.map วาดตรง ๆ", () => {
   const m = between("const msgsEl = React.useMemo(() => msgs.map((m, i) => {", "\n  const custOptionsAll");
