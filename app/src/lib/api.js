@@ -2732,20 +2732,26 @@ async function _creators(ids) {
 export function listInvoices(opts = {}) { return _cached("listInvoices:" + JSON.stringify(opts || {}), () => _loadInvoices(opts), _SHORT_TTL); }
 async function _loadInvoices(opts = {}) {
   const nos = _scopeNos(opts);
-  const ivP = _allRows((f, t) => _onlyNos(supabase.from("invoices").select("*", { count: "exact" }), "invoice_no", nos).order("created_at", { ascending: false }).order("invoice_no").range(f, t));
-  const iv = nos ? await ivP : { data: [] };   // เจาะจงใบ → รอหัวใบก่อน · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
+  const since = _sinceOf(opts);   // หน้าใบแจ้งหนี้เปิดมาเห็น 6 เดือน → โหลดเฉพาะช่วงจากเซิร์ฟเวอร์ (ไม่ใช่โหลดทุกใบมาแล้วซ่อน)
+  const scoped = !!(nos || since);
+  const ivP = _allRows((f, t) => _orSince(_onlyNos(supabase.from("invoices").select("*", { count: "exact" }), "invoice_no", nos), ["issue_date", "created_at"], since).order("created_at", { ascending: false }).order("invoice_no").range(f, t));
+  const iv = scoped ? await ivP : { data: [] };   // เจาะจงใบ/ช่วงวันที่ → รอหัวใบก่อน · โหลดทั้งหมด → ยิงขนานเหมือนเดิม
   if (iv.error) throw iv.error;
   const cids = _idsOf(iv.data, "customer_id"), sids = _idsOf(iv.data, "site_id"), qnos = _idsOf(iv.data, "quote_no");
+  // ช่วงวันที่ → ตารางลูกกรองตาม "ใบที่ได้มาจริง" · เกิน 200 ใบ _capNos คืน null = โหลดเต็ม (ถูกเสมอ แค่ไม่ประหยัด)
+  const ivNos = nos || (since ? _capNos(_idsOf(iv.data, "invoice_no")) : null);
+  const cScope = scoped ? _capNos(cids) : null, sScope = scoped ? _capNos(sids) : null;
+  const qScope = nos ? (qnos.length ? qnos : ["__none__"]) : since ? _capNos(qnos) : null;
   const [cu, si, ct, qt, rc, bn] = await Promise.all([
-    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,vat,branch,type", { count: "exact" }), "id", nos && cids).order("id").range(f, t)),
-    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", nos && sids).order("id").range(f, t)),
-    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", nos && cids).order("id").range(f, t)),
-    _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,title", { count: "exact" }), "quote_no", nos && (qnos.length ? qnos : ["__none__"])).order("quote_no").range(f, t)),
-    _allRows((f, t) => _onlyNos(supabase.from("receipts").select("invoice_no,status", { count: "exact" }), "invoice_no", nos).order("receipt_no").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customers").select("id,name,address,tax_id,vat,branch,type", { count: "exact" }), "id", cScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_sites").select("id,site_name,address,map_url,contact_name,phone", { count: "exact" }), "id", sScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyIds(supabase.from("customer_contacts").select("customer_id,name,phone", { count: "exact" }), "customer_id", cScope).order("id").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("quotations").select("quote_no,boq_no,title", { count: "exact" }), "quote_no", qScope).order("quote_no").range(f, t)),
+    _allRows((f, t) => _onlyNos(supabase.from("receipts").select("invoice_no,status", { count: "exact" }), "invoice_no", ivNos).order("receipt_no").range(f, t)),
     // invoice_nos เป็น array — หาใบวางบิลที่ "มีใบใดใบหนึ่งในชุดนี้" ต้องใช้ overlaps ไม่ใช่ in/contains
-    _allRows((f, t) => { const q = supabase.from("billing_notes").select("billing_no,invoice_nos,status", { count: "exact" }); return (nos ? q.overlaps("invoice_nos", nos) : q).order("billing_no").range(f, t); }).catch(() => ({ data: [] })), // pre-050 → ไม่มีตาราง
+    _allRows((f, t) => { const q = supabase.from("billing_notes").select("billing_no,invoice_nos,status", { count: "exact" }); return (ivNos ? q.overlaps("invoice_nos", ivNos) : q).order("billing_no").range(f, t); }).catch(() => ({ data: [] })), // pre-050 → ไม่มีตาราง
   ]);
-  const ivR = nos ? iv : await ivP;
+  const ivR = scoped ? iv : await ivP;
   if (ivR.error) throw ivR.error;
   if (cu.error) throw cu.error; if (si.error) throw si.error; if (ct.error) throw ct.error; if (qt.error) throw qt.error;
   const cn = Object.fromEntries((cu.data || []).map((c) => [c.id, c.name]));
@@ -2761,7 +2767,7 @@ async function _loadInvoices(opts = {}) {
   // ใบวางบิลที่ยังไม่ยกเลิกที่มีใบแจ้งหนี้นี้อยู่ — ล็อกลำดับการยกเลิก (ต้องยกเลิกใบวางบิลก่อน)
   const billingByInv = {};
   (bn.data || []).forEach((b) => { if (b.status !== "cancelled") (b.invoice_nos || []).forEach((n) => { if (!billingByInv[n]) billingByInv[n] = b.billing_no; }); });
-  const cb = await _creators(nos ? _idsOf(ivR.data, "created_by") : null);
+  const cb = await _creators(scoped ? _idsOf(ivR.data, "created_by") : null);
   return (ivR.data || []).map((x) => {
     const s = x.site_id ? sm[x.site_id] : null; const ct0 = cc[x.customer_id];
     return { ...x, boq_no: x.boq_no || (x.quote_no ? boqByQuote[x.quote_no] : null) || null,
@@ -2780,6 +2786,13 @@ export function billedByQuote(invoices) {
   const m = {};
   (invoices || []).forEach((x) => { if (x.status !== "cancelled") m[x.quote_no] = (m[x.quote_no] || 0) + Number(x.total || 0); });
   return m;
+}
+// ยอดสรุปทุกใบ "ทั้งบริษัท" แบบบาง 5 คอลัมน์ (ไม่ join ลูกค้า/ไซต์/ใบเสร็จ) — หน้าใบแจ้งหนี้โหลดรายการเต็ม
+// เฉพาะช่วงวันที่ที่เลือก แต่ "วางบิลไปแล้วเท่าไร / งวดที่เท่าไร / ซ่อนอยู่กี่ใบ" ต้องนับจากทุกใบ ไม่งั้น
+// ใบเสนอที่ถูกวางบิลครบเมื่อปีก่อนจะโผล่ให้เลือกวางบิลซ้ำ (การ์ดฝั่งบันทึกยังกันอยู่ แต่ผู้ใช้จะงง)
+// ⚠️ ต้องอยู่หลัง billedByQuote — test-scoped-loads ตัดโค้ด _loadInvoices ถึง "export function billedByQuote"
+export function listInvoiceTotals() {
+  return _cached("listInvoiceTotals", () => _fetchAll((f, t) => supabase.from("invoices").select("invoice_no,quote_no,total,status,issue_date", { count: "exact" }).order("invoice_no").range(f, t)), _SHORT_TTL);
 }
 // ยอดรวมทั้งสิ้นของใบเสนอ คำนวณสดจาก DB — สูตรเดียวกับ listQuotations (ส่วนลดบรรทัด → ส่วนลดรวม → VAT · ราคาบัตรปรับต่อหน่วย)
 // ⚠️ อ่านไม่สำเร็จต้อง "โยน" ไม่ใช่คืน null — ผู้เรียกใช้ค่านี้เป็นการ์ดกันวางบิลเกิน 100%
