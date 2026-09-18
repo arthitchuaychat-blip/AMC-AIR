@@ -51,6 +51,7 @@ const SUITES = [
   ["test-invoice-window.mjs"],
   ["test-cash-nonop.mjs"],
   ["test-expense-merged.mjs"],
+  ["test-chat-perf.mjs"],
 ];
 
 const failed = [];

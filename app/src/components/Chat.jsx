@@ -93,6 +93,11 @@ async function dlFile(url, name) {
   } catch { window.open(url, "_blank", "noopener"); }
 }
 
+// เปิดห้อง = โหลดข้อความท้ายสุดแค่ CHAT_FIRST (เดิม 400 · ห้องเฉลี่ยมี ~47 ข้อความ ห้องใหญ่สุด 2,000+) แล้วค่อยกด "โหลดข้อความเก่า" ทีละ CHAT_OLDER
+const CHAT_FIRST = 80;
+const CHAT_OLDER = 200;
+const CONVO_PAGE = 80;   // จำนวนห้องที่วาดในรายชื่อแชตต่อหน้า
+
 export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, onCreateSurvey, onCreateTask, focus, onFocusConsumed }) {
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ประวัติเอกสารลูกค้า → พรีวิวแผงขวาก่อน
   const canSend = can(role, "chat", "edit");
@@ -255,7 +260,31 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
     try {
       const [lc, fc] = await Promise.all([listLineContacts().catch(() => []), listFbContacts().catch(() => [])]);
       setAllC({ line: lc, fb: fc });
+      [...lc, ...fc].forEach((c) => { if (c.customer_id && c.customerName) custNameRef.current[c.customer_id] = c.customerName; });
     } catch (e) { flash("โหลดแชตไม่สำเร็จ: " + (e.message || e), true); }
+  }
+  // ---- อัปเดตรายชื่อแชต "ทีละแถว" (v853) ----
+  // เดิม: ข้อความเข้า 1 ข้อความ (ห้องไหนก็ได้) หรือกดเปลี่ยนสถานะ/ผู้ดูแล/ปักหมุด = โหลด line_contacts ทั้ง 1,000+ แถว + ลูกค้าทั้งหมด + ตารางเชื่อม ใหม่ทั้งชุด
+  // ใหม่: realtime ส่ง "แถวที่เปลี่ยน" มาอยู่แล้ว → ผสานเข้า state ตรง ๆ · การกระทำในหน้านี้ patch ทันที (ไม่รอเน็ต) · โหลดเต็มเหลือเป็นตาข่ายนิรภัยนาน ๆ ครั้ง
+  const custNameRef = React.useRef({});   // id ลูกค้า → ชื่อ (ไว้เติม customerName ให้แถวที่มาจาก realtime)
+  React.useEffect(() => { custs.forEach((c) => { custNameRef.current[c.id] = c.name; }); }, [custs]);
+  function patchLocal(uid, fields) {
+    setAllC((st) => { const key = isFb ? "fb" : "line"; return { ...st, [key]: (st[key] || []).map((c) => (c.line_user_id === uid ? { ...c, ...fields } : c)) }; });
+  }
+  function mergeContactRow(key, row, removed) {
+    const uid = row?.line_user_id || row?.psid; if (!uid) return;
+    setAllC((st) => {
+      const list = st[key] || [];
+      if (removed) return { ...st, [key]: list.filter((c) => c.line_user_id !== uid) };
+      const old = list.find((c) => c.line_user_id === uid);
+      let custIds = old?.custIds || [];
+      if (row.customer_id && !custIds.some((x) => String(x) === String(row.customer_id))) custIds = [row.customer_id, ...custIds];
+      const next = { ...(old || {}), ...row, line_user_id: uid, ...(key === "fb" ? { channel: "fb" } : {}),
+        display_name: row.custom_name || row.display_name,
+        customerName: row.customer_id ? (custNameRef.current[row.customer_id] ?? (String(old?.customer_id) === String(row.customer_id) ? old?.customerName : null) ?? null) : null,
+        custIds };
+      return { ...st, [key]: old ? list.map((c) => (c.line_user_id === uid ? next : c)) : [next, ...list] };
+    });
   }
   const contacts = isFb ? allC.fb : allC.line;
   // ยอดค้างอ่านต่อแท็บ: LINE ลูกค้า / ซัพพลายเออร์ (แหล่งเดียวกัน แยกด้วย kind) / Facebook
@@ -298,18 +327,18 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
   // ผู้รับผิดชอบลูกค้า = เฉพาะทีมหลังบ้านที่เข้าถึงแชตได้ (admin/exec/บัญชี/บุคคล/ขาย) — ไม่รวมช่างหน้างาน
   const ownerStaff = React.useMemo(() => staff.filter((s) => can(s.role, "chat", "view")), [staff]);
   const staffColor = React.useMemo(() => Object.fromEntries(staff.map((s, i) => [s.id, STAFF_COLORS[i % STAFF_COLORS.length]])), [staff]);
-  async function changeStage(s) { try { if (isFb) await setFbStage(sel, s); else await setLineStage(sel, s); await loadContacts(); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
-  async function changeOwner(uid) { try { if (isFb) await setFbOwner(sel, uid || null); else await setLineOwner(sel, uid || null); await loadContacts(); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
-  async function changeNote(note) { try { if (isFb) await setFbNote(sel, note); else await setLineNote(sel, note); await loadContacts(); } catch (e) { flash("บันทึกโน้ตไม่สำเร็จ: " + (e.message || e), true); } }
-  async function changeTags(tags) { try { if (isFb) await setFbTags(sel, tags); else await setLineTags(sel, tags); await loadContacts(); } catch (e) { flash("บันทึกแท็กไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeStage(s) { try { if (isFb) await setFbStage(sel, s); else await setLineStage(sel, s); patchLocal(sel, { stage: s }); } catch (e) { flash("เปลี่ยนสถานะไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeOwner(uid) { try { if (isFb) await setFbOwner(sel, uid || null); else await setLineOwner(sel, uid || null); patchLocal(sel, { assigned_to: uid || null }); } catch (e) { flash("มอบหมายไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeNote(note) { try { if (isFb) await setFbNote(sel, note); else await setLineNote(sel, note); patchLocal(sel, { note: note || null }); } catch (e) { flash("บันทึกโน้ตไม่สำเร็จ: " + (e.message || e), true); } }
+  async function changeTags(tags) { try { if (isFb) await setFbTags(sel, tags); else await setLineTags(sel, tags); patchLocal(sel, { tags: (tags && tags.length) ? tags : null }); } catch (e) { flash("บันทึกแท็กไม่สำเร็จ: " + (e.message || e), true); } }
   // ปิดบอทเฉพาะห้องนี้ — ใช้ตอนกำลังคุยปิดการขายเอง ไม่อยากให้บอทแทรก (mig 164)
   async function toggleAiOff(off) {
-    try { await (isFb ? setFbAiOff(sel, off) : setLineAiOff(sel, off)); await loadContacts(); flash(off ? "ปิดบอท AI ห้องนี้แล้ว — มีแต่คนตอบ" : "เปิดบอท AI ห้องนี้แล้ว"); }
+    try { await (isFb ? setFbAiOff(sel, off) : setLineAiOff(sel, off)); patchLocal(sel, { ai_off: !!off }); flash(off ? "ปิดบอท AI ห้องนี้แล้ว — มีแต่คนตอบ" : "เปิดบอท AI ห้องนี้แล้ว"); }
     catch (e) { flash("เปลี่ยนไม่สำเร็จ: " + (e.message || e), true); }
   }
   // ปักหมุดแชต (ดันขึ้นบนสุด) + เปลี่ยนชื่อลูกค้าในแชต — ทุกแพลตฟอร์ม (mig 223)
   async function togglePin(c) {
-    try { await (isFb ? setFbPinned(c.line_user_id, !c.pinned) : setLinePinned(c.line_user_id, !c.pinned)); await loadContacts(); flash(!c.pinned ? "ปักหมุดแชตไว้ด้านบนแล้ว 📌" : "ยกเลิกปักหมุดแล้ว"); }
+    try { await (isFb ? setFbPinned(c.line_user_id, !c.pinned) : setLinePinned(c.line_user_id, !c.pinned)); patchLocal(c.line_user_id, { pinned: !c.pinned }); flash(!c.pinned ? "ปักหมุดแชตไว้ด้านบนแล้ว 📌" : "ยกเลิกปักหมุดแล้ว"); }
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   async function renameContact(c) {
@@ -321,7 +350,8 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
   React.useEffect(() => { selRef.current = sel; }, [sel]);
   React.useEffect(() => { setMultiSel(false); setSelDocs(new Set()); setBatch(null); }, [sel]);   // สลับห้อง → ล้างโหมดเลือกหลายใบ
   // teams + jobs for the คิวช่าง panel (so we can answer queue questions instantly)
-  React.useEffect(() => { listTeams().then(setTeams).catch(() => {}); listJobOrders().then(setJobs).catch(() => {}); }, []);
+  // เดิมโหลดใบงานทั้งบริษัท (660+ ใบ พร้อม join) ทุกครั้งที่เปิดหน้าแชต ทั้งที่ใช้แค่ในแผง "คิวช่าง" — ย้ายมาโหลดตอนเปิดแผง (ปุ่มส่งคอนเฟิมโหลดเองอยู่แล้วถ้ายังไม่มี)
+  React.useEffect(() => { if (!showQueue) return; if (!teams.length) listTeams().then(setTeams).catch(() => {}); if (!jobs) listJobOrders().then(setJobs).catch(() => {}); }, [showQueue]); // eslint-disable-line react-hooks/exhaustive-deps
   // เปิดห้องแชตใหม่ = กระโดดไปข้อความล่าสุด (ล่างสุด) ทันที · ข้อความใหม่ที่เข้ามาระหว่างเปิดอยู่ค่อยเลื่อนแบบนุ่ม
   const jumpBottom = React.useRef(true);
   React.useEffect(() => { jumpBottom.current = true; }, [sel]);
@@ -338,14 +368,19 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
     // ⚠️ ห้าม loadContacts() (โหลดทั้งตาราง line_contacts + join) ทุกข้อความ — LINE OA คุยรัว = ยิงหมื่นครั้ง/CPU ตัน
     //   หน่วงรวมเป็นครั้งเดียวทุก 3 วิ (รายการอัปช้า 3 วิ ไม่มีใครสังเกต · ข้อความในห้องที่เปิดยัง append ทันที)
     let t = null;
-    const reloadSoon = () => { if (t) return; t = setTimeout(() => { t = null; loadContacts(); }, 3000); };
+    // โหลดเต็มเป็นตาข่ายนิรภัยเท่านั้น (กัน event หลุด/ตารางเชื่อมเปลี่ยน) — ความสดของรายชื่อมาจาก mergeContactRow ด้านล่างแล้ว
+    const reloadSoon = () => { if (t) return; t = setTimeout(() => { t = null; loadContacts(); }, 30000); };
     const ch = supabase.channel(channel + "-rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: msgTable }, (p) => {
         const row = p.new; const uid = row.line_user_id || row.psid;
         reloadSoon();
         if (uid === selRef.current) { setMsgs((m) => m.some((x) => x.id === row.id) ? m : [...m, { ...row, line_user_id: uid }]); chMarkRead(uid); }
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: contactTable }, () => reloadSoon())
+      .on("postgres_changes", { event: "*", schema: "public", table: contactTable }, (p) => {
+        const key = isFb ? "fb" : "line";
+        if (p.eventType === "DELETE") mergeContactRow(key, p.old || {}, true); else if (p.new) mergeContactRow(key, p.new);
+        reloadSoon();
+      })
       .subscribe();
     return () => { if (t) clearTimeout(t); supabase.removeChannel(ch); };
   }, [channel]);
@@ -362,11 +397,11 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
     setSel(c.line_user_id); setShowThread(true); setShowInfo(false);
     setQrPendImgs([]);   // รูปแนบค้างจากแชตก่อนหน้า — อย่าหลุดไปห้องอื่น
     try {
-      const rows = await chListMessages(c.line_user_id);
+      const rows = await chListMessages(c.line_user_id, { limit: CHAT_FIRST });
       setMsgs(rows);
       // ได้มาเต็มหน้าพอดี = น่าจะยังมีเก่ากว่านี้อีก → โชว์ปุ่มโหลดย้อนหลัง
-      setMoreOld(rows.length >= CHAT_TAIL);
-      if (c.unread) { chMarkRead(c.line_user_id); loadContacts(); }
+      setMoreOld(rows.length >= CHAT_FIRST);
+      if (c.unread) { chMarkRead(c.line_user_id); patchLocal(c.line_user_id, { unread: 0 }); }
     }
     catch (e) { flash("โหลดข้อความไม่สำเร็จ", true); }
   }
@@ -375,9 +410,9 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
     if (!sel || loadingOld || !msgs.length) return;
     setLoadingOld(true);
     try {
-      const older = await chListMessages(sel, { before: msgs[0].created_at });
+      const older = await chListMessages(sel, { before: msgs[0].created_at, limit: CHAT_OLDER });
       setMsgs((m) => [...older, ...m]);
-      setMoreOld(older.length >= CHAT_TAIL);
+      setMoreOld(older.length >= CHAT_OLDER);
     } catch (e) { flash("โหลดข้อความเก่าไม่สำเร็จ", true); }
     setLoadingOld(false);
   }
@@ -800,7 +835,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
     }, 300);
     return () => { dropped = true; clearTimeout(t); };
   }, [q, channel]);
-  const shown = contacts.filter((c) =>
+  const shown = React.useMemo(() => contacts.filter((c) =>
     (stageF === "all" || (c.stage || "new") === stageF)
     && (ownerF === "all" ? true : ownerF === "me" ? c.assigned_to === myId : ownerF === "none" ? !c.assigned_to : c.assigned_to === ownerF)
     // แท็บซัพ = เฉพาะผู้ติดต่อที่ติดป้ายซัพพลายเออร์ · แท็บ LINE ลูกค้า = ที่เหลือ (FB ไม่มีป้าย)
@@ -814,7 +849,93 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
       const au = (a.unread || 0) > 0 ? 1 : 0, bu = (b.unread || 0) > 0 ? 1 : 0;
       if (au !== bu) return bu - au;
       return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
-    });
+    }), [contacts, stageF, ownerF, myId, isFb, isSup, q, msgHits]);
+
+  // ===== กันหน้าอืด (v853) =====
+  // หน้านี้เป็นคอมโพเนนต์ก้อนเดียว — เดิมพิมพ์ 1 ตัวอักษรในช่องข้อความ = วาดรายชื่อแชตทั้ง 1,000+ ห้อง + ฟองข้อความหลายร้อยฟองใหม่ทุกครั้ง
+  // ⇒ จำ JSX ไว้ด้วย useMemo: React ข้ามการวาดซ้ำเมื่อได้ element ก้อนเดิม · ฟังก์ชันที่ถูกเรียกจากข้างในวิ่งผ่าน fnRef (ได้ตัวล่าสุดเสมอ ไม่ติด closure เก่า)
+  // + รายชื่อแชตวาดทีละ CONVO_PAGE ห้อง (มีปุ่ม "แสดงเพิ่ม") — ห้องใหม่/ยังไม่อ่าน/ปักหมุดถูกเรียงขึ้นบนอยู่แล้ว
+  const fnRef = React.useRef({});
+  fnRef.current = { openContact, jumpToMsg, dlFile, scanCoupon };
+  const [convoLimit, setConvoLimit] = React.useState(CONVO_PAGE);
+  React.useEffect(() => { setConvoLimit(CONVO_PAGE); }, [channel, q, stageF, ownerF]);
+  const convoEl = React.useMemo(() => shown.slice(0, convoLimit).map((c) => {
+              const sd = stageDef(c.stage);
+              return (
+              <button key={c.line_user_id} className={"chat-convo" + (sel === c.line_user_id ? " on" : "")} onClick={() => fnRef.current.openContact(c)}>
+                <div className="chat-av">{c.picture_url ? <img src={c.picture_url} alt="" loading="lazy" decoding="async" /> : initial(c.display_name)}</div>
+                <div className="chat-convo-body">
+                  <div className="chat-convo-top"><b>{c.pinned ? "📌 " : ""}{c.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</b><span title={c.last_message_at ? new Date(c.last_message_at).toLocaleString("th-TH") : ""}>{fmtWhen(c.last_message_at)}</span></div>
+                  {/* เจอคำค้นในประวัติแชต → โชว์ข้อความที่ตรงแทนข้อความล่าสุด จะได้รู้ว่าเจอเพราะอะไร */}
+                  {msgHits[c.line_user_id]
+                    ? <div className="chat-convo-last chat-convo-hit" title={msgHits[c.line_user_id].text || ""}>
+                        <span className="chat-hit-tag">🔎 {msgHits[c.line_user_id].direction === "out" ? "เราตอบ" : "ลูกค้า"}</span>{" "}
+                        {msgHits[c.line_user_id].text || ""}
+                      </div>
+                    : <div className="chat-convo-last">{c.last_message || "—"}</div>}
+                  <div className="chat-convo-tags">
+                    <span className="conv-stage" style={{ background: sd.color }}>{sd.label}</span>
+                    {c.customerName && <span className="chat-link-chip">🔗 {c.customerName}</span>}
+                    {c.assigned_to && staffMap[c.assigned_to] && <span className="conv-owner">👤 {staffMap[c.assigned_to]}</span>}
+                  </div>
+                </div>
+                {c.unread > 0 && <span className="chat-unread">{c.unread}</span>}
+              </button>
+              );
+            }), [shown, convoLimit, sel, msgHits, staffMap, isFb]);
+  const selName = selContact?.display_name;
+  const msgsEl = React.useMemo(() => msgs.map((m, i) => {
+                  const prev = msgs[i - 1];
+                  const daySep = !prev || fmtDay(prev.created_at) !== fmtDay(m.created_at);
+                  const out = m.direction === "out";
+                  const coworker = out && m.sent_by && m.sent_by !== myId;
+                  const cwColor = coworker ? (staffColor[m.sent_by] || "#0891b2") : null;
+                  const senderName = m.sent_by ? (staffMap[m.sent_by] || "ทีมงาน") : "ส่งจากแอป";
+                  return (
+                    <React.Fragment key={m.id}>
+                      {daySep && <div className="chat-daysep">{fmtDay(m.created_at)}</div>}
+                      <div id={"cmsg-" + m.id} className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "") + (m.type === "sticker" && m.image_url ? " sticker" : "")}
+                        style={coworker ? { background: cwColor, borderColor: cwColor } : undefined}>
+                        {out && m.sent_by && <span className="chat-sender">↳ {senderName}</span>}
+                        {!out && m.sender_name && <span className="chat-sender" style={{ color: "#0891b2" }}>{m.sender_name}</span>}
+                        {m.quoted_message_id && (() => {
+                          const orig = byLineId[m.quoted_message_id];
+                          return (
+                            <div className="chat-quote" role="button" tabIndex={0} title="กดเพื่อไปที่ข้อความที่ตอบกลับ" style={{ cursor: "pointer" }}
+                              onClick={() => fnRef.current.jumpToMsg(orig)} onKeyDown={(e) => { if (e.key === "Enter") fnRef.current.jumpToMsg(orig); }}>
+                              <span className="chat-quote-who">↩ {orig ? (orig.direction === "out" ? (orig.sent_by && staffMap[orig.sent_by]) || "ทีมงาน" : (selName || "ลูกค้า")) : "ข้อความที่อ้างอิง"}</span>
+                              <span className="chat-quote-text">{orig ? msgSnippet(orig) : "(กดเพื่อโหลดข้อความเก่า)"}</span>
+                            </div>
+                          );
+                        })()}
+                        {canSend && (isFb ? m.fb_message_id : m.line_message_id) &&
+                          <button type="button" className="chat-reply-btn" title="ตอบกลับข้อความนี้" onClick={() => setReplyTo(m)}>↩</button>}
+                        {m.type === "sticker" && m.image_url ? (
+                          <img className="chat-sticker" src={m.image_url} alt="สติกเกอร์" loading="lazy" />
+                        ) : m.image_url ? (
+                          <span className="chat-media">
+                            <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" decoding="async" /></a>
+                            <span className="chat-media-acts">
+                              <a href={m.image_url} target="_blank" rel="noreferrer">เปิด</a>
+                              <button type="button" onClick={() => fnRef.current.dlFile(m.image_url, "")}>ดาวน์โหลด</button>
+                              {!out && !isSup && !isCm && <button type="button" disabled={scanning} onClick={() => fnRef.current.scanCoupon(m.image_url)}>{scanning ? "กำลังอ่าน…" : "🎟️ ตรวจคูปอง"}</button>}
+                            </span>
+                          </span>
+                        ) : m.file_url ? (
+                          <span className="chat-media">
+                            <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || m.text || "เปิดไฟล์"}</a>
+                            <span className="chat-media-acts">
+                              <a href={m.file_url} target="_blank" rel="noreferrer">เปิด</a>
+                              <button type="button" onClick={() => fnRef.current.dlFile(m.file_url, m.file_name)}>ดาวน์โหลด</button>
+                            </span>
+                          </span>
+                        ) : <span>{linkify(m.text)}</span>}
+                        <span className="chat-bubble-time" title={m.created_at ? new Date(m.created_at).toLocaleString("th-TH") : ""}>{fmtTime(m.created_at)}{out ? " · " + senderName : ""}</span>
+                      </div>
+                    </React.Fragment>
+                  );
+                }), [msgs, myId, staffColor, staffMap, byLineId, selName, canSend, isFb, isSup, isCm, scanning]);
+  const custOptionsAll = React.useMemo(() => custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>), [custs]);
 
   return (
     <div className="adm">
@@ -886,30 +1007,12 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
           <div className="chat-convos">
             {searching && <div className="empty" style={{ fontSize: 13 }}>กำลังค้นข้อความในแชต…</div>}
             {!searching && shown.length === 0 && <div className="empty" style={{ fontSize: 13 }}>ไม่พบผู้ติดต่อตามเงื่อนไข{q.trim().length === 1 ? " — พิมพ์อย่างน้อย 2 ตัวอักษรเพื่อค้นข้อความในแชต" : ""}</div>}
-            {shown.map((c) => {
-              const sd = stageDef(c.stage);
-              return (
-              <button key={c.line_user_id} className={"chat-convo" + (sel === c.line_user_id ? " on" : "")} onClick={() => openContact(c)}>
-                <div className="chat-av">{c.picture_url ? <img src={c.picture_url} alt="" /> : initial(c.display_name)}</div>
-                <div className="chat-convo-body">
-                  <div className="chat-convo-top"><b>{c.pinned ? "📌 " : ""}{c.display_name || (isFb ? "ผู้ใช้ Facebook" : "LINE User")}</b><span title={c.last_message_at ? new Date(c.last_message_at).toLocaleString("th-TH") : ""}>{fmtWhen(c.last_message_at)}</span></div>
-                  {/* เจอคำค้นในประวัติแชต → โชว์ข้อความที่ตรงแทนข้อความล่าสุด จะได้รู้ว่าเจอเพราะอะไร */}
-                  {msgHits[c.line_user_id]
-                    ? <div className="chat-convo-last chat-convo-hit" title={msgHits[c.line_user_id].text || ""}>
-                        <span className="chat-hit-tag">🔎 {msgHits[c.line_user_id].direction === "out" ? "เราตอบ" : "ลูกค้า"}</span>{" "}
-                        {msgHits[c.line_user_id].text || ""}
-                      </div>
-                    : <div className="chat-convo-last">{c.last_message || "—"}</div>}
-                  <div className="chat-convo-tags">
-                    <span className="conv-stage" style={{ background: sd.color }}>{sd.label}</span>
-                    {c.customerName && <span className="chat-link-chip">🔗 {c.customerName}</span>}
-                    {c.assigned_to && staffMap[c.assigned_to] && <span className="conv-owner">👤 {staffMap[c.assigned_to]}</span>}
-                  </div>
-                </div>
-                {c.unread > 0 && <span className="chat-unread">{c.unread}</span>}
+            {convoEl}
+            {shown.length > convoLimit && (
+              <button type="button" className="btn-ghost sm" style={{ margin: "8px auto", display: "block" }} onClick={() => setConvoLimit((n) => n + CONVO_PAGE)}>
+                แสดงเพิ่ม ({shown.length - convoLimit} ห้อง) ▼
               </button>
-              );
-            })}
+            )}
           </div>
         </div>
 
@@ -946,57 +1049,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
                     </button>
                   </div>
                 )}
-                {msgs.map((m, i) => {
-                  const prev = msgs[i - 1];
-                  const daySep = !prev || fmtDay(prev.created_at) !== fmtDay(m.created_at);
-                  const out = m.direction === "out";
-                  const coworker = out && m.sent_by && m.sent_by !== myId;
-                  const cwColor = coworker ? (staffColor[m.sent_by] || "#0891b2") : null;
-                  const senderName = m.sent_by ? (staffMap[m.sent_by] || "ทีมงาน") : "ส่งจากแอป";
-                  return (
-                    <React.Fragment key={m.id}>
-                      {daySep && <div className="chat-daysep">{fmtDay(m.created_at)}</div>}
-                      <div id={"cmsg-" + m.id} className={"chat-bubble " + (out ? "out" : "in") + (coworker ? " coworker" : "") + (m.type === "sticker" && m.image_url ? " sticker" : "")}
-                        style={coworker ? { background: cwColor, borderColor: cwColor } : undefined}>
-                        {out && m.sent_by && <span className="chat-sender">↳ {senderName}</span>}
-                        {!out && m.sender_name && <span className="chat-sender" style={{ color: "#0891b2" }}>{m.sender_name}</span>}
-                        {m.quoted_message_id && (() => {
-                          const orig = byLineId[m.quoted_message_id];
-                          return (
-                            <div className="chat-quote" role="button" tabIndex={0} title="กดเพื่อไปที่ข้อความที่ตอบกลับ" style={{ cursor: "pointer" }}
-                              onClick={() => jumpToMsg(orig)} onKeyDown={(e) => { if (e.key === "Enter") jumpToMsg(orig); }}>
-                              <span className="chat-quote-who">↩ {orig ? (orig.direction === "out" ? (orig.sent_by && staffMap[orig.sent_by]) || "ทีมงาน" : (selContact?.display_name || "ลูกค้า")) : "ข้อความที่อ้างอิง"}</span>
-                              <span className="chat-quote-text">{orig ? msgSnippet(orig) : "(กดเพื่อโหลดข้อความเก่า)"}</span>
-                            </div>
-                          );
-                        })()}
-                        {canSend && (isFb ? m.fb_message_id : m.line_message_id) &&
-                          <button type="button" className="chat-reply-btn" title="ตอบกลับข้อความนี้" onClick={() => setReplyTo(m)}>↩</button>}
-                        {m.type === "sticker" && m.image_url ? (
-                          <img className="chat-sticker" src={m.image_url} alt="สติกเกอร์" loading="lazy" />
-                        ) : m.image_url ? (
-                          <span className="chat-media">
-                            <a href={m.image_url} target="_blank" rel="noreferrer"><img className="chat-img" src={m.image_url} alt="" /></a>
-                            <span className="chat-media-acts">
-                              <a href={m.image_url} target="_blank" rel="noreferrer">เปิด</a>
-                              <button type="button" onClick={() => dlFile(m.image_url, "")}>ดาวน์โหลด</button>
-                              {!out && !isSup && !isCm && <button type="button" disabled={scanning} onClick={() => scanCoupon(m.image_url)}>{scanning ? "กำลังอ่าน…" : "🎟️ ตรวจคูปอง"}</button>}
-                            </span>
-                          </span>
-                        ) : m.file_url ? (
-                          <span className="chat-media">
-                            <a className="chat-file" href={m.file_url} target="_blank" rel="noreferrer">📎 {m.file_name || m.text || "เปิดไฟล์"}</a>
-                            <span className="chat-media-acts">
-                              <a href={m.file_url} target="_blank" rel="noreferrer">เปิด</a>
-                              <button type="button" onClick={() => dlFile(m.file_url, m.file_name)}>ดาวน์โหลด</button>
-                            </span>
-                          </span>
-                        ) : <span>{linkify(m.text)}</span>}
-                        <span className="chat-bubble-time" title={m.created_at ? new Date(m.created_at).toLocaleString("th-TH") : ""}>{fmtTime(m.created_at)}{out ? " · " + senderName : ""}</span>
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
+                {msgsEl}
                 <div ref={endRef} />
               </div>
 
@@ -1318,7 +1371,7 @@ export default function Chat({ role, onOpenDoc, onGoCustomers, onCreateQuote, on
                       <label className="ci-field"><span>เชื่อมกับลูกค้าที่มีอยู่</span>
                         <Combo className="inp" value="" onChange={(e) => e.target.value && onLink(e.target.value)}>
                           <option value="">— เลือกลูกค้า —</option>
-                          {custs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          {custOptionsAll}
                         </Combo>
                       </label>
                       <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={addNewCustomer}>
