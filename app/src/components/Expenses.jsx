@@ -1,5 +1,5 @@
 import React from "react";
-import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, saveAccount, deleteAccount, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound, generateRecurringExpenses, listSuppliers, quickAddSupplier, updateExpenseRequest } from "../lib/api";
+import { listAccounts, listAccountEntries, transferFunds, listTransfers, updateTransfer, deleteTransfer, addAccountEntry, deleteAccountEntry, setEntriesReconciled, setAccountOpening, saveAccount, deleteAccount, syncBankReceipts, listExpenseCategories, addExpenseCategory, uploadExpenseFile, submitExpense, listMyExpenses, listExpenses, decideExpense, payExpense, unpayExpense, unmergeExpense, attachExpenseReceipt, setExpenseExpectedDate, setExpenseVat, nudgeExpenseReceipts, listJobOrders, listPurchaseOrders, requestPoPaymentBatch, requestExpensePaymentBatch, reopenPayrollRound, generateRecurringExpenses, listSuppliers, quickAddSupplier, updateExpenseRequest } from "../lib/api";
 import { confirmDialog } from "./ConfirmDialog";
 import { EXPENSE_CATS, CAT_BY_NAME, ASSET_GROUPS, PAY_METHODS, PAY_LABEL, kindOf, KIND_LABEL } from "../lib/expenseTaxonomy";
 import DocCardHead from "./DocCard";
@@ -12,9 +12,19 @@ import { useLang } from "../lib/i18n";
 import FilterBar from "./FilterBar";
 
 const OFFICE = ["admin", "exec", "finance"]; // HR uses employee self-service; payment authority is separate.
-const EST = { pending: { t: "รออนุมัติ", m: "အတည်ပြုရန် စောင့်", c: "b-amber" }, approved: { t: "อนุมัติ · รอจ่าย", m: "အတည်ပြုပြီး · ငွေပေးရန် စောင့်", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", m: "ပယ်ချ", c: "b-red" }, paid: { t: "จ่ายแล้ว", m: "ပေးပြီး", c: "b-green" } };
+const EST = { pending: { t: "รออนุมัติ", m: "အတည်ပြုရန် စောင့်", c: "b-amber" }, approved: { t: "อนุมัติ · รอจ่าย", m: "အတည်ပြုပြီး · ငွေပေးရန် စောင့်", c: "b-blue" }, rejected: { t: "ไม่อนุมัติ", m: "ပယ်ချ", c: "b-red" }, merged: { t: "รวมจ่ายในใบอื่น", m: "အခြားလွှာတွင် ပေါင်းပေး", c: "b-purple" }, paid: { t: "จ่ายแล้ว", m: "ပေးပြီး", c: "b-green" } };
 // เบิกเงินไปแล้ว (จ่ายครบหรือบางส่วน) แต่ยังไม่มีรูปใบเสร็จ/บิลแนบ → ตามทวงใบเสร็จ
 const needReceipt = (x) => x.status !== "rejected" && (x.status === "paid" || Number(x.paid_amount) > 0) && !(x.attachments?.length);
+// ใบลูกที่ถูกรวมจ่าย: สถานะ "จริง" ตามใบรวม (แม่) — ใช้ทั้งป้ายบนการ์ดและเงื่อนไขปุ่ม
+const parentPaidAny = (x) => !!x?.mergedParent && (x.mergedParent.status === "paid" || Number(x.mergedParent.paid_amount) > 0);
+const parentStatusView = (p) => {
+  if (!p) return { t: "ไม่พบใบรวม", c: "b-grey" };
+  if (p.status === "paid") return { t: "จ่ายแล้ว", c: "b-green" };
+  if (p.status === "approved") return Number(p.paid_amount) > 0 ? { t: "จ่ายบางส่วน", c: "b-amber" } : { t: "อนุมัติแล้ว · รอจ่าย", c: "b-blue" };
+  if (p.status === "pending") return { t: "รออนุมัติ", c: "b-amber" };
+  if (p.status === "rejected") return { t: "ใบรวมไม่อนุมัติ", c: "b-red" };
+  return { t: p.status, c: "b-grey" };
+};
 const ACC_ICON = { cash: "💵", card: "💳", barter: "🔄", bank: "🏦" };   // ไอคอนช่องทางเงิน
 const ACC_KINDS = [["bank", "🏦 ธนาคาร"], ["cash", "💵 เงินสด"], ["card", "💳 บัตรเครดิต"], ["barter", "🔄 Barter/Trade"]];
 const fmtD = (d) => d ? new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }) : "";
@@ -108,7 +118,7 @@ export default function Expenses({ role, me, onOpenDoc, focus, onFocusConsumed, 
   );
 }
 
-function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
+function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat, onFocusExpense }) {
   const lang = useLang();
   const L = (th, my) => (lang === "my" ? my : th);
   const st = EST[x.status] || EST.pending;
@@ -124,6 +134,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
       <DocCardHead no={L("เบิก #", "တောင်းခံ #") + String(x.id || "").slice(0, 8).toUpperCase()}
         badges={<>
           <span className={"job-badge " + st.c}>{L(st.t, st.m)}</span>
+          {x.status === "merged" && (() => { const v = parentStatusView(x.mergedParent); return <span className={"job-badge " + v.c}>{L("ใบรวม: ", "ပေါင်းလွှာ: ")}{v.t}</span>; })()}
           <span className="job-badge" style={x.entity === "personal" ? { background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe" } : { background: "#eff6ff", color: "#1d4ed8", borderColor: "#bfdbfe" }}>{x.entity === "personal" ? L("👤 บุคคล", "👤 ပုဂ္ဂိုလ်") : L("🏢 บริษัท", "🏢 ကုမ္ပဏီ")}</span>
           {partial && <span className="job-badge b-amber">{L("จ่ายบางส่วน", "တစ်စိတ်တစ်ပိုင်း ပေးပြီး")}</span>}
           {needReceipt(x) && <span className="job-badge b-amber">📎 {L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန် ကျန်")}</span>}
@@ -144,7 +155,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
         ) : null}
         amountLabel={L("ยอดจ่ายสุทธิ", "ပေးရမည့် အသားတင်") } amount={total}
         rightExtra={x.expected_pay_date && x.status !== "paid" ? (() => { const over = x.expected_pay_date < new Date().toISOString().slice(0, 10); return <span className="job-badge" style={over ? { background: "#fef2f2", color: "#b42318", borderColor: "#fecaca", fontWeight: 700 } : { background: "#fff7ed", color: "#c2410c", borderColor: "#fed7aa" }}>{over ? "⚠️ " : "📅 "}{L("ครบกำหนด", "ကုန်ဆုံး")} {fmtD(x.expected_pay_date)}{over ? L(" (เลยกำหนด)", "") : ""}</span>; })() : null}
-        partyIcon="👤" customer={x.customerName ? { name: x.customerName } : null} />
+        partyIcon="👤" customer={x.customerName ? { name: x.customerName } : (x.customerNames?.length > 1 ? { name: L(`หลายลูกค้า (${x.customerNames.length} ราย) — กางดูรายการ PO`, `ဖောက်သည် များစွာ (${x.customerNames.length})`) } : null)} />
       {/* วันรับ/ส่งสินค้า (ดึงจาก PO ที่ผูก — เหมือนในเมนูใบสั่งซื้อ) */}
       {pos.some((p) => p.delivery_date || p.delivery_method) && (
         <div className="po-docrow" style={{ padding: "8px 2px 0" }}>
@@ -177,6 +188,21 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
           ))}
         </div>
       )}
+      {x.status === "merged" && (() => { const p = x.mergedParent; const v = parentStatusView(p); const pTotal = p ? Math.round(((Number(p.amount) || 0) - (Number(p.wht_amt) || 0)) * 100) / 100 : 0; return (
+        <div className="doc2-extra" style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "9px 12px", fontSize: 13 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <b>🔗 {L("ใบนี้ถูกนำไปรวมจ่ายในใบ", "ဤလွှာကို ပေါင်းပေးသည့်လွှာ")} {x.merged_into ? "#" + String(x.merged_into).slice(0, 8).toUpperCase() : ""}</b>
+            {p?.title && <span className="jo-dim">{p.title}</span>}
+            <span className={"job-badge " + v.c}>{v.t}</span>
+            {p && Number(p.paid_amount) > 0 && <span className="jo-dim">{L("ใบรวมจ่ายแล้ว", "ပေးပြီး")} {fmtBaht(p.paid_amount)} / {fmtBaht(pTotal)}{p.last_paid_at ? " · " + fmtD(p.last_paid_at) : ""}</span>}
+            {p && p.status !== "paid" && p.expected_pay_date && <span className="jo-dim">📅 {L("คาดว่าจะจ่าย", "ပေးမည့်ရက်")} {fmtD(p.expected_pay_date)}</span>}
+            {p && onFocusExpense && <button type="button" className="btn-ghost sm" style={{ marginLeft: "auto" }} onClick={() => onFocusExpense(p.id)}>{L("เปิดใบรวม ›", "ပေါင်းလွှာ ဖွင့် ›")}</button>}
+          </div>
+          {p?.payment_proof?.length > 0 && <div className="exp-att-grp" style={{ marginTop: 8 }}><span>💸 {L("สลิปโอนเงิน (ของใบรวม):", "ငွေလွှဲ ဆလစ် (ပေါင်းလွှာ):")}</span><div className="tb-attach-grid">{p.payment_proof.map((u, i) => <div className="tb-att" key={i}><AttachThumb url={u} /></div>)}</div></div>}
+          <div className="jo-dim" style={{ marginTop: 6, fontSize: 12 }}>{L("ยอดของใบนี้นับรวมอยู่ในใบรวมแล้ว (ไม่ถูกนับซ้ำ) · เอกสารแนบของใบนี้ยังอยู่ครบ", "ဤလွှာ၏ ပမာဏကို ပေါင်းလွှာတွင် ထည့်တွက်ပြီး")}</div>
+        </div>
+      ); })()}
+      {x.mergedChildren?.length > 0 && <MergedChildren kids={x.mergedChildren} onFocusExpense={onFocusExpense} L={L} />}
       {(x.decide_note || (x.note && pos.length <= 1)) && (
         <div className="doc2-extra jo-dim" style={{ fontSize: 12.5 }}>
           {x.note && pos.length <= 1 ? <div>{x.note}</div> : null}
@@ -189,7 +215,7 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
           <input type="date" className="inp" style={{ width: 160, padding: "4px 8px" }} value={x.expected_pay_date || ""} onChange={(e) => onSetExpected(x.id, e.target.value)} />
         </div></div>
       )}
-      {onSetVat && x.status !== "rejected" && x.category !== "เงินเดือน" && (() => { const v7 = Math.round((Number(x.amount) || 0) * 7 / 107 * 100) / 100; return (
+      {onSetVat && x.status !== "rejected" && x.status !== "merged" && x.category !== "เงินเดือน" && (() => { const v7 = Math.round((Number(x.amount) || 0) * 7 / 107 * 100) / 100; return (
         <div className="job-lines"><div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--ink-2)", flexWrap: "wrap", padding: "2px 0" }}>
           🧾 <span>{L("ภาษีซื้อ (VAT) ในบิลนี้:", "ဤဘီလ်၏ ဝယ်ခွန် (VAT):")}</span>
           <span className="inp inp-unit" style={{ width: 120 }}><span className="unit-pre">฿</span>
@@ -209,9 +235,38 @@ function ExpenseCard({ x, children, onOpenDoc, onSetExpected, onSetVat }) {
   );
 }
 
+// รายการใบเบิกเดิม (ใบลูก) ที่ถูกนำมารวมจ่ายในใบนี้ — เห็นว่าใครเบิก ยอดเท่าไร และเปิดดูเอกสารแนบของแต่ละใบได้โดยไม่ต้องไปหาในแท็บอื่น
+function MergedChildren({ kids, onFocusExpense, L }) {
+  const [open, setOpen] = React.useState(false);
+  const nFiles = kids.reduce((a, k) => a + (k.attachments?.length || 0), 0);
+  return (
+    <div className="doc2-extra" style={{ borderTop: "1px dashed var(--line,#e5e7eb)", paddingTop: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
+        <b>🧾 {L(`รวมจากใบเบิกเดิม ${kids.length} ใบ`, `မူလ တောင်းခံလွှာ ${kids.length} စောင်`)}</b>
+        <span className="jo-dim">{[...new Set(kids.map((k) => k.requesterName).filter(Boolean))].join(" · ")}{nFiles ? ` · 📎 ${nFiles} ${L("ไฟล์", "ဖိုင်")}` : ""}</span>
+        <button type="button" className="btn-ghost sm" style={{ marginLeft: "auto" }} onClick={() => setOpen((v) => !v)}>{open ? L("ซ่อน ▲", "ဖျောက် ▲") : L("ดูใบเดิม + เอกสารแนบ ▼", "မူလလွှာ + တွဲဖိုင် ▼")}</button>
+      </div>
+      {open && <div className="bn-invlist" style={{ marginTop: 6 }}>
+        {kids.map((k, i) => (
+          <div key={k.id} style={{ padding: "6px 0", borderTop: i ? "1px solid var(--line,#eef0f3)" : 0 }}>
+            <div className="bn-invrow">
+              <span className="jo-dim" style={{ width: 18, textAlign: "right" }}>{i + 1}.</span>
+              <span style={{ fontWeight: 600 }}>#{String(k.id).slice(0, 8).toUpperCase()}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>{k.title}{k.requesterName ? <span className="jo-dim"> · 👤 {k.requesterName}</span> : null}</span>
+              <b>{fmtBaht(k.amount)}</b>
+              {onFocusExpense && <button type="button" className="btn-ghost sm" onClick={() => onFocusExpense(k.id)}>{L("ดูใบ ›", "လွှာကြည့် ›")}</button>}
+            </div>
+            {k.attachments?.length > 0 && <div className="tb-attach-grid" style={{ marginLeft: 26, marginTop: 4 }}>{k.attachments.map((u, j) => <div className="tb-att" key={j}><AttachThumb url={u} /></div>)}</div>}
+          </div>
+        ))}
+      </div>}
+    </div>
+  );
+}
+
 // ค้นหาใบเบิก: ชื่อรายการ / เลข PO / ลูกค้า / พนักงานผู้ขอ / งาน / QT / หมวด + ช่วงวันที่สร้าง
 const expMatch = (x, q, dateR) =>
-  matchText(q, x.title, x.poNo, ...(x.poNos || []), x.customerName, x.requesterName, x.jobNo || x.job_no, x.quoteNo, x.category, x.jobTitle, x.note)
+  matchText(q, String(x.id || "").slice(0, 8), x.title, x.poNo, ...(x.poNos || []), ...(x.customerNames || []), x.customerName, x.requesterName, x.jobNo || x.job_no, x.quoteNo, x.category, x.jobTitle, x.note)
   && inDateRange(x.created_at, dateR);
 
 function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegisterAsset }) {
@@ -249,7 +304,7 @@ function MineTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegister
           {x.status !== "rejected" && (
             needReceipt(x)
               ? <button className="btn-primary sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จ", "ဘောက်ချာ တွဲ")}</button>
-              : (x.status === "paid" || Number(x.paid_amount) > 0) && <button className="btn-ghost sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จเพิ่ม", "ဘောက်ချာ ထပ်တွဲ")}</button>
+              : (x.status === "paid" || Number(x.paid_amount) > 0 || (x.status === "merged" && parentPaidAny(x))) && <button className="btn-ghost sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จเพิ่ม", "ဘောက်ချာ ထပ်တွဲ")}</button>
           )}
         </ExpenseCard>
       ))}</div>
@@ -505,6 +560,12 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
     catch (e) { flash("ไม่สำเร็จ: " + (e.message || e), true); }
   }
   // นำใบเบิกที่ "ไม่อนุมัติ" กลับมา — ใบเงินเดือนกลับเป็น "รอจ่าย" ทันที · ใบอื่นกลับเป็น "รออนุมัติ"
+  // แยกใบลูกออกจากใบรวม (ออฟฟิศ) — ทำได้เฉพาะใบรวมที่ยังไม่จ่ายเงิน · ใบลูกกลับสถานะเดิม ใบรวมถูกลดยอดให้
+  async function unmerge(x) {
+    const p = x.mergedParent;
+    if (!await confirmDialog({ title: L(`แยก "${x.title}" ออกจากใบรวม?`, "ပေါင်းလွှာမှ ခွဲထုတ်မလား?"), message: L(`• ใบนี้กลับเป็น "${x.merged_prev_status === "approved" ? "อนุมัติ · รอจ่าย" : "รออนุมัติ"}" และจ่ายแยกได้\n• ใบรวม${p?.title ? ` "${p.title}"` : ""} จะถูกลดยอด ${fmtBaht(x.amount)}${p ? "" : "\n• (ไม่พบใบรวม — คืนสถานะใบนี้อย่างเดียว)"}`, ""), confirmText: L("แยกออก", "ခွဲထုတ်"), danger: false })) return;
+    try { await unmergeExpense(x.id); flash(L("แยกออกจากใบรวมแล้ว ✓", "ခွဲထုတ်ပြီး ✓")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); }
+  }
   async function restore(x) {
     const toApproved = !!salaryPeriod(x);
     const lbl = toApproved ? L("รอจ่าย", "ငွေပေးရန်စောင့်") : L("รออนุมัติ", "အတည်ပြုရန်စောင့်");
@@ -550,7 +611,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
         </div></div>
       <FilterBar id="expenses-approve" count={activeCount}>
         <div className="cat-filter">
-        {[["dueToday", "⏰ " + L("ถึงกำหนดวันนี้", "ယနေ့ကုန်")], ["pending", L("รออนุมัติ", "အတည်ပြုရန် စောင့်")], ["approved", L("รอจ่าย", "ငွေပေးရန် စောင့်")], ["paid", L("จ่ายแล้ว", "ပေးပြီး")], ["needReceipt", `📎 ${L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန်ကျန်")}`], ["rejected", L("ไม่อนุมัติ", "ပယ်ချ")], ["all", L("ทั้งหมด", "အားလုံး")]].map(([v, l]) => {
+        {[["dueToday", "⏰ " + L("ถึงกำหนดวันนี้", "ယနေ့ကုန်")], ["pending", L("รออนุมัติ", "အတည်ပြုရန် စောင့်")], ["approved", L("รอจ่าย", "ငွေပေးရန် စောင့်")], ["paid", L("จ่ายแล้ว", "ပေးပြီး")], ["needReceipt", `📎 ${L("ค้างแนบใบเสร็จ", "ဘောက်ချာ တွဲရန်ကျန်")}`], ["rejected", L("ไม่อนุมัติ", "ပယ်ချ")], ["merged", L("รวมจ่ายแล้ว", "ပေါင်းပေးပြီး")], ["all", L("ทั้งหมด", "အားလုံး")]].map(([v, l]) => {
           const c = countBy("status", statusPred(v));
           return <button key={v} className={"cat-chip" + (statusF === v ? " on" : "")} onClick={() => setStatusF(v)} style={statusF === v ? { background: "#111", color: "#fff", borderColor: "#111" } : {}}>{l} <b style={{ opacity: 0.75 }}>{c}</b></button>;
         })}
@@ -587,7 +648,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
       {list && shown.length === 0 && <div className="empty">{L("ไม่มีรายการ", "စာရင်း မရှိပါ")}</div>}
       <div className="job-cards">
         {shown.map((x) => (
-          <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} onSetExpected={async (id, d) => { try { await setExpenseExpectedDate(id, d); flash(L("ตั้งวันประมาณการจ่ายแล้ว ✓", "ခန့်မှန်း ငွေပေးရက် သတ်မှတ်ပြီး ✓")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); } }}
+          <ExpenseCard key={x.id} x={x} onOpenDoc={onOpenDoc} onFocusExpense={(id) => { setStatusF("all"); setDateR({ from: "", to: "" }); setGroupF("all"); setCatF("all"); setSupF("all"); setReqF("all"); setQ(String(id).slice(0, 8)); window.scrollTo({ top: 0, behavior: "smooth" }); }} onSetExpected={async (id, d) => { try { await setExpenseExpectedDate(id, d); flash(L("ตั้งวันประมาณการจ่ายแล้ว ✓", "ခန့်မှန်း ငွေပေးရက် သတ်မှတ်ပြီး ✓")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); } }}
             onSetVat={async (id, v, ex) => { const nv = Math.max(0, Math.round((Number(v) || 0) * 100) / 100); if (Math.round((Number(ex.vat_amt) || 0) * 100) / 100 === nv) return; try { await setExpenseVat(id, nv); flash(L("บันทึกภาษีซื้อแล้ว ✓", "ဝယ်ခွန် သိမ်းပြီး ✓")); load(); } catch (e) { flash(L("ไม่สำเร็จ: ", "မအောင်မြင်: ") + (e.message || e), true); } }}>
             {x.status === "pending" && <><button className="btn-primary sm ok" onClick={() => decide(x, "approved")}>✓ {L("อนุมัติ", "အတည်ပြု")}</button>
               <button className="btn-ghost sm" onClick={() => setEditFor(expenseToForm(x))}>✏️ {L("แก้ไข", "ပြင်")}</button>
@@ -596,6 +657,7 @@ function ApproveTab({ role, flash, onOpenDoc, initialSearch, onConsumed, onRegis
               {!(Number(x.paid_amount) > 0) && (salaryPeriod(x)
                 ? <button className="btn-ghost sm danger" title={L("ยกเลิกใบเบิกเงินเดือนทั้งรอบ + เปิดรอบให้ทำเงินเดือนใหม่", "လစာ တောင်းခံလွှာ တစ်ကာလလုံး ပယ်ဖျက် + ကာလ ပြန်ဖွင့်")} onClick={() => reopenPayroll(x)}>↩️ {L("ยกเลิก + เปิดรอบเงินเดือนใหม่", "ပယ်ဖျက် + လစာကာလ ပြန်ဖွင့်")}</button>
                 : <button className="btn-ghost sm danger" onClick={() => decide(x, "pending")}>{L("ยกเลิกอนุมัติ", "အတည်ပြုမှု ပယ်ဖျက်")}</button>)}</>}
+            {x.status === "merged" && !parentPaidAny(x) && <button className="btn-ghost sm danger" title={L("คืนใบนี้กลับสถานะเดิมเพื่อจ่ายแยก — ใบรวมจะถูกลดยอดให้อัตโนมัติ", "")} onClick={() => unmerge(x)}>↩️ {L("แยกออกจากใบรวม", "ပေါင်းလွှာမှ ခွဲထုတ်")}</button>}
             {x.status === "rejected" && !(Number(x.paid_amount) > 0) && <button className="btn-primary sm ok" title={L("นำรายการกลับมาจ่าย/อนุมัติใหม่", "ပြန်ယူ၍ ပေးချေ/အတည်ပြု")} onClick={() => restore(x)}>↩️ {L("นำกลับมา", "ပြန်ယူ")}{salaryPeriod(x) ? L(" (รอจ่าย)", "") : ""}</button>}
             {needReceipt(x) && <button className="btn-ghost sm" onClick={() => setRcptFor(x)}>📎 {L("แนบใบเสร็จแทนพนักงาน", "ဝန်ထမ်းကိုယ်စား ဘောက်ချာ တွဲ")}</button>}
             {isAssetExp(x) && onRegisterAsset && <button className="btn-ghost sm" style={{ color: "#137a54", borderColor: "#99e2c4" }} onClick={() => onRegisterAsset(assetPrefillOf(x))} title={L("นำไปสร้างทะเบียนสินทรัพย์ (คิดค่าเสื่อม)", "ပိုင်ဆိုင်မှု မှတ်ပုံတင်")}>🏗️ {L("ขึ้นทะเบียนสินทรัพย์", "ပိုင်ဆိုင်မှု မှတ်ပုံတင်")}</button>}
@@ -1279,7 +1341,7 @@ function ExpenseSummaryTab({ flash }) {
   const [open, setOpen] = React.useState({});
   React.useEffect(() => { listExpenses().then(setList).catch(() => { flash(L("โหลดไม่สำเร็จ", "ဖွင့်မရ"), true); setList([]); }); }, []);   // eslint-disable-line
   if (!list) return <div className="empty">{L("กำลังโหลด…", "ဖွင့်နေသည်…")}</div>;
-  const inMonth = list.filter((x) => x.status !== "rejected" && (x.created_at || "").slice(0, 7) === ym);
+  const inMonth = list.filter((x) => !["rejected", "merged"].includes(x.status) && (x.created_at || "").slice(0, 7) === ym);
   const kindOfX = expenseGroup;
   const groups = { cost: {}, opex: {}, asset: {} };
   inMonth.forEach((x) => {

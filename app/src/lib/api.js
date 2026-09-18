@@ -1318,23 +1318,128 @@ export async function requestPoPayment(po) {
   return ex.id;
 }
 
+// ===== ใบรวมจ่าย (แม่) ↔ ใบเบิกเดิม (ลูก) — mig 20260918170000 =====
+// เดิม: รวมจ่ายหลายใบ = ปิดใบเดิมเป็น "ไม่อนุมัติ" → ผู้เบิกเห็นใบตัวเองถูกปฏิเสธ ไม่รู้สถานะจ่าย ไฟล์แนบไปจมอยู่ในแท็บไม่อนุมัติ
+// ใหม่: ใบเดิม = สถานะ 'merged' + merged_into ชี้ใบรวม · ยอดเงินนับที่ใบรวมที่เดียว · ใบรวมถูกไม่อนุมัติ → ใบลูกคืนสถานะเดิม + PO ผูกกลับ
+// DB ที่ยังไม่รัน migration → fallback ไปพฤติกรรมเดิม (rejected + หมายเหตุ) ระบบไม่พัง
+const _isMergeMigErr = (error) => !!error && (["23514", "42703", "PGRST204"].includes(error.code) || /merged_into|merged_prev_status|merged_po_nos|status_check/i.test(error.message || ""));
+async function _markMergedChildren(children, parentId, legacyNote) {
+  for (const c of children) {
+    const upd = { status: "merged", merged_into: parentId, merged_prev_status: c.status === "approved" ? "approved" : "pending", merged_po_nos: c.poNos?.length ? c.poNos : null, decide_note: null };
+    let { error } = await supabase.from("expense_requests").update(upd).eq("id", c.id);
+    if (_isMergeMigErr(error)) ({ error } = await supabase.from("expense_requests").update({ status: "rejected", decide_note: legacyNote }).eq("id", c.id));
+    if (error) throw error;
+  }
+}
+// คืนใบลูกทุกใบของใบรวมกลับสถานะเดิม + ผูก PO กลับ (เรียกหลังปลด PO ออกจากใบรวมแล้ว) — คืนรายการใบลูกที่ถูกคืน
+async function _restoreMergedChildren(parentId) {
+  const { data: kids, error } = await supabase.from("expense_requests").select("id,requester,title,merged_prev_status,merged_po_nos").eq("merged_into", parentId).eq("status", "merged");
+  if (error || !kids?.length) return [];
+  for (const k of kids) {
+    const { error: e1 } = await supabase.from("expense_requests").update({ status: k.merged_prev_status === "approved" ? "approved" : "pending", merged_into: null, merged_prev_status: null, merged_po_nos: null }).eq("id", k.id);
+    if (e1) throw e1;
+    if (k.merged_po_nos?.length) await supabase.from("purchase_orders").update({ expense_id: k.id }).in("po_no", k.merged_po_nos).is("expense_id", null);
+  }
+  return kids;
+}
+async function _mergedChildRequesters(parentId, exceptUid) {
+  try {
+    const { data } = await supabase.from("expense_requests").select("requester").eq("merged_into", parentId).eq("status", "merged");
+    return [...new Set((data || []).map((x) => x.requester).filter((u) => u && u !== exceptUid))];
+  } catch (_) { return []; }
+}
+// แยกใบลูก 1 ใบออกจากใบรวม (ออฟฟิศเท่านั้น — gate ที่ UI + RLS) · ทำได้เฉพาะใบรวมที่ยังไม่จ่ายเงินสักบาท
+// ใบรวม: ลดยอด/ตัดรายการในหมายเหตุ/ปรับจำนวนใบในชื่อ · ไม่เหลือรายการแล้ว → ปิดใบรวม
+export async function unmergeExpense(childId) {
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const { data: c, error: e0 } = await supabase.from("expense_requests").select("*").eq("id", childId).maybeSingle();
+  if (e0) throw e0;
+  if (!c || c.status !== "merged") throw new Error("ใบนี้ไม่ได้อยู่ในใบรวมจ่าย (อาจถูกแยกไปแล้ว — รีเฟรช)");
+  const prev = c.merged_prev_status === "approved" ? "approved" : "pending";
+  let p = null;
+  if (c.merged_into) { const r = await supabase.from("expense_requests").select("*").eq("id", c.merged_into).maybeSingle(); if (r.error) throw r.error; p = r.data; }
+  if (p && (p.status === "paid" || Number(p.paid_amount) > 0.009)) throw new Error("ใบรวมนี้จ่ายเงินไปแล้ว — แยกออกไม่ได้ (ต้องยกเลิกการจ่ายของใบรวมก่อน)");
+  const poNos = c.merged_po_nos || [];
+  if (p && poNos.length) { const { error } = await supabase.from("purchase_orders").update({ expense_id: null }).eq("expense_id", p.id).in("po_no", poNos); if (error) throw error; }
+  const { error: e1 } = await supabase.from("expense_requests").update({ status: prev, merged_into: null, merged_prev_status: null, merged_po_nos: null }).eq("id", c.id);
+  if (e1) throw e1;
+  if (poNos.length) await supabase.from("purchase_orders").update({ expense_id: c.id }).in("po_no", poNos).is("expense_id", null);
+  if (p && p.status !== "rejected") {
+    // รายการในหมายเหตุใบรวมคั่นด้วย " · " — ตัดชิ้นที่เป็นของใบลูกนี้ออก (ขึ้นต้นด้วยเลข PO ของมัน หรือชื่อใบเบิกของมัน)
+    const [head, ...restParts] = String(p.note || "").split(": ");
+    const segs = restParts.join(": ").split(" · ").filter(Boolean);
+    const mine = (seg) => poNos.length ? poNos.some((n) => seg.startsWith(n + " (")) : seg.startsWith((c.title || "#" + String(c.id).slice(0, 6)) + " (");
+    let cut = false; const left = segs.filter((sg) => { if (!cut && mine(sg)) { cut = true; return false; } return true; });
+    const { count: kidsLeft } = await supabase.from("expense_requests").select("id", { count: "exact", head: true }).eq("merged_into", p.id).eq("status", "merged");
+    const { count: posLeft } = await supabase.from("purchase_orders").select("po_no", { count: "exact", head: true }).eq("expense_id", p.id);
+    if (!(kidsLeft > 0) && !(posLeft > 0)) {
+      await supabase.from("expense_requests").update({ status: "rejected", decide_note: "แยกรายการออกหมดแล้ว — ปิดใบรวม" }).eq("id", p.id);
+    } else {
+      const upd = { amount: Math.max(0, r2(r2(p.amount) - r2(c.amount))), note: head + ": " + left.join(" · "), title: String(p.title || "").replace(/(\d+) ใบ/, (_, n) => Math.max(1, Number(n) - 1) + " ใบ") };
+      if (p.vat_amt != null && Number(c.vat_amt) > 0) upd.vat_amt = Math.max(0, r2(r2(p.vat_amt) - r2(c.vat_amt)));
+      if (Array.isArray(p.attachments) && (c.attachments || []).length) upd.attachments = p.attachments.filter((u) => !(c.attachments || []).includes(u));
+      let { error: e2 } = await supabase.from("expense_requests").update(upd).eq("id", p.id);
+      if (e2 && /vat_amt/i.test(e2.message || "")) { delete upd.vat_amt; ({ error: e2 } = await supabase.from("expense_requests").update(upd).eq("id", p.id)); }
+      if (e2) throw e2;
+    }
+  }
+  await logAudit({ action: "cancel", target_type: "expense", target_no: "แยกออกจากใบรวม #" + String(c.id).slice(0, 8), reason: p ? "ใบรวม #" + String(p.id).slice(0, 8) : "ใบรวมถูกลบ", snapshot: { child: c.id, parent: p?.id || null, amount: c.amount } });
+  syncCashEntriesFromDocs().catch(() => {});
+  try { notify([c.requester], { category: "hr", title: `↩️ ใบเบิก "${c.title}" ถูกแยกออกจากใบรวมจ่าย`, body: prev === "approved" ? "กลับเป็น: อนุมัติ · รอจ่าย" : "กลับเป็น: รออนุมัติ", url: "expenses", ref_type: "expense" }); } catch (_) {}
+}
+// เติมความสัมพันธ์แม่↔ลูกให้ลิสต์ใบเบิก: ใบลูกได้ mergedParent (สถานะ/ยอดจ่าย/สลิปของใบรวม) · ใบรวมได้ mergedChildren (ใบเดิม+ผู้เบิก+ไฟล์แนบ)
+async function _attachMergeLinks(rows, nameById, statusFiltered) {
+  try {
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    const slim = (k) => ({ id: k.id, title: k.title, amount: k.amount, requester: k.requester, requesterName: nameById?.[k.requester] || null, attachments: k.attachments || [], created_at: k.created_at, poNos: k.merged_po_nos || [] });
+    let kids = rows.filter((r) => r.status === "merged" && r.merged_into);
+    if (statusFiltered) {   // ลิสต์ถูกกรองสถานะ → ใบลูกของใบรวมในลิสต์ไม่ได้ติดมาด้วย ต้องถามเพิ่ม
+      const pids = rows.filter((r) => r.status !== "merged").map((r) => r.id); kids = [];
+      for (let i = 0; i < pids.length; i += 100) {
+        const { data, error } = await supabase.from("expense_requests").select("id,title,amount,requester,attachments,created_at,merged_into,merged_po_nos").eq("status", "merged").in("merged_into", pids.slice(i, i + 100));
+        if (error) throw error; kids.push(...(data || []));
+      }
+    }
+    const kidsByParent = {}; kids.forEach((k) => { (kidsByParent[k.merged_into] = kidsByParent[k.merged_into] || []).push(slim(k)); });
+    const need = [...new Set(rows.filter((r) => r.status === "merged" && r.merged_into && !byId[r.merged_into]).map((r) => r.merged_into))];
+    const parents = {};
+    for (let i = 0; i < need.length; i += 100) {
+      const { data, error } = await supabase.from("expense_requests").select("id,status,title,amount,wht_amt,paid_amount,paid_at,last_paid_at,expected_pay_date,payment_proof").in("id", need.slice(i, i + 100));
+      if (error) throw error; (data || []).forEach((p) => { parents[p.id] = p; });
+    }
+    const pv = (p) => p && { id: p.id, status: p.status, title: p.title, amount: p.amount, wht_amt: p.wht_amt, paid_amount: p.paid_amount, paid_at: p.paid_at, last_paid_at: p.last_paid_at, expected_pay_date: p.expected_pay_date, payment_proof: p.payment_proof || [] };
+    return rows.map((r) => r.status === "merged"
+      ? { ...r, mergedParent: pv(byId[r.merged_into] || parents[r.merged_into]) || null }
+      : (kidsByParent[r.id] ? { ...r, mergedChildren: kidsByParent[r.id] } : r));
+  } catch (_) { return rows; }   // pre-migration / อ่านไม่ได้ → ลิสต์เดิมใช้ได้ตามปกติ
+}
+
 // จ่ายเจ้าหนี้หลายใบในคราวเดียว (เหมือนใบวางบิลฝั่งซื้อ): เลือก PO ค้างจ่ายของร้านเดียวกันหลายใบ → ตั้งเบิกจ่าย 1 ใบ
 // จ่ายครบ = payExpense ประทับ paid_at ทุก PO ที่ผูก (.eq expense_id) · ไม่อนุมัติ = ปลดทุกใบกลับเป็นยังไม่จ่าย — รองรับอยู่แล้วทั้งคู่
-// PO ที่ตั้งเบิกรายใบค้างอยู่ (ยังไม่จ่ายเงินสักบาท) เลือกยุบรวมได้ — ใบเบิกเดี่ยวเดิมถูกปิดเป็น "ไม่อนุมัติ" พร้อมหมายเหตุ
+// PO ที่ตั้งเบิกรายใบค้างอยู่ (ยังไม่จ่ายเงินสักบาท) เลือกยุบรวมได้ — ใบเบิกเดี่ยวเดิมกลายเป็น "ใบลูก" สถานะ merged ชี้มาที่ใบรวม (ไม่ใช่ไม่อนุมัติ)
 export async function requestPoPaymentBatch(pos) {
   const list = (pos || []).filter(Boolean);
   if (!list.length) throw new Error("เลือกใบสั่งซื้ออย่างน้อย 1 ใบ");
   const uid = await _uid();
-  // ยุบใบเบิกรายใบเดิม: ต้องยังไม่มีการจ่ายเงินเลยเท่านั้น (จ่ายไปแล้วบางส่วน = ห้ามยุ่ง)
+  // ใบเบิกรายใบเดิมของ PO ที่เลือก → จะกลายเป็น "ใบลูก" ของใบรวมใหม่ (ต้องยังไม่มีการจ่ายเงินเลยเท่านั้น)
   const oldIds = [...new Set(list.map((p) => p.expense_id).filter(Boolean))];
+  let olds = [];
+  const oldPoNos = {};   // ใบเบิกเดิม → PO ที่มันผูกอยู่ (ไว้ผูกกลับตอนแยกออก/ใบรวมถูกไม่อนุมัติ)
   if (oldIds.length) {
-    const { data: olds } = await supabase.from("expense_requests").select("id,status,paid_amount,title").in("id", oldIds);
-    const bad = (olds || []).find((x) => x.status === "paid" || Number(x.paid_amount) > 0);
+    const r = await supabase.from("expense_requests").select("id,status,paid_amount,title").in("id", oldIds);
+    if (r.error) throw r.error; olds = r.data || [];
+    const bad = olds.find((x) => x.status === "paid" || Number(x.paid_amount) > 0);
     if (bad) throw new Error(`ใบเบิกเดิม "${bad.title || "#" + bad.id}" มีการจ่ายเงินไปแล้ว — ยุบรวมไม่ได้ เอาใบสั่งซื้อใบนั้นออกจากรายการก่อน`);
-    const { error: eOld } = await supabase.from("expense_requests").update({ status: "rejected", decide_note: "ยุบรวมเข้าใบเบิกจ่ายเจ้าหนี้ใบใหม่ (จ่ายรวมหลาย PO)" }).in("id", oldIds);
-    if (eOld) throw eOld;
-    await supabase.from("purchase_orders").update({ expense_id: null }).in("expense_id", oldIds);
+    const lk = await supabase.from("purchase_orders").select("po_no,expense_id").in("expense_id", oldIds);
+    if (lk.error) throw lk.error;
+    (lk.data || []).forEach((x) => { (oldPoNos[x.expense_id] = oldPoNos[x.expense_id] || []).push(x.po_no); });
+    // ใบเบิกเดิมที่เป็น "ใบรวม" อยู่แล้ว (ผูกหลาย PO) ต้องถูกเลือกครบทุกใบ — ไม่งั้น PO ที่ไม่ได้เลือกจะหลุดเป็นยังไม่ตั้งเบิกแบบเงียบ ๆ
+    const chosen = new Set(list.map((p) => p.po_no));
+    const partial = olds.find((o) => (oldPoNos[o.id] || []).some((n) => !chosen.has(n)));
+    if (partial) throw new Error(`ใบเบิกเดิม "${partial.title || "#" + partial.id}" รวมใบสั่งซื้อไว้หลายใบ — ต้องเลือกให้ครบทุกใบของใบนั้น หรือแยกออกจากใบรวมเดิมก่อน`);
   }
+  const relinkOlds = async () => { for (const o of olds) { const nos = oldPoNos[o.id] || []; if (nos.length) await supabase.from("purchase_orders").update({ expense_id: o.id }).in("po_no", nos).is("expense_id", null); } };
+  if (oldIds.length) { const { error } = await supabase.from("purchase_orders").update({ expense_id: null }).in("expense_id", oldIds); if (error) throw error; }
   const supplier = list[0].supplier || "";
   const total = Math.round(list.reduce((a, p) => a + (Number(p.total) || 0), 0) * 100) / 100;
   const { data: ex, error } = await supabase.from("expense_requests").insert({
@@ -1346,14 +1451,20 @@ export async function requestPoPaymentBatch(pos) {
     note: "รวมใบสั่งซื้อ: " + list.map((p) => `${p.po_no} (${(Number(p.total) || 0).toLocaleString("en-US")})`).join(" · "),
     attachments: [], created_by: uid,
   }).select("id").single();
-  if (error) throw error;
-  // ผูกเฉพาะใบที่ยังว่าง (กันตั้งเบิกซ้ำพร้อมกัน) — ถ้ามีใบไหนถูกชิงตั้งไปแล้ว ถอนใบเบิกใหม่ทิ้งทันที
+  if (error) { await relinkOlds(); throw error; }
+  // ผูกเฉพาะใบที่ยังว่าง (กันตั้งเบิกซ้ำพร้อมกัน) — ถ้ามีใบไหนถูกชิงตั้งไปแล้ว ถอนใบเบิกใหม่ทิ้งทันที แล้วคืน PO ให้ใบเบิกเดิม
   const { data: u2, error: e2 } = await supabase.from("purchase_orders").update({ expense_id: ex.id }).in("po_no", list.map((p) => p.po_no)).is("expense_id", null).select("po_no");
-  if (e2) throw new Error(/expense_id|column|PGRST204/i.test(e2.message || "") ? "ยังไม่ได้รัน migration 100 (PO ↔ เบิกจ่าย) ใน Supabase" : (e2.message || e2));
-  if ((u2 || []).length !== list.length) {
+  if (e2 || (u2 || []).length !== list.length) {
     await supabase.from("purchase_orders").update({ expense_id: null }).eq("expense_id", ex.id);
     await supabase.from("expense_requests").delete().eq("id", ex.id);
+    await relinkOlds();
+    if (e2) throw new Error(/expense_id|column|PGRST204/i.test(e2.message || "") ? "ยังไม่ได้รัน migration 100 (PO ↔ เบิกจ่าย) ใน Supabase" : (e2.message || e2));
     throw new Error("มีใบสั่งซื้อบางใบถูกตั้งเบิกไปแล้ว (มีคนทำพร้อมกัน) — รีเฟรชแล้วเลือกใหม่");
+  }
+  if (olds.length) {
+    // ใบเดิมที่เป็นใบรวมอยู่ก่อน: ย้ายใบลูกของมันมาอยู่ใต้ใบรวมใหม่ด้วย (ไม่ให้เป็นหลาน)
+    try { await supabase.from("expense_requests").update({ merged_into: ex.id }).in("merged_into", oldIds).eq("status", "merged"); } catch (_) {}
+    await _markMergedChildren(olds.map((o) => ({ id: o.id, status: o.status, poNos: oldPoNos[o.id] || [] })), ex.id, "ยุบรวมเข้าใบเบิกจ่ายเจ้าหนี้ใบใหม่ (จ่ายรวมหลาย PO)");
   }
   const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `🏭 ${me?.name || "พนักงาน"} ตั้งเบิกจ่ายเจ้าหนี้ ${list.length} ใบ · ${total.toLocaleString("en-US")} บาท`, body: supplier, url: "expenses", ref_type: "expense" });
@@ -5275,14 +5386,27 @@ async function _enrichExpenseJobs(rows) {
     const entity = qi && qi.vat === false ? "personal" : "company";
     // ผู้ขาย: ช่อง supplier ที่กรอกเอง · ไม่มีก็ดึงจาก PO ที่ผูก (จ่ายค่าสินค้า PO)
     const vendor = x.supplier || poList.map((p) => p.supplier).find(Boolean) || null;
-    return { ...x, supplier: vendor, jobNo: job?.job_no || null, jobTitle: job?.title || qi?.title || null, entity,
-      customerName: custId != null ? custName[custId] || null : null, poNo: po?.po_no || null, poNos: poList.map((p) => p.po_no), poDetails, quoteNo };
+    // ใบรวมหลาย PO: ห้ามเอาลูกค้า/งาน/ใบเสนอของ "PO ใบแรก" มาแปะทั้งใบ (เคยขึ้นชื่อลูกค้าคนเดียวทั้งที่รวม 8 ใบคนละลูกค้า)
+    const custNames = [...new Set(poDetails.map((p) => p.customerName).filter(Boolean))];
+    const oneDoc = poList.length <= 1 || new Set(poList.map((p) => p.quote_no || "")).size === 1;
+    const baseCust = custId != null ? custName[custId] || null : null;
+    return { ...x, supplier: vendor, jobNo: oneDoc ? (job?.job_no || null) : null, jobTitle: oneDoc ? (job?.title || qi?.title || null) : null, entity,
+      customerName: oneDoc ? baseCust : (custNames.length === 1 ? custNames[0] : null), customerNames: custNames,
+      poNo: po?.po_no || null, poNos: poList.map((p) => p.po_no), poDetails, quoteNo: oneDoc ? quoteNo : null };
   });
 }
 export async function listMyExpenses() {
   const uid = await _uid();
   const data = await _fetchAll((f, t) => supabase.from("expense_requests").select("*", { count: "exact" }).eq("requester", uid).order("created_at", { ascending: false }).order("id").range(f, t));
-  return _enrichExpenseJobs(data || []);
+  const rows = await _enrichExpenseJobs(data || []);
+  // ใบของฉันที่ถูกรวมจ่าย → ขอสถานะ/สลิปของใบรวมผ่าน RPC (RLS ไม่ให้อ่านใบของคนอื่นตรง ๆ)
+  if (!rows.some((r) => r.status === "merged")) return rows;
+  try {
+    const { data: ps, error } = await supabase.rpc("my_merged_parents");
+    if (error) return rows;
+    const byChild = Object.fromEntries((ps || []).map((p) => [p.child_id, { id: p.parent_id, status: p.status, title: p.title, amount: p.amount, paid_amount: p.paid_amount, paid_at: p.paid_at, last_paid_at: p.last_paid_at, expected_pay_date: p.expected_pay_date, payment_proof: p.payment_proof || [] }]));
+    return rows.map((r) => (r.status === "merged" ? { ...r, mergedParent: byChild[r.id] || null } : r));
+  } catch (_) { return rows; }
 }
 export function listExpenses(status) { return _cached("listExpenses:" + String(status), () => _loadExpenses(status), _SHORT_TTL); }
 async function _loadExpenses(status) {
@@ -5292,7 +5416,8 @@ async function _loadExpenses(status) {
   const ex = { data: exRows };
   const nm = Object.fromEntries((profs.data || []).map((p) => [p.id, p.name || p.email]));
   const enriched = await _enrichExpenseJobs(ex.data || []);
-  return enriched.map((x) => ({ ...x, requesterName: nm[x.requester] || "—", approverName: x.approver ? (nm[x.approver] || "—") : null }));
+  const named = enriched.map((x) => ({ ...x, requesterName: nm[x.requester] || "—", approverName: x.approver ? (nm[x.approver] || "—") : null }));
+  return _attachMergeLinks(named, nm, !!status);
 }
 export async function decideExpense(id, status, note) {
   const uid = await _uid();
@@ -5311,7 +5436,15 @@ export async function decideExpense(id, status, note) {
   if (error) throw error;
   // คำขอชำระใบสั่งซื้อถูกปฏิเสธ → ปลดลิงก์ให้ PO กลับเป็น "ยังไม่จ่าย" (ส่งขอใหม่ได้)
   if (status === "rejected") { try { await supabase.from("purchase_orders").update({ expense_id: null }).eq("expense_id", id); } catch (_) {} }
+  // ใบรวมถูกไม่อนุมัติ → ใบลูกทุกใบคืนสถานะเดิม + ผูก PO กลับ (ต้องทำหลังปลด PO ออกจากใบรวม) แล้วบอกผู้เบิกตัวจริง
+  let restoredKids = [];
+  if (status === "rejected") { try { restoredKids = await _restoreMergedChildren(id); } catch (_) {} }
   const { data: ex } = await supabase.from("expense_requests").select("requester,title").eq("id", id).maybeSingle();
+  try {
+    const kidUids = status === "rejected" ? [...new Set(restoredKids.map((k) => k.requester).filter((u) => u && u !== ex?.requester))] : await _mergedChildRequesters(id, ex?.requester);
+    const kl = { approved: "อนุมัติแล้ว · รอจ่าย ✅", rejected: "ใบรวมถูกไม่อนุมัติ — ใบเบิกของคุณกลับเป็นสถานะเดิม", pending: "ใบรวมกลับเป็นรออนุมัติ" }[status];
+    if (kidUids.length && kl) notify(kidUids, { category: "hr", title: `🧾 ใบเบิกของคุณ (รวมจ่ายใน "${ex?.title || ""}") : ${kl}`, body: note || "", url: "expenses", ref_type: "expense" });
+  } catch (_) {}
   const lbl = { approved: "อนุมัติ ✅", rejected: "ไม่อนุมัติ ❌", pending: "กลับเป็นรออนุมัติ" }[status] || status;
   if (ex) notify([ex.requester], { category: "hr", title: `🧾 คำขอเบิก "${ex.title}" : ${lbl}`, body: note || "", url: "expenses", ref_type: "expense" });
 }
@@ -5403,6 +5536,8 @@ export async function payExpense(id, { accountId, proof, payDate, amount, expect
   // กระแสเงินสด: ให้ syncCashEntriesFromDocs สร้าง/อัปเดตเส้น จ่ายจริง (expense_paid) + ประมาณการยอดค้าง (expense_due) เอง
   syncCashEntriesFromDocs().catch(() => {});
   notify([ex.requester], { category: "hr", title: `💸 ${fully ? "จ่ายเงินเบิกครบแล้ว" : "จ่ายเงินเบิกบางส่วน"} "${ex.title}" ${payAmt.toLocaleString()} บาท`, body: fully ? "แนบหลักฐานการจ่ายเรียบร้อย" : `คงเหลืออีก ${(remaining - payAmt).toLocaleString()} บาท`, url: "expenses", ref_type: "expense" });
+  // ใบรวมจ่าย → บอกผู้เบิกตัวจริงของใบลูกทุกใบด้วย (เดิมรู้แค่คนกดรวม)
+  try { const kidUids = await _mergedChildRequesters(id, ex.requester); if (kidUids.length) notify(kidUids, { category: "hr", title: `💸 ใบเบิกของคุณ (รวมจ่ายใน "${ex.title}") : ${fully ? "จ่ายแล้ว" : "จ่ายบางส่วน"}`, body: "เปิดเมนูเบิกจ่าย → ขอเบิกของฉัน เพื่อดูสลิปโอน", url: "expenses", ref_type: "expense" }); } catch (_) {}
 }
 // ยกเลิกการจ่ายเงินเบิก (ผู้บริหารเท่านั้น — gate ที่ UI) — คืนสถานะ "อนุมัติ · รอจ่าย" + ถอนรายการเงินออก
 // รวมเบิกทั่วไปหลายใบ → ตั้งเป็น "ใบขอจ่ายรวม" ใบเดียว (รออนุมัติ → จ่าย) เหมือน PO
@@ -5429,8 +5564,8 @@ export async function requestExpensePaymentBatch(expenseIds, label) {
   let { data: ex, error } = await insBundle(true);
   if (error && /vat_amt|PGRST204/i.test(error.message || "")) ({ data: ex, error } = await insBundle(false));   // pre-232 fallback
   if (error) throw error;
-  const { error: eR } = await supabase.from("expense_requests").update({ status: "rejected", decide_note: "ยุบรวมเข้าใบขอจ่ายรวม (จ่ายรวมหลายใบ)" }).in("id", payable.map((e) => e.id));
-  if (eR) { await supabase.from("expense_requests").delete().eq("id", ex.id); throw eR; }
+  try { await _markMergedChildren(payable.map((e) => ({ id: e.id, status: e.status })), ex.id, "ยุบรวมเข้าใบขอจ่ายรวม (จ่ายรวมหลายใบ)"); }
+  catch (eR) { try { await _restoreMergedChildren(ex.id); } catch (_) {} await supabase.from("expense_requests").delete().eq("id", ex.id); throw eR; }
   const me = await _meSafe();
   notify(await _usersByRole(["admin", "finance", "exec", "hr"]), { category: "hr", title: `⛽ ${me?.name || "พนักงาน"} ตั้งเบิกจ่ายรวม ${payable.length} ใบ · ${total.toLocaleString("en-US")} บาท`, body: label || "", url: "expenses", ref_type: "expense" });
   return ex.id;
@@ -5485,7 +5620,8 @@ export async function jobExpenseCost() {
   // ผลคือต้นทุนงานต่ำกว่าจริง → กำไร/งานสูงเกินจริง โดยไม่มีอะไรฟ้องเลย
   const rows = await _fetchAll((f, t) =>
     supabase.from("expense_requests").select("job_no,amount,status", { count: "exact" })
-      .not("job_no", "is", null).in("status", ["approved", "paid"]).order("id").range(f, t)   // ไม่มี order = แถวซ้ำ/หายระหว่างหน้า
+      // merged = ใบเบิกเข้างานที่ถูกรวมจ่าย: ต้นทุนยังเป็นของงานนี้ (ใบรวมไม่มี job_no จึงไม่นับซ้ำ) — เดิมถูกปิดเป็น rejected ต้นทุนงานหายเงียบ
+      .not("job_no", "is", null).in("status", ["approved", "paid", "merged"]).order("id").range(f, t)   // ไม่มี order = แถวซ้ำ/หายระหว่างหน้า
   );
   const m = {}; (rows || []).forEach((x) => { if (x.job_no) m[x.job_no] = (m[x.job_no] || 0) + (Number(x.amount) || 0); });
   return m;
