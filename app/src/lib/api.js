@@ -3088,8 +3088,9 @@ export async function saveReceipt(r) {
     wht: !!r.wht, wht_rate: whtRate(r.wht_rate), items: r.items || [],
     status, note: r.note?.trim() || null, internal_note: r.internal_note?.trim() || null, ..._termCols(r), ..._signCols(r), created_by: user?.id || null,
   }, "receipt_no");
+  // สถานะใบแจ้งหนี้ตามใบเสร็จ — ทำแม้เป็นการกดซ้ำ (dup): รอบก่อนอาจตายหลังบันทึกใบเสร็จแต่ก่อนปรับใบแจ้งหนี้ (ทำซ้ำได้ไม่เสียหาย) · dup = ไม่โยน error ซ้ำใส่ผู้ใช้
+  await _syncInvoicePaid(r.invoice_no, status, !!dup);
   if (dup) return { dup: true };   // บันทึกไปแล้วจากรอบก่อน (กดซ้ำ/retry หลังเน็ตหลุด) — ข้าม side effect ที่ทำไปแล้ว
-  if (r.invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", r.invoice_no).neq("status", "cancelled"); // ห้ามปลุกใบที่ยกเลิกแล้วกลับมา
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
   syncBankReceipts().catch(() => {});        // auto-post the deposit into the bank-account ledger
   syncInternalNote({ invoiceNo: r.invoice_no }, r.internal_note).catch(() => {});
@@ -3252,10 +3253,22 @@ export async function deleteBillingNote(billing_no, reason) {
   syncCashEntriesFromDocs().catch(() => {}); // reconcile cash flow after delete
 }
 
+// สถานะใบแจ้งหนี้ต้องตามใบเสร็จเสมอ — เดิม update นี้ไม่เช็ก error เลย: เน็ตสะดุดจังหวะนี้ = ใบเสร็จ "รับเงินแล้ว" แต่ใบแจ้งหนี้ค้าง "ยังไม่ชำระ" ตลอดไป
+// (พบจริง 1 ใบ: ลูกหนี้ค้างรับเกินจริง + กระแสเงินสดนับ "คาดว่าจะรับ" ซ้ำกับเงินที่รับไปแล้ว) · ลองซ้ำ 1 ครั้ง แล้วค่อยโยน error ให้ผู้ใช้รู้
+async function _syncInvoicePaid(invoice_no, receiptStatus, soft) {
+  if (!invoice_no) return;
+  let lastErr = null;
+  for (let i = 0; i < 2; i++) {
+    const { error } = await supabase.from("invoices").update({ status: receiptStatus === "paid" ? "paid" : "unpaid" }).eq("invoice_no", invoice_no).neq("status", "cancelled"); // ห้ามปลุกใบที่ยกเลิกแล้วกลับมา
+    if (!error) return;
+    lastErr = error;
+  }
+  if (!soft) throw new Error("บันทึกใบเสร็จแล้ว แต่ปรับสถานะใบแจ้งหนี้ " + invoice_no + " ไม่สำเร็จ — กดบันทึกอีกครั้ง (" + (lastErr?.message || lastErr) + ")");
+}
 export async function setReceiptStatus(receipt_no, status, invoice_no, reason) {
   const { error } = await supabase.from("receipts").update({ status }).eq("receipt_no", receipt_no);
   if (error) throw error;
-  if (invoice_no) await supabase.from("invoices").update({ status: status === "paid" ? "paid" : "unpaid" }).eq("invoice_no", invoice_no).neq("status", "cancelled"); // ห้ามปลุกใบที่ยกเลิกแล้ว
+  await _syncInvoicePaid(invoice_no, status);
   if (status === "cancelled") await logAudit({ action: "cancel", target_type: "receipt", target_no: receipt_no, reason });
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
   syncBankReceipts().catch(() => {});        // paid→post / cancelled→remove the bank-ledger deposit
@@ -3297,7 +3310,7 @@ export async function deleteReceipt(receipt_no, invoice_no, reason) {
   const { data: snap } = await supabase.from("receipts").select("*").eq("receipt_no", receipt_no).maybeSingle();
   const { error } = await supabase.from("receipts").delete().eq("receipt_no", receipt_no);
   if (error) throw error;
-  if (invoice_no) await supabase.from("invoices").update({ status: "unpaid" }).eq("invoice_no", invoice_no).neq("status", "cancelled"); // ห้ามปลุกใบที่ยกเลิกแล้ว
+  await _syncInvoicePaid(invoice_no, "deleted");   // ลบใบเสร็จ → ใบแจ้งหนี้กลับเป็นยังไม่ชำระ (เช็ก error + ลองซ้ำ เหมือนทางอื่น)
   await logAudit({ action: "delete", target_type: "receipt", target_no: receipt_no, reason, snapshot: snap });
   syncCashEntriesFromDocs().catch(() => {}); // auto-update cash flow in background
   syncBankReceipts().catch(() => {});        // remove the bank-ledger deposit for the deleted receipt
@@ -7113,7 +7126,9 @@ export async function syncCashEntriesFromDocs() {
   (expReq.data || []).forEach((x) => {
     if (x.status === "rejected") return;
     const total = Math.round((Number(x.amount) || 0) * 100) / 100;
-    const paidAmt = Math.round((Number(x.paid_amount) || 0) * 100) / 100;
+    // ใบเบิกรุ่นเก่า (ก่อนมีแบ่งจ่าย mig 111) status=paid แต่ paid_amount=0 → เดิมไม่ถูกนับเป็นเงินออกจริงเลย (พบ 4 ใบ รวม ~66,500 บาท หายจากกระแสเงินสด)
+    const paidRaw = Math.round((Number(x.paid_amount) || 0) * 100) / 100;
+    const paidAmt = x.status === "paid" && !(paidRaw > 0.01) ? total : paidRaw;
     const remaining = Math.round((total - paidAmt) * 100) / 100;
     const label = `เบิกจ่าย: ${x.title || ""}${x.job_no ? " · งาน " + x.job_no : ""}`;
     if (paidAmt > 0.01) desired.push({ source_type: "expense_paid", source_ref: String(x.id), direction: "out", status: "actual", entry_date: _d(x.last_paid_at || x.paid_at || x.created_at), amount: paidAmt, note: label + (remaining > 0.01 ? " (จ่ายบางส่วน)" : "") });

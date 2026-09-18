@@ -54,6 +54,7 @@ const SUITES = [
   ["test-chat-perf.mjs"],
   ["test-chat-waiting.mjs"],
   ["test-myjobs-photo-bounce.mjs"],
+  ["test-integrity-r15.mjs"],
 ];
 
 const failed = [];
