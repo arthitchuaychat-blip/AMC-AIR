@@ -7,11 +7,14 @@ export default function ReportChart({ buckets, series, label = "แนวโน�
   const host = React.useRef(null);
   const [width, setWidth] = React.useState(600);
   React.useEffect(() => {
-    if (!host.current) return;
-    const update = () => setWidth(Math.max(220, host.current.clientWidth));
+    // จับ element ไว้ตั้งแต่ตอน mount — ResizeObserver ยิง callback ค้างได้อีก 1 ครั้ง "หลัง" หน้าแดชบอร์ดถูกถอด (ผู้ใช้กดไปเมนูอื่น)
+    // ตอนนั้น host.current เป็น null แล้ว → "Cannot read properties of null (reading 'clientWidth')" (client_errors 11 ครั้ง 4 คน v848–v853)
+    const el = host.current;
+    if (!el) return;
+    const update = () => { if (!el.isConnected) return; setWidth(Math.max(220, el.clientWidth)); };
     update();
     if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(update); observer.observe(host.current);
+    const observer = new ResizeObserver(update); observer.observe(el);
     return () => observer.disconnect();
   }, []);
   const W = Math.max(width, buckets.length * (series.length > 1 ? 46 : 34) + 88);

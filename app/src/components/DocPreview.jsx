@@ -36,7 +36,8 @@ export default function DocPreview({ type, no, title, onClose, onOpenFull }) {
 
   React.useEffect(() => {
     const node = viewport.current;
-    const measure = () => setWidth(node.clientWidth);
+    if (!node) return;
+    const measure = () => { if (node.isConnected) setWidth(node.clientWidth); };   // กัน callback ค้างหลังปิดพรีวิว (แบบเดียวกับ ReportChart)
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
