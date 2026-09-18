@@ -168,6 +168,33 @@ check("since รูปแบบผิด → ไม่กรอง (ไม่ใ
   assert.equal(calls.filter((c) => c.filters.length).length, 0);
 });
 
+// ---- ใบแจ้งหนี้ { since } — หน้าใบแจ้งหนี้ (v850) โหลดเฉพาะช่วงวันที่ ไม่ดึงทุกใบทั้งบริษัท ----
+calls = []; headRows = { invoices: [{ invoice_no: "IV-1", customer_id: 5, site_id: 2, quote_no: "QT-9", created_by: "u1" }] };
+await listInvoices({ since: "2026-07-01" });
+check("ใบแจ้งหนี้: OR issue_date กับ created_at (ใบที่ issue_date ว่างต้องไม่หาย)", () => {
+  assert.deepEqual(calls.find((c) => c.table === "invoices").filters, ["or(issue_date.gte.2026-07-01,created_at.gte.2026-07-01)"]);
+});
+check("ใบแจ้งหนี้: ตารางลูกทุกตารางกรองตาม 'ใบที่ได้มาจริง' (ลูกค้า/ไซต์/ใบเสนอ/ใบเสร็จ/ใบวางบิล)", () => {
+  assert.deepEqual(calls.find((c) => c.table === "customers").filters, ["id in [5]"]);
+  assert.deepEqual(calls.find((c) => c.table === "customer_sites").filters, ["id in [2]"]);
+  assert.deepEqual(calls.find((c) => c.table === "customer_contacts").filters, ["customer_id in [5]"]);
+  assert.deepEqual(calls.find((c) => c.table === "quotations").filters, ["quote_no in [QT-9]"]);
+  assert.deepEqual(calls.find((c) => c.table === "receipts").filters, ["invoice_no in [IV-1]"]);
+  assert.deepEqual(calls.find((c) => c.table === "billing_notes").filters, ["invoice_nos ov [IV-1]"]);
+});
+calls = []; headRows = { invoices: [] };
+await listInvoices({ since: "2026-07-01" });
+check("ใบแจ้งหนี้: ช่วงที่ไม่มีใบเลย → ตารางลูกได้ 0 แถว (sentinel) ไม่ใช่โหลดทั้งตาราง", () => {
+  assert.deepEqual(calls.find((c) => c.table === "customers").filters, ["id in [-1]"]);
+  assert.deepEqual(calls.find((c) => c.table === "receipts").filters, ["invoice_no in [__none__]"]);
+  assert.deepEqual(calls.find((c) => c.table === "quotations").filters, ["quote_no in [__none__]"]);
+});
+calls = []; headRows = {};
+await listInvoices({});
+check("ใบแจ้งหนี้: ไม่ส่ง since/nos → ไม่มีตัวกรองเลย (หน้าอื่นที่โหลดเต็มยังได้ทุกใบเหมือนเดิม)", () => {
+  assert.equal(calls.filter((c) => c.filters.length).length, 0);
+});
+
 // ============ (4) แดชบอร์ด: กรองรายพนักงานขายแล้วใบเสร็จต้องไม่หาย ============
 // บั๊กที่เอเจนต์ตรวจจับได้: ใบเสร็จเดือนนี้ส่วนใหญ่มาจากใบเสนอที่อนุมัติไปหลายเดือนก่อน (ลูกค้าจ่ายทีหลัง)
 // ถ้ากรองใบเสร็จด้วย "ใบเสนอในช่วง" ใบเสร็จพวกนั้นจะถูกทิ้ง การ์ด "รับเงินแล้ว" กลายเป็น 0 บาท

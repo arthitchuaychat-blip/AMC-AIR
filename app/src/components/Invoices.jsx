@@ -3,7 +3,7 @@ import { calculateSalesWht, salesItems, enrichSalesItems, whtEnabled, whtRate } 
 import SalesWhtControl from "./SalesWhtControl";
 import { confirmDialog } from "./ConfirmDialog";
 import Combo from "./Combo";
-import { salesWhtLocks, listInvoices, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks, listCustomers, docNoTaken } from "../lib/api";
+import { salesWhtLocks, listInvoices, listInvoiceTotals, listQuotations, saveInvoice, deleteInvoice, setInvoiceStatus, setInvoiceWht, getCompanies, billedByQuote, listDocLinks, listCustomers, docNoTaken } from "../lib/api";
 import { fmtBaht2, custCode, round2, matchText, matchPhone, fmtDocDate, fmtDocAmount } from "../lib/format";
 import { can } from "../lib/permissions";
 import { UIcon } from "../icons";
@@ -34,7 +34,10 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [peekEl, openPeek] = useDocPeek(onOpenDoc);   // ชิปเชื่อมโยง → พรีวิวแผงขวาก่อน
   const canEdit = can(role, "invoice", "edit");
   const canDelete = ["exec", "admin"].includes(role); // ลบจริงได้เฉพาะธุรการ
-  const [list, setList] = React.useState([]);
+  const [list, setList] = React.useState([]);            // ใบเต็ม (join ลูกค้า/ไซต์/ใบเสร็จ) เฉพาะช่วงวันที่ที่โหลดมา
+  const [totals, setTotals] = React.useState([]);        // ทุกใบทั้งบริษัทแบบบาง — ใช้นับยอดวางบิล/งวด/ใบที่ซ่อน
+  const [loadedSince, setLoadedSince] = React.useState(undefined);   // undefined=ยังไม่โหลด · ""=โหลดทุกใบ · "YYYY-MM-DD"=โหลดตั้งแต่วันนี้
+  const loadSeq = React.useRef(0);                       // กันผลโหลดรอบเก่ามาทับรอบใหม่ (เปลี่ยนช่วงวันที่ระหว่างโหลด)
   const [quotes, setQuotes] = React.useState([]);
   const [custs, setCusts] = React.useState([]);
   const [companies, setCompanies] = React.useState({ vat: {}, novat: {} });
@@ -54,21 +57,33 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   const [noDueF, setNoDueF] = React.useState(false);   // ไล่เก็บใบเก่าที่ไม่ได้ใส่วันครบกำหนด (หลุดจาก KPI เกินกำหนด)
   const [dateR, setDateR] = React.useState(defaultDocRange);   // เปิดมาเห็น 6 เดือนล่าสุด · เก่ากว่านั้นกด "ดูทั้งหมด"
   // ใบที่ถูกช่วงวันที่ตัดออก — ต้องบอกจำนวนบนแถบตัวกรอง ห้ามซ่อนเงียบ ๆ
-  const dateHidden = React.useMemo(() => (list || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [list, dateR]);
+  const dateHidden = React.useMemo(() => (totals || []).filter((x) => !inDateRange(x.issue_date, dateR)).length, [totals, dateR]);   // นับจากทุกใบ — list มีแค่ช่วงที่โหลด
   // ตัวเลือกผู้สร้างเอกสาร = รายชื่อที่ปรากฏจริงในใบทั้งหมดที่โหลดมา (ไม่ยิง API เพิ่ม)
   const creatorOpts = React.useMemo(() => Array.from(new Set((list || []).map((d) => d.createdByName).filter(Boolean))).sort(), [list]);
   const [billIncomplete, setBillIncomplete] = React.useState(false); // เฉพาะงานที่วางบิลยังไม่ครบ 100%
   const [noReceiptF, setNoReceiptF] = React.useState(false);         // เฉพาะใบที่ยังไม่ออกใบเสร็จ (ยังไม่รับเงิน)
   const [docLinks, setDocLinks] = React.useState({ byQuote: {} });
 
-  async function load() {
+  // โหลดใบเต็มเฉพาะ "ตั้งแต่วันที่" (since) ที่ช่วงวันที่ต้องการ — ค่าเริ่มต้น 6 เดือน จึงไม่ต้องดึงทุกใบทั้งบริษัท
+  // since = "" → โหลดทุกใบ (ผู้ใช้กด ล้าง/ดูทั้งหมด หรือเปิดเจาะจงใบจากลิงก์) · ปุ่ม "ลองโหลดใหม่" ส่ง event มา → ใช้ช่วงปัจจุบัน
+  async function load(sinceArg) {
+    const since = typeof sinceArg === "string" ? sinceArg : (dateR.from || "");
+    const my = ++loadSeq.current;
     setLoading(true);
     setLoadError("");
-    try { const [locks, iv, q, co, dl, cu] = await Promise.all([salesWhtLocks(), listInvoices(), listQuotations(), getCompanies(), listDocLinks(), listCustomers()]); setWhtLocks(locks); setList(iv); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); setCusts(cu); }
-    catch (e) { setLoadError("โหลดข้อมูลเอกสารไม่สำเร็จ: " + (e.message || e)); flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
-    setLoading(false);
+    try {
+      const [locks, iv, tot, q, co, dl, cu] = await Promise.all([salesWhtLocks(), listInvoices(since ? { since } : {}), listInvoiceTotals(), listQuotations(), getCompanies(), listDocLinks(), listCustomers()]);
+      if (my !== loadSeq.current) return;   // มีรอบใหม่กว่าแล้ว — ทิ้งผลรอบนี้
+      setWhtLocks(locks); setList(iv); setTotals(tot); setLoadedSince(since); setQuotes(q); setCompanies(co || { vat: {}, novat: {} }); setDocLinks(dl); setCusts(cu);
+    }
+    catch (e) { if (my !== loadSeq.current) return; setLoadError("โหลดข้อมูลเอกสารไม่สำเร็จ: " + (e.message || e)); flash("โหลดไม่สำเร็จ: " + (e.message || e), true); }
+    if (my === loadSeq.current) setLoading(false);
   }
-  React.useEffect(() => { load(); }, []);
+  // ช่วงวันที่ขยับไป "เก่ากว่า" ที่โหลดไว้ (หรือขอดูทั้งหมด) → โหลดใหม่ตั้งแต่วันนั้น · ขยับให้แคบลงไม่ต้องโหลด (ข้อมูลครอบอยู่แล้ว)
+  const needFrom = dateR.from || "";
+  React.useEffect(() => {
+    if (loadedSince === undefined || (loadedSince && (!needFrom || needFrom < loadedSince))) load(needFrom);
+  }, [needFrom]);
   // เปิดเจาะจงใบ (มาจากลิงก์/ชิปเชื่อมโยง) → ล้างช่วงวันที่ ไม่งั้นใบเก่ากว่า 6 เดือนจะขึ้นว่าไม่พบ
   React.useEffect(() => { if (focus) { setEd(null); setDateR({ from: "", to: "" }); setSearch(focus); onFocusConsumed && onFocusConsumed(); } }, [focus]);
   const printWin = React.useRef(null);
@@ -77,7 +92,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   React.useEffect(() => { if (!fromQuote || !quotes.length) return; startNew(fromQuote); onFromQuoteConsumed && onFromQuoteConsumed(); }, [fromQuote, quotes]);
   function flash(m, bad) { setToast({ m, bad }); setTimeout(() => setToast(null), 2800); }
 
-  const billed = React.useMemo(() => billedByQuote(list), [list]);
+  const billed = React.useMemo(() => billedByQuote(totals), [totals]);   // ยอดวางบิลสะสมต้องนับจากทุกใบ ไม่ใช่แค่ช่วงที่โหลด
   const approvedQuotes = quotes.filter((q) => q.status === "approved");
   const quoteByNo = React.useMemo(() => Object.fromEntries(quotes.map((q) => [q.quote_no, q])), [quotes]);
 
@@ -103,7 +118,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   }
   // งานฟรี/ไม่เก็บเงิน = ใบเสนอราคายอดรวม 0 (เช่น งานรับประกัน/อภินันทนาการ) → ออกใบแจ้งหนี้ ฿0 ได้ 1 ใบเพื่อปิดงาน
   const isFreeQuote = (q) => round2(q?.grand || 0) < 0.01;
-  const invoicedQuotes = React.useMemo(() => new Set((list || []).filter((x) => x.status !== "cancelled").map((x) => x.quote_no)), [list]);
+  const invoicedQuotes = React.useMemo(() => new Set((totals || []).filter((x) => x.status !== "cancelled").map((x) => x.quote_no)), [totals]);
   // approved quotes that still have a balance to bill · งานฟรีที่ยังไม่เคยออกใบแจ้งหนี้ก็ขึ้นให้เลือก (ออกได้ 1 ใบ)
   const billableQuotes = approvedQuotes.filter((q) => isFreeQuote(q)
     ? !invoicedQuotes.has(q.quote_no)
@@ -159,7 +174,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       if (newTotal > remaining + 0.01) return flash("ยอดงวดเกินยอดคงเหลือ", true);
     }
     const f = selQ.grand > 0 ? newTotal / selQ.grand : 0;
-    const installment = list.filter((x) => x.quote_no === selQ.quote_no && x.status !== "cancelled").length + 1;
+    const installment = totals.filter((x) => x.quote_no === selQ.quote_no && x.status !== "cancelled").length + 1;   // งวดที่เท่าไร นับจากทุกใบ
     const base = round2((selQ.afterDisc || 0) * f);
     // หัก ณ ที่จ่าย — คำนวณอัตโนมัติสำหรับลูกค้านิติบุคคลที่มีรายการค่าบริการ
     const snap = salesItems(selQ, ed.wht);
@@ -326,7 +341,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
   return (
     <div className="adm">
       <div className="adm-head">
-        <div><h1 className="page-title">ใบส่งของ/ใบแจ้งหนี้ <span className="page-title-en">Delivery / Invoice</span></h1><p className="page-sub">{list.length} ใบ · แบ่งงวดจากใบเสนอราคา · กดรับเงินออกใบเสร็จได้เลย</p></div>
+        <div><h1 className="page-title">ใบส่งของ/ใบแจ้งหนี้ <span className="page-title-en">Delivery / Invoice</span></h1><p className="page-sub">{totals.length} ใบ · แบ่งงวดจากใบเสนอราคา · กดรับเงินออกใบเสร็จได้เลย</p></div>
         <div className="cat-head-actions">
           <div className="cat-search"><UIcon name="search" size={17} color="var(--ink-3)" />
             <input placeholder="ค้นหาเลขที่ / ลูกค้า / ใบเสนอ / หมายเหตุ" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -364,7 +379,7 @@ export default function Invoices({ role, fromQuote, onFromQuoteConsumed, onCreat
       </FilterBar>
       {loading && <div className="empty">กำลังโหลด…</div>}
       {loadError && <div className="empty" role="alert"><p>{loadError}</p><p>ยังยืนยันจำนวนเอกสารไม่ได้ หากมีรายการเดิมแสดงอยู่ อาจยังไม่ใช่ข้อมูลล่าสุด</p><button type="button" className="btn" disabled={loading} onClick={load}>ลองโหลดใหม่</button></div>}
-      {!loading && !loadError && shown.length === 0 && <div className="empty">{list.length === 0 ? "ยังไม่มีใบส่งของ/ใบแจ้งหนี้" : "ไม่พบใบส่งของ/ใบแจ้งหนี้"}</div>}
+      {!loading && !loadError && shown.length === 0 && <div className="empty">{totals.length === 0 ? "ยังไม่มีใบส่งของ/ใบแจ้งหนี้" : "ไม่พบใบส่งของ/ใบแจ้งหนี้"}</div>}
       <div className="job-cards">
         {shown.map((x) => {
           const st = STATUS[x.status] || STATUS.unpaid;
