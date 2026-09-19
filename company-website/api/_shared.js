@@ -27,7 +27,7 @@ const thDate = (iso) => {
 };
 
 // โครงหน้าเว็บย่อย — โทน/ฟอนต์เดียวกับหน้าแรก
-function pageShell({ title, desc, canonical, ogImage, jsonld, content }) {
+function pageShell({ title, desc, canonical, ogImage, jsonld, content, ogType = 'article', pageClass = 'fa-detail' }) {
   return `<!DOCTYPE html>
 <html lang="th">
 <head>
@@ -52,7 +52,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}" />
 <link rel="canonical" href="${esc(canonical)}" />
-<meta property="og:type" content="article" />
+<meta property="og:type" content="${esc(ogType)}" />
 <meta property="og:site_name" content="AMC AIR" />
 <meta property="og:title" content="${esc(title)}" />
 <meta property="og:description" content="${esc(desc)}" />
@@ -60,10 +60,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}" />` : ""}
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" type="image/png" href="/logo.png" />
-${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>` : ""}
+${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ""}
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=Kanit:wght@400;500&display=swap" rel="stylesheet" />
 <style>
 :root{--primary:#0ea5e9;--primary-dark:#0369a1;--bg-soft:#f1f6fb;--ink:#0f1729;--ink-2:#475569;--ink-3:#94a3b8;--line:#e4e9f0;
 --shadow-sm:0 2px 10px rgba(15,23,41,.06);--shadow:0 12px 36px rgba(15,23,41,.10)}
@@ -147,8 +147,10 @@ footer a{color:#cbd5e1;font-weight:700}
 .fab svg{width:25px;height:25px;color:#fff}
 .fab .call{background:var(--primary)}.fab .line{background:#06c755}
 </style>
+<link rel="stylesheet" href="/future-air.css" />
+<script src="/future-air.js" defer></script>
 </head>
-<body>
+<body class="future-air ${esc(pageClass)}">
 <!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KNT3RKJB"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
